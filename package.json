@@ -1,0 +1,22 @@
+{
+  "name": "tauri-playground",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/desktop",
+    "apps/mobile",
+    "packages/core",
+    "packages/ui"
+  ],
+  "scripts": {
+    "dev": "bun run scripts/tauri.ts dev",
+    "build": "bun run scripts/tauri.ts build",
+    "tauri": "bun run scripts/tauri.ts tauri",
+    "tauri:build": "bun run scripts/tauri.ts tauri desktop build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "bun-types": "^1.3.14"
+  }
+}
