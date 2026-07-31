@@ -11,12 +11,23 @@
   ],
   "scripts": {
     "dev": "bun run scripts/tauri.ts dev",
+    "dev:desktop": "bun run scripts/tauri.ts dev desktop",
+    "dev:mobile": "bun run scripts/tauri.ts dev mobile",
     "build": "bun run scripts/tauri.ts build",
+    "build:desktop": "bun run scripts/tauri.ts build desktop",
+    "build:mobile": "bun run scripts/tauri.ts build mobile",
     "tauri": "bun run scripts/tauri.ts tauri",
-    "tauri:build": "bun run scripts/tauri.ts tauri desktop build"
+    "tauri:desktop": "bun run scripts/tauri.ts tauri desktop",
+    "tauri:mobile": "bun run scripts/tauri.ts tauri mobile",
+    "tauri:build": "bun run scripts/tauri.ts tauri desktop build",
+    "tauri:build:mobile": "bun run scripts/tauri.ts tauri mobile build"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
-    "bun-types": "^1.3.14"
+    "@types/bun": "^1.3.14",
+    "typescript": "~7.0.2"
+  },
+  "peerDependencies": {
+    "vite": "^8.1.5"
   }
 }

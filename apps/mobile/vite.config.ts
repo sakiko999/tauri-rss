@@ -5,6 +5,11 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  // 构建产物输出到根目录 dist/mobile，避免散落在各 app 下
+  build: {
+    outDir: "../../dist/mobile",
+    emptyOutDir: true,
+  },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

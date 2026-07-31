@@ -1,0 +1,35 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "tauri-dev-desktop",
+      "type": "shell",
+      "command": "bun run scripts/tauri.ts tauri desktop",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "rust",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^error\\[E\\d+\\]: (.*)$",
+            "message": 1
+          },
+          {
+            "regexp": "^\\s*-->\\s*([^:]+):(\\d+):(\\d+)",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Running DevCommand",
+          "endsPattern": "Running.*tauri-app\\.exe"
+        }
+      }
+    }
+  ]
+}

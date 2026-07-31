@@ -10,8 +10,8 @@ logs
 
 # Editor
 .idea
-.vscode/*
-!.vscode/extensions.json
+# .vscode
+.claude
 .DS_Store
 
 # Rust
