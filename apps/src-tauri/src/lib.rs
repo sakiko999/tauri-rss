@@ -4,7 +4,7 @@ pub mod plugins;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = plugins::configure(tauri::Builder::default())
-        .invoke_handler(tauri::generate_handler![commands::greet]);
+        .invoke_handler(tauri::generate_handler![commands::http_get]);
 
     #[cfg(mobile)]
     builder
