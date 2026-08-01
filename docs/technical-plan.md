@@ -317,6 +317,40 @@ Cargo 侧（可选、极薄）：`reqwest` + `#[tauri::command] http_get(url) ->
 - `plugins: [tailwindcss()]`、`resolve.dedupe: ['react','react-dom']`
 - `optimizeDeps.exclude` 两个 workspace 包
 
+### Tauri 插件调研结论（2026-08 记录，保留现状）
+
+> 背景：曾评估用 `tauri-plugin-http` 替换自研 `http_get` 命令、用 `tauri-plugin-sql`/`tauri-plugin-store` 替换 web 侧 localStorage。结论：**当前保留现状**，理由与后续切换点如下。
+
+**HTTP：保留自研 `http_get`（reqwest）命令，不用 `tauri-plugin-http`**
+
+- plugin-http 本质是把「Rust reqwest + CORS 直通」官方化，JS 侧是 fetch 兼容 API。但两个具体摩擦点对本项目是硬伤：
+  1. **URL scope**：RSS 阅读器要抓**任意用户添加的 URL**，plugin-http 要求 capability 里配 `allow` URL pattern，等于放弃作用域保护或写死 `https://**`
+  2. **forbidden header**：直播平台需自定义 `user-agent`/`referer`（douyin ABogus 签名必需），plugin-http 默认忽略，要开 `unsafe-headers` feature
+- 自研命令已验证、无 scope/header 摩擦，对「任意 URL + 自定义头」是更贴合的核心需求模型
+- **切换触发点**：需要媒体附件下载进度/取消（plugin-http 的 `download`/`upload`）、或想大幅削减自定义 Rust 代码时。迁移成本低：Cargo 加 `unsafe-headers`、capabilities 配宽 URL scope、TS 换 `@tauri-apps/plugin-http` 的 fetch
+
+**存储：localStorage 元数据暂够，SQLite 留给离线缓存阶段（P6）**
+
+- 分两层看：
+  - **元数据**（订阅/设置/阅读状态）：量小，localStorage 足够。将来可换 `tauri-plugin-store`（JSON 文件，异步 + 100ms debounce 落盘），非紧迫
+  - **条目缓存**（离线阅读/搜索/过滤）：这才是量级问题——500 feed × 50 条 × 几 KB 即超 localStorage ~5–10MB 配额，且无查询能力。**正解是 `tauri-plugin-sql`（SQLite + sqlx，支持迁移/索引/事务）**，但当前条目根本没持久化（纯内存 store），决策应推迟到做 P6 离线缓存时
+- core 的 `PlatformHost` seam 已保证：届时新增一个 `QueryBackend` seam 接 SQLite，不碰 core 逻辑
+
+**其他值得接入的插件（按优先级）**
+
+| 优先级 | 插件 | 用途 | 时机 |
+|---|---|---|---|
+| ⭐ 已接入 | opener | 点文章链接开外部浏览器 | ✅ 已用 |
+| 高 | notification | 新文章系统通知 | 有阅读行为后 |
+| 高 | sql | 条目缓存/搜索 | P6 离线缓存 |
+| 中 | fs | 媒体附件本地缓存、OPML 导入导出 | P6 配套 |
+| 中 | dialog | OPML 文件选择/导出位置 | 导入导出时 |
+| 中 | logging | 结构化日志，排查直播平台签名 | 需要就上 |
+| 低 | websocket | 直播平台实时推送（非轮询） | 长尾 |
+| 低 | window-state / single-instance / updater / deep-link | 窗口记忆/防重复轮询/分发 | 后期 |
+
+**不建议**：stronghold（无敏感 API 密钥）、barcode/geolocation/haptics 等无关插件。
+
 ### Tailwind 4 CSS-first 接入
 
 ```css
@@ -337,7 +371,9 @@ Cargo 侧（可选、极薄）：`reqwest` + `#[tauri::command] http_get(url) ->
 | **P3 瀑布流** | MasonryGrid + 四卡片 + aspect 行高 + 懒加载 | 卡片错落排布、滚动流畅、dataSaver 生效 |
 | **P4 短视频** | ShortVideoFeed + VideoPlayer/hls.js + PlayerRegistry + 自动播放 | 竖向翻页、切换互斥、demo m3u8 可播、无泄漏 |
 | **P5 数据流接线** | mutations + 未读数 + 订阅管理 UI + 刷新间隔 | 增删 feed 双层同步、重启存活、未读正确 |
-| **P6 跨平台** | mobile 布局 + 暗色 + IndexedDB 离线缓存 + 错误态 | 双端观感一致、断网读缓存 |
+| **P6 跨平台** | mobile 布局 + 暗色 + 离线缓存 + 错误态 | 双端观感一致、断网读缓存 |
+
+> P6 离线缓存：条目改用 `tauri-plugin-sql`（SQLite）持久化，新增 `QueryBackend` seam 接入（见「Tauri 插件调研结论」）。localStorage 只保留元数据，够用不换。
 
 ## 关键风险
 
