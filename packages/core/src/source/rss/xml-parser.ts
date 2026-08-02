@@ -134,5 +134,14 @@ function asString(val: unknown): string | undefined {
   if (val === undefined || val === null) return undefined
   if (typeof val === "string") return val
   if (typeof val === "number" || typeof val === "boolean") return String(val)
+  // fast-xml-parser represents a typed/CDATA element as an object, e.g. Atom
+  // `<title type="html"><![CDATA[...]]></title>` → { "#text": "...", "@_type": "html" }.
+  // Pull the text out so typed Atom fields (title/content/summary) aren't lost.
+  if (typeof val === "object") {
+    const o = val as Record<string, unknown>
+    const text = o["#text"]
+    if (typeof text === "string") return text
+    if (text !== undefined) return asString(text)
+  }
   return undefined
 }

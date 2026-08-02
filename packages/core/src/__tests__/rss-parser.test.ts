@@ -62,6 +62,34 @@ describe("parseFeed", () => {
     expect(it.guid).toBe("tag:atom.example.com,2025:e1")
   })
 
+  test("Atom: typed/CDATA fields render their text (regression)", () => {
+    // Real-world Atom (WordPress/Verge style): <title type="html"><![CDATA[...]]></title>,
+    // <content type="html"><![CDATA[...]]></content>. fast-xml-parser yields these as
+    // { "#text": "...", "@_type": "html" } objects, NOT plain strings. asString() must
+    // dig the #text out, else title/content silently drop to undefined.
+    const xml = `<?xml version="1.0"?>
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <title type="text"><![CDATA[The Verge]]></title>
+        <link href="https://www.theverge.com"/>
+        <entry>
+          <title type="html"><![CDATA[Xbox prices are going up]]></title>
+          <link rel="alternate" type="text/html" href="https://www.theverge.com/1"/>
+          <summary type="html"><![CDATA[A short summary]]></summary>
+          <content type="html"><![CDATA[<p>full body</p>]]></content>
+          <published>2025-03-01T00:00:00Z</published>
+          <id>https://www.theverge.com/?p=1</id>
+        </entry>
+      </feed>`
+    const feed = parseFeed(xml)
+    expect(feed.channel.title).toBe("The Verge")
+    const it = feed.channel.item[0]!
+    expect(it.title).toBe("Xbox prices are going up")
+    expect(it.description).toBe("A short summary")
+    expect(it.content).toBe("<p>full body</p>")
+    expect(it.link).toBe("https://www.theverge.com/1")
+    expect(it.guid).toBe("https://www.theverge.com/?p=1")
+  })
+
   test("single-item feed (not wrapped in array) still arrayed", () => {
     const xml = `<?xml version="1.0"?><rss version="2.0"><channel><title>S</title>
       <item><title>only</title></item></channel></rss>`
