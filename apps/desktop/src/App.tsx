@@ -7,15 +7,62 @@ import {
 } from "@tauri-playground/core"
 import { createTauriHost } from "./host/tauri-host"
 
-/** 一组测试订阅 —— 覆盖不同格式（Atom/RSS 2.0）与不同来源。 */
+/**
+ * 一组测试订阅 —— 覆盖不同格式（Atom/RSS 2.0）与不同来源、不同媒体类型。
+ *
+ * 全部为**自带原生 RSS/Atom feed**的稳定源（curl 实测 200 + 正确 XML），
+ * 直接走现有 RssSource 管线，无需任何抓取逻辑。
+ *
+ * 选源原则（参考 tmp/RSSHub 的 routes 目录，但只取「无 puppeteer / 无反爬 /
+ * 无 requireConfig」的等价物——即站点自己暴露的 feed）：
+ *   - 格式覆盖：RSS 2.0（BBC/NYT/arxiv/播客）+ Atom（GitHub/阮一峰/V2EX/YouTube）
+ *   - 媒体覆盖：纯文（HN）、图（BBC/NYT）、视频（YouTube）、音频（播客）、文档（arxiv PDF）
+ *  分类标签见 media，供后续 UI/分组/分类器联调用。
+ */
+type TestSub = {
+  id: string
+  title: string
+  url: string
+  /** 人类可读的媒体/格式标注，仅用于测试展示，不进数据层。 */
+  tag: string
+}
+
 const TEST_SUBSCRIPTIONS = [
-  { id: "ruanyifeng", title: "阮一峰的网络日志", url: "https://www.ruanyifeng.com/blog/atom.xml" },
-  { id: "hn", title: "Hacker News", url: "https://hnrss.org/frontpage" },
-  { id: "coolshell", title: "酷壳 CoolShell", url: "https://coolshell.cn/feed" },
-] as const
+  // ── 文章 / 纯文 ──────────────────────────────────────────────
+  { id: "hn", title: "Hacker News", url: "https://hnrss.org/frontpage", tag: "RSS · 纯文" },
+  { id: "ruanyifeng", title: "阮一峰的网络日志", url: "https://www.ruanyifeng.com/blog/atom.xml", tag: "Atom · 纯文" },
+  { id: "v2ex", title: "V2EX", url: "https://www.v2ex.com/index.xml", tag: "Atom · 纯文" },
+
+  // ── 图文新闻（带 thumbnail）──────────────────────────────────
+  { id: "bbc-world", title: "BBC World", url: "https://feeds.bbci.co.uk/news/world/rss.xml", tag: "RSS · 图文" },
+  { id: "nyt-home", title: "NYT Home", url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", tag: "RSS · 图文" },
+
+  // ── 视频 ──────────────────────────────────────────────────────
+  { id: "yt-ted", title: "TED Talks (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0RhatS1pyxInC00YKjjBqQ", tag: "Atom · 视频" },
+
+  // ── 音频 / 播客（enclosure + itunes）────────────────────────
+  { id: "huberman", title: "Huberman Lab", url: "https://feeds.megaphone.fm/hubermanlab", tag: "RSS · 播客" },
+  { id: "changelog", title: "The Changelog", url: "https://feeds.simplecast.com/54nAGcIl", tag: "RSS · 播客" },
+  { id: "npr-upfirst", title: "NPR Up First", url: "https://feeds.npr.org/500005/podcast.xml", tag: "RSS · 播客" },
+
+  // ── 文档 / 学术（PDF enclosure）──────────────────────────────
+  { id: "arxiv-cl", title: "arXiv · cs.CL", url: "https://export.arxiv.org/rss/cs.CL", tag: "RSS · 文档" },
+
+  // ── 软件发布（tarball enclosure）─────────────────────────────
+  { id: "vue-releases", title: "Vue.js Releases", url: "https://github.com/vuejs/core/releases.atom", tag: "Atom · 发布" },
+
+  // ── 科技 / 工程博客（经 B 脚本从 RSSHub 摘录 + curl 实测 200）──
+  { id: "solidot", title: "奇客 Solidot", url: "https://www.solidot.org/index.rss", tag: "RSS · 科技" },
+  { id: "deepmind", title: "Google DeepMind Blog", url: "https://www.deepmind.com/blog/rss.xml", tag: "RSS · 科技" },
+  { id: "theverge", title: "The Verge", url: "https://www.theverge.com/rss/index.xml", tag: "RSS · 科技" },
+  { id: "vscoblog", title: "VS Code Blog", url: "https://code.visualstudio.com/feed.xml", tag: "Atom · 工程" },
+  { id: "nodejs-blog", title: "Node.js Blog", url: "https://nodejs.org/en/feed/blog.xml", tag: "RSS · 工程" },
+  { id: "zed-blog", title: "Zed Blog", url: "https://zed.dev/blog.rss", tag: "RSS · 工程" },
+  { id: "warp-blog", title: "Warp Blog", url: "https://www.warp.dev/blog/feed.xml", tag: "RSS · 工程" },
+] as const satisfies readonly TestSub[]
 
 interface FeedState {
-  sub: (typeof TEST_SUBSCRIPTIONS)[number]
+  sub: TestSub
   result?: RefreshResult
   items: MediaItem[]
 }
@@ -93,6 +140,9 @@ export default function App() {
           <section key={sub.id} className="mb-8">
             <h2 className="mb-1 text-lg font-semibold">
               {sub.title}
+              <span className="ml-2 rounded bg-zinc-200 px-1.5 py-0.5 align-middle font-mono text-[10px] uppercase text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                {sub.tag}
+              </span>
               <span className="ml-2 text-xs font-normal text-zinc-400">{sub.url}</span>
             </h2>
             <p className="mb-3 text-xs text-zinc-500">
