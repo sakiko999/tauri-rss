@@ -25,6 +25,8 @@ type TestSub = {
   url: string
   /** 人类可读的媒体/格式标注，仅用于测试展示，不进数据层。 */
   tag: string
+  /** 订阅 kind，默认 "rss"；非 rss（如 bilibili-rank）走对应 adapter。 */
+  kind?: "rss" | "bilibili-rank"
 }
 
 const TEST_SUBSCRIPTIONS = [
@@ -70,7 +72,13 @@ const TEST_SUBSCRIPTIONS = [
   { id: "geekpark", title: "极客公园", url: "https://www.geekpark.net/rss", tag: "RSS · 国内" },
   { id: "cnbeta", title: "cnBeta", url: "https://www.cnbeta.com.tw/backend.php", tag: "RSS · 国内" },
   { id: "sina-tech", title: "新浪科技", url: "https://rss.sina.com.cn/tech/rollnews.xml", tag: "RSS · 国内" },
-] as const satisfies readonly TestSub[]
+
+  // ── 热门平台（bilibili 走 wbi 签名 API，零登录；YouTube 走官方 RSS）──
+  { id: "bili-hot", title: "bilibili 热搜", url: "https://www.bilibili.com/", tag: "API · 热搜", kind: "bilibili-rank" },
+  { id: "yt-3b1b", title: "3Blue1Brown (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCYO_jab_esuFRV4b17AJtAw", tag: "Atom · 视频" },
+  { id: "yt-lex", title: "Lex Fridman (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA", tag: "Atom · 视频" },
+  { id: "yt-kenjee", title: "Ken Jee (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiT9RITQ9PW6BhXK0y2jaeg", tag: "Atom · 视频" },
+] as TestSub[]
 
 interface FeedState {
   sub: TestSub
@@ -97,15 +105,11 @@ export default function App() {
       for (const s of TEST_SUBSCRIPTIONS) {
         const existing = await dl.subscriptions.get(s.id)
         if (!existing) {
-          await dl.subscriptions.add({
-            id: s.id,
-            kind: "rss",
-            title: s.title,
-            enabled: true,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            url: s.url,
-          })
+          await dl.subscriptions.add(
+            s.kind === "bilibili-rank"
+              ? { id: s.id, kind: "bilibili-rank", title: s.title, enabled: true, createdAt: Date.now(), updatedAt: Date.now() }
+              : { id: s.id, kind: "rss", title: s.title, enabled: true, createdAt: Date.now(), updatedAt: Date.now(), url: s.url },
+          )
         }
       }
       const next: FeedState[] = []
