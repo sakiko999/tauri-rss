@@ -78,3 +78,20 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - Rust 增量编译偶尔报 `拒绝访问 os error 5`，是无害警告，忽略。
 - Tauri dev 的 `devUrl` 是 `http://localhost:1420`，脚本并行启动 Vite dev server + tauri dev。
 - `apps/src-tauri/tauri.conf.json` 是桌面配置，`tauri.conf.mobile.json` 是移动端。
+
+## 测试数据源（RSSHub 摘录 + bilibili 复刻）
+
+- `tmp/RSSHub` 是 RSSHub 的 git clone（已 gitignore）。`docs/rsshub-catalog.*` 由
+  `bun run scripts/rsshub-catalog.ts` 静态摘录生成——只把 RSSHub 当**数据源目录**抄，
+  **不跑它的运行时**（`@/` alias、config、cache、registry 太重，与不部署的诉求冲突）。
+- RSSHub 里**绝大多数 handler 是定制 scraper，无现成原生 feed URL**；只有少量真·原生
+  feed 直传（catalog 已高亮）。判断源可用性先 `curl` 实测（检查 200 + `<rss`/`<feed` 头，
+  注意新浪科技带 `xml-stylesheet` 会误判 HTML，实为真 RSS）。
+- **bilibili wbi 签名零登录可复刻**（关键发现）：`GET /x/web-interface/nav` 未登录
+  （`code:-101`）仍返回 `data.wbi_img`，无需 cookie/puppeteer，纯
+  `MD5(排序参数&wts&mixinKey)`。范式见 `packages/core/src/source/bilibili/`
+  （`bilibili-rank` kind）。换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源。
+- 测试订阅清单在 `apps/desktop/src/App.tsx` 的 `TEST_SUBSCRIPTIONS`（31 个），
+  可用性结论见 `docs/domestic-feed-availability.md`。新源先 curl 验证再并入。
+- 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/X/小红书
+  是硬反爬（puppeteer+登录+代理），个人不部署 RSSHub 碰不了。
