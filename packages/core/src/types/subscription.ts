@@ -9,7 +9,7 @@
 import type { LivePlatformId } from "./media-item.ts"
 
 /** The kinds of sources a subscription can pull from. */
-export type SubscriptionKind = "rss" | "live-room"
+export type SubscriptionKind = "rss" | "live-room" | "bilibili-rank"
 
 /** Fields shared by every subscription variant. */
 export interface SubscriptionBase {
@@ -38,9 +38,15 @@ export interface LiveRoomSubscription extends SubscriptionBase {
   roomId: string
 }
 
+/** A Bilibili hot-search / ranking feed (wbi-signed API, no login needed). */
+export interface BilibiliRankSubscription extends SubscriptionBase {
+  kind: "bilibili-rank"
+}
+
 export type Subscription =
   | RssSubscription
   | LiveRoomSubscription
+  | BilibiliRankSubscription
 
 /** A user-defined folder in the subscription tree. */
 export interface SubscriptionGroup {

@@ -27,6 +27,7 @@ import {
   type SettingsRepository,
 } from "./repo/settings-repository.ts"
 import type { SourceAdapter } from "./source/source-adapter.ts"
+import { BilibiliRankSource } from "./source/bilibili/bilibili-rank-source.ts"
 import type { SubscriptionKind } from "./types/subscription.ts"
 import { RssSource } from "./source/rss/rss-source.ts"
 import { LiveSource } from "./live/shared/live-source.ts"
@@ -73,6 +74,7 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
   const defaults: SourceAdapter[] = [
     new RssSource(),
     new LiveSource(),
+    new BilibiliRankSource(),
   ]
   for (const a of defaults) adapters.set(a.kind, a)
 
