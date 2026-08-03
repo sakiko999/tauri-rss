@@ -59,6 +59,17 @@ const TEST_SUBSCRIPTIONS = [
   { id: "nodejs-blog", title: "Node.js Blog", url: "https://nodejs.org/en/feed/blog.xml", tag: "RSS · 工程" },
   { id: "zed-blog", title: "Zed Blog", url: "https://zed.dev/blog.rss", tag: "RSS · 工程" },
   { id: "warp-blog", title: "Warp Blog", url: "https://www.warp.dev/blog/feed.xml", tag: "RSS · 工程" },
+
+  // ── 国内平台（docs/domestic-feed-availability.md · curl 实测 200 原生 feed）──
+  { id: "sspai", title: "少数派", url: "https://sspai.com/feed", tag: "RSS · 国内" },
+  { id: "36kr", title: "36氪", url: "https://36kr.com/feed", tag: "RSS · 国内" },
+  { id: "ithome", title: "IT之家", url: "https://www.ithome.com/rss/", tag: "RSS · 国内" },
+  { id: "oschina", title: "开源中国", url: "https://www.oschina.net/news/rss", tag: "RSS · 国内" },
+  { id: "infoq-cn", title: "InfoQ 中文", url: "https://www.infoq.cn/feed", tag: "RSS · 国内" },
+  { id: "ifanr", title: "爱范儿", url: "https://www.ifanr.com/feed", tag: "RSS · 国内" },
+  { id: "geekpark", title: "极客公园", url: "https://www.geekpark.net/rss", tag: "RSS · 国内" },
+  { id: "cnbeta", title: "cnBeta", url: "https://www.cnbeta.com.tw/backend.php", tag: "RSS · 国内" },
+  { id: "sina-tech", title: "新浪科技", url: "https://rss.sina.com.cn/tech/rollnews.xml", tag: "RSS · 国内" },
 ] as const satisfies readonly TestSub[]
 
 interface FeedState {
