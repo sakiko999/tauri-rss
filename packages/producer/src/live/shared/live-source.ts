@@ -10,7 +10,7 @@
  * resolve. This keeps refresh cheap (status + metadata only).
  */
 import type { LiveItem } from "../../types/media-item.ts"
-import type { PlatformHost } from "../../types/platform.ts"
+import type { ProducerHost } from "../../types/producer-host.ts"
 import type { LiveRoomSubscription } from "../../types/subscription.ts"
 import type { SourceAdapter } from "../../source/source-adapter.ts"
 import { getLiveSite } from "../index.ts"
@@ -18,7 +18,7 @@ import { getLiveSite } from "../index.ts"
 export class LiveSource implements SourceAdapter<LiveRoomSubscription> {
   readonly kind = "live-room" as const
 
-  async fetch(subscription: LiveRoomSubscription, host: PlatformHost): Promise<LiveItem[]> {
+  async fetch(subscription: LiveRoomSubscription, host: ProducerHost): Promise<LiveItem[]> {
     const site = getLiveSite(subscription.platform)
     if (!site) {
       throw new Error(`No LiveSite registered for platform: ${subscription.platform}`)

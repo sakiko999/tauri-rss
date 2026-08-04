@@ -10,7 +10,7 @@ import type {
   Subscription,
   SubscriptionGroup,
   SubscriptionKind,
-} from "../types/subscription.ts"
+} from "@tauri-playground/producer"
 
 const STORAGE_KEY = "subscriptions"
 

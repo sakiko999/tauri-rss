@@ -1,13 +1,16 @@
 /**
- * @tauri-playground/core — data layer for the Tauri RSS reader
- * (RSS/Atom + live streams, one typed media model).
+ * @tauri-playground/core — the "订阅维护者" (maintainer) layer.
+ *
+ * Assembles the producer's source adapters into a data layer: repo (subscription
+ * config persistence), media store (content cache), and refresh orchestration.
  *
  * Public surface:
- *   - Types:         `types/*`
- *   - Host seam:     `host/*`
- *   - Integration:   `createDataLayer`, `DataLayer`
- *   - Live contract: `live/*`
- *   - Media:         `source/rss/media.ts`, `content/classifier.ts`
+ *   - Types (own):      `types/*` (content/platform/reading/settings/queries)
+ *   - Types (producer): re-exported from @tauri-playground/producer so consumers
+ *                       get MediaItem / Subscription / result in one place.
+ *   - Host seam:        `host/*` (PlatformHost implementations)
+ *   - Integration:      `createDataLayer`, `DataLayer`
+ *   - Producer:         adapters + parsing re-exported for convenience
  */
 export * from "./types/index.ts"
 export * from "./host/platform-host.ts"
@@ -17,36 +20,56 @@ export { FetchHttpBackend, LocalStorageBackend, ConsoleLogger } from "./host/bro
 export { FunctionJsBackend } from "./host/browser-host.ts"
 export { createDataLayer } from "./data-layer.ts"
 export type { DataLayer, DataLayerOptions } from "./data-layer.ts"
-export type { SourceAdapter } from "./source/source-adapter.ts"
-export { RssSource } from "./source/rss/rss-source.ts"
-export { parseFeed } from "./source/rss/xml-parser.ts"
-export type { ParsedFeed, ParsedItem } from "./source/rss/xml-parser.ts"
-export { feedToArticles } from "./source/rss/rss-to-items.ts"
-export { extractMedia } from "./source/rss/media.ts"
 export { inferContent, classifyMediaItem, socialContent } from "./content/classifier.ts"
-export { LiveSource } from "./live/shared/live-source.ts"
-export { registerAllLiveSites } from "./live/platforms/index.ts"
-export { BilibiliSite } from "./live/platforms/bilibili/site.ts"
-export { DouyuSite } from "./live/platforms/douyu/site.ts"
-export { DouyinSite } from "./live/platforms/douyin/site.ts"
-export { HuyaSite } from "./live/platforms/huya/site.ts"
-export { md5Hex } from "./live/shared/md5.ts"
-export {
-  createSubscriptionRepository,
-  isSubscription,
-} from "./repo/subscription-repository.ts"
+export { NotImplementedError, NoAdapterError } from "./errors.ts"
+export { createSubscriptionRepository, isSubscription } from "./repo/subscription-repository.ts"
 export type { SubscriptionRepository } from "./repo/subscription-repository.ts"
-export {
-  createReadingRepository,
-} from "./repo/reading-repository.ts"
+export { createReadingRepository } from "./repo/reading-repository.ts"
 export type { ReadingRepository } from "./repo/reading-repository.ts"
-export {
-  createSettingsRepository,
-} from "./repo/settings-repository.ts"
+export { createSettingsRepository } from "./repo/settings-repository.ts"
 export type { SettingsRepository } from "./repo/settings-repository.ts"
 export { createMediaStore } from "./store/media-store.ts"
 export type { MediaStore, MediaQuery, MediaStoreListener } from "./store/media-store.ts"
-export { NotImplementedError, NoAdapterError } from "./errors.ts"
+
+// ── Producer surface (re-exported for one-stop consumer imports) ────────────
+export type {
+  MediaItem,
+  ArticleItem,
+  SocialItem,
+  VideoItem,
+  AudioItem,
+  LiveItem,
+  MediaAttachment,
+  MediaAttachmentKind,
+  MediaAuthor,
+  MediaKind,
+  LivePlatformId,
+  StreamingFormat,
+} from "@tauri-playground/producer"
+export type {
+  Subscription,
+  SubscriptionBase,
+  SubscriptionKind,
+  RssSubscription,
+  LiveRoomSubscription,
+  BilibiliRankSubscription,
+  SubscriptionGroup,
+} from "@tauri-playground/producer"
+export type { RefreshResult, LivePlayUrl } from "@tauri-playground/producer"
+export type { SourceAdapter } from "@tauri-playground/producer"
+export { RssSource } from "@tauri-playground/producer"
+export { parseFeed } from "@tauri-playground/producer"
+export type { ParsedFeed, ParsedItem } from "@tauri-playground/producer"
+export { feedToArticles } from "@tauri-playground/producer"
+export { extractMedia } from "@tauri-playground/producer"
+export { BilibiliRankSource } from "@tauri-playground/producer"
+export { LiveSource } from "@tauri-playground/producer"
+export { registerAllLiveSites } from "@tauri-playground/producer"
+export { BilibiliSite } from "@tauri-playground/producer"
+export { DouyuSite } from "@tauri-playground/producer"
+export { DouyinSite } from "@tauri-playground/producer"
+export { HuyaSite } from "@tauri-playground/producer"
+export { md5Hex } from "@tauri-playground/producer"
 export type {
   LiveSite,
   LiveCategory,
@@ -57,5 +80,5 @@ export type {
   LiveAnchorPage,
   LivePlayQuality,
   LiveRoomDetail,
-} from "./live/live-site.ts"
-export { registerLiveSite, getLiveSite, listLiveSites } from "./live/index.ts"
+} from "@tauri-playground/producer"
+export { registerLiveSite, getLiveSite, listLiveSites } from "@tauri-playground/producer"

@@ -10,7 +10,7 @@
  * getLiveStatus. (Danmaku is out of data-layer scope.)
  */
 import type { LivePlatformId } from "../../../types/media-item.ts"
-import type { PlatformHost } from "../../../types/platform.ts"
+import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
   LivePlayQuality,
@@ -20,8 +20,8 @@ import type {
   LiveSite,
   LiveSubCategory,
 } from "../../live-site.ts"
-import { md5Hex } from "../../shared/md5.ts"
-import { type Json, arr, bodyText, strOr, toInt } from "../../shared/json.ts"
+import { md5Hex } from "../../../utils/md5.ts"
+import { type Json, arr, bodyText, strOr, toInt } from "../../../utils/json.ts"
 
 const API_LIVE = "https://api.live.bilibili.com"
 const API_MAIN = "https://api.bilibili.com"
@@ -45,7 +45,7 @@ export class BilibiliSite implements LiveSite {
   private buvid4 = ""
   private cookie = ""
 
-  constructor(private readonly host: PlatformHost) {}
+  constructor(private readonly host: ProducerHost) {}
 
   // ── required LiveSite surface ──────────────────────────────────────────
 

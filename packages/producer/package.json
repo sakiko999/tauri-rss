@@ -1,14 +1,14 @@
 {
-  "name": "@tauri-playground/core",
+  "name": "@tauri-playground/producer",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "index.ts",
+  "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@tauri-playground/producer": "workspace:*"
+    "fast-xml-parser": "^4.5.0"
   },
   "scripts": {}
 }

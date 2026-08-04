@@ -11,7 +11,7 @@
  */
 import { NotImplementedError } from "../../../errors.ts"
 import type { LivePlatformId } from "../../../types/media-item.ts"
-import type { PlatformHost } from "../../../types/platform.ts"
+import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
   LivePlayQuality,
@@ -21,7 +21,7 @@ import type {
   LiveSite,
   LiveSubCategory,
 } from "../../live-site.ts"
-import { type Json, arr, bodyText, strOr, toInt } from "../../shared/json.ts"
+import { type Json, arr, bodyText, strOr, toInt } from "../../../utils/json.ts"
 
 const M_HUYA = "https://m.huya.com"
 const WWW_HUYA = "https://www.huya.com"
@@ -32,7 +32,7 @@ export class HuyaSite implements LiveSite {
   readonly platform: LivePlatformId = "huya"
   readonly name = "虎牙直播"
 
-  constructor(private readonly host: PlatformHost) {}
+  constructor(private readonly host: ProducerHost) {}
 
   async getCategories(): Promise<LiveCategory[]> {
     return []

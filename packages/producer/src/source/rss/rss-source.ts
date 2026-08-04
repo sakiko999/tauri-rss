@@ -2,7 +2,7 @@
  * RssSource — fetches a direct RSS/Atom feed URL and emits `ArticleItem`s.
  */
 import type { MediaItem } from "../../types/media-item.ts"
-import type { PlatformHost } from "../../types/platform.ts"
+import type { ProducerHost } from "../../types/producer-host.ts"
 import type { RssSubscription } from "../../types/subscription.ts"
 import type { SourceAdapter } from "../source-adapter.ts"
 import { feedToArticles } from "./rss-to-items.ts"
@@ -11,7 +11,7 @@ import { parseFeed } from "./xml-parser.ts"
 export class RssSource implements SourceAdapter<RssSubscription> {
   readonly kind = "rss" as const
 
-  async fetch(subscription: RssSubscription, host: PlatformHost): Promise<MediaItem[]> {
+  async fetch(subscription: RssSubscription, host: ProducerHost): Promise<MediaItem[]> {
     const res = await host.http.request({
       url: subscription.url,
       method: "GET",

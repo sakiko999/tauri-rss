@@ -11,7 +11,7 @@
  * - `live`    — a live stream room
  * - `social`  — a short-form post
  */
-import type { MediaAttachment, MediaItem } from "./media-item.ts"
+import type { MediaAttachment, MediaItem } from "@tauri-playground/producer"
 
 export type ContentKind = "article" | "video" | "audio" | "live" | "social"
 

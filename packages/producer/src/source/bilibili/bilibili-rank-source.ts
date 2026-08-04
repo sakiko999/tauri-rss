@@ -17,10 +17,10 @@
  *   - RSSHub bilibili/hot-search.ts (the square/search response shape)
  */
 import type { MediaItem } from "../../types/media-item.ts"
-import type { PlatformHost } from "../../types/platform.ts"
+import type { ProducerHost } from "../../types/producer-host.ts"
 import type { BilibiliRankSubscription } from "../../types/subscription.ts"
 import type { SourceAdapter } from "../source-adapter.ts"
-import { md5Hex } from "../../live/shared/md5.ts"
+import { md5Hex } from "../../utils/md5.ts"
 
 const API_MAIN = "https://api.bilibili.com"
 const UA =
@@ -43,7 +43,7 @@ export class BilibiliRankSource implements SourceAdapter<BilibiliRankSubscriptio
 
   private wbiKeyPromise: Promise<string> | null
 
-  async fetch(subscription: BilibiliRankSubscription, host: PlatformHost): Promise<MediaItem[]> {
+  async fetch(subscription: BilibiliRankSubscription, host: ProducerHost): Promise<MediaItem[]> {
     // Fetch hot-search via the wbi-signed `search/square` endpoint.
     const params = await this.signParams("limit=50&platform=web", host)
     const url = `${API_MAIN}/x/web-interface/wbi/search/square?${params}`
@@ -88,7 +88,7 @@ export class BilibiliRankSource implements SourceAdapter<BilibiliRankSubscriptio
   // ── wbi signing (ported from RSSHub, no login required) ───────────────
 
   /** Fetch & cache the 32-char mixin key from the unauthenticated nav response. */
-  private async getWbiKey(host: PlatformHost): Promise<string> {
+  private async getWbiKey(host: ProducerHost): Promise<string> {
     if (this.wbiKeyPromise) return this.wbiKeyPromise
     this.wbiKeyPromise = (async () => {
       const res = await host.http.request({
@@ -117,7 +117,7 @@ export class BilibiliRankSource implements SourceAdapter<BilibiliRankSubscriptio
   }
 
   /** Append `w_rid` + `wts` to the given param string (sorted query). */
-  private async signParams(params: string, host: PlatformHost): Promise<string> {
+  private async signParams(params: string, host: ProducerHost): Promise<string> {
     const key = await this.getWbiKey(host)
     const sp = new URLSearchParams(params)
     sp.sort()

@@ -3,7 +3,7 @@
  * 用 Node 原生 fetch 做 http backend（只读脚本，不污染 core）。
  * Run: `bun run scripts/bilibili-smoke.ts`
  */
-import { BilibiliRankSource } from "../packages/core/src/source/bilibili/bilibili-rank-source.ts"
+import { BilibiliRankSource } from "../packages/producer/src/source/bilibili/bilibili-rank-source.ts"
 
 const host = {
   now: () => Date.now(),

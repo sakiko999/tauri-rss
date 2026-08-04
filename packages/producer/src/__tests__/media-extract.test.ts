@@ -6,7 +6,6 @@
 import { test, expect, describe } from "bun:test"
 import { parseFeed } from "../source/rss/xml-parser.ts"
 import { feedToArticles } from "../source/rss/rss-to-items.ts"
-import { inferContent } from "../content/classifier.ts"
 
 describe("extractMedia", () => {
   test("RSS 2.0 <enclosure> → video attachment", () => {
@@ -88,49 +87,5 @@ describe("extractMedia", () => {
     const feed = parseFeed(xml)
     const items = feedToArticles(feed, { subscriptionId: "s", sourceId: "rss", fetchedAt: 0 })
     expect(items[0]!.media).toHaveLength(1)
-  })
-})
-
-describe("inferContent", () => {
-  test("thin-body + video → video content", () => {
-    const item = {
-      id: "1",
-      subscriptionId: "s",
-      sourceId: "rss",
-      kind: "article" as const,
-      title: "V",
-      fetchedAt: 0,
-      media: [{ kind: "video" as const, url: "https://x/v.mp4" }],
-    }
-    const c = inferContent(item)
-    expect(c.kind).toBe("video")
-    if (c.kind === "video") expect(c.video.url).toBe("https://x/v.mp4")
-  })
-
-  test("substantial text body wins → article content", () => {
-    const item = {
-      id: "1",
-      subscriptionId: "s",
-      sourceId: "rss",
-      kind: "article" as const,
-      title: "A",
-      fetchedAt: 0,
-      content: "x".repeat(300),
-      media: [{ kind: "video" as const, url: "https://x/v.mp4" }],
-    }
-    const c = inferContent(item)
-    expect(c.kind).toBe("article")
-  })
-
-  test("no media → article content", () => {
-    const item = {
-      id: "1",
-      subscriptionId: "s",
-      sourceId: "rss",
-      kind: "article" as const,
-      title: "A",
-      fetchedAt: 0,
-    }
-    expect(inferContent(item).kind).toBe("article")
   })
 })

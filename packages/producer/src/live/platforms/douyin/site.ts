@@ -11,7 +11,7 @@
  * detail). Danmaku out of scope.
  */
 import type { LivePlatformId } from "../../../types/media-item.ts"
-import type { PlatformHost } from "../../../types/platform.ts"
+import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
   LivePlayQuality,
@@ -21,7 +21,7 @@ import type {
   LiveSite,
   LiveSubCategory,
 } from "../../live-site.ts"
-import { type Json, arr, bodyText, strOr, toInt } from "../../shared/json.ts"
+import { type Json, arr, bodyText, strOr, toInt } from "../../../utils/json.ts"
 import { ABOGUS_JS } from "./abogus.ts"
 
 const LIVE = "https://live.douyin.com"
@@ -45,7 +45,7 @@ export class DouyinSite implements LiveSite {
   private cookieJar = ""
   private cookiePromise: Promise<void> | null = null
 
-  constructor(private readonly host: PlatformHost) {}
+  constructor(private readonly host: ProducerHost) {}
 
   /**
    * Warmup GET to `live.douyin.com/` harvests a fresh `ttwid` (etc.) from

@@ -1,12 +1,12 @@
 import { test, expect, describe } from "bun:test"
 import { BilibiliSite } from "../live/platforms/bilibili/site.ts"
-import type { HttpBackend, HttpRequest, HttpResponse, PlatformHost } from "../index.ts"
+import type { HttpBackend, HttpRequest, HttpResponse, ProducerHost } from "../types/producer-host.ts"
 
 /**
  * Mock host: returns canned JSON per URL pattern, and records requested URLs
  * so the Wbi-signature shape can be asserted (presence of w_rid/wts).
  */
-function bilibiliHost(): PlatformHost & { urls: string[] } {
+function bilibiliHost(): ProducerHost & { urls: string[] } {
   const urls: string[] = []
   const backend: HttpBackend = {
     async request(req: HttpRequest): Promise<HttpResponse> {

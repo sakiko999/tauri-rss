@@ -12,7 +12,7 @@
  * player layer handles.
  */
 import type { LivePlatformId } from "../../../types/media-item.ts"
-import type { PlatformHost } from "../../../types/platform.ts"
+import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
   LivePlayQuality,
@@ -22,7 +22,7 @@ import type {
   LiveSite,
   LiveSubCategory,
 } from "../../live-site.ts"
-import { type Json, arr, bodyText, strOr, toInt } from "../../shared/json.ts"
+import { type Json, arr, bodyText, strOr, toInt } from "../../../utils/json.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 
 const BASE = "https://www.douyu.com"
@@ -33,7 +33,7 @@ export class DouyuSite implements LiveSite {
   readonly platform: LivePlatformId = "douyu"
   readonly name = "斗鱼直播"
 
-  constructor(private readonly host: PlatformHost) {}
+  constructor(private readonly host: ProducerHost) {}
 
   async getCategories(): Promise<LiveCategory[]> {
     return []

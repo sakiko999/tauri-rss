@@ -10,10 +10,10 @@
  * `registerAdapter`.
  */
 import { NoAdapterError } from "./errors.ts"
-import type { MediaItem } from "./types/media-item.ts"
+import type { MediaItem } from "@tauri-playground/producer"
 import { createMediaStore, type MediaQuery } from "./store/media-store.ts"
 import type { PlatformHost } from "./types/platform.ts"
-import type { LivePlayUrl, RefreshResult } from "./types/result.ts"
+import type { LivePlayUrl, RefreshResult } from "@tauri-playground/producer"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
@@ -26,13 +26,13 @@ import {
   createSettingsRepository,
   type SettingsRepository,
 } from "./repo/settings-repository.ts"
-import type { SourceAdapter } from "./source/source-adapter.ts"
-import { BilibiliRankSource } from "./source/bilibili/bilibili-rank-source.ts"
-import type { SubscriptionKind } from "./types/subscription.ts"
-import { RssSource } from "./source/rss/rss-source.ts"
-import { LiveSource } from "./live/shared/live-source.ts"
-import { registerAllLiveSites } from "./live/platforms/index.ts"
-import { getLiveSite } from "./live/index.ts"
+import type { SourceAdapter } from "@tauri-playground/producer"
+import { BilibiliRankSource } from "@tauri-playground/producer"
+import type { SubscriptionKind } from "@tauri-playground/producer"
+import { RssSource } from "@tauri-playground/producer"
+import { LiveSource } from "@tauri-playground/producer"
+import { registerAllLiveSites } from "@tauri-playground/producer"
+import { getLiveSite } from "@tauri-playground/producer"
 
 export interface DataLayerOptions {
   /** Custom clock (defaults to host.now). */

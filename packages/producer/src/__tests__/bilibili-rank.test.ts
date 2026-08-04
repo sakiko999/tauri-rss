@@ -1,13 +1,13 @@
 import { test, expect, describe } from "bun:test"
 import { BilibiliRankSource } from "../source/bilibili/bilibili-rank-source.ts"
-import type { HttpBackend, HttpRequest, HttpResponse, PlatformHost } from "../index.ts"
+import type { HttpBackend, HttpRequest, HttpResponse, ProducerHost } from "../types/producer-host.ts"
 
 /**
  * Mock host for BilibiliRankSource: returns canned nav (wbi keys) + hot-search
  * payload, and records requested URLs so the wbi-signature shape (w_rid + wts
  * present) and the nav→sign→fetch sequence can be asserted.
  */
-function biliRankHost(): PlatformHost & { urls: string[] } {
+function biliRankHost(): ProducerHost & { urls: string[] } {
   const urls: string[] = []
   const backend: HttpBackend = {
     async request(req: HttpRequest): Promise<HttpResponse> {
