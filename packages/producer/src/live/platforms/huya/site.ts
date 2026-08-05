@@ -10,7 +10,7 @@
  * port is deferred to a later phase.
  */
 import { NotImplementedError } from "../../../errors.ts"
-import type { LivePlatformId } from "../../../types/media-item.ts"
+import type { FeedLivePlatformId } from "../../../types/feed-item.ts"
 import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
@@ -29,7 +29,7 @@ const UA_MOBILE =
   "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
 
 export class HuyaSite implements LiveSite {
-  readonly platform: LivePlatformId = "huya"
+  readonly platform: FeedLivePlatformId = "huya"
   readonly name = "虎牙直播"
 
   constructor(private readonly host: ProducerHost) {}

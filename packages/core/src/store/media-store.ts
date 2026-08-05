@@ -8,7 +8,7 @@
  * Phase 1 keeps the store in-memory. A cache/persistence layer can sit in
  * front of it later without changing this contract.
  */
-import type { MediaItem } from "@tauri-playground/producer"
+import type { MediaItem } from "../types/media-item.ts"
 
 export type MediaStoreListener = () => void
 

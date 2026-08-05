@@ -110,7 +110,7 @@ describe("feedToArticles", () => {
       </item></channel></rss>`
     const feed = parseFeed(xml)
     const items = feedToArticles(feed, {
-      subscriptionId: "sub1",
+
       sourceId: "rss",
       fetchedAt: 1_700_000_000_000,
       feedTitle: "Blog",
@@ -119,12 +119,10 @@ describe("feedToArticles", () => {
     const a = items[0]!
     expect(a.kind).toBe("article")
     expect(a.id).toBe("g1")
-    expect(a.subscriptionId).toBe("sub1")
     expect(a.content).toContain("<p>body</p>")
     expect(a.contentFormat).toBe("html")
     expect(a.publishedAt).toBe(new Date("Wed, 15 Jan 2025 10:00:00 GMT").getTime())
     expect(a.author?.name).toBe("Blog")
-    expect(a.isUnread).toBe(true)
   })
 
   test("falls back to url hash id when guid missing", () => {
@@ -132,7 +130,7 @@ describe("feedToArticles", () => {
       `<?xml version="1.0"?><rss version="2.0"><channel><item><title>NoGuid</title><link>https://x/1</link></item></channel></rss>`,
     )
     const items = feedToArticles(feed, {
-      subscriptionId: "s",
+
       sourceId: "rss",
       fetchedAt: 0,
     })

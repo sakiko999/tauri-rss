@@ -10,7 +10,7 @@
  * no HTTP; reads `stream_url` from detail.data), getLiveStatus (delegates to
  * detail). Danmaku out of scope.
  */
-import type { LivePlatformId } from "../../../types/media-item.ts"
+import type { FeedLivePlatformId } from "../../../types/feed-item.ts"
 import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
@@ -38,7 +38,7 @@ const DEFAULT_TTWID_COOKIE =
   "ttwid=1%7CB1qls3GdnZhUov9o2NxOMxxYS2ff6OSvEWbv0ytbES4%7C1680522049%7C280d802d6d478e3e78d0c807f7c487e7ffec0ae4e5fdd6a0fe74c3c6af149511"
 
 export class DouyinSite implements LiveSite {
-  readonly platform: LivePlatformId = "douyin"
+  readonly platform: FeedLivePlatformId = "douyin"
   readonly name = "抖音直播"
 
   /** Lazily-initialized cookie jar (fresh ttwid etc. from a warmup GET). */

@@ -9,7 +9,7 @@ import type { PlatformHost } from "../types/platform.ts"
 import type {
   Subscription,
   SubscriptionGroup,
-  SubscriptionKind,
+  KnownKind,
 } from "@tauri-playground/producer"
 
 const STORAGE_KEY = "subscriptions"
@@ -105,7 +105,7 @@ export function createSubscriptionRepository(host: PlatformHost): SubscriptionRe
  */
 export function isSubscription<S extends Subscription>(
   s: Subscription,
-  kind: SubscriptionKind,
+  kind: KnownKind,
 ): s is S {
   return s.kind === kind
 }

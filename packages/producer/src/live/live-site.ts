@@ -10,7 +10,7 @@
  * `LivePlayQuality.data`, `LiveMessage.data`) are replaced with typed shapes
  * or `unknown` (still opaque, but explicit) rather than `any`.
  */
-import type { LivePlatformId } from "../types/media-item.ts"
+import type { FeedLivePlatformId } from "../types/feed-item.ts"
 import type { LivePlayUrl } from "../types/result.ts"
 
 /** A live platform's top-level category (dart `LiveCategory`). */
@@ -94,7 +94,7 @@ export interface LiveRoomDetail {
  * Danmaku (`getDanmaku`) is out of scope and omitted here.
  */
 export interface LiveSite {
-  readonly platform: LivePlatformId
+  readonly platform: FeedLivePlatformId
   readonly name: string
 
   getCategories(): Promise<LiveCategory[]>

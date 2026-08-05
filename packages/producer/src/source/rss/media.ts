@@ -13,9 +13,9 @@
  * extension.
  */
 import type {
-  MediaAttachment,
-  MediaAttachmentKind,
-} from "../../types/media-item.ts"
+  FeedAttachment,
+  FeedAttachmentKind,
+} from "../../types/feed-item.ts"
 import type { ParsedItem } from "./xml-parser.ts"
 
 export interface ExtractMediaOptions {
@@ -24,12 +24,12 @@ export interface ExtractMediaOptions {
 }
 
 /** Extract media attachments from a parsed item. Returns [] when none. */
-export function extractMedia(item: ParsedItem, opts: ExtractMediaOptions = {}): MediaAttachment[] {
+export function extractMedia(item: ParsedItem, opts: ExtractMediaOptions = {}): FeedAttachment[] {
   const raw = item.raw
   if (!raw) return []
 
-  const out: MediaAttachment[] = []
-  const push = (att: MediaAttachment) => {
+  const out: FeedAttachment[] = []
+  const push = (att: FeedAttachment) => {
     if (att.url) out.push(att)
   }
 
@@ -147,9 +147,9 @@ function mediaAttachment(fields: {
   width?: number
   height?: number
   length?: string
-}, opts: ExtractMediaOptions): MediaAttachment {
+}, opts: ExtractMediaOptions): FeedAttachment {
   const kind = inferKind(fields.mimeType, fields.url)
-  const att: MediaAttachment = {
+  const att: FeedAttachment = {
     kind,
     url: fields.url ?? "",
     title: fields.title,
@@ -173,7 +173,7 @@ function mediaAttachment(fields: {
   return att
 }
 
-function inferKind(mimeType?: string, url?: string): MediaAttachmentKind {
+function inferKind(mimeType?: string, url?: string): FeedAttachmentKind {
   if (mimeType) {
     if (mimeType.startsWith("video/")) return "video"
     if (mimeType.startsWith("audio/")) return "audio"
@@ -253,7 +253,7 @@ function asString(v: unknown): string | undefined {
   return undefined
 }
 
-function dedupe(list: MediaAttachment[]): MediaAttachment[] {
+function dedupe(list: FeedAttachment[]): FeedAttachment[] {
   const seen = new Set<string>()
   return list.filter((a) => {
     const key = `${a.kind}:${a.url}`

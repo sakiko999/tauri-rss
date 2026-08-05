@@ -1,22 +1,22 @@
 /**
- * Media item types — the unified content model the app layer renders.
+ * Media item types — the app's *content model* the render layer consumes.
+ *
+ * Moved here from the producer package: `MediaItem` carries app-layer semantics
+ * (subscriptionId / unread / starred / rendering hints) that belong to core,
+ * NOT to the producer's feed protocol. The producer emits its own protocol
+ * shape (`FeedItem`, packages/producer/src/types/feed-item.ts) and core bridges
+ * FeedItem → MediaItem via `feed-to-media.ts`.
  *
  * A `MediaItem` is a discriminated union keyed on `kind`. Each variant carries
  * the fields that kind requires (not optional), so the app layer narrows on
  * `kind` and renders accordingly. `raw?: unknown` carries the opaque source
- * payload (mirrors dart `LiveRoomDetail.data` escape hatch) for lossless
- * round-tripping when a source field has no mapped home yet.
- *
- * Design note: this replaces rss-reader's flat-optional model (where
- * `Article`/`VideoItem`/… sat side-by-side on one `FeedItem`). A union keeps
- * kind-specific data guaranteed-present after narrowing.
+ * payload for lossless round-tripping when a source field has no mapped home.
  *
  * Kind set: `article | social | video | audio | live`. There is NO standalone
- * `image` kind — images are extracted into `ArticleItem.media[]` as attachments
- * (see `source/rss/media.ts`). This reflects the reader's primary flows
- * (articles + video/audio playback + live streams) while keeping `social`
- * available for short-form posts.
+ * `image` kind — images are extracted into `ArticleItem.media[]` as attachments.
  */
+
+import type { LivePlatformId, LiveStatus } from "./live.ts"
 
 /** The set of media kinds the app layer knows how to render. */
 export type MediaKind = "article" | "social" | "video" | "audio" | "live"
@@ -137,12 +137,6 @@ export interface AudioItem extends MediaItemBase {
   stream?: MediaStream
 }
 
-/** Live-stream liveness, as resolved at refresh time. */
-export type LiveStatus = "live" | "offline" | "unknown"
-
-/** Supported live platforms (mirrors dart_simple_live's four sites). */
-export type LivePlatformId = "bilibili" | "douyu" | "huya" | "douyin"
-
 /**
  * A live room surfaced as a media item.
  *
@@ -164,6 +158,9 @@ export interface LiveItem extends MediaItemBase {
   playUrls?: string[]
   playHeaders?: Record<string, string>
   quality?: string
+  /** Snapshot expiry for `playUrls` (epoch ms). When in the past, consumers
+   *  MUST NOT trust the URLs and should re-resolve via `resolveLivePlay()`. */
+  playUrlsExpiresAt?: number
 }
 
 export type MediaItem =

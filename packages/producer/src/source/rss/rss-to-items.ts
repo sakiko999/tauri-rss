@@ -1,19 +1,16 @@
 /**
- * Map a parsed feed into `ArticleItem[]`.
+ * Map a parsed feed into `FeedArticle[]`.
  *
  * Each item carries its extracted media attachments (`media[]`) via
- * `source/rss/media.ts`. Drop the rss-reader baggage the new model doesn't need:
- * avatar/icon/color generation (no avatar on `ArticleItem`), time formatting
- * (publishedAt is epoch ms; formatting is app-layer), random fallback ids
- * (use guid or url-hash).
+ * `source/rss/media.ts`. The protocol `FeedArticle` carries no app-layer
+ * `subscriptionId` (core injects it when bridging to MediaItem) and no
+ * `isUnread` default (protocol-nullable).
  */
-import type { ArticleItem, MediaAuthor } from "../../types/media-item.ts"
+import type { FeedArticle, FeedAuthor } from "../../types/feed-item.ts"
 import type { ParsedFeed, ParsedItem } from "./xml-parser.ts"
 import { extractMedia } from "./media.ts"
 
 export interface MapOptions {
-  /** Owning subscription id, stamped onto every item. */
-  subscriptionId: string
   /** Source adapter id (e.g. "rss"). */
   sourceId: string
   /** Epoch ms at fetch time. */
@@ -22,11 +19,11 @@ export interface MapOptions {
   feedTitle?: string
 }
 
-export function feedToArticles(feed: ParsedFeed, opts: MapOptions): ArticleItem[] {
+export function feedToArticles(feed: ParsedFeed, opts: MapOptions): FeedArticle[] {
   return feed.channel.item.map((it) => itemToArticle(it, opts))
 }
 
-function itemToArticle(item: ParsedItem, opts: MapOptions): ArticleItem {
+function itemToArticle(item: ParsedItem, opts: MapOptions): FeedArticle {
   const title = item.title ?? "(untitled)"
   const summary = item.description
   const content = item.content ?? item.description
@@ -37,7 +34,6 @@ function itemToArticle(item: ParsedItem, opts: MapOptions): ArticleItem {
 
   return {
     id: item.guid ?? `hash-${hashString(item.link ?? title)}`,
-    subscriptionId: opts.subscriptionId,
     sourceId: opts.sourceId,
     kind: "article",
     title,
@@ -49,7 +45,6 @@ function itemToArticle(item: ParsedItem, opts: MapOptions): ArticleItem {
     author,
     publishedAt,
     fetchedAt: opts.fetchedAt,
-    isUnread: true,
     media: media.length ? media : undefined,
     raw: item,
   }
@@ -63,7 +58,7 @@ function firstImage(media: ReturnType<typeof extractMedia>): string | undefined 
   return media[0]?.poster
 }
 
-function toAuthor(authorName: string | undefined, feedTitle?: string): MediaAuthor | undefined {
+function toAuthor(authorName: string | undefined, feedTitle?: string): FeedAuthor | undefined {
   if (authorName && authorName.trim()) return { name: authorName.trim() }
   if (feedTitle && feedTitle.trim()) return { name: feedTitle.trim() }
   return undefined

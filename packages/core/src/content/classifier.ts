@@ -7,7 +7,7 @@
  * article (text is primary; media stays in `media[]`). Live streams map to
  * `live`. Social posts map to `social`.
  */
-import type { ArticleItem, MediaAttachment, MediaItem } from "@tauri-playground/producer"
+import type { ArticleItem, MediaAttachment, MediaItem } from "../types/media-item.ts"
 import type { Content } from "../types/content.ts"
 
 export interface ClassifierOptions {

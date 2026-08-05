@@ -5,12 +5,14 @@
  * and `resolveLivePlay()` to lazily get a live room's playable URLs. Everything
  * else (adapters, host, repo) is an implementation detail.
  *
- * Default adapters are registered at construction: RSS and live rooms
- * (Bilibili/Douyu/Douyin/Huya). Custom adapters can still be added via
- * `registerAdapter`.
+ * Built-in source adapters are registered into the producer registry via
+ * `registerAllSources()`; this snapshots that registry into the adapter map.
+ * Plugins register via `registerSource(new XxxSource())` at app startup — they
+ * need no change here. `resolveLivePlay` dispatches to the adapter's optional
+ * `resolveLivePlay` capability.
  */
 import { NoAdapterError } from "./errors.ts"
-import type { MediaItem } from "@tauri-playground/producer"
+import type { MediaItem } from "./types/media-item.ts"
 import { createMediaStore, type MediaQuery } from "./store/media-store.ts"
 import type { PlatformHost } from "./types/platform.ts"
 import type { LivePlayUrl, RefreshResult } from "@tauri-playground/producer"
@@ -26,13 +28,11 @@ import {
   createSettingsRepository,
   type SettingsRepository,
 } from "./repo/settings-repository.ts"
+import { feedItemsToMediaItems } from "./feed-to-media.ts"
 import type { SourceAdapter } from "@tauri-playground/producer"
-import { BilibiliRankSource } from "@tauri-playground/producer"
 import type { SubscriptionKind } from "@tauri-playground/producer"
-import { RssSource } from "@tauri-playground/producer"
-import { LiveSource } from "@tauri-playground/producer"
+import { registerAllSources, listSources } from "@tauri-playground/producer"
 import { registerAllLiveSites } from "@tauri-playground/producer"
-import { getLiveSite } from "@tauri-playground/producer"
 
 export interface DataLayerOptions {
   /** Custom clock (defaults to host.now). */
@@ -70,13 +70,11 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
 
   // Register live platforms in the registry (looked up by LiveSource).
   registerAllLiveSites(host)
-  // Register default source adapters.
-  const defaults: SourceAdapter[] = [
-    new RssSource(),
-    new LiveSource(),
-    new BilibiliRankSource(),
-  ]
-  for (const a of defaults) adapters.set(a.kind, a)
+  // Register built-in source adapters (idempotent), then snapshot the registry
+  // into the adapter map. Plugins registered via registerSource() before this
+  // call are picked up here too.
+  registerAllSources()
+  for (const a of listSources()) adapters.set(a.kind, a)
 
   return {
     subscriptions: repo,
@@ -107,8 +105,12 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
       if (!adapter) throw new NoAdapterError(sub.kind)
       try {
         const items = await adapter.fetch(sub, host)
-        store.replace(subscriptionId, items)
-        return { subscriptionId, itemCount: items.length, fetchedAt: host.now() }
+        const mediaItems = feedItemsToMediaItems(items, {
+          subscriptionId,
+          now: host.now(),
+        })
+        store.replace(subscriptionId, mediaItems)
+        return { subscriptionId, itemCount: mediaItems.length, fetchedAt: host.now() }
       } catch (err) {
         host.log.log("error", "refresh failed", { subscriptionId, error: String(err) })
         return {
@@ -122,17 +124,13 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
 
     async resolveLivePlay(subscriptionId) {
       const sub = await repo.get(subscriptionId)
-      if (!sub?.kind || sub.kind !== "live-room") {
-        throw new Error(`subscription ${subscriptionId} is not a live-room`)
+      if (!sub) throw new Error(`subscription ${subscriptionId} not found`)
+      const adapter = adapters.get(sub.kind)
+      if (!adapter) throw new NoAdapterError(sub.kind)
+      if (!adapter.resolveLivePlay) {
+        throw new Error(`subscription kind ${sub.kind} does not support resolveLivePlay`)
       }
-      const site = getLiveSite(sub.platform)
-      if (!site) throw new Error(`No LiveSite registered for platform: ${sub.platform}`)
-      // resolveLivePlay needs detail + quality + urls — the multi-step resolve.
-      const detail = await site.getRoomDetail(sub.roomId)
-      const qualities = await site.getPlayQualities(detail)
-      const best = qualities[0]
-      if (!best) throw new Error(`No play qualities for room ${sub.roomId}`)
-      return site.getPlayUrls(detail, best)
+      return adapter.resolveLivePlay(sub, host)
     },
   }
 }

@@ -78,13 +78,11 @@ describe("BilibiliRankSource", () => {
     expect(sp.has("wts")).toBe(true)
     expect(String(sp.get("wts"))).toBe(String(Math.floor(1_700_000_000_000 / 1000)))
 
-    // Items mapped to ArticleItem with title/url/subscriptionId.
+    // Items mapped to FeedArticle with title/url/kind.
     expect(items).toHaveLength(2)
-    const first = items[0] as { title: string; url: string; kind: string; subscriptionId: string; isUnread: boolean }
+    const first = items[0] as { title: string; url: string; kind: string }
     expect(first.kind).toBe("article")
     expect(first.title).toBe("U17国足3-2绝杀阿森纳")
-    expect(first.subscriptionId).toBe("bili-hot")
-    expect(first.isUnread).toBe(true)
     expect(items[1]).toMatchObject({ title: "Jiejie加入EDG" })
   })
 })

@@ -16,7 +16,7 @@ describe("extractMedia", () => {
         <enclosure url="https://x/video.mp4" type="video/mp4" length="12345"/>
       </item></channel></rss>`
     const feed = parseFeed(xml)
-    const items = feedToArticles(feed, { subscriptionId: "s", sourceId: "rss", fetchedAt: 0 })
+    const items = feedToArticles(feed, { sourceId: "rss", fetchedAt: 0 })
     expect(items[0]!.media).toHaveLength(1)
     const m = items[0]!.media![0]!
     expect(m.kind).toBe("video")
@@ -34,7 +34,7 @@ describe("extractMedia", () => {
         <itunes:duration>12:34</itunes:duration>
       </item></channel></rss>`
     const feed = parseFeed(xml)
-    const items = feedToArticles(feed, { subscriptionId: "s", sourceId: "rss", fetchedAt: 0 })
+    const items = feedToArticles(feed, { sourceId: "rss", fetchedAt: 0 })
     const media = items[0]!.media!
     // audio enclosure + itunes image
     expect(media.length).toBeGreaterThanOrEqual(2)
@@ -51,7 +51,7 @@ describe("extractMedia", () => {
         <media:content url="https://x/pic.jpg" type="image/jpeg" width="800" height="400"/>
       </item></channel></rss>`
     const feed = parseFeed(xml)
-    const items = feedToArticles(feed, { subscriptionId: "s", sourceId: "rss", fetchedAt: 0 })
+    const items = feedToArticles(feed, { sourceId: "rss", fetchedAt: 0 })
     const media = items[0]!.media!
     const img = media.find((m) => m.kind === "image")!
     expect(img.width).toBe(800)
@@ -70,7 +70,7 @@ describe("extractMedia", () => {
         </entry>
       </feed>`
     const feed = parseFeed(xml)
-    const items = feedToArticles(feed, { subscriptionId: "s", sourceId: "rss", fetchedAt: 0 })
+    const items = feedToArticles(feed, { sourceId: "rss", fetchedAt: 0 })
     const media = items[0]!.media!
     expect(media).toHaveLength(1)
     expect(media[0]!.kind).toBe("video")
@@ -85,7 +85,7 @@ describe("extractMedia", () => {
         <enclosure url="https://x/a.mp3" type="audio/mpeg"/>
       </item></channel></rss>`
     const feed = parseFeed(xml)
-    const items = feedToArticles(feed, { subscriptionId: "s", sourceId: "rss", fetchedAt: 0 })
+    const items = feedToArticles(feed, { sourceId: "rss", fetchedAt: 0 })
     expect(items[0]!.media).toHaveLength(1)
   })
 })

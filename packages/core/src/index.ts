@@ -30,33 +30,28 @@ export { createSettingsRepository } from "./repo/settings-repository.ts"
 export type { SettingsRepository } from "./repo/settings-repository.ts"
 export { createMediaStore } from "./store/media-store.ts"
 export type { MediaStore, MediaQuery, MediaStoreListener } from "./store/media-store.ts"
+export { feedItemsToMediaItems } from "./feed-to-media.ts"
+export type { FeedToMediaOptions } from "./feed-to-media.ts"
 
-// ── Producer surface (re-exported for one-stop consumer imports) ────────────
-export type {
-  MediaItem,
-  ArticleItem,
-  SocialItem,
-  VideoItem,
-  AudioItem,
-  LiveItem,
-  MediaAttachment,
-  MediaAttachmentKind,
-  MediaAuthor,
-  MediaKind,
-  LivePlatformId,
-  StreamingFormat,
-} from "@tauri-playground/producer"
+// ── Core-owned content model + producer surface (one-stop consumer imports) ──
+export * from "./types/media-item.ts"
 export type {
   Subscription,
   SubscriptionBase,
   SubscriptionKind,
+  KnownKind,
+  KnownSubscription,
+  PluginSubscription,
   RssSubscription,
   LiveRoomSubscription,
   BilibiliRankSubscription,
+  BilibiliSubscription,
   SubscriptionGroup,
 } from "@tauri-playground/producer"
 export type { RefreshResult, LivePlayUrl } from "@tauri-playground/producer"
-export type { SourceAdapter } from "@tauri-playground/producer"
+export type { SourceAdapter, SourceAdapterMeta, SourceConfigField } from "@tauri-playground/producer"
+export { registerSource, getSource, listSources, overrideSource } from "@tauri-playground/producer"
+export { registerAllSources } from "@tauri-playground/producer"
 export { RssSource } from "@tauri-playground/producer"
 export { parseFeed } from "@tauri-playground/producer"
 export type { ParsedFeed, ParsedItem } from "@tauri-playground/producer"

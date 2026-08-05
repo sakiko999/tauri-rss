@@ -11,7 +11,7 @@
  * getLiveStatus. The H5Play responses return RTMP URLs (rtmp_live), which the
  * player layer handles.
  */
-import type { LivePlatformId } from "../../../types/media-item.ts"
+import type { FeedLivePlatformId } from "../../../types/feed-item.ts"
 import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
@@ -30,7 +30,7 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 
 export class DouyuSite implements LiveSite {
-  readonly platform: LivePlatformId = "douyu"
+  readonly platform: FeedLivePlatformId = "douyu"
   readonly name = "斗鱼直播"
 
   constructor(private readonly host: ProducerHost) {}

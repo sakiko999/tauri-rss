@@ -8,7 +8,7 @@
 // 而这个脚本自建 fixture host，只需 data-layer 与纯类型。走具体模块导入，
 // 让 scripts 项目（纯 node tsconfig）不把 DOM 库拖进来。
 import { createDataLayer } from "../packages/core/src/data-layer.ts"
-import type { ArticleItem } from "../packages/producer/src/types/media-item.ts"
+import type { ArticleItem } from "../packages/core/src/types/media-item.ts"
 import type {
   HttpBackend,
   HttpResponse,

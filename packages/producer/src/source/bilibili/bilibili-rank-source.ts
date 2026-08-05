@@ -16,7 +16,7 @@
  *   - RSSHub bilibili/utils.ts  `addWbiVerifyInfo` (w_rid = md5(params+wts+key))
  *   - RSSHub bilibili/hot-search.ts (the square/search response shape)
  */
-import type { MediaItem } from "../../types/media-item.ts"
+import type { FeedItem } from "../../types/feed-item.ts"
 import type { ProducerHost } from "../../types/producer-host.ts"
 import type { BilibiliRankSubscription } from "../../types/subscription.ts"
 import type { SourceAdapter } from "../source-adapter.ts"
@@ -43,7 +43,7 @@ export class BilibiliRankSource implements SourceAdapter<BilibiliRankSubscriptio
 
   private wbiKeyPromise: Promise<string> | null
 
-  async fetch(subscription: BilibiliRankSubscription, host: ProducerHost): Promise<MediaItem[]> {
+  async fetch(subscription: BilibiliRankSubscription, host: ProducerHost): Promise<FeedItem[]> {
     // Fetch hot-search via the wbi-signed `search/square` endpoint.
     const params = await this.signParams("limit=50&platform=web", host)
     const url = `${API_MAIN}/x/web-interface/wbi/search/square?${params}`
@@ -68,7 +68,6 @@ export class BilibiliRankSource implements SourceAdapter<BilibiliRankSubscriptio
         `https://search.bilibili.com/all?${new URLSearchParams({ keyword })}&from_source=webtop_search`
       return {
         id: `bili-rank-${i}-${keyword}`,
-        subscriptionId: subscription.id,
         sourceId: "bilibili-rank",
         kind: "article",
         title: keyword,
@@ -79,9 +78,8 @@ export class BilibiliRankSource implements SourceAdapter<BilibiliRankSubscriptio
         author: { name: subscription.title },
         publishedAt: now,
         fetchedAt: now,
-        isUnread: true,
         raw: item,
-      } as MediaItem
+      } as FeedItem
     })
   }
 

@@ -5,16 +5,16 @@
  * Registered via `registerLiveSite(site)` so `LiveSourceAdapter` can look one
  * up by platform id at refresh time.
  */
-import type { LivePlatformId } from "../types/media-item.ts"
+import type { FeedLivePlatformId } from "../types/feed-item.ts"
 import type { LiveSite } from "./live-site.ts"
 
-const sites = new Map<LivePlatformId, LiveSite>()
+const sites = new Map<FeedLivePlatformId, LiveSite>()
 
 export function registerLiveSite(site: LiveSite): void {
   sites.set(site.platform, site)
 }
 
-export function getLiveSite(platform: LivePlatformId): LiveSite | undefined {
+export function getLiveSite(platform: FeedLivePlatformId): LiveSite | undefined {
   return sites.get(platform)
 }
 

@@ -1,7 +1,7 @@
 /**
- * RssSource — fetches a direct RSS/Atom feed URL and emits `ArticleItem`s.
+ * RssSource — fetches a direct RSS/Atom feed URL and emits `FeedArticle`s.
  */
-import type { MediaItem } from "../../types/media-item.ts"
+import type { FeedItem } from "../../types/feed-item.ts"
 import type { ProducerHost } from "../../types/producer-host.ts"
 import type { RssSubscription } from "../../types/subscription.ts"
 import type { SourceAdapter } from "../source-adapter.ts"
@@ -10,8 +10,23 @@ import { parseFeed } from "./xml-parser.ts"
 
 export class RssSource implements SourceAdapter<RssSubscription> {
   readonly kind = "rss" as const
+  readonly meta = {
+    name: "RSS / Atom 订阅",
+    description: "任意原生 feed URL",
+    configSchema: [
+      { key: "url", label: "Feed URL", type: "text" as const, required: true },
+    ],
+  }
 
-  async fetch(subscription: RssSubscription, host: ProducerHost): Promise<MediaItem[]> {
+  /** Build a subscription from form values: config.url → RssSubscription.url. */
+  createSubscription(
+    base: { id: string; title: string; enabled: boolean; createdAt: number; updatedAt: number },
+    config: Record<string, unknown>,
+  ): RssSubscription {
+    return { ...base, kind: "rss", url: String(config.url ?? "") }
+  }
+
+  async fetch(subscription: RssSubscription, host: ProducerHost): Promise<FeedItem[]> {
     const res = await host.http.request({
       url: subscription.url,
       method: "GET",
@@ -24,7 +39,6 @@ export class RssSource implements SourceAdapter<RssSubscription> {
     const xml = typeof res.body === "string" ? res.body : new TextDecoder().decode(res.body)
     const feed = parseFeed(xml)
     return feedToArticles(feed, {
-      subscriptionId: subscription.id,
       sourceId: "rss",
       fetchedAt: host.now(),
       feedTitle: feed.channel.title ?? subscription.title,

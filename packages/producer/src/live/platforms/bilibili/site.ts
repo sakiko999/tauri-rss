@@ -9,7 +9,7 @@
  * Scope: getRecommendRooms / getRoomDetail / getPlayQualites / getPlayUrls /
  * getLiveStatus. (Danmaku is out of data-layer scope.)
  */
-import type { LivePlatformId } from "../../../types/media-item.ts"
+import type { FeedLivePlatformId } from "../../../types/feed-item.ts"
 import type { ProducerHost } from "../../../types/producer-host.ts"
 import type {
   LiveCategory,
@@ -36,7 +36,7 @@ const MIXIN_KEY_ENC_TAB = [
 ]
 
 export class BilibiliSite implements LiveSite {
-  readonly platform: LivePlatformId = "bilibili"
+  readonly platform: FeedLivePlatformId = "bilibili"
   readonly name = "哔哩哔哩直播"
 
   private imgKey = ""

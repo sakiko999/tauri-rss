@@ -4,31 +4,24 @@ export * from "./content.ts"
 export * from "./reading.ts"
 export * from "./settings.ts"
 export * from "./queries.ts"
-// Producer-owned contracts (MediaItem / Subscription / result) are re-exported
-// from the producer package so consumers get one surface. core is the maintainer
-// and depends on producer's types.
-export type {
-  MediaItem,
-  ArticleItem,
-  SocialItem,
-  VideoItem,
-  AudioItem,
-  LiveItem,
-  MediaAttachment,
-  MediaAttachmentKind,
-  MediaAuthor,
-  MediaKind,
-  LivePlatformId,
-  StreamingFormat,
-} from "@tauri-playground/producer"
+// Core-owned content model — the render layer's `MediaItem` union (moved here
+// from the producer package; producer keeps its own protocol `FeedItem`).
+export * from "./media-item.ts"
+export * from "./live.ts"
+// Producer-owned contracts (Subscription / result / source seam) re-exported so
+// consumers get one surface. core is the maintainer and depends on producer.
 export type {
   Subscription,
   SubscriptionBase,
   SubscriptionKind,
+  KnownKind,
+  KnownSubscription,
+  PluginSubscription,
   RssSubscription,
   LiveRoomSubscription,
   BilibiliRankSubscription,
+  BilibiliSubscription,
   SubscriptionGroup,
 } from "@tauri-playground/producer"
 export type { RefreshResult, LivePlayUrl } from "@tauri-playground/producer"
-export type { SourceAdapter } from "@tauri-playground/producer"
+export type { SourceAdapter, SourceAdapterMeta, SourceConfigField } from "@tauri-playground/producer"
