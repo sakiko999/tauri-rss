@@ -47,21 +47,10 @@ Git Bash 自带 `/usr/bin/link`（GNU 链接器），如果它在 PATH 里排在
 
 **解决**：确保 MSVC 的 `bin\Hostx64\x64` 在 PATH 最前（Native Tools 启动即自动前置）。
 
-```bash
-# 若从普通 bash 跑，手动前置 MSVC：
-export PATH="/c/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64:$PATH"
-```
-
 > 本机实际版本：`/c/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64`。
 > **Bash 工具调用间 env 不持久**——每次 cargo 命令前都要内联 `export PATH`（写在同一条命令里）。
 
 > 之前 `.cargo/config.toml` 硬编码过 linker 路径，已删除（硬编码 MSVC 版本号，VS 更新后必坏）。**不要在 cargo config 里写死 linker**，保持 PATH 方案。
-
-### 验证当前环境
-
-```bash
-which link   # 应显示 MSVC 路径，而非 /usr/bin/link
-```
 
 ## Git 提交身份
 
