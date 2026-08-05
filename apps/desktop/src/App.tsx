@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react"
 import {
   createDataLayer,
+  getSource,
   type DataLayer,
   type MediaItem,
   type RefreshResult,
+  type Subscription,
+  type SubscriptionKind,
 } from "@tauri-playground/core"
 import { createTauriHost } from "./host/tauri-host"
 
@@ -22,11 +25,55 @@ import { createTauriHost } from "./host/tauri-host"
 type TestSub = {
   id: string
   title: string
-  url: string
+  url?: string
   /** 人类可读的媒体/格式标注，仅用于测试展示，不进数据层。 */
   tag: string
-  /** 订阅 kind，默认 "rss"；非 rss（如 bilibili-rank）走对应 adapter。 */
-  kind?: "rss" | "bilibili-rank"
+  /** 订阅 kind，默认 "rss"；非 rss（如 bilibili-rank / bilibili / 插件 kind）走对应 adapter。 */
+  kind?: SubscriptionKind
+  /** bilibili 路由（kind="bilibili" 时用）。 */
+  route?: "popular" | "ranking" | "weekly" | "user-video"
+  /** ranking 分区（all/douga/…），user-video 的 uid。 */
+  rid?: string
+  uid?: string
+  /** 插件 kind 的配置字段透传（kind 非内置时原样传给订阅）。 */
+  [key: string]: unknown
+}
+
+/**
+ * 由测试订阅描述构造 Subscription。
+ * 1. 若注册表里有该 kind 的 adapter 且实现了 createSubscription，则用它拼接
+ *    （这是「外部选渠道 → 填参数 → 拼出订阅」的正规路径，插件无需改这里）；
+ * 2. 否则内置 kind 走精确分支；
+ * 3. 未知(插件)kind 走开放兜底——kind 字符串 + 剩余配置字段透传。
+ */
+function buildSubscription(base: { id: string; title: string }, s: TestSub): Subscription {
+  const fullBase = { ...base, enabled: true, createdAt: Date.now(), updatedAt: Date.now() }
+  if (s.kind) {
+    const adapter = getSource(s.kind)
+    if (adapter?.createSubscription) {
+      const { id, title, url, tag, kind, route, rid, uid, ...config } = s
+      return adapter.createSubscription(fullBase, config)
+    }
+  }
+  switch (s.kind) {
+    case "bilibili-rank":
+      return { ...fullBase, kind: "bilibili-rank" }
+    case "bilibili":
+      return {
+        ...fullBase,
+        kind: "bilibili",
+        route: s.route ?? "popular",
+        ...(s.rid ? { rid: s.rid } : {}),
+        ...(s.uid ? { uid: s.uid } : {}),
+      }
+    case undefined:
+    case "rss":
+      return { ...fullBase, kind: "rss", url: s.url! }
+    default:
+      // 插件 kind 兜底：kind 字符串 + 配置字段透传（去掉已消费的展示字段）。
+      const { id, title, url, tag, kind, route, rid, uid, ...rest } = s
+      return { ...fullBase, kind: s.kind, ...rest }
+  }
 }
 
 const TEST_SUBSCRIPTIONS = [
@@ -73,11 +120,15 @@ const TEST_SUBSCRIPTIONS = [
   { id: "cnbeta", title: "cnBeta", url: "https://www.cnbeta.com.tw/backend.php", tag: "RSS · 国内" },
   { id: "sina-tech", title: "新浪科技", url: "https://rss.sina.com.cn/tech/rollnews.xml", tag: "RSS · 国内" },
 
-  // ── 热门平台（bilibili 走 wbi 签名 API，零登录；YouTube 走官方 RSS）──
+  // ── 热门平台（bilibili 走 API，零登录；YouTube 走官方 RSS）──
   { id: "bili-hot", title: "bilibili 热搜", url: "https://www.bilibili.com/", tag: "API · 热搜", kind: "bilibili-rank" },
-  { id: "yt-3b1b", title: "3Blue1Brown (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCYO_jab_esuFRV4b17AJtAw", tag: "Atom · 视频" },
-  { id: "yt-lex", title: "Lex Fridman (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA", tag: "Atom · 视频" },
-  { id: "yt-kenjee", title: "Ken Jee (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiT9RITQ9PW6BhXK0y2jaeg", tag: "Atom · 视频" },
+  { id: "bili-popular", title: "bilibili 综合热门", url: "https://www.bilibili.com/", tag: "API · 视频", kind: "bilibili", route: "popular" },
+  { id: "bili-ranking", title: "bilibili 排行榜·全站", url: "https://www.bilibili.com/", tag: "API · 视频", kind: "bilibili", route: "ranking", rid: "all" },
+  { id: "bili-weekly", title: "B站每周必看", url: "https://www.bilibili.com/", tag: "API · 视频", kind: "bilibili", route: "weekly" },
+  { id: "bili-3b1b", title: "3Blue1Brown (B 站)", url: "https://www.bilibili.com/", tag: "API · UP主", kind: "bilibili", route: "user-video", uid: "511068914" },
+  { id: "yt-3b1b", title: "3Blue1Brown (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCYO_jab_esuFRV4b17AJtAw", tag: "API · 频道", kind: "youtube", channelId: "UCYO_jab_esuFRV4b17AJtAw" },
+  { id: "yt-lex", title: "Lex Fridman (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCSHZKyawb77ixDdsGog4iWA", tag: "API · 频道", kind: "youtube", channelId: "UCSHZKyawb77ixDdsGog4iWA" },
+  { id: "yt-kenjee", title: "Ken Jee (YouTube)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCiT9RITQ9PW6BhXK0y2jaeg", tag: "API · 频道", kind: "youtube", channelId: "UCiT9RITQ9PW6BhXK0y2jaeg" },
 ] as TestSub[]
 
 interface FeedState {
@@ -105,11 +156,7 @@ export default function App() {
       for (const s of TEST_SUBSCRIPTIONS) {
         const existing = await dl.subscriptions.get(s.id)
         if (!existing) {
-          await dl.subscriptions.add(
-            s.kind === "bilibili-rank"
-              ? { id: s.id, kind: "bilibili-rank", title: s.title, enabled: true, createdAt: Date.now(), updatedAt: Date.now() }
-              : { id: s.id, kind: "rss", title: s.title, enabled: true, createdAt: Date.now(), updatedAt: Date.now(), url: s.url },
-          )
+          await dl.subscriptions.add(buildSubscription({ id: s.id, title: s.title }, s))
         }
       }
       const next: FeedState[] = []
