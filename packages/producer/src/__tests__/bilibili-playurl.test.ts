@@ -45,12 +45,12 @@ function json(obj: unknown): HttpResponse {
 
 const SUB: BilibiliSubscription = {
   id: "bili-x",
-  kind: "bilibili",
+  sourceId: "bilibili",
   title: "bilibili",
   enabled: true,
   createdAt: 0,
   updatedAt: 0,
-  route: "popular",
+  config: { route: "popular" },
 }
 
 describe("BilibiliSource.resolveVideoPlay", () => {
@@ -85,6 +85,6 @@ describe("BilibiliSource.resolveVideoPlay", () => {
       now: () => 1_700_000_000_000,
     }
     const src = new BilibiliSource()
-    await expect(src.resolveVideoPlay(noCidHost, noCidHost, "BV1xx")).rejects.toThrow(/no cid/)
+    await expect(src.resolveVideoPlay(SUB, noCidHost, "BV1xx")).rejects.toThrow(/no cid/)
   })
 })

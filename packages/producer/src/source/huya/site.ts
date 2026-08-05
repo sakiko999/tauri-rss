@@ -9,9 +9,9 @@
  * need the Tars binary codec to call `wup.huya.com`/`getCdnTokenInfoEx` — that
  * port is deferred to a later phase.
  */
-import { NotImplementedError } from "../../../errors.ts"
-import type { FeedLivePlatformId } from "../../../types/feed-item.ts"
-import type { ProducerHost } from "../../../types/producer-host.ts"
+import { NotImplementedError } from "../../errors.ts"
+import type { FeedLivePlatformId } from "../../types/feed-item.ts"
+import type { ProducerHost } from "../../types/producer-host.ts"
 import type {
   LiveCategory,
   LivePlayQuality,
@@ -20,8 +20,8 @@ import type {
   LiveRoomPage,
   LiveSite,
   LiveSubCategory,
-} from "../../live-site.ts"
-import { type Json, arr, bodyText, strOr, toInt } from "../../../utils/json.ts"
+} from "../../types/live-site.ts"
+import { type Json, arr, bodyText, strOr, toInt } from "../../utils/json.ts"
 
 const M_HUYA = "https://m.huya.com"
 const WWW_HUYA = "https://www.huya.com"

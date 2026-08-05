@@ -9,7 +9,6 @@ import type { PlatformHost } from "../types/platform.ts"
 import type {
   Subscription,
   SubscriptionGroup,
-  KnownKind,
 } from "@tauri-playground/producer"
 
 const STORAGE_KEY = "subscriptions"
@@ -100,12 +99,12 @@ export function createSubscriptionRepository(host: PlatformHost): SubscriptionRe
 }
 
 /**
- * Type guard helpers for narrowing subscriptions by kind. Useful for adapters
- * and tests; cheap to keep here next to the persistence layer.
+ * Type guard for narrowing a subscription by its source adapter. Useful for
+ * adapters and tests; cheap to keep here next to the persistence layer.
  */
 export function isSubscription<S extends Subscription>(
   s: Subscription,
-  kind: KnownKind,
+  sourceId: string,
 ): s is S {
-  return s.kind === kind
+  return s.sourceId === sourceId
 }

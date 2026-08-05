@@ -11,8 +11,10 @@ apps/
   mobile/        前端（React 19 + Vite，产物 → dist/mobile）
 packages/
   producer/      ★ @tauri-playground/producer — 订阅生产者（source/rss + source/bilibili +
-                   live(4平台) + 类型契约 MediaItem/Subscription + ProducerHost）。只依赖自身，
-                   不 import core/desktop；host 能力用自带 ProducerHost（与 core PlatformHost 鸭子兼容）
+                   source/{douyu,douyin,huya} 独立直播 source + 类型契约 Subscription/FeedItem +
+                   ProducerHost）。订阅无 kind 判别——按 sourceId 找 adapter，统一产出 RSS 2.0 +
+                   tpl: XML（BaseSource.toXml）。只依赖自身，不 import core/desktop；host 能力用
+                   自带 ProducerHost（与 core PlatformHost 鸭子兼容）
   core/          @tauri-playground/core — 订阅维护者（types/content-platform 等 +
                    host / store / repo / classifier）。反向 import producer 的类型与适配器，
                    createDataLayer 组装 refresh 编排 + 持久化

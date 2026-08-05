@@ -30,9 +30,7 @@ import {
 } from "./repo/settings-repository.ts"
 import { feedItemsToMediaItems } from "./feed-to-media.ts"
 import type { SourceAdapter } from "@tauri-playground/producer"
-import type { SubscriptionKind } from "@tauri-playground/producer"
-import { registerAllSources, listSources } from "@tauri-playground/producer"
-import { registerAllLiveSites } from "@tauri-playground/producer"
+import { deserializeFeed, registerAllSources, listSources } from "@tauri-playground/producer"
 
 export interface DataLayerOptions {
   /** Custom clock (defaults to host.now). */
@@ -68,15 +66,13 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
   const reading = createReadingRepository(host)
   const settings = createSettingsRepository(host)
   const store = createMediaStore(options.now ?? host.now)
-  const adapters = new Map<SubscriptionKind, SourceAdapter>()
+  const adapters = new Map<string, SourceAdapter>()
 
-  // Register live platforms in the registry (looked up by LiveSource).
-  registerAllLiveSites(host)
   // Register built-in source adapters (idempotent), then snapshot the registry
   // into the adapter map. Plugins registered via registerSource() before this
   // call are picked up here too.
-  registerAllSources()
-  for (const a of listSources()) adapters.set(a.kind, a)
+  registerAllSources(host)
+  for (const a of listSources()) adapters.set(a.sourceId, a)
 
   return {
     subscriptions: repo,
@@ -90,7 +86,7 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
     },
 
     registerAdapter(adapter) {
-      adapters.set(adapter.kind, adapter)
+      adapters.set(adapter.sourceId, adapter)
     },
 
     async refresh(subscriptionId) {
@@ -103,10 +99,14 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
           fetchedAt: host.now(),
         }
       }
-      const adapter = adapters.get(sub.kind)
-      if (!adapter) throw new NoAdapterError(sub.kind)
+      const adapter = adapters.get(sub.sourceId)
+      if (!adapter) throw new NoAdapterError(sub.sourceId)
       try {
-        const items = await adapter.fetch(sub, host)
+        // The producer↔core transfer is XML: every source satisfies `toXml`,
+        // so core consumes uniform RSS 2.0 (+ tpl:) and recovers the protocol
+        // items via `deserializeFeed`.
+        const xml = await adapter.toXml(sub, host)
+        const items = deserializeFeed(xml)
         const mediaItems = feedItemsToMediaItems(items, {
           subscriptionId,
           now: host.now(),
@@ -127,10 +127,10 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
     async resolveLivePlay(subscriptionId) {
       const sub = await repo.get(subscriptionId)
       if (!sub) throw new Error(`subscription ${subscriptionId} not found`)
-      const adapter = adapters.get(sub.kind)
-      if (!adapter) throw new NoAdapterError(sub.kind)
+      const adapter = adapters.get(sub.sourceId)
+      if (!adapter) throw new NoAdapterError(sub.sourceId)
       if (!adapter.resolveLivePlay) {
-        throw new Error(`subscription kind ${sub.kind} does not support resolveLivePlay`)
+        throw new Error(`subscription source ${sub.sourceId} does not support resolveLivePlay`)
       }
       return adapter.resolveLivePlay(sub, host)
     },
@@ -138,10 +138,10 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
     async resolveVideoPlay(subscriptionId, videoId) {
       const sub = await repo.get(subscriptionId)
       if (!sub) throw new Error(`subscription ${subscriptionId} not found`)
-      const adapter = adapters.get(sub.kind)
-      if (!adapter) throw new NoAdapterError(sub.kind)
+      const adapter = adapters.get(sub.sourceId)
+      if (!adapter) throw new NoAdapterError(sub.sourceId)
       if (!adapter.resolveVideoPlay) {
-        throw new Error(`subscription kind ${sub.kind} does not support resolveVideoPlay`)
+        throw new Error(`subscription source ${sub.sourceId} does not support resolveVideoPlay`)
       }
       return adapter.resolveVideoPlay(sub, host, videoId)
     },

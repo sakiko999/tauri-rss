@@ -10,10 +10,10 @@ export class NotImplementedError extends Error {
   }
 }
 
-/** Raised when a subscription kind has no registered source adapter. */
+/** Raised when a subscription's sourceId has no registered source adapter. */
 export class NoAdapterError extends Error {
-  constructor(kind: string) {
-    super(`No source adapter registered for subscription kind: ${kind}`)
+  constructor(sourceId: string) {
+    super(`No source adapter registered for subscription source: ${sourceId}`)
     this.name = "NoAdapterError"
   }
 }

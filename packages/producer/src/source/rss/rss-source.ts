@@ -4,12 +4,13 @@
 import type { FeedItem } from "../../types/feed-item.ts"
 import type { ProducerHost } from "../../types/producer-host.ts"
 import type { RssSubscription } from "../../types/subscription.ts"
-import type { SourceAdapter } from "../source-adapter.ts"
-import { feedToArticles } from "./rss-to-items.ts"
-import { parseFeed } from "./xml-parser.ts"
+import { BaseSource } from "../base-source.ts"
+import { RSS_BUILTIN_FEEDS } from "./builtin-feeds.ts"
+import { feedToArticles } from "../../parse/rss-to-items.ts"
+import { parseFeed } from "../../parse/xml-parser.ts"
 
-export class RssSource implements SourceAdapter<RssSubscription> {
-  readonly kind = "rss" as const
+export class RssSource extends BaseSource<RssSubscription> {
+  readonly sourceId = "rss" as const
   readonly meta = {
     name: "RSS / Atom 订阅",
     description: "任意原生 feed URL",
@@ -18,23 +19,27 @@ export class RssSource implements SourceAdapter<RssSubscription> {
     ],
   }
 
-  /** Build a subscription from form values: config.url → RssSubscription.url. */
+  /** Curated public RSS/Atom feeds this source ships with. */
+  readonly builtinSubscriptions = RSS_BUILTIN_FEEDS
+
+  /** Build a subscription from form values: config.url → RssSubscription.config. */
   createSubscription(
-    base: { id: string; title: string; enabled: boolean; createdAt: number; updatedAt: number },
+    base: { id: string; sourceId: string; title: string; enabled: boolean; createdAt: number; updatedAt: number },
     config: Record<string, unknown>,
   ): RssSubscription {
-    return { ...base, kind: "rss", url: String(config.url ?? "") }
+    return { ...base, sourceId: "rss", config: { url: String(config.url ?? "") } }
   }
 
   async fetch(subscription: RssSubscription, host: ProducerHost): Promise<FeedItem[]> {
+    const url = subscription.config.url
     const res = await host.http.request({
-      url: subscription.url,
+      url,
       method: "GET",
       responseType: "text",
       headers: { "user-agent": UA },
     })
     if (res.status < 200 || res.status >= 300) {
-      throw new Error(`RSS fetch failed: ${res.status} for ${subscription.url}`)
+      throw new Error(`RSS fetch failed: ${res.status} for ${url}`)
     }
     const xml = typeof res.body === "string" ? res.body : new TextDecoder().decode(res.body)
     const feed = parseFeed(xml)

@@ -1,34 +1,27 @@
 /**
  * Subscription types — the *config* layer ("what you follow").
  *
- * Separated from `MediaItem` (the *content* fetched from a subscription):
- * one `Subscription` produces N `MediaItem`s joined by `subscriptionId`.
+ * Separated from `FeedItem` (the *content* fetched from a subscription):
+ * one `Subscription` produces N `FeedItem`s joined by `subscriptionId`.
  * Keeping config and content apart lets "smart feeds" (today / unread /
  * starred) become store queries rather than special tree nodes.
+ *
+ * No `kind` discriminant: a subscription identifies its source by `sourceId`
+ * (an open string the adapter registry keys on) and carries its source-specific
+ * fields in a nested `config`. Consumers never switch on a kind union — they
+ * look up the adapter by `sourceId` and let it interpret `config`. This is the
+ * "producer as a minimal RSSHub" boundary: every source is equally just
+ * "a subscription → XML".
  */
-import type { FeedLivePlatformId } from "./feed-item.ts"
 
-/** Built-in kinds with their own config types (producer ships these). */
-export type KnownKind = "rss" | "live-room" | "bilibili-rank" | "bilibili"
-
-/**
- * The kinds of sources a subscription can pull from.
- * Built-in kinds plus any plugin string — `string & {}` keeps literal
- * narrowing for known kinds while still accepting arbitrary plugin kinds.
- */
-export type SubscriptionKind = KnownKind | (string & {})
-
-/** Bilibili API route variants handled by the `BilibiliSource` adapter. */
-export type BilibiliRoute =
-  | "popular" // 综合热门  /x/web-interface/popular
-  | "ranking" // 排行榜    /x/web-interface/ranking/v2  (needs `rid`)
-  | "weekly" // 每周必看  app.bilibili.com/.../selected
-  | "user-video" // UP 主投稿 /x/space/wbi/arc/search (needs `uid`, wbi-signed)
+/** Identifier of a source adapter (registry key), e.g. "rss" | "bilibili" | "douyu". */
+export type SourceId = string
 
 /** Fields shared by every subscription variant. */
 export interface SubscriptionBase {
   id: string
-  kind: SubscriptionKind
+  /** Which source adapter owns this subscription (registry key). */
+  sourceId: SourceId
   title: string
   /** Grouping in the sidebar tree. `null`/`undefined` = top-level. */
   groupId?: string | null
@@ -39,57 +32,72 @@ export interface SubscriptionBase {
   refreshIntervalSec?: number
 }
 
+/**
+ * Config shapes are open (`[key: string]: unknown`) so they satisfy the
+ * open `Subscription.config: Record<string, unknown>` — any adapter may carry
+ * extra source-specific config without widening the shape.
+ */
 /** A direct RSS/Atom feed URL. */
-export interface RssSubscription extends SubscriptionBase {
-  kind: "rss"
+export interface RssConfig {
   url: string
-}
-
-/** A live-streaming room to watch for liveness. */
-export interface LiveRoomSubscription extends SubscriptionBase {
-  kind: "live-room"
-  platform: FeedLivePlatformId
-  roomId: string
-}
-
-/** A Bilibili hot-search / ranking feed (wbi-signed API, no login needed). */
-export interface BilibiliRankSubscription extends SubscriptionBase {
-  kind: "bilibili-rank"
-}
-
-/**
- * A Bilibili API route (video list, ranking, weekly picks). All routes hit
- * `api.bilibili.com` over plain GET; `popular`/`ranking`/`weekly` need no
- * signature, `user-video` is wbi-signed (reuses `source/bilibili/wbi.ts`).
- */
-export interface BilibiliSubscription extends SubscriptionBase {
-  kind: "bilibili"
-  route: BilibiliRoute
-  /** Ranking partition id (e.g. "all", "douga", or numeric rid). Required by `ranking`. */
-  rid?: string
-  /** UP 主 uid. Required by `user-video`. */
-  uid?: string
-}
-
-/**
- * Plugin-defined kind: arbitrary kind string + opaque extra config fields,
- * interpreted by the plugin adapter itself. This is the open fallback that lets
- * a third-party source register without touching the built-in union.
- */
-export interface PluginSubscription extends SubscriptionBase {
-  kind: string
   [key: string]: unknown
 }
 
-/** Precise union of the built-in variants — where exhaustive checks run. */
-export type KnownSubscription =
-  | RssSubscription
-  | LiveRoomSubscription
-  | BilibiliRankSubscription
-  | BilibiliSubscription
+/** Bilibili multi-route config (video + hot-search + live room). */
+export interface BilibiliConfig {
+  route: "hot-search" | "popular" | "ranking" | "weekly" | "user-video" | "live-room"
+  /** Ranking partition (e.g. "all"); UP 主 uid for user-video; room for live-room. */
+  rid?: string
+  uid?: string
+  /** 直播房间 id (route="live-room"). */
+  roomId?: string
+  [key: string]: unknown
+}
 
-/** Full union exposed to consumers: built-in variants + open plugin fallback. */
-export type Subscription = KnownSubscription | PluginSubscription
+/** YouTube channel via official RSS. */
+export interface YoutubeConfig {
+  channelId: string
+  [key: string]: unknown
+}
+
+/** A live room on any platform. */
+export interface LiveRoomConfig {
+  roomId: string
+  [key: string]: unknown
+}
+
+/** A subscription backed by a built-in source adapter (typed convenience). */
+export interface RssSubscription extends SubscriptionBase {
+  sourceId: "rss"
+  config: RssConfig
+}
+
+export interface BilibiliSubscription extends SubscriptionBase {
+  sourceId: "bilibili"
+  config: BilibiliConfig
+}
+
+export interface YoutubeSubscription extends SubscriptionBase {
+  sourceId: "youtube"
+  config: YoutubeConfig
+}
+
+/**
+ * The open subscription shape: any sourceId + opaque config. Every subscription
+ * (built-in or plugin) is this shape at runtime — built-in variants are just
+ * narrowings for typed config access. `config` carries the source-specific
+ * fields, interpreted by the adapter that owns `sourceId`.
+ */
+export interface PluginSubscription extends SubscriptionBase {
+  sourceId: string
+  config: Record<string, unknown>
+}
+
+/** Full subscription type exposed to consumers. */
+export type Subscription = PluginSubscription
+
+/** Compatibility alias — prefer `Subscription`; kept for code that switches on sourceId. */
+export type KnownSubscription = Subscription
 
 /** A user-defined folder in the subscription tree. */
 export interface SubscriptionGroup {

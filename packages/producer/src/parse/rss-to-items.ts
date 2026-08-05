@@ -6,7 +6,7 @@
  * `subscriptionId` (core injects it when bridging to MediaItem) and no
  * `isUnread` default (protocol-nullable).
  */
-import type { FeedArticle, FeedAuthor } from "../../types/feed-item.ts"
+import type { FeedArticle, FeedAuthor } from "../types/feed-item.ts"
 import type { ParsedFeed, ParsedItem } from "./xml-parser.ts"
 import { extractMedia } from "./media.ts"
 

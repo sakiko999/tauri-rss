@@ -4,8 +4,8 @@
  * and classifies an item's primary `Content` kind.
  */
 import { test, expect, describe } from "bun:test"
-import { parseFeed } from "../source/rss/xml-parser.ts"
-import { feedToArticles } from "../source/rss/rss-to-items.ts"
+import { parseFeed } from "../parse/xml-parser.ts"
+import { feedToArticles } from "../parse/rss-to-items.ts"
 
 describe("extractMedia", () => {
   test("RSS 2.0 <enclosure> → video attachment", () => {

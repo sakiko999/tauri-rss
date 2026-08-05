@@ -11,8 +11,8 @@
  * getLiveStatus. The H5Play responses return RTMP URLs (rtmp_live), which the
  * player layer handles.
  */
-import type { FeedLivePlatformId } from "../../../types/feed-item.ts"
-import type { ProducerHost } from "../../../types/producer-host.ts"
+import type { FeedLivePlatformId } from "../../types/feed-item.ts"
+import type { ProducerHost } from "../../types/producer-host.ts"
 import type {
   LiveCategory,
   LivePlayQuality,
@@ -21,8 +21,8 @@ import type {
   LiveRoomPage,
   LiveSite,
   LiveSubCategory,
-} from "../../live-site.ts"
-import { type Json, arr, bodyText, strOr, toInt } from "../../../utils/json.ts"
+} from "../../types/live-site.ts"
+import { type Json, arr, bodyText, strOr, toInt } from "../../utils/json.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 
 const BASE = "https://www.douyu.com"

@@ -13,14 +13,13 @@ export * from "./live.ts"
 export type {
   Subscription,
   SubscriptionBase,
-  SubscriptionKind,
-  KnownKind,
-  KnownSubscription,
-  PluginSubscription,
+  SourceId,
   RssSubscription,
-  LiveRoomSubscription,
-  BilibiliRankSubscription,
   BilibiliSubscription,
+  YoutubeSubscription,
+  RssConfig,
+  BilibiliConfig,
+  YoutubeConfig,
   SubscriptionGroup,
 } from "@tauri-playground/producer"
 export type { RefreshResult, LivePlayUrl } from "@tauri-playground/producer"

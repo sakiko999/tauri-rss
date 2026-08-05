@@ -15,7 +15,7 @@
 import type {
   FeedAttachment,
   FeedAttachmentKind,
-} from "../../types/feed-item.ts"
+} from "../types/feed-item.ts"
 import type { ParsedItem } from "./xml-parser.ts"
 
 export interface ExtractMediaOptions {

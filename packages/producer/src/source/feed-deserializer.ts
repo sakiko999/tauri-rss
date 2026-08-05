@@ -14,7 +14,7 @@
  */
 import type { FeedItem, FeedLivePlatformId, FeedLiveStatus } from "../types/feed-item.ts"
 import type { FeedAttachment, FeedAuthor, FeedStreamingFormat } from "../types/feed-item.ts"
-import { parseFeed, type ParsedItem } from "./rss/xml-parser.ts"
+import { parseFeed, type ParsedItem } from "../parse/xml-parser.ts"
 
 /** `FeedStreamingFormat` is a closed union; unknown values degrade to undefined. */
 function asStreamingFormat(v: unknown): FeedStreamingFormat | undefined {

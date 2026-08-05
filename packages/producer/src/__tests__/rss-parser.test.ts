@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test"
-import { parseFeed } from "../source/rss/xml-parser.ts"
-import { feedToArticles } from "../source/rss/rss-to-items.ts"
+import { parseFeed } from "../parse/xml-parser.ts"
+import { feedToArticles } from "../parse/rss-to-items.ts"
 
 describe("parseFeed", () => {
   test("RSS 2.0: maps channel + items", () => {

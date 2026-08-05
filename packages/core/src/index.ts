@@ -38,14 +38,13 @@ export * from "./types/media-item.ts"
 export type {
   Subscription,
   SubscriptionBase,
-  SubscriptionKind,
-  KnownKind,
-  KnownSubscription,
-  PluginSubscription,
+  SourceId,
   RssSubscription,
-  LiveRoomSubscription,
-  BilibiliRankSubscription,
   BilibiliSubscription,
+  YoutubeSubscription,
+  RssConfig,
+  BilibiliConfig,
+  YoutubeConfig,
   SubscriptionGroup,
 } from "@tauri-playground/producer"
 export type { RefreshResult, LivePlayUrl } from "@tauri-playground/producer"
@@ -53,27 +52,14 @@ export type { SourceAdapter, SourceAdapterMeta, SourceConfigField } from "@tauri
 export { registerSource, getSource, listSources, overrideSource } from "@tauri-playground/producer"
 export { registerAllSources } from "@tauri-playground/producer"
 export { RssSource } from "@tauri-playground/producer"
+export { BilibiliSource } from "@tauri-playground/producer"
+export { YoutubeSource } from "@tauri-playground/producer"
+export { DouyuSource } from "@tauri-playground/producer"
+export { DouyinSource } from "@tauri-playground/producer"
+export { HuyaSource } from "@tauri-playground/producer"
+export { deserializeFeed } from "@tauri-playground/producer"
 export { parseFeed } from "@tauri-playground/producer"
 export type { ParsedFeed, ParsedItem } from "@tauri-playground/producer"
 export { feedToArticles } from "@tauri-playground/producer"
 export { extractMedia } from "@tauri-playground/producer"
-export { BilibiliRankSource } from "@tauri-playground/producer"
-export { LiveSource } from "@tauri-playground/producer"
-export { registerAllLiveSites } from "@tauri-playground/producer"
-export { BilibiliSite } from "@tauri-playground/producer"
-export { DouyuSite } from "@tauri-playground/producer"
-export { DouyinSite } from "@tauri-playground/producer"
-export { HuyaSite } from "@tauri-playground/producer"
 export { md5Hex } from "@tauri-playground/producer"
-export type {
-  LiveSite,
-  LiveCategory,
-  LiveSubCategory,
-  LiveRoomItem,
-  LiveRoomPage,
-  LiveAnchorItem,
-  LiveAnchorPage,
-  LivePlayQuality,
-  LiveRoomDetail,
-} from "@tauri-playground/producer"
-export { registerLiveSite, getLiveSite, listLiveSites } from "@tauri-playground/producer"

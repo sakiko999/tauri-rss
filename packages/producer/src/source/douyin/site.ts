@@ -10,8 +10,8 @@
  * no HTTP; reads `stream_url` from detail.data), getLiveStatus (delegates to
  * detail). Danmaku out of scope.
  */
-import type { FeedLivePlatformId } from "../../../types/feed-item.ts"
-import type { ProducerHost } from "../../../types/producer-host.ts"
+import type { FeedLivePlatformId } from "../../types/feed-item.ts"
+import type { ProducerHost } from "../../types/producer-host.ts"
 import type {
   LiveCategory,
   LivePlayQuality,
@@ -20,8 +20,8 @@ import type {
   LiveRoomPage,
   LiveSite,
   LiveSubCategory,
-} from "../../live-site.ts"
-import { type Json, arr, bodyText, strOr, toInt } from "../../../utils/json.ts"
+} from "../../types/live-site.ts"
+import { type Json, arr, bodyText, strOr, toInt } from "../../utils/json.ts"
 import { ABOGUS_JS } from "./abogus.ts"
 
 const LIVE = "https://live.douyin.com"

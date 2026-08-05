@@ -65,12 +65,12 @@ async function main() {
 
   await dl.subscriptions.add({
     id: "fixture",
-    kind: "rss",
+    sourceId: "rss",
     title: "Fixture",
     enabled: true,
     createdAt: 0,
     updatedAt: 0,
-    url: "https://fixture.example/feed.xml",
+    config: { url: "https://fixture.example/feed.xml" },
   })
 
   const res = await dl.refresh("fixture")

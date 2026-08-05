@@ -19,9 +19,9 @@
  */
 import type { FeedItem, FeedVideo } from "../../types/feed-item.ts"
 import type { ProducerHost } from "../../types/producer-host.ts"
-import type { PluginSubscription } from "../../types/subscription.ts"
-import type { SourceAdapter } from "../source-adapter.ts"
-import { parseFeed, type ParsedItem } from "../rss/xml-parser.ts"
+import type { YoutubeSubscription } from "../../types/subscription.ts"
+import { BaseSource } from "../base-source.ts"
+import { parseFeed, type ParsedItem } from "../../parse/xml-parser.ts"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -29,8 +29,13 @@ const UA =
 const FEED_URL = (channelId: string) =>
   `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`
 
-export class YoutubeSource implements SourceAdapter<PluginSubscription> {
-  readonly kind = "youtube" as const
+export class YoutubeSource extends BaseSource<YoutubeSubscription> {
+  readonly sourceId = "youtube" as const
+  readonly builtinSubscriptions = [
+    { id: "yt-3b1b", title: "3Blue1Brown (YouTube)", tag: "API · 频道", config: { channelId: "UCYO_jab_esuFRV4b17AJtAw" } },
+    { id: "yt-lex", title: "Lex Fridman (YouTube)", tag: "API · 频道", config: { channelId: "UCSHZKyawb77ixDdsGog4iWA" } },
+    { id: "yt-kenjee", title: "Ken Jee (YouTube)", tag: "API · 频道", config: { channelId: "UCiT9RITQ9PW6BhXK0y2jaeg" } },
+  ] as const
   readonly meta = {
     name: "YouTube 频道",
     description: "官方 RSS,零登录",
@@ -39,8 +44,8 @@ export class YoutubeSource implements SourceAdapter<PluginSubscription> {
     ],
   }
 
-  async fetch(subscription: PluginSubscription, host: ProducerHost): Promise<FeedItem[]> {
-    const channelId = String(subscription.channelId ?? "")
+  async fetch(subscription: YoutubeSubscription, host: ProducerHost): Promise<FeedItem[]> {
+    const channelId = String(subscription.config.channelId ?? "")
     if (!channelId) throw new Error("youtube: channelId is required")
     const res = await host.http.request({
       url: FEED_URL(channelId),
@@ -58,13 +63,13 @@ export class YoutubeSource implements SourceAdapter<PluginSubscription> {
 
   /** Build a subscription from form values (plugin seam: config → Subscription). */
   createSubscription(
-    base: { id: string; title: string; enabled: boolean; createdAt: number; updatedAt: number },
+    base: { id: string; sourceId: string; title: string; enabled: boolean; createdAt: number; updatedAt: number },
     config: Record<string, unknown>,
-  ): PluginSubscription {
+  ): YoutubeSubscription {
     return {
       ...base,
-      kind: "youtube",
-      channelId: String(config.channelId ?? ""),
+      sourceId: "youtube",
+      config: { channelId: String(config.channelId ?? "") },
     }
   }
 

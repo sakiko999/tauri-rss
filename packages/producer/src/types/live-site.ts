@@ -1,17 +1,18 @@
 /**
- * LiveSite — TypeScript port of dart_simple_live's `LiveSite` interface
- * (dart_simple_live/simple_live_core/lib/src/interface/live_site.dart).
+ * Live platform types — shared by the per-platform live site adapters
+ * (`source/{bilibili,douyu,douyin,huya}/site.ts`).
+ *
+ * Moved out of the old `live/` layer when live became per-platform sources.
+ * `LiveSite` is kept as the internal contract each site implements; it is NOT
+ * exported from the producer barrel (sites are implementation details behind
+ * their SourceAdapter).
  *
  * Scope per the project decision: **status + play URL only**. The danmaku
  * surface (`getDanmaku()` / `LiveDanmaku`) is intentionally omitted — it
  * belongs to the app layer / a later phase, not the periodic data layer.
- *
- * Dart's `dynamic` escape hatches (`LiveRoomDetail.data`, `.danmakuData`,
- * `LivePlayQuality.data`, `LiveMessage.data`) are replaced with typed shapes
- * or `unknown` (still opaque, but explicit) rather than `any`.
  */
-import type { FeedLivePlatformId } from "../types/feed-item.ts"
-import type { LivePlayUrl } from "../types/result.ts"
+import type { FeedLivePlatformId } from "./feed-item.ts"
+import type { LivePlayUrl } from "./result.ts"
 
 /** A live platform's top-level category (dart `LiveCategory`). */
 export interface LiveCategory {

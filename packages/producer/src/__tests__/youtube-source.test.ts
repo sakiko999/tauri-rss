@@ -2,7 +2,7 @@ import { test, expect, describe } from "bun:test"
 import { YoutubeSource } from "../source/youtube/youtube-source.ts"
 import type { FeedVideo } from "../types/feed-item.ts"
 import type { HttpBackend, ProducerHost } from "../types/producer-host.ts"
-import type { PluginSubscription } from "../types/subscription.ts"
+import type { YoutubeSubscription } from "../types/subscription.ts"
 
 const YT_FIXTURE = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
@@ -50,15 +50,15 @@ function youtubeHost(xml: string): ProducerHost {
   }
 }
 
-const SUB = {
+const SUB: YoutubeSubscription = {
   id: "yt-1",
-  kind: "youtube",
+  sourceId: "youtube",
   title: "TestChannel",
   enabled: true,
   createdAt: 0,
   updatedAt: 0,
-  channelId: "UCtest",
-} as unknown as PluginSubscription
+  config: { channelId: "UCtest" },
+}
 
 describe("YoutubeSource", () => {
   test("parses official RSS entries into VideoItems with watch URLs + thumbnails", async () => {
@@ -84,18 +84,18 @@ describe("YoutubeSource", () => {
     expect(items[1]?.isLiveNow).toBeUndefined() // placeholder semantics — see below
   })
 
-  test("createSubscription builds a PluginSubscription from channelId config", () => {
+  test("createSubscription builds a YoutubeSubscription from channelId config", () => {
     const src = new YoutubeSource()
     const sub = src.createSubscription(
-      { id: "yt-new", title: "My Channel", enabled: true, createdAt: 1, updatedAt: 1 },
+      { id: "yt-new", sourceId: "youtube", title: "My Channel", enabled: true, createdAt: 1, updatedAt: 1 },
       { channelId: "UCnew123" },
     )
-    expect(sub).toMatchObject({ id: "yt-new", kind: "youtube", title: "My Channel", channelId: "UCnew123" })
+    expect(sub).toMatchObject({ id: "yt-new", sourceId: "youtube", title: "My Channel", config: { channelId: "UCnew123" } })
   })
 
   test("fetch throws when channelId missing", async () => {
     const src = new YoutubeSource()
-    const noId = { ...SUB, channelId: "" } as unknown as PluginSubscription
+    const noId: YoutubeSubscription = { ...SUB, config: { channelId: "" } }
     await expect(src.fetch(noId, youtubeHost(YT_FIXTURE))).rejects.toThrow(/channelId/)
   })
 })

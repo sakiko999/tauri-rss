@@ -2,9 +2,12 @@
  * producer 极简 example —— 命令行版"订阅内容输出"。
  *
  * 展示 producer 作为「极简 RSSHub」的核心能力:
- *   fetch(订阅) → FeedItem[] → serializeFeed → RSS 2.0 XML
+ *   subscription → toXml → RSS 2.0 XML
  * 不依赖 core / Tauri / 浏览器——用 Node 原生 fetch 做 http backend,
  * 纯命令行打印。这也验证重构后 producer 的对外边界:只认订阅、产出 XML。
+ *
+ * 订阅源来自各 source 自带的 builtinSubscriptions(公开 RSS 链接/频道/直播房间),
+ * 枚举 `listBuiltinSubscriptions()` 聚合。
  *
  * 用法:
  *   bun run scripts/producer-example.ts          # 打印每个订阅的可读摘要
@@ -13,13 +16,8 @@
  */
 // 走具体模块导入(与 core-smoke 一致),避免把 producer barrel 里无关面拉进来。
 import type { ProducerHost } from "../packages/producer/src/types/producer-host.ts"
-import type { FeedItem } from "../packages/producer/src/types/feed-item.ts"
-import type { PresetSubscription } from "../packages/producer/src/presets/types.ts"
-import { PRESETS, buildPresetSubscription } from "../packages/producer/src/presets/index.ts"
 import { registerAllSources } from "../packages/producer/src/source/register-all.ts"
-import { registerAllLiveSites } from "../packages/producer/src/live/platforms/index.ts"
-import { getSource } from "../packages/producer/src/source/registry.ts"
-import { serializeFeed } from "../packages/producer/src/source/feed-serializer.ts"
+import { getSource, listBuiltinSubscriptions, type BuiltinEntry } from "../packages/producer/src/source/registry.ts"
 
 /** 用 Node 原生 fetch 实现的 ProducerHost(只读脚本,不污染 core)。 */
 function nodeHost(): ProducerHost {
@@ -57,14 +55,15 @@ const args = process.argv.slice(2)
 const wantXml = args.includes("--xml")
 const only = args.filter((a) => !a.startsWith("--"))
 
-/** 从 presets 选要跑的订阅:给了 id 就只跑那几条,否则全跑。 */
-function pickPresets(): PresetSubscription[] {
-  if (!only.length) return [...PRESETS]
+/** 从各 source 的 builtinSubscriptions 选要跑的订阅:给了 id 就只跑那几条,否则全跑。 */
+function pickBuiltins(): BuiltinEntry[] {
+  const all = listBuiltinSubscriptions()
+  if (!only.length) return all
   const picked = only
-    .map((id) => PRESETS.find((p) => p.id === id))
-    .filter((p): p is PresetSubscription => p !== undefined)
+    .map((id) => all.find((e) => e.sub.id === id))
+    .filter((e): e is BuiltinEntry => e !== undefined)
   if (!picked.length) {
-    console.error(`没有匹配的订阅 id。可用: ${PRESETS.map((p) => p.id).join(" / ")}`)
+    console.error(`没有匹配的订阅 id。可用: ${all.map((e) => e.sub.id).join(" / ")}`)
     process.exit(1)
   }
   return picked
@@ -72,26 +71,31 @@ function pickPresets(): PresetSubscription[] {
 
 async function main() {
   const host = nodeHost()
-  registerAllSources()
-  registerAllLiveSites(host)
+  registerAllSources(host)
 
-  const presets = pickPresets()
+  const picked = pickBuiltins()
 
-  for (const preset of presets) {
-    console.log(`\n═══ ${preset.title} (kind: ${preset.kind}) ═══`)
-    const sub = buildPresetSubscription(preset, { enabled: true, createdAt: Date.now(), updatedAt: Date.now() })
-    const adapter = getSource(sub.kind)
+  for (const { sourceId, sub } of picked) {
+    console.log(`\n═══ ${sub.title} (source: ${sourceId}) ═══`)
+    const adapter = getSource(sourceId)
     if (!adapter) {
-      console.log(`  ⚠️ 无 adapter(未注册 kind: ${sub.kind})`)
+      console.log(`  ⚠️ 无 adapter(未注册 source: ${sourceId})`)
       continue
     }
+    const subscription = adapter.createSubscription
+      ? adapter.createSubscription(
+          { id: sub.id, sourceId, title: sub.title, enabled: true, createdAt: Date.now(), updatedAt: Date.now() },
+          sub.config,
+        )
+      : { id: sub.id, sourceId, title: sub.title, enabled: true, createdAt: Date.now(), updatedAt: Date.now(), config: sub.config }
     try {
-      const items: FeedItem[] = await adapter.fetch(sub, host)
-      console.log(`  ✅ ${items.length} 条`)
-
       if (wantXml) {
-        console.log(serializeFeed(items, { channelTitle: preset.title, channelLink: "https://tauri-playground.local/feeds/" + preset.id }))
+        // 对外统一出口:任意 source 都产标准 RSS 2.0 + tpl: XML。
+        const xml = await adapter.toXml(subscription, host)
+        console.log(xml)
       } else {
+        const items = await adapter.fetch(subscription, host)
+        console.log(`  ✅ ${items.length} 条`)
         // 可读摘要:仿 App.tsx 的列表输出。
         for (const it of items.slice(0, 8)) {
           const thumb = it.thumbnail ? " 🖼" : ""

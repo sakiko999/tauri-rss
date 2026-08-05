@@ -1,23 +1,24 @@
 import { test, expect, describe, afterEach } from "bun:test"
 import { createDataLayer } from "../data-layer.ts"
 import { createBrowserHost } from "../host/browser-host.ts"
-import type { MediaItem, SourceAdapter } from "../index.ts"
+import type { SourceAdapter } from "../index.ts"
 import {
   __resetSources,
   registerSource,
   getSource,
   listSources,
+  serializeFeed,
 } from "@tauri-playground/producer"
 import type { FeedItem, ProducerHost, Subscription } from "@tauri-playground/producer"
 
 /**
- * End-to-end plugin test: register a fake adapter with a custom kind, then prove
- * `createDataLayer.refresh` routes to it through the open `SubscriptionKind`.
+ * End-to-end plugin test: register a fake adapter with a custom sourceId, then
+ * prove `createDataLayer.refresh` routes to it through the open source registry.
  * This is the "pluginability really works" proof for the producer plugin seam.
  * The adapter emits `FeedItem` (protocol); core bridges to MediaItem.
  */
 class EchoSource implements SourceAdapter {
-  readonly kind = "echo" as const
+  readonly sourceId = "echo" as const
   readonly meta = { name: "Echo" }
   async fetch(subscription: Subscription, host: ProducerHost): Promise<FeedItem[]> {
     return [
@@ -30,18 +31,23 @@ class EchoSource implements SourceAdapter {
       },
     ]
   }
+  async toXml(subscription: Subscription, host: ProducerHost): Promise<string> {
+    const items = await this.fetch(subscription, host)
+    return serializeFeed(items, { channelTitle: subscription.title })
+  }
 }
 
 function echoSub(id: string, title: string): Subscription {
-  // kind:"echo" is an open plugin kind — it flows through PluginSubscription.
+  // sourceId:"echo" is an open plugin source — it flows through PluginSubscription.
   return {
     id,
-    kind: "echo",
+    sourceId: "echo",
     title,
     enabled: true,
     createdAt: 0,
     updatedAt: 0,
-  } as unknown as Subscription
+    config: {},
+  }
 }
 
 describe("producer plugin end-to-end", () => {
@@ -70,22 +76,23 @@ describe("producer plugin end-to-end", () => {
     await expect(dl.resolveLivePlay("echo-2")).rejects.toThrow(/does not support resolveLivePlay/)
   })
 
-  test("unknown kind with no registered adapter throws NoAdapterError on refresh", async () => {
+  test("unknown source with no registered adapter throws NoAdapterError on refresh", async () => {
     const dl = createDataLayer(createBrowserHost())
     await dl.subscriptions.add({
       id: "gh",
-      kind: "github-repo",
+      sourceId: "github-repo",
       title: "x",
       enabled: true,
       createdAt: 0,
       updatedAt: 0,
-    } as unknown as Subscription)
-    await expect(dl.refresh("gh")).rejects.toThrow(/No source adapter registered for subscription kind: github-repo/)
+      config: {},
+    })
+    await expect(dl.refresh("gh")).rejects.toThrow(/No source adapter registered for subscription source: github-repo/)
   })
 
   test("registry is shared with producer package (getSource/listSources)", () => {
     registerSource(new EchoSource())
     expect(getSource("echo")).toBeInstanceOf(EchoSource)
-    expect(listSources().some((a) => a.kind === "echo")).toBe(true)
+    expect(listSources().some((a) => a.sourceId === "echo")).toBe(true)
   })
 })

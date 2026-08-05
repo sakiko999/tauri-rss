@@ -115,29 +115,28 @@ describe("MediaItem variants", () => {
 })
 
 describe("Subscription variants", () => {
-  test("each kind constructs", () => {
+  test("each source constructs with sourceId + config", () => {
     const rss: Subscription = {
       id: "r",
-      kind: "rss",
+      sourceId: "rss",
       title: "A blog",
       enabled: true,
       createdAt: 1,
       updatedAt: 1,
-      url: "https://example/feed.xml",
+      config: { url: "https://example/feed.xml" },
     }
     const live: Subscription = {
       id: "l",
-      kind: "live-room",
+      sourceId: "douyu",
       title: "A room",
       enabled: true,
       createdAt: 1,
       updatedAt: 1,
-      platform: "douyu",
-      roomId: "42",
+      config: { roomId: "42" },
     }
     const group: SubscriptionGroup = { id: "g", title: "Tech" }
-    expect(rss.kind).toBe("rss")
-    expect(live.kind).toBe("live-room")
+    expect(rss.sourceId).toBe("rss")
+    expect(live.sourceId).toBe("douyu")
     expect(group.title).toBe("Tech")
   })
 })
@@ -190,15 +189,15 @@ describe("PlatformHost + DataLayer wiring", () => {
 
     const rss: Subscription = {
       id: "r1",
-      kind: "rss",
+      sourceId: "rss",
       title: "Feed",
       enabled: true,
       createdAt: 1,
       updatedAt: 1,
-      url: "https://example/feed.xml",
+      config: { url: "https://example/feed.xml" },
     }
     await dl.subscriptions.add(rss)
-    expect(await dl.subscriptions.get("r1")).toMatchObject({ kind: "rss" })
+    expect(await dl.subscriptions.get("r1")).toMatchObject({ sourceId: "rss" })
   })
 
   test("refresh on unknown subscription returns an error result (no throw)", async () => {
@@ -221,12 +220,12 @@ describe("PlatformHost + DataLayer wiring", () => {
     })
     const rss: Subscription = {
       id: "r2",
-      kind: "rss",
+      sourceId: "rss",
       title: "Feed",
       enabled: true,
       createdAt: 1,
       updatedAt: 1,
-      url: "https://example/feed.xml",
+      config: { url: "https://example/feed.xml" },
     }
     await dl.subscriptions.add(rss)
     const res = await dl.refresh("r2")
