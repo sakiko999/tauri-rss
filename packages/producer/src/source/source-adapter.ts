@@ -17,7 +17,7 @@
  * is an open string (see `SubscriptionKind`); the optional `meta` lets the
  * registry be surfaced as a "supported platforms / add subscription" form.
  */
-import type { FeedItem } from "../types/feed-item.ts"
+import type { FeedItem, FeedStream } from "../types/feed-item.ts"
 import type { ProducerHost } from "../types/producer-host.ts"
 import type { LivePlayUrl } from "../types/result.ts"
 import type { Subscription } from "../types/subscription.ts"
@@ -62,6 +62,15 @@ export interface SourceAdapter<S extends Subscription = Subscription> {
    * "does not support resolveLivePlay".
    */
   resolveLivePlay?(subscription: S, host: ProducerHost): Promise<LivePlayUrl>
+  /**
+   * Optional capability: lazily resolve a video item's playable streams.
+   * Unlike `resolveLivePlay` (subscription-scoped — a live room), this is
+   * item-scoped: a video subscription has many items, so `videoId` (the item's
+   * `id`, e.g. bilibili bvid) picks which one to resolve. When absent,
+   * `DataLayer.resolveVideoPlay` throws "does not support resolveVideoPlay".
+   * Stream URLs typically carry an expiry signature — never cache in refresh.
+   */
+  resolveVideoPlay?(subscription: S, host: ProducerHost, videoId: string): Promise<FeedStream[]>
   /**
    * Optional factory: build a complete `Subscription` from form values. This is
    * the "external picks a channel → enters an id → gets a subscribe-able source

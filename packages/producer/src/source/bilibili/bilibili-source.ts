@@ -18,7 +18,7 @@
  *   - tmp/RSSHub/lib/routes/bilibili/weekly-recommend.ts
  *   - tmp/RSSHub/lib/routes/bilibili/video.ts (API path `/x/space/wbi/arc/search`)
  */
-import type { FeedArticle, FeedItem } from "../../types/feed-item.ts"
+import type { FeedArticle, FeedItem, FeedStream } from "../../types/feed-item.ts"
 import type { ProducerHost } from "../../types/producer-host.ts"
 import type { BilibiliRoute, BilibiliSubscription } from "../../types/subscription.ts"
 import type { SourceAdapter } from "../source-adapter.ts"
@@ -256,6 +256,41 @@ export class BilibiliSource implements SourceAdapter<BilibiliSubscription> {
       fetchedAt: now,
       media,
     }
+  }
+
+  // ── video play resolution (lazy) ──────────────────────────────────────────
+
+  /**
+   * Lazily resolve a video item's playable streams (item-scoped, unlike the
+   * subscription-scoped `resolveLivePlay`). Two-step:
+   *   `/x/web-interface/view?bvid=`  → cid
+   *   `/x/player/playurl?bvid=&cid=` → durl[] direct mp4/flv URLs
+   * Zero-login (just a Referer). URLs carry a `deadline` expiry signature, so
+   * never cache this in a refresh snapshot — call it at play time.
+   */
+  async resolveVideoPlay(
+    _sub: BilibiliSubscription,
+    host: ProducerHost,
+    videoId: string,
+  ): Promise<FeedStream[]> {
+    const referer = "https://www.bilibili.com/"
+    const view = await this.getJson(
+      host,
+      `${API_MAIN}/x/web-interface/view?bvid=${encodeURIComponent(videoId)}`,
+      { referer },
+    )
+    const cid = view?.data?.cid
+    if (!cid) throw new Error(`bilibili view: no cid for ${videoId}`)
+
+    const play = await this.getJson(
+      host,
+      `${API_MAIN}/x/player/playurl?bvid=${encodeURIComponent(videoId)}&cid=${cid}&qn=64&platform=html5`,
+      { referer },
+    )
+    const durl: Array<{ url?: string }> = Array.isArray(play?.data?.durl) ? play.data.durl : []
+    return durl
+      .map((d) => ({ url: d.url ?? "", format: "mp4" as const, headers: { referer } }))
+      .filter((s) => s.url.length > 0)
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

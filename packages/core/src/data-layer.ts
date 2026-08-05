@@ -15,7 +15,7 @@ import { NoAdapterError } from "./errors.ts"
 import type { MediaItem } from "./types/media-item.ts"
 import { createMediaStore, type MediaQuery } from "./store/media-store.ts"
 import type { PlatformHost } from "./types/platform.ts"
-import type { LivePlayUrl, RefreshResult } from "@tauri-playground/producer"
+import type { FeedStream, LivePlayUrl, RefreshResult } from "@tauri-playground/producer"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
@@ -59,6 +59,8 @@ export interface DataLayer {
   refresh(subscriptionId: string): Promise<RefreshResult>
   /** Lazily resolve a live room's playable URLs (live scope). */
   resolveLivePlay(subscriptionId: string): Promise<LivePlayUrl>
+  /** Lazily resolve a video item's playable streams (item-scoped by videoId). */
+  resolveVideoPlay(subscriptionId: string, videoId: string): Promise<FeedStream[]>
 }
 
 export function createDataLayer(host: PlatformHost, options: DataLayerOptions = {}): DataLayer {
@@ -131,6 +133,17 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
         throw new Error(`subscription kind ${sub.kind} does not support resolveLivePlay`)
       }
       return adapter.resolveLivePlay(sub, host)
+    },
+
+    async resolveVideoPlay(subscriptionId, videoId) {
+      const sub = await repo.get(subscriptionId)
+      if (!sub) throw new Error(`subscription ${subscriptionId} not found`)
+      const adapter = adapters.get(sub.kind)
+      if (!adapter) throw new NoAdapterError(sub.kind)
+      if (!adapter.resolveVideoPlay) {
+        throw new Error(`subscription kind ${sub.kind} does not support resolveVideoPlay`)
+      }
+      return adapter.resolveVideoPlay(sub, host, videoId)
     },
   }
 }
