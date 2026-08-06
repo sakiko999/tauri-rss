@@ -1,14 +1,16 @@
 /**
  * bilibili 视频类 channel(rank/hot/ranking/weekly/user-video)。
  *
- * 每个 channel 一个 class,继承 BaseChannel(自动 fetchItems → serializeFeed → XML)。
+ * 每个 channel 一个 class,直接 `implements RssChannel`(+ 能力接口 RssVideoChannel),
+ * getSource 用组合工厂装配(factory.ts 的 createApiSource:fetchItems → serializeFeed,纯函数)。
  * 共享 BilibiliClient 的 wbi 签名/web 请求。video 项映射成 Video(kind=video)。
  *
  * 零登录:wbi 签名 nav 取密钥(未登录仍返回 wbi_img),纯 MD5 签名即可。
  */
-import type { Article, Item, Video } from "@tauri-playground/xml"
-import { BaseChannel } from "../base.ts"
-import type { SourceInfo } from "../../index.ts"
+import type { Article, Item, Stream, Video } from "@tauri-playground/xml"
+import { type SerializeOptions } from "@tauri-playground/xml"
+import type { RssChannel, RssVideoChannel, SourceInfo } from "../../index.ts"
+import { createApiSource } from "../factory.ts"
 import { now } from "../../host.ts"
 import { createBilibiliClient } from "./client.ts"
 
@@ -16,7 +18,7 @@ const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400
 
 /** bilibili UGC 视频 → Video(kind=video)。stream 留空——playurl 直链由下游懒解析。 */
-function ugc(t: number, v: {
+function ugc(sourceId: string, t: number, v: {
   title: unknown
   pic?: unknown
   desc?: unknown
@@ -35,7 +37,7 @@ function ugc(t: number, v: {
   const ownerName = v.owner?.name
   return {
     id: bvid ?? `av${aid}`,
-    sourceId: "bili",
+    sourceId,
     kind: "video",
     title: String(v.title ?? "(untitled)"),
     url: link,
@@ -51,14 +53,23 @@ function ugc(t: number, v: {
   }
 }
 
-// ── bili:rank(热搜)──────────────────────────────────────────────────────────
+/**
+ * 共享的 bili 视频懒解析:bvid/aid → cid → durl mp4 直链。
+ * 4 个 video channel 的 `resolvePlay` 方法都调它(避免重复代码)。
+ */
+function resolveBiliPlay(itemId: string): Promise<Stream[]> {
+  const client = createBilibiliClient()
+  return client.resolveCid(itemId).then((cid) => client.resolvePlayUrl(itemId, cid))
+}
 
-export class BiliRankChannel extends BaseChannel {
-  readonly key = "bili:rank"
+// ── bili:square(热搜)────────────────────────────────────────────────────────
+
+export class BiliSquareChannel implements RssChannel {
+  readonly key = "bili:square"
   readonly name = "bilibili 热搜"
   readonly kind = "article" as const
-  readonly defaultInfo: SourceInfo = {}
-  protected async fetchItems(): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  private async fetchItems(_info: SourceInfo): Promise<Item[]> {
     const client = createBilibiliClient()
     const signed = await client.signWeb("limit=50&platform=web")
     const data = await client.getJson<{ data?: { trending?: { list?: Array<Record<string, unknown>> } } }>(
@@ -73,7 +84,7 @@ export class BiliRankChannel extends BaseChannel {
         `https://search.bilibili.com/all?${new URLSearchParams({ keyword })}&from_source=webtop_search`
       return {
         id: `bili-rank-${i}-${keyword}`,
-        sourceId: "bili:rank",
+        sourceId: "bili:square",
         kind: "article",
         title: keyword,
         url: link,
@@ -85,19 +96,23 @@ export class BiliRankChannel extends BaseChannel {
       } satisfies Article
     })
   }
-  protected channelOptions() {
+  private channelOptions(_info: SourceInfo): SerializeOptions {
     return { channelTitle: "bilibili 热搜", channelLink: "https://www.bilibili.com/" }
   }
 }
 
-// ── bili:hot(综合热门)────────────────────────────────────────────────────────
+// ── bili:popular(综合热门)────────────────────────────────────────────────────
 
-export class BiliHotChannel extends BaseChannel {
-  readonly key = "bili:hot"
+export class BiliPopularChannel implements RssChannel, RssVideoChannel {
+  readonly key = "bili:popular"
   readonly name = "bilibili 综合热门"
   readonly kind = "video" as const
-  readonly defaultInfo: SourceInfo = {}
-  protected async fetchItems(): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
+  resolvePlay(itemId: string): Promise<Stream[]> {
+    return resolveBiliPlay(itemId)
+  }
+  private async fetchItems(_info: SourceInfo): Promise<Item[]> {
     const client = createBilibiliClient()
     const data = await client.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `${API}/x/web-interface/popular`,
@@ -105,7 +120,7 @@ export class BiliHotChannel extends BaseChannel {
     const list = data?.data?.list ?? []
     const t = now()
     return list.map((raw) =>
-      ugc(t, {
+      ugc("bili:popular", t, {
         title: raw.title,
         pic: raw.pic,
         desc: raw.desc,
@@ -116,7 +131,7 @@ export class BiliHotChannel extends BaseChannel {
       }),
     )
   }
-  protected channelOptions() {
+  private channelOptions(_info: SourceInfo): SerializeOptions {
     return { channelTitle: "bilibili 综合热门", channelLink: "https://www.bilibili.com/" }
   }
 }
@@ -130,12 +145,17 @@ const RID_TABLE: Record<string, string> = {
   sports: "1018", animal: "1024",
 }
 
-export class BiliRankingChannel extends BaseChannel {
+export class BiliRankingChannel implements RssChannel, RssVideoChannel {
   readonly key = "bili:ranking"
   readonly name = "bilibili 排行榜"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "rid", label: "分区(all/douga/…)", required: false }]
-  protected async fetchItems(info: SourceInfo): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
+  resolvePlay(itemId: string): Promise<Stream[]> {
+    return resolveBiliPlay(itemId)
+  }
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const rid = info.rid ?? "all"
     const numericRid = /^\d+$/.test(rid) ? rid : (RID_TABLE[rid] ?? "0")
     const client = createBilibiliClient()
@@ -146,7 +166,7 @@ export class BiliRankingChannel extends BaseChannel {
     const list = data?.data?.list ?? []
     const t = now()
     return list.map((raw) =>
-      ugc(t, {
+      ugc("bili:ranking", t, {
         title: raw.title,
         pic: raw.pic,
         desc: raw.desc || raw.title,
@@ -157,19 +177,23 @@ export class BiliRankingChannel extends BaseChannel {
       }),
     )
   }
-  protected channelOptions(info: SourceInfo) {
+  private channelOptions(info: SourceInfo): SerializeOptions {
     return { channelTitle: `bilibili 排行榜·${info.rid ?? "all"}`, channelLink: "https://www.bilibili.com/v/popular/rank/all" }
   }
 }
 
 // ── bili:weekly(每周必看)────────────────────────────────────────────────────────
 
-export class BiliWeeklyChannel extends BaseChannel {
+export class BiliWeeklyChannel implements RssChannel, RssVideoChannel {
   readonly key = "bili:weekly"
   readonly name = "B站每周必看"
   readonly kind = "video" as const
-  readonly defaultInfo: SourceInfo = {}
-  protected async fetchItems(): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
+  resolvePlay(itemId: string): Promise<Stream[]> {
+    return resolveBiliPlay(itemId)
+  }
+  private async fetchItems(_info: SourceInfo): Promise<Item[]> {
     const client = createBilibiliClient()
     const status = await client.getJson<{ data?: Array<{ number: number; name: string }> }>(
       "https://app.bilibili.com/x/v2/show/popular/selected/series?type=weekly_selected",
@@ -186,7 +210,7 @@ export class BiliWeeklyChannel extends BaseChannel {
     const list = data?.data?.list ?? []
     const t = now()
     return list.map((raw) =>
-      ugc(t, {
+      ugc("bili:weekly", t, {
         title: raw.title,
         pic: raw.cover,
         desc: `${head.name} ${raw.title} - ${raw.rcmd_reason ?? ""}`,
@@ -197,19 +221,24 @@ export class BiliWeeklyChannel extends BaseChannel {
       }),
     )
   }
-  protected channelOptions() {
+  private channelOptions(_info: SourceInfo): SerializeOptions {
     return { channelTitle: "B站每周必看", channelLink: "https://www.bilibili.com/h5/weekly-recommend" }
   }
 }
 
 // ── bili:user_video(UP 主投稿)─────────────────────────────────────────────────
 
-export class BiliUserVideoChannel extends BaseChannel {
+export class BiliUserVideoChannel implements RssChannel, RssVideoChannel {
   readonly key = "bili:user_video"
   readonly name = "bilibili UP 主投稿"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "uid", label: "UP 主 uid", required: true }]
-  protected async fetchItems(info: SourceInfo): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
+  resolvePlay(itemId: string): Promise<Stream[]> {
+    return resolveBiliPlay(itemId)
+  }
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const uid = info.uid ?? ""
     if (!uid) throw new Error("bili:user_video 需要 uid")
     const client = createBilibiliClient({ buvid: true })
@@ -221,7 +250,7 @@ export class BiliUserVideoChannel extends BaseChannel {
     const vlist = data?.data?.list?.vlist ?? []
     const t = now()
     return vlist.map((v) =>
-      ugc(t, {
+      ugc("bili:user_video", t, {
         title: v.title,
         pic: v.pic,
         desc: v.description,
@@ -232,7 +261,7 @@ export class BiliUserVideoChannel extends BaseChannel {
       }),
     )
   }
-  protected channelOptions(info: SourceInfo) {
+  private channelOptions(info: SourceInfo): SerializeOptions {
     const uid = info.uid ?? ""
     return { channelTitle: `bilibili UP 主 ${uid}`, channelLink: `https://space.bilibili.com/${uid}` }
   }

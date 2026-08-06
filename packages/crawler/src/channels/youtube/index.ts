@@ -6,20 +6,22 @@
  * videoId → watch URL,产 Video Item。
  */
 import type { Item, Video } from "@tauri-playground/xml"
-import { BaseChannel } from "../base.ts"
-import type { SourceInfo } from "../../index.ts"
+import { type SerializeOptions } from "@tauri-playground/xml"
+import type { RssChannel, SourceInfo } from "../../index.ts"
+import { createApiSource } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
-export class YoutubeChannel extends BaseChannel {
+export class YoutubeChannel implements RssChannel {
   readonly key = "youtube"
   readonly name = "YouTube 频道"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "channelId", label: "频道 ID", required: true }]
-  protected async fetchItems(info: SourceInfo): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const channelId = info.channelId ?? ""
     if (!channelId) throw new Error("youtube: 需要 channelId")
     const xml = await httpText(
@@ -30,7 +32,7 @@ export class YoutubeChannel extends BaseChannel {
     const t = now()
     return feed.channel.item.map((entry) => entryToVideo(entry, t))
   }
-  protected channelOptions(info: SourceInfo) {
+  private channelOptions(info: SourceInfo): SerializeOptions {
     return { channelTitle: `YouTube ${info.channelId ?? ""}`, channelLink: `https://www.youtube.com/channel/${info.channelId ?? ""}` }
   }
 }

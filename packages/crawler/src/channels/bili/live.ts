@@ -5,20 +5,40 @@
  * 产单个 Live Item(状态 + 元数据,不含 playUrls——懒解析)。
  * 零登录:wbi 签名 + buvid finger cookie。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { BaseChannel } from "../base.ts"
-import type { SourceInfo } from "../../index.ts"
+import type { Item, Live, Stream } from "@tauri-playground/xml"
+import { type SerializeOptions } from "@tauri-playground/xml"
+import type { RssChannel, RssLiveChannel, SourceInfo } from "../../index.ts"
+import { createApiSource } from "../factory.ts"
 import { now } from "../../host.ts"
-import { createBilibiliClient } from "./client.ts"
+import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
 
 const API_LIVE = "https://api.live.bilibili.com"
 
-export class BiliLiveChannel extends BaseChannel {
+export class BiliLiveChannel implements RssChannel, RssLiveChannel {
   readonly key = "bili:live"
   readonly name = "bilibili 直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  protected async fetchItems(info: SourceInfo): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+
+  /** 懒解析直播流:getRoomPlayInfo(带 buvid cookie + live 签名)→ hls/flv 直链。 */
+  async resolveLivePlay(roomId: string): Promise<Stream[]> {
+    const client = createBilibiliClient({ referer: "https://live.bilibili.com/", buvid: true, live: true })
+    const params = await client.signLiveParams({
+      room_id: roomId,
+      protocol: "0,1",
+      format: "0,2",
+      codec: "0,1",
+      platform: "web",
+      qn: "10000",
+    })
+    const res = await client.getJson<{ data?: Record<string, any> }>(
+      `${API_LIVE}/xlive/web-room/v2/index/getRoomPlayInfo?${params}`,
+    )
+    return parseBiliLiveStreams(res?.data ?? {})
+  }
+
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const roomId = info.roomId ?? ""
     if (!roomId) throw new Error("bili:live 需要 roomId")
     const client = createBilibiliClient({ referer: "https://live.bilibili.com/", buvid: true, live: true })
@@ -45,7 +65,40 @@ export class BiliLiveChannel extends BaseChannel {
     }
     return [live]
   }
-  protected channelOptions(info: SourceInfo) {
+  private channelOptions(info: SourceInfo): SerializeOptions {
     return { channelTitle: `bilibili 直播 ${info.roomId ?? ""}`, channelLink: `https://live.bilibili.com/${info.roomId ?? ""}` }
   }
+}
+
+/**
+ * 从 getRoomPlayInfo 响应提取可播流。
+ * 结构:data.playurl_info.playurl.stream[] → format[] → codec[],每个 codec 有
+ * base_url + url_info[](host + extra),完整 url = host + base_url + extra。
+ * 按 host 排序(scdn/mcdn 排后,保真 CDN 优先),format 由 base_url 后缀推断。
+ */
+function parseBiliLiveStreams(data: Record<string, any>): Stream[] {
+  const playUrl = (data?.playurl_info?.playurl ?? {}) as Record<string, any>
+  const streams: Array<Record<string, any>> = Array.isArray(playUrl?.stream) ? playUrl.stream : []
+  const urls: Array<{ url: string; format: string; host: string }> = []
+  const headers = { referer: "https://live.bilibili.com/", "user-agent": BILIBILI_UA }
+
+  for (const s of streams) {
+    const formats: Array<Record<string, any>> = Array.isArray(s?.format) ? s.format : []
+    for (const f of formats) {
+      const codecs: Array<Record<string, any>> = Array.isArray(f?.codec) ? f.codec : []
+      for (const c of codecs) {
+        const baseUrl = String(c?.base_url ?? "")
+        const urlInfos: Array<Record<string, any>> = Array.isArray(c?.url_info) ? c.url_info : []
+        const format = baseUrl.includes(".m3u8") ? "hls" : baseUrl.includes(".flv") ? "flv" : "live"
+        for (const ui of urlInfos) {
+          const host = String(ui?.host ?? "")
+          const extra = String(ui?.extra ?? "")
+          if (host && baseUrl) urls.push({ url: `${host}${baseUrl}${extra}`, format, host })
+        }
+      }
+    }
+  }
+
+  urls.sort((a, b) => Number(a.host.includes("mcdn") || a.host.includes("scdn")) - Number(b.host.includes("mcdn") || b.host.includes("scdn")))
+  return urls.map((u) => ({ url: u.url, format: u.format, headers }))
 }

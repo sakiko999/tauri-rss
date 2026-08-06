@@ -3,13 +3,15 @@
 > 状态：路线图。**本文是目标态规划，部分描述与当前实现已不同步**——以下模块已按新架构落地，
 > 以实际代码为准：
 > - **数据获取层已换成 crawler**（`packages/crawler`）：一切皆 RssChannel → RSS XML，取代本文的
->   `feeds/parser` + `fetch/transport` 划分。宿主能力经**全局 `globalThis.appHost`** 注入
+>   `feeds/parser` + `fetch/transport` 划分。channel 直接 implements 能力接口
+>   `RssVideoChannel`/`RssLiveChannel`（懒解析 `resolvePlay`/`resolveLivePlay`），getSource
+>   是纯函数（每次新实例，缓存/去重归 core）。宿主能力经**全局 `globalThis.appHost`** 注入
 >   （`packages/host`，node/browser/tauri 三环境），取代本文 `platform/` + `PlatformHost` seam。
 > - **core 数据模型是判别联合 `MediaItem`**（`packages/core/src/types/media-item.ts`，五种 kind：
 >   article/social/video/audio/live），XML 编解码在独立包 `packages/xml`。
 > - 当前桌面端是验证型两栏界面（订阅列表 + 按 kind 渲染），尚未实现本文的三模式 UI。
 > 其余（UI 三模式、数据流边界、Tauri 插件调研、实现阶段）仍是后续方向。
-> 更新日期：2026-08-06
+> 更新日期：2026-08-07
 
 ## 目标
 

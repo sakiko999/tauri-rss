@@ -8,9 +8,10 @@
  * 产 Live Item(状态 + 元数据),playUrls 藏在上游 stream_url(live_core_sdk_data),
  * 由下游 resolveLivePlay 懒解析(本地,无额外请求)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { BaseChannel } from "../base.ts"
-import type { SourceInfo } from "../../index.ts"
+import type { Item, Live, Stream } from "@tauri-playground/xml"
+import { type SerializeOptions } from "@tauri-playground/xml"
+import type { RssChannel, RssLiveChannel, SourceInfo } from "../../index.ts"
+import { createApiSource } from "../factory.ts"
 import { now } from "../../host.ts"
 import { ABOGUS_JS } from "./abogus.ts"
 
@@ -25,36 +26,30 @@ const UA =
 const DEFAULT_TTWID_COOKIE =
   "ttwid=1%7CB1qls3GdnZhUov9o2NxOMxxYS2ff6OSvEWbv0ytbES4%7C1680522049%7C280d802d6d478e3e78d0c807f7c487e7ffec0ae4e5fdd6a0fe74c3c6af149511"
 
-export class DouyinLiveChannel extends BaseChannel {
+export class DouyinLiveChannel implements RssChannel, RssLiveChannel {
   readonly key = "live:douyin"
   readonly name = "抖音直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
 
   /** 懒初始化的 cookie jar(warmup GET 抓到的新鲜 ttwid 等)。 */
   private cookieJar = ""
   private cookiePromise: Promise<void> | null = null
 
-  protected async fetchItems(info: SourceInfo): Promise<Item[]> {
+  /** 懒解析直播流:重拉 enter 拿 stream_url,本地提取 flv/hls(无额外请求)。 */
+  async resolveLivePlay(roomId: string): Promise<Stream[]> {
+    const res = await this.fetchRoomDetail(roomId)
+    const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
+    return parseDouyinStreams((room.stream_url ?? {}) as Record<string, any>)
+  }
+
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const roomId = info.roomId ?? ""
     if (!roomId) throw new Error("live:douyin 需要 roomId")
 
-    const base = `${LIVE}/webcast/room/web/enter/`
-    const params = new URLSearchParams({
-      aid: "6383",
-      app_name: "douyin_web",
-      live_id: "1",
-      device_platform: "web",
-      language: "zh-CN",
-      browser_language: "zh-CN",
-      browser_platform: "Win32",
-      browser_name: "Chrome",
-      browser_version: "125.0.0.0",
-      web_rid: roomId,
-    })
-    const url = await this.abogusUrl(`${base}?${params.toString()}`)
-    const res = await this.getJson(url)
-    const room = (res?.data?.data?.[0]?.room ?? res?.data?.room ?? {}) as Record<string, any>
+    const res = await this.fetchRoomDetail(roomId)
+    const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
     const user = (res?.data?.data?.[0]?.user ?? res?.data?.user ?? {}) as Record<string, any>
     const streamUrl = (room.stream_url ?? {}) as Record<string, any>
     const isLive = toInt(room.status) === 2
@@ -79,11 +74,30 @@ export class DouyinLiveChannel extends BaseChannel {
     return [live]
   }
 
-  protected channelOptions(info: SourceInfo) {
+  private channelOptions(info: SourceInfo): SerializeOptions {
     return { channelTitle: `抖音直播 ${info.roomId ?? ""}`, channelLink: `${LIVE}/${info.roomId ?? ""}` }
   }
 
   // ── internals ───────────────────────────────────────────────────────────
+
+  /** 拉 enter 接口完整响应(room/user/stream_url 同源)。ABogus 签名 + ttwid cookie。 */
+  private async fetchRoomDetail(roomId: string): Promise<Record<string, any>> {
+    const base = `${LIVE}/webcast/room/web/enter/`
+    const params = new URLSearchParams({
+      aid: "6383",
+      app_name: "douyin_web",
+      live_id: "1",
+      device_platform: "web",
+      language: "zh-CN",
+      browser_language: "zh-CN",
+      browser_platform: "Win32",
+      browser_name: "Chrome",
+      browser_version: "125.0.0.0",
+      web_rid: roomId,
+    })
+    const url = await this.abogusUrl(`${base}?${params.toString()}`)
+    return this.getJson(url)
+  }
 
   /** ABogus 签名:url + msToken → getABogus(query, UA) → 追加 a_bogus。 */
   private async abogusUrl(url: string): Promise<string> {
@@ -159,4 +173,39 @@ function generateMsToken(length: number): string {
   let out = ""
   for (let i = 0; i < length; i++) out += chars[Math.floor(Math.random() * chars.length)]
   return out
+}
+
+/**
+ * 从抖音 enter 响应的 stream_url 提取各清晰度可播流。
+ * 结构:stream_url.live_core_sdk_data.pull_data.options.qualities[] → sdk_key;
+ * stream_data(JSON 字符串)按 sdk_key 展开 data[key].main.{flv,hls}。
+ * 按清晰度从高到低返回;每档 flv 优先(flv 体积小加载快),hls 兜底。
+ */
+function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
+  const liveCore = (streamUrl?.live_core_sdk_data ?? {}) as Record<string, any>
+  const pullData = (liveCore?.pull_data ?? {}) as Record<string, any>
+  const qualities: Array<Record<string, any>> = Array.isArray(pullData?.options?.qualities)
+    ? pullData.options.qualities
+    : []
+  const streamDataRaw = String(pullData?.stream_data ?? "")
+  if (!streamDataRaw.trimStart().startsWith("{")) return []
+  let streamData: Record<string, any>
+  try {
+    streamData = JSON.parse(streamDataRaw) as Record<string, any>
+  } catch {
+    return []
+  }
+
+  const headers = { referer: LIVE, "user-agent": UA }
+  const sorted = [...qualities].sort((a, b) => (toInt(b.level) ?? 0) - (toInt(a.level) ?? 0))
+  const streams: Stream[] = []
+  for (const q of sorted) {
+    const sdkKey = String(q?.sdk_key ?? "")
+    const main = (streamData?.data?.[sdkKey]?.main ?? {}) as Record<string, any>
+    const flv = String(main?.flv ?? "")
+    const hls = String(main?.hls ?? "")
+    if (flv) streams.push({ url: flv, format: "flv", headers: { ...headers, authority: LIVE } })
+    else if (hls) streams.push({ url: hls, format: "hls", headers })
+  }
+  return streams
 }

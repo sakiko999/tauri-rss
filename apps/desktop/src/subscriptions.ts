@@ -20,7 +20,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
   },
   {
     id: "s-video-bili",
-    channelKey: "bili:hot",
+    channelKey: "bili:popular",
     title: "bilibili 综合热门",
     enabled: true,
     info: {},

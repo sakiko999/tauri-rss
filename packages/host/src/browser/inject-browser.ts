@@ -18,6 +18,7 @@ function browserBackend(): HttpBackend {
       const res = await fetch(req.url, {
         method: req.method ?? "GET",
         headers: req.headers ?? {},
+        body: req.body,
         redirect: "follow",
         signal: req.timeoutMs ? AbortSignal.timeout(req.timeoutMs) : undefined,
       })

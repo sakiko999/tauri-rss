@@ -8,7 +8,8 @@
  * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
-import { getChannel, registerAllChannels } from "@tauri-playground/crawler"
+import { getChannel, isRssLiveChannel, isRssVideoChannel, registerAllChannels } from "@tauri-playground/crawler"
+import type { Stream } from "@tauri-playground/xml"
 import { deserializeFeed } from "./xml/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
@@ -38,6 +39,10 @@ export interface DataLayer {
   }
   /** 刷新一次订阅,把内容写入 store。 */
   refresh(subscriptionId: string): Promise<RefreshResult>
+  /** 懒解析某条 video item 的可播流(播放时调用;URL 带 deadline 签名,不缓存)。 */
+  resolvePlay(subscriptionId: string, itemId: string): Promise<Stream[]>
+  /** 懒解析某直播房间的可播流(播放时调用;playUrls 带 expiry 签名,不缓存)。 */
+  resolveLivePlay(subscriptionId: string, roomId: string): Promise<Stream[]>
 }
 
 export function createDataLayer(): DataLayer {
@@ -80,6 +85,28 @@ export function createDataLayer(): DataLayer {
     }
   }
 
+  async function resolvePlay(subscriptionId: string, itemId: string): Promise<Stream[]> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) throw new Error("subscription not found")
+    const channel = getChannel(sub.channelKey)
+    if (!channel) throw new NoChannelError(sub.channelKey)
+    if (!isRssVideoChannel(channel)) {
+      throw new Error(`channel ${sub.channelKey} does not support lazy play resolution`)
+    }
+    return channel.resolvePlay(itemId)
+  }
+
+  async function resolveLivePlay(subscriptionId: string, roomId: string): Promise<Stream[]> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) throw new Error("subscription not found")
+    const channel = getChannel(sub.channelKey)
+    if (!channel) throw new NoChannelError(sub.channelKey)
+    if (!isRssLiveChannel(channel)) {
+      throw new Error(`channel ${sub.channelKey} does not support lazy live play resolution`)
+    }
+    return channel.resolveLivePlay(roomId)
+  }
+
   return {
     subscriptions: repo,
     reading,
@@ -91,5 +118,7 @@ export function createDataLayer(): DataLayer {
       subscribe: (l) => store.subscribe(l),
     },
     refresh,
+    resolvePlay,
+    resolveLivePlay,
   }
 }

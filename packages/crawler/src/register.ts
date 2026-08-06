@@ -6,8 +6,8 @@
 import { registerChannel } from "./index.ts"
 import { RawRssChannel, RssPodcastChannel, RSS_BUILTIN_FEEDS } from "./channels/rss/index.ts"
 import {
-  BiliRankChannel,
-  BiliHotChannel,
+  BiliSquareChannel,
+  BiliPopularChannel,
   BiliRankingChannel,
   BiliWeeklyChannel,
   BiliUserVideoChannel,
@@ -29,8 +29,8 @@ export function registerBuiltinChannels(): void {
   registerChannel(new RssPodcastChannel())
 
   // ── bilibili(wbi 签名 API,零登录)──
-  registerChannel(new BiliRankChannel())
-  registerChannel(new BiliHotChannel())
+  registerChannel(new BiliSquareChannel())
+  registerChannel(new BiliPopularChannel())
   registerChannel(new BiliRankingChannel())
   registerChannel(new BiliWeeklyChannel())
   registerChannel(new BiliUserVideoChannel())

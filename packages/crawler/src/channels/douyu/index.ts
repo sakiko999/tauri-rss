@@ -8,9 +8,10 @@
  * 签名只用于 getH5Play(拉 RTMP 直链)。本 channel 产出 Live Item(状态+元数据),
  * playUrls 需额外 H5Play 请求,交由下游 resolveLivePlay 懒解析(同 huya)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { BaseChannel } from "../base.ts"
-import type { SourceInfo } from "../../index.ts"
+import type { Item, Live, Stream } from "@tauri-playground/xml"
+import { type SerializeOptions } from "@tauri-playground/xml"
+import type { RssChannel, RssLiveChannel, SourceInfo } from "../../index.ts"
+import { createApiSource } from "../factory.ts"
 import { now } from "../../host.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 
@@ -20,13 +21,21 @@ const UA =
 
 const DID = "10000000000000000000000000001501"
 
-export class DouyuLiveChannel extends BaseChannel {
+export class DouyuLiveChannel implements RssChannel, RssLiveChannel {
   readonly key = "live:douyu"
   readonly name = "斗鱼直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
 
-  protected async fetchItems(info: SourceInfo): Promise<Item[]> {
+  /** 懒解析直播流:重取签名 body → POST getH5Play → RTMP 直链。签名带时间戳,resolve 时重取。 */
+  async resolveLivePlay(roomId: string): Promise<Stream[]> {
+    const crptext = await this.fetchSignPayload(roomId)
+    const signed = this.sign(crptext, roomId)
+    return this.getH5Play(roomId, signed)
+  }
+
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const roomId = info.roomId ?? ""
     if (!roomId) throw new Error("live:douyu 需要 roomId")
 
@@ -55,7 +64,7 @@ export class DouyuLiveChannel extends BaseChannel {
     return [live]
   }
 
-  protected channelOptions(info: SourceInfo) {
+  private channelOptions(info: SourceInfo): SerializeOptions {
     return { channelTitle: `斗鱼直播 ${info.roomId ?? ""}`, channelLink: `${BASE}/${info.roomId ?? ""}` }
   }
 
@@ -72,6 +81,37 @@ export class DouyuLiveChannel extends BaseChannel {
   private async fetchSignPayload(roomId: string): Promise<string> {
     const res = await this.getJson(`${BASE}/swf_api/homeH5Enc?rids=${roomId}`)
     return String(res?.data?.[`room${roomId}`] ?? "")
+  }
+
+  /**
+   * POST getH5Play 拿 RTMP 直链。body = 签名串 + cdn/rate 选择;
+   * 响应 data.rtmp_url + data.rtmp_live 拼接成完整地址(rtmp_live 带 HTML 实体需 unescape)。
+   */
+  private async getH5Play(roomId: string, signed: string): Promise<Stream[]> {
+    const postBody = `${signed}&cdn=&rate=-1&ver=Douyu_223061205&iar=1&ive=1&hevc=0&fa=0`
+    const res = await globalThis.appHost.http.request({
+      url: `${BASE}/lapi/live/getH5Play/${roomId}`,
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "user-agent": UA,
+        referer: `${BASE}/${roomId}`,
+      },
+      body: postBody,
+      responseType: "json",
+    })
+    if (res.status < 200 || res.status >= 300) throw new Error(`douyu H5Play HTTP ${res.status}`)
+    const data = (res.body as Record<string, any>)?.data as Record<string, any> | undefined
+    const rtmpUrl = String(data?.rtmp_url ?? "")
+    const rtmpLive = htmlUnescape(String(data?.rtmp_live ?? ""))
+    if (!rtmpUrl || !rtmpLive) throw new Error(`douyu H5Play: no stream for room ${roomId}`)
+    return [
+      {
+        url: `${rtmpUrl}/${rtmpLive}`,
+        format: "rtmp",
+        headers: { referer: `${BASE}/${roomId}`, "user-agent": UA },
+      },
+    ]
   }
 
   private async getRoomInfo(roomId: string): Promise<Record<string, any>> {
@@ -118,4 +158,15 @@ function toInt(v: unknown): number | undefined {
 
 function strOr(v: unknown): string | undefined {
   return v === undefined || v === null || v === "" ? undefined : String(v)
+}
+
+/** 反转 HTML 实体(rtmp_live 常带 &amp; 等)。按 producer 同款表转。 */
+function htmlUnescape(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
 }

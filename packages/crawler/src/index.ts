@@ -21,13 +21,10 @@ export type { Kind } from "@tauri-playground/xml"
 /** 渠道参数字段定义(描述实例化一个 source 需要什么)。 */
 export type SourceInfo = Record<string, string>
 
-/** 参数规范化为缓存 key:按 key 排序后 JSON.stringify,保证 {a,b}/{b,a} 同 key。 */
-export function canonicalSourceKey(info: SourceInfo): string {
-  return JSON.stringify(Object.keys(info).sort().map((k) => [k, info[k]]))
-}
-
 /**
  * 一个可抓取的源实例。`fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展)。
+ * getSource 返回的最小契约——channel 的懒解析能力(见下)挂在 channel 上,不经由此。
+ * getSource 是纯函数:每次返回新实例,无缓存状态(复用/去重归 core 编排)。
  */
 export interface RssSource {
   /** 抓取并返回 RSS 2.0 XML 字符串。 */
@@ -35,22 +32,28 @@ export interface RssSource {
 }
 
 /**
- * 视频源的懒解析扩展(可选能力,不放基类)。
- * 播放 URL 通常带 expiry 签名,须在播放时调用而非塞进 refresh 快照。
+ * 视频懒解析能力契约。**channel 类 implements 它**——能力即普通方法,
+ * 播放 URL 带 deadline 签名,须在播放时调用而非塞进 refresh 快照。
  */
-export interface RssVideoSource extends RssSource {
+export interface RssVideoChannel {
   /** 按 item id(如 bvid)懒解析可播流。 */
-  resolvePlay?(itemId: string): Promise<Stream[]>
+  resolvePlay(itemId: string): Promise<Stream[]>
 }
 
-/** 直播源的懒解析扩展(可选能力,不放基类)。 */
-export interface RssLiveSource extends RssSource {
+/** 直播懒解析能力契约。channel 类 implements 它,playUrls 带 expiry 签名。 */
+export interface RssLiveChannel {
   /** 按 roomId 懒解析可播流。 */
-  resolveLivePlay?(roomId: string): Promise<Stream[]>
+  resolveLivePlay(roomId: string): Promise<Stream[]>
 }
 
-/** getSource 的返回:基础抓取 + 可选懒解析能力。 */
-export type AnyRssSource = RssSource | RssVideoSource | RssLiveSource
+/** 类型谓词:运行时探测 + 编译期收窄,消费侧(如 core)能力判定一处定义。 */
+export function isRssVideoChannel(c: RssChannel): c is RssChannel & RssVideoChannel {
+  return "resolvePlay" in c
+}
+
+export function isRssLiveChannel(c: RssChannel): c is RssChannel & RssLiveChannel {
+  return "resolveLivePlay" in c
+}
 
 /** 渠道参数字段(供 UI 生成"新增订阅"表单)。 */
 export interface SourceInfoField {
@@ -64,21 +67,22 @@ export interface SourceInfoField {
  * 一个渠道:用 `sourceInfoTpl` 描述参数,`getSource(info)` 按 info 实例化 source。
  */
 export interface RssChannel {
-  /** 渠道唯一 key(如 "bili:rank"、"rss:hn")。 */
+  /** 渠道唯一 key(如 "bili:square"、"rss:hn")。 */
   readonly key: string
   /** 人类可读名称。 */
   readonly name: string
   /** 该 channel 产出的 item 默认 kind。item 自身 tpl:kind 可覆盖。 */
   readonly kind: Kind
-  /** 实例化 source 需要的参数字段(供 UI 生成表单)。 */
+  /** 实例化 source 需要的参数字段(供 UI 生成表单)。无参 channel 不声明。 */
   readonly sourceInfoTpl?: SourceInfoField[]
   /**
-   * 默认可订阅参数(可选)。存在 = 无需用户输入即可订阅一个合理实例
-   * (如内置 RSS 的 url、无参榜单);缺失 = 需要用户提供参数(如 uid/roomId)。
+   * 带默认参数的实例(可选)。存在 = 无需用户输入即可订阅一个合理实例
+   * (如内置 RSS 的 url、live:douyu 的 roomId)。**无参 channel 不声明**
+   * ——「无需输入即可订阅」由 empty info 表达,不必用 `{}` 占位。
    */
   readonly defaultInfo?: SourceInfo
-  /** 按 info(url/uid/…)实例化一个 source。 */
-  getSource(info: SourceInfo): AnyRssSource
+  /** 按 info(url/uid/…)实例化一个可抓取的 source(纯 fetch)。懒解析能力在 channel 上。 */
+  getSource(info: SourceInfo): RssSource
 }
 
 // ── channel 注册表 ───────────────────────────────────────────────────────────

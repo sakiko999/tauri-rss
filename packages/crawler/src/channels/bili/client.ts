@@ -9,6 +9,7 @@
  *
  * 零登录:nav 未登录(`code:-101`)仍返回 wbi_img → MD5 即可签名。
  */
+import type { Stream } from "@tauri-playground/xml"
 import { now } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"
 
@@ -43,6 +44,10 @@ export interface BilibiliClient {
   signLiveParams(params: Record<string, string>): Promise<string>
   /** 确保 buvid3/4 就绪(仅 buvid:true 有意义)。幂等。 */
   ensureBuvid(): Promise<void>
+  /** bvid/aid → 默认分 P 的 cid(/x/web-interface/view,非 wbi 接口)。 */
+  resolveCid(bvidOrAid: string): Promise<string>
+  /** bvid+cid → durl mp4 直链(/x/player/playurl,qn=80 platform=html5)。 */
+  resolvePlayUrl(bvidOrAid: string, cid: string): Promise<Stream[]>
 }
 
 export function createBilibiliClient(options: BilibiliClientOptions = {}): BilibiliClient {
@@ -143,7 +148,39 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
     return `${query}&w_rid=${wRid}`
   }
 
-  return { getJson, signWeb, signLiveParams, ensureBuvid }
+  /**
+   * bvid/aid → 默认分 P 的 cid。复用 /x/web-interface/view(非 wbi,无需签名)。
+   * 多 P 视频默认取第一 P(data.cid);需要多 P 列表可后续扩展 pages。
+   */
+  async function resolveCid(bvidOrAid: string): Promise<string> {
+    const q = bvidOrAid.startsWith("av") ? `aid=${bvidOrAid.slice(2)}` : `bvid=${encodeURIComponent(bvidOrAid)}`
+    const video = `${API_MAIN}/x/web-interface/view?${q}`
+    const res = await getJson<{ data?: { cid?: number } }>(video, {
+      referer: `https://www.bilibili.com/video/${bvidOrAid}`,
+    })
+    const cid = res?.data?.cid
+    if (!cid) throw new Error(`bilibili view: no cid for ${bvidOrAid}`)
+    return String(cid)
+  }
+
+  /**
+   * bvid+cid → durl mp4 直链(/x/player/playurl,qn=80 platform=html5)。
+   * URL 带 deadline 签名,须在播放时调用(懒解析),不缓存。零登录可用。
+   */
+  async function resolvePlayUrl(bvidOrAid: string, cid: string): Promise<Stream[]> {
+    const id = bvidOrAid.startsWith("av") ? `av${bvidOrAid.slice(2)}` : bvidOrAid
+    const referer = `https://www.bilibili.com/video/${bvidOrAid}`
+    const url = `${API_MAIN}/x/player/playurl?bvid=${encodeURIComponent(id)}&cid=${cid}&qn=80&platform=html5`
+    const res = await getJson<{ data?: { durl?: Array<{ url?: string }> } }>(url, { referer })
+    const durl: Array<{ url?: string }> = Array.isArray(res?.data?.durl) ? res.data.durl : []
+    const streams = durl
+      .map((d) => ({ url: d.url ?? "", format: "mp4", headers: { referer, "user-agent": BILIBILI_UA } }))
+      .filter((s) => s.url.length > 0)
+    if (!streams.length) throw new Error(`bilibili playurl: no playable stream for ${bvidOrAid}`)
+    return streams
+  }
+
+  return { getJson, signWeb, signLiveParams, ensureBuvid, resolveCid, resolvePlayUrl }
 }
 
 function fileStem(url: string): string {

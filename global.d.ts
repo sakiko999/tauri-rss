@@ -46,6 +46,8 @@ declare global {
     url: string
     method?: string
     headers?: Record<string, string>
+    /** 请求体(如 douyu 的 form 编码 POST)。string 原样发送;对象走 JSON.stringify。 */
+    body?: string
     /** "text" | "json" | "arraybuffer"(arraybuffer 走 base64,与 producer 一致) */
     responseType?: "text" | "json" | "arraybuffer"
     timeoutMs?: number

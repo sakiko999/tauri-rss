@@ -6,20 +6,22 @@
  * playUrls 需 Tars 二进制 codec,暂不实现(同 producer)。
  */
 import type { Item, Live } from "@tauri-playground/xml"
-import { BaseChannel } from "../base.ts"
-import type { SourceInfo } from "../../index.ts"
+import { type SerializeOptions } from "@tauri-playground/xml"
+import type { RssChannel, SourceInfo } from "../../index.ts"
+import { createApiSource } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 
 const M_HUYA = "https://m.huya.com"
 const UA_MOBILE =
   "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
 
-export class HuyaLiveChannel extends BaseChannel {
+export class HuyaLiveChannel implements RssChannel {
   readonly key = "live:huya"
   readonly name = "虎牙直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  protected async fetchItems(info: SourceInfo): Promise<Item[]> {
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const roomId = info.roomId ?? ""
     if (!roomId) throw new Error("live:huya 需要 roomId")
     const html = await httpText(`${M_HUYA}/${roomId}`, { "user-agent": UA_MOBILE })
@@ -45,7 +47,7 @@ export class HuyaLiveChannel extends BaseChannel {
     }
     return [live]
   }
-  protected channelOptions(info: SourceInfo) {
+  private channelOptions(info: SourceInfo): SerializeOptions {
     return { channelTitle: `虎牙直播 ${info.roomId ?? ""}`, channelLink: `https://www.huya.com/${info.roomId ?? ""}` }
   }
 }

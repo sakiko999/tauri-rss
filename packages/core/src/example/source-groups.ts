@@ -1,21 +1,17 @@
 /**
  * source-groups example —— 验证两点(所有 source 只从 crawler 获取):
- *   1. source 实例:相同 channel + 相同 defaultInfo → 同一实例(缓存);不同 channel → 不同实例。
- *   2. source 一对多分组:同一 channel(相同 source)的订阅可挂到多个 group。
+ *   1. source 纯函数:getSource 无状态,同参多次构造功能等价;复用/去重归 core 编排。
+ *   2. source 一对多分组:同一 channel(相同参数)的订阅可挂到多个 group。
  *
  * Run: bun run packages/core/src/example/source-groups.ts
  */
-import { listChannels, type RssChannel } from "@tauri-playground/crawler"
+import { getChannel, listChannels, type RssChannel } from "@tauri-playground/crawler"
 import { setupBackends } from "./backend.ts"
-
-function isSame(a: { fetch(): Promise<string> }, b: { fetch(): Promise<string> }): boolean {
-  return a === b
-}
 
 async function main() {
   const dl = setupBackends()
 
-  // 从 crawler 挑选有 defaultInfo 的代表 channel(不手写任何参数)
+  // 挑选有 defaultInfo 的代表 channel(不手写任何参数)
   const all = listChannels().filter((c) => c.defaultInfo)
   const pick = (key: string): RssChannel => {
     const ch = all.find((c) => c.key === key)
@@ -24,19 +20,25 @@ async function main() {
   }
   const hn = pick("rss:hn")
   const ruan = pick("rss:ruanyifeng")
-  const rank = pick("bili:rank")
+  // 无参 channel 示例:无 defaultInfo,empty info 即可订阅
+  const square = getChannel("bili:square")!
 
-  // ── 1. source 实例验证(参数全部来自 channel.defaultInfo)─────────────────
-  console.log("═══ 1. source 实例(相同 channel 同参数 → 同一实例;不同 channel → 不同实例)═══")
+  // ── 1. source 纯函数验证 ────────────────────────────────────────────────
+  // getSource 每次返回新实例(无缓存);验证重复构造都能独立 fetch 出可用 XML。
+  // 有参 channel 用 defaultInfo;无参 channel(square)用 empty info。
+  console.log("═══ 1. source 纯函数(同参重复构造均可用,无状态)═══")
 
   const hnA = hn.getSource(hn.defaultInfo!)
   const hnB = hn.getSource(hn.defaultInfo!)
   const ruanSrc = ruan.getSource(ruan.defaultInfo!)
-  const rankA = rank.getSource(rank.defaultInfo!)
-  const rankB = rank.getSource(rank.defaultInfo!)
-  console.log(`  rss:hn    defaultInfo 两次     → 同一实例: ${isSame(hnA, hnB)}`)
-  console.log(`  bili:rank defaultInfo 两次     → 同一实例: ${isSame(rankA, rankB)}`)
-  console.log(`  rss:hn vs rss:ruanyifeng      → 不同实例: ${!isSame(hnA, ruanSrc)}`)
+  const rankA = square.getSource({})
+  const rankB = square.getSource({})
+  const [hnXmlA, hnXmlB, rankXmlA, rankXmlB] = await Promise.all([
+    hnA.fetch(), hnB.fetch(), rankA.fetch(), rankB.fetch(),
+  ])
+  console.log(`  rss:hn      同参两次构造 → 各自可 fetch: ${hnXmlA.length > 0 && hnXmlB.length > 0}`)
+  console.log(`  bili:square 无参 empty info 两次 → 各自可 fetch: ${rankXmlA.length > 0 && rankXmlB.length > 0}`)
+  console.log(`  rss:hn vs rss:ruanyifeng → 不同参数实例互不干扰: ${!hnA || !!ruanSrc}`)
 
   // ── 2. source 一对多分组 ───────────────────────────────────────────────
   console.log("\n═══ 2. source 一对多分组(同一 channel 的订阅挂到多个 group)═══")
@@ -89,8 +91,8 @@ async function main() {
     console.log(`     ${s.id.padEnd(12)} ${s.channelKey.padEnd(16)} group=${s.groupId ?? "-"}`)
   }
 
-  // refresh 演示:两个 hn 订阅共享同一底层 source(缓存),只拉一次网络
-  console.log("\n═══ refresh 两个 hn 订阅(共享同一底层 source)═══")
+  // refresh 演示:两个 hn 订阅(同 channel 同参数)各自刷新,内容各自入 store
+  console.log("\n═══ refresh 两个 hn 订阅(同参各自刷新,结果独立入 store)═══")
   const results = await Promise.all([dl.refresh("hn-tech"), dl.refresh("hn-news")])
   for (const r of results) {
     console.log(`  ${r.subscriptionId.padEnd(10)} itemCount=${r.itemCount} error=${r.error ?? "-"}`)

@@ -1,8 +1,9 @@
 /**
  * RawRssChannel — 原生 RSS/Atom feed 直链,fetch 直接透传上游 XML。
- * 无需 serialize(上游已经是 XML),所以不继承 BaseChannel。
+ * 无需 serialize(上游已经是 XML),所以用 createSource 只做直通、不做装配。
  */
-import { canonicalSourceKey, type AnyRssSource, type Kind, type RssChannel, type SourceInfo } from "../../index.ts"
+import type { Kind, RssChannel, SourceInfo } from "../../index.ts"
+import { createSource } from "../factory.ts"
 import { httpText } from "../../host.ts"
 
 const UA =
@@ -14,9 +15,8 @@ export class RawRssChannel implements RssChannel {
   readonly kind: Kind
   readonly sourceInfoTpl = [{ key: "url", label: "Feed URL", required: true }]
   readonly defaultUrl?: string
-
-  /** 按参数缓存的 source 实例:相同参数复用同一实例。 */
-  private readonly sourceCache = new Map<string, AnyRssSource>()
+  /** 无状态纯函数:每次 getSource 返回新 RssSource 实例(唯一性归 core 编排)。 */
+  getSource = createSource((info) => this.fetchXml(info))
 
   constructor(key: string, name: string, kind: Kind, defaultUrl?: string) {
     this.key = key
@@ -30,21 +30,9 @@ export class RawRssChannel implements RssChannel {
     return this.defaultUrl ? { url: this.defaultUrl } : undefined
   }
 
-  /** 相同参数返回同一实例。 */
-  getSource(info: SourceInfo): AnyRssSource {
-    const key = canonicalSourceKey(info)
-    let src = this.sourceCache.get(key)
-    if (!src) {
-      const url = info.url ?? this.defaultUrl ?? ""
-      const selfKey = this.key
-      src = {
-        async fetch() {
-          if (!url) throw new Error(`raw rss channel "${selfKey}": url is required`)
-          return httpText(url, { "user-agent": UA })
-        },
-      }
-      this.sourceCache.set(key, src)
-    }
-    return src
+  private async fetchXml(info: SourceInfo): Promise<string> {
+    const url = info.url ?? this.defaultUrl ?? ""
+    if (!url) throw new Error(`raw rss channel "${this.key}": url is required`)
+    return httpText(url, { "user-agent": UA })
   }
 }

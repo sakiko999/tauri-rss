@@ -17,8 +17,10 @@ packages/
                    （node/ 真实网络+内存存储给 example；browser/ 浏览器 fetch+localStorage
                    给纯前端调试；tauri/ Rust http_get+localStorage 给生产）
   crawler/       ★ @tauri-playground/crawler — 订阅源抓取层（producer 的重构替代）。
-                   一切皆 RssChannel：channel 描述参数 → getSource(info) → source.fetch()
-                   直出 RSS 2.0 + tpl: XML 字符串。XML 即天然类型，不导出数据模型类型
+                   一切皆 RssChannel：channel 直接 implements RssChannel(+ 能力接口
+                   RssVideoChannel/RssLiveChannel),getSource 用组合工厂(factory.ts)
+                   装配——纯函数,每次返回新 source,缓存/去重归 core。直出 RSS 2.0 + tpl:
+                   XML 字符串。XML 即天然类型,不导出数据模型类型
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
   ui/            @tauri-playground/ui   — UI 组件库（当前仅按 kind 分发的媒体渲染器）
@@ -52,6 +54,8 @@ bun run scripts/tauri.ts help  # 查看全部用法
 bun run packages/crawler/src/example/list_channels.ts     # 打印全部 channel（47 个）
 bun run packages/crawler/src/example/list_sources.ts      # 每个 channel 实例化 source
 bun run packages/crawler/src/example/sample_sources.ts live:   # 抽样 fetch，filter=live: 只看直播
+bun run packages/crawler/src/example/resolve_play.ts bili:popular  # 懒解析可播流(视频)
+bun run packages/crawler/src/example/resolve_live_play.ts bili:live 6  # 懒解析直播流(直播)
 
 # core example（基于 crawler 输出的 channel 批量订阅 + 刷新）
 bun run packages/core/src/example/data-layer.ts
@@ -131,13 +135,16 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   - `LiveRenderer`：playUrls 带 expiry 签名，当前只显示状态 + 链接，未接真实播放
 - 建议顺序：先 Audio（已通）+ Live（playUrls 现成，试播最简单），再 Video（懒解析）
 - 目标：按 `technical-plan.md` 的 VideoPlayer/hls.js 方案接真实播放（video/audio/live 共用），
-  懒解析走 crawler 的 `RssVideoSource.resolvePlay` / `RssLiveSource.resolveLivePlay`。
+  懒解析走 channel 能力方法——`RssVideoChannel.resolvePlay(itemId)` /
+  `RssLiveChannel.resolveLivePlay(roomId)`（core 的 `data-layer.ts` 已暴露对应 seam，
+  用 `isRssVideoChannel`/`isRssLiveChannel` 类型谓词收窄）。
   注意 risk：hls.js + StrictMode 的 destroy 幂等
 
 **2. 订阅管理 UI（crawler 已设计好，只是没用起来）**
 - `TEST_SUBSCRIPTIONS` 硬编码 → 用户能自己增删订阅
-- 用 `RssChannel.sourceInfoTpl` 自动生成「新增订阅」表单
-- 展示 `channel.defaultInfo`（无需输入即可订阅的默认实例）
+- 用 `RssChannel.sourceInfoTpl` 自动生成「新增订阅」表单（仅需用户输入的 channel 声明）
+- 展示 `channel.defaultInfo`（带默认参数的实例，一键订阅）；无参 channel 不声明，
+  empty info 即免输入可订阅
 
 **3. packages/ui 接入 tailwind**
 - 目前 renderer 全是内联 `style={styles}` CSSProperties；desktop 已接 `@tailwindcss/vite`
@@ -154,4 +161,7 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - react-query 数据流 + 无限滚动（列表化内容不再一次性全量）
 - 三模式 UI：三分栏 / 瀑布流 / 短视频（technical-plan 的 P2–P4）
 - mobile 接入 appHost + core（当前还是 Tauri 模板）
+- **source 缓存（core 层）**：crawler 的 `getSource` 是纯函数（每次新实例）。
+  若要「同参复用实例 / 去重刷新」，在 core 编排层按 `channelKey + info` 持 Map 实现
+  （与 `RssChannel.sourceInfoTpl`/`defaultInfo` 参数体系相关，见 `packages/core/src/data-layer.ts`）
 - 离线缓存 + SQLite（P6）
