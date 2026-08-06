@@ -46,6 +46,22 @@ bun run packages/core/src/example/data-layer.ts
 
 > ⚠️ Rust 侧要求从 "x64 Native Tools Command Prompt for VS 2022" 启动终端（MSVC linker），详见 CLAUDE.md。
 
+## 参考项目（`tmp/`，gitignore）
+
+| 项目 | 用途 |
+|---|---|
+| `tmp/RSSHub` | 路由静态摘录数据源目录（`scripts/rsshub-catalog.ts` 抄 handler） |
+| `tmp/MediaCrawler` | 微博/小红书等反爬平台爬虫对照（确认为什么搞不定） |
+| `tmp/dart_simple_live` | 直播流获取参考（虎牙/斗鱼/bilibili/抖音） |
+| `tmp/producer` | 旧订阅生产者源码（已无代码引用，保留实现范式参考） |
+
+## 下一步 Todo
+
+- **正常渲染 video / audio / live**：`packages/ui/src/renderers/` 补真实播放
+  （video 懒解析流、audio 直链、live playUrls），按 `technical-plan.md` 的 VideoPlayer/hls.js 方案
+- **packages/ui 接入 tailwind**：renderer 从内联 style 迁到 Tailwind 4（@theme 令牌在
+  `packages/ui/src/styles/theme.css`），desktop 已接好 `@tailwindcss/vite`
+
 ## 更多文档
 
 - `docs/technical-plan.md` — 整体技术方案（UI 三模式 / 数据流边界 / Tauri 插件调研）

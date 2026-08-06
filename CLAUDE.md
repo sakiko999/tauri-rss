@@ -91,8 +91,13 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - tsc 用根 `./node_modules/.bin/tsc -p <项目>`（各包/desktop/scripts 各自校验）；**不要** `npx tsc`
   （会误装 tsc@2.0.3），**不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪音）。
 - cargo test/build 前若 tauri-app.exe 仍在运行会锁二进制报 `拒绝访问 (os error 5)`，先 `taskkill //F //IM tauri-app.exe`。
-- `tmp/` 是 gitignore 的迁移源 / 参考项目：RSSHub、MediaCrawler、dart_simple_live、producer（已无代码
-  引用的旧订阅生产者，源码保留在此供参考）。**不要对它跑任何构建/测试**。
+- `tmp/` 是 gitignore 的迁移源 / 参考项目，**不要对它跑任何构建/测试**：
+  - `RSSHub` — 路由静态摘录数据源目录（`scripts/rsshub-catalog.ts` 抄它的 handler）
+  - `MediaCrawler` — 微博/小红书等反爬平台爬虫对照（确认为什么这些平台搞不定）
+  - `dart_simple_live` — 直播流获取参考（虎牙/斗鱼/bilibili/抖音，Dart 实现，
+    与 crawler 直播 channel 同源平台）
+  - `producer` — 旧订阅生产者源码（无代码引用，保留参考：source/bilibili、douyin abogus、
+    douyu cryptojs、huya、rss 的实现范式）
 - Rust 增量编译偶尔报 `拒绝访问 os error 5`，是无害警告，忽略。
 - Tauri dev 的 `devUrl` 是 `http://localhost:1420`，脚本并行启动 Vite dev server + tauri dev。
 - `apps/src-tauri/tauri.conf.json` 是桌面配置，`tauri.conf.mobile.json` 是移动端。
@@ -114,3 +119,16 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   可用性结论见 `docs/domestic-feed-availability.md`。新源先 curl 验证再并入。
 - 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/X/小红书
   是硬反爬（puppeteer+登录+代理），个人不部署 RSSHub 碰不了。
+
+## 下一步 Todo（待办）
+
+- **正常渲染 video / audio / live**：`packages/ui/src/renderers/` 目前是验证型——
+  - `VideoRenderer`：播放直链需懒解析（deadline 签名），当前只显示「▶ 播放」链接，未接真实 `<video>`
+  - `AudioRenderer`：播客 mp3 无签名，已用 `<audio controls>`，可正常播
+  - `LiveRenderer`：playUrls 带 expiry 签名，当前只显示状态 + 链接，未接真实播放
+  - 目标：按 `technical-plan.md` 的 VideoPlayer/hls.js 方案接真实播放（video/audio/live 共用），
+    懒解析走 crawler 的 `RssVideoSource.resolvePlay` / `RssLiveSource.resolveLivePlay`
+- **packages/ui 接入 tailwind**：目前 renderer 全是内联 `style={styles}` CSSProperties；
+  desktop 已接 `@tailwindcss/vite`（v4 CSS-first），ui 包本身没有 tailwind 依赖。
+  计划：给 ui 包加 tailwind（@theme 设计令牌在 `packages/ui/src/styles/theme.css`，见
+  `technical-plan.md` 的 Tailwind 4 接入节——`@source` 显式扫包源码、styles.css 引入 theme.css）。
