@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
-    "@tauri-apps/plugin-opener": "^2",
     "@tauri-playground/core": "workspace:*",
     "@tauri-playground/crawler": "workspace:*",
     "@tauri-playground/host": "workspace:*",

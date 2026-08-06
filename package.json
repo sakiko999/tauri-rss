@@ -9,7 +9,6 @@
     "packages/core",
     "packages/crawler",
     "packages/host",
-    "packages/producer",
     "packages/ui",
     "packages/xml"
   ],
