@@ -3,12 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "index.ts",
+  "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@tauri-playground/producer": "workspace:*"
+    "@tauri-playground/crawler": "workspace:*",
+    "@tauri-playground/host": "workspace:*",
+    "@tauri-playground/xml": "workspace:*"
   },
   "scripts": {}
 }

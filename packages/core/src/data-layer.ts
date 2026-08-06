@@ -1,78 +1,84 @@
 /**
- * DataLayer — the single public seam between the app layer and the data layer.
+ * DataLayer — app 层与数据层之间的单一公共 seam。
  *
- * The app layer reads via `store`, calls `refresh()` to pull a subscription,
- * and `resolveLivePlay()` to lazily get a live room's playable URLs. Everything
- * else (adapters, host, repo) is an implementation detail.
+ * app 层通过 `store` 读内容、调 `refresh()` 拉订阅、经 subscriptions/reading/
+ * settings 三个 repo 维护配置。宿主能力来自全局 `globalThis.appHost`
+ * (注入见根 global.d.ts),无 createDataLayer(host) 参数。
  *
- * Built-in source adapters are registered into the producer registry via
- * `registerAllSources()`; this snapshots that registry into the adapter map.
- * Plugins register via `registerSource(new XxxSource())` at app startup — they
- * need no change here. `resolveLivePlay` dispatches to the adapter's optional
- * `resolveLivePlay` capability.
+ * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
+ * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
-import { NoAdapterError } from "./errors.ts"
+import { getChannel, registerAllChannels } from "@tauri-playground/crawler"
+import { deserializeFeed } from "./xml/deserialize.ts"
+import { NoChannelError } from "./errors.ts"
+import type { RefreshResult } from "./types/refresh-result.ts"
+import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem } from "./types/media-item.ts"
-import { createMediaStore, type MediaQuery } from "./store/media-store.ts"
-import type { PlatformHost } from "./types/platform.ts"
-import type { FeedStream, LivePlayUrl, RefreshResult } from "@tauri-playground/producer"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
-} from "./repo/subscription-repository.ts"
-import {
-  createReadingRepository,
-  type ReadingRepository,
-} from "./repo/reading-repository.ts"
-import {
-  createSettingsRepository,
-  type SettingsRepository,
-} from "./repo/settings-repository.ts"
-import { feedItemsToMediaItems } from "./feed-to-media.ts"
-import type { SourceAdapter } from "@tauri-playground/producer"
-import { deserializeFeed, registerAllSources, listSources } from "@tauri-playground/producer"
-
-export interface DataLayerOptions {
-  /** Custom clock (defaults to host.now). */
-  now?: () => number
-}
+} from "./repo/subscription-repo.ts"
+import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
+import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
+import { createMediaStore } from "./store/media-store.ts"
 
 export interface DataLayer {
-  /** Subscription config (CRUD). */
+  /** 订阅配置(CRUD + 分组)。 */
   readonly subscriptions: SubscriptionRepository
-  /** Read-state (mark read / playback position). */
+  /** 阅读状态(已读 / 续播位置)。 */
   readonly reading: ReadingRepository
-  /** App settings. */
+  /** app 设置。 */
   readonly settings: SettingsRepository
-  /** Content store (query + observe). */
+  /** 内容 store(查询 + 订阅)。 */
   readonly store: {
     all(): MediaItem[]
     query(query?: MediaQuery): MediaItem[]
     patch(id: string, patch: Partial<MediaItem>): void
     subscribe(listener: () => void): () => void
   }
-  /** Register an additional source adapter for a subscription kind. */
-  registerAdapter(adapter: SourceAdapter): void
-  /** Refresh one subscription, writing its items into the store. */
+  /** 刷新一次订阅,把内容写入 store。 */
   refresh(subscriptionId: string): Promise<RefreshResult>
-  /** Lazily resolve a live room's playable URLs (live scope). */
-  resolveLivePlay(subscriptionId: string): Promise<LivePlayUrl>
-  /** Lazily resolve a video item's playable streams (item-scoped by videoId). */
-  resolveVideoPlay(subscriptionId: string, videoId: string): Promise<FeedStream[]>
 }
 
-export function createDataLayer(host: PlatformHost, options: DataLayerOptions = {}): DataLayer {
-  const repo = createSubscriptionRepository(host)
-  const reading = createReadingRepository(host)
-  const settings = createSettingsRepository(host)
-  const store = createMediaStore(options.now ?? host.now)
-  const adapters = new Map<string, SourceAdapter>()
+export function createDataLayer(): DataLayer {
+  registerAllChannels()
+  // 全局 appHost 门面(getter 校验未注入抛清晰错误;now/log 兜底)。
+  const storage = globalThis.appHost.storage
+  const now = globalThis.appHost.now!
+  const log = globalThis.appHost.log!
+  const repo = createSubscriptionRepository(storage, now)
+  const reading = createReadingRepository(storage, now)
+  const settings = createSettingsRepository(storage)
+  const store = createMediaStore(now)
 
-  // Register built-in source adapters (idempotent), then snapshot the registry
-  // into the adapter map. Plugins registered via registerSource() before this
-  // call are picked up here too.
-  registerAllSources(host)
-  for (const a of listSources()) adapters.set(a.sourceId, a)
+  async function refresh(subscriptionId: string): Promise<RefreshResult> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) {
+      return {
+        subscriptionId,
+        itemCount: 0,
+        error: "subscription not found",
+        fetchedAt: now(),
+      }
+    }
+    try {
+      // 未注册的 channelKey 是配置错误——throw 后由 catch 统一返回 error 结果。
+      const channel = getChannel(sub.channelKey)
+      if (!channel) throw new NoChannelError(sub.channelKey)
+      const xml = await channel.getSource(sub.info).fetch()
+      const items = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
+      store.replace(subscriptionId, items)
+      return { subscriptionId, itemCount: items.length, fetchedAt: now() }
+    } catch (err) {
+      log.log("error", "refresh failed", { subscriptionId, error: String(err) })
+      return {
+        subscriptionId,
+        itemCount: 0,
+        error: err instanceof Error ? err.message : String(err),
+        fetchedAt: now(),
+      }
+    }
+  }
 
   return {
     subscriptions: repo,
@@ -84,66 +90,6 @@ export function createDataLayer(host: PlatformHost, options: DataLayerOptions = 
       patch: (id, patch) => store.patch(id, patch),
       subscribe: (l) => store.subscribe(l),
     },
-
-    registerAdapter(adapter) {
-      adapters.set(adapter.sourceId, adapter)
-    },
-
-    async refresh(subscriptionId) {
-      const sub = await repo.get(subscriptionId)
-      if (!sub) {
-        return {
-          subscriptionId,
-          itemCount: 0,
-          error: "subscription not found",
-          fetchedAt: host.now(),
-        }
-      }
-      const adapter = adapters.get(sub.sourceId)
-      if (!adapter) throw new NoAdapterError(sub.sourceId)
-      try {
-        // The producer↔core transfer is XML: every source satisfies `toXml`,
-        // so core consumes uniform RSS 2.0 (+ tpl:) and recovers the protocol
-        // items via `deserializeFeed`.
-        const xml = await adapter.toXml(sub, host)
-        const items = deserializeFeed(xml)
-        const mediaItems = feedItemsToMediaItems(items, {
-          subscriptionId,
-          now: host.now(),
-        })
-        store.replace(subscriptionId, mediaItems)
-        return { subscriptionId, itemCount: mediaItems.length, fetchedAt: host.now() }
-      } catch (err) {
-        host.log.log("error", "refresh failed", { subscriptionId, error: String(err) })
-        return {
-          subscriptionId,
-          itemCount: 0,
-          error: err instanceof Error ? err.message : String(err),
-          fetchedAt: host.now(),
-        }
-      }
-    },
-
-    async resolveLivePlay(subscriptionId) {
-      const sub = await repo.get(subscriptionId)
-      if (!sub) throw new Error(`subscription ${subscriptionId} not found`)
-      const adapter = adapters.get(sub.sourceId)
-      if (!adapter) throw new NoAdapterError(sub.sourceId)
-      if (!adapter.resolveLivePlay) {
-        throw new Error(`subscription source ${sub.sourceId} does not support resolveLivePlay`)
-      }
-      return adapter.resolveLivePlay(sub, host)
-    },
-
-    async resolveVideoPlay(subscriptionId, videoId) {
-      const sub = await repo.get(subscriptionId)
-      if (!sub) throw new Error(`subscription ${subscriptionId} not found`)
-      const adapter = adapters.get(sub.sourceId)
-      if (!adapter) throw new NoAdapterError(sub.sourceId)
-      if (!adapter.resolveVideoPlay) {
-        throw new Error(`subscription source ${sub.sourceId} does not support resolveVideoPlay`)
-      }
-      return adapter.resolveVideoPlay(sub, host, videoId)
-    },
+    refresh,
   }
 }

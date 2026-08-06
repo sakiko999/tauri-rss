@@ -12,6 +12,9 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-playground/core": "workspace:*",
+    "@tauri-playground/crawler": "workspace:*",
+    "@tauri-playground/host": "workspace:*",
+    "@tauri-playground/ui": "workspace:*",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.14"

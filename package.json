@@ -7,8 +7,11 @@
     "apps/desktop",
     "apps/mobile",
     "packages/core",
+    "packages/crawler",
+    "packages/host",
     "packages/producer",
-    "packages/ui"
+    "packages/ui",
+    "packages/xml"
   ],
   "scripts": {
     "dev": "bun run scripts/tauri.ts dev",

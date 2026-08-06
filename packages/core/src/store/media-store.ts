@@ -1,38 +1,26 @@
 /**
- * MediaStore — in-memory store of `MediaItem`s, queryable and observable.
+ * MediaStore — MediaItem 内存存储,可查询 + 可订阅。
  *
- * The app layer reads content from here; source adapters write to it on
- * refresh. "Smart feeds" (today / unread / starred) are *queries* over all
- * items, not special nodes — which is why subscriptions and items are separate.
- *
- * Phase 1 keeps the store in-memory. A cache/persistence layer can sit in
- * front of it later without changing this contract.
+ * app 层从这里读内容;refresh 时写入。"智能订阅"(today/unread/starred)
+ * 是对全部条目的查询,而非特殊节点——订阅与条目分离即因此。
  */
 import type { MediaItem } from "../types/media-item.ts"
+import type { MediaQuery } from "../types/query.ts"
 
 export type MediaStoreListener = () => void
 
-export interface MediaQuery {
-  /** Limit to one subscription. Omit for all. */
-  subscriptionId?: string
-  today?: boolean
-  unreadOnly?: boolean
-  starredOnly?: boolean
-  /** Lexicographic on publishedAt desc (newest first); ties broken by id. */
-}
-
 export interface MediaStore {
-  /** All items (snapshot copy). */
+  /** 全部条目(快照副本)。 */
   all(): MediaItem[]
-  /** Filtered, newest-first view per `query`. */
+  /** 按 query 过滤,新在前。 */
   query(query?: MediaQuery): MediaItem[]
-  /** Replace a subscription's items with a fresh fetch. */
+  /** 用一次新抓取替换某订阅的全部条目。 */
   replace(subscriptionId: string, items: MediaItem[]): void
-  /** Patch a single item (e.g. mark read, star) by id. */
+  /** 按 id patch 单条(如标已读、收藏)。 */
   patch(id: string, patch: Partial<MediaItem>): void
-  /** Subscribe to store changes; returns an unsubscribe function. */
+  /** 订阅 store 变更;返回退订函数。 */
   subscribe(listener: MediaStoreListener): () => void
-  /** Drop all items for a subscription (e.g. on unsubscribe). */
+  /** 丢弃某订阅全部条目(如退订时)。 */
   clear(subscriptionId: string): void
 }
 

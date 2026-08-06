@@ -1,61 +1,51 @@
 /**
- * Media item types — the app's *content model* the render layer consumes.
+ * MediaItem — core 自建的渲染模型(app 内容模型)。
  *
- * Moved here from the producer package: `MediaItem` carries app-layer semantics
- * (subscriptionId / unread / starred / rendering hints) that belong to core,
- * NOT to the producer's feed protocol. The producer emits its own protocol
- * shape (`FeedItem`, packages/producer/src/types/feed-item.ts) and core bridges
- * FeedItem → MediaItem via `feed-to-media.ts`.
+ * 由 core 的 XML deserializer 从 crawler 输出的 RSS 2.0 + `tpl:` XML 还原,
+ * 叠加 app 层语义(subscriptionId / isUnread / isStarred)。判别联合 keyed on
+ * `kind`,app 层按 kind 收窄渲染。
  *
- * A `MediaItem` is a discriminated union keyed on `kind`. Each variant carries
- * the fields that kind requires (not optional), so the app layer narrows on
- * `kind` and renders accordingly. `raw?: unknown` carries the opaque source
- * payload for lossless round-tripping when a source field has no mapped home.
- *
- * Kind set: `article | social | video | audio | live`. There is NO standalone
- * `image` kind — images are extracted into `ArticleItem.media[]` as attachments.
+ * Kind 集:`article | social | video | audio | live`,无独立 image kind——
+ * 图片进 `ArticleItem.media[]` 作为附件。
  */
-
 import type { LivePlatformId, LiveStatus } from "./live.ts"
 
-/** The set of media kinds the app layer knows how to render. */
+/** 渲染层认识的媒体种类。 */
 export type MediaKind = "article" | "social" | "video" | "audio" | "live"
 
-/** A person/account associated with an item (article byline, video channel, …). */
+/** 与条目关联的作者/账号(文章署名、视频频道等)。 */
 export interface MediaAuthor {
   name: string
   avatar?: string
   handle?: string
 }
 
-/** Delivery hint for a playable stream. */
+/** 可播流的投递提示。 */
 export type StreamingFormat = "hls" | "dash" | "progressive"
 
-/** Fields common to every media item variant. */
+/** 每种媒体条目的公共字段。 */
 export interface MediaItemBase {
-  /** Stable unique id within the source (the RSS guid / live roomId / …). */
+  /** 源内稳定唯一 id(RSS guid / 直播 roomId / …)。 */
   id: string
-  /** Owning subscription. Items are joined to config by this. */
+  /** 所属订阅。条目按此 join 到配置。 */
   subscriptionId: string
-  /** Identifier of the originating source adapter (e.g. "rss", "live:bilibili"). */
-  sourceId: string
   kind: MediaKind
   title: string
   url?: string
   summary?: string
   thumbnail?: string
   author?: MediaAuthor
-  /** Unix epoch ms. Omitted when a source provides no usable timestamp. */
+  /** Unix epoch ms。源无时间戳时省略。 */
   publishedAt?: number
-  /** Unix epoch ms — when the data layer fetched this item. */
+  /** Unix epoch ms —— 数据层抓取时间。 */
   fetchedAt: number
-  /** User-facing state. Defaults to true on fresh items; cleared on read. */
+  /** 用户状态。新条目默认 true,已读时清除。 */
   isUnread?: boolean
   isStarred?: boolean
-  /** Opaque source payload, kept for lossless round-trip / future mapping. */
+  /** 不透明源负载,保真 round-trip。 */
   raw?: unknown
 
-  // ── Rendering / playback hints (see docs/technical-plan.md) ──────────────
+  // ── 渲染 / 播放提示 ──────────────────────────────────────────────
   mimeType?: string
   poster?: string
   width?: number
@@ -68,16 +58,16 @@ export interface MediaItemBase {
   lang?: string
 }
 
-/** Long-form text content (blog post, news article, RSS `<item>`). */
+/** 长文正文(博客、新闻、RSS item)。 */
 export interface ArticleItem extends MediaItemBase {
   kind: "article"
   content?: string
   contentFormat?: "html" | "markdown" | "text"
-  /** Media attachments extracted from the source (enclosure / media:content / itunes). */
+  /** 从源提取的媒体附件(enclosure / media:content)。 */
   media?: MediaAttachment[]
 }
 
-/** Short-form social post (tweet-like, with reactions). */
+/** 短社交动态(tweet 类,带互动数)。 */
 export interface SocialItem extends MediaItemBase {
   kind: "social"
   content: string
@@ -88,20 +78,14 @@ export interface SocialItem extends MediaItemBase {
   isLiked?: boolean
 }
 
-/** A playable stream plus its delivery hints (format, headers). */
+/** 可播流 + 投递提示。 */
 export interface MediaStream {
   url: string
   format?: string
   headers?: Record<string, string>
 }
 
-/**
- * A media *attachment* inside an article (`ArticleItem.media[]`).
- *
- * Distinct from the top-level `MediaItem` union: an attachment is a single
- * embeddable resource (image / video / audio / live), and images are allowed
- * here even though there is no standalone `image` *item* kind.
- */
+/** 文章内嵌附件(ArticleItem.media[])。 */
 export type MediaAttachmentKind = "image" | "video" | "audio" | "live"
 
 export interface MediaAttachment {
@@ -120,7 +104,7 @@ export interface MediaAttachment {
   lang?: string
 }
 
-/** A hosted video clip (VOD). Distinct from a live stream — see `LiveItem`. */
+/** 托管视频片段(VOD)。与直播流区分 —— 见 LiveItem。 */
 export interface VideoItem extends MediaItemBase {
   kind: "video"
   duration?: number
@@ -128,7 +112,7 @@ export interface VideoItem extends MediaItemBase {
   channel?: { name: string; avatar?: string }
 }
 
-/** A hosted audio clip (podcast / music). Distinct from a live stream. */
+/** 托管音频片段(播客 / 音乐)。 */
 export interface AudioItem extends MediaItemBase {
   kind: "audio"
   duration?: number
@@ -137,13 +121,7 @@ export interface AudioItem extends MediaItemBase {
   stream?: MediaStream
 }
 
-/**
- * A live room surfaced as a media item.
- *
- * Scope: status + metadata only at refresh time. `playUrls` are resolved on
- * demand via `DataLayer.resolveLivePlay()` because they expire and require a
- * multi-step resolve — not part of the periodic refresh.
- */
+/** 直播房间。refresh 时只有状态 + 元数据;playUrls 由懒解析填充。 */
 export interface LiveItem extends MediaItemBase {
   kind: "live"
   platform: LivePlatformId
@@ -154,12 +132,10 @@ export interface LiveItem extends MediaItemBase {
   introduction?: string
   notice?: string
   showTime?: string
-  /** Populated lazily by `resolveLivePlay()`. */
+  /** 懒解析填充(resolveLivePlay),带 expiry 签名,过期须重解析。 */
   playUrls?: string[]
   playHeaders?: Record<string, string>
   quality?: string
-  /** Snapshot expiry for `playUrls` (epoch ms). When in the past, consumers
-   *  MUST NOT trust the URLs and should re-resolve via `resolveLivePlay()`. */
   playUrlsExpiresAt?: number
 }
 
