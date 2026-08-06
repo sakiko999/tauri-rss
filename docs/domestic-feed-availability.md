@@ -29,7 +29,7 @@
 
 ## 二、立即可用的原生 feed（已 curl 实测 200 + 真 XML）
 
-可直接塞进 `App.tsx` 的 `TEST_SUBSCRIPTIONS`，无需任何抓取逻辑，走现有 `RssSource`：
+可直接塞进 `apps/desktop/src/subscriptions.ts` 的 `TEST_SUBSCRIPTIONS`，无需任何抓取逻辑，走现有 RawRssChannel（`rss:{id}`）：
 
 | # | 平台 | feed URL | 类型 |
 |---|---|---|---|
@@ -73,12 +73,10 @@ mixinKey = permute(imgKey + subKey, MIXIN_KEY_ENC_TAB).slice(0, 32)
 w_rid    = MD5(sortedParams & wts & mixinKey)
 ```
 
-已实现为 `packages/core/src/source/bilibili/bilibili-rank-source.ts`（`bilibili-rank` kind）：
+已实现为 `packages/crawler/src/channels/bili/channels.ts` 的 `BiliRankChannel`（`bili:rank` channel，wbi 签名在 `client.ts`）：
 - 端到端验证：真实抓取热搜 50 条（code:0），零 cookie
-- 单测：`__tests__/bilibili-rank.test.ts` 断言 nav→签名→fetch 序列 + `w_rid/wts` 形状
-- 冒烟：`scripts/bilibili-smoke.ts`
-- 复用 live 层同款 `MIXIN_KEY_ENC_TAB` 换位表（`live/platforms/bilibili/site.ts` 同源）
-- App.tsx 已接入（`bili-hot` 热搜订阅）
+- 复用 live 层同款 `MIXIN_KEY_ENC_TAB` 换位表（`bili/live.ts` 同源）
+- desktop 测试订阅已接入（`apps/desktop/src/subscriptions.ts` 的 `bili:hot`）
 
 后续可加：`/user/article/:uid`（UP 主图文）、`/video/danmaku/:bvid`（弹幕）、`/ranking`
 （排行榜）。同法可试其它走 wbi 签名的 bilibili API。
@@ -107,18 +105,18 @@ w_rid    = MD5(sortedParams & wts & mixinKey)
 > ⚠️ 教训：YouTube channel_id 必须精确，误写会静默 404 或串到别的频道
 > （曾把 TED 的 ID 记成 GeeksforGeeks 的 ID，实测纠正）。
 
-## 六、当前测试订阅全貌（31 个，App.tsx TEST_SUBSCRIPTIONS）
+## 六、当前测试订阅全貌
 
-| 组 | 订阅 | 类型 |
+内置 RSS 直链全量清单在 `packages/crawler/src/channels/rss/builtin.ts`（36 条，含上表多数源）。
+desktop 测试订阅精简为 5 个（`apps/desktop/src/subscriptions.ts`），覆盖不同 kind：
+
+| 订阅 | channel | kind |
 |---|---|---|
-| 纯文 | HN / 阮一峰 / V2EX | RSS·Atom |
-| 图文 | BBC / NYT / 少数派 / 36氪 / IT之家 / 开源中国 / InfoQ / 爱范儿 / 极客公园 / cnBeta / 新浪科技 | RSS |
-| 视频 | TED / 3Blue1Brown / Lex / Ken Jee（YouTube 官方 RSS） | Atom |
-| 播客 | Huberman / The Changelog / NPR Up First | RSS |
-| 文档 | arXiv cs.CL | RSS |
-| 发布 | Vue.js Releases | Atom |
-| 科技/工程 | Solidot / DeepMind / Verge / VS Code / Node.js / Zed / Warp | RSS·Atom |
-| 热榜 | bilibili 热搜（bilibili-rank adapter） | API |
+| Hacker News | `rss:hn` | article |
+| YouTube · 3Blue1Brown | `youtube` | video |
+| bilibili 综合热门 | `bili:hot` | video |
+| Huberman Lab | `rss:podcast` | audio |
+| 虎牙直播 | `live:huya` | live |
 
 ## 七、不建议碰的（反爬 / 无原生）
 
@@ -132,8 +130,8 @@ w_rid    = MD5(sortedParams & wts & mixinKey)
 ## 八、用法
 
 - 直接可用的一批（第二节）可随时并入 `TEST_SUBSCRIPTIONS`（参照 `cnBeta`/`新浪` 已验证）。
-- bilibili 复刻 → 参考 `tmp/RSSHub/lib/routes/bilibili/**` + 本项目 `source/bilibili/` 已落地范式
-  （零登录 nav 取密钥 → wbi 签名 → API）。
+- bilibili 复刻 → 参考 `tmp/RSSHub/lib/routes/bilibili/**` + 本项目 `packages/crawler/src/channels/bili/`
+  已落地范式（零登录 nav 取密钥 → wbi 签名 → API）。
 - 新源可用性 → 鼓励跑 `bun run scripts/rsshub-catalog.ts` 重新生成 catalog，再用脚本探测。
 
 > 记：catalog 的「原生 feed 直传」对**中文源覆盖差**（仅 solidot/bilibili弹幕），大量国内源是**简单 scraper**而非直传，需到仓库看 handler 是否纯 `ofetch`。

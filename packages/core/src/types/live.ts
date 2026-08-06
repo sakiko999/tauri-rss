@@ -1,9 +1,6 @@
 /**
  * Live platform identifiers — owned by core (the render model layer).
- *
- * The producer has its own structurally-identical `FeedLivePlatformId`
- * (packages/producer/src/types/feed-item.ts) to stay import-free of core. Both
- * are the same string-literal union, so values flow between them without casts.
+ * String-literal union; crawler 直播 channel 产出的 `tpl:platform` 与之对齐。
  */
 export type LivePlatformId = "bilibili" | "douyu" | "huya" | "douyin"
 export type LiveStatus = "live" | "offline" | "unknown"

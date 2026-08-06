@@ -1,7 +1,15 @@
 # RSS Reader 技术方案
 
-> 状态：已确认，待执行。**执行顺序：先 core 数据层，后界面开发。**
-> 更新日期：2026-07-31
+> 状态：路线图。**本文是目标态规划，部分描述与当前实现已不同步**——以下模块已按新架构落地，
+> 以实际代码为准：
+> - **数据获取层已换成 crawler**（`packages/crawler`）：一切皆 RssChannel → RSS XML，取代本文的
+>   `feeds/parser` + `fetch/transport` 划分。宿主能力经**全局 `globalThis.appHost`** 注入
+>   （`packages/host`，node/browser/tauri 三环境），取代本文 `platform/` + `PlatformHost` seam。
+> - **core 数据模型是判别联合 `MediaItem`**（`packages/core/src/types/media-item.ts`，五种 kind：
+>   article/social/video/audio/live），XML 编解码在独立包 `packages/xml`。
+> - 当前桌面端是验证型两栏界面（订阅列表 + 按 kind 渲染），尚未实现本文的三模式 UI。
+> 其余（UI 三模式、数据流边界、Tauri 插件调研、实现阶段）仍是后续方向。
+> 更新日期：2026-08-06
 
 ## 目标
 
@@ -334,7 +342,7 @@ Cargo 侧（可选、极薄）：`reqwest` + `#[tauri::command] http_get(url) ->
 - 分两层看：
   - **元数据**（订阅/设置/阅读状态）：量小，localStorage 足够。将来可换 `tauri-plugin-store`（JSON 文件，异步 + 100ms debounce 落盘），非紧迫
   - **条目缓存**（离线阅读/搜索/过滤）：这才是量级问题——500 feed × 50 条 × 几 KB 即超 localStorage ~5–10MB 配额，且无查询能力。**正解是 `tauri-plugin-sql`（SQLite + sqlx，支持迁移/索引/事务）**，但当前条目根本没持久化（纯内存 store），决策应推迟到做 P6 离线缓存时
-- core 的 `PlatformHost` seam 已保证：届时新增一个 `QueryBackend` seam 接 SQLite，不碰 core 逻辑
+- 全局 `appHost` 门面（`packages/host`）已保证宿主能力可扩展：届时新增一个 `QueryBackend` seam 接 SQLite，不碰 core 逻辑
 
 **其他值得接入的插件（按优先级）**
 
