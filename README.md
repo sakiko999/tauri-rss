@@ -57,10 +57,18 @@ bun run packages/core/src/example/data-layer.ts
 
 ## 下一步 Todo
 
-- **正常渲染 video / audio / live**：`packages/ui/src/renderers/` 补真实播放
-  （video 懒解析流、audio 直链、live playUrls），按 `technical-plan.md` 的 VideoPlayer/hls.js 方案
-- **packages/ui 接入 tailwind**：renderer 从内联 style 迁到 Tailwind 4（@theme 令牌在
+Demo 必选（按建议顺序）：
+- **1 媒体播放闭环**：`packages/ui/src/renderers/` 补真实播放 —— 先 Audio（已通）+ Live（playUrls 现成），
+  再 Video（懒解析）；按 `technical-plan.md` 的 VideoPlayer/hls.js 方案（video/audio/live 共用），
+  懒解析走 `RssVideoSource.resolvePlay` / `RssLiveSource.resolveLivePlay`
+- **2 订阅管理 UI**：`TEST_SUBSCRIPTIONS` 硬编码 → 用 `RssChannel.sourceInfoTpl` 自动生成增删订阅表单
+- **3 packages/ui 接入 tailwind**：renderer 从内联 style 迁到 Tailwind 4（@theme 令牌在
   `packages/ui/src/styles/theme.css`），desktop 已接好 `@tailwindcss/vite`
+- **4 阅读体验**：文章详情 / HTML 渲染 / 图片加载
+
+Demo 之后：react-query + 无限滚动、三模式 UI（三分栏/瀑布流/短视频）、mobile 接入、离线缓存 + SQLite。
+
+完整清单见 CLAUDE.md「下一步 Todo」。
 
 ## 更多文档
 

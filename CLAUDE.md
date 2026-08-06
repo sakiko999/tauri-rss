@@ -120,15 +120,38 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/X/小红书
   是硬反爬（puppeteer+登录+代理），个人不部署 RSSHub 碰不了。
 
-## 下一步 Todo（待办）
+## 下一步 Todo（阶段性任务）
 
-- **正常渲染 video / audio / live**：`packages/ui/src/renderers/` 目前是验证型——
+### Demo 必选（按建议顺序）
+
+**1. 媒体播放闭环（demo 差异化价值）**
+- `packages/ui/src/renderers/` 目前是验证型：
   - `VideoRenderer`：播放直链需懒解析（deadline 签名），当前只显示「▶ 播放」链接，未接真实 `<video>`
   - `AudioRenderer`：播客 mp3 无签名，已用 `<audio controls>`，可正常播
   - `LiveRenderer`：playUrls 带 expiry 签名，当前只显示状态 + 链接，未接真实播放
-  - 目标：按 `technical-plan.md` 的 VideoPlayer/hls.js 方案接真实播放（video/audio/live 共用），
-    懒解析走 crawler 的 `RssVideoSource.resolvePlay` / `RssLiveSource.resolveLivePlay`
-- **packages/ui 接入 tailwind**：目前 renderer 全是内联 `style={styles}` CSSProperties；
-  desktop 已接 `@tailwindcss/vite`（v4 CSS-first），ui 包本身没有 tailwind 依赖。
-  计划：给 ui 包加 tailwind（@theme 设计令牌在 `packages/ui/src/styles/theme.css`，见
-  `technical-plan.md` 的 Tailwind 4 接入节——`@source` 显式扫包源码、styles.css 引入 theme.css）。
+- 建议顺序：先 Audio（已通）+ Live（playUrls 现成，试播最简单），再 Video（懒解析）
+- 目标：按 `technical-plan.md` 的 VideoPlayer/hls.js 方案接真实播放（video/audio/live 共用），
+  懒解析走 crawler 的 `RssVideoSource.resolvePlay` / `RssLiveSource.resolveLivePlay`。
+  注意 risk：hls.js + StrictMode 的 destroy 幂等
+
+**2. 订阅管理 UI（crawler 已设计好，只是没用起来）**
+- `TEST_SUBSCRIPTIONS` 硬编码 → 用户能自己增删订阅
+- 用 `RssChannel.sourceInfoTpl` 自动生成「新增订阅」表单
+- 展示 `channel.defaultInfo`（无需输入即可订阅的默认实例）
+
+**3. packages/ui 接入 tailwind**
+- 目前 renderer 全是内联 `style={styles}` CSSProperties；desktop 已接 `@tailwindcss/vite`
+  （v4 CSS-first），ui 包本身没有 tailwind 依赖
+- 计划：给 ui 包加 tailwind（@theme 设计令牌在 `packages/ui/src/styles/theme.css`，见
+  `technical-plan.md` 的 Tailwind 4 接入节——`@source` 显式扫包源码、styles.css 引入 theme.css）
+- 注意：与 #1 有交叉（renderer 都要改），可合并推进
+
+**4. 阅读体验**
+- 文章详情 / HTML 渲染 / 图片加载，是阅读器主场景
+
+### Demo 之后（产品化）
+
+- react-query 数据流 + 无限滚动（列表化内容不再一次性全量）
+- 三模式 UI：三分栏 / 瀑布流 / 短视频（technical-plan 的 P2–P4）
+- mobile 接入 appHost + core（当前还是 Tauri 模板）
+- 离线缓存 + SQLite（P6）
