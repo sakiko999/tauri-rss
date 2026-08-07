@@ -44,9 +44,18 @@ export class TauriHttpBackend implements HttpBackend {
     if (responseType === "arraybuffer") {
       body = base64ToBytes(res.body)
     } else {
+      // 契约:responseType="json" 时 body 应是已解析对象(与 node/browser 后端一致)。
       body = res.body
     }
 
-    return { status: res.status, headers: res.headers, body }
+    return {
+      status: res.status,
+      headers: res.headers,
+      // 契约:responseType="json" 时 body 应是已解析对象;解析失败(空/非 JSON)保留原串。
+      body:
+        responseType === "json" && typeof body === "string" && body.trim() !== ""
+          ? ((JSON.parse(body) as unknown) ?? body)
+          : body,
+    }
   }
 }
