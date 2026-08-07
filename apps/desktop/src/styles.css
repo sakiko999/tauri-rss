@@ -1,6 +1,9 @@
 @import "tailwindcss";
+/* ui 包设计令牌(唯一来源) */
+@import "../../../packages/ui/src/styles/theme.css";
 
-/* 暗色模式跟随 .dark class（由 zustand store 切换） */
+/* 关键:monorepo 必须显式扫 ui 包源码,否则 ui 组件里的 tailwind 类不生效 */
+@source "../../../packages/ui/src";
+
+/* 暗色模式跟随 .dark class(由 zustand store 切换) */
 @custom-variant dark (&:where(.dark, .dark *));
-
-/* 未来 packages/ui 的 @theme 设计令牌在此引入（P1 之后） */

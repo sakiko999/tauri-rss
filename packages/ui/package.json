@@ -9,6 +9,8 @@
   },
   "dependencies": {
     "@tauri-playground/core": "workspace:*",
+    "flv.js": "^1",
+    "hls.js": "^1",
     "react": "^19.2.8"
   },
   "devDependencies": {

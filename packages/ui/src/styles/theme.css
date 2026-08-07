@@ -1,0 +1,26 @@
+/**
+ * @tauri-playground/ui 设计令牌 —— Tailwind 4 @theme(唯一来源)。
+ *
+ * 由消费方(desktop/mobile)的 styles.css `@import` 引入,并用 `@source`
+ * 显式扫描 ui 包源码,让 ui 组件里写的 tailwind 类被消费方构建。
+ * 参照 docs/technical-plan.md「Tailwind 4 CSS-first 接入」节。
+ */
+@theme {
+  /* 品牌色 */
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+
+  /* 中性色(zinc 系) */
+  --color-surface: #ffffff;
+  --color-surface-subtle: #f4f4f5;
+  --color-border: #d4d4d8;
+  --color-text: #18181b;
+  --color-text-muted: #71717a;
+
+  /* 直播/在线语义 */
+  --color-live: #dc2626;
+
+  /* 圆角 */
+  --radius-card: 0.5rem;
+  --radius-btn: 0.375rem;
+}

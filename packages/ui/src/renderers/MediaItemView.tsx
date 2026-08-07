@@ -2,7 +2,6 @@
  * MediaItemView — 按 item.kind 分发到对应渲染器。
  * social 目前无真实源,走最简 fallback。
  */
-import type { CSSProperties } from "react"
 import type { MediaItem } from "@tauri-playground/core"
 import type { RendererCallbacks } from "./types.ts"
 import { ArticleRenderer } from "./ArticleRenderer.tsx"
@@ -22,17 +21,10 @@ export function MediaItemView({ item, ...callbacks }: { item: MediaItem } & Rend
       return <LiveRenderer item={item} {...callbacks} />
     case "social":
       return (
-        <article style={fallbackStyle}>
-          <h3>{item.title}</h3>
-          <p>{item.content}</p>
+        <article className="mb-2 rounded-lg border border-zinc-200 p-3">
+          <h3 className="m-0 text-base font-medium">{item.title}</h3>
+          <p className="mt-1 text-sm text-zinc-600">{item.content}</p>
         </article>
       )
   }
-}
-
-const fallbackStyle: CSSProperties = {
-  border: "1px solid #ddd",
-  borderRadius: 8,
-  padding: 12,
-  marginBottom: 8,
 }
