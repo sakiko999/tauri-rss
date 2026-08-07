@@ -1,5 +1,10 @@
 /**
- * 测试订阅清单 —— 每个 source 类型选一个,验证不同 kind 的渲染器。
+ * 测试订阅清单 —— 覆盖不同 kind + 真实可播演示源。
+ *
+ * 更新说明:
+ *   - live:douyu 替换原 live:huya(huya 直播流 Tars codec 未实现,无法播放;
+ *     douyu 是 HTTP-FLV,flv.js 可播,实测 40/40 房间成功)
+ *   - bili:live 补充直播演示(需直播中的房间)
  */
 import type { Subscription } from "@tauri-playground/core"
 
@@ -33,10 +38,17 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     info: { url: "https://feeds.megaphone.fm/hubermanlab" },
   },
   {
-    id: "s-live",
-    channelKey: "live:huya",
-    title: "虎牙直播",
+    id: "s-live-douyu",
+    channelKey: "live:douyu",
+    title: "斗鱼直播 · yyfyyf",
     enabled: true,
-    info: { roomId: "116" },
+    info: { roomId: "9999" },
+  },
+  {
+    id: "s-live-bili",
+    channelKey: "bili:live",
+    title: "bilibili 直播",
+    enabled: true,
+    info: { roomId: "6" },
   },
 ]

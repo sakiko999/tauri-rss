@@ -13,6 +13,7 @@ import {
   createDataLayer,
   type DataLayer,
   type MediaItem,
+  type MediaStream,
   type Subscription,
   type SubscriptionGroup,
 } from "@tauri-playground/core"
@@ -32,6 +33,10 @@ interface DesktopState {
   refreshAll(): Promise<void>
   markRead(item: MediaItem): void
   toggleStar(item: MediaItem): void
+  /** 懒解析视频可播流(播放时调用)。 */
+  resolvePlay(subscriptionId: string, itemId: string): Promise<MediaStream[]>
+  /** 懒解析直播可播流(播放时调用)。 */
+  resolveLivePlay(subscriptionId: string, roomId: string): Promise<MediaStream[]>
 }
 
 let initPromise: Promise<void> | null = null
@@ -42,10 +47,22 @@ export const useDesktop = create<DesktopState>((set, get) => {
     return dl.store.query({ subscriptionId: selectedId })
   }
 
+  /**
+   * 种子订阅同步:本地与 TEST_SUBSCRIPTIONS 对齐。
+   *   - 缺的补上;
+   *   - 多余的删掉(测试种子是权威;处理旧数据残留如 channelKey 改名的 bili:hot)。
+   */
   async function ensureSubscriptions(dl: DataLayer): Promise<void> {
     const existing = await dl.subscriptions.list()
-    const existingIds = new Set(existing.map((s) => s.id))
+    const seedIds = new Set(TEST_SUBSCRIPTIONS.map((s) => s.id))
     const t = Date.now()
+    // 删多余
+    for (const s of existing) {
+      if (!seedIds.has(s.id)) await dl.subscriptions.remove(s.id)
+    }
+    // 补缺失
+    const current = await dl.subscriptions.list()
+    const existingIds = new Set(current.map((s) => s.id))
     for (const sub of TEST_SUBSCRIPTIONS) {
       if (existingIds.has(sub.id)) continue
       await dl.subscriptions.add({ ...sub, createdAt: t, updatedAt: t })
@@ -124,6 +141,18 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const dl = get().dl
       if (!dl) return
       dl.store.patch(item.id, { isStarred: !item.isStarred })
+    },
+
+    async resolvePlay(subscriptionId, itemId) {
+      const dl = get().dl
+      if (!dl) throw new Error("DataLayer 未初始化")
+      return dl.resolvePlay(subscriptionId, itemId)
+    },
+
+    async resolveLivePlay(subscriptionId, roomId) {
+      const dl = get().dl
+      if (!dl) throw new Error("DataLayer 未初始化")
+      return dl.resolveLivePlay(subscriptionId, roomId)
     },
   }
 })
