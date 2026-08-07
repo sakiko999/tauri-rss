@@ -55,18 +55,20 @@ bun run packages/core/src/example/data-layer.ts
 | `tmp/dart_simple_live` | 直播流获取参考（虎牙/斗鱼/bilibili/抖音） |
 | `tmp/producer` | 旧订阅生产者源码（已无代码引用，保留实现范式参考） |
 
-## 下一步 Todo
+## 进度
 
-Demo 必选（按建议顺序）：
-- **1 媒体播放闭环**：`packages/ui/src/renderers/` 补真实播放 —— 先 Audio（已通）+ Live（playUrls 现成），
-  再 Video（懒解析）；按 `technical-plan.md` 的 VideoPlayer/hls.js 方案（video/audio/live 共用），
-  懒解析走 channel 能力方法 `RssVideoChannel.resolvePlay` / `RssLiveChannel.resolveLivePlay`
-- **2 订阅管理 UI**：`TEST_SUBSCRIPTIONS` 硬编码 → 用 `RssChannel.sourceInfoTpl` 自动生成增删订阅表单
-- **3 packages/ui 接入 tailwind**：renderer 从内联 style 迁到 Tailwind 4（@theme 令牌在
-  `packages/ui/src/styles/theme.css`），desktop 已接好 `@tailwindcss/vite`
-- **4 阅读体验**：文章详情 / HTML 渲染 / 图片加载
+Demo 必选：
+- ✅ **1 媒体播放闭环**：`packages/ui/src/player/`（useMediaStream + MediaPlayer + PlayableMedia）
+  video/audio/live 共用。已通：Audio、douyu/huya/douyin 直播（flv.js）、bilibili 直播
+  （hls.js + avc）、bilibili 视频（dash.js 双 SourceBuffer，DASH 1080P 有声）、YouTube 视频
+  （mp4 直链）/ 直播（iOS client HLS）。多档位切换（douyu/bili live/video/douyin 动态获取）
+- ✅ **2 订阅管理 UI**：AddFeedDialog 按 `RssChannel.sourceInfoTpl` 动态生成表单，一键订阅
+- ✅ **3 三栏阅读器**：Sidebar（订阅树/分组/smart feeds/tab/dark）+ 文章列表/详情 +
+  各 kind 媒体卡片（已接入真实 DataLayer）
+- ⏳ **4 packages/ui 接入 tailwind**：renderer 从内联 style 迁到 Tailwind 4（desktop 已接好）
+- ⏳ **5 阅读体验增强**：图片懒加载 / 阅读进度
 
-Demo 之后：react-query + 无限滚动、三模式 UI（三分栏/瀑布流/短视频）、mobile 接入、离线缓存 + SQLite。
+Demo 之后：react-query + 无限滚动、瀑布流/短视频模式、mobile 接入、离线缓存 + SQLite。
 
 完整清单见 CLAUDE.md「下一步 Todo」。
 

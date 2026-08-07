@@ -119,43 +119,69 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   `MD5(排序参数&wts&mixinKey)`。范式见 `packages/crawler/src/channels/bili/`
   （wbi 签名在 client.ts，channel 在 channels.ts/live.ts）。换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源。
 - 内置 RSS 直链清单在 `packages/crawler/src/channels/rss/builtin.ts`（36 条，按 kind 标注）。
-  desktop 测试订阅在 `apps/desktop/src/subscriptions.ts`（5 个，覆盖 article/video/audio/live）。
-  可用性结论见 `docs/domestic-feed-availability.md`。新源先 curl 验证再并入。
+  desktop 测试订阅在 `apps/desktop/src/subscriptions.ts`（覆盖 article/video/audio/live，
+  含 douyu/bili live/huya/douyin 在播房间）。可用性结论见 `docs/domestic-feed-availability.md`。
+  新源先 curl 验证再并入。
 - 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/X/小红书
   是硬反爬（puppeteer+登录+代理），个人不部署 RSSHub 碰不了。
+- **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
+  空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
+  默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
+  编辑该文件 → `git update-index --no-skip-worktree` 再改,勿提交真实值。
 
 ## 下一步 Todo（阶段性任务）
 
 ### Demo 必选（按建议顺序）
 
 **1. 媒体播放闭环（demo 差异化价值）**
-- `packages/ui/src/player/` 已落地：`useMediaStream`（hls.js/flv.js 生命周期）+
-  `MediaPlayer`（按 format 选流分发）+ `PlayableMedia`（懒解析+播放），video/audio/live 共用
+- `packages/ui/src/player/` 已落地：`useMediaStream`（hls.js/flv.js/dash.js 生命周期）+
+  `MediaPlayer`（按 format 选流分发 + 多档位切换条）+ `PlayableMedia`（懒解析+播放），
+  video/audio/live 共用
 - ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
-  huya 直播（flv.js HTTP-FLV）、bilibili 视频 / YouTube 视频（原生 mp4 直链）、
+  huya 直播（flv.js HTTP-FLV）、douyin 直播（flv.js HTTP-FLV,5 档）、bilibili 视频
+  （dash.js 双 SourceBuffer,DASH 1080P 有声）、YouTube 视频（原生 mp4 直链）、
   **YouTube 直播（iOS client → hlsManifestUrl,hls.js 播;ANDROID 直播不返回 HLS,必须 iOS）**
 - ✅ 自动播放：点击「播放」→ 带声自动播（`unlockAudioPlayback` 手势内解 autoplay policy +
   失败降级静音）；全部平台（B站视频/YouTube/douyu/bili live/huya/douyin）一致
+- ✅ 多档位切换：douyu/bili live/bili video/douyin 动态获取档位（服务端 accept_qn/
+  multirates/accept_quality,非硬编码）,MediaPlayer 档位条切换（同 rate 去重）
+- ✅ B站视频 DASH：playurl `fnval=16` 拿 dash.video(avc)+dash.audio(AAC),crawler 拼 MPD
+  （每档单 Representation,SegementBase Range）存 `stream.dashManifest`,dash.js 双
+  SourceBuffer 合成播放(等价 B 站官方 MSE)。登录后 avc 有 1080P（非会员也）;
+  `url:""` + `format:"dash"` + dashManifest 由 `isDashStream`(format==="dash")识别
 - ✅ HLS 档位：video/live **锁最高档**（`currentLevel=max`,ABR 关闭）。原因：宿主隧道
   （Rust reqwest + base64）的固定开销让 ABR 带宽估算失真（1080p 4561kbps 测得仅 ~1Mbps），
   自动降档会骤降 144p 永不回升。档位选择后续在播放器开放，用户手动选
-- ⚠️ DASH-only 直播（如 Claude FM `tRsQsTMvPNg` 当前形态）：iOS 不返回 hlsManifestUrl、
-  只有 adaptiveFormats（音视频分离）→ 内嵌暂不支持（需 dash.js），降级 `format:"web"`
-  打开页面。已知边界，见 `docs/youtube-stream-extraction.md` 5.5
+- ✅ dash.js 走 `DashHostLoader`（工厂函数,dash.js extend 用 Object.create;blob MPD 原样
+  fetch,分片 Range 补 `bytes=` 前缀走 appHost.http 隧道无 CORS）;hls.js 走 `HlsHostLoader`
+  （class,googlevideo.com 无 CORS 时切隧道）;dash/hls 均锁最高档防隧道带宽估算降档
+- ⚠️ YouTube DASH-only 直播（如 Claude FM `tRsQsTMvPNg` 当前形态）：iOS 不返回 hlsManifestUrl、
+  只有 adaptiveFormats（音视频分离）→ 仍降级 `format:"web"` 打开页面。已知边界,
+  见 `docs/youtube-stream-extraction.md` 5.5
 - YouTube 直链实现见 `docs/youtube-stream-extraction.md`（InnerTube ANDROID client,
   渐进式 mp4 无签名无 n 参数,clientVersion 必须最新 21.03.36;旧版会 400/UNPLAYABLE;
-  直播加 iOS client `getIosPlayerResponse`,live 判定看 `playabilityStatus.liveStreamability`）
+  直播加 iOS client `getIosPlayerResponse`,live 判定看 `playabilityStatus.liveStreamability`;
+  ANDROID/WEB/iOS 请求端点统一走 gapis `youtubei.googleapis.com` + t/id 参数,NewPipe 同款;
+  ⚠️ node/example 环境被 YouTube IP 风控(LOGIN_REQUIRED),Tauri 设备环境正常）
 - huya 直链实现见 `packages/crawler/src/channels/huya/play.ts`（buildAntiCode 纯 MD5/base64,
-  `lChannelId` 作 presenterUid;反爬是**频率限制**,连续请求会降级页,单次 resolve 稳定）
-- douyin：enter API(ABogus)失败 4001038 → 降级 HTML 抓 flv_pull_url(参照 dart_simple_live);
-  ⚠️ 订阅必须用 **web_rid(短号)**,room_id(长号)在 API/HTML 都拿不到流
-  （`fetchItems` 已修:item.roomId 用订阅 web_rid,id 保留长号）
+  `lChannelId` 作 presenterUid;反爬是**频率限制**,连续请求会降级页,单次 resolve 稳定;
+  ⚠️ 只返回最高档,`&ratio=` 低档 flv.js 播几秒断）
+- douyin 直链见 `packages/crawler/src/channels/douyin/index.ts`（enter API ABogus 签名 →
+  stream_url 的 live_core_sdk_data.stream_data(JSON sdk_key 展开)/flv_pull_url 索引,reflow
+  长号兜底,HTML flv_pull_url 末级兜底;liveStatus **status==2 才是直播中**(复刻 dart,
+  ==4 是 roomId 一次性需换 webRid);resolveLivePlay 用 **web_rid(短号)**)
+- bili live/video 登录档位：`DEFAULT_BILIBILI_COOKIE` 作 core 层默认值(core 层 settings.
+  bilibiliCookie),data-layer `sourceInfoFor` 合并到所有 bili 订阅,解锁登录档位;
+  cookie 文件 gitignore + 空占位 + skip-worktree 保护(见 `packages/core/src/bilibili-cookie.ts`)
 
-**2. 订阅管理 UI（crawler 已设计好，只是没用起来）**
-- `TEST_SUBSCRIPTIONS` 硬编码 → 用户能自己增删订阅
-- 用 `RssChannel.sourceInfoTpl` 自动生成「新增订阅」表单（仅需用户输入的 channel 声明）
-- 展示 `channel.defaultInfo`（带默认参数的实例，一键订阅）；无参 channel 不声明，
-  empty info 即免输入可订阅
+**2. 订阅管理 UI（已完成）**
+- ✅ `apps/desktop/src/components/AddFeedDialog.tsx`：`listChannels()` 选渠道 →
+  按 `sourceInfoTpl` 动态渲染参数字段;有 `defaultInfo` 的 channel 一键订阅。
+  走 `useDesktop.addSubscription`（dl.subscriptions.add + refresh）
+- ✅ 三栏阅读器已落地（参考 `tmp/rss-reader`）：Sidebar（订阅树/分组/smart feeds/
+  kind tab,含 dark 切换）+ 中栏按 kind 分发（article → ArticleList+ArticleDetail 两栏,
+  video/audio/live/social → MediaList 卡片）+ AddFeedDialog
+- ⚠️ 分组树仅渲染/展开,不做增删组 UI;分组节点点击只 toggle 不 select
 
 **3. packages/ui 接入 tailwind**
 - 目前 renderer 全是内联 `style={styles}` CSSProperties；desktop 已接 `@tailwindcss/vite`
@@ -165,16 +191,18 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - 注意：与 #1 有交叉（renderer 都要改），可合并推进
 
 **4. 阅读体验**
-- 文章详情 / HTML 渲染 / 图片加载，是阅读器主场景
+- ✅ 文章详情已落地（ArticleDetail:HTML 渲染/正文/pre 纯文本/已读/星标/打开原文）
+- 图片懒加载 / 阅读进度等仍可加强
 
 ### Demo 之后（产品化）
 
-- react-query 数据流 + 无限滚动（列表化内容不再一次性全量）
-- 三模式 UI：三分栏 / 瀑布流 / 短视频（technical-plan 的 P2–P4）
+- react-query 数据流 + 无限滚动（列表化内容不再一次性全量；MediaList 当前用
+  IntersectionObserver + PAGE=50 本地切片）
+- 三模式 UI：三分栏 ✅ / 瀑布流 / 短视频（technical-plan 的 P2–P4;三分栏已实现）
   - ⚠️ **live 源是 1:1、其他源是 1:N 的错位**：live 单房间订阅在列表/瀑布流是孤条。
     设计记录见 `docs/technical-plan.md`「live 源与产品形态的错位」——倾向 **B 分组聚合**
     （core 层把同 kind 的 live 订阅合成混合 feed），C 分区/搜索聚合（发现流，参考
-    `tmp/dart_simple_live`）后补。P2 三模式前需定稿
+    `tmp/dart_simple_live`）后补。瀑布流/短视频前需定稿
 - mobile 接入 appHost + core（当前还是 Tauri 模板）
 - **source 缓存（core 层）**：crawler 的 `getSource` 是纯函数（每次新实例）。
   若要「同参复用实例 / 去重刷新」，在 core 编排层按 `channelKey + info` 持 Map 实现

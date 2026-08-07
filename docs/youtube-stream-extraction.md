@@ -236,6 +236,16 @@ packages/crawler/src/channels/youtube/
   此时 `resolveYoutubeStreams` 直播分支拿不到 HLS → throw → UI 降级 `format:"web"`
   (打开页面播放)。当前**不支持内嵌 DASH 播放**(需 dash.js,MSE 混流),已知边界。
   HLS 直播(主流大直播)仍正常内嵌。
+- ✅ **ANDROID/WEB 端点统一走 gapis(2026-08 对齐 NewPipe)**:`getAndroidPlayerResponse`
+  从 `www.youtube.com/youtubei/v1/player` 改为 `youtubei.googleapis.com/youtubei/v1/player`
+  + `&t={ts}&id={videoId}`(NewPipe `YoutubeStreamHelper.java:150` 同款)。gapis 更稳,
+  绕开 www.youtube.com 的地域/风控;iOS 本就同款。
+- ⚠️ **node/example 环境被 YouTube IP 风控(2026-08 实测)**:`injectNodeHost` 直连时
+  ANDROID/WEB/iOS 任意 client 都返回 `playabilityStatus.status = LOGIN_REQUIRED` +
+  "Sign in to confirm you're not a bot"。curl 对比 gapis 与 www.youtube.com 两个端点
+  **结果一致**——是出口 IP 信誉问题,不是端点选择。**youtube 可播性只能在 Tauri 设备
+  环境实测**(真实 IP + webview),node 断言失败 ≠ 实现坏。NewPipe 的 poToken(bot guard)
+  是解决途径,零登录无 poToken 无法绕开 node 环境的 IP 风控。
 
 ### 5.4 依赖注入
 
