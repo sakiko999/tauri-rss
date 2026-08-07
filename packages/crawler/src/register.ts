@@ -21,8 +21,9 @@ import { DouyinLiveChannel } from "./channels/douyin/index.ts"
 /** 注册所有内置 channel。无守卫——由调用方(index.ts)保证幂等。 */
 export function registerBuiltinChannels(): void {
   // ── 原生 RSS 直链(批量注册 36 条内置清单,kind 标注在清单里)──
+  // 内置清单里 kind=video 的直链(如 YouTube 官方 feed)即声明视频可播放力。
   for (const f of RSS_BUILTIN_FEEDS) {
-    registerChannel(new RawRssChannel(`rss:${f.id}`, f.title, f.kind, f.url))
+    registerChannel(new RawRssChannel(`rss:${f.id}`, f.title, f.kind, f.url, f.kind === "video"))
   }
 
   // ── 播客 RSS(解析 enclosure/itunes → AudioItem)──

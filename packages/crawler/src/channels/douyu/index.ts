@@ -10,8 +10,8 @@
  */
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, SourceInfo } from "../../index.ts"
-import { createApiSource } from "../factory.ts"
+import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 
@@ -26,12 +26,13 @@ export class DouyuLiveChannel implements RssChannel {
   readonly name = "斗鱼直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  // 懒解析能力作为 factory capabilities 装配进 source(闭包捕获 this 私有逻辑)。
-  getSource = createApiSource(
-    (info) => this.fetchItems(info),
-    (info) => this.channelOptions(info),
-    { resolveLivePlay: (roomId) => this.resolveLivePlayImpl(roomId) },
-  )
+  // 直播源:implements LivePlayable,resolveLivePlay 闭包捕获 this 实例状态(签名重取)。
+  getSource(info: SourceInfo): RssSource & LivePlayable {
+    return {
+      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      resolveLivePlay: (roomId) => this.resolveLivePlayImpl(roomId),
+    }
+  }
 
   /** 懒解析直播流:重取签名 body → POST getH5Play → RTMP 直链。签名带时间戳,resolve 时重取。 */
   private async resolveLivePlayImpl(roomId: string): Promise<Stream[]> {

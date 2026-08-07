@@ -7,8 +7,8 @@
  */
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, SourceInfo } from "../../index.ts"
-import { createApiSource } from "../factory.ts"
+import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
 
@@ -19,8 +19,13 @@ export class BiliLiveChannel implements RssChannel {
   readonly name = "bilibili 直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  // 懒解析能力作为 factory capabilities 装配进 source:resolveLivePlay(roomId)。
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolveLivePlay: resolveBiliLivePlay })
+  // 直播源:implements LivePlayable,resolveLivePlay 是模块纯函数。
+  getSource(info: SourceInfo): RssSource & LivePlayable {
+    return {
+      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      resolveLivePlay: resolveBiliLivePlay,
+    }
+  }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const roomId = info.roomId ?? ""

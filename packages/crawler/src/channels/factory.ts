@@ -1,44 +1,23 @@
 /**
- * channel 组合工厂 —— 装配 RssSource 的纯函数。
+ * source 装配辅助。
  *
- * 每个「info → RssSource」的 channel 用它装配 getSource:
- *   getSource 是无状态纯函数,每次返回新 RssSource 实例。
- * 「相同 info 复用同一实例 / 去重」是 core 编排层的事(core 若需要可自持缓存),
- * crawler 不为所有消费者强加缓存状态。
+ * channel 在 getSource(info) 里直接拼 source 对象字面量:fetch 必备,
+ * 可选 implements VideoPlayable / LivePlayable(能力由 channel 实现,按需声明)。
+ * 这里只提供 fetch 的两种装配方式,不介入能力声明。
  *
- * 懒解析能力(resolvePlay/resolveLivePlay)挂在 source 上(行为载体):
- *   有能力就把对应函数作为 factory 的 capabilities 传入,装配出的 source
- *   带该能力;没能力就不传,source 只有 fetch。消费方用
- *   `isRssVideoSource/isRssLiveSource` 探测。
+ *   - api channel(items → serializeFeed → XML):用 `apiFetch` 包出 fetch;
+ *   - 原生直传(上游已是 XML):channel 自行 `() => this.fetchXml(info)`。
  */
-import type { Item } from "@tauri-playground/xml"
-import { serializeFeed, type SerializeOptions } from "@tauri-playground/xml"
-import type { AnyRssSource, RssSource, SourceInfo } from "../index.ts"
+import type { Item, SerializeOptions } from "@tauri-playground/xml"
+import { serializeFeed } from "@tauri-playground/xml"
 
-/** 懒解析能力集(可选)。有能力的 channel 传对应函数。 */
-export interface SourceCapabilities {
-  resolvePlay?(itemId: string): Promise<import("@tauri-playground/xml").Stream[]>
-  resolveLivePlay?(roomId: string): Promise<import("@tauri-playground/xml").Stream[]>
-}
-
-/** 最小编源原语:info → 新 RssSource 实例(fetch 直接透传 fetchXml)。无状态。 */
-export function createSource(
-  fetchXml: (info: SourceInfo) => Promise<string>,
-  caps: SourceCapabilities = {},
-): (info: SourceInfo) => AnyRssSource {
-  return (info) => {
-    const source: RssSource = { fetch: () => fetchXml(info) }
-    if (caps.resolvePlay) (source as RssSource & typeof caps).resolvePlay = caps.resolvePlay
-    if (caps.resolveLivePlay) (source as RssSource & typeof caps).resolveLivePlay = caps.resolveLivePlay
-    return source as AnyRssSource
-  }
-}
-
-/** API 复刻 channel 专用:fetchItems → serializeFeed 装配。无状态。 */
-export function createApiSource(
-  fetchItems: (info: SourceInfo) => Promise<Item[]>,
-  channelOptions: (info: SourceInfo) => SerializeOptions,
-  caps: SourceCapabilities = {},
-): (info: SourceInfo) => AnyRssSource {
-  return createSource(async (info) => serializeFeed(await fetchItems(info), channelOptions(info)), caps)
+/**
+ * api channel 的 fetch 装配:抓 items → serializeFeed 成 RSS 2.0 XML。
+ * 返回无参 `() => Promise<string>`,channel 在 getSource 里绑定 info 后塞进 source.fetch。
+ */
+export function apiFetch(
+  fetchItems: () => Promise<Item[]>,
+  channelOptions: () => SerializeOptions,
+): () => Promise<string> {
+  return async () => serializeFeed(await fetchItems(), channelOptions())
 }

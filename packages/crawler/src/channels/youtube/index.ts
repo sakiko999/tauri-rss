@@ -7,8 +7,8 @@
  */
 import type { Item, Stream, Video } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, SourceInfo } from "../../index.ts"
-import { createApiSource } from "../factory.ts"
+import type { RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../index.ts"
+import { apiFetch } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
 
@@ -42,8 +42,13 @@ export class YoutubeChannel implements RssChannel {
     return this.defaultChannelId ? { channelId: this.defaultChannelId } : undefined
   }
 
-  // 懒解析能力作为 factory capabilities 装配进 source:resolvePlay(itemId)。
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolvePlay: resolveYoutubePlay })
+  // 视频源:implements VideoPlayable,resolvePlay 是模块纯函数。
+  getSource(info: SourceInfo): RssSource & VideoPlayable {
+    return {
+      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      resolvePlay: resolveYoutubePlay,
+    }
+  }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const channelId = info.channelId ?? this.defaultChannelId ?? ""

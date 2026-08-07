@@ -7,8 +7,8 @@
  */
 import type { Audio, Item } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, SourceInfo } from "../../index.ts"
-import { createApiSource } from "../factory.ts"
+import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import { apiFetch } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
 
@@ -20,7 +20,10 @@ export class RssPodcastChannel implements RssChannel {
   readonly name = "播客 RSS"
   readonly kind = "audio" as const
   readonly sourceInfoTpl = [{ key: "url", label: "Feed URL", required: true }]
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  // 无能力 source:只 { fetch }(audio enclosure 是直链,无需懒解析)。
+  getSource(info: SourceInfo): RssSource {
+    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+  }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const url = info.url ?? ""

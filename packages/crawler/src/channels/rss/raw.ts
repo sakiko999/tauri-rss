@@ -1,15 +1,17 @@
 /**
- * RawRssChannel — 原生 RSS/Atom feed 直链,fetch 直接透传上游 XML。
- * 无需 serialize(上游已经是 XML),所以用 createSource 只做直通、不做装配。
+ * RawRssChannel — 原生 RSS/Atom feed 直链,fetch 直接透传上游 XML(无需 serialize)。
  *
- * kind 是构造时传入的宽 `Kind`(上游 feed 类型运行时才知道)。
- * 懒解析能力随 kind 装配进 source:
- *   - kind=video 的直链(如 YouTube 官方 RSS):resolvePlay 返回 `format:"web"`
- *     页面流(上游只有 watch 链接,无可播直链);
- *   - 其它 kind / 直播:resolveLivePlay 抛清晰错误(直传 feed 无可播直链)。
+ * kind 是构造时传入的宽 `Kind`(上游 feed 类型运行时才知道),只用于产出描述
+ * (deserialize 兜底),**不决定能力**。是否实现 VideoPlayable 由构造参数
+ * `video: boolean` 显式声明——kind 与能力正交(见 index.ts 注释)。
+ *
+ *   - video 直链(如 YouTube 官方 RSS):声明 video=true,resolvePlay 返回
+ *     `format:"web"` 页面流(上游只有 watch 链接,无可播直链);
+ *   - 非 video:不声明能力,source 仅 { fetch }——`isRssVideoSource` 返回 false,
+ *     消费侧如实知道「无可播放力」(旧实现对非 video 挂了抛错的 resolveLivePlay,
+ *     反而让谓词谎报 true;现在如实没有更诚实)。
  */
-import type { AnyRssSource, Kind, RssChannel, SourceInfo, Stream } from "../../index.ts"
-import { createSource } from "../factory.ts"
+import type { Kind, RssChannel, RssSource, SourceInfo, Stream, VideoPlayable } from "../../index.ts"
 import { httpText } from "../../host.ts"
 
 const UA =
@@ -21,21 +23,15 @@ export class RawRssChannel implements RssChannel {
   readonly kind: Kind
   readonly sourceInfoTpl = [{ key: "url", label: "Feed URL", required: true }]
   readonly defaultUrl?: string
-  /** 无状态纯函数:每次 getSource 返回新 RssSource 实例(唯一性归 core 编排)。 */
-  readonly getSource: (info: SourceInfo) => AnyRssSource
+  /** 该直链 feed 是否提供视频可播放力(决定 source 是否 implements VideoPlayable)。与 kind 正交。 */
+  private readonly video: boolean
 
-  constructor(key: string, name: string, kind: Kind, defaultUrl?: string) {
+  constructor(key: string, name: string, kind: Kind, defaultUrl?: string, video = false) {
     this.key = key
     this.name = name
     this.kind = kind
     this.defaultUrl = defaultUrl
-    // 懒解析能力随 kind 装配进 source(video 直链 → resolvePlay 页面流;其它 → 抛错)。
-    this.getSource = createSource(
-      (info) => this.fetchXml(info),
-      kind === "video"
-        ? { resolvePlay: (itemId: string) => this.resolvePlayImpl(itemId) }
-        : { resolveLivePlay: () => Promise.reject(new Error(`raw rss channel "${this.key}" has no live stream`)) },
-    )
+    this.video = video
   }
 
   /** 内置直链自带默认可订阅参数。 */
@@ -43,7 +39,20 @@ export class RawRssChannel implements RssChannel {
     return this.defaultUrl ? { url: this.defaultUrl } : undefined
   }
 
-  /** 懒解析可播流:kind=video 时返回 `format:"web"` 页面流(item 链接)。 */
+  /**
+   * video 直链:implements VideoPlayable,resolvePlay 返回 `format:"web"` 页面流。
+   * 否则仅返回 { fetch }——不声明能力。
+   */
+  getSource(info: SourceInfo): RssSource {
+    if (!this.video) return { fetch: () => this.fetchXml(info) }
+    const source: RssSource & VideoPlayable = {
+      fetch: () => this.fetchXml(info),
+      resolvePlay: (itemId) => this.resolvePlayImpl(itemId),
+    }
+    return source
+  }
+
+  /** 懒解析可播流:返回 `format:"web"` 页面流(item 链接)。 */
   private async resolvePlayImpl(itemId: string): Promise<Stream[]> {
     return [{ url: itemId, format: "web", headers: { "user-agent": UA } }]
   }

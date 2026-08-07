@@ -3,10 +3,11 @@
  *
  * 核心抽象:一切皆 RssChannel(渠道)。
  *   - channel 是**纯描述**:key/name/kind(默认 item kind)/sourceInfoTpl/defaultInfo;
- *   - `getSource(info)` 工厂,按参数(url / uid / roomId)产出一个 source(行为载体);
+ *   - `getSource(info)` 产出一个 source(行为载体)——channel 直接拼装对象字面量,
+ *     用 `implements` 声明它具备哪些能力;
  *   - `source.fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展);
- *   - 懒解析能力(resolvePlay/resolveLivePlay)是 **source 的能力**,按行为存在与否
- *     探测(`"resolvePlay" in source`),不挂在 channel 上。
+ *   - 懒解析能力(resolvePlay/resolveLivePlay)是 **source 的能力**,由它在
+ *     `getSource` 里实现的 interface 决定。消费方用类型谓词探测后收窄。
  *
  * 公共契约只有「渠道 → 参数 → XML」:XML 就是天然类型,下游(core / 任意
  * RSS 阅读器)自己解析 XML,不依赖 crawler 的任何数据模型类型。
@@ -28,39 +29,37 @@ export type SourceInfo = Record<string, string>
 /**
  * 可抓取的源实例(行为载体)。`fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展)。
  * getSource 是纯函数:每次返回新实例,无缓存状态(复用/去重归 core 编排)。
+ *
+ * 能力按 interface 组合声明:`RssSource` 只保证 fetch;source 是否还可播放由
+ * 它在 getSource 时 `implements` 的 `VideoPlayable`/`LivePlayable` 决定。
  */
 export interface RssSource {
   /** 抓取并返回 RSS 2.0 XML 字符串。 */
   fetch(): Promise<string>
 }
 
-/**
- * 视频懒解析能力(扩展接口,有该能力的源才实现)。
- * 播放 URL 带 deadline 签名,须在播放时调用而非塞进 refresh 快照。
- */
-export interface RssVideoSource extends RssSource {
-  /** 按 item id(如 bvid)懒解析可播流。 */
+/** 视频懒解析能力(可选能力,有该能力的 source 才 implements)。 */
+export interface VideoPlayable {
+  /** 按 item id(如 bvid)懒解析可播流。URL 带 deadline 签名,播放时调用而非塞进 refresh。 */
   resolvePlay(itemId: string): Promise<Stream[]>
 }
 
-/**
- * 直播懒解析能力(扩展接口,有该能力的源才实现)。
- * playUrls 带 expiry 签名,须在播放时调用。
- */
-export interface RssLiveSource extends RssSource {
-  /** 按 roomId 懒解析可播流。 */
+/** 直播懒解析能力(可选能力,有该能力的 source 才 implements)。 */
+export interface LivePlayable {
+  /** 按 roomId 懒解析可播流。playUrls 带 expiry 签名,播放时调用。 */
   resolveLivePlay(roomId: string): Promise<Stream[]>
 }
 
-/** getSource 的返回:基础抓取 + 可选懒解析能力。 */
-export type AnyRssSource = RssSource | RssVideoSource | RssLiveSource
-
-/** 类型谓词:运行时探测 + 编译期收窄,消费侧(如 core)能力判定一处定义。 */
-export function isRssVideoSource(s: RssSource): s is RssVideoSource {
+/**
+ * 类型谓词:运行时探测 + 编译期收窄,消费侧(如 core)能力判定一处定义。
+ * 类型由 channel 在 getSource 时 implements 声明静态保证,这里只是把编译期
+ * 已知的信息在运行时恢复出来(standard interface-guard idiom)。
+ */
+export function isRssVideoSource(s: RssSource): s is RssSource & VideoPlayable {
   return "resolvePlay" in s
 }
 
-export function isRssLiveSource(s: RssSource): s is RssLiveSource {
+export function isRssLiveSource(s: RssSource): s is RssSource & LivePlayable {
   return "resolveLivePlay" in s
 }
 
@@ -91,8 +90,8 @@ export interface RssChannel {
    * ——「无需输入即可订阅」由 empty info 表达,不必用 `{}` 占位。
    */
   readonly defaultInfo?: SourceInfo
-  /** 按 info(url/uid/…)实例化一个可抓取的 source(行为载体,含可选懒解析能力)。 */
-  getSource(info: SourceInfo): AnyRssSource
+  /** 按 info(url/uid/…)实例化一个可抓取的 source(行为载体);返回类型可按需收窄成 RssSource & VideoPlayable 等。 */
+  getSource(info: SourceInfo): RssSource
 }
 
 // ── channel 注册表 ───────────────────────────────────────────────────────────
