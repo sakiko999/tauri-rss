@@ -11,7 +11,7 @@
  *   bili:live 6         → FLV + HLS(m3u8)直链
  *   live:douyin 1       → 示例房间,未开播时 0 条(需换直播中房间)
  */
-import { getChannel, isRssLiveChannel } from "../index.ts"
+import { getChannel, isRssLiveSource } from "../index.ts"
 import { setupBackends, exampleInfo } from "./backend.ts"
 
 async function main() {
@@ -20,11 +20,16 @@ async function main() {
   const roomId = process.argv[3] ?? exampleInfo(key).roomId ?? ""
   const ch = getChannel(key)
   if (!ch) throw new Error(`unknown channel: ${key}`)
-  if (!isRssLiveChannel(ch)) throw new Error(`channel ${key} does not support lazy live play resolution`)
+
+  // 懒解析能力在 source 上:实例化源 → 探测是否有 resolveLivePlay。
+  const source = ch.getSource(exampleInfo(key))
+  if (!isRssLiveSource(source)) {
+    throw new Error(`channel ${key} does not support live play resolution`)
+  }
 
   console.log(`channel: ${key}  ${ch.name}`)
   console.log(`room:    ${roomId || "(default)"}`)
-  const streams = await ch.resolveLivePlay(roomId)
+  const streams = await source.resolveLivePlay(roomId)
   console.log(`streams: ${streams.length} 条`)
   for (const [i, s] of streams.entries()) {
     console.log(`  [${i}] ${s.format} ${s.url.slice(0, 110)}${s.url.length > 110 ? "…" : ""}`)

@@ -5,7 +5,7 @@
  * (thumbnail + description)和 yt:videoId。本 channel 解析它,规范化
  * videoId → watch URL,产 Video Item。
  */
-import type { Item, Video } from "@tauri-playground/xml"
+import type { Item, Stream, Video } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, SourceInfo } from "../../index.ts"
 import { createApiSource } from "../factory.ts"
@@ -15,14 +15,38 @@ import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
+/**
+ * 懒解析可播流。YouTube 官方 RSS 无直链,返回 `format: "web"` 的页面流
+ * (watch URL),UI 收到非 hls/flv/mp4 的 format 时打开页面播放。
+ */
+function resolveYoutubePlay(itemId: string): Promise<Stream[]> {
+  const videoId = itemId.replace(/^https?:\/\/www\.youtube\.com\/watch\?v=/, "")
+  return Promise.resolve([{ url: `https://www.youtube.com/watch?v=${videoId}`, format: "web", headers: { "user-agent": UA } }])
+}
+
 export class YoutubeChannel implements RssChannel {
-  readonly key = "youtube"
-  readonly name = "YouTube 频道"
+  readonly key: string
+  readonly name: string
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "channelId", label: "频道 ID", required: true }]
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  /** 内置频道 ID(可选):存在 = 无需输入 channelId 即可订阅一个默认频道。 */
+  readonly defaultChannelId?: string
+
+  constructor(options: { key?: string; name?: string; defaultChannelId?: string } = {}) {
+    this.key = options.key ?? "youtube"
+    this.name = options.name ?? "YouTube 频道"
+    this.defaultChannelId = options.defaultChannelId
+  }
+
+  get defaultInfo(): SourceInfo | undefined {
+    return this.defaultChannelId ? { channelId: this.defaultChannelId } : undefined
+  }
+
+  // 懒解析能力作为 factory capabilities 装配进 source:resolvePlay(itemId)。
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolvePlay: resolveYoutubePlay })
+
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
-    const channelId = info.channelId ?? ""
+    const channelId = info.channelId ?? this.defaultChannelId ?? ""
     if (!channelId) throw new Error("youtube: 需要 channelId")
     const xml = await httpText(
       `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
@@ -33,7 +57,8 @@ export class YoutubeChannel implements RssChannel {
     return feed.channel.item.map((entry) => entryToVideo(entry, t))
   }
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `YouTube ${info.channelId ?? ""}`, channelLink: `https://www.youtube.com/channel/${info.channelId ?? ""}` }
+    const channelId = info.channelId ?? this.defaultChannelId ?? ""
+    return { channelTitle: `YouTube ${channelId}`, channelLink: `https://www.youtube.com/channel/${channelId}` }
   }
 }
 

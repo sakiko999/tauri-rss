@@ -7,36 +7,20 @@
  */
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, RssLiveChannel, SourceInfo } from "../../index.ts"
+import type { RssChannel, SourceInfo } from "../../index.ts"
 import { createApiSource } from "../factory.ts"
 import { now } from "../../host.ts"
 import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
 
 const API_LIVE = "https://api.live.bilibili.com"
 
-export class BiliLiveChannel implements RssChannel, RssLiveChannel {
+export class BiliLiveChannel implements RssChannel {
   readonly key = "bili:live"
   readonly name = "bilibili 直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
-
-  /** 懒解析直播流:getRoomPlayInfo(带 buvid cookie + live 签名)→ hls/flv 直链。 */
-  async resolveLivePlay(roomId: string): Promise<Stream[]> {
-    const client = createBilibiliClient({ referer: "https://live.bilibili.com/", buvid: true, live: true })
-    const params = await client.signLiveParams({
-      room_id: roomId,
-      protocol: "0,1",
-      format: "0,2",
-      codec: "0,1",
-      platform: "web",
-      qn: "10000",
-    })
-    const res = await client.getJson<{ data?: Record<string, any> }>(
-      `${API_LIVE}/xlive/web-room/v2/index/getRoomPlayInfo?${params}`,
-    )
-    return parseBiliLiveStreams(res?.data ?? {})
-  }
+  // 懒解析能力作为 factory capabilities 装配进 source:resolveLivePlay(roomId)。
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolveLivePlay: resolveBiliLivePlay })
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const roomId = info.roomId ?? ""
@@ -68,6 +52,26 @@ export class BiliLiveChannel implements RssChannel, RssLiveChannel {
   private channelOptions(info: SourceInfo): SerializeOptions {
     return { channelTitle: `bilibili 直播 ${info.roomId ?? ""}`, channelLink: `https://live.bilibili.com/${info.roomId ?? ""}` }
   }
+}
+
+/**
+ * 懒解析 bilibili 直播流:getRoomPlayInfo(带 buvid cookie + live 签名)→ hls/flv 直链。
+ * 独立纯函数(不依赖 channel 实例),由 factory 装配进 source。
+ */
+async function resolveBiliLivePlay(roomId: string): Promise<Stream[]> {
+  const client = createBilibiliClient({ referer: "https://live.bilibili.com/", buvid: true, live: true })
+  const params = await client.signLiveParams({
+    room_id: roomId,
+    protocol: "0,1",
+    format: "0,2",
+    codec: "0,1",
+    platform: "web",
+    qn: "10000",
+  })
+  const res = await client.getJson<{ data?: Record<string, any> }>(
+    `${API_LIVE}/xlive/web-room/v2/index/getRoomPlayInfo?${params}`,
+  )
+  return parseBiliLiveStreams(res?.data ?? {})
 }
 
 /**

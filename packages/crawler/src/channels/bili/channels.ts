@@ -1,7 +1,7 @@
 /**
  * bilibili 视频类 channel(rank/hot/ranking/weekly/user-video)。
  *
- * 每个 channel 一个 class,直接 `implements RssChannel`(+ 能力接口 RssVideoChannel),
+ * 每个 channel 一个 class,直接 `implements RssChannel`,能力方法可选。
  * getSource 用组合工厂装配(factory.ts 的 createApiSource:fetchItems → serializeFeed,纯函数)。
  * 共享 BilibiliClient 的 wbi 签名/web 请求。video 项映射成 Video(kind=video)。
  *
@@ -9,7 +9,7 @@
  */
 import type { Article, Item, Stream, Video } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, RssVideoChannel, SourceInfo } from "../../index.ts"
+import type { RssChannel, SourceInfo } from "../../index.ts"
 import { createApiSource } from "../factory.ts"
 import { now } from "../../host.ts"
 import { createBilibiliClient } from "./client.ts"
@@ -103,15 +103,12 @@ export class BiliSquareChannel implements RssChannel {
 
 // ── bili:popular(综合热门)────────────────────────────────────────────────────
 
-export class BiliPopularChannel implements RssChannel, RssVideoChannel {
+export class BiliPopularChannel implements RssChannel {
   readonly key = "bili:popular"
   readonly name = "bilibili 综合热门"
   readonly kind = "video" as const
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
-  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
-  resolvePlay(itemId: string): Promise<Stream[]> {
-    return resolveBiliPlay(itemId)
-  }
+  // 懒解析能力作为 factory capabilities 装配进 source:resolvePlay(itemId)。
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolvePlay: resolveBiliPlay })
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
     const client = createBilibiliClient()
     const data = await client.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
@@ -145,16 +142,12 @@ const RID_TABLE: Record<string, string> = {
   sports: "1018", animal: "1024",
 }
 
-export class BiliRankingChannel implements RssChannel, RssVideoChannel {
+export class BiliRankingChannel implements RssChannel {
   readonly key = "bili:ranking"
   readonly name = "bilibili 排行榜"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "rid", label: "分区(all/douga/…)", required: false }]
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
-  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
-  resolvePlay(itemId: string): Promise<Stream[]> {
-    return resolveBiliPlay(itemId)
-  }
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolvePlay: resolveBiliPlay })
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const rid = info.rid ?? "all"
     const numericRid = /^\d+$/.test(rid) ? rid : (RID_TABLE[rid] ?? "0")
@@ -184,15 +177,11 @@ export class BiliRankingChannel implements RssChannel, RssVideoChannel {
 
 // ── bili:weekly(每周必看)────────────────────────────────────────────────────────
 
-export class BiliWeeklyChannel implements RssChannel, RssVideoChannel {
+export class BiliWeeklyChannel implements RssChannel {
   readonly key = "bili:weekly"
   readonly name = "B站每周必看"
   readonly kind = "video" as const
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
-  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
-  resolvePlay(itemId: string): Promise<Stream[]> {
-    return resolveBiliPlay(itemId)
-  }
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolvePlay: resolveBiliPlay })
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
     const client = createBilibiliClient()
     const status = await client.getJson<{ data?: Array<{ number: number; name: string }> }>(
@@ -228,16 +217,12 @@ export class BiliWeeklyChannel implements RssChannel, RssVideoChannel {
 
 // ── bili:user_video(UP 主投稿)─────────────────────────────────────────────────
 
-export class BiliUserVideoChannel implements RssChannel, RssVideoChannel {
+export class BiliUserVideoChannel implements RssChannel {
   readonly key = "bili:user_video"
   readonly name = "bilibili UP 主投稿"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "uid", label: "UP 主 uid", required: true }]
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
-  /** 懒解析可播流:bvid/aid → cid → durl mp4 直链。 */
-  resolvePlay(itemId: string): Promise<Stream[]> {
-    return resolveBiliPlay(itemId)
-  }
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolvePlay: resolveBiliPlay })
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const uid = info.uid ?? ""
     if (!uid) throw new Error("bili:user_video 需要 uid")

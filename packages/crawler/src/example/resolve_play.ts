@@ -6,7 +6,7 @@
  *   channel  可选:channel key(默认 bili:popular)
  */
 import { parseFeed } from "@tauri-playground/xml"
-import { getChannel, isRssVideoChannel } from "../index.ts"
+import { getChannel, isRssVideoSource } from "../index.ts"
 import { setupBackends, exampleInfo } from "./backend.ts"
 
 async function main() {
@@ -14,7 +14,6 @@ async function main() {
   const key = process.argv[2] ?? "bili:popular"
   const ch = getChannel(key)
   if (!ch) throw new Error(`unknown channel: ${key}`)
-  if (!isRssVideoChannel(ch)) throw new Error(`channel ${key} does not support lazy play resolution`)
 
   // fetch → 解析第一个 video item 的 id(bili 为 bvid ?? av{aid})。
   const source = ch.getSource(exampleInfo(key))
@@ -27,8 +26,11 @@ async function main() {
   console.log(`item:    ${item.title ?? "(untitled)"}`)
   console.log(`id:      ${itemId}`)
 
-  // 懒解析可播流。
-  const streams = await ch.resolvePlay(itemId)
+  // 懒解析可播流。能力在 source 上:探测是否有 resolvePlay(不依赖 kind)。
+  if (!isRssVideoSource(source)) {
+    throw new Error(`channel ${key} does not support video play resolution`)
+  }
+  const streams = await source.resolvePlay(itemId)
   console.log(`streams: ${streams.length} 条`)
   for (const [i, s] of streams.entries()) {
     console.log(`  [${i}] ${s.format} ${s.url}`)

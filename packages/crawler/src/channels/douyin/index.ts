@@ -10,7 +10,7 @@
  */
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, RssLiveChannel, SourceInfo } from "../../index.ts"
+import type { RssChannel, SourceInfo } from "../../index.ts"
 import { createApiSource } from "../factory.ts"
 import { now } from "../../host.ts"
 import { ABOGUS_JS } from "./abogus.ts"
@@ -26,19 +26,24 @@ const UA =
 const DEFAULT_TTWID_COOKIE =
   "ttwid=1%7CB1qls3GdnZhUov9o2NxOMxxYS2ff6OSvEWbv0ytbES4%7C1680522049%7C280d802d6d478e3e78d0c807f7c487e7ffec0ae4e5fdd6a0fe74c3c6af149511"
 
-export class DouyinLiveChannel implements RssChannel, RssLiveChannel {
+export class DouyinLiveChannel implements RssChannel {
   readonly key = "live:douyin"
   readonly name = "抖音直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  // 懒解析能力作为 factory capabilities 装配进 source(闭包捕获 this 私有逻辑)。
+  getSource = createApiSource(
+    (info) => this.fetchItems(info),
+    (info) => this.channelOptions(info),
+    { resolveLivePlay: (roomId) => this.resolveLivePlayImpl(roomId) },
+  )
 
   /** 懒初始化的 cookie jar(warmup GET 抓到的新鲜 ttwid 等)。 */
   private cookieJar = ""
   private cookiePromise: Promise<void> | null = null
 
   /** 懒解析直播流:重拉 enter 拿 stream_url,本地提取 flv/hls(无额外请求)。 */
-  async resolveLivePlay(roomId: string): Promise<Stream[]> {
+  private async resolveLivePlayImpl(roomId: string): Promise<Stream[]> {
     const res = await this.fetchRoomDetail(roomId)
     const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
     return parseDouyinStreams((room.stream_url ?? {}) as Record<string, any>)

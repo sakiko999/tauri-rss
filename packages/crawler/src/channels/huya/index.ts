@@ -5,7 +5,7 @@
  * `window.HNF_GLOBAL_INIT` JSON,产 Live Item(状态 + 元数据)。
  * playUrls 需 Tars 二进制 codec,暂不实现(同 producer)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
+import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, SourceInfo } from "../../index.ts"
 import { createApiSource } from "../factory.ts"
@@ -15,12 +15,19 @@ const M_HUYA = "https://m.huya.com"
 const UA_MOBILE =
   "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
 
+/** 虎牙可播流需 Tars 二进制 codec,暂未实现——抛清晰错误(同 producer)。 */
+function resolveHuyaLivePlay(_roomId: string): Promise<Stream[]> {
+  return Promise.reject(new Error("live:huya 直播流解析暂未实现(需 Tars 二进制 codec)"))
+}
+
 export class HuyaLiveChannel implements RssChannel {
   readonly key = "live:huya"
   readonly name = "虎牙直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info))
+  // 懒解析能力作为 factory capabilities 装配进 source(当前抛错,占位)。
+  getSource = createApiSource((info) => this.fetchItems(info), (info) => this.channelOptions(info), { resolveLivePlay: resolveHuyaLivePlay })
+
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const roomId = info.roomId ?? ""
     if (!roomId) throw new Error("live:huya 需要 roomId")

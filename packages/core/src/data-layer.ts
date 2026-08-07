@@ -8,7 +8,7 @@
  * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
-import { getChannel, isRssLiveChannel, isRssVideoChannel, registerAllChannels } from "@tauri-playground/crawler"
+import { getChannel, isRssLiveSource, isRssVideoSource, registerAllChannels } from "@tauri-playground/crawler"
 import type { Stream } from "@tauri-playground/xml"
 import { deserializeFeed } from "./xml/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
@@ -90,10 +90,12 @@ export function createDataLayer(): DataLayer {
     if (!sub) throw new Error("subscription not found")
     const channel = getChannel(sub.channelKey)
     if (!channel) throw new NoChannelError(sub.channelKey)
-    if (!isRssVideoChannel(channel)) {
-      throw new Error(`channel ${sub.channelKey} does not support lazy play resolution`)
+    // 能力在 source 上:实例化源 → 探测是否有 resolvePlay(不依赖 kind)。
+    const source = channel.getSource(sub.info)
+    if (!isRssVideoSource(source)) {
+      throw new Error(`channel ${sub.channelKey} does not support video play resolution`)
     }
-    return channel.resolvePlay(itemId)
+    return source.resolvePlay(itemId)
   }
 
   async function resolveLivePlay(subscriptionId: string, roomId: string): Promise<Stream[]> {
@@ -101,10 +103,12 @@ export function createDataLayer(): DataLayer {
     if (!sub) throw new Error("subscription not found")
     const channel = getChannel(sub.channelKey)
     if (!channel) throw new NoChannelError(sub.channelKey)
-    if (!isRssLiveChannel(channel)) {
-      throw new Error(`channel ${sub.channelKey} does not support lazy live play resolution`)
+    // 能力在 source 上:实例化源 → 探测是否有 resolveLivePlay(不依赖 kind)。
+    const source = channel.getSource(sub.info)
+    if (!isRssLiveSource(source)) {
+      throw new Error(`channel ${sub.channelKey} does not support live play resolution`)
     }
-    return channel.resolveLivePlay(roomId)
+    return source.resolveLivePlay(roomId)
   }
 
   return {

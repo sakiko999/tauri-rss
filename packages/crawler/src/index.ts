@@ -2,9 +2,11 @@
  * crawler —— 订阅源抓取层(producer 的重构替代)。
  *
  * 核心抽象:一切皆 RssChannel(渠道)。
- *   - channel 用 `sourceInfoTpl` 描述实例化一个 source 需要什么参数;
- *   - `getSource(info)` 工厂,按参数(url / uid / roomId)产出一个 source;
- *   - `source.fetch()` 直出 RSS 2.0 XML 字符串(标准子集 + `tpl:` 扩展)。
+ *   - channel 是**纯描述**:key/name/kind(默认 item kind)/sourceInfoTpl/defaultInfo;
+ *   - `getSource(info)` 工厂,按参数(url / uid / roomId)产出一个 source(行为载体);
+ *   - `source.fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展);
+ *   - 懒解析能力(resolvePlay/resolveLivePlay)是 **source 的能力**,按行为存在与否
+ *     探测(`"resolvePlay" in source`),不挂在 channel 上。
  *
  * 公共契约只有「渠道 → 参数 → XML」:XML 就是天然类型,下游(core / 任意
  * RSS 阅读器)自己解析 XML,不依赖 crawler 的任何数据模型类型。
@@ -17,13 +19,14 @@ import type { Kind, Stream } from "@tauri-playground/xml"
 
 /** channel 产出的 item 种类。 */
 export type { Kind } from "@tauri-playground/xml"
+/** 懒解析返回的可播流。 */
+export type { Stream } from "@tauri-playground/xml"
 
 /** 渠道参数字段定义(描述实例化一个 source 需要什么)。 */
 export type SourceInfo = Record<string, string>
 
 /**
- * 一个可抓取的源实例。`fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展)。
- * getSource 返回的最小契约——channel 的懒解析能力(见下)挂在 channel 上,不经由此。
+ * 可抓取的源实例(行为载体)。`fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展)。
  * getSource 是纯函数:每次返回新实例,无缓存状态(复用/去重归 core 编排)。
  */
 export interface RssSource {
@@ -32,27 +35,33 @@ export interface RssSource {
 }
 
 /**
- * 视频懒解析能力契约。**channel 类 implements 它**——能力即普通方法,
+ * 视频懒解析能力(扩展接口,有该能力的源才实现)。
  * 播放 URL 带 deadline 签名,须在播放时调用而非塞进 refresh 快照。
  */
-export interface RssVideoChannel {
+export interface RssVideoSource extends RssSource {
   /** 按 item id(如 bvid)懒解析可播流。 */
   resolvePlay(itemId: string): Promise<Stream[]>
 }
 
-/** 直播懒解析能力契约。channel 类 implements 它,playUrls 带 expiry 签名。 */
-export interface RssLiveChannel {
+/**
+ * 直播懒解析能力(扩展接口,有该能力的源才实现)。
+ * playUrls 带 expiry 签名,须在播放时调用。
+ */
+export interface RssLiveSource extends RssSource {
   /** 按 roomId 懒解析可播流。 */
   resolveLivePlay(roomId: string): Promise<Stream[]>
 }
 
+/** getSource 的返回:基础抓取 + 可选懒解析能力。 */
+export type AnyRssSource = RssSource | RssVideoSource | RssLiveSource
+
 /** 类型谓词:运行时探测 + 编译期收窄,消费侧(如 core)能力判定一处定义。 */
-export function isRssVideoChannel(c: RssChannel): c is RssChannel & RssVideoChannel {
-  return "resolvePlay" in c
+export function isRssVideoSource(s: RssSource): s is RssVideoSource {
+  return "resolvePlay" in s
 }
 
-export function isRssLiveChannel(c: RssChannel): c is RssChannel & RssLiveChannel {
-  return "resolveLivePlay" in c
+export function isRssLiveSource(s: RssSource): s is RssLiveSource {
+  return "resolveLivePlay" in s
 }
 
 /** 渠道参数字段(供 UI 生成"新增订阅"表单)。 */
@@ -64,7 +73,8 @@ export interface SourceInfoField {
 }
 
 /**
- * 一个渠道:用 `sourceInfoTpl` 描述参数,`getSource(info)` 按 info 实例化 source。
+ * 一个渠道 —— **纯描述**。`kind` 是默认 item kind(deserialize 兜底);
+ * 实例化出的 source 才承担抓取与懒解析能力。
  */
 export interface RssChannel {
   /** 渠道唯一 key(如 "bili:square"、"rss:hn")。 */
@@ -81,8 +91,8 @@ export interface RssChannel {
    * ——「无需输入即可订阅」由 empty info 表达,不必用 `{}` 占位。
    */
   readonly defaultInfo?: SourceInfo
-  /** 按 info(url/uid/…)实例化一个可抓取的 source(纯 fetch)。懒解析能力在 channel 上。 */
-  getSource(info: SourceInfo): RssSource
+  /** 按 info(url/uid/…)实例化一个可抓取的 source(行为载体,含可选懒解析能力)。 */
+  getSource(info: SourceInfo): AnyRssSource
 }
 
 // ── channel 注册表 ───────────────────────────────────────────────────────────
