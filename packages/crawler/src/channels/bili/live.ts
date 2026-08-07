@@ -82,8 +82,11 @@ async function resolveBiliLivePlay(roomId: string): Promise<Stream[]> {
 /**
  * 从 getRoomPlayInfo 响应提取可播流。
  * 结构:data.playurl_info.playurl.stream[] → format[] → codec[],每个 codec 有
- * base_url + url_info[](host + extra),完整 url = host + base_url + extra。
- * 按 host 排序(scdn/mcdn 排后,保真 CDN 优先),format 由 base_url 后缀推断。
+ * codec_name(avc=H.264 / hevc=HEVC)、base_url + url_info[](host + extra)。
+ *
+ * **只保留 avc(H.264)流** —— HEVC(minihevc)flv.js/hls.js 都播不了(编码不支持)。
+ * 返回的流里 format 由 base_url 后缀推断(flv / m3u8);hls(fmp4)优先排前。
+ * 按 host 排序(scdn/mcdn 排后,保真 CDN 优先)。
  */
 function parseBiliLiveStreams(data: Record<string, any>): Stream[] {
   const playUrl = (data?.playurl_info?.playurl ?? {}) as Record<string, any>
@@ -96,6 +99,8 @@ function parseBiliLiveStreams(data: Record<string, any>): Stream[] {
     for (const f of formats) {
       const codecs: Array<Record<string, any>> = Array.isArray(f?.codec) ? f.codec : []
       for (const c of codecs) {
+        // 只留 H.264(avc);HEVC(hevc/minihevc)浏览器播不了。
+        if (String(c?.codec_name ?? "").toLowerCase() !== "avc") continue
         const baseUrl = String(c?.base_url ?? "")
         const urlInfos: Array<Record<string, any>> = Array.isArray(c?.url_info) ? c.url_info : []
         const format = baseUrl.includes(".m3u8") ? "hls" : baseUrl.includes(".flv") ? "flv" : "live"
@@ -109,5 +114,7 @@ function parseBiliLiveStreams(data: Record<string, any>): Stream[] {
   }
 
   urls.sort((a, b) => Number(a.host.includes("mcdn") || a.host.includes("scdn")) - Number(b.host.includes("mcdn") || b.host.includes("scdn")))
+  // hls(fmp4)优先(对直播延迟/兼容更好),再 flv。
+  urls.sort((a, b) => Number(a.format === "flv") - Number(b.format === "flv"))
   return urls.map((u) => ({ url: u.url, format: u.format, headers }))
 }

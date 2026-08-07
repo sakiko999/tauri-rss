@@ -90,8 +90,13 @@ export class DouyuLiveChannel implements RssChannel {
   }
 
   /**
-   * POST getH5Play 拿 RTMP 直链。body = 签名串 + cdn/rate 选择;
+   * POST getH5Play 拿可播流。body = 签名串 + cdn/rate 选择;
    * 响应 data.rtmp_url + data.rtmp_live 拼接成完整地址(rtmp_live 带 HTML 实体需 unescape)。
+   *
+   * 注意:实测 `rtmp_url` 返回的是 **https 的 HTTP-FLV 地址**(`edgesrv.com:8443/live/xxx.flv`),
+   * 前 4 字节是标准 FLV 头(46 4c 56 01)——浏览器可用 flv.js 直接播。format 按 URL 协议判定:
+   *   - https/http 的 .flv → "flv"(HTTP-FLV);
+   *   - rtmp:// → "rtmp"(浏览器播不了,flv.js 也仅支持 http-flv)。
    */
   private async getH5Play(roomId: string, signed: string): Promise<Stream[]> {
     const postBody = `${signed}&cdn=&rate=-1&ver=Douyu_223061205&iar=1&ive=1&hevc=0&fa=0`
@@ -108,13 +113,15 @@ export class DouyuLiveChannel implements RssChannel {
     })
     if (res.status < 200 || res.status >= 300) throw new Error(`douyu H5Play HTTP ${res.status}`)
     const data = (res.body as Record<string, any>)?.data as Record<string, any> | undefined
-    const rtmpUrl = String(data?.rtmp_url ?? "")
-    const rtmpLive = htmlUnescape(String(data?.rtmp_live ?? ""))
-    if (!rtmpUrl || !rtmpLive) throw new Error(`douyu H5Play: no stream for room ${roomId}`)
+    const base = String(data?.rtmp_url ?? "")
+    const live = htmlUnescape(String(data?.rtmp_live ?? ""))
+    if (!base || !live) throw new Error(`douyu H5Play: no stream for room ${roomId}`)
+    const url = `${base}/${live}`
+    const format = /^https?:\/\//i.test(url) ? "flv" : "rtmp"
     return [
       {
-        url: `${rtmpUrl}/${rtmpLive}`,
-        format: "rtmp",
+        url,
+        format,
         headers: { referer: `${BASE}/${roomId}`, "user-agent": UA },
       },
     ]
