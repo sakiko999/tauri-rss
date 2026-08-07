@@ -90,6 +90,34 @@ export type Content =
   | { kind: 'live';   stream: MediaItem; channel?: string; viewerCount?: number };
 ```
 
+### 设计记录:live 源与产品形态的错位(2026-08)
+
+**问题**:live channel 是 1:1(一个直播间 = 一个订阅),其他 channel 是 1:N(一个
+订阅 = 一个内容流)。`refresh` 按 `channelKey + info` 查 crawler,直播源的
+`fetchItems` 恒返回 1 条 Item → 在列表/瀑布流里是一个孤条,没有「流」的体感;
+单房间订阅只有短视频模式(每条全屏播)天然不违和。**不是 UI 层的错**——
+数据模型缺「直播聚合」维度,单房间 live channel 本质是「单房间查询器」,
+不是「内容源」。
+
+**倾向方案(未定,待 P2 前决定)**:
+- **B. 分组聚合(core 层)**:渲染层把同 kind 的 live 订阅动态合成一个混合 feed
+  (「直播」分组 = 所有 live 订阅合并),无新 channel,改动集中在 core 编排
+  (合并 + 去重 + 排序)。当前倾向此方案——复用现有订阅模型,不引入新源概念。
+- A. 订阅级聚合(`live:aggregate`,rooms 数组参数,复用各 live channel fetch):
+  一条订阅 = 一条「我的直播」流,但引入新 channel,与订阅模型耦合。
+- C. 分区/搜索聚合(发现流,`dart_simple_live` 已实现可参考):分区 API 拉「平台
+  在播房间」+ 房间搜索,是瀑布流/短视频的**发现**来源,与订阅聚合互补。
+  本仓库已有 bilibili partition v2 + ABogus 签名能力(见 CLAUDE.md),douyu/huya
+  的分区/搜索在 `tmp/dart_simple_live` 有 Dart 参考。
+
+**产品形态下的落地**:
+- 三分栏列表:订阅树里「直播」分组 = 聚合 feed(B),单房间订阅是叶子。
+- 瀑布流:聚合源(关注,B)+ 分区热榜(发现,C)混排,直播卡片带「● 直播中」角标。
+- 短视频模式:聚合源直接驱动上下滑切换直播间,懒解析即播。
+
+**dart_simple_live 参考**(`tmp/dart_simple_live`):分区推荐、房间搜索、
+按平台列出所有在播房间——C 方案的成熟参照,已对照 douyin HTML fallback。
+
 ### Feed / FeedItem / 阅读 / 设置
 
 ```ts

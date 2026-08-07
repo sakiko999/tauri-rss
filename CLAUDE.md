@@ -136,6 +136,12 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   **YouTube 直播（iOS client → hlsManifestUrl,hls.js 播;ANDROID 直播不返回 HLS,必须 iOS）**
 - ✅ 自动播放：点击「播放」→ 带声自动播（`unlockAudioPlayback` 手势内解 autoplay policy +
   失败降级静音）；全部平台（B站视频/YouTube/douyu/bili live/huya/douyin）一致
+- ✅ HLS 档位：video/live **锁最高档**（`currentLevel=max`,ABR 关闭）。原因：宿主隧道
+  （Rust reqwest + base64）的固定开销让 ABR 带宽估算失真（1080p 4561kbps 测得仅 ~1Mbps），
+  自动降档会骤降 144p 永不回升。档位选择后续在播放器开放，用户手动选
+- ⚠️ DASH-only 直播（如 Claude FM `tRsQsTMvPNg` 当前形态）：iOS 不返回 hlsManifestUrl、
+  只有 adaptiveFormats（音视频分离）→ 内嵌暂不支持（需 dash.js），降级 `format:"web"`
+  打开页面。已知边界，见 `docs/youtube-stream-extraction.md` 5.5
 - YouTube 直链实现见 `docs/youtube-stream-extraction.md`（InnerTube ANDROID client,
   渐进式 mp4 无签名无 n 参数,clientVersion 必须最新 21.03.36;旧版会 400/UNPLAYABLE;
   直播加 iOS client `getIosPlayerResponse`,live 判定看 `playabilityStatus.liveStreamability`）
@@ -165,6 +171,10 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 
 - react-query 数据流 + 无限滚动（列表化内容不再一次性全量）
 - 三模式 UI：三分栏 / 瀑布流 / 短视频（technical-plan 的 P2–P4）
+  - ⚠️ **live 源是 1:1、其他源是 1:N 的错位**：live 单房间订阅在列表/瀑布流是孤条。
+    设计记录见 `docs/technical-plan.md`「live 源与产品形态的错位」——倾向 **B 分组聚合**
+    （core 层把同 kind 的 live 订阅合成混合 feed），C 分区/搜索聚合（发现流，参考
+    `tmp/dart_simple_live`）后补。P2 三模式前需定稿
 - mobile 接入 appHost + core（当前还是 Tauri 模板）
 - **source 缓存（core 层）**：crawler 的 `getSource` 是纯函数（每次新实例）。
   若要「同参复用实例 / 去重刷新」，在 core 编排层按 `channelKey + info` 持 Map 实现
