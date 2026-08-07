@@ -83,6 +83,12 @@ export interface MediaStream {
   url: string
   format?: string
   headers?: Record<string, string>
+  /** 档位名(直播多清晰度流,如 douyu 的「原画2K60/蓝光8M」;单流无)。 */
+  quality?: string
+  /** 档位原始值(直播平台切档参数,如 douyu 的 rate);切档重解析时按它重发请求。 */
+  rate?: number
+  /** DASH manifest(MPD XML)——音视频分离流(如 B 站视频)用 dash.js 合成播放。 */
+  dashManifest?: string
 }
 
 /** 文章内嵌附件(ArticleItem.media[])。 */

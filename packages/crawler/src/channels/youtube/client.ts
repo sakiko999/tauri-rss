@@ -125,8 +125,11 @@ async function getAndroidPlayerResponse(videoId: string, visitorData: string): P
     contentCheckOk: true,
     racyCheckOk: true,
   }
+  // ANDROID 走 gapis 端点 + t/id 参数(复刻 NewPipe getAndroidPlayerResponse:
+  // YoutubeStreamHelper.java:150——YOUTUBEI_V1_GAPIS_URL + "&t=" + generateTParameter()
+  // + "&id=" + videoId)。gapis 更稳定(绕开 www.youtube.com 的地域/风控)。iOS 同款。
   const res = (await postJson(
-    `${YOUTUBEI_V1}/player?prettyPrint=false`,
+    `${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`,
     body,
     { "user-agent": ANDROID_UA, "X-Goog-Api-Format-Version": "2" },
   )) as PlayerResponse

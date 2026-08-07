@@ -1,0 +1,11 @@
+/**
+ * bilibili 登录 cookie 模板(.example)。
+ *
+ * 用法:复制本文件为 `bilibili-cookie.ts`,填入你的真实 cookie,然后
+ * `git update-index --skip-worktree packages/core/src/bilibili-cookie.ts`
+ * 防止真实 cookie 被提交(仓库跟踪的是空占位版本)。
+ *
+ * 留空 = 零登录(bili 直播原画/超清封顶,视频 720P 封顶)。
+ * 订阅级 info.cookie 优先于它;settings 持久化的 bilibiliCookie 也优先于它。
+ */
+export const DEFAULT_BILIBILI_COOKIE = ""

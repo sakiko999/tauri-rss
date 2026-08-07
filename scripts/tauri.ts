@@ -8,7 +8,7 @@
  */
 
 import { $ } from "bun";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 
 const [, , command, platform = "desktop", flag] = process.argv;
 
@@ -45,6 +45,10 @@ const SRC_TAURI = `${ROOT}/apps/src-tauri`;
 /**
  * 并行启动多个长驻进程（如 Vite dev server + Tauri dev）。
  * 任一进程退出即整体退出，信号转发给子进程。
+ *
+ * 清理细节(Windows):`shell: true` 时子进程是 cmd 壳,`child.kill()` 只杀壳,
+ * 其下 bun → node 链(Vite 实际运行时)不会被带走 → 残留进程占 1420 端口、
+ * 锁二进制。因此 Windows 上用 `taskkill /T` 连子树强杀。
  */
 function spawnParallel(cmds: { cmd: string; args: string[]; cwd: string; label: string }[]) {
   const children = cmds.map(({ cmd, args, cwd, label }) => {
@@ -56,14 +60,26 @@ function spawnParallel(cmds: { cmd: string; args: string[]; cwd: string; label: 
     });
   });
 
+  /** 杀一个子进程树:Windows 用 taskkill /T /F,其余平台走普通 kill。 */
+  function killTree(c: ReturnType<typeof spawn>): void {
+    if (c.killed || !c.pid) return;
+    if (process.platform === "win32") {
+      try {
+        execSync(`taskkill /F /T /PID ${c.pid}`, { stdio: "ignore" });
+        return;
+      } catch {
+        // taskkill 失败(进程已退)则 fallthrough 到普通 kill。
+      }
+    }
+    c.kill();
+  }
+
   let exited = false;
   function onExit(code: number | null) {
     if (exited) return;
     exited = true;
     console.log(`\n⏹ 进程退出 (${code ?? "signal"})，终止其余进程`);
-    children.forEach((c) => {
-      if (!c.killed) c.kill();
-    });
+    children.forEach(killTree);
     process.exit(code ?? 0);
   }
 
@@ -78,7 +94,7 @@ function spawnParallel(cmds: { cmd: string; args: string[]; cwd: string; label: 
   // 转发 Ctrl+C / SIGTERM
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.on(sig, () => {
-      children.forEach((c) => c.kill(sig));
+      children.forEach(killTree);
       process.exit(0);
     });
   }

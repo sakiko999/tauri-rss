@@ -1,143 +1,40 @@
 /**
- * App — 两栏验证界面(Tailwind 4)。
+ * App — 三栏 RSS 阅读器(参考 tmp/rss-reader 的三栏布局)。
  *
- * 左栏:订阅列表(标题 + channelKey + 刷新错误徽章),点击 select。
- * 右栏:选中订阅的 items,按 kind 分发 MediaItemView(ui 渲染器)。
- * 顶部:刷新全部按钮 + loading 指示。
+ * 左栏 Sidebar(订阅/分组/smart feeds/tab),中栏按 kind 分发:
+ *   - article → 文章列表(ArticleList) + 右栏详情(ArticleDetail),两栏;
+ *   - video/audio/live/social → MediaItemView 卡片列表(MediaList),单栏。
+ * showDetail 决策:activeTab 显式选 article 或(all 且当前视图以文章为主)。
  */
-import { useEffect, useRef, useState } from "react"
-import { MediaItemView } from "@tauri-playground/ui"
+import { useEffect } from "react"
 import { useDesktop } from "./store"
-
-const PAGE = 50
+import { Sidebar } from "./components/Sidebar.tsx"
+import { ArticleList } from "./components/ArticleList.tsx"
+import { ArticleDetail } from "./components/ArticleDetail.tsx"
+import { MediaList } from "./components/MediaList.tsx"
 
 export default function App() {
-  const {
-    subscriptions,
-    selectedId,
-    items,
-    loading,
-    refreshErrors,
-    init,
-    select,
-    refresh,
-    refreshAll,
-    markRead,
-    toggleStar,
-    resolvePlay,
-    resolveLivePlay,
-  } = useDesktop()
+  const { items, activeTab, init } = useDesktop()
 
   useEffect(() => {
     init()
   }, [init])
 
-  // 懒加载:每次渲染前 PAGE 条,滚到底加载更多(避免一次性渲染上千条)。
-  const [visibleCount, setVisibleCount] = useState(PAGE)
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    setVisibleCount(PAGE) // 切换订阅时重置
-  }, [selectedId])
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((c) => Math.min(items.length, c + PAGE))
-        }
-      },
-      { rootMargin: "400px" },
-    )
-    io.observe(sentinel)
-    return () => io.disconnect()
-  }, [items.length, selectedId])
-
-  const visibleItems = items.slice(0, visibleCount)
-  const selected = subscriptions.find((s) => s.id === selectedId)
+  // 面板决策:文章详情三栏 vs 各 kind 卡片单栏。
+  const hasArticles = items.some((it) => it.kind === "article")
+  const showDetail = activeTab === "article" || (activeTab === "all" && hasArticles)
 
   return (
-    <div className="flex h-screen font-sans">
-      {/* ── 左栏:订阅列表 ── */}
-      <aside className="w-64 shrink-0 overflow-y-auto border-r border-zinc-200 p-4">
-        <h2 className="mb-3 text-lg font-semibold">订阅</h2>
-        <button
-          onClick={refreshAll}
-          disabled={loading}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 disabled:opacity-50"
-        >
-          {loading ? "刷新中…" : "刷新全部"}
-        </button>
-        <ul className="mt-3 space-y-0.5">
-          {subscriptions.map((sub) => {
-            const err = refreshErrors[sub.id]
-            const active = sub.id === selectedId
-            return (
-              <li
-                key={sub.id}
-                onClick={() => select(sub.id)}
-                className={[
-                  "flex cursor-pointer items-center justify-between rounded-md px-3 py-2",
-                  active ? "bg-blue-50 border border-blue-200" : "border border-transparent hover:bg-zinc-50",
-                ].join(" ")}
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{sub.title}</div>
-                  <div className="truncate text-xs text-zinc-400">{sub.channelKey}</div>
-                </div>
-                {err && (
-                  <span title={err} className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-red-600 text-xs text-white">
-                    !
-                  </span>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      </aside>
-
-      {/* ── 右栏:选中订阅的 items ── */}
-      <main className="flex-1 overflow-y-auto p-6">
-        <div className="mb-4 flex items-center gap-3">
-          <h1 className="m-0 text-xl font-semibold">{selected?.title ?? "选择订阅"}</h1>
-          {selected && (
-            <button
-              onClick={() => refresh(selected.id)}
-              disabled={loading}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 disabled:opacity-50"
-            >
-              刷新
-            </button>
-          )}
-          {refreshErrors[selectedId ?? ""] && (
-            <span className="text-sm text-red-600">{refreshErrors[selectedId!]}</span>
-          )}
-        </div>
-        <div>
-          {items.length === 0 && !loading && <p className="text-sm text-zinc-400">暂无内容</p>}
-          {visibleItems.map((item) => (
-            <MediaItemView
-              key={item.id}
-              item={item}
-              onOpen={(url) => window.open(url, "_blank")}
-              onToggleRead={markRead}
-              onToggleStar={toggleStar}
-              onResolvePlay={
-                selectedId ? (itemId) => resolvePlay(selectedId, itemId) : undefined
-              }
-              onResolveLivePlay={
-                selectedId ? (roomId) => resolveLivePlay(selectedId, roomId) : undefined
-              }
-            />
-          ))}
-          {/* 无限滚动哨兵:滚动接近底部时加载更多 */}
-          {visibleItems.length < items.length && (
-            <div ref={sentinelRef} className="py-4 text-center text-sm text-zinc-400">
-              加载更多…({visibleItems.length}/{items.length})
-            </div>
-          )}
-        </div>
-      </main>
+    <div className="flex h-screen bg-background font-sans overflow-hidden">
+      <Sidebar />
+      {showDetail ? (
+        <>
+          <ArticleList />
+          <ArticleDetail />
+        </>
+      ) : (
+        <MediaList />
+      )}
     </div>
   )
 }

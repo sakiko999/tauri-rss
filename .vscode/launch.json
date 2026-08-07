@@ -6,14 +6,16 @@
       "type": "lldb",
       "request": "attach",
       "program": "${workspaceFolder}/target/debug/tauri-app.exe",
-      "preLaunchTask": "tauri-dev-desktop"
+      "preLaunchTask": "tauri-dev-desktop",
+      "postDebugTask": "kill-tauri"
     },
     {
       "name": "Tauri Rust Unit Tests",
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/deps/tauri_app_lib-*.exe",
-      "cwd": "${workspaceFolder}/apps/src-tauri"
+      "cwd": "${workspaceFolder}/apps/src-tauri",
+      "preLaunchTask": "kill-tauri"
     }
   ]
 }

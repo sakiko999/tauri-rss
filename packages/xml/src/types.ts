@@ -24,6 +24,19 @@ export interface Stream {
   url: string
   format?: string
   headers?: Record<string, string>
+  /** 档位名(直播多清晰度流,如 douyu 的「原画2K60/蓝光8M」;单流无)。 */
+  quality?: string
+  /**
+   * 档位原始值(直播平台切档参数,如 douyu 的 rate)。存 headers 同款理由:
+   * 切档重解析时按它重发请求。UI 层透传,不解析语义。
+   */
+  rate?: number
+  /**
+   * DASH manifest(MPD XML 字符串)——B 站视频音视频分离(video+audio 两轨),
+   * 需合成播放。crawler 把 playurl 的 dash.video/audio 构造成 MPD 存这里,
+   * 播放器(dash.js)用 `format:"dash"` + dashManifest 播。单流无。
+   */
+  dashManifest?: string
 }
 
 export type AttachmentKind = "image" | "video" | "audio" | "live"

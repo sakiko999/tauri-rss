@@ -56,6 +56,13 @@ export function createDataLayer(): DataLayer {
   const settings = createSettingsRepository(storage)
   const store = createMediaStore(now)
 
+  /** 合并 core 层默认 cookie 到订阅 info(订阅显式配的 cookie 优先)。bili live/video 自动带登录态。 */
+  async function sourceInfoFor(sub: { info: Record<string, string> }): Promise<Record<string, string>> {
+    const s = await settings.get()
+    if (!s.bilibiliCookie || sub.info["cookie"]) return sub.info
+    return { ...sub.info, cookie: s.bilibiliCookie }
+  }
+
   async function refresh(subscriptionId: string): Promise<RefreshResult> {
     const sub = await repo.get(subscriptionId)
     if (!sub) {
@@ -70,7 +77,8 @@ export function createDataLayer(): DataLayer {
       // 未注册的 channelKey 是配置错误——throw 后由 catch 统一返回 error 结果。
       const channel = getChannel(sub.channelKey)
       if (!channel) throw new NoChannelError(sub.channelKey)
-      const xml = await channel.getSource(sub.info).fetch()
+      const info = await sourceInfoFor(sub)
+      const xml = await channel.getSource(info).fetch()
       const items = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
       store.replace(subscriptionId, items)
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
@@ -91,7 +99,8 @@ export function createDataLayer(): DataLayer {
     const channel = getChannel(sub.channelKey)
     if (!channel) throw new NoChannelError(sub.channelKey)
     // 能力在 source 上:实例化源 → 探测是否有 resolvePlay(不依赖 kind)。
-    const source = channel.getSource(sub.info)
+    const info = await sourceInfoFor(sub)
+    const source = channel.getSource(info)
     if (!isRssVideoSource(source)) {
       throw new Error(`channel ${sub.channelKey} does not support video play resolution`)
     }
@@ -104,7 +113,8 @@ export function createDataLayer(): DataLayer {
     const channel = getChannel(sub.channelKey)
     if (!channel) throw new NoChannelError(sub.channelKey)
     // 能力在 source 上:实例化源 → 探测是否有 resolveLivePlay(不依赖 kind)。
-    const source = channel.getSource(sub.info)
+    const info = await sourceInfoFor(sub)
+    const source = channel.getSource(info)
     if (!isRssLiveSource(source)) {
       throw new Error(`channel ${sub.channelKey} does not support live play resolution`)
     }

@@ -16,7 +16,7 @@
  */
 import { useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
-import { isFlvStream, isHlsStream, useMediaStream } from "./useHls.ts"
+import { isDashStream, isFlvStream, isHlsStream, useMediaStream } from "./useHls.ts"
 
 /** 渐进式视频(mp4/webm/ogg)→ 原生 <video>。 */
 function isProgressiveVideo(stream: MediaStream): boolean {
@@ -50,16 +50,41 @@ export function MediaPlayer({
   onError?: (err: unknown) => void
 }) {
   const [error, setError] = useState<unknown>(null)
-  // 选流:渐进式优先(双端兼容),其次 hls/flv(流媒体)。
-  const stream =
+  // 多档位直播(douyu 等):用户切档后的目标档流。null = 用默认选流逻辑。
+  // 切档不重发请求——resolveLivePlay 已返回全档位,从 streams 里按 rate 换流即可
+  // (签名带 expiry,会话内够用;过期由 PlayableMedia 重新 resolve)。
+  const [activeStream, setActiveStream] = useState<MediaStream | null>(null)
+  // streams 变化(重新 resolve / props 更新)时重置用户切档态。
+  useEffect(() => setActiveStream(null), [streams])
+
+  // 默认选流:渐进式优先(双端兼容),其次 hls/flv(流媒体)。
+  const defaultStream =
     streams.find(isProgressiveVideo) ??
     streams.find(isProgressiveAudio) ??
     streams.find(isHlsStream) ??
     streams.find(isFlvStream) ??
     streams[0]
+  const stream = activeStream ?? defaultStream
+
+  // 档位列表:去重同 rate 的 quality 名(服务端返回顺序即档位序)。单流无 quality → 不显示切换。
+  const qualityOptions = streams
+    .filter((s): s is MediaStream & { rate: number; quality: string } => s.rate !== undefined && !!s.quality)
+    .reduce<Array<{ rate: number; quality: string }>>((acc, s) => {
+      if (!acc.some((q) => q.rate === s.rate)) acc.push({ rate: s.rate, quality: s.quality })
+      return acc
+    }, [])
+  const showQualityBar = qualityOptions.length >= 2
+
+  function switchQuality(rate: number) {
+    const target = streams.find((s) => s.rate === rate)
+    if (!target) return
+    setError(null)
+    // 换流:useMediaStream 的 effect 依赖 stream,变化自动销毁旧 hls/flv 实例重建。
+    setActiveStream(target)
+  }
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  const needsStreamPlayer = !!stream && (isHlsStream(stream) || isFlvStream(stream))
+  const needsStreamPlayer = !!stream && (isHlsStream(stream) || isFlvStream(stream) || isDashStream(stream))
 
   // 诊断:打印最终选中的流(URL 域名/截断 + format + headers 键),排查清晰度/来源。
   useEffect(() => {
@@ -133,9 +158,34 @@ export function MediaPlayer({
   // 媒体元素默认全宽 + 黑底。
   const mediaClass = ["w-full", "rounded", "bg-black", className].filter(Boolean).join(" ")
 
+  // 多档位切换条(直播多清晰度,douyu 等)。当前档高亮,点击切档(已有全档位流,直接换)。
+  const qualityBar = showQualityBar ? (
+    <div className="flex flex-wrap gap-1">
+      {qualityOptions.map(({ rate, quality }) => {
+        const active = stream?.rate === rate
+        return (
+          <button
+            key={rate}
+            type="button"
+            onClick={() => switchQuality(rate)}
+            className={[
+              "rounded px-2 py-0.5 text-xs",
+              active
+                ? "bg-blue-600 text-white"
+                : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100",
+            ].join(" ")}
+          >
+            {quality}
+          </button>
+        )
+      })}
+    </div>
+  ) : null
+
   if (isProgressiveVideo(stream)) {
     return (
       <div className="space-y-1">
+        {qualityBar}
         {headerHint}
         {/* autoPlay 由上方 effect 处理:先带声 play(),被拦降级静音。 */}
         <video ref={videoRef} src={stream.url} controls preload="none" className={mediaClass} />
@@ -146,6 +196,7 @@ export function MediaPlayer({
   if (isProgressiveAudio(stream)) {
     return (
       <div className="space-y-1">
+        {qualityBar}
         {headerHint}
         <audio
           src={stream.url}
@@ -160,5 +211,10 @@ export function MediaPlayer({
   }
 
   // HLS / FLV → useMediaStream 已挂载(hls.js / flv.js)。preload 交给 MSE 库控制。
-  return <video ref={videoRef} controls autoPlay={autoPlay} className={mediaClass} />
+  return (
+    <div className="space-y-1">
+      {qualityBar}
+      <video ref={videoRef} controls autoPlay={autoPlay} className={mediaClass} />
+    </div>
+  )
 }

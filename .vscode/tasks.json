@@ -2,6 +2,17 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "kill-tauri",
+      "type": "process",
+      "command": "C:/Windows/System32/cmd.exe",
+      "args": ["/c", "taskkill /F /IM tauri-app.exe >nul 2>&1 & exit /b 0"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "close": true
+      }
+    },
+    {
       "label": "tauri-dev-desktop",
       "type": "shell",
       "command": "bun run scripts/tauri.ts tauri desktop",
@@ -9,6 +20,8 @@
         "cwd": "${workspaceFolder}"
       },
       "isBackground": true,
+      "dependsOn": ["kill-tauri"],
+      "dependsOrder": "sequence",
       "problemMatcher": {
         "owner": "rust",
         "fileLocation": ["autoDetect", "${workspaceFolder}"],

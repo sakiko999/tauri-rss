@@ -10,15 +10,13 @@
  * YouTube 直播订阅方式:youtube channel 支持 videoId 直接订阅单视频/直播,
  * 如 `tRsQsTMvPNg`(Claude FM 常驻直播,hls.js 播放)。
  *
- * 直播房间备选(当前房间下播/受限时换用;douyin 受限报 4001038):
+ * 直播房间备选(当前房间下播/受限时换用):
  *   - douyu:   9999(yyfyyf)
  *   - bili:live:6
- *   - huya:    527988(游戏区在线主播,不定)
- *   - douyin:  706293310661(奶酪)、84139699615(DNF)、429692277417(桃兵)、
- *              797182238243(猫腻)、458369128783(于二)
- *   更准的方式:douyin 用 live.douyin.com 分区接口实时抓在播房间
- *   (packages/crawler/src/channels/douyin/ 的 ABogus 签名 + partition v2)。
- *   ⚠️ douyin 订阅必须用 web_rid(短号,如 706293310661),不能用 room_id(长号)。
+ *   - huya:    60066(主播「骚男」,2026-08 实测在播,蓝光20M 起 5 档)
+ *   - douyin:  217952067344(2026-08-08 实测在播,原画/蓝光 5 档;
+ *              ⚠️ room.status==2 才是直播中,==4 是 roomId 一次性需换 webRid,见 dart)
+ *   huya 在播房间可从 www.huya.com/l 页实时列表取(WebFetch 可见)。
  */
 import type { Subscription } from "@tauri-playground/core"
 
@@ -75,15 +73,15 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
   {
     id: "s-live-huya",
     channelKey: "live:huya",
-    title: "虎牙直播",
+    title: "虎牙直播 · 骚男",
     enabled: true,
-    info: { roomId: "527988" },
+    info: { roomId: "60066" },
   },
   {
     id: "s-live-douyin",
     channelKey: "live:douyin",
-    title: "抖音直播",
+    title: "抖音直播 · 享受问号",
     enabled: true,
-    info: { roomId: "706293310661" },
+    info: { roomId: "217952067344" },
   },
 ]

@@ -55,11 +55,12 @@ function ugc(sourceId: string, t: number, v: {
 }
 
 /**
- * 共享的 bili 视频懒解析:bvid/aid → cid → durl mp4 直链。
+ * 共享的 bili 视频懒解析:bvid/aid → cid → 全档位 durl mp4 直链。
  * 4 个 video channel 的 `resolvePlay` 方法都调它(避免重复代码)。
+ * info 携带 core 层注入的登录 cookie → 解锁更高档位(登录 1080P+);无则零登录。
  */
-function resolveBiliPlay(itemId: string): Promise<Stream[]> {
-  const client = createBilibiliClient()
+function resolveBiliPlay(itemId: string, info?: SourceInfo): Promise<Stream[]> {
+  const client = createBilibiliClient({ cookie: (info?.cookie as string) || undefined })
   return client.resolveCid(itemId).then((cid) => client.resolvePlayUrl(itemId, cid))
 }
 
@@ -110,11 +111,11 @@ export class BiliPopularChannel implements RssChannel {
   readonly key = "bili:popular"
   readonly name = "bilibili 综合热门"
   readonly kind = "video" as const
-  // 视频源:implements VideoPlayable,resolvePlay 是模块纯函数。
+  // 视频源:implements VideoPlayable,resolvePlay 闭包捕获 info(core 层注入 cookie)。
   getSource(info: SourceInfo): RssSource & VideoPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolvePlay: resolveBiliPlay,
+      resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
@@ -158,7 +159,7 @@ export class BiliRankingChannel implements RssChannel {
   getSource(info: SourceInfo): RssSource & VideoPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolvePlay: resolveBiliPlay,
+      resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
@@ -197,7 +198,7 @@ export class BiliWeeklyChannel implements RssChannel {
   getSource(info: SourceInfo): RssSource & VideoPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolvePlay: resolveBiliPlay,
+      resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
@@ -243,7 +244,7 @@ export class BiliUserVideoChannel implements RssChannel {
   getSource(info: SourceInfo): RssSource & VideoPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolvePlay: resolveBiliPlay,
+      resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

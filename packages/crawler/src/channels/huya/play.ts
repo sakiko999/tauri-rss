@@ -16,6 +16,7 @@ import { httpText } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"
 
 const M_HUYA = "https://m.huya.com"
+/** 抓房间页 UA(移动页 m.huya.com 用移动 UA,PC UA 会被风控返回无数据页)。 */
 const UA_MOBILE =
   "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
 /** 播放 FLV 用的 UA(HYSDK PC 端,dart 同款)。 */
@@ -52,9 +53,12 @@ function base64ToUtf8(b64: string): string {
  */
 export function buildAntiCode(stream: string, presenterUid: number, antiCodeQuery: string, nowMs: number): string {
   const params = new URLSearchParams(antiCodeQuery)
-  const ctype = params.get("ctype") ?? "huya_pc_exe"
-  const platformId = Number(params.get("t") ?? "0")
-  const isWap = platformId === 103
+  // 强制 PC 平台(ctype=huya_pc_exe, t=0):移动页面(m.huya.com)线路是 tars_mobile,
+  // flv.js 播不稳;用 PC anticode 让同一条 CDN 线路按 PC 平台出流(可稳定播放)。
+  // fm/wsTime 仍取自页面签名(与平台无关的密钥)。
+  const ctype = "huya_pc_exe"
+  const platformId = 0
+  const isWap = false
 
   const seqId = presenterUid + nowMs
   const secretHash = md5Hex(`${seqId}|${ctype}|${platformId}`)
@@ -92,14 +96,26 @@ export function buildAntiCode(stream: string, presenterUid: number, antiCodeQuer
     .join("&")
 }
 
-/** 抓房间页 + 解析线路,返回第一条可用 FLV 线路与 presenterUid。 */
-async function fetchFirstLine(roomId: string): Promise<{ line: HuyaStreamLine; presenterUid: number } | null> {
+/**
+ * 抓房间页(移动版 m.huya.com,应用环境抓取稳定) + 解析线路/档位。
+ * 移动版数据在 `window.HNF_GLOBAL_INIT = {...}`:
+ *   roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value[] → 线路
+ *   roomInfo.tLiveInfo.tLiveStreamInfo.vBitRateInfo.value[] → 档位
+ * 线路虽是移动版 CDN(tars_mobile),但 buildAntiCode 强制 PC 平台出流(dart 同款思路)。
+ * ⚠️ 不用 PC 版 www.huya.com(hyPlayerConfig)——Tauri Rust 隧道抓取被虎牙风控(无线路)。
+ */
+async function fetchFirstLine(roomId: string): Promise<{
+  line: HuyaStreamLine
+  presenterUid: number
+  bitRates: Array<{ bitRate: number; name: string }>
+} | null> {
   const html = await httpText(`${M_HUYA}/${roomId}`, { "user-agent": UA_MOBILE })
   const info = parseHnfGlobalInit(html)
   const ri = (info.roomInfo ?? {}) as Record<string, any>
   const tLiveInfo = (ri.tLiveInfo ?? {}) as Record<string, any>
-  const lines = Array.isArray(tLiveInfo?.tLiveStreamInfo?.vStreamInfo?.value)
-    ? (tLiveInfo.tLiveStreamInfo.vStreamInfo.value as Record<string, any>[])
+  const tLiveStreamInfo = (tLiveInfo.tLiveStreamInfo ?? {}) as Record<string, any>
+  const lines = Array.isArray(tLiveStreamInfo?.vStreamInfo?.value)
+    ? (tLiveStreamInfo.vStreamInfo.value as Record<string, any>[])
     : []
   if (!lines.length) return null
   for (const l of lines) {
@@ -107,46 +123,79 @@ async function fetchFirstLine(roomId: string): Promise<{ line: HuyaStreamLine; p
     const streamName = String(l.sStreamName ?? "")
     const flvAntiCode = String(l.sFlvAntiCode ?? "")
     if (flvUrl && streamName && flvAntiCode) {
-      // presenterUid = lChannelId(主播 uid),HTML 里嵌着,不在 JSON 内。
       const presenterUid = Number(html.match(/lChannelId":([0-9]+)/)?.[1] ?? 0)
-      return { line: { flvUrl, streamName, flvAntiCode }, presenterUid }
+      // 档位(vBitRateInfo)。过滤 HDR;顺序保留(原画/蓝光在前)。
+      const bitRates = (Array.isArray(tLiveStreamInfo?.vBitRateInfo?.value)
+        ? (tLiveStreamInfo.vBitRateInfo.value as Record<string, any>[])
+        : []
+      )
+        .map((b) => ({ bitRate: Number(b?.iBitRate ?? 0), name: String(b?.sDisplayName ?? "") }))
+        .filter((b) => b.name && !b.name.includes("HDR"))
+      return { line: { flvUrl, streamName, flvAntiCode }, presenterUid, bitRates }
     }
   }
   return null
 }
 
-/** 懒解析虎牙直播流:返回 HTTP-FLV 直链数组(flv.js 可播)。 */
+/**
+ * 懒解析虎牙直播流,返回**最高档**(无 ratio 参数,稳定)。
+ * ⚠️ 实测:huya 的 `&ratio=` 低档在 flv.js 下播几秒即断(服务端分段重连),只有
+ * 最高档(bitRate=0, 不带 ratio)能稳定持续播放。所以只返回最高档——档位切换
+ * 在 douyu/bili/douyin 已可用,huya 的 ratio 方案受 flv.js 限制放弃。
+ * 若无档位信息则返回单流(原始 base)。
+ */
 export async function resolveHuyaLivePlay(roomId: string): Promise<Stream[]> {
   const found = await fetchFirstLine(roomId)
   if (!found) throw new Error(`huya: no stream for room ${roomId}(未开播或无线路)`)
-  const { line, presenterUid } = found
+  const { line, presenterUid, bitRates } = found
   const anticode = buildAntiCode(line.streamName, presenterUid, line.flvAntiCode, Date.now())
-  // 拼接:AL/TX 等 CDN 线路,sFlvUrl 是 http。选第一条(通常是 al=阿里)。
-  const url = `${line.flvUrl}/${line.streamName}.flv?${anticode}&codec=264`
-  return [
-    {
-      url,
-      format: "flv",
-      headers: { referer: `${M_HUYA}/${roomId}`, "user-agent": HUYA_PLAY_UA },
-    },
-  ]
+  const headers = { referer: `${M_HUYA}/${roomId}`, "user-agent": HUYA_PLAY_UA }
+  const base = `${line.flvUrl}/${line.streamName}.flv?${anticode}&codec=264`
+
+  // 最高档 = bitRate 最小(原画/蓝光20M),不加 ratio(加 ratio 的档 flv.js 播不稳)。
+  const top = bitRates[0]
+  if (!top) return [{ url: base, format: "flv", headers }]
+  return [{ url: base, format: "flv", headers, quality: top.name, rate: top.bitRate }]
 }
 
 /**
- * 解析 `window.HNF_GLOBAL_INIT = {...}`(替换内联 function 让 JSON.parse 通过)。
+ * 解析 `window.HNF_GLOBAL_INIT = {...}`(平衡括号提取,页面嵌套深时非贪婪正则会截断)。
  * channel 元数据解析与 play 解析共用。
  */
 export function parseHnfGlobalInit(html: string): Record<string, any> {
-  const blockMatch = html.match(/window\.HNF_GLOBAL_INIT\s*=\s*(\{[\s\S]*?\})\s*<\/script>/)
-  if (!blockMatch?.[1]) throw new Error("Huya: window.HNF_GLOBAL_INIT block not found")
-  let raw = blockMatch[1]
-  raw = raw.replace(/function\s*\(.*?\)\s*\{[\s\S]*?\}/g, '""')
+  const eq = html.indexOf("HNF_GLOBAL_INIT")
+  if (eq < 0) throw new Error("Huya: window.HNF_GLOBAL_INIT not found")
+  const start = html.indexOf("{", eq)
+  if (start < 0) throw new Error("Huya: window.HNF_GLOBAL_INIT block not found")
+  // 平衡括号:从第一个 { 计数直到归零(跳过字符串内的括号)。
+  let depth = 0
+  let inString = false
+  let esc = false
+  let end = -1
+  for (let i = start; i < html.length; i++) {
+    const c = html[i]
+    if (inString) {
+      if (esc) esc = false
+      else if (c === "\\") esc = true
+      else if (c === '"') inString = false
+      continue
+    }
+    if (c === '"') inString = true
+    else if (c === "{") depth++
+    else if (c === "}") {
+      depth--
+      if (depth === 0) {
+        end = i
+        break
+      }
+    }
+  }
+  if (end < 0) throw new Error("Huya: HNF_GLOBAL_INIT unbalanced braces")
+  let raw = html.slice(start, end + 1)
+  raw = raw.replace(/function\s*\([^)]*\)\s*\{[\s\S]*?\}/g, '""')
   try {
     return JSON.parse(raw)
   } catch {
-    const start = raw.indexOf("{")
-    const end = raw.lastIndexOf("}")
-    if (start >= 0 && end > start) return JSON.parse(raw.slice(start, end + 1))
     throw new Error("Huya: failed to parse HNF_GLOBAL_INIT JSON")
   }
 }

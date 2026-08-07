@@ -34,11 +34,50 @@ export class DouyuLiveChannel implements RssChannel {
     }
   }
 
-  /** 懒解析直播流:重取签名 body → POST getH5Play → RTMP 直链。签名带时间戳,resolve 时重取。 */
+  /**
+   * 懒解析直播流,返回**全档位**(每档一个 Stream,quality=档位名,rate 藏在 headers):
+   *   1. POST getH5Play 带 rate=-1 → 响应 multirates 列出本房间可用档位(rate 值→中文名);
+   *   2. 逐档重发 getH5Play(rate=档位值) → 该档 RTMP/HTTP-FLV 直链。
+   * 签名带时间戳,resolve 时重取。多档位让下游 MediaPlayer 展示画质切换。
+   */
   private async resolveLivePlayImpl(roomId: string): Promise<Stream[]> {
     const crptext = await this.fetchSignPayload(roomId)
     const signed = this.sign(crptext, roomId)
-    return this.getH5Play(roomId, signed)
+
+    // 1. 列档位 + 可用 CDN(复刻 dart getPlayQualites:douyu_site.dart:95)。
+    //    rate=-1 只回 multirates + cdnsWithName(不产流),按服务端顺序(高档在前)。
+    const listRes = await this.getH5PlayData(roomId, `${signed}&cdn=&rate=-1`)
+    const multirates = Array.isArray(listRes?.multirates)
+      ? (listRes.multirates as Array<Record<string, any>>)
+      : []
+    const qualities = multirates
+      .map((m) => ({ rate: toInt(m.rate), name: String(m.name ?? "") }))
+      .filter((q): q is { rate: number; name: string } => q.rate !== undefined && !!q.name)
+    // 可用 CDN(cdnsWithName,scdn 排后——dart 同款,scdn 优先兜底)。
+    const cdns = (Array.isArray(listRes?.cdnsWithName) ? listRes.cdnsWithName : [])
+      .map((c) => String((c as Record<string, any>)?.cdn ?? ""))
+      .filter(Boolean)
+      .sort((a, b) => Number(a.startsWith("scdn")) - Number(b.startsWith("scdn")))
+
+    // 2. 逐档拉真实直链(复刻 dart getPlayUrls:douyu_site.dart:134——遍历所有 CDN,
+    //    单个 cdn 失败换下一个,返回首个可用)。首档全 CDN 失败则整体报错;其余档失败跳过。
+    const streams: Stream[] = []
+    for (const [idx, q] of qualities.entries()) {
+      try {
+        const s = await this.getH5Play(roomId, signed, q.rate, cdns)
+        if (s) streams.push({ ...s, quality: q.name, rate: q.rate })
+      } catch (e) {
+        if (idx === 0) throw e
+        console.warn(`[douyu] 档位 ${q.name}(rate=${q.rate}) 解析失败,跳过:`, (e as Error)?.message)
+      }
+    }
+    if (!streams.length) {
+      // 兜底:multirates 为空(房间异常)时按 rate=-1 直接拿单流。
+      const s = await this.getH5Play(roomId, signed, -1, cdns)
+      if (s) streams.push(s)
+    }
+    if (!streams.length) throw new Error(`douyu H5Play: no stream for room ${roomId}`)
+    return streams
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
@@ -90,16 +129,46 @@ export class DouyuLiveChannel implements RssChannel {
   }
 
   /**
-   * POST getH5Play 拿可播流。body = 签名串 + cdn/rate 选择;
+   * POST getH5Play 拿可播流(复刻 dart getPlayUrls:douyu_site.dart:151)。
+   * body = 签名串 + cdn/rate 选择;遍历所有 CDN,单个失败换下一个,返回首个可用。
    * 响应 data.rtmp_url + data.rtmp_live 拼接成完整地址(rtmp_live 带 HTML 实体需 unescape)。
+   *
+   * 关键:body **不能带** `ver=Douyu_223061205&iar=1&ive=1&hevc=0&fa=0`——实测带这些
+   * 参数服务端强制降到最高档(rate 参数失效),只有 `&cdn=&rate=N` 才能按档位切。
+   * 参照 dart_simple_live 的 getPlayUrl(只拼 `&cdn=$cdn&rate=$rate`)。
    *
    * 注意:实测 `rtmp_url` 返回的是 **https 的 HTTP-FLV 地址**(`edgesrv.com:8443/live/xxx.flv`),
    * 前 4 字节是标准 FLV 头(46 4c 56 01)——浏览器可用 flv.js 直接播。format 按 URL 协议判定:
    *   - https/http 的 .flv → "flv"(HTTP-FLV);
    *   - rtmp:// → "rtmp"(浏览器播不了,flv.js 也仅支持 http-flv)。
    */
-  private async getH5Play(roomId: string, signed: string): Promise<Stream[]> {
-    const postBody = `${signed}&cdn=&rate=-1&ver=Douyu_223061205&iar=1&ive=1&hevc=0&fa=0`
+  private async getH5Play(roomId: string, signed: string, rate: number, cdns: string[]): Promise<Stream | undefined> {
+    // cdn 为空列表时补一个空串(等价 `cdn=`,服务端默认线路)——dart 的 cdnsWithName 必有值。
+    const list = cdns.length ? cdns : [""]
+    let lastErr: unknown
+    for (const cdn of list) {
+      try {
+        const postBody = `${signed}&cdn=${cdn}&rate=${rate}`
+        const data = await this.getH5PlayData(roomId, postBody)
+        const base = String(data?.rtmp_url ?? "")
+        const live = htmlUnescape(String(data?.rtmp_live ?? ""))
+        if (!base || !live) {
+          lastErr = new Error("no stream")
+          continue
+        }
+        const url = `${base}/${live}`
+        const format = /^https?:\/\//i.test(url) ? "flv" : "rtmp"
+        return { url, format, headers: { referer: `${BASE}/${roomId}`, "user-agent": UA } }
+      } catch (e) {
+        lastErr = e
+        console.warn(`[douyu] cdn=${cdn} rate=${rate} 失败,换下一个:`, (e as Error)?.message)
+      }
+    }
+    throw lastErr ?? new Error(`douyu H5Play: no stream for room ${roomId}`)
+  }
+
+  /** POST getH5Play 返回原始 data(rtmp_url/rtmp_live/multirates 同源)。body 由调用方拼好(含 cdn/rate)。 */
+  private async getH5PlayData(roomId: string, postBody: string): Promise<Record<string, any> | undefined> {
     const res = await globalThis.appHost.http.request({
       url: `${BASE}/lapi/live/getH5Play/${roomId}`,
       method: "POST",
@@ -112,19 +181,7 @@ export class DouyuLiveChannel implements RssChannel {
       responseType: "json",
     })
     if (res.status < 200 || res.status >= 300) throw new Error(`douyu H5Play HTTP ${res.status}`)
-    const data = (res.body as Record<string, any>)?.data as Record<string, any> | undefined
-    const base = String(data?.rtmp_url ?? "")
-    const live = htmlUnescape(String(data?.rtmp_live ?? ""))
-    if (!base || !live) throw new Error(`douyu H5Play: no stream for room ${roomId}`)
-    const url = `${base}/${live}`
-    const format = /^https?:\/\//i.test(url) ? "flv" : "rtmp"
-    return [
-      {
-        url,
-        format,
-        headers: { referer: `${BASE}/${roomId}`, "user-agent": UA },
-      },
-    ]
+    return (res.body as Record<string, any>)?.data as Record<string, any> | undefined
   }
 
   private async getRoomInfo(roomId: string): Promise<Record<string, any>> {

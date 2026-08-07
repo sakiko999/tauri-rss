@@ -14,8 +14,11 @@
     "@tauri-playground/crawler": "workspace:*",
     "@tauri-playground/host": "workspace:*",
     "@tauri-playground/ui": "workspace:*",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.468.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "tailwind-merge": "^2.5.4",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
