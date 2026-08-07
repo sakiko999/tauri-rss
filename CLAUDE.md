@@ -129,16 +129,21 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 ### Demo 必选（按建议顺序）
 
 **1. 媒体播放闭环（demo 差异化价值）**
-- `packages/ui/src/renderers/` 目前是验证型：
-  - `VideoRenderer`：播放直链需懒解析（deadline 签名），当前只显示「▶ 播放」链接，未接真实 `<video>`
-  - `AudioRenderer`：播客 mp3 无签名，已用 `<audio controls>`，可正常播
-  - `LiveRenderer`：playUrls 带 expiry 签名，当前只显示状态 + 链接，未接真实播放
-- 建议顺序：先 Audio（已通）+ Live（playUrls 现成，试播最简单），再 Video（懒解析）
-- 目标：按 `technical-plan.md` 的 VideoPlayer/hls.js 方案接真实播放（video/audio/live 共用），
-  懒解析走 channel 能力方法——`RssVideoChannel.resolvePlay(itemId)` /
-  `RssLiveChannel.resolveLivePlay(roomId)`（core 的 `data-layer.ts` 已暴露对应 seam，
-  用 `isRssVideoChannel`/`isRssLiveChannel` 类型谓词收窄）。
-  注意 risk：hls.js + StrictMode 的 destroy 幂等
+- `packages/ui/src/player/` 已落地：`useMediaStream`（hls.js/flv.js 生命周期）+
+  `MediaPlayer`（按 format 选流分发）+ `PlayableMedia`（懒解析+播放），video/audio/live 共用
+- ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
+  huya 直播（flv.js HTTP-FLV）、bilibili 视频 / YouTube 视频（原生 mp4 直链）、
+  **YouTube 直播（iOS client → hlsManifestUrl,hls.js 播;ANDROID 直播不返回 HLS,必须 iOS）**
+- ✅ 自动播放：点击「播放」→ 带声自动播（`unlockAudioPlayback` 手势内解 autoplay policy +
+  失败降级静音）；全部平台（B站视频/YouTube/douyu/bili live/huya/douyin）一致
+- YouTube 直链实现见 `docs/youtube-stream-extraction.md`（InnerTube ANDROID client,
+  渐进式 mp4 无签名无 n 参数,clientVersion 必须最新 21.03.36;旧版会 400/UNPLAYABLE;
+  直播加 iOS client `getIosPlayerResponse`,live 判定看 `playabilityStatus.liveStreamability`）
+- huya 直链实现见 `packages/crawler/src/channels/huya/play.ts`（buildAntiCode 纯 MD5/base64,
+  `lChannelId` 作 presenterUid;反爬是**频率限制**,连续请求会降级页,单次 resolve 稳定）
+- douyin：enter API(ABogus)失败 4001038 → 降级 HTML 抓 flv_pull_url(参照 dart_simple_live);
+  ⚠️ 订阅必须用 **web_rid(短号)**,room_id(长号)在 API/HTML 都拿不到流
+  （`fetchItems` 已修:item.roomId 用订阅 web_rid,id 保留长号）
 
 **2. 订阅管理 UI（crawler 已设计好，只是没用起来）**
 - `TEST_SUBSCRIPTIONS` 硬编码 → 用户能自己增删订阅

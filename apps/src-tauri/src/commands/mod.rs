@@ -11,6 +11,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HttpGetRequest {
     pub url: String,
     #[serde(default = "default_method")]

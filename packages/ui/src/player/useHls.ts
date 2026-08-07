@@ -12,6 +12,7 @@ import { useEffect, useRef } from "react"
 import Hls from "hls.js"
 import flvjs from "flv.js"
 import type { MediaStream } from "@tauri-playground/core"
+import { HlsHostLoader } from "./hlsHostLoader.ts"
 
 /** 是否为 m3u8/HLS 流。 */
 export function isHlsStream(stream: MediaStream): boolean {
@@ -29,11 +30,14 @@ export function useMediaStream({
   stream,
   videoRef,
   onError,
+  autoPlay = true,
 }: {
   /** 当前要播的 m3u8/flv 流;null / 非流媒体时 no-op。 */
   stream: MediaStream | null
   videoRef: React.RefObject<HTMLVideoElement | null>
   onError?: (err: unknown) => void
+  /** 是否自动播放:true 带声起播(需 unlockAudioPlayback 已解锁),被拦降级静音。 */
+  autoPlay?: boolean
 }): void {
   const hlsRef = useRef<Hls | null>(null)
   const flvRef = useRef<flvjs.Player | null>(null)
@@ -81,7 +85,21 @@ export function useMediaStream({
       // 再开 hls.js 的 lowLatencyMode 双重低延迟可能不兼容。
       const hls = new Hls()
       hlsRef.current = hls
-      if (stream.headers) {
+      // 档位策略:video/live 都锁最高档起播,不走 ABR 自动降档。
+      // 原因:宿主隧道(Rust reqwest + base64)的固定开销让 ABR 带宽估算严重失真
+      // ——1080p 4561kbps 的流测得仅 ~1Mbps,ABR 会骤降 144p 且永不回升。
+      // `currentLevel = max` 是手动档位模式,ABR 完全关闭,恒定最高清晰度。
+      // 档位选择后续在播放器开放,用户手动选(当前默认最高档)。
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const max = hls.levels.length - 1
+        if (max < 0) return
+        hls.currentLevel = max
+      })
+      // YouTube HLS(googlevideo.com)无 CORS 头,hls.js 默认 XHR 被浏览器拦。
+      // 走 HlsHostLoader(appHost.http:Rust reqwest 隧道无 CORS / 浏览器 fetch)。
+      if (/googlevideo\.com/i.test(stream.url)) {
+        hls.config.loader = HlsHostLoader
+      } else if (stream.headers) {
         hls.config.xhrSetup = (xhr) => {
           for (const [k, v] of Object.entries(stream.headers!)) {
             // 浏览器禁止 JS 设置 forbidden headers(referer/user-agent 等),
@@ -99,14 +117,31 @@ export function useMediaStream({
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         if (data.fatal) report?.(data)
       })
-      // 静音起播:先确保 muted(浏览器 autoplay policy 允许 muted 自动播放),
-      // 再在 MANIFEST_PARSED + canplay 后 play(数据真正就绪时才调)。
-      video.muted = true
+      // 流信息:LEVEL_LOADED 打印实际播放档位(高度/码率),排查清晰度来源。
+      hls.on(Hls.Events.LEVEL_LOADED, (_e, d) => {
+        const lvl = hls.levels[d.level]
+        console.debug(
+          "[hls] 播放档位",
+          d.details?.live ? "live" : "vod",
+          lvl ? `${lvl.height ?? "?"}p/${Math.round((lvl.bitrate ?? 0) / 1000)}kbps` : `#${d.level}`,
+        )
+      })
+      // 起播:autoPlay=true 带声(PlayableMedia 点击时 unlockAudioPlayback 已解除
+      // autoplay policy),被拦降级静音重试。在 MANIFEST_PARSED + canplay 后 play
+      // (数据真正就绪时才调)。
+      video.muted = !autoPlay
       const attemptPlay = () => {
         if (!video.isConnected) return
         const p = video.play() as Promise<void> | void
         if (p && typeof p.catch === "function") {
           p.catch((e: unknown) => {
+            // 带声被拦 → 降级静音起播(静音 autoplay 恒允许)。
+            if (autoPlay && !video.muted && video.isConnected) {
+              video.muted = true
+              const retry = video.play() as Promise<void> | void
+              if (retry && typeof retry.catch === "function") retry.catch(() => {})
+              return
+            }
             console.warn("[useMediaStream] hls autoplay 失败:", e)
             report?.(e)
           })
@@ -134,14 +169,25 @@ export function useMediaStream({
       flv.on(flvjs.Events.ERROR, (_t, _d, e) => report?.(e))
       flv.attachMediaElement(video)
       flv.load()
-      // 静音起播(浏览器自动播放策略要求 muted)。
-      video.muted = true
+      // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。
+      video.muted = !autoPlay
       // 延迟 play:StrictMode 下第一个挂载的 video 会被立即移除,此时 play() 会
       // 报 "media was removed"。延迟到下一个 tick 并检查 isConnected,移除的跳过。
       const raf = requestAnimationFrame(() => {
         if (!video.isConnected) return
         const p = flv.play() as Promise<void> | void
-        if (p && typeof p.catch === "function") p.catch((e: unknown) => report?.(e))
+        if (p && typeof p.catch === "function") {
+          p.catch((e: unknown) => {
+            // 带声被拦 → 降级静音起播。
+            if (autoPlay && !video.muted && video.isConnected) {
+              video.muted = true
+              const retry = flv.play() as Promise<void> | void
+              if (retry && typeof retry.catch === "function") retry.catch(() => {})
+              return
+            }
+            report?.(e)
+          })
+        }
       })
       // 记录 raf 供 cleanup 取消。
       pendingRaf.current = raf

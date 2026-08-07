@@ -14,7 +14,7 @@
  * 注意:原生 <video>/<audio> 无法带自定义 header(如 bilibili 直链的 referer)。
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { isFlvStream, isHlsStream, useMediaStream } from "./useHls.ts"
 
@@ -60,14 +60,49 @@ export function MediaPlayer({
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const needsStreamPlayer = !!stream && (isHlsStream(stream) || isFlvStream(stream))
+
+  // 诊断:打印最终选中的流(URL 域名/截断 + format + headers 键),排查清晰度/来源。
+  useEffect(() => {
+    if (!stream) return
+    let host = ""
+    try {
+      host = new URL(stream.url, "https://x.invalid").hostname
+    } catch {
+      host = stream.url.slice(0, 60)
+    }
+    const path = stream.url.length > 100 ? `…${stream.url.slice(-60)}` : stream.url
+    console.info("[media] 选择流:", host, "| format:", stream.format ?? "?", "| headers:", Object.keys(stream.headers ?? {}).join(",") || "-", "|", path)
+  }, [stream])
+
   useMediaStream({
     stream: needsStreamPlayer ? stream : null,
     videoRef,
+    autoPlay,
     onError: (e) => {
       setError(e)
       onError?.(e)
     },
   })
+
+  // 原生 mp4 分支的自动播放:先带声 play()(用户已点「播放」+ unlockAudioPlayback
+  // 已解锁),被 autoplay policy 拦则降级静音重试。
+  // 注意 StrictMode 双挂载:第一个 video 会被移除,play() reject——检查 isConnected。
+  const isNativeStream = !!stream && !needsStreamPlayer
+  useEffect(() => {
+    if (!autoPlay || !isNativeStream) return
+    const el = videoRef.current
+    if (!el) return
+    el.muted = false
+    const p = el.play() as Promise<void> | void
+    if (p && typeof p.catch === "function") {
+      p.catch(() => {
+        if (!el.isConnected) return
+        el.muted = true
+        const retry = el.play() as Promise<void> | void
+        if (retry && typeof retry.catch === "function") retry.catch(() => {})
+      })
+    }
+  }, [autoPlay, isNativeStream, stream?.url])
 
   if (!stream) {
     return <div className="rounded border border-zinc-300 p-4 text-center text-sm text-zinc-500">无可播流</div>
@@ -102,7 +137,8 @@ export function MediaPlayer({
     return (
       <div className="space-y-1">
         {headerHint}
-        <video src={stream.url} controls autoPlay={autoPlay} preload="none" className={mediaClass} />
+        {/* autoPlay 由上方 effect 处理:先带声 play(),被拦降级静音。 */}
+        <video ref={videoRef} src={stream.url} controls preload="none" className={mediaClass} />
       </div>
     )
   }
@@ -111,7 +147,14 @@ export function MediaPlayer({
     return (
       <div className="space-y-1">
         {headerHint}
-        <audio src={stream.url} controls autoPlay={autoPlay} preload="none" className={mediaClass} />
+        <audio
+          src={stream.url}
+          controls
+          autoPlay={autoPlay}
+          muted={autoPlay}
+          preload="none"
+          className={mediaClass}
+        />
       </div>
     )
   }

@@ -43,11 +43,45 @@ export class DouyinLiveChannel implements RssChannel {
   private cookieJar = ""
   private cookiePromise: Promise<void> | null = null
 
-  /** 懒解析直播流:重拉 enter 拿 stream_url,本地提取 flv/hls(无额外请求)。 */
+  /**
+   * 懒解析直播流:重拉 enter 拿 stream_url,本地提取 flv/hls(无额外请求)。
+   * API 失败(如 4001038 内容不可用/间歇反爬)→ fallback 抓网页 HTML 提取
+   * flv_pull_url 直链(dart_simple_live 同款兜底策略)。
+   */
   private async resolveLivePlayImpl(roomId: string): Promise<Stream[]> {
-    const res = await this.fetchRoomDetail(roomId)
-    const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
-    return parseDouyinStreams((room.stream_url ?? {}) as Record<string, any>)
+    try {
+      const res = await this.fetchRoomDetail(roomId)
+      const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
+      const streams = parseDouyinStreams((room.stream_url ?? {}) as Record<string, any>)
+      if (streams.length) return streams
+    } catch (e) {
+      console.warn("[douyin] enter API 失败,降级 HTML:", (e as Error)?.message)
+    }
+    return this.resolveFromHtml(roomId)
+  }
+
+  /**
+   * HTML 兜底:抓 `live.douyin.com/{roomId}` 页面,正则提取 flv_pull_url 直链。
+   * 页面里 stream_url.flv_pull_url.{FULL_HD1/HD1/...} 是带签名的 flv 直链,
+   * 需实时抓取(签名有过期时间)。参照 dart_simple_live 的 _getRoomDataByHtml。
+   */
+  private async resolveFromHtml(roomId: string): Promise<Stream[]> {
+    const res = await globalThis.appHost.http.request({
+      url: `${LIVE}/${roomId}`,
+      method: "GET",
+      responseType: "text",
+      headers: {
+        "user-agent": UA,
+        referer: LIVE,
+        authority: "live.douyin.com",
+        cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
+      },
+    })
+    if (res.status < 200 || res.status >= 300) throw new Error(`douyin HTML HTTP ${res.status}: ${LIVE}/${roomId}`)
+    const html = typeof res.body === "string" ? res.body : String(res.body)
+    const streams = parseHtmlPullStreams(html)
+    if (!streams.length) throw new Error(`douyin HTML: 未找到可播流(房间 ${roomId} 可能未开播)`)
+    return streams
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
@@ -61,6 +95,8 @@ export class DouyinLiveChannel implements RssChannel {
     const isLive = toInt(room.status) === 2
 
     const live: Live = {
+      // id 用长号 id_str(唯一稳定);roomId 必须用订阅传入的 web_rid(短号)——
+      // douyin 的 enter API / HTML 页面 / resolveLivePlay 都用 web_rid,不是 room_id。
       id: `douyin:${String(room.id_str ?? roomId)}`,
       sourceId: "live:douyin",
       kind: "live",
@@ -70,7 +106,7 @@ export class DouyinLiveChannel implements RssChannel {
       author: { name: String(user.nickname ?? ""), avatar: String(user?.avatar_thumb?.url_list?.[0] ?? "") || undefined },
       fetchedAt: now(),
       platform: "douyin",
-      roomId: String(room.id_str ?? roomId),
+      roomId: String(roomId),
       liveStatus: isLive ? "live" : "offline",
       online: toInt(room?.room_view_stats?.display_value),
       introduction: strOr(room.intro),
@@ -131,7 +167,15 @@ export class DouyinLiveChannel implements RssChannel {
     // backend 已按 responseType:"json" 解析;空 body 时抛错(抖音常无合法 ttwid 返回空)。
     const body = res.body
     if (body === undefined || body === null || body === "") throw new Error(`douyin empty body for ${url.slice(0, 80)}`)
-    return typeof body === "string" ? (JSON.parse(body) as Record<string, any>) : (body as Record<string, any>)
+    const json = typeof body === "string" ? (JSON.parse(body) as Record<string, any>) : (body as Record<string, any>)
+    // 抖音内容级错误:HTTP 200 但 body 带 status_code(如 4001038「内容无法查看」)。
+    // 不抛会静默产出空元数据 → UI「直播没反应」且无法定位。抛清晰错误。
+    const code = json?.status_code
+    if (code !== undefined && code !== 0) {
+      const msg = String(json?.prompts ?? json?.status_msg ?? `status_code=${code}`)
+      throw new Error(`douyin 内容不可用:${msg}(code ${code})`)
+    }
+    return json
   }
 
   /**
@@ -212,6 +256,45 @@ function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
     const hls = String(main?.hls ?? "")
     if (flv) streams.push({ url: flv, format: "flv", headers: { ...headers, authority: LIVE } })
     else if (hls) streams.push({ url: hls, format: "hls", headers })
+  }
+  return streams
+}
+
+/**
+ * 从 douyin 网页 HTML 提取 flv_pull_url 直链(HTML fallback)。
+ * 页面里 `"stream_url":{"flv_pull_url":{"FULL_HD1":"http...","HD1":"..."}}`
+ * 是带签名的 flv 直链(转义 `&` = `&`)。实时抓取,签名有过期时间。
+ * 按清晰度键名顺序返回(蓝光/高清优先)。
+ */
+function parseHtmlPullStreams(html: string): Stream[] {
+  const QUALITY_ORDER = ["FULL_HD1", "HD1", "SD1", "SD2", "ORIGION"]
+  const headers = { referer: LIVE, "user-agent": UA, authority: "live.douyin.com" }
+  const streams: Stream[] = []
+  // 只取 flv_pull_url 对象(到下一个 _pull_url 或片段结束);hls_pull_url 是 m3u8,另论。
+  const flvStart = html.indexOf("flv_pull_url")
+  if (flvStart < 0) return streams
+  // 下一个 _pull_url(hls_pull_url);注意跳过 flv_pull_url 自身的 `_pull_url` 子串。
+  const flvEnd = html.indexOf("_pull_url", flvStart + "flv_pull_url".length)
+  const seg = html.slice(flvStart, flvEnd > flvStart ? flvEnd : flvStart + 3000)
+  // 逐清晰度用 indexOf 提取(避免正则转义坑):`"KEY":"http...`。
+  const found = new Map<string, string>()
+  for (const q of QUALITY_ORDER) {
+    const ki = seg.indexOf(`\\"${q}\\":\\"`)
+    if (ki < 0) continue
+    const urlStart = seg.indexOf("http:", ki)
+    if (urlStart < 0) continue
+    // URL 到未转义的引号结束(页面里转义引号是 `\"`,URL 参数里 `&` 是转义的 &)。
+    let url = ""
+    for (let i = urlStart; i < seg.length; i++) {
+      const c = seg[i]
+      if (c === "\\" && seg[i + 1] === '"') break // 未转义边界:转义引号
+      url += c
+    }
+    if (url) found.set(q, url)
+  }
+  for (const q of QUALITY_ORDER) {
+    const url = found.get(q)
+    if (url) streams.push({ url: url.replaceAll("\\u0026", "&"), format: "flv", headers })
   }
   return streams
 }

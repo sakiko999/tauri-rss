@@ -11,24 +11,37 @@ import type { RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../ind
 import { apiFetch } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
+import { resolveYoutubeStreams } from "./client.ts"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 /**
- * 懒解析可播流。YouTube 官方 RSS 无直链,返回 `format: "web"` 的页面流
- * (watch URL),UI 收到非 hls/flv/mp4 的 format 时打开页面播放。
+ * 懒解析可播流。真实直链走 InnerTube player API(见 client.ts):
+ * ANDROID client 渐进式 mp4(音视频合一)→ HLS fallback。
+ * 直链失败时兜底返回 `format: "web"`(watch URL),UI 打开页面播放。
  */
-function resolveYoutubePlay(itemId: string): Promise<Stream[]> {
+async function resolveYoutubePlay(itemId: string): Promise<Stream[]> {
   const videoId = itemId.replace(/^https?:\/\/www\.youtube\.com\/watch\?v=/, "")
-  return Promise.resolve([{ url: `https://www.youtube.com/watch?v=${videoId}`, format: "web", headers: { "user-agent": UA } }])
+  try {
+    return await resolveYoutubeStreams(videoId)
+  } catch (e) {
+    console.warn("[youtube] 直链获取失败,兜底页面流:", e)
+    return [
+      { url: `https://www.youtube.com/watch?v=${videoId}`, format: "web", headers: { "user-agent": UA } },
+    ]
+  }
 }
 
 export class YoutubeChannel implements RssChannel {
   readonly key: string
   readonly name: string
   readonly kind = "video" as const
-  readonly sourceInfoTpl = [{ key: "channelId", label: "频道 ID", required: true }]
+  // videoId 可选:订阅单视频/直播(如常驻直播间);channelId 订阅整个频道(RSS)。
+  readonly sourceInfoTpl = [
+    { key: "videoId", label: "视频/直播 ID(可选)", required: false },
+    { key: "channelId", label: "频道 ID(可选,与 videoId 二选一)", required: false },
+  ]
   /** 内置频道 ID(可选):存在 = 无需输入 channelId 即可订阅一个默认频道。 */
   readonly defaultChannelId?: string
 
@@ -51,17 +64,25 @@ export class YoutubeChannel implements RssChannel {
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
+    const t = now()
+    // 单视频/直播订阅(videoId 优先):产单个 Item,resolvePlay 直接播该 videoId。
+    const videoId = info.videoId ?? ""
+    if (videoId) {
+      return [videoItem(videoId, t)]
+    }
     const channelId = info.channelId ?? this.defaultChannelId ?? ""
-    if (!channelId) throw new Error("youtube: 需要 channelId")
+    if (!channelId) throw new Error("youtube: 需要 channelId 或 videoId")
     const xml = await httpText(
       `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
       { "user-agent": UA },
     )
     const feed = parseFeed(xml)
-    const t = now()
     return feed.channel.item.map((entry) => entryToVideo(entry, t))
   }
   private channelOptions(info: SourceInfo): SerializeOptions {
+    if (info.videoId) {
+      return { channelTitle: `YouTube ${info.videoId}`, channelLink: `https://www.youtube.com/watch?v=${info.videoId}` }
+    }
     const channelId = info.channelId ?? this.defaultChannelId ?? ""
     return { channelTitle: `YouTube ${channelId}`, channelLink: `https://www.youtube.com/channel/${channelId}` }
   }
@@ -88,6 +109,22 @@ function entryToVideo(entry: ParsedItem, t: number): Video {
     publishedAt: entry.pubDate ? new Date(entry.pubDate).getTime() : undefined,
     fetchedAt: t,
     duration,
+  }
+}
+
+/** 单视频/直播订阅的 Item(无 RSS 元数据,标题用 videoId 占位,播放时 resolvePlay 拿直链)。 */
+function videoItem(videoId: string, t: number): Video {
+  return {
+    id: videoId,
+    sourceId: "youtube",
+    kind: "video",
+    title: `YouTube ${videoId}`,
+    url: `https://www.youtube.com/watch?v=${videoId}`,
+    // 稳定缩略图约定:i.ytimg.com/vi/<videoId>/hqdefault.jpg —— 零请求,对视频/直播
+    // 都有效(未开播也有占位封面)。hqdefault=480×360,足够列表缩略图用。
+    thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    poster: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    fetchedAt: t,
   }
 }
 
