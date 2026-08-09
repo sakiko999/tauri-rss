@@ -224,11 +224,12 @@ export function pickProgressiveVideo(formats: PlayerFormat[]): PlayerFormat | nu
     return true
   }
   const height = (f: PlayerFormat): number => (f.itag ? (getItag(f.itag)?.height ?? 0) : 0)
-  return R.pipe(
-    R.filter(playable),
-    R.sortBy(height), // 升序
-    R.last<PlayerFormat>,
-  )(formats) ?? null
+  // maxBy 比较严格大于 → height 相同时保留**第一个**(原 for+`>` 语义;sortBy+last 会取最后一个)。
+  return R.reduce<PlayerFormat, PlayerFormat | null>(
+    (best, f) => (best === null || height(f) > height(best) ? f : best),
+    null,
+    R.filter(playable, formats),
+  )
 }
 
 /** 把 format 的 URL 解出来(签名解密 + n 参数解密)。返回可播 URL;失败返回 null。 */
