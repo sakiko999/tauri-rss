@@ -12,8 +12,9 @@
  * n 参数:HTML5 client 的 URL 带 `n=xxx`(节流混淆),不解 → 限速 50KB/s 或 403。
  * 本 client 在 resolve 后统一解 n(见 signature.ts 的 deobfuscateNParam)。
  */
+import * as R from "ramda"
 import type { Stream } from "@tauri-playground/xml"
-import { getItag, isPlayableItag, type ItagInfo } from "./itag.ts"
+import { getItag, isPlayableItag } from "./itag.ts"
 import { deobfuscateNParam, hasThrottlingParam } from "./signature.ts"
 
 const YOUTUBEI_V1 = "https://www.youtube.com/youtubei/v1"
@@ -214,19 +215,20 @@ function checkPlayability(res: PlayerResponse, videoId: string): void {
  * 优先顺序:渐进式视频(itag type=video)> 音频(audio)。
  */
 export function pickProgressiveVideo(formats: PlayerFormat[]): PlayerFormat | null {
-  let best: PlayerFormat | null = null
-  let bestInfo: ItagInfo | null = null
-  for (const f of formats) {
+  // filter(可播 + 音视频合一 + 有可解 URL) → 按高度取最高(手写 maxBy 的 for/best 消掉)。
+  const playable = (f: PlayerFormat): boolean => {
     const info = f.itag ? getItag(f.itag) : undefined
-    if (!info || !isPlayableItag(info)) continue
-    if (info.type !== "video") continue // 只挑音视频合一
-    if (!f.url && !f.cipher && !f.signatureCipher) continue
-    if (!best || (info.height ?? 0) > (bestInfo?.height ?? 0)) {
-      best = f
-      bestInfo = info
-    }
+    if (!info || !isPlayableItag(info)) return false
+    if (info.type !== "video") return false // 只挑音视频合一
+    if (!f.url && !f.cipher && !f.signatureCipher) return false
+    return true
   }
-  return best
+  const height = (f: PlayerFormat): number => (f.itag ? (getItag(f.itag)?.height ?? 0) : 0)
+  return R.pipe(
+    R.filter(playable),
+    R.sortBy(height), // 升序
+    R.last<PlayerFormat>,
+  )(formats) ?? null
 }
 
 /** 把 format 的 URL 解出来(签名解密 + n 参数解密)。返回可播 URL;失败返回 null。 */

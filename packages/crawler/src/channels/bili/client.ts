@@ -9,6 +9,7 @@
  *
  * 零登录:nav 未登录(`code:-101`)仍返回 wbi_img → MD5 即可签名。
  */
+import * as R from "ramda"
 import type { Stream } from "@tauri-playground/xml"
 import { now } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"
@@ -256,47 +257,49 @@ function fileStem(url: string): string {
  * init 段与 index 段,拼进 MPD 的 Representation 供 dash.js 做 Range 拉取。
  */
 function dashStreamsWithMpd(data: Record<string, any>, headers: Record<string, string>): Stream[] {
-  const acceptDesc: unknown[] = Array.isArray(data.accept_description) ? data.accept_description : []
-  const acceptQuality: unknown[] = Array.isArray(data.accept_quality) ? data.accept_quality : []
+  const acceptDesc = R.pathOr<unknown[]>([], ["accept_description"], data)
+  const acceptQuality = R.pathOr<unknown[]>([], ["accept_quality"], data)
+  // qn → 档位中文名(accept_quality/accept_description 同索引)。
   const nameOf = (qn: number): string => {
-    const i = acceptQuality.findIndex((q) => Number(q) === qn)
+    const i = R.findIndex((q: unknown) => Number(q) === qn, acceptQuality)
     return i >= 0 ? String(acceptDesc[i] ?? `档位${qn}`) : `档位${qn}`
   }
-  const dash = (data.dash ?? {}) as Record<string, any>
-  const videos: Array<Record<string, any>> = Array.isArray(dash.video) ? dash.video : []
-  const audios: Array<Record<string, any>> = Array.isArray(dash.audio) ? dash.audio : []
+  const dash = R.pathOr<Record<string, any>>({}, ["dash"], data)
+  const videos = R.pathOr<Record<string, any>[]>([], ["video"], dash)
+  const audios = R.pathOr<Record<string, any>[]>([], ["audio"], dash)
 
   // 音轨:取最高码率一档(AAC)。无音轨(纯音乐视频等)→ MPD 不含 audio,视频无声。
-  const audio = [...audios].sort((a, b) => (Number(b?.bandwidth) ?? 0) - (Number(a?.bandwidth) ?? 0))[0]
+  // sortBy 升序后取 last(带宽最大);显式参数避免 pipe 的类型流卡成 unknown。
+  const audio = R.last<Record<string, any>>(R.sortBy((a: Record<string, any>) => Number(a?.bandwidth ?? 0), audios))
 
   const duration = Number(dash.duration ?? 0)
   const minBufferTime = Number(dash.minBufferTime ?? 1.5)
 
-  const streams: Stream[] = []
-  for (const v of videos) {
-    const qn = Number(v?.id ?? 0)
-    if (!v?.baseUrl) continue
-    // 只保留 avc(H.264);hevc 浏览器 MSE 播不了。
-    if (!/avc1|avc/i.test(String(v?.codecs ?? ""))) continue
-    // 每档 MPD **只含该档 Representation**(+公共音轨)——dash.js 无档可选,
-    // 天然锁目标档,不会 ABR 降档。切档时 resolvePlay 返回对应档的 MPD。
-    const mpd = buildBiliMpd({
-      videos: [v],
-      audio,
-      duration,
-      minBufferTime,
-      avcOnly: true,
-    })
-    streams.push({
-      url: "",
-      format: "dash",
-      headers,
-      quality: nameOf(qn),
-      rate: qn,
-      dashManifest: mpd,
-    })
-  }
-  return streams
+  // filter(可播 avc) → map(每档一条带 MPD 的 Stream)。for/continue/push 消掉。
+  return R.pipe(
+    R.filter(
+      (v: Record<string, any>) => !!v?.baseUrl && /avc1|avc/i.test(String(v?.codecs ?? "")),
+    ),
+    R.map((v: Record<string, any>): Stream => {
+      const qn = Number(v?.id ?? 0)
+      // 每档 MPD **只含该档 Representation**(+公共音轨)——dash.js 无档可选,
+      // 天然锁目标档,不会 ABR 降档。切档时 resolvePlay 返回对应档的 MPD。
+      return {
+        url: "",
+        format: "dash",
+        headers,
+        quality: nameOf(qn),
+        rate: qn,
+        dashManifest: buildBiliMpd({
+          videos: [v],
+          audio,
+          duration,
+          minBufferTime,
+          avcOnly: true,
+        }),
+      }
+    }),
+  )(videos)
 }
 
 /** dash.video[i] → MPD `<Representation>`(BaseURL + SegmentBase)。 */

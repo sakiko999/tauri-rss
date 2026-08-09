@@ -20,7 +20,9 @@ packages/
                    一切皆 RssChannel：channel 直接 implements RssChannel(+ 能力接口
                    RssVideoChannel/RssLiveChannel),getSource 用组合工厂(factory.ts)
                    装配——纯函数,每次返回新 source,缓存/去重归 core。直出 RSS 2.0 + tpl:
-                   XML 字符串。XML 即天然类型,不导出数据模型类型
+                   XML 字符串。XML 即天然类型,不导出数据模型类型。依赖 **ramda** 0.32
+                   （+ @types/ramda devDep）——嵌套解析/排序用 chain/sortWith/pathOr
+                   函数式展开(范式见 bili/live.ts 的 parseBiliLiveStreams)
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
   ui/            @tauri-playground/ui   — UI 组件库（当前仅按 kind 分发的媒体渲染器）

@@ -9,6 +9,7 @@
  * 三链(每次独立取新鲜签名直链,带过期时间)。liveStatus 判定:**status==2 才是直播中**
  * (复刻 dart,实测在播房间返回 2);status==4 是 roomId 一次性、需改用 webRid,非直播中。
  */
+import * as R from "ramda"
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
@@ -281,51 +282,48 @@ function generateMsToken(length: number): string {
 }
 
 /**
- * 从抖音 enter 响应的 stream_url 提取各清晰度可播流。
+ * 从抖音 enter 响应的 stream_url 提取各清晰度可播流(函数式)。
  * 复刻 dart getPlayQualites(douyin_site.dart:538):
  *   1. stream_data 是 JSON → 按 sdk_key 展开 data[key].main.{flv,hls};
  *   2. stream_data 非 JSON → 用 flv_pull_url / hls_pull_url_map 按 level 索引兜底。
  * 按清晰度从高到低返回;每档 flv 优先(flv 体积小加载快),hls 兜底。
  */
 function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
-  const liveCore = (streamUrl?.live_core_sdk_data ?? {}) as Record<string, any>
-  const pullData = (liveCore?.pull_data ?? {}) as Record<string, any>
-  const qualities: Array<Record<string, any>> = Array.isArray(pullData?.options?.qualities)
-    ? pullData.options.qualities
-    : []
+  const pullData = R.pathOr<Record<string, any>>({}, ["live_core_sdk_data", "pull_data"], streamUrl)
+  const qualities = R.pathOr<Record<string, any>[]>([], ["options", "qualities"], pullData)
   const headers = { referer: LIVE, "user-agent": UA }
-  const streams: Stream[] = []
-  const sorted = [...qualities].sort((a, b) => (toInt(b.level) ?? 0) - (toInt(a.level) ?? 0))
-  const streamDataRaw = String(pullData?.stream_data ?? "")
-  const streamData: Record<string, any> | null =
-    streamDataRaw.trimStart().startsWith("{") ? (safeParseJson(streamDataRaw) ?? null) : null
+  // level 降序(dart: qualities 按 level 从高到低;手写 sort 语义等价 R.sortWith descend)。
+  const sorted = R.sortWith([R.descend((q: Record<string, any>) => toInt(q?.level) ?? 0)], qualities)
+  // stream_data 可能缺失或非 JSON → 走 flv_pull_url 兜底。
+  const streamData = safeParseJson(String(pullData?.stream_data ?? "").trimStart().startsWith("{") ? String(pullData?.stream_data) : "")
 
-  if (streamData) {
-    // 主路径:stream_data JSON → data[sdk_key].main.{flv,hls}(dart:591)。
-    for (const q of sorted) {
-      const sdkKey = String(q?.sdk_key ?? "")
-      const main = (streamData.data?.[sdkKey]?.main ?? {}) as Record<string, any>
-      const flv = String(main?.flv ?? "")
-      const hls = String(main?.hls ?? "")
-      const name = String(q?.name ?? "") || String(q?.sdk_key ?? "")
-      const level = toInt(q?.level) ?? 0
-      if (flv) streams.push({ url: flv, format: "flv", headers: { ...headers, authority: LIVE }, quality: name, rate: level })
-      else if (hls) streams.push({ url: hls, format: "hls", headers, quality: name, rate: level })
-    }
-  } else {
-    // 兜底:stream_data 非 JSON → flv_pull_url / hls_pull_url_map 按 level 索引(dart:563)。
-    const flvList = Object.values((streamUrl?.flv_pull_url ?? {}) as Record<string, string>)
-    const hlsList = Object.values((streamUrl?.hls_pull_url_map ?? {}) as Record<string, string>)
-    for (const q of sorted) {
-      const level = toInt(q?.level) ?? 0
-      const name = String(q?.name ?? "") || String(q?.sdk_key ?? "")
-      const flv = flvList[flvList.length - level] ?? ""
-      const hls = hlsList[hlsList.length - level] ?? ""
-      if (flv) streams.push({ url: flv, format: "flv", headers, quality: name, rate: level })
-      else if (hls) streams.push({ url: hls, format: "hls", headers, quality: name, rate: level })
-    }
-  }
-  return filterPlayable(streams)
+  // 每档 quality → 一条 Stream(flv 优先,hls 兜底)。两条来源路径产出同一 shape:
+  //   主路径:data[sdk_key].main.{flv,hls}(运行时动态键,sdk_key 来自 quality);
+  //   兜底:flv_pull_url / hls_pull_url_map 按 level 索引。
+  const toStreams = streamData
+    ? (q: Record<string, any>): Stream[] => {
+        const main = R.pathOr<Record<string, any>>({}, ["data", String(q?.sdk_key ?? ""), "main"], streamData)
+        const name = String(q?.name ?? "") || String(q?.sdk_key ?? "")
+        const level = toInt(q?.level) ?? 0
+        const flv = String(main?.flv ?? "")
+        const hls = String(main?.hls ?? "")
+        if (flv) return [{ url: flv, format: "flv", headers: { ...headers, authority: LIVE }, quality: name, rate: level }]
+        if (hls) return [{ url: hls, format: "hls", headers, quality: name, rate: level }]
+        return []
+      }
+    : (q: Record<string, any>): Stream[] => {
+        const flvList = Object.values(R.pathOr<Record<string, string>>({}, ["flv_pull_url"], streamUrl))
+        const hlsList = Object.values(R.pathOr<Record<string, string>>({}, ["hls_pull_url_map"], streamUrl))
+        const level = toInt(q?.level) ?? 0
+        const name = String(q?.name ?? "") || String(q?.sdk_key ?? "")
+        const flv = flvList[flvList.length - level] ?? ""
+        const hls = hlsList[hlsList.length - level] ?? ""
+        if (flv) return [{ url: flv, format: "flv", headers, quality: name, rate: level }]
+        if (hls) return [{ url: hls, format: "hls", headers, quality: name, rate: level }]
+        return []
+      }
+
+  return filterPlayable(R.chain(toStreams, sorted))
 }
 
 function safeParseJson(raw: string): Record<string, any> | null {

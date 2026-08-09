@@ -11,6 +11,7 @@
  * 范围:仅本项目产出的 XML。第三方标准阅读器重发的 feed 会丢 `tpl:` 命名空间,
  * 退化为纯 `ArticleItem` 默认态——这是下游信息损失,不是解析器 bug。
  */
+import * as R from "ramda"
 import type { MediaAttachment, MediaAuthor, MediaItem, MediaKind, MediaStream, StreamingFormat } from "../types/media-item.ts"
 import type { LivePlatformId, LiveStatus } from "../types/live.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
@@ -162,8 +163,8 @@ function parseLive(it: ParsedItem, ctx: DeserializeContext): MediaItem {
 function parseMedia(raw: Record<string, unknown>): MediaAttachment[] | undefined {
   const nodes = arr(raw["tpl:media"])
   if (!nodes.length) return undefined
-  return nodes
-    .map((o): MediaAttachment | null => {
+  return R.pipe(
+    R.map((o: Record<string, unknown>): MediaAttachment | null => {
       const kind = str(attr(o, "kind"))
       const url = str(attr(o, "url"))
       if (!kind || !url) return null
@@ -182,13 +183,11 @@ function parseMedia(raw: Record<string, unknown>): MediaAttachment[] | undefined
         isLiveNow: bool(attr(o, "isLiveNow")),
         lang: str(attr(o, "lang")),
       }
-      // strip undefined holes so deep-equal matches the source shape
-      for (const k of Object.keys(att) as (keyof MediaAttachment)[]) {
-        if (att[k] === undefined) delete att[k]
-      }
-      return att
-    })
-    .filter((m): m is MediaAttachment => m !== null)
+      // strip undefined holes so deep-equal matches the source shape(pickBy 替代可变 delete)
+      return R.pickBy((v: unknown) => v !== undefined, att) as MediaAttachment
+    }),
+    R.filter((m: MediaAttachment | null): m is MediaAttachment => m !== null),
+  )(nodes)
 }
 
 function parseImages(node: unknown): string[] | undefined {
@@ -214,12 +213,16 @@ function parseHeaders(node: unknown): Record<string, string> | undefined {
   const o = obj(node)
   const headers = arr(o["tpl:header"])
   if (!headers.length) return undefined
-  const out: Record<string, string> = {}
-  for (const h of headers) {
-    const name = str(attr(h, "name"))
-    const value = text(h)
-    if (name && value !== undefined) out[name] = value
-  }
+  // name 非空才写入(name 为空 = 残缺节点跳过);fold 为 Record,等价原 for + out[name]=value。
+  const out = R.reduce(
+    (acc: Record<string, string>, h: Record<string, unknown>) => {
+      const name = str(attr(h, "name"))
+      const value = text(h)
+      return name && value !== undefined ? { ...acc, [name]: value } : acc
+    },
+    {},
+    headers,
+  )
   return Object.keys(out).length ? out : undefined
 }
 

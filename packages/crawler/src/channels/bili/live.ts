@@ -5,6 +5,7 @@
  * 产单个 Live Item(状态 + 元数据,不含 playUrls——懒解析)。
  * 零登录:wbi 签名 + buvid finger cookie。
  */
+import * as R from "ramda"
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
@@ -151,43 +152,59 @@ function extractBiliLiveQualities(data: Record<string, any>): Array<{ qn: number
     .filter((q) => Number.isFinite(q.qn) && q.qn > 0)
 }
 
+/** 一条可播流 URL(codec.url_info 展开后)。 */
+interface BiliLiveUrl {
+  url: string
+  format: string
+  host: string
+}
+
+/** 取嵌套数组字段,缺省空数组(pathOr 提供类型化默认,免 Array.isArray 样板)。 */
+const pathArr = (path: string[]) => (obj: Record<string, any>): Record<string, any>[] =>
+  R.pathOr<Record<string, any>[]>([], path, obj)
+
 /**
- * 从 getRoomPlayInfo 响应提取可播流。
+ * 从单个 codec 展开 url_info 列表。
+ * **只保留 avc(H.264)流** —— HEVC(minihevc)flv.js/hls.js 都播不了(编码不支持)。
+ * format 由 base_url 后缀推断:.m3u8 和 .fmp4 都是 HLS(fmp4 用 hls.js 可播),.flv 是 HTTP-FLV。
+ * host 空的 url_info 跳过。
+ */
+function codecToUrls(c: Record<string, any>): BiliLiveUrl[] {
+  if (String(c?.codec_name ?? "").toLowerCase() !== "avc") return []
+  const baseUrl = String(c?.base_url ?? "")
+  if (!baseUrl) return []
+  const format = baseUrl.includes(".m3u8") || baseUrl.includes(".fmp4") ? "hls" : baseUrl.includes(".flv") ? "flv" : "live"
+  return R.chain(
+    (ui: Record<string, any>) => {
+      const host = String(ui?.host ?? "")
+      const extra = String(ui?.extra ?? "")
+      return host ? [{ url: `${host}${baseUrl}${extra}`, format, host }] : []
+    },
+    pathArr(["url_info"])(c),
+  )
+}
+
+/**
+ * 从 getRoomPlayInfo 响应提取可播流(函数式)。
  * 结构:data.playurl_info.playurl.stream[] → format[] → codec[],每个 codec 有
  * codec_name(avc=H.264 / hevc=HEVC)、base_url + url_info[](host + extra)。
  *
- * **只保留 avc(H.264)流** —— HEVC(minihevc)flv.js/hls.js 都播不了(编码不支持)。
- * 返回的流里 format 由 base_url 后缀推断(flv / m3u8);hls(fmp4)优先排前。
- * 按 host 排序(scdn/mcdn 排后,保真 CDN 优先)。
+ * 三层 chain 展开(stream→format→codec→url_info,等价原嵌套 for),sortWith 显式双键排序:
+ *   hls(fmp4)优先(对直播延迟/兼容更好) → mcdn/scdn 保真 CDN 优先。
+ * pathOr 消除 Array.isArray 样板;全部无副作用(无可变 push)。
  */
 function parseBiliLiveStreams(data: Record<string, any>): Stream[] {
-  const playUrl = (data?.playurl_info?.playurl ?? {}) as Record<string, any>
-  const streams: Array<Record<string, any>> = Array.isArray(playUrl?.stream) ? playUrl.stream : []
-  const urls: Array<{ url: string; format: string; host: string }> = []
   const headers = { referer: "https://live.bilibili.com/", "user-agent": BILIBILI_UA }
-
-  for (const s of streams) {
-    const formats: Array<Record<string, any>> = Array.isArray(s?.format) ? s.format : []
-    for (const f of formats) {
-      const codecs: Array<Record<string, any>> = Array.isArray(f?.codec) ? f.codec : []
-      for (const c of codecs) {
-        // 只留 H.264(avc);HEVC(hevc/minihevc)浏览器播不了。
-        if (String(c?.codec_name ?? "").toLowerCase() !== "avc") continue
-        const baseUrl = String(c?.base_url ?? "")
-        const urlInfos: Array<Record<string, any>> = Array.isArray(c?.url_info) ? c.url_info : []
-        // format 推断:.m3u8 和 .fmp4 都是 HLS(fmp4 用 hls.js 可播),.flv 是 HTTP-FLV。
-        const format = baseUrl.includes(".m3u8") || baseUrl.includes(".fmp4") ? "hls" : baseUrl.includes(".flv") ? "flv" : "live"
-        for (const ui of urlInfos) {
-          const host = String(ui?.host ?? "")
-          const extra = String(ui?.extra ?? "")
-          if (host && baseUrl) urls.push({ url: `${host}${baseUrl}${extra}`, format, host })
-        }
-      }
-    }
-  }
-
-  urls.sort((a, b) => Number(a.host.includes("mcdn") || a.host.includes("scdn")) - Number(b.host.includes("mcdn") || b.host.includes("scdn")))
-  // hls(fmp4)优先(对直播延迟/兼容更好),再 flv。
-  urls.sort((a, b) => Number(a.format === "flv") - Number(b.format === "flv"))
-  return urls.map((u) => ({ url: u.url, format: u.format, headers }))
+  const urls: BiliLiveUrl[] = R.chain(
+    (s) => R.chain((f) => R.chain(codecToUrls, pathArr(["codec"])(f)), pathArr(["format"])(s)),
+    pathArr(["playurl_info", "playurl", "stream"])(data),
+  )
+  const sorted = R.sortWith(
+    [
+      R.ascend((u: BiliLiveUrl) => (u.format === "flv" ? 1 : 0)),
+      R.ascend((u: BiliLiveUrl) => (u.host.includes("mcdn") || u.host.includes("scdn") ? 1 : 0)),
+    ],
+    urls,
+  )
+  return R.map((u: BiliLiveUrl) => ({ url: u.url, format: u.format, headers }), sorted)
 }

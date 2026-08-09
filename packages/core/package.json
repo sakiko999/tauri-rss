@@ -10,7 +10,11 @@
   "dependencies": {
     "@tauri-playground/crawler": "workspace:*",
     "@tauri-playground/host": "workspace:*",
-    "@tauri-playground/xml": "workspace:*"
+    "@tauri-playground/xml": "workspace:*",
+    "ramda": "^0.32.0"
   },
-  "scripts": {}
+  "scripts": {},
+  "devDependencies": {
+    "@types/ramda": "^0.32.0"
+  }
 }

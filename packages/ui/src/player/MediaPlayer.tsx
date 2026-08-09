@@ -14,6 +14,7 @@
  * 注意:原生 <video>/<audio> 无法带自定义 header(如 bilibili 直链的 referer)。
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
+import * as R from "ramda"
 import { useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { isDashStream, isFlvStream, isHlsStream, useMediaStream } from "./useHls.ts"
@@ -67,12 +68,18 @@ export function MediaPlayer({
   const stream = activeStream ?? defaultStream
 
   // 档位列表:去重同 rate 的 quality 名(服务端返回顺序即档位序)。单流无 quality → 不显示切换。
-  const qualityOptions = streams
-    .filter((s): s is MediaStream & { rate: number; quality: string } => s.rate !== undefined && !!s.quality)
-    .reduce<Array<{ rate: number; quality: string }>>((acc, s) => {
-      if (!acc.some((q) => q.rate === s.rate)) acc.push({ rate: s.rate, quality: s.quality })
-      return acc
-    }, [])
+  // filter 出带 rate/quality 的流 → uniqBy(rate) 去重 → 取 {rate, quality}(手写 reduce 去重消掉)。
+  // R.pipe 内类型守卫收窄不传递(泛型流丢失),改用显式标注的分步。
+  const qualityOptions = R.map(
+    (s: MediaStream & { rate: number; quality: string }) => ({ rate: s.rate, quality: s.quality }),
+    R.uniqBy(
+      (s: MediaStream & { rate: number; quality: string }) => s.rate,
+      R.filter(
+        (s): s is MediaStream & { rate: number; quality: string } => s.rate !== undefined && !!s.quality,
+        streams,
+      ),
+    ),
+  )
   const showQualityBar = qualityOptions.length >= 2
 
   function switchQuality(rate: number) {
