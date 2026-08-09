@@ -224,9 +224,11 @@ export function pickProgressiveVideo(formats: PlayerFormat[]): PlayerFormat | nu
     return true
   }
   const height = (f: PlayerFormat): number => (f.itag ? (getItag(f.itag)?.height ?? 0) : 0)
-  // maxBy 比较严格大于 → height 相同时保留**第一个**(原 for+`>` 语义;sortBy+last 会取最后一个)。
+  // maxBy(height, f, best):f 更高 → f;相等 → best(保留第一个出现的,忠实原 for+`>` 语义)。
+  // ⚠️ 参数顺序关键:maxBy 相等时返回**第二个**参数,所以必须是 (f, best) 而非 (best, f)
+  //   (R.reduce(R.maxBy(height), ...) 里 acc=best 在前 → 相等取新 f,语义反了)。
   return R.reduce<PlayerFormat, PlayerFormat | null>(
-    (best, f) => (best === null || height(f) > height(best) ? f : best),
+    (best, f) => (best === null ? f : R.maxBy(height, f, best)),
     null,
     R.filter(playable, formats),
   )
