@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.9",
     "@tauri-apps/api": "^2",
     "@tauri-playground/core": "workspace:*",
     "@tauri-playground/crawler": "workspace:*",
@@ -18,6 +19,7 @@
     "lucide-react": "^0.468.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-virtuoso": "^4.18.11",
     "tailwind-merge": "^2.5.4",
     "zustand": "^5.0.14"
   },

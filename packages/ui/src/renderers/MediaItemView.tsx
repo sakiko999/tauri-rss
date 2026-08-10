@@ -8,6 +8,7 @@ import { ArticleRenderer } from "./ArticleRenderer.tsx"
 import { VideoRenderer } from "./VideoRenderer.tsx"
 import { AudioRenderer } from "./AudioRenderer.tsx"
 import { LiveRenderer } from "./LiveRenderer.tsx"
+import { SocialRenderer } from "./SocialRenderer.tsx"
 
 export function MediaItemView({ item, ...callbacks }: { item: MediaItem } & RendererCallbacks) {
   switch (item.kind) {
@@ -20,11 +21,6 @@ export function MediaItemView({ item, ...callbacks }: { item: MediaItem } & Rend
     case "live":
       return <LiveRenderer item={item} {...callbacks} />
     case "social":
-      return (
-        <article className="mb-2 rounded-lg border border-zinc-200 p-3">
-          <h3 className="m-0 text-base font-medium">{item.title}</h3>
-          <p className="mt-1 text-sm text-zinc-600">{item.content}</p>
-        </article>
-      )
+      return <SocialRenderer item={item} {...callbacks} />
   }
 }

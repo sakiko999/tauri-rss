@@ -38,6 +38,7 @@ export function useMediaStream({
   videoRef,
   onError,
   autoPlay = true,
+  retryKey = 0,
 }: {
   /** 当前要播的 m3u8/flv 流;null / 非流媒体时 no-op。 */
   stream: MediaStream | null
@@ -45,6 +46,8 @@ export function useMediaStream({
   onError?: (err: unknown) => void
   /** 是否自动播放:true 带声起播(需 unlockAudioPlayback 已解锁),被拦降级静音。 */
   autoPlay?: boolean
+  /** 变化时强制销毁旧实例重建(错误重试)。 */
+  retryKey?: number
 }): void {
   const hlsRef = useRef<Hls | null>(null)
   const flvRef = useRef<flvjs.Player | null>(null)
@@ -259,7 +262,7 @@ export function useMediaStream({
     }
 
     return cleanup
-  }, [stream, videoRef])
+  }, [stream, videoRef, retryKey])
 
   // 组件卸载时兜底销毁(独立 effect,不依赖 stream 状态)。
   useEffect(() => {

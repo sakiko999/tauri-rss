@@ -84,4 +84,13 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     enabled: true,
     info: { roomId: "217952067344" },
   },
+  // social:需登录 cookie(未登录 bili 动态接口返回 code:-101)。core 层
+  // DEFAULT_BILIBILI_COOKIE 经 sourceInfoFor 自动注入,桌面端开箱即用。
+  {
+    id: "s-social-bili-dyn",
+    channelKey: "bili:dynamic",
+    title: "bilibili 动态 · 半佛仙人",
+    enabled: true,
+    info: { uid: "37883317" },
+  },
 ]

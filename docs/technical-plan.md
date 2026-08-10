@@ -252,7 +252,13 @@ ui/
       masonry/          MasonryGrid MediaCard ArticleCard AudioCard LiveCard
       shortvideo/       ShortVideoFeed ShortVideoSlide VideoSlide ImageSlide
                         ArticleSlide AudioSlide SlideProgressBar
-      player/           VideoPlayer useHls AudioPlayer LiveBadge PlayerRegistry
+      player/           MediaPlayer PlayableMedia MediaItemView(renderers)
+                        VideoShell useVideoElement useMediaStream(useHls)
+                        controls/   ← MediaChrome 式独立控件(见下)
+                        MediaPlayButton MediaMuteButton MediaVolumeSlider
+                        MediaTimeRange MediaRateButton MediaQualityButton
+                        MediaFullscreenButton MediaLiveEdgeButton MediaTimeDisplay
+                        PlayerControls(默认组合=media-control-bar)
 ```
 
 ### 三模式实现要点
@@ -294,6 +300,23 @@ interface VideoPlayerHandle {
 - `LEVEL_LOADED.details.live` 判定直播态 → LiveBadge + 无进度条（或 DVR）
 - 音频复用同一 `<video>` 壳，`AudioPlayer` 只换控制条皮肤
 - preload 策略：非激活 slide `preload="metadata"`，激活才全量加载
+
+**实际落地（2026-08，与上述接口对齐的 React 实现）**：
+- `useVideoElement(videoRef, isStreaming)`：单一状态中枢，监听 11 个媒体事件
+  （timeupdate/durationchange/progress/volumechange/ratechange/play/pause/ended/waiting/playing/canplay）
+  → `state{paused,currentTime,duration,buffered,volume,muted,playbackRate,waiting,live}`；
+  暴露 `ops{togglePlay,seek,changeVolume,toggleMute,changeRate,setLiveEdge}`。
+  直播判定：流媒体 duration 无效即 live，原生媒体 `duration===Infinity` 即 live。
+- `VideoShell`：外壳(容器全屏 / 控件自动隐藏 2.5s / 键盘 Space K ←→↑↓ M F Home End 数字 / 
+  点击播放暂停 + 双击全屏 / 缓冲 spinner 400ms 延迟 / 居中大播放键)。
+- **控件 = MediaChrome 式独立组件**（`controls/`，每个窄接口、可自由组合，等价
+  `<media-play-button>`/`<media-time-range>` 等）：MediaPlayButton / MediaMuteButton /
+  MediaVolumeSlider / MediaTimeRange(原 SeekBar:缓冲+悬停+拖拽+键盘) / MediaRateButton(radix 菜单) /
+  MediaQualityButton(radix 档位菜单) / MediaFullscreenButton / MediaLiveEdgeButton /
+  MediaTimeDisplay。`PlayerControls` = 默认组合(等价 `<media-control-bar>`)。
+- **useMediaStream 生命周期**：hls/flv/dash 懒实例 + StrictMode 双挂载安全
+  （unmount effect 销毁实例）+ 锁最高档（`currentLevel=max`，宿主隧道带宽估算失真，
+  ABR 会骤降 144p 永不回升，后续开放用户手动选档）。
 
 ## 数据流边界
 

@@ -5,3 +5,4 @@
 export * from "./client.ts"
 export * from "./channels.ts"
 export * from "./live.ts"
+export * from "./dynamic.ts"

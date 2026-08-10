@@ -121,9 +121,15 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   `MD5(排序参数&wts&mixinKey)`。范式见 `packages/crawler/src/channels/bili/`
   （wbi 签名在 client.ts，channel 在 channels.ts/live.ts）。换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源。
 - 内置 RSS 直链清单在 `packages/crawler/src/channels/rss/builtin.ts`（36 条，按 kind 标注）。
-  desktop 测试订阅在 `apps/desktop/src/subscriptions.ts`（覆盖 article/video/audio/live，
-  含 douyu/bili live/huya/douyin 在播房间）。可用性结论见 `docs/domestic-feed-availability.md`。
-  新源先 curl 验证再并入。
+  desktop 测试订阅在 `apps/desktop/src/subscriptions.ts`（覆盖 article/video/audio/live/social，
+  含 douyu/bili live/huya/douyin 在播房间 + bili:dynamic 半佛仙人）。可用性结论见
+  `docs/domestic-feed-availability.md`。新源先 curl 验证再并入。
+- **bili:dynamic 用户动态 channel**（`packages/crawler/src/channels/bili/dynamic.ts`）：
+  用 RSSHub 同款 `GET /x/polymer/web-dynamic/v1/feed/space?host_mid={uid}`（非 dynamic_new
+  时间线——那个返回关注流,`desc.uid` 不匹配目标用户）。**需登录 cookie**（未登录 code:-101,
+  core 层 DEFAULT 自动注入）。动态类型靠 `modules.module_dynamic.major` 的 opus(图文/专栏)/
+  archive(视频)分支;转发展开 `orig` 被转内容。实测半佛 37883317(转发为主)、
+  DIYgod 2267573(视频为主)。
 - 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/X/小红书
   是硬反爬（puppeteer+登录+代理），个人不部署 RSSHub 碰不了。
 - **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
@@ -131,14 +137,32 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
   编辑该文件 → `git update-index --no-skip-worktree` 再改,勿提交真实值。
 
+## 调研文档（tmp/ 参考仓库）
+
+- **弹幕获取机制**：`docs/danmaku-research.md`。B站视频弹幕 = 零摩擦入口
+  （`bvid→cid→GET /x/v2/dm/web/seg.so?oid&segment_index`,protobuf、6min/段、**匿名可用**）,
+  是弹幕 MVP 首选;直播弹幕全是 WS 长连接(bilibili 16B 大端头+brotli、douyu STT、huya Tars、
+  douyin protobuf+QuickJS 签名),**host 层目前只有 HTTP 是缺口**。proto `progress` 是毫秒,
+  XML 弹幕是秒,与 currentTime(秒)换算勿混淆。
+- **Folo 架构**:`docs/folo-architecture-research.md`。分组=subscriptions 表 `category` 字符串
+  + 按 siteUrl 域名自动归类;`Transaction` 四段式乐观更新(store→request→rollback→persist)
+  最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;
+  iframe 嵌入播放差于我们 hls/flv/dash 直链解析,不抄。
+
 ## 下一步 Todo（阶段性任务）
 
 ### Demo 必选（按建议顺序）
 
 **1. 媒体播放闭环（demo 差异化价值）**
 - `packages/ui/src/player/` 已落地：`useMediaStream`（hls.js/flv.js/dash.js 生命周期）+
-  `MediaPlayer`（按 format 选流分发 + 多档位切换条）+ `PlayableMedia`（懒解析+播放），
-  video/audio/live 共用
+  `MediaPlayer`（按 format 选流分发）+ `PlayableMedia`（懒解析+播放），video/audio/live 共用。
+  **控件是 MediaChrome 式独立组件**（`controls/`,窄接口 `{state, ops}`、可自由组合）:
+  `MediaPlayButton`/`MediaMuteButton`/`MediaVolumeSlider`/`MediaTimeRange`/`MediaRateButton`/
+  `MediaQualityButton`/`MediaFullscreenButton`/`MediaLiveEdgeButton`/`MediaTimeDisplay`;
+  `PlayerControls` 是默认组合（等价 `<media-control-bar>`）,`VideoShell` 外壳管
+  自动隐藏/键盘快捷键/全屏/缓冲/点击播放暂停。状态中枢 `useVideoElement`
+  （监听 11 媒体事件 → state + ops）。倍速/档位菜单用 **radix primitive**
+  （ui 包装全量 26 个,desktop 只留 dialog）
 - ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
   huya 直播（flv.js HTTP-FLV）、douyin 直播（flv.js HTTP-FLV,5 档）、bilibili 视频
   （dash.js 双 SourceBuffer,DASH 1080P 有声）、YouTube 视频（原生 mp4 直链）、
@@ -179,7 +203,8 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 **2. 订阅管理 UI（已完成）**
 - ✅ `apps/desktop/src/components/AddFeedDialog.tsx`：`listChannels()` 选渠道 →
   按 `sourceInfoTpl` 动态渲染参数字段;有 `defaultInfo` 的 channel 一键订阅。
-  走 `useDesktop.addSubscription`（dl.subscriptions.add + refresh）
+  走 `useDesktop.addSubscription`（dl.subscriptions.add + refresh）。已换 **radix Dialog**
+  （焦点陷阱/ESC/ARIA）替代裸 div modal
 - ✅ 三栏阅读器已落地（参考 `tmp/rss-reader`）：Sidebar（订阅树/分组/smart feeds/
   kind tab,含 dark 切换）+ 中栏按 kind 分发（article → ArticleList+ArticleDetail 两栏,
   video/audio/live/social → MediaList 卡片）+ AddFeedDialog

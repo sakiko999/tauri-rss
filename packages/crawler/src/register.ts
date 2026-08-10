@@ -12,6 +12,7 @@ import {
   BiliWeeklyChannel,
   BiliUserVideoChannel,
   BiliLiveChannel,
+  BiliDynamicChannel,
 } from "./channels/bili/index.ts"
 import { YoutubeChannel } from "./channels/youtube/index.ts"
 import { HuyaLiveChannel } from "./channels/huya/index.ts"
@@ -36,6 +37,7 @@ export function registerBuiltinChannels(): void {
   registerChannel(new BiliWeeklyChannel())
   registerChannel(new BiliUserVideoChannel())
   registerChannel(new BiliLiveChannel())
+  registerChannel(new BiliDynamicChannel())
 
   // ── YouTube(官方 RSS)──
   registerChannel(new YoutubeChannel())

@@ -43,9 +43,9 @@ export function FeedTree({
           <div key={node.id}>
             <div
               className={cn(
-                "flex items-center gap-2 px-2 py-1 rounded-md cursor-pointer text-sm",
+                "group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-colors",
                 "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                active && "bg-sidebar-accent text-sidebar-accent-foreground",
+                active && "bg-sidebar-accent text-sidebar-accent-foreground font-medium",
               )}
               style={{ paddingLeft: `${8 + level * 16}px` }}
               onClick={() => {

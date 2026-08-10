@@ -9,6 +9,7 @@ export { ArticleRenderer } from "./renderers/ArticleRenderer.tsx"
 export { VideoRenderer } from "./renderers/VideoRenderer.tsx"
 export { AudioRenderer } from "./renderers/AudioRenderer.tsx"
 export { LiveRenderer } from "./renderers/LiveRenderer.tsx"
+export { SocialRenderer } from "./renderers/SocialRenderer.tsx"
 export type { RendererCallbacks } from "./renderers/types.ts"
 
 // ── 播放组件(video/audio/live 共用)─────────────────────────────

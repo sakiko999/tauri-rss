@@ -4,6 +4,7 @@
  * 数据来自 useDesktop.items(已按选中节点 + activeTab 聚合),过滤 article kind。
  * 行:未读圆点 + 图标 + 标题/摘要/来源·时间。点击选中 → 右栏 ArticleDetail。
  */
+import { Virtuoso } from "react-virtuoso"
 import type { ArticleItem } from "@tauri-playground/core"
 import { Rss } from "lucide-react"
 import { cn } from "../lib/cn.ts"
@@ -95,20 +96,22 @@ export function ArticleList() {
         </div>
       </div>
 
-      {/* 列表 */}
-      <div className="flex-1 overflow-y-auto">
-        {articles.length === 0 && (
-          <p className="p-4 text-sm text-muted-foreground">暂无文章</p>
-        )}
-        {articles.map((a) => (
-          <ArticleRow
-            key={a.id}
-            item={a}
-            selected={a.id === selectedArticleId}
-            onClick={() => selectArticle(a.id)}
-          />
-        ))}
-      </div>
+      {/* 列表:Virtuoso 虚拟化(文章是长列表,只渲染可见区) */}
+      {articles.length === 0 ? (
+        <p className="p-4 text-sm text-muted-foreground">暂无文章</p>
+      ) : (
+        <Virtuoso
+          className="flex-1"
+          data={articles}
+          itemContent={(_, a) => (
+            <ArticleRow
+              item={a}
+              selected={a.id === selectedArticleId}
+              onClick={() => selectArticle(a.id)}
+            />
+          )}
+        />
+      )}
     </div>
   )
 }

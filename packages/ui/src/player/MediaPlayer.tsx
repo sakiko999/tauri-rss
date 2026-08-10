@@ -15,9 +15,10 @@
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
 import * as R from "ramda"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { isDashStream, isFlvStream, isHlsStream, useMediaStream } from "./useHls.ts"
+import { VideoShell } from "./VideoShell.tsx"
 
 /** 渐进式视频(mp4/webm/ogg)→ 原生 <video>。 */
 function isProgressiveVideo(stream: MediaStream): boolean {
@@ -51,6 +52,7 @@ export function MediaPlayer({
   onError?: (err: unknown) => void
 }) {
   const [error, setError] = useState<unknown>(null)
+  const [retryKey, setRetryKey] = useState(0)
   // 多档位直播(douyu 等):用户切档后的目标档流。null = 用默认选流逻辑。
   // 切档不重发请求——resolveLivePlay 已返回全档位,从 streams 里按 rate 换流即可
   // (签名带 expiry,会话内够用;过期由 PlayableMedia 重新 resolve)。
@@ -82,13 +84,13 @@ export function MediaPlayer({
   )
   const showQualityBar = qualityOptions.length >= 2
 
-  function switchQuality(rate: number) {
+  const switchQuality = useCallback((rate: number) => {
     const target = streams.find((s) => s.rate === rate)
     if (!target) return
     setError(null)
     // 换流:useMediaStream 的 effect 依赖 stream,变化自动销毁旧 hls/flv 实例重建。
     setActiveStream(target)
-  }
+  }, [streams])
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const needsStreamPlayer = !!stream && (isHlsStream(stream) || isFlvStream(stream) || isDashStream(stream))
@@ -110,6 +112,8 @@ export function MediaPlayer({
     stream: needsStreamPlayer ? stream : null,
     videoRef,
     autoPlay,
+    // retryKey 变化强制 useMediaStream 重建播放实例(错误重试)。
+    retryKey,
     onError: (e) => {
       setError(e)
       onError?.(e)
@@ -142,8 +146,18 @@ export function MediaPlayer({
 
   if (error) {
     return (
-      <div className="rounded border border-red-300 p-4 text-center text-sm text-red-600">
-        播放失败:{error instanceof Error ? error.message : String(error)}
+      <div className="space-y-2 rounded border border-red-300 p-4 text-center text-sm text-red-600">
+        <p>播放失败:{error instanceof Error ? error.message : String(error)}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setError(null)
+            setRetryKey((k) => k + 1)
+          }}
+          className="rounded border border-red-300 px-3 py-1 text-xs hover:bg-red-50"
+        >
+          重试
+        </button>
       </div>
     )
   }
@@ -189,17 +203,26 @@ export function MediaPlayer({
     </div>
   ) : null
 
-  if (isProgressiveVideo(stream)) {
+  // 渐进式视频 / HLS / FLV / DASH → 统一用 VideoShell 外壳(自定义控件)。
+  if (isProgressiveVideo(stream) || needsStreamPlayer) {
     return (
       <div className="space-y-1">
-        {qualityBar}
         {headerHint}
-        {/* autoPlay 由上方 effect 处理:先带声 play(),被拦降级静音。 */}
-        <video ref={videoRef} src={stream.url} controls preload="none" className={mediaClass} />
+        <VideoShell
+          videoRef={videoRef}
+          isStreaming={needsStreamPlayer}
+          src={isProgressiveVideo(stream) ? stream.url : undefined}
+          autoPlay={autoPlay}
+          qualityOptions={qualityOptions}
+          activeQuality={stream.rate}
+          onQuality={switchQuality}
+          className="aspect-video"
+        />
       </div>
     )
   }
 
+  // 渐进式音频(mp3/aac)→ 原生 <audio>,保留浏览器控件(音频无画面,外壳不适用)。
   if (isProgressiveAudio(stream)) {
     return (
       <div className="space-y-1">
@@ -217,10 +240,9 @@ export function MediaPlayer({
     )
   }
 
-  // HLS / FLV → useMediaStream 已挂载(hls.js / flv.js)。preload 交给 MSE 库控制。
+  // 未知流类型:兜底原生 <video>。
   return (
     <div className="space-y-1">
-      {qualityBar}
       <video ref={videoRef} controls autoPlay={autoPlay} className={mediaClass} />
     </div>
   )

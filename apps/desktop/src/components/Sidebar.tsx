@@ -145,7 +145,7 @@ export function Sidebar() {
         </div>
 
         {/* ── Content Tabs(kind 过滤) ── */}
-        <div className="flex items-center justify-around px-1 py-2 border-b border-sidebar-border shrink-0">
+        <div className="flex items-center justify-around px-1 pt-1.5 pb-0 border-b border-sidebar-border shrink-0">
           {TABS.map((tab) => {
             const Icon = tab.icon
             const active = activeTab === tab.id
@@ -154,13 +154,20 @@ export function Sidebar() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 p-1.5 rounded-md transition-colors",
-                  active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 hover:text-sidebar-foreground",
+                  "relative flex flex-col items-center gap-1 pb-2 pt-1.5 rounded-md transition-colors",
+                  active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 hover:text-sidebar-foreground/80",
                 )}
                 title={tab.label}
               >
                 <Icon className="h-5 w-5" />
                 <span className="text-[10px] leading-none">{counts[tab.id] || ""}</span>
+                {/* 激活指示条:当前 kind 的「位置」信号 */}
+                <span
+                  className={cn(
+                    "absolute bottom-0 left-1/2 -translate-x-1/2 h-0.5 rounded-full transition-all",
+                    active ? "w-6 bg-sidebar-primary" : "w-0",
+                  )}
+                />
               </button>
             )
           })}
