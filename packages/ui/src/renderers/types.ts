@@ -14,4 +14,6 @@ export interface RendererCallbacks {
   onResolvePlay?: (itemId: string) => Promise<MediaStream[]>
   /** 懒解析 live 可播流(播放时调用;绑定 DataLayer.resolveLivePlay)。 */
   onResolveLivePlay?: (roomId: string) => Promise<MediaStream[]>
+  /** 打开模态大播放器(有则播放入口改为「大屏」,不再内嵌小播放器)。 */
+  onPlayBig?: () => void
 }

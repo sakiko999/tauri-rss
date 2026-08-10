@@ -11,11 +11,13 @@
  *
  * 依赖 react-virtuoso(virtualized list/grid 一体化)。
  */
-import { forwardRef } from "react"
+import { forwardRef, useState } from "react"
 import { VirtuosoGrid, type GridComponents } from "react-virtuoso"
+import type { MediaItem } from "@tauri-playground/core"
 import { MediaItemView } from "@tauri-playground/ui"
 import { cn } from "../lib/cn.ts"
 import { isSmartFeed, useDesktop } from "../store.ts"
+import { ExpandedPlayer } from "./ExpandedPlayer.tsx"
 
 /** VirtuosoGrid 需要把「滚动容器 + 网格容器」都显式交给它(它不渲染外层布局)。 */
 const gridComponents: GridComponents = {
@@ -53,6 +55,10 @@ export function MediaList({ className }: { className?: string }) {
 
   const selectedIsSub = !!selectedNodeId && !isSmartFeed(selectedNodeId)
 
+  // 模态大播放器:展开的视频/直播条目。按 item 快照(展开后列表可能刷新,用当时的
+  // resolve 绑定不失效——resolvePlay/resolveLivePlay 是 store 稳定函数)。
+  const [expandedItem, setExpandedItem] = useState<MediaItem | null>(null)
+
   const renderItem = (item: (typeof items)[number]) => (
     <MediaItemView
       key={item.id}
@@ -62,6 +68,7 @@ export function MediaList({ className }: { className?: string }) {
       onToggleStar={toggleStar}
       onResolvePlay={(itemId) => resolvePlay(item.subscriptionId, itemId)}
       onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
+      onPlayBig={() => setExpandedItem(item)}
     />
   )
 
@@ -96,6 +103,16 @@ export function MediaList({ className }: { className?: string }) {
           totalCount={items.length}
           components={gridComponents}
           itemContent={(index) => renderItem(items[index])}
+        />
+      )}
+
+      {/* 模态大播放器:点击「大屏播放」打开。闭包绑定当时的 item + resolve。 */}
+      {expandedItem && (
+        <ExpandedPlayer
+          item={expandedItem}
+          resolvePlay={(itemId) => resolvePlay(expandedItem.subscriptionId, itemId)}
+          resolveLivePlay={(roomId) => resolveLivePlay(expandedItem.subscriptionId, roomId)}
+          onClose={() => setExpandedItem(null)}
         />
       )}
     </main>

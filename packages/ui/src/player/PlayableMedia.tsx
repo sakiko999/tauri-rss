@@ -6,7 +6,7 @@
  *   - 无流 → 显示「播放」按钮,点击调 `resolve()` 拿 MediaStream[] 再播。
  *   resolve 由宿主(App 层)注入——它绑定 DataLayer 的 resolvePlay/resolveLivePlay。
  */
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { MediaPlayer } from "./MediaPlayer.tsx"
 
@@ -41,6 +41,7 @@ export function PlayableMedia({
   resolve,
   className,
   onError,
+  autoResolve = false,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -48,10 +49,14 @@ export function PlayableMedia({
   resolve?: () => Promise<MediaStream[]>
   className?: string
   onError?: (err: unknown) => void
+  /** 挂载后立即懒解析起播(模态大播放器用,无需点按钮)。 */
+  autoResolve?: boolean
 }) {
   const [resolved, setResolved] = useState<MediaStream[] | null>(null)
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  const resolveRef = useRef(resolve)
+  resolveRef.current = resolve
 
   // 最终播放用的流:初始流或懒解析结果。
   const playStreams = resolved ?? streams ?? []
@@ -74,6 +79,17 @@ export function PlayableMedia({
       setResolving(false)
     }
   }
+
+  // 模态大播放器:挂载即自动懒解析起播(用户点「大屏」按钮时已在手势内,无需再点「播放」)。
+  // 用 ref 持 resolve,effect 只跑一次(StrictMode 双挂载幂等:第二次挂载 resolved 已非空直接播)。
+  const startedRef = useRef(false)
+  useEffect(() => {
+    if (!autoResolve) return
+    if (startedRef.current || resolved) return
+    startedRef.current = true
+    void handlePlay()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoResolve])
 
   if (error) {
     return (

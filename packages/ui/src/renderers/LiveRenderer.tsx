@@ -19,6 +19,7 @@ export function LiveRenderer({
   onToggleRead,
   onToggleStar,
   onResolveLivePlay,
+  onPlayBig,
 }: { item: LiveItem } & RendererCallbacks) {
   const isLive = item.liveStatus === "live"
   return (
@@ -51,10 +52,24 @@ export function LiveRenderer({
             {item.online !== undefined && <span>在线 {item.online}</span>}
           </div>
           {item.introduction && <p className="mt-2 text-sm text-zinc-600">{item.introduction}</p>}
-          {/* 内嵌播放:直播流懒解析(roomId);未开播时 resolve 可能返回空 */}
-          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-            <PlayableMedia resolve={onResolveLivePlay ? () => onResolveLivePlay!(item.roomId) : undefined} />
-          </div>
+          {/* 播放入口:宿主提供 onPlayBig → 大屏模态(不内嵌小播放器);否则内嵌播放 */}
+          {onPlayBig ? (
+            <div className="mt-2 flex gap-2">
+              <button
+                className="rounded bg-zinc-900 px-3 py-1 text-sm text-white hover:bg-zinc-700"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onPlayBig()
+                }}
+              >
+                ▶ 大屏播放
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+              <PlayableMedia resolve={onResolveLivePlay ? () => onResolveLivePlay!(item.roomId) : undefined} />
+            </div>
+          )}
           <div className="mt-2 flex gap-2">
             <button
               className="rounded border border-zinc-300 px-2 py-0.5 text-sm hover:bg-zinc-100"

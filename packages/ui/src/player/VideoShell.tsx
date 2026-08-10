@@ -38,6 +38,7 @@ export function VideoShell({
   qualityOptions,
   activeQuality,
   onQuality,
+  title,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   /** 是否由 useMediaStream(hls/flv/dash)驱动(决定直播判定)。 */
@@ -50,6 +51,8 @@ export function VideoShell({
   qualityOptions: { rate: number; quality: string }[]
   activeQuality?: number
   onQuality: (rate: number) => void
+  /** 悬停提示(如 referer 提示),挂容器 title。 */
+  title?: string
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { state, ops } = useVideoElement(videoRef, isStreaming)
@@ -248,7 +251,12 @@ export function VideoShell({
       className={[
         "group relative flex items-center justify-center overflow-hidden bg-black outline-none",
         fullscreenState.isFullscreen ? "h-full w-full" : "rounded",
+        // 默认 16:9 撑开比例:video 加载中无元数据(宽高 0)时容器也不塌成扁黑条。
+        // 调用方可传 className 覆盖(如自定义比例)。min-h 兜底 aspect-ratio 失效的环境。
+        fullscreenState.isFullscreen ? "" : "aspect-video min-h-48",
+        className,
       ].join(" ")}
+      title={title}
     >
       <video ref={videoRef} className={mediaClass} playsInline preload="auto" />
 

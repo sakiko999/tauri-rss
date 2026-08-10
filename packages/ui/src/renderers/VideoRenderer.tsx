@@ -23,6 +23,7 @@ export function VideoRenderer({
   onToggleRead,
   onToggleStar,
   onResolvePlay,
+  onPlayBig,
 }: { item: VideoItem } & RendererCallbacks) {
   return (
     <article
@@ -50,13 +51,27 @@ export function VideoRenderer({
             {item.publishedAt && <span>{new Date(item.publishedAt).toLocaleDateString()}</span>}
           </div>
           {item.summary && <p className="mt-2 text-sm text-zinc-600">{item.summary}</p>}
-          {/* 内嵌播放:有初始流直接播;否则点击懒解析 */}
-          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-            <PlayableMedia
-              streams={item.stream ? [item.stream] : undefined}
-              resolve={onResolvePlay ? () => onResolvePlay!(item.id) : undefined}
-            />
-          </div>
+          {/* 播放入口:宿主提供 onPlayBig → 大屏模态(不内嵌小播放器);否则内嵌播放 */}
+          {onPlayBig ? (
+            <div className="mt-2 flex gap-2">
+              <button
+                className="rounded bg-zinc-900 px-3 py-1 text-sm text-white hover:bg-zinc-700"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onPlayBig()
+                }}
+              >
+                ▶ 大屏播放
+              </button>
+            </div>
+          ) : (
+            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+              <PlayableMedia
+                streams={item.stream ? [item.stream] : undefined}
+                resolve={onResolvePlay ? () => onResolvePlay!(item.id) : undefined}
+              />
+            </div>
+          )}
           <div className="mt-2 flex gap-2">
             <button
               className="rounded border border-zinc-300 px-2 py-0.5 text-sm hover:bg-zinc-100"

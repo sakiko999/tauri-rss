@@ -171,13 +171,11 @@ export function MediaPlayer({
     )
   }
 
-  // 原生 <video> 带 headers 时提示可能需 referer。
-  const headerHint = stream.headers ? (
-    <p className="text-xs text-zinc-400">该直链可能需要 referer 头,若播放失败请用浏览器打开</p>
-  ) : null
-
   // 媒体元素默认全宽 + 黑底。
   const mediaClass = ["w-full", "rounded", "bg-black", className].filter(Boolean).join(" ")
+  // 带 referer 头的渐进式 mp4 原生播可能被 CDN 拒(浏览器无法带自定义 header)。
+  // 作为 title 提示挂外壳,不进流式布局(避免与 video 并列占行)。
+  const headerHintTitle = stream.headers ? "该直链可能需要 referer 头,若播放失败请用浏览器打开" : undefined
 
   // 多档位切换条(直播多清晰度,douyu 等)。当前档高亮,点击切档(已有全档位流,直接换)。
   const qualityBar = showQualityBar ? (
@@ -207,7 +205,6 @@ export function MediaPlayer({
   if (isProgressiveVideo(stream) || needsStreamPlayer) {
     return (
       <div className="space-y-1">
-        {headerHint}
         <VideoShell
           videoRef={videoRef}
           isStreaming={needsStreamPlayer}
@@ -217,6 +214,7 @@ export function MediaPlayer({
           activeQuality={stream.rate}
           onQuality={switchQuality}
           className="aspect-video"
+          title={headerHintTitle}
         />
       </div>
     )
@@ -227,7 +225,6 @@ export function MediaPlayer({
     return (
       <div className="space-y-1">
         {qualityBar}
-        {headerHint}
         <audio
           src={stream.url}
           controls
