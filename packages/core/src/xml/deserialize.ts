@@ -12,7 +12,7 @@
  * 退化为纯 `ArticleItem` 默认态——这是下游信息损失,不是解析器 bug。
  */
 import * as R from "ramda"
-import type { MediaAttachment, MediaAuthor, MediaItem, MediaKind, MediaStream, StreamingFormat } from "../types/media-item.ts"
+import type { MediaAttachment, MediaAuthor, MediaItem, MediaKind, MediaStream, SocialImage, StreamingFormat } from "../types/media-item.ts"
 import type { LivePlatformId, LiveStatus } from "../types/live.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
 
@@ -190,11 +190,23 @@ function parseMedia(raw: Record<string, unknown>): MediaAttachment[] | undefined
   )(nodes)
 }
 
-function parseImages(node: unknown): string[] | undefined {
+function parseImages(node: unknown): SocialImage[] | undefined {
   const o = obj(node)
   const imgs = asList(o["tpl:image"])
-    .map((x) => text(x))
-    .filter((v): v is string => !!v)
+    .map((x) => {
+      // 兼容两种协议:纯文本 URL(旧) / 带 @_url @_width @_height 属性对象(新)。
+      if (typeof x === "string") return { url: x }
+      const o2 = typeof x === "object" ? (x as Record<string, unknown>) : {}
+      const url = str(attr(o2, "url"))
+      if (!url) return null
+      const w = num(attr(o2, "width"))
+      const h = num(attr(o2, "height"))
+      const img: SocialImage = { url }
+      if (w !== undefined) img.width = w
+      if (h !== undefined) img.height = h
+      return img
+    })
+    .filter((v): v is SocialImage => v !== null)
   return imgs.length ? imgs : undefined
 }
 

@@ -112,7 +112,21 @@ function setKindTpl(tree: Record<string, unknown>, item: Item): void {
       break
     }
     case "social": {
-      if (item.images?.length) tree["tpl:images"] = { "tpl:image": item.images }
+      if (item.images?.length) {
+        // 每张图:纯 URL → 文本;带尺寸 → 属性对象(瀑布流需要宽高)。
+        // 统一输出对象(URL 也转 @_url),parse 侧兼容纯文本旧数据。
+        tree["tpl:images"] = {
+          "tpl:image": item.images.map((img) =>
+            typeof img === "string"
+              ? { "@_url": img }
+              : {
+                  "@_url": img.url,
+                  ...(img.width !== undefined ? { "@_width": String(img.width) } : {}),
+                  ...(img.height !== undefined ? { "@_height": String(img.height) } : {}),
+                },
+          ),
+        }
+      }
       if (item.likes !== undefined) setTpl(tree, "likes", String(item.likes))
       if (item.reposts !== undefined) setTpl(tree, "reposts", String(item.reposts))
       if (item.replies !== undefined) setTpl(tree, "replies", String(item.replies))

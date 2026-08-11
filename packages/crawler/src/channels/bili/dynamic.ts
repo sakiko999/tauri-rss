@@ -16,12 +16,13 @@
  *   - DYNAMIC_TYPE_ARTICLE(专栏):major.opus.jump_url(cv 号)
  * 统一映射成 Social(content + images + likes/reposts/replies),链接指向 t.bilibili.com/{id_str}。
  */
-import type { Item, Social } from "@tauri-playground/xml"
+import type { Item, Social, SocialImage } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { createBilibiliClient } from "./client.ts"
+import { fetchImageSize } from "../../utils/img-size.ts"
 
 const API = "https://api.bilibili.com"
 
@@ -33,7 +34,8 @@ interface DynModule {
       type?: string
       opus?: {
         summary?: { text?: string }
-        pics?: Array<{ url?: string }>
+        /** 图文动态图片:B站 API 自带宽高,直接透传给瀑布流。 */
+        pics?: Array<{ url?: string; width?: number; height?: number }>
         jump_url?: string
       }
       archive?: { title?: string; cover?: string; desc?: string; duration_text?: string }
@@ -47,8 +49,12 @@ interface DynItem {
   id_str?: string
   type?: string
   modules?: DynModule
-  /** 转发动态的被转内容(原动态的完整 modules)。 */
-  orig?: DynModule
+  /**
+   * 转发动态的被转内容。**注意:是完整的 DynItem 结构**(有 id_str/type/modules/orig),
+   * 不是 DynModule——module_dynamic 在 `orig.modules.module_dynamic` 下。
+   * 实测被转内容通常是 opus(图文/专栏)或 archive(视频)。
+   */
+  orig?: DynItem
 }
 
 /** http 封面升 https(bilibili 混用 http,浏览器混载会报错)。 */
@@ -57,27 +63,33 @@ function httpsUrl(u: string): string {
 }
 
 /** 单个动态模块 → 可渲染字段。按 major 结构(opus/archive)分支,major.type 只是形态标签。 */
-function parseModule(d: DynModule): { content: string; images: string[]; likes: number; title: string } {
+function parseModule(d: DynModule): { content: string; images: SocialImage[]; likes: number; title: string } {
   const dyn = d.module_dynamic
   const desc = dyn?.desc?.text ?? ""
   const major = dyn?.major
   const opus = major?.opus
   const archive = major?.archive
   let content = desc
-  const images: string[] = []
+  const images: SocialImage[] = []
   let title = ""
 
-  // 图文动态/专栏:major.opus → 图片 + summary。专栏标题用 cv 号。
+  // 图文动态/专栏:major.opus → 图片(带 API 宽高)+ summary。专栏标题用 cv 号。
   if (opus) {
     const pics = opus.pics ?? []
-    for (const p of pics) if (p?.url) images.push(httpsUrl(p.url))
+    for (const p of pics) {
+      if (!p?.url) continue
+      const img: SocialImage = { url: httpsUrl(p.url) }
+      if (p.width) img.width = p.width
+      if (p.height) img.height = p.height
+      images.push(img)
+    }
     if (opus.summary?.text) content = `${content}\n${opus.summary.text}`.trim()
     title = opus.jump_url?.match(/cv(\d+)/)?.[0] ?? ""
   }
   // 视频动态:major.archive → 标题 + 封面。desc 为空时正文用标题。
   if (archive) {
     title = archive.title ?? ""
-    if (archive.cover) images.push(httpsUrl(archive.cover))
+    if (archive.cover) images.push({ url: httpsUrl(archive.cover) })
     if (!content) content = archive.desc ?? ""
   }
 
@@ -86,13 +98,14 @@ function parseModule(d: DynModule): { content: string; images: string[]; likes: 
 }
 
 /** 动态 + 被转内容(orig)→ 完整社交字段(正文含转发来源,图含被转图)。 */
-function parseItem(it: DynItem): { content: string; images: string[]; likes: number; title: string } {
+function parseItem(it: DynItem): { content: string; images: SocialImage[]; likes: number; title: string } {
   const mods = it?.modules ?? {}
   const parsed = parseModule(mods)
   // 转发动态:正文拼上被转内容来源(「//转发自: @name: title/desc」,RSSHub 同款)。
-  if (it?.orig) {
-    const origin = parseModule(it.orig)
-    const originName = it.orig.module_author?.name
+  if (it?.orig?.modules) {
+    // orig 是完整 DynItem,module_dynamic 在 orig.modules.module_dynamic 下。
+    const origin = parseModule(it.orig.modules)
+    const originName = it.orig.modules.module_author?.name
     const parts: string[] = []
     if (originName) parts.push(`//转发自: @${originName}:`)
     if (origin.title) parts.push(origin.title)
@@ -126,11 +139,29 @@ export class BiliDynamicChannel implements RssChannel {
     )
     const items = data?.data?.items ?? []
     const t = now()
-    return items.map((it): Social => {
+    // 先一次性 parse 全部(缓存结果,map 时复用)——兜底 fill 尺寸的必须是同一个对象,
+    // 否则 fill 完再 map 又 parse 一次生成新对象,宽高丢失。
+    const parsedItems = items.map((it) => parseItem(it))
+    // 补全缺宽高的图(archive 封面等):Range 预取文件头。失败静默(UI 退化默认比例)。
+    // 仅当存在缺宽高的图才发请求,避免每条动态都网络预取。
+    const needsSize = (img: SocialImage) => !img.width || !img.height
+    await Promise.all(
+      parsedItems.flatMap((p) => {
+        const missing = p.images.filter(needsSize)
+        return missing.map(async (img) => {
+          const size = await fetchImageSize(img.url)
+          if (size) {
+            img.width = size.width
+            img.height = size.height
+          }
+        })
+      }),
+    )
+    return items.map((it, i): Social => {
       const idStr = it?.id_str ?? ""
       const mods = it?.modules
       const author = mods?.module_author
-      const parsed = parseItem(it)
+      const parsed = parsedItems[i]!
       return {
         id: `bili-dyn-${idStr}`,
         sourceId: "bili:dynamic",

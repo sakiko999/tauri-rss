@@ -19,6 +19,7 @@ export type {
   Base,
   Article,
   Social,
+  SocialImage,
   Video,
   Audio,
   LiveStatus,

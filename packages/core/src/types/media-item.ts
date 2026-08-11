@@ -13,6 +13,13 @@ import type { LivePlatformId, LiveStatus } from "./live.ts"
 /** 渲染层认识的媒体种类。 */
 export type MediaKind = "article" | "social" | "video" | "audio" | "live"
 
+/** 社交图片,带可选宽高(瀑布流 span 用)。宽高未知时省略,UI 退化默认比例。 */
+export interface SocialImage {
+  url: string
+  width?: number
+  height?: number
+}
+
 /** 与条目关联的作者/账号(文章署名、视频频道等)。 */
 export interface MediaAuthor {
   name: string
@@ -71,7 +78,8 @@ export interface ArticleItem extends MediaItemBase {
 export interface SocialItem extends MediaItemBase {
   kind: "social"
   content: string
-  images?: string[]
+  /** 图片列表(可带宽高,瀑布流 span 用;宽高未知时退化默认比例)。 */
+  images?: SocialImage[]
   likes?: number
   reposts?: number
   replies?: number
