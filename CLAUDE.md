@@ -113,6 +113,16 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - Rust 增量编译偶尔报 `拒绝访问 os error 5`，是无害警告，忽略。
 - Tauri dev 的 `devUrl` 是 `http://localhost:1420`，脚本并行启动 Vite dev server + tauri dev。
 - `apps/src-tauri/tauri.conf.json` 是桌面配置，`tauri.conf.mobile.json` 是移动端。
+- **WebView 自动播放(带声)默认放行**(wry `WebViewAttributes.autoplay=true`):Windows
+  加 `--autoplay-policy=no-user-gesture-required`、macOS `setMediaTypesRequiring
+  UserActionForPlayback:0`、Linux WebKitGTK `AutoplayPolicy::Allow`、Android
+  `setMediaPlaybackRequiresUserGesture(false)`。⚠️ **实测存疑**:此前所有播放
+  都是静音(唯一有声的是走流媒体库 hls/flv/dash 的源),说明该「默认无手势配置」
+  **未必真的生效**——`unlockAudioPlayback()`(AudioContext.resume)也未解决问题。
+  player 层实际修复是:原生 mp4 分支「src 刚设立即 play」媒体未加载致降级静音
+  → 改等 `canplay` 再带声(与 hls/flv 分支对称),已解决。⚠️ **坑**:desktop 若
+  自定义 `additionalBrowserArgs`(Windows)会**覆盖** wry 默认 browser args,必须
+  显式带上 `--autoplay-policy=no-user-gesture-required`,否则带声播放回归静音。
 
 ## 测试数据源（RSSHub 摘录 + bilibili 复刻）
 

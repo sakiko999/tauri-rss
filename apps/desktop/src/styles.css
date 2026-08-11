@@ -125,29 +125,9 @@ body {
   overscroll-behavior: none;
 }
 
-/* ── 自定义滚动条(明暗自适配,不占内容区) ──
- * 默认滚动条在暗色下刺眼、且占内容宽度。改为细窄 overlay 滚动条:
- *   - ::-webkit-scrollbar 8px,滑块圆角,半透明(用 currentColor 的 muted 语义色)
- *   - 始终可见但极淡,悬停加深
- * WebKit/Blink(WebView2/Tauri 默认)生效;Firefox 走 scrollbar-width 兜底。 */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  border-radius: 9999px;
-  background: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
-}
-::-webkit-scrollbar-corner {
-  background: transparent;
-}
-* {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 40%, transparent) transparent;
-}
+/* ── 滚动条:交给 tauri.conf 的 scrollBarStyle: "fluentOverlay"(native,不占内容区) ──
+ * fluentOverlay 是 WebView2 原生 Fluent 滚动条(native 层绘制),悬浮、不占位,
+ * 不受 Windows「始终显示/自动隐藏」系统设置影响。⚠️ 它是 native 渲染,不是
+ * Chromium 滚动条——`::-webkit-scrollbar-*` CSS 对它完全无效(实测),
+ * 不要在这里加滚动条样式。纯前端 dev(浏览器,无 Tauri)会回退系统默认滚动条,
+ * 仅调试环境,可接受。 */
