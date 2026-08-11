@@ -1,0 +1,14 @@
+/**
+ * @tauri-playground/ui Tailwind 入口(仅给 VSCode IntelliSense,不进任何 bundle)。
+ *
+ * 真实构建由消费方(desktop styles.css)经 `@import "../../../packages/ui/src/styles/theme.css"`
+ * + `@source "../../../packages/ui/src"` 完成。本文件纯声明「ui 包是 tailwind 项目」,
+ * 让 tailwindcss-intellisense 插件打开 ui 组件时能识别类名补全/高亮/悬停。
+ *
+ * 不被任何 package import(否则会重复注入 tailwind 基样式)。
+ */
+@import "tailwindcss";
+@import "./theme.css";
+
+/* 扫 ui 包源码 → 插件索引 ui 组件里写的 tailwind 类。 */
+@source "../";
