@@ -21,26 +21,31 @@
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react"
 import { VirtuosoGrid, type GridComponents } from "react-virtuoso"
 import type { MediaItem } from "@tauri-playground/core"
-import { MediaItemView } from "@tauri-playground/ui"
+import { MediaItemView, UnifiedCard } from "@tauri-playground/ui"
+import { unlockAudioPlayback } from "@tauri-playground/player"
 import { cn } from "../lib/cn.ts"
-import { isSmartFeed, useDesktop } from "../store.ts"
+import { isSmartFeed, isTabNode, useDesktop } from "../store.ts"
 import { ExpandedPlayer } from "./ExpandedPlayer.tsx"
 import { MasonryGrid } from "./MasonryGrid.tsx"
 
 /** 模块级稳定 onOpen:只依赖参数 url,不捕获组件内状态(供 MediaItemView memo 复用)。 */
 const openUrl = (url: string) => window.open(url, "_blank")
 
-/** 按容器宽度选列数(Folo 断点):80rem≈1280→5、72rem≈1152→4、48rem≈768→3、32rem≈512→2。 */
-function colsForWidth(w: number): number {
-  if (w >= 1280) return 5
-  if (w >= 1152) return 4
-  if (w >= 768) return 3
-  if (w >= 512) return 2
-  return 1
+/** 按容器宽度选列数(Folo 断点):80rem≈1280→5、72rem≈1152→4、48rem≈768→3、32rem≈512→2。
+ * live 视图(大图卡)上限 2 列——16:9 大图卡在 5 列等宽格子里会被压成小卡。 */
+function colsForWidth(w: number, isLive: boolean): number {
+  const base = w >= 1280 ? 5 : w >= 1152 ? 4 : w >= 768 ? 3 : w >= 512 ? 2 : 1
+  return isLive ? Math.min(2, base) : base
 }
 
 /** 模块级列数(供模块级 GridList 读)。MediaList 每次渲染同步最新 state。 */
 let gridColCountRef = 1
+
+/** 模块级 live 视图标志(供 GridList 的 RO 回调读,选 live 大图列数)。 */
+let liveViewRef = false
+
+/** 模块级 GridList 容器 node(供 MediaList 在视图 kind 切换时重算列数)。 */
+let gridListNode: HTMLDivElement | null = null
 
 /**
  * 模块级 setColCount。Virtuoso 的 RO 回调在模块作用域,不能直接调组件内 setState,
@@ -65,6 +70,8 @@ const GridList = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>
     const setRef = useCallback(
       (node: HTMLDivElement | null) => {
         nodeRef.current = node
+        // 记录到模块级:MediaList 在视图 kind 切换(live↔非live)时用它重算列数。
+        gridListNode = node
         if (typeof ref === "function") ref(node)
         else if (ref) ref.current = node
       },
@@ -74,7 +81,7 @@ const GridList = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>
     useEffect(() => {
       const node = nodeRef.current
       if (!node) return
-      const calc = () => setColCount?.(colsForWidth(node.clientWidth))
+      const calc = () => setColCount?.(colsForWidth(node.clientWidth, liveViewRef))
       calc()
       const ro = new ResizeObserver(calc)
       ro.observe(node)
@@ -139,11 +146,22 @@ export function MediaList({ className }: { className?: string }) {
     refreshErrors,
   } = useDesktop()
 
-  const selectedIsSub = !!selectedNodeId && !isSmartFeed(selectedNodeId)
+  // 刷新按钮只对真实订阅显示:tab 视图节点 / smart feed 无「该订阅」可刷。
+  const selectedIsSub = !!selectedNodeId && !isSmartFeed(selectedNodeId) && !isTabNode(selectedNodeId)
 
   // 模态大播放器:展开的视频/直播条目。按 item 快照(展开后列表可能刷新,用当时的
   // resolve 绑定不失效——resolvePlay/resolveLivePlay 是 store 稳定函数)。
   const [expandedItem, setExpandedItem] = useState<MediaItem | null>(null)
+
+  // 视图 kind 判断:
+  //   - 单一 kind(live/social) → 专属布局(live 大图卡 2 列 / social 瀑布流);
+  //   - 混合 kind(如 tab:all 跨视频+直播+音频) → 统一卡片 UnifiedCard。
+  //     VirtuosoGrid 要求等尺寸 item,kind 专属卡高度差异大,混排会重排错位,
+  //     故混合视图用统一卡(同一壳 + kind 徽标),消除高度差异。
+  const kinds = new Set(items.map((it) => it.kind))
+  const isSingleKind = items.length > 0 && kinds.size === 1
+  const isLiveView = isSingleKind && kinds.has("live")
+  const isSocialView = isSingleKind && kinds.has("social")
 
   // 响应式列数 state + 模块级接线。RO 回调在模块作用域,setColCount 指向最新 setter。
   const [colCount, setColCountState] = useState(1)
@@ -152,25 +170,53 @@ export function MediaList({ className }: { className?: string }) {
   setColCount = (n) => setColCountRef.current(n)
   // 同步列数到模块级 ref:GridList 渲染时读它(改 gridTemplateColumns → 网格重排)。
   gridColCountRef = colCount
+  // 同步 live 标志到模块级:GridList 的 RO 回调读它选 live 大图列数。
+  liveViewRef = isLiveView
+
+  // 视图 kind 切换(live↔非live)不改变容器宽度,RO 不会触发重算——这里手动重算
+  // 列数,保证切到 live 立即变 2 列大图。空依赖 RO 只在挂载/resize 跑,此 effect 补 kind 维度。
+  useEffect(() => {
+    const node = gridListNode
+    if (node) setColCountState(colsForWidth(node.clientWidth, isLiveView))
+  }, [isLiveView])
+
+  // 打开模态大播放器:同步手势内解锁 autoplay(点击「大屏/播放」按钮的 transient
+  // user activation 窗口内),ExpandedPlayer 挂载后 autoResolve 才能带声起播。
+  // ⚠️ 不能在 ExpandedPlayer 的 effect 里 unlock——effect 在 commit 后异步执行,
+  // 手势已过期,AudioContext.resume() 被拒 → 解锁失败 → 静音起播。
+  const openExpanded = (item: MediaItem) => {
+    unlockAudioPlayback()
+    setExpandedItem(item)
+  }
 
   // 模块级稳定回调:onOpen 只依赖参数 url,可提前绑定。
-  const renderItem = (item: (typeof items)[number]) => (
-    <MediaItemView
-      key={item.id}
-      item={item}
-      onOpen={openUrl}
-      onToggleRead={markRead}
-      onToggleStar={toggleStar}
-      // 这三个捕获 item;引用变化但行为由 item 决定(item 相同则行为相同),
-      // 由 MediaItemView 自定义 memo 比较器跳过比较,不影响 memo 生效。
-      onResolvePlay={(itemId) => resolvePlay(item.subscriptionId, itemId)}
-      onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
-      onPlayBig={() => setExpandedItem(item)}
-    />
-  )
-
-  // social 视图:当前选中节点全是 social 条目 → 瀑布流(其余 kind 走网格)。
-  const isSocialView = items.length > 0 && items.every((it) => it.kind === "social")
+  // 混合视图 → UnifiedCard(统一卡);单一 kind → MediaItemView(kind 专属卡)。
+  const renderItem = (item: (typeof items)[number]) =>
+    isSingleKind ? (
+      <MediaItemView
+        key={item.id}
+        item={item}
+        onOpen={openUrl}
+        onToggleRead={markRead}
+        onToggleStar={toggleStar}
+        // 这三个捕获 item;引用变化但行为由 item 决定(item 相同则行为相同),
+        // 由 MediaItemView 自定义 memo 比较器跳过比较,不影响 memo 生效。
+        onResolvePlay={(itemId) => resolvePlay(item.subscriptionId, itemId)}
+        onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
+        onPlayBig={() => openExpanded(item)}
+      />
+    ) : (
+      <UnifiedCard
+        key={item.id}
+        item={item}
+        onOpen={openUrl}
+        onToggleRead={markRead}
+        onToggleStar={toggleStar}
+        onResolvePlay={(itemId) => resolvePlay(item.subscriptionId, itemId)}
+        onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
+        onPlayBig={() => openExpanded(item)}
+      />
+    )
 
   return (
     // 外层只做布局不滚动(overflow-hidden)——VirtuosoGrid 的 List 自带滚动容器,

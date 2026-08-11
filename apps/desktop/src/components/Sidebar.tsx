@@ -1,8 +1,9 @@
 /**
  * Sidebar — 三栏左栏(参考 tmp/rss-reader 的 sidebar.tsx,数据来自真实 DataLayer)。
  *
- * 结构:macOS 交通灯 + 工具栏(刷新/添加) + Content Tabs(kind 过滤,带计数)
+ * 结构:macOS 交通灯 + 工具栏(刷新/添加) + Content Tabs(tab 视图节点,带计数)
  *   + Smart Feeds(today/unread/starred) + 订阅/分组树。
+ * 三类节点(tab / smart feed / 订阅)统一由 selectedNodeId 承载,点击即 select。
  * 分组树:groups 顶层组 + 组内 subscriptions(groupId join);无组订阅渲染为顶层叶子。
  */
 import { useMemo, useState } from "react"
@@ -26,7 +27,7 @@ import {
 } from "lucide-react"
 import { cn } from "../lib/cn.ts"
 import { useTheme } from "../theme.ts"
-import { useDesktop, SMART_FEED_IDS, isSmartFeed, type ContentTab } from "../store.ts"
+import { useDesktop, SMART_FEED_IDS, isSmartFeed, isTabNode, type ContentTab } from "../store.ts"
 import { FeedTree, type FeedTreeNode } from "./FeedTree.tsx"
 import { AddFeedDialog } from "./AddFeedDialog.tsx"
 
@@ -51,12 +52,10 @@ export function Sidebar() {
     groups,
     items,
     allItems,
-    activeTab,
     selectedNodeId,
     expandedGroups,
     loading,
     refreshErrors,
-    setActiveTab,
     select,
     toggleGroup,
     refreshAll,
@@ -151,11 +150,12 @@ export function Sidebar() {
         <div className="flex items-center justify-around px-1 pt-1.5 pb-0 border-b border-sidebar-border shrink-0">
           {TABS.map((tab) => {
             const Icon = tab.icon
-            const active = activeTab === tab.id
+            // tab 是内置视图节点:选中态与 smart feed/订阅源统一由 selectedNodeId 承载。
+            const active = selectedNodeId === `tab:${tab.id}`
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => select(`tab:${tab.id}`)}
                 className={cn(
                   // grid 固定两行:图标行(h-5)+ 计数行(h-3 固定占位,空内容不塌缩),
                   // 避免 flex 下 span 无内容高度为 0 导致各 tab 图标垂直错位。
@@ -201,7 +201,8 @@ export function Sidebar() {
           </div>
           <FeedTree
             nodes={tree}
-            selectedId={isSmartFeed(selectedNodeId) ? null : selectedNodeId}
+            // 订阅树只高亮真实订阅节点:tab 视图 / smart feed 选中时不传。
+            selectedId={!isSmartFeed(selectedNodeId) && !isTabNode(selectedNodeId) ? selectedNodeId : null}
             onSelect={select}
             onToggle={toggleGroup}
           />

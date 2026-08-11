@@ -8,7 +8,7 @@
  *   4. 订阅 core MediaStore(listener 无参数,全量变更 → 重查当前视图 items)
  *   5. refreshAll
  *
- * 三栏视图状态:activeTab(kind 过滤) + selectedNodeId(订阅 or smart feed)
+ * 三栏视图状态:selectedNodeId 统一承载 tab 节点 / smart feed / 订阅源三类节点
  *   + selectedArticleId(文章详情) + expandedGroups(分组树展开)。查询聚合见 queryView。
  */
 import { create } from "zustand"
@@ -22,7 +22,7 @@ import {
 } from "@tauri-playground/core"
 import { TEST_SUBSCRIPTIONS } from "./subscriptions"
 
-/** 内容 tab:all 显示全部,其余按 kind 过滤中栏。 */
+/** 内容 tab:all 显示全部,其余按 kind 过滤中栏。tab 是「默认视图节点」的 kind 部分。 */
 export type ContentTab = "all" | "article" | "video" | "audio" | "live" | "social"
 /** smart feed 特殊节点 id(非真实订阅,查询走全局聚合)。 */
 export type SmartFeedId = "today" | "unread" | "starred"
@@ -34,44 +34,63 @@ export function isSmartFeed(id: string | null): id is SmartFeedId {
   return id === "today" || id === "unread" || id === "starred"
 }
 
-/** 按「选中节点 + tab」查当前视图 items。 */
-function queryView(dl: DataLayer, nodeId: string | null, activeTab: ContentTab): MediaItem[] {
-  let items: MediaItem[]
+/**
+ * tab 节点 id(`tab:<kind>`)——内置视图节点,与 smart feed/订阅源同为
+ * selectedNodeId 的候选。`tab:` 前缀防与订阅 id(均 `s-`)冲突。
+ */
+export const TAB_NODES: string[] = ["tab:all", "tab:article", "tab:video", "tab:audio", "tab:live", "tab:social"]
+
+/** 是否为 tab 内置视图节点。 */
+export function isTabNode(id: string | null): id is string {
+  return !!id && id.startsWith("tab:")
+}
+
+/**
+ * 按「选中节点」查当前视图 items。节点体系统一由 selectedNodeId 承载,
+ * dispatch 按 id 前缀/裸 id 分支——未来分组(`group:<id>`)标签(`tag:<id>`)
+ * 在此加分支即可,不动已选节点体系。
+ */
+function queryView(dl: DataLayer, nodeId: string | null): MediaItem[] {
+  // smart feed(裸 id)——全局聚合
   if (nodeId === "today") {
-    items = dl.store.query({ today: true })
+    return dl.store.query({ today: true })
   } else if (nodeId === "unread") {
-    items = dl.store.query({ unreadOnly: true })
+    return dl.store.query({ unreadOnly: true })
   } else if (nodeId === "starred") {
-    items = dl.store.query({ starredOnly: true })
-  } else if (nodeId) {
-    items = dl.store.query({ subscriptionId: nodeId })
-  } else {
-    items = dl.store.all()
+    return dl.store.query({ starredOnly: true })
   }
-  return activeTab === "all" ? items : items.filter((it) => it.kind === activeTab)
+  // tab 节点(前缀 tab:)——全局按 kind 过滤
+  if (isTabNode(nodeId)) {
+    const kind = nodeId.slice(4) // "tab:" → kind
+    return kind === "all" ? dl.store.all() : dl.store.all().filter((it) => it.kind === kind)
+  }
+  // 真实订阅(裸 id)——单源
+  if (nodeId) {
+    return dl.store.query({ subscriptionId: nodeId })
+  }
+  // null → 等价 tab:all(初始化/兜底)
+  return dl.store.all()
+  // TODO 下一步:group:<id> → 递归展开组下订阅 → subscriptionIds;tag:<id> → tags 命中
 }
 
 interface DesktopState {
   dl: DataLayer | null
   subscriptions: Subscription[]
   groups: SubscriptionGroup[]
-  /** 当前视图聚合结果(按 selectedNodeId + activeTab 派生)。 */
+  /** 当前视图聚合结果(按 selectedNodeId 派生)。 */
   items: MediaItem[]
   /** 全局全部条目(与选中节点无关)——sidebar 的 kind 计数用。 */
   allItems: MediaItem[]
-  /** 选中节点:订阅 id 或 smart feed id(today/unread/starred)。 */
+  /** 选中节点:tab 节点(`tab:<kind>`)/ smart feed / 订阅 id,统一承载。 */
   selectedNodeId: string | null
   /** 文章详情选中条目。 */
   selectedArticleId: string | null
-  /** kind 过滤 tab。 */
-  activeTab: ContentTab
   /** 分组树展开态(纯内存)。 */
   expandedGroups: Record<string, boolean>
   loading: boolean
   refreshErrors: Record<string, string>
   init(): Promise<void>
   select(nodeId: string | null): void
-  setActiveTab(tab: ContentTab): void
   toggleGroup(groupId: string): void
   selectArticle(id: string | null): void
   refresh(id: string): Promise<void>
@@ -91,7 +110,7 @@ let initPromise: Promise<void> | null = null
 export const useDesktop = create<DesktopState>((set, get) => {
   function refreshView(dl: DataLayer): void {
     set({
-      items: queryView(dl, get().selectedNodeId, get().activeTab),
+      items: queryView(dl, get().selectedNodeId),
       // 全局统计:与选中节点无关(store 每次变更都同步,sidebar 计数恒定)。
       allItems: dl.store.all(),
     })
@@ -126,9 +145,9 @@ export const useDesktop = create<DesktopState>((set, get) => {
     groups: [],
     items: [],
     allItems: [],
-    selectedNodeId: null,
+    // 默认选中「全部」tab——等价原 activeTab:"all"。
+    selectedNodeId: "tab:all",
     selectedArticleId: null,
-    activeTab: "all",
     expandedGroups: {},
     loading: false,
     refreshErrors: {},
@@ -152,12 +171,6 @@ export const useDesktop = create<DesktopState>((set, get) => {
 
     select(nodeId) {
       set({ selectedNodeId: nodeId, selectedArticleId: null })
-      const dl = get().dl
-      if (dl) refreshView(dl)
-    },
-
-    setActiveTab(tab) {
-      set({ activeTab: tab })
       const dl = get().dl
       if (dl) refreshView(dl)
     },

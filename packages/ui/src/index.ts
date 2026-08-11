@@ -5,6 +5,7 @@
  * @tauri-playground/player(见下 re-export,保持旧入口可用)。
  */
 export { MediaItemView } from "./renderers/MediaItemView.tsx"
+export { UnifiedCard } from "./renderers/UnifiedCard.tsx"
 export { ArticleRenderer } from "./renderers/ArticleRenderer.tsx"
 export { VideoRenderer } from "./renderers/VideoRenderer.tsx"
 export { AudioRenderer } from "./renderers/AudioRenderer.tsx"

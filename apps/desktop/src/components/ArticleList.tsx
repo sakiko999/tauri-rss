@@ -1,7 +1,8 @@
 /**
  * ArticleList — 三栏中栏(文章列表,参考 tmp/rss-reader 的 article-list.tsx)。
  *
- * 数据来自 useDesktop.items(已按选中节点 + activeTab 聚合),过滤 article kind。
+ * 数据来自 useDesktop.items(已按选中节点聚合),过滤 article kind。
+ * 通常选中 tab:article(全局文章)时使用;smart feed 聚合下的文章不在此列。
  * 行:未读圆点 + 图标 + 标题/摘要/来源·时间。点击选中 → 右栏 ArticleDetail。
  */
 import { Virtuoso } from "react-virtuoso"
