@@ -10,7 +10,7 @@
  */
 import { useEffect } from "react"
 import type { MediaItem, MediaStream } from "@tauri-playground/core"
-import { PlayableMedia, unlockAudioPlayback } from "@tauri-playground/ui"
+import { PlayableMedia, unlockAudioPlayback } from "@tauri-playground/player"
 
 export function ExpandedPlayer({
   item,

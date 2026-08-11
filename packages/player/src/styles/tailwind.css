@@ -1,0 +1,15 @@
+/**
+ * @tauri-playground/player Tailwind 入口(仅给 VSCode IntelliSense,不进任何 bundle)。
+ *
+ * 真实构建由消费方(desktop styles.css)经 `@source "../../../packages/player/src"`
+ * 扫描完成。本文件纯声明「player 包是 tailwind 项目」,让 tailwindcss-intellisense
+ * 插件打开 player 组件时能识别类名补全/高亮/悬停。
+ *
+ * 不 import ui 的 theme.css:player 组件只用标准 tailwind 类 + shadcn 语义令牌
+ * (bg-primary/text-muted-foreground 等,令牌由 desktop styles.css 定义,构建时覆盖)。
+ * 不被任何 package import(否则会重复注入 tailwind 基样式)。
+ */
+@import "tailwindcss";
+
+/* 扫 player 包源码 → 插件索引 player 组件里写的 tailwind 类。 */
+@source "../";

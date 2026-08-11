@@ -14,6 +14,7 @@
     "@tauri-playground/core": "workspace:*",
     "@tauri-playground/crawler": "workspace:*",
     "@tauri-playground/host": "workspace:*",
+    "@tauri-playground/player": "workspace:*",
     "@tauri-playground/ui": "workspace:*",
     "clsx": "^2.1.1",
     "lucide-react": "^0.468.0",

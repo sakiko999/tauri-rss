@@ -9,6 +9,7 @@
     "packages/core",
     "packages/crawler",
     "packages/host",
+    "packages/player",
     "packages/ui",
     "packages/xml"
   ],
