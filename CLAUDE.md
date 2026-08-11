@@ -25,10 +25,16 @@ packages/
                    函数式展开(范式见 bili/live.ts 的 parseBiliLiveStreams)
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
-  ui/            @tauri-playground/ui   — UI 组件库（当前仅按 kind 分发的媒体渲染器）
+  player/        ★ @tauri-playground/player — 媒体播放器(video/audio/live 共用),从 ui 拆出。
+                   MediaPlayer/PlayableMedia/VideoShell + MediaChrome 式独立控件(controls/)。
+                   依赖 core(MediaStream 类型) + 全局 appHost(hls/flv/dash 走隧道) +
+                   hls.js/flv.js/dashjs/ramda。依赖链:core ← player ← ui/desktop
+  ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
+                   播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
 ```
 
-依赖链：`xml ← crawler ← core ← ui ← desktop`；`host` 被 crawler/core/desktop 共用。
+依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
+`host` 被 crawler/core/desktop/player 共用。
 读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
 
 ## 宿主注入：全局 appHost 门面
@@ -128,7 +134,9 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   用 RSSHub 同款 `GET /x/polymer/web-dynamic/v1/feed/space?host_mid={uid}`（非 dynamic_new
   时间线——那个返回关注流,`desc.uid` 不匹配目标用户）。**需登录 cookie**（未登录 code:-101,
   core 层 DEFAULT 自动注入）。动态类型靠 `modules.module_dynamic.major` 的 opus(图文/专栏)/
-  archive(视频)分支;转发展开 `orig` 被转内容。实测半佛 37883317(转发为主)、
+  archive(视频)分支;转发展开 `orig` 被转内容(**orig 是完整 DynItem,
+  module_dynamic 在 orig.modules.module_dynamic 下**,非 DynModule 层级)。
+  实测半佛 37663924(硬核的半佛仙人,转发为主;⚠️ 37883317 是「DILI念」勿用)、
   DIYgod 2267573(视频为主)。
 - 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/X/小红书
   是硬反爬（puppeteer+登录+代理），个人不部署 RSSHub 碰不了。
@@ -210,12 +218,33 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   video/audio/live/social → MediaList 卡片）+ AddFeedDialog
 - ⚠️ 分组树仅渲染/展开,不做增删组 UI;分组节点点击只 toggle 不 select
 
-**3. packages/ui 接入 tailwind**
-- 目前 renderer 全是内联 `style={styles}` CSSProperties；desktop 已接 `@tailwindcss/vite`
-  （v4 CSS-first），ui 包本身没有 tailwind 依赖
-- 计划：给 ui 包加 tailwind（@theme 设计令牌在 `packages/ui/src/styles/theme.css`，见
-  `technical-plan.md` 的 Tailwind 4 接入节——`@source` 显式扫包源码、styles.css 引入 theme.css）
-- 注意：与 #1 有交叉（renderer 都要改），可合并推进
+**3. packages/ui 接入 tailwind（✅ 已完成）**
+- ✅ renderer 已全部改走 **Tailwind 4 类**（desktop `@tailwindcss/vite` + `@source` 扫 ui 包）。
+  媒体卡片体系参考 **Folo entry-column** 完整重设计（素色主题,不学 Folo accent 彩色）:
+  - `renderers/atoms/` 原子组件：`MediaCard`（统一卡片壳 border-border/bg-card/hover）、
+    `CardThumb`（aspect-ratio 撑开 + 角标）、`MediaImage`（lazy + error 占位 +
+    loadedUrls 模块级缓存防虚拟化重挂载闪骨架）、`Skeleton`（animate-pulse）、
+    `UnreadDot`（accent 蓝未读圆点,已读收缩）、`RelativeTime`、`format.ts`
+  - 卡片形态：video 紧凑横向小卡（长列表塞更多）、live 纵向大图（16:9 + 状态角标）、
+    audio 行式方形封面、social 瀑布流（见下）、article 列表行式
+  - **关键**：全部从固定 `zinc-*` 迁到**语义令牌**（bg-card/border-border/text-muted-foreground），
+    暗色主题免费生效;未读圆点/选中态用 `blue-*`（与 Sidebar/ArticleList 一致的唯一提示蓝）
+  - 网格响应式：`MediaList` 用 **ResizeObserver** 观察容器宽度 → 断点选列数
+    （>=1280→5 / >=1152→4 / >=768→3 / >=512→2 / 否则1），对齐 Folo 断点
+  - **social 瀑布流**：`apps/desktop/src/components/MasonryGrid.tsx`（CSS columns 实现,
+    非 VirtuosoGrid——其假设等尺寸 item 承载不了变高瀑布流）。递增渲染 + 底部哨兵
+    无限加载;图片按 width/height 撑比例
+  - **图片宽高方案 A**：`crawler/src/utils/img-size.ts` Range 预取文件头解析
+    （PNG 64B / JPEG 1KB,WebP/GIF 同源）,失败退化 4:3。bili:dynamic 用 API 宽高 +
+    Range 兜底(archive 封面)。XML `tpl:image` 支持 `@_url/@_width/@_height` 属性,
+    core `SocialItem.images` → `SocialImage[]`
+- ui 包依赖：`clsx`（拼类）;lucide-react 只在 desktop，ui 包图标用自包含内联 SVG
+  （`renderers/atoms/icons.tsx`）
+- **player 独立包**：播放器已拆到 `@tauri-playground/player`(见目录结构)。
+  ui 的 `index.ts` re-export 保持旧入口;新代码直接引 player 包。
+  desktop `styles.css` `@source` 需同时扫 ui/src + player/src(拆包后补过)
+- **IntelliSense**：ui/player 包各有一个 dev-only `src/styles/tailwind.css`
+  （`@import "tailwindcss"` + `@source "../"`）,不进 bundle,给 VSCode 插件识别类名
 
 **4. 阅读体验**
 - ✅ 文章详情已落地（ArticleDetail:HTML 渲染/正文/pre 纯文本/已读/星标/打开原文）

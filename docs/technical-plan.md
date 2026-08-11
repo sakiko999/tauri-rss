@@ -270,9 +270,13 @@ ui/
 - 桌面键盘导航：↑/↓ 切文章，←/→ 切 feed
 
 **2. 瀑布流**（`MasonryGrid`）
-- `VirtuosoGrid` + `display:grid; grid-auto-rows:8px`
-- 每卡按 `aspectRatio` 设 `grid-row-end: span ceil(高/8)`
-- `useIsVisible` + `loading="lazy"` 懒加载；`dataSaver` 非可视渲染占位
+- ⚠️ **已修正**:原方案 `VirtuosoGrid + grid-auto-rows:8px + span` 不可行——
+  VirtuosoGrid 假设「same sized items」(等宽等高)做虚拟化,变高 span 击穿测量。
+- ✅ **实际方案**:CSS columns 实现(`apps/desktop/src/components/MasonryGrid.tsx`)。
+  列优先填充、高度错落;递增渲染数 + 底部哨兵 IntersectionObserver 无限加载;
+  `loading="lazy"` 懒加载。social 源按图片 width/height 撑比例(方案 A:Range 预取
+  文件头解析,`crawler/src/utils/img-size.ts`),未知比例退化 4:3。
+- 按 kind 分发:MediaList 中 social → MasonryGrid,其余 → VirtuosoGrid
 
 **3. 短视频**（`ShortVideoFeed`）
 - Swiper vertical + Virtual + Cube/Flip，只渲染可视 ±1

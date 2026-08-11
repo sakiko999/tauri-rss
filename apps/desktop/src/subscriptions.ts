@@ -91,6 +91,6 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "bili:dynamic",
     title: "bilibili 动态 · 半佛仙人",
     enabled: true,
-    info: { uid: "37883317" },
+    info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)
   },
 ]
