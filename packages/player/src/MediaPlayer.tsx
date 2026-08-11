@@ -231,7 +231,8 @@ export function MediaPlayer({
           autoPlay={autoPlay}
           muted={autoPlay}
           preload="none"
-          className={mediaClass}
+          // audio 无画面:不要黑底(mediaClass 含 bg-black 是给 video 的)。
+          className={["w-full", className].filter(Boolean).join(" ")}
         />
       </div>
     )

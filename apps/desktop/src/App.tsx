@@ -14,15 +14,16 @@ import { ArticleDetail } from "./components/ArticleDetail.tsx"
 import { MediaList } from "./components/MediaList.tsx"
 
 export default function App() {
-  const { items, activeTab, init } = useDesktop()
+  const { activeTab, init } = useDesktop()
 
   useEffect(() => {
     init()
   }, [init])
 
   // 面板决策:文章详情三栏 vs 各 kind 卡片单栏。
-  const hasArticles = items.some((it) => it.kind === "article")
-  const showDetail = activeTab === "article" || (activeTab === "all" && hasArticles)
+  // 只有显式选 article tab 才进文章两栏;默认(all)始终显示全部内容卡片页,
+  // 不因「存在文章」自动切走(否则刷新后数据加载完会跳到 HN 文章页)。
+  const showDetail = activeTab === "article"
 
   return (
     <div className="flex h-screen bg-background font-sans overflow-hidden">

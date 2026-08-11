@@ -57,6 +57,8 @@ interface DesktopState {
   groups: SubscriptionGroup[]
   /** 当前视图聚合结果(按 selectedNodeId + activeTab 派生)。 */
   items: MediaItem[]
+  /** 全局全部条目(与选中节点无关)——sidebar 的 kind 计数用。 */
+  allItems: MediaItem[]
   /** 选中节点:订阅 id 或 smart feed id(today/unread/starred)。 */
   selectedNodeId: string | null
   /** 文章详情选中条目。 */
@@ -88,7 +90,11 @@ let initPromise: Promise<void> | null = null
 
 export const useDesktop = create<DesktopState>((set, get) => {
   function refreshView(dl: DataLayer): void {
-    set({ items: queryView(dl, get().selectedNodeId, get().activeTab) })
+    set({
+      items: queryView(dl, get().selectedNodeId, get().activeTab),
+      // 全局统计:与选中节点无关(store 每次变更都同步,sidebar 计数恒定)。
+      allItems: dl.store.all(),
+    })
   }
 
   /**
@@ -119,6 +125,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     subscriptions: [],
     groups: [],
     items: [],
+    allItems: [],
     selectedNodeId: null,
     selectedArticleId: null,
     activeTab: "all",

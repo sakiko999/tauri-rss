@@ -50,6 +50,7 @@ export function Sidebar() {
     subscriptions,
     groups,
     items,
+    allItems,
     activeTab,
     selectedNodeId,
     expandedGroups,
@@ -63,12 +64,14 @@ export function Sidebar() {
   const { theme, toggle: toggleTheme } = useTheme()
   const [addOpen, setAddOpen] = useState(false)
 
-  // kind 计数(基于当前"全部"视图)
+  // kind 计数(基于全局 allItems——不随选中订阅变化,侧栏徽章恒定)。
+  // allItems 是 store 的全局全部条目;若仍未加载则用当前视图 items 兜底。
+  const countSource = allItems.length ? allItems : items
   const counts = useMemo(() => {
-    const c: Record<ContentTab, number> = { all: items.length, article: 0, video: 0, audio: 0, live: 0, social: 0 }
-    for (const it of items) if (it.kind in c) c[it.kind as keyof typeof c]++
+    const c: Record<ContentTab, number> = { all: countSource.length, article: 0, video: 0, audio: 0, live: 0, social: 0 }
+    for (const it of countSource) if (it.kind in c) c[it.kind as keyof typeof c]++
     return c
-  }, [items])
+  }, [countSource])
 
   // 订阅树:顶层组(递归) + 无组订阅叶子
   const tree = useMemo<FeedTreeNode[]>(() => {
@@ -154,7 +157,9 @@ export function Sidebar() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={cn(
-                  "relative flex flex-col items-center gap-1 pb-2 pt-1.5 rounded-md transition-colors",
+                  // grid 固定两行:图标行(h-5)+ 计数行(h-3 固定占位,空内容不塌缩),
+                  // 避免 flex 下 span 无内容高度为 0 导致各 tab 图标垂直错位。
+                  "relative grid grid-rows-[1.25rem_0.75rem] place-items-center gap-1 pb-2 pt-1.5 rounded-md transition-colors",
                   active ? "text-sidebar-foreground" : "text-sidebar-foreground/50 hover:text-sidebar-foreground/80",
                 )}
                 title={tab.label}
