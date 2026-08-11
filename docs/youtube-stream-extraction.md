@@ -247,6 +247,84 @@ packages/crawler/src/channels/youtube/
   环境实测**(真实 IP + webview),node 断言失败 ≠ 实现坏。NewPipe 的 poToken(bot guard)
   是解决途径,零登录无 poToken 无法绕开 node 环境的 IP 风控。
 
+### 5.6 ANDROID/iOS client 强制 poToken(2026-08)与规避方案
+
+> ⚠️ **重要更新(2026-08-11)**:上述 5.5 的「Tauri 设备环境正常」已失效——
+> 2026 年起 **ANDROID / iOS 标准 client 被强制要求 poToken**,即使 Tauri 真实 IP 也返回
+> `LOGIN_REQUIRED` "Sign in to confirm you're not a bot"。这是 **client 身份问题,
+> 不是 IP 问题**。规避与溯源证据如下。
+
+#### 根因:NewPipe 已移除 ANDROID/IOS client
+
+- **NewPipeExtractor PR #1529(2026-08-06,AudricV)把 ANDROID + IOS client 整体移除**,
+  注释原话 *"using them requires poTokens nobody can generate"*——ANDROID 用
+  **DroidGuard**(Play Services 原生 VM,校验 app 签名/包 ID,非 root 的 reVanced 都过不了),
+  iOS 用 **iosGuard**(可能依赖 Apple attestation)。两者都不是纯 HTTP/JS 能复刻的。
+- **ANDROID 无 poToken 时 NewPipe 改用 reel 端点兜底**(`getAndroidReelPlayerResponse`,
+  `YoutubeStreamExtractor.fetchAndroidClient`——`androidPoTokenResult == null` 走
+  `reel/reel_item_watch`,Shorts 专用,非常规 player 端点)。我们项目只有常规 player 端点,
+  无 poToken 直接撞 LOGIN_REQUIRED。
+- 时间线:2025 年初 ANDROID 仍匿名可用(PR #1272 只是可选加 poToken 支持);
+  **2025-09 起 poToken 从 visitorData 绑定改为 videoId 绑定**(yt-dlp #14471 / FreeTube #8137,
+  每视频现 mint);**2026 年 ANDROID/iOS 全面强制**。
+
+#### 规避方案(按推荐序)
+
+**① 换免 poToken 的 client —— ANDROID_VR(Oculus Quest 3)【首选,最小改动】**
+
+YouTube 至今仍给此 client 返回**传统 stream URL(非 SABR),无需 poToken**。多项目 2026 实测:
+yt-dlp `youtube.py` 内置、[YoutubeExplode PR #936](https://github.com/Tyrrrz/YoutubeExplode/pull/936)
+(2026-02,用户确认恢复下载)、[NewPipe PR #1498](https://github.com/TeamNewPipe/NewPipeExtractor/pull/1498)
+(2026-05,恢复 720p/1080p+,并检测 SABR-only 响应自动 fallback)。完整常量:
+
+```json
+{
+  "clientName": "ANDROID_VR",
+  "clientVersion": "1.60.19",
+  "deviceMake": "Oculus",
+  "deviceModel": "Quest 3",
+  "osName": "Android",
+  "osVersion": "12L",
+  "androidSdkVersion": 32
+}
+// INNERTUBE_CONTEXT_CLIENT_NAME = 28
+// UA: com.google.android.apps.youtube.vr.oculus/1.60.19
+//   (Linux; U; Android 12L; Quest 3 Build/SQ3A.220605.009.A1) gzip
+```
+
+落地 = 改 `client.ts` 的 `getAndroidPlayerResponse` 常量 + ANDROID_UA,其余逻辑不变
+(渐进式 mp4 优先 → HLS fallback)。已知限制:**不支持 made-for-kids 视频**(无
+audio/video_only 流,可接受)。注意 AV1 itags(394-401)+ audio(599,600)需入 itag 表才能
+吃到 VR 的高清流;仅用渐进式 mp4(18/22)则无感。
+
+**② 兜底链(ANDROID_VR 万一也被封锁时)**
+
+| client | poToken | 现状(2026) | 备注 |
+|---|---|---|---|
+| `ANDROID_VR` | 不需要 | ✅ 传统 URL 免 poToken | 首选;不含 made-for-kids |
+| `TVHTML5` / `tv` | 不需要 | ⚠️ 仍返回 URL 但格式 DRM'd | 无 cookie 全 DRM,需登录 |
+| `WEB_EMBEDDED_PLAYER` | 不需要 | ⚠️ 仅可嵌入视频有效 | 换 embed 端点 |
+| `WEB` / `MWEB` | 需要(GVS) | 🔒 2025-02 起锁 SABR-only | adaptiveFormats 被移除 |
+| `ANDROID` / `IOS` | 必须(DroidGuard/iOSGuard) | ❌ NewPipe 已移除 | 无人能生成 |
+| `web_safari` | GVS 暂不需要 | ✅ HLS 免 token | HLS 直播兜底 |
+
+**③ 彻底方案:WebView2 内跑 BotGuard 生成 poToken(后续再议)**
+
+Web 端 poToken 可**自托管生成**——yt-dlp 官方推荐 `bgutil-ytdlp-pot-provider`
+(= [LuanRT/BgUtils](https://github.com/LuanRT/BgUtils) 跑 BotGuard challenge),但
+PoTokenProvider javadoc 明确:**需「良好 DOM 的 JS 引擎」**。我们 Tauri 就是真实 WebView2,
+天然满足(NewPipe 在 Android 也是用系统 WebView 生成,PR #12027 HtmlUnit 是替代)。
+代价:poToken 现绑定 videoId,每视频 mint;且 @Nonnull 注入 `serviceIntegrityDimensions.poToken`。
+**工程量大,仅当 ① ANDROID_VR 失效才考虑。**
+
+#### 本项目的落地指向
+
+- `packages/crawler/src/channels/youtube/client.ts` 当前 `getAndroidPlayerResponse` 用
+  ANDROID client → **换 ANDROID_VR**(常量见上)即可恢复 Tauri 环境可播。
+- `resolveYoutubeStreams` 目前只取 `formats`(渐进式 mp4,最高 itag 22=720p);要 1080p+
+  需扩展 adaptiveFormats + DASH 混流(与 bot 规避无关,后续迭代)。
+- 调研记忆见 `[[youtube-android-client-pocomp-removal]]`。
+
 ### 5.4 依赖注入
 
 `host.js` 已存在(`FunctionJsBackend`,`new Function` 执行 JS)——签名/n 解密天然可用。
