@@ -14,7 +14,7 @@ import {
   BiliLiveChannel,
   BiliDynamicChannel,
 } from "./channels/bili/index.ts"
-import { YoutubeChannel } from "./channels/youtube/index.ts"
+import { YoutubeChannel, YoutubeLiveChannel } from "./channels/youtube/index.ts"
 import { HuyaLiveChannel } from "./channels/huya/index.ts"
 import { DouyuLiveChannel } from "./channels/douyu/index.ts"
 import { DouyinLiveChannel } from "./channels/douyin/index.ts"
@@ -39,8 +39,9 @@ export function registerBuiltinChannels(): void {
   registerChannel(new BiliLiveChannel())
   registerChannel(new BiliDynamicChannel())
 
-  // ── YouTube(官方 RSS)──
+  // ── YouTube(官方 RSS 视频 + 直播订阅)──
   registerChannel(new YoutubeChannel())
+  registerChannel(new YoutubeLiveChannel())
 
   // ── huya 直播(纯 HTTP,零签名)──
   registerChannel(new HuyaLiveChannel())

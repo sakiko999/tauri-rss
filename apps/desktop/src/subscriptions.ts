@@ -7,8 +7,9 @@
  *   - bili:live 补充直播演示(需直播中的房间)
  *   - live:huya / live:douyin 补充多平台直播演示(roomId 需在线,离线时无流)
  *
- * YouTube 直播订阅方式:youtube channel 支持 videoId 直接订阅单视频/直播,
- * 如 `tRsQsTMvPNg`(Claude FM 常驻直播,hls.js 播放)。
+ * YouTube 直播订阅方式:**youtube:live channel**(kind 固定 live,零判定请求)——videoId
+ * 声明即直播,如 `tRsQsTMvPNg`(Claude FM 常驻直播,hls.js 播放)。
+ * 普通视频订阅用 `youtube` channel(channelId 订阅频道 / videoId 订阅单视频)。
  *
  * 直播房间备选(当前房间下播/受限时换用):
  *   - douyu:   9999(yyfyyf)
@@ -44,7 +45,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
   },
   {
     id: "s-video-youtube-live",
-    channelKey: "youtube",
+    channelKey: "youtube:live",
     title: "Claude FM 直播",
     enabled: true,
     info: { videoId: "tRsQsTMvPNg" },
