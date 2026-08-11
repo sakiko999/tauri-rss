@@ -42,6 +42,7 @@ export function PlayableMedia({
   className,
   onError,
   autoResolve = false,
+  fill = false,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -51,6 +52,8 @@ export function PlayableMedia({
   onError?: (err: unknown) => void
   /** 挂载后立即懒解析起播(模态大播放器用,无需点按钮)。 */
   autoResolve?: boolean
+  /** 填满父容器(父已定比例)——透传给 MediaPlayer/VideoShell。 */
+  fill?: boolean
 }) {
   const [resolved, setResolved] = useState<MediaStream[] | null>(null)
   const [resolving, setResolving] = useState(false)
@@ -116,5 +119,13 @@ export function PlayableMedia({
   // resolved !== null = 用户点过「播放」按钮 → resolve 成功后自动播
   // (原生 mp4 带声起播,unlockAudioPlayback 已解除 policy;live 仍静音起播)。
   // 有初始流(未点击)不自动播。
-  return <MediaPlayer streams={playStreams} className={className} onError={onError} autoPlay={resolved !== null} />
+  return (
+    <MediaPlayer
+      streams={playStreams}
+      className={className}
+      onError={onError}
+      autoPlay={resolved !== null}
+      fill={fill}
+    />
+  )
 }

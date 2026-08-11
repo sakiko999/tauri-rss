@@ -39,6 +39,7 @@ export function VideoShell({
   activeQuality,
   onQuality,
   title,
+  fill = false,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   /** 是否由 useMediaStream(hls/flv/dash)驱动(决定直播判定)。 */
@@ -53,6 +54,9 @@ export function VideoShell({
   onQuality: (rate: number) => void
   /** 悬停提示(如 referer 提示),挂容器 title。 */
   title?: string
+  /** 填满父容器(父已定比例,如模态大播放器播放器外层 aspect-video)。true 时
+   *  不自撑比例——避免父比例 + 自撑双算导致首帧塌缩。 */
+  fill?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { state, ops } = useVideoElement(videoRef, isStreaming)
@@ -233,7 +237,19 @@ export function VideoShell({
   // 播放中暂停(中间态)→ 悬停显示播放键。
   const showPausedOverlay = state.paused && !showBigPlay && !state.ended
 
-  const mediaClass = ["h-full", "w-full", "object-contain", className].filter(Boolean).join(" ")
+  // ⚠️ 不要在这里拼 className(容器比例类,如 aspect-video)——video 应只填容器
+  // (比例由容器管),若给 video 加 aspect-ratio 会与 h-full/w-full 冲突,
+  // 加载中(无内容)塌成窄黑条。
+  const mediaClass = ["h-full", "w-full", "object-contain"].filter(Boolean).join(" ")
+
+  // 非全屏:
+  //   - fill=true(父已定比例):容器 h-full w-full 填满,不自撑——避免父比例 +
+  //     自撑双算导致首帧塌缩;
+  //   - fill=false(自撑):用 padding-top 百分比撑开 16:9(padding-top:56.25%
+  //     基于父宽,只要父宽确定就必然撑开,与 video 是否加载无关)。
+  // ⚠️ 不用 aspect-ratio:它依赖「容器宽度确定 + video 内在尺寸」,video 未初始化
+  // (无元数据,宽高 0)时可能撑不起容器 → 塌成窄黑条。
+  const isFullscreen = fullscreenState.isFullscreen
 
   return (
     <div
@@ -249,16 +265,25 @@ export function VideoShell({
         fullscreenToggleRef.current()
       }}
       className={[
-        "group relative flex items-center justify-center overflow-hidden bg-black outline-none",
-        fullscreenState.isFullscreen ? "h-full w-full" : "rounded",
-        // 默认 16:9 撑开比例:video 加载中无元数据(宽高 0)时容器也不塌成扁黑条。
-        // 调用方可传 className 覆盖(如自定义比例)。min-h 兜底 aspect-ratio 失效的环境。
-        fullscreenState.isFullscreen ? "" : "aspect-video min-h-48",
+        "group flex items-center justify-center overflow-hidden bg-black outline-none",
+        // fill(父已定比例):absolute inset-0 填满最近 relative 祖先——⚠️ 不能用
+        // h-full:父链(MediaPlayer 的 space-y-1)无高度约束,h-full 循环依赖塌 0。
+        // 自撑(padding-top):w-full 按父宽撑高。
+        isFullscreen ? "h-full w-full relative" : fill ? "absolute inset-0" : "relative w-full rounded",
         className,
       ].join(" ")}
+      // 非全屏且非 fill:padding-top 撑开 16:9(video 未初始化也必然有高度)。
+      style={isFullscreen || fill ? undefined : { paddingTop: "56.25%" }}
       title={title}
     >
-      <video ref={videoRef} className={mediaClass} playsInline preload="auto" />
+      {/* video absolute 填满容器(自撑时 padding-top 后内容区高为 0,必须 absolute)。
+          fill 时父已定比例,absolute 同样铺满。 */}
+      <video
+        ref={videoRef}
+        className={["absolute inset-0", mediaClass].filter(Boolean).join(" ")}
+        playsInline
+        preload="auto"
+      />
 
       {/* 缓冲 spinner */}
       {showSpinner && (

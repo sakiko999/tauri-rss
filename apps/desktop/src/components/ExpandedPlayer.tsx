@@ -80,13 +80,16 @@ export function ExpandedPlayer({
           </button>
         </div>
 
-        {/* 大播放器:key 绑 item.id,打开即全新挂载 → autoResolve 起播 */}
-        <div key={item.id} className="overflow-hidden rounded-lg bg-black shadow-2xl">
+        {/* 大播放器:key 绑 item.id,打开即全新挂载 → autoResolve 起播。
+            外层 relative aspect-video 定 16:9(父 w-[min(72rem,90vw)] 用 vw 首帧
+            即确定,避免子 VideoShell 自撑在首帧父宽未就绪时塌成扁黑条);
+            PlayableMedia fill → VideoShell absolute 填满本层(relative 定位祖先)。 */}
+        <div key={item.id} className="relative aspect-video overflow-hidden rounded-lg bg-black shadow-2xl">
           <PlayableMedia
             streams={initialStream}
             resolve={resolve}
-            className="aspect-video"
             autoResolve
+            fill
             onError={(err) => console.warn("[ExpandedPlayer] 播放失败:", err)}
           />
         </div>

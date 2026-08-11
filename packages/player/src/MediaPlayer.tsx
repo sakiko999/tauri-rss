@@ -44,12 +44,15 @@ export function MediaPlayer({
   className,
   autoPlay = false,
   onError,
+  fill = false,
 }: {
   /** 懒解析出的可播流,按顺序取第一个可播的。 */
   streams: MediaStream[]
   className?: string
   autoPlay?: boolean
   onError?: (err: unknown) => void
+  /** 填满父容器(父已定比例)——透传给 VideoShell,避免双撑首帧塌缩。 */
+  fill?: boolean
 }) {
   const [error, setError] = useState<unknown>(null)
   const [retryKey, setRetryKey] = useState(0)
@@ -120,24 +123,33 @@ export function MediaPlayer({
     },
   })
 
-  // 原生 mp4 分支的自动播放:先带声 play()(用户已点「播放」+ unlockAudioPlayback
-  // 已解锁),被 autoplay policy 拦则降级静音重试。
-  // 注意 StrictMode 双挂载:第一个 video 会被移除,play() reject——检查 isConnected。
+  // 原生 mp4 分支的自动播放:与 HLS 对齐,**等媒体可播(canplay)后**带声 play。
+  // ⚠️ 不能 src 刚设就立即 play:此时媒体未加载,autoplay policy 判定不稳定,
+  // 带声 play 易被拦 → 降级静音(实测 video 静音、live 有声即因此——live 走 HLS
+  // 在 canplay 才 play,媒体已就绪)。canplay 时媒体已加载,带声 play 最可能放行。
+  // 被拦降级静音(保底可播);StrictMode 双挂载:第一个 video 被移除,检查 isConnected。
   const isNativeStream = !!stream && !needsStreamPlayer
   useEffect(() => {
     if (!autoPlay || !isNativeStream) return
     const el = videoRef.current
     if (!el) return
-    el.muted = false
-    const p = el.play() as Promise<void> | void
-    if (p && typeof p.catch === "function") {
-      p.catch(() => {
-        if (!el.isConnected) return
-        el.muted = true
-        const retry = el.play() as Promise<void> | void
-        if (retry && typeof retry.catch === "function") retry.catch(() => {})
-      })
+    const attemptUnmuted = () => {
+      if (!el.isConnected) return
+      el.muted = false
+      const p = el.play() as Promise<void> | void
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {
+          if (!el.isConnected) return
+          el.muted = true
+          const retry = el.play() as Promise<void> | void
+          if (retry && typeof retry.catch === "function") retry.catch(() => {})
+        })
+      }
     }
+    // 只等 canplay(媒体可播)再带声 play——**不要立即 play**:src 刚设媒体未
+    // 加载,立即 play 易被判失败 → 降级静音(YouTube video 静音即因此)。
+    el.addEventListener("canplay", attemptUnmuted, { once: true })
+    return () => el.removeEventListener("canplay", attemptUnmuted)
   }, [autoPlay, isNativeStream, stream?.url])
 
   if (!stream) {
@@ -213,8 +225,8 @@ export function MediaPlayer({
           qualityOptions={qualityOptions}
           activeQuality={stream.rate}
           onQuality={switchQuality}
-          className="aspect-video"
           title={headerHintTitle}
+          fill={fill}
         />
       </div>
     )
