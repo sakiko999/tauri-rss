@@ -25,16 +25,21 @@ export { fmtDuration, fmtAudioDuration, fmtCount } from "./renderers/atoms/forma
 // ── 播放组件(video/audio/live 共用)─────────────────────────────
 // 已拆到 @tauri-playground/player。此处 re-export 兼容旧入口;新代码应直接引 player 包。
 export {
-  MediaPlayer,
   PlayableMedia,
   unlockAudioPlayback,
   useMediaStream,
   isHlsStream,
   isFlvStream,
   isDashStream,
+  useStreamSelection,
+  isProgressiveVideo,
+  isProgressiveAudio,
+  isRtmp,
+  isStreamingStream,
   useVideoElement,
   bindFullscreen,
   VideoShell,
+  AudioShell,
   PlayerControls,
 } from "@tauri-playground/player"
 export type {

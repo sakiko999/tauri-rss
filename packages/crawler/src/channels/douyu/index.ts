@@ -8,6 +8,7 @@
  * 签名只用于 getH5Play(拉 RTMP 直链)。本 channel 产出 Live Item(状态+元数据),
  * playUrls 需额外 H5Play 请求,交由下游 resolveLivePlay 懒解析(同 huya)。
  */
+import * as R from "ramda"
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
@@ -77,7 +78,9 @@ export class DouyuLiveChannel implements RssChannel {
       if (s) streams.push(s)
     }
     if (!streams.length) throw new Error(`douyu H5Play: no stream for room ${roomId}`)
-    return streams
+    // 契约:最高清晰度排最前(player 默认选流取第一个)。multirates 服务端顺序
+    // 理论上高档在前,不依赖它,显式按 rate 降序兜底(bili/youtube 同款写法)。
+    return R.sortWith([R.descend((s: Stream) => s.rate ?? 0)], streams)
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

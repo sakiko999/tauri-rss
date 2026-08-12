@@ -7,7 +7,7 @@
  * 独立可组合:只读 `state.volume/muted`,拖动调 `ops.changeVolume`。
  */
 import { useState } from "react"
-import type { VideoOps, VideoPlayState } from "../useVideoElement.ts"
+import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 import { MediaMuteButton } from "./MediaMuteButton.tsx"
 
 export function MediaVolumeSlider({

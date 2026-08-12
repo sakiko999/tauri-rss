@@ -3,7 +3,7 @@
  *
  * 只读 `fullscreen.isFullscreen`,点按调 `fullscreen.toggle`。
  */
-import type { FullscreenApi } from "../useVideoElement.ts"
+import type { FullscreenApi } from "../hooks/useVideoElement.ts"
 import { FullscreenExitIcon, FullscreenIcon } from "../icons.tsx"
 
 export function MediaFullscreenButton({

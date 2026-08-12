@@ -15,6 +15,7 @@
  *     非流媒体(原生 mp4/audio)用 `duration !== Infinity` 区分(VOD),无限时长视为 live。
  */
 import { useCallback, useEffect, useState } from "react"
+import { playableDuration } from "../utils/buffer.ts"
 
 export interface BufferedRange {
   start: number
@@ -167,7 +168,7 @@ export function useVideoElement(
       const el = videoRef.current
       if (!el) return
       // 直播:seek 到已缓冲区间内(短延迟 DVR);越界 clamp 到 bufferedEnd。
-      const max = state.live ? state.bufferedEnd : state.duration
+      const max = playableDuration(state)
       const target = Math.max(0, Math.min(time, max))
       try {
         el.currentTime = target
@@ -211,7 +212,7 @@ export function useVideoElement(
   const setLiveEdge = useCallback(() => {
     const el = videoRef.current
     if (!el) return
-    const end = state.live ? state.bufferedEnd : state.duration
+    const end = playableDuration(state)
     if (end > 0) {
       try {
         el.currentTime = end

@@ -3,7 +3,7 @@
  *
  * 只读 `state.muted/volume`,点按调 `ops.toggleMute`。音量归零也显示静音图标。
  */
-import type { VideoOps, VideoPlayState } from "../useVideoElement.ts"
+import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 import { VolumeIcon, VolumeMutedIcon } from "../icons.tsx"
 
 export function MediaMuteButton({

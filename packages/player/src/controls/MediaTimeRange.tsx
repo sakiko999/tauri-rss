@@ -12,8 +12,9 @@
  * pointerup 释放。用 pointer capture 保证拖出元素仍跟手。
  */
 import { useCallback, useRef, useState } from "react"
-import type { VideoOps, VideoPlayState } from "../useVideoElement.ts"
-import { formatTime } from "../time.ts"
+import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
+import { formatTime } from "../utils/time.ts"
+import { playableDuration } from "../utils/buffer.ts"
 
 const STEP_SEC = 5
 const PAGE_RATIO = 0.1
@@ -29,7 +30,7 @@ export function MediaTimeRange({
   const [dragging, setDragging] = useState(false)
   const trackRef = useRef<HTMLDivElement | null>(null)
 
-  const duration = state.live ? state.bufferedEnd : state.duration
+  const duration = playableDuration(state)
   const pct = duration > 0 ? Math.min(100, (state.currentTime / duration) * 100) : 0
   const bufferPct = duration > 0 ? Math.min(100, (state.bufferedEnd / duration) * 100) : 0
 
@@ -45,7 +46,7 @@ export function MediaTimeRange({
   const seekFromEvent = useCallback(
     (clientX: number) => {
       const p = pctFromEvent(clientX)
-      const t = (p / 100) * (state.live ? state.bufferedEnd : state.duration)
+      const t = (p / 100) * playableDuration(state)
       ops.seek(t)
     },
     [pctFromEvent, ops, state.live, state.bufferedEnd, state.duration],

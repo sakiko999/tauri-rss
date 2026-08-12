@@ -8,7 +8,7 @@
  * 纯受控:全部状态来自 `VideoPlayState`,操作来自 `VideoOps`。
  * 挂载在 VideoShell 底部,随自动隐藏一起显隐。
  */
-import type { VideoOps, VideoPlayState, FullscreenApi } from "./useVideoElement.ts"
+import type { VideoOps, VideoPlayState, FullscreenApi } from "./hooks/useVideoElement.ts"
 import {
   MediaFullscreenButton,
   MediaLiveEdgeButton,
@@ -37,7 +37,7 @@ export function PlayerControls({
   onQuality: (rate: number) => void
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-b-lg bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
+    <div className="flex flex-col gap-1 rounded-b-lg bg-linear-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
       {/* Seek(直播只显示缓冲状态,不可拖拽;带「回直播」按钮) */}
       <div className="flex items-center gap-2">
         <MediaLiveEdgeButton state={state} ops={ops} />

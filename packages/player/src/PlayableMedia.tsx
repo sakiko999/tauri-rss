@@ -1,14 +1,32 @@
 /**
- * PlayableMedia —— 可播放媒体容器(video/live 用)。
+ * PlayableMedia —— 可播放媒体容器(video/audio/live 共用)。
  *
- * 封装"懒解析 + 播放"两个阶段:
- *   - 有初始流(refresh 已带,如 audio 的 stream)→ 直接内嵌 MediaPlayer;
+ * 封装「懒解析 + 播放」两阶段 + 按格式分发渲染:
+ *   - 有初始流(refresh 已带,如 audio 的 stream)→ 直接内嵌播放;
  *   - 无流 → 显示「播放」按钮,点击调 `resolve()` 拿 MediaStream[] 再播。
  *   resolve 由宿主(App 层)注入——它绑定 DataLayer 的 resolvePlay/resolveLivePlay。
+ *
+ * 渲染分发(单流,stream 由 useStreamSelection 选出):
+ *   - mp4/webm → VideoShell 原生 <video>;  m3u8/flv/dash → VideoShell + useMediaStream;
+ *   - mp3/aac/ogg → AudioShell 原生 <audio>(无画面,保留浏览器控件);
+ *   - rtmp:// 协议 → 浏览器播不了,占位提示。
+ *
+ * 注意:原生 <video>/<audio> 无法带自定义 header(如 bilibili 直链的 referer)。
+ * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
 import { useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
-import { MediaPlayer } from "./MediaPlayer.tsx"
+import { useMediaStream } from "./hooks/useMediaStream.ts"
+import {
+  isProgressiveAudio,
+  isProgressiveVideo,
+  isRtmp,
+  isStreamingStream,
+  useStreamSelection,
+} from "./hooks/useStreamSelection.ts"
+import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
+import { AudioShell } from "./AudioShell.tsx"
+import { VideoShell } from "./VideoShell.tsx"
 
 /**
  * 在用户手势内解锁浏览器 autoplay policy(带声音自动播放)。
@@ -52,12 +70,15 @@ export function PlayableMedia({
   onError?: (err: unknown) => void
   /** 挂载后立即懒解析起播(模态大播放器用,无需点按钮)。 */
   autoResolve?: boolean
-  /** 填满父容器(父已定比例)——透传给 MediaPlayer/VideoShell。 */
+  /** 填满父容器(父已定比例)——透传给 VideoShell,避免双撑首帧塌缩。 */
   fill?: boolean
 }) {
   const [resolved, setResolved] = useState<MediaStream[] | null>(null)
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<unknown>(null)
+  // 切档后仍要传 error 给 useMediaStream;error 展示由 error state 管。
+  const [playError, setPlayError] = useState<unknown>(null)
+  const [retryKey, setRetryKey] = useState(0)
   const resolveRef = useRef(resolve)
   resolveRef.current = resolve
 
@@ -94,6 +115,73 @@ export function PlayableMedia({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoResolve])
 
+  // 选流 + 档位。
+  const { stream, qualityOptions, switchQuality } = useStreamSelection(playStreams)
+
+  // 诊断:打印最终选中的流(URL 域名/截断 + format + headers 键),排查清晰度/来源。
+  useEffect(() => {
+    if (!stream) return
+    let host = ""
+    try {
+      host = new URL(stream.url, "https://x.invalid").hostname
+    } catch {
+      host = stream.url.slice(0, 60)
+    }
+    const path = stream.url.length > 100 ? `…${stream.url.slice(-60)}` : stream.url
+    console.info(
+      "[media] 选择流:",
+      host,
+      "| format:",
+      stream.format ?? "?",
+      "| headers:",
+      Object.keys(stream.headers ?? {}).join(",") || "-",
+      "|",
+      path,
+    )
+  }, [stream])
+
+  // 流媒体驱动(hls/flv/dash)→ useMediaStream 接管 video;原生 src 由 VideoShell 写。
+  const needsStreamPlayer = !!stream && isStreamingStream(stream)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  // autoPlay 语义:用户点过「播放」(resolved !== null)→ 自动带声起播;初始流未点击不自动播。
+  const autoPlay = resolved !== null
+
+  useMediaStream({
+    stream: needsStreamPlayer ? stream : null,
+    videoRef,
+    autoPlay,
+    // retryKey 变化强制 useMediaStream 重建播放实例(错误重试)。
+    retryKey,
+    onError: (e) => {
+      setPlayError(e)
+      onError?.(e)
+    },
+  })
+
+  // 原生 mp4 分支的自动播放:与 HLS 对齐,**等媒体可播(canplay)后**带声 play。
+  // ⚠️ 不能 src 刚设就立即 play:此时媒体未加载,autoplay policy 判定不稳定,
+  // 带声 play 易被拦 → 降级静音(实测 video 静音、live 有声即因此——live 走 HLS
+  // 在 canplay 才 play,媒体已就绪)。canplay 时媒体已加载,带声 play 最可能放行。
+  // 被拦降级静音(保底可播);StrictMode 双挂载:第一个 video 被移除,检查 isConnected。
+  const isNativeStream = !!stream && !needsStreamPlayer && isProgressiveVideo(stream)
+  useEffect(() => {
+    if (!autoPlay || !isNativeStream) return
+    const el = videoRef.current
+    if (!el) return
+    const attemptUnmuted = () => {
+      if (!el.isConnected) return
+      el.muted = false
+      // 带声 play;被 policy 拦 → 静音重试(attemptPlay 内部)。AbortError 不降级。
+      attemptPlayWithMuteFallback(el, () => el.play(), { autoPlay, onFail: (e) => setPlayError(e) })
+    }
+    // 只等 canplay(媒体可播)再带声 play——**不要立即 play**:src 刚设媒体未
+    // 加载,立即 play 易被判失败 → 降级静音(YouTube video 静音即因此)。
+    el.addEventListener("canplay", attemptUnmuted, { once: true })
+    return () => el.removeEventListener("canplay", attemptUnmuted)
+  }, [autoPlay, isNativeStream, stream?.url])
+
+  // 解析失败展示。
   if (error) {
     return (
       <div className="rounded border border-red-300 p-2 text-sm text-red-600">
@@ -116,16 +204,76 @@ export function PlayableMedia({
     )
   }
 
-  // resolved !== null = 用户点过「播放」按钮 → resolve 成功后自动播
-  // (原生 mp4 带声起播,unlockAudioPlayback 已解除 policy;live 仍静音起播)。
-  // 有初始流(未点击)不自动播。
+  if (!stream) {
+    return <div className="rounded border border-zinc-300 p-4 text-center text-sm text-zinc-500">无可播流</div>
+  }
+
+  if (playError) {
+    return (
+      <div className="space-y-2 rounded border border-red-300 p-4 text-center text-sm text-red-600">
+        <p>播放失败:{playError instanceof Error ? playError.message : String(playError)}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setPlayError(null)
+            setRetryKey((k) => k + 1)
+          }}
+          className="rounded border border-red-300 px-3 py-1 text-xs hover:bg-red-50"
+        >
+          重试
+        </button>
+      </div>
+    )
+  }
+
+  // 真 rtmp 播不了。
+  if (isRtmp(stream)) {
+    return (
+      <div className="rounded border border-zinc-300 p-4 text-center text-sm text-zinc-500">
+        该流为 rtmp 协议,当前浏览器无法直接播放
+      </div>
+    )
+  }
+
+  // 带 referer 头的渐进式直链原生播可能被 CDN 拒(浏览器无法带自定义 header)。
+  // 作为 title 提示挂外壳,不进流式布局(避免与 video 并列占行)。
+  const headerHintTitle = stream.headers ? "该直链可能需要 referer 头,若播放失败请用浏览器打开" : undefined
+
+  // 渐进式视频 / HLS / FLV / DASH → VideoShell 外壳(自定义控件)。
+  if (isProgressiveVideo(stream) || needsStreamPlayer) {
+    return (
+      <VideoShell
+        videoRef={videoRef}
+        isStreaming={needsStreamPlayer}
+        src={isProgressiveVideo(stream) ? stream.url : undefined}
+        autoPlay={autoPlay}
+        qualityOptions={qualityOptions}
+        activeQuality={stream.rate}
+        onQuality={switchQuality}
+        title={headerHintTitle}
+        fill={fill}
+      />
+    )
+  }
+
+  // 渐进式音频(mp3/aac/ogg)→ AudioShell 原生 <audio>。
+  if (isProgressiveAudio(stream)) {
+    return (
+      <AudioShell
+        src={stream.url}
+        autoPlay={autoPlay}
+        qualityOptions={qualityOptions}
+        activeQuality={stream.rate}
+        onQuality={switchQuality}
+        className={className}
+      />
+    )
+  }
+
+  // 未知流类型:兜底原生 <video>。
   return (
-    <MediaPlayer
-      streams={playStreams}
-      className={className}
-      onError={onError}
-      autoPlay={resolved !== null}
-      fill={fill}
-    />
+    <div className="space-y-1">
+      <video ref={videoRef} controls autoPlay={autoPlay} className={["w-full rounded bg-black", className].filter(Boolean).join(" ")} />
+    </div>
   )
 }

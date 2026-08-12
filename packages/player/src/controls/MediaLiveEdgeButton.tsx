@@ -2,7 +2,7 @@
  * MediaLiveEdgeButton —— 直播「回到直播」按钮(离边缘超过阈值时显示)。
  * MediaChrome `<media-live-button>` 的 React 版。
  */
-import type { VideoOps, VideoPlayState } from "../useVideoElement.ts"
+import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 
 /** 距直播边缘超过 5s 判定为「离开直播」,显示回直播按钮。 */
 export const LIVE_EDGE_THRESHOLD_S = 5

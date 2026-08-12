@@ -231,9 +231,10 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
       if (first?.url) durlStreams.push({ url: first.url, format: "mp4", headers })
     }
 
-    // 3. DASH 优先(1080P + 有声);DASH 构造失败回退 durl。
+    // 3. DASH 优先(1080P + 有声);DASH 构造失败回退 durl。两者均已按 rate 降序
+    //    (契约:最高清晰度排最前,player 默认选流取第一个)。
     if (dashStreams.length) return dashStreams
-    if (durlStreams.length) return durlStreams
+    if (durlStreams.length) return R.sortWith([R.descend((s: Stream) => s.rate ?? 0)], durlStreams)
     throw new Error(`bilibili playurl: no playable stream for ${bvidOrAid}`)
   }
 
@@ -299,6 +300,9 @@ function dashStreamsWithMpd(data: Record<string, any>, headers: Record<string, s
         }),
       }
     }),
+    // 契约:最高清晰度排最前(player 默认选流取第一个)。dash.video[] 是服务端
+    // 原始顺序(不保证 qn 降序),显式按 rate 降序。
+    R.sortWith([R.descend((s: Stream) => s.rate ?? 0)]),
   )(videos)
 }
 

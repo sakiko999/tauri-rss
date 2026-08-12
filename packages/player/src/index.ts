@@ -6,13 +6,20 @@
  *
  * 依赖链:core ← player ← ui/desktop。
  */
-export { MediaPlayer } from "./MediaPlayer.tsx"
 export { PlayableMedia } from "./PlayableMedia.tsx"
 export { unlockAudioPlayback } from "./PlayableMedia.tsx"
-export { useMediaStream, isHlsStream, isFlvStream, isDashStream } from "./useHls.ts"
-export { useVideoElement, bindFullscreen } from "./useVideoElement.ts"
-export type { VideoPlayState, VideoOps, FullscreenApi, BufferedRange } from "./useVideoElement.ts"
+export { useMediaStream, isHlsStream, isFlvStream, isDashStream } from "./hooks/useMediaStream.ts"
+export {
+  useStreamSelection,
+  isProgressiveVideo,
+  isProgressiveAudio,
+  isRtmp,
+  isStreamingStream,
+} from "./hooks/useStreamSelection.ts"
+export { useVideoElement, bindFullscreen } from "./hooks/useVideoElement.ts"
+export type { VideoPlayState, VideoOps, FullscreenApi, BufferedRange } from "./hooks/useVideoElement.ts"
 export { VideoShell } from "./VideoShell.tsx"
+export { AudioShell } from "./AudioShell.tsx"
 export { PlayerControls } from "./PlayerControls.tsx"
 export type { MediaStream } from "@tauri-playground/core"
 

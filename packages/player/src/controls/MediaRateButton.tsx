@@ -6,7 +6,7 @@
  */
 import { useState } from "react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
-import type { VideoOps, VideoPlayState } from "../useVideoElement.ts"
+import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 
 export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 

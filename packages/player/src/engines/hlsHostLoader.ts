@@ -10,6 +10,7 @@
  */
 import Hls from "hls.js"
 import { LoadStats, type Loader, type LoaderCallbacks, type LoaderConfiguration, type LoaderContext, type LoaderStats } from "hls.js"
+import { toArrayBuffer } from "../utils/buffer.ts"
 
 /** hls.js 的 Loader 类型作为类实现(`new (config: HlsConfig) => Loader<LoaderContext>`)。 */
 export class HlsHostLoader implements Loader<LoaderContext> {
@@ -58,8 +59,7 @@ export class HlsHostLoader implements Loader<LoaderContext> {
         this.stats.loading.end = performance.now()
         if (isBinary) {
           // appHost.http arraybuffer 返回 Uint8Array → hls.js 要 ArrayBuffer。
-          const bytes = res.body as Uint8Array
-          const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+          const buf = toArrayBuffer(res.body as Uint8Array)
           this.stats.loaded = buf.byteLength
           this.stats.total = buf.byteLength
           callbacks.onSuccess({ url, data: buf }, this.stats, context, null)

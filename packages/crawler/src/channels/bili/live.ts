@@ -130,7 +130,8 @@ async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Promise<S
     }
   }
   if (!streams.length) return parseBiliLiveStreams(probe?.data ?? {})
-  return streams
+  // 契约:最高清晰度排最前(player 默认选流取第一个)。accept_qn 顺序不保证高→低,显式降序。
+  return R.sortWith([R.descend((s: Stream) => s.rate ?? 0)], streams)
 }
 
 /**

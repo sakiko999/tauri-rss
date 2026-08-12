@@ -13,6 +13,7 @@
  * DashHostLoader 是工厂函数,返回 { load, abort, reset, resetInitialSettings }。
  */
 import { type URLLoader } from "dashjs"
+import { toArrayBuffer } from "../utils/buffer.ts"
 
 interface DashLoadConfig {
   request?: {
@@ -97,9 +98,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
           return
         }
         if (isBinary) {
-          const bytes = res.body as Uint8Array
-          const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
-          config.success?.(buf, String(res.status), url)
+          config.success?.(toArrayBuffer(res.body as Uint8Array), String(res.status), url)
           config.complete?.(req, String(res.status))
         } else {
           const text = typeof res.body === "string" ? res.body : String(res.body)

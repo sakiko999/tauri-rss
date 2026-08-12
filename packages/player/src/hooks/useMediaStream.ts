@@ -13,9 +13,9 @@ import Hls from "hls.js"
 import flvjs from "flv.js"
 import * as dashjs from "dashjs"
 import type { MediaStream } from "@tauri-playground/core"
-import { HlsHostLoader } from "./hlsHostLoader.ts"
-import { DashHostLoader } from "./dashHostLoader.ts"
-import { attemptPlayWithMuteFallback } from "./attemptPlay.ts"
+import { HlsHostLoader } from "../engines/hlsHostLoader.ts"
+import { DashHostLoader } from "../engines/dashHostLoader.ts"
+import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
 
 /** 是否为 m3u8/HLS 流。 */
 export function isHlsStream(stream: MediaStream): boolean {
@@ -54,7 +54,6 @@ export function useMediaStream({
   const flvRef = useRef<flvjs.Player | null>(null)
   const dashRef = useRef<dashjs.MediaPlayerClass | null>(null)
   const dashUrlRef = useRef<string | null>(null)
-  const pendingRaf = useRef<number | null>(null)
   // onError 用 ref 持有:调用方每次渲染传新函数,但 effect 不该因它重跑
   // (否则 hls.js/flv.js 反复 destroy/重建,直播流被中断)。
   const onErrorRef = useRef(onError)
@@ -65,17 +64,8 @@ export function useMediaStream({
     const video = videoRef.current
     if (!video) return
     const report = onErrorRef.current
-    // 取消上一步残留的 raf(StrictMode 双挂载时第一个的 raf 不该再 play)。
-    if (pendingRaf.current !== null) {
-      cancelAnimationFrame(pendingRaf.current)
-      pendingRaf.current = null
-    }
 
     const cleanup = () => {
-      if (pendingRaf.current !== null) {
-        cancelAnimationFrame(pendingRaf.current)
-        pendingRaf.current = null
-      }
       flvRef.current?.destroy()
       flvRef.current = null
       hlsRef.current?.destroy()
@@ -144,19 +134,22 @@ export function useMediaStream({
         )
       })
       // 起播:autoPlay=true 带声(PlayableMedia 点击时 unlockAudioPlayback 已解除
-      // autoplay policy),被拦降级静音重试。在 MANIFEST_PARSED + canplay 后 play
-      // (数据真正就绪时才调)。
+      // autoplay policy),被拦降级静音重试。统一等 video 的 canplay(浏览器权威
+      // 「可播」信号,库级 MANIFEST_PARSED 只是 manifest 就绪、不保证能播)——
+      // canplay 到达时数据已在 buffer,play() 才稳定。`{once:true}` 天然幂等。
       video.muted = !autoPlay
       const attemptPlay = () => {
         if (!video.isConnected) return
         attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
       }
-      hls.on(Hls.Events.MANIFEST_PARSED, attemptPlay)
-      // 兜底:分段缓冲到可播时再试一次(部分 LL-HLS 时序 MANIFEST_PARSED 早于数据)。
       video.addEventListener("canplay", attemptPlay, { once: true })
       hls.loadSource(stream.url)
       hls.attachMedia(video)
-      return cleanup
+      // 清理:hls.destroy() 移除 hls 事件;video 上的 canplay 需手动移除。
+      return () => {
+        video.removeEventListener("canplay", attemptPlay)
+        cleanup()
+      }
     }
 
     // FLV 分支(仅 http-flv;rtmp:// 播不了)。
@@ -173,17 +166,19 @@ export function useMediaStream({
       flv.on(flvjs.Events.ERROR, (_t, _d, e) => report?.(e))
       flv.attachMediaElement(video)
       flv.load()
-      // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。
+      // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
+      // (浏览器权威「可播」信号,METADATA_ARRIVED 只是 FLV 头就绪、不保证能播)。
       video.muted = !autoPlay
-      // 延迟 play:StrictMode 下第一个挂载的 video 会被立即移除,此时 play() 会
-      // 报 "media was removed"。延迟到下一个 tick 并检查 isConnected,移除的跳过。
-      const raf = requestAnimationFrame(() => {
+      const attemptPlay = () => {
         if (!video.isConnected) return
         attemptPlayWithMuteFallback(video, () => flv.play(), { autoPlay, onFail: report })
-      })
-      // 记录 raf 供 cleanup 取消。
-      pendingRaf.current = raf
-      return cleanup
+      }
+      video.addEventListener("canplay", attemptPlay, { once: true })
+      // 清理:flv.destroy() 移除 flv 事件;video 上的 canplay 需手动移除。
+      return () => {
+        video.removeEventListener("canplay", attemptPlay)
+        cleanup()
+      }
     }
 
     // DASH 分支(B站视频:音视频分离,MPD 由 crawler 拼好存 dashManifest)。
@@ -219,12 +214,18 @@ export function useMediaStream({
       player.attachView(video)
       player.attachSource(mpdUrl)
       video.muted = !autoPlay
-      const raf = requestAnimationFrame(() => {
+      // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
+      // (浏览器权威「可播」信号;dash.js 的 CAN_PLAY 就是它的转发,直接等原生更可靠)。
+      const attemptPlay = () => {
         if (!video.isConnected) return
         attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
-      })
-      pendingRaf.current = raf
-      return cleanup
+      }
+      video.addEventListener("canplay", attemptPlay, { once: true })
+      // 清理:player.reset() 移除 dash.js 事件;video 上的 canplay 需手动移除。
+      return () => {
+        video.removeEventListener("canplay", attemptPlay)
+        cleanup()
+      }
     }
 
     return cleanup
@@ -233,10 +234,6 @@ export function useMediaStream({
   // 组件卸载时兜底销毁(独立 effect,不依赖 stream 状态)。
   useEffect(() => {
     return () => {
-      if (pendingRaf.current !== null) {
-        cancelAnimationFrame(pendingRaf.current)
-        pendingRaf.current = null
-      }
       hlsRef.current?.destroy()
       flvRef.current?.destroy()
       dashRef.current?.reset()

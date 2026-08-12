@@ -403,21 +403,16 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
     checkPlayability(res, videoId)
   }
 
-  const live = isLiveContent(res)
   // 直播:ANDROID_VR 自带 hlsManifestUrl(实测确认)。若没有(部分直播形态),
   // fallback iOS client(ANDROID 系不返回 hls 时才需要)。
-  if (live) {
+  if (isLiveContent(res)) {
     const hls = res.streamingData?.hlsManifestUrl
-    if (hls) {
-      return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
-    }
+    if (hls) return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
     try {
       const ios = await getIosPlayerResponse(videoId, visitorData)
       checkPlayability(ios, videoId)
       const iosHls = ios.streamingData?.hlsManifestUrl
-      if (iosHls) {
-        return [{ url: iosHls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
-      }
+      if (iosHls) return [{ url: iosHls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
     } catch (e) {
       console.warn("[youtube] iOS live 请求失败:", (e as Error)?.message)
     }
@@ -438,16 +433,12 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
   const best = pickProgressiveVideo(formats)
   if (best) {
     const url = await resolveFormatUrl(best)
-    if (url) {
-      return [{ url, format: "mp4", headers }]
-    }
+    if (url) return [{ url, format: "mp4", headers }]
   }
 
   // 渐进式拿不到 → 试 HLS manifest(直播)。
   const hls = res.streamingData?.hlsManifestUrl
-  if (hls) {
-    return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/" } }]
-  }
+  if (hls) return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/" } }]
 
   throw new Error(`YouTube 未找到可播直链: https://www.youtube.com/watch?v=${videoId}`)
 }
