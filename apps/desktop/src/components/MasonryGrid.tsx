@@ -70,7 +70,7 @@ export function MasonryGrid({
   const visible = useMemo(() => items.slice(0, count), [items, count])
 
   return (
-    <div ref={listRef} className="h-full overflow-y-auto">
+    <div ref={listRef} className="h-full overflow-y-auto px-4">
       {/* 内联 columnCount:CSS columns 列数。不用 Tailwind `columns-{n}` 动态类
           (构建时扫不到)。column-gap 由 columnCount 侧显式设。 */}
       <div style={{ columnCount: colCount, columnGap: "1rem" }}>

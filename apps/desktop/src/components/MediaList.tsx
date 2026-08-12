@@ -32,20 +32,13 @@ import { MasonryGrid } from "./MasonryGrid.tsx"
 const openUrl = (url: string) => window.open(url, "_blank")
 
 /** 按容器宽度选列数(Folo 断点):80rem≈1280→5、72rem≈1152→4、48rem≈768→3、32rem≈512→2。
- * live 视图(大图卡)上限 2 列——16:9 大图卡在 5 列等宽格子里会被压成小卡。 */
-function colsForWidth(w: number, isLive: boolean): number {
-  const base = w >= 1280 ? 5 : w >= 1152 ? 4 : w >= 768 ? 3 : w >= 512 ? 2 : 1
-  return isLive ? Math.min(2, base) : base
+ * video/live 统一中卡(16:9 图在上),按正常断点,不再对 live 限 2 列。 */
+function colsForWidth(w: number): number {
+  return w >= 1280 ? 5 : w >= 1152 ? 4 : w >= 768 ? 3 : w >= 512 ? 2 : 1
 }
 
 /** 模块级列数(供模块级 GridList 读)。MediaList 每次渲染同步最新 state。 */
 let gridColCountRef = 1
-
-/** 模块级 live 视图标志(供 GridList 的 RO 回调读,选 live 大图列数)。 */
-let liveViewRef = false
-
-/** 模块级 GridList 容器 node(供 MediaList 在视图 kind 切换时重算列数)。 */
-let gridListNode: HTMLDivElement | null = null
 
 /**
  * 模块级 setColCount。Virtuoso 的 RO 回调在模块作用域,不能直接调组件内 setState,
@@ -70,8 +63,6 @@ const GridList = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>
     const setRef = useCallback(
       (node: HTMLDivElement | null) => {
         nodeRef.current = node
-        // 记录到模块级:MediaList 在视图 kind 切换(live↔非live)时用它重算列数。
-        gridListNode = node
         if (typeof ref === "function") ref(node)
         else if (ref) ref.current = node
       },
@@ -81,7 +72,7 @@ const GridList = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>
     useEffect(() => {
       const node = nodeRef.current
       if (!node) return
-      const calc = () => setColCount?.(colsForWidth(node.clientWidth, liveViewRef))
+      const calc = () => setColCount?.(colsForWidth(node.clientWidth))
       calc()
       const ro = new ResizeObserver(calc)
       ro.observe(node)
@@ -98,6 +89,9 @@ const GridList = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>
           flexWrap: "wrap",
           alignContent: "flex-start",
           gap: "1rem",
+          // 水平 padding 统一到容器(左右对称 px-3):卡片无水平 padding,滚动条不压内容。
+          paddingLeft: "1rem",
+          paddingRight: "1rem",
         }}
       />
     )
@@ -154,13 +148,11 @@ export function MediaList({ className }: { className?: string }) {
   const [expandedItem, setExpandedItem] = useState<MediaItem | null>(null)
 
   // 视图 kind 判断:
-  //   - 单一 kind(live/social) → 专属布局(live 大图卡 2 列 / social 瀑布流);
-  //   - 混合 kind(如 tab:all 跨视频+直播+音频) → 统一卡片 UnifiedCard。
-  //     VirtuosoGrid 要求等尺寸 item,kind 专属卡高度差异大,混排会重排错位,
-  //     故混合视图用统一卡(同一壳 + kind 徽标),消除高度差异。
+  //   - 单一 kind(social) → 专属瀑布流;
+  //   - 其余(video/live/audio 单一或混合) → VirtuosoGrid,统一中卡。
+  //     video/live 也用 UnifiedCard(16:9 图在上,与混合视图一致)。
   const kinds = new Set(items.map((it) => it.kind))
   const isSingleKind = items.length > 0 && kinds.size === 1
-  const isLiveView = isSingleKind && kinds.has("live")
   const isSocialView = isSingleKind && kinds.has("social")
 
   // 响应式列数 state + 模块级接线。RO 回调在模块作用域,setColCount 指向最新 setter。
@@ -170,15 +162,6 @@ export function MediaList({ className }: { className?: string }) {
   setColCount = (n) => setColCountRef.current(n)
   // 同步列数到模块级 ref:GridList 渲染时读它(改 gridTemplateColumns → 网格重排)。
   gridColCountRef = colCount
-  // 同步 live 标志到模块级:GridList 的 RO 回调读它选 live 大图列数。
-  liveViewRef = isLiveView
-
-  // 视图 kind 切换(live↔非live)不改变容器宽度,RO 不会触发重算——这里手动重算
-  // 列数,保证切到 live 立即变 2 列大图。空依赖 RO 只在挂载/resize 跑,此 effect 补 kind 维度。
-  useEffect(() => {
-    const node = gridListNode
-    if (node) setColCountState(colsForWidth(node.clientWidth, isLiveView))
-  }, [isLiveView])
 
   // 打开模态大播放器:同步手势内解锁 autoplay(点击「大屏/播放」按钮的 transient
   // user activation 窗口内),ExpandedPlayer 挂载后 autoResolve 才能带声起播。
@@ -190,9 +173,21 @@ export function MediaList({ className }: { className?: string }) {
   }
 
   // 模块级稳定回调:onOpen 只依赖参数 url,可提前绑定。
-  // 混合视图 → UnifiedCard(统一卡);单一 kind → MediaItemView(kind 专属卡)。
+  // 卡片分发:video/live 恒走 UnifiedCard(16:9 中卡,统一观感);audio 单一 kind
+  // 走 MediaItemView(AudioRenderer 行式封面);混合视图全走 UnifiedCard(等尺寸)。
   const renderItem = (item: (typeof items)[number]) =>
-    isSingleKind ? (
+    item.kind === "video" || item.kind === "live" || !isSingleKind ? (
+      <UnifiedCard
+        key={item.id}
+        item={item}
+        onOpen={openUrl}
+        onToggleRead={markRead}
+        onToggleStar={toggleStar}
+        onResolvePlay={(itemId) => resolvePlay(item.subscriptionId, itemId)}
+        onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
+        onPlayBig={() => openExpanded(item)}
+      />
+    ) : (
       <MediaItemView
         key={item.id}
         item={item}
@@ -205,25 +200,14 @@ export function MediaList({ className }: { className?: string }) {
         onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
         onPlayBig={() => openExpanded(item)}
       />
-    ) : (
-      <UnifiedCard
-        key={item.id}
-        item={item}
-        onOpen={openUrl}
-        onToggleRead={markRead}
-        onToggleStar={toggleStar}
-        onResolvePlay={(itemId) => resolvePlay(item.subscriptionId, itemId)}
-        onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
-        onPlayBig={() => openExpanded(item)}
-      />
     )
 
   return (
     // 外层只做布局不滚动(overflow-hidden)——VirtuosoGrid 的 List 自带滚动容器,
     // 若外层也 overflow-y-auto 会出现双滚动条。列表容器 flex-1 min-h-0 撑满剩余高度。
-    <main className={cn("flex h-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden p-6", className)}>
+    <main className={cn("flex h-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden p-2", className)}>
       {/* 顶部:当前视图名 + 条数徽章 + 刷新。徽章用实心圆底突出计数。 */}
-      <div className="mb-5 flex shrink-0 items-center gap-3">
+      <div className="mb-5 px-4 flex shrink-0 items-center gap-3">
         <h2 className="text-sm font-semibold text-foreground">内容</h2>
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
           {items.length} 条
