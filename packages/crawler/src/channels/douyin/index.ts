@@ -15,7 +15,9 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
+import { log } from "../../log.ts"
 import { ABOGUS_JS } from "./abogus.ts"
+
 
 const LIVE = "https://live.douyin.com"
 const UA =
@@ -61,14 +63,14 @@ export class DouyinLiveChannel implements RssChannel {
       const streams = parseDouyinStreams((room.stream_url ?? {}) as Record<string, any>)
       if (streams.length) return streams
     } catch (e) {
-      console.warn("[douyin] enter API 失败:", (e as Error)?.message)
+      log.douyin.warn("enter API 失败:", (e as Error)?.message)
     }
     // 2. reflow/info(room 长号)
     try {
       const streams = await this.fetchReflowStreams(roomId)
       if (streams.length) return streams
     } catch (e) {
-      console.warn("[douyin] reflow API 失败,降级 HTML:", (e as Error)?.message)
+      log.douyin.warn("reflow API 失败,降级 HTML:", (e as Error)?.message)
     }
     // 3. HTML 兜底
     return this.resolveFromHtml(roomId)

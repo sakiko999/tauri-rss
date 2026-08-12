@@ -11,9 +11,11 @@
  */
 import * as R from "ramda"
 import type { Stream } from "@tauri-playground/xml"
+import { log } from "../../log.ts"
 import { now } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
+
 
 export const BILIBILI_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -221,7 +223,7 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
         if (first?.url) durlStreams.push({ url: first.url, format: "mp4", headers, quality: q.name, rate: q.qn })
       } catch (e) {
         if (idx === 0) throw e
-        console.warn(`[bili] 视频档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, (e as Error)?.message)
+        log.bili.warn(`视频档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, (e as Error)?.message)
       }
     }
     if (!durlStreams.length) {

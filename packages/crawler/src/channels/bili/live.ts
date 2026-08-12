@@ -11,7 +11,9 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
+import { log } from "../../log.ts"
 import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
+
 
 const API_LIVE = "https://api.live.bilibili.com"
 
@@ -105,7 +107,7 @@ async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Promise<S
     `${API_LIVE}/xlive/web-room/v2/index/getRoomPlayInfo?${probeParams}`,
   )
   const qualities = extractBiliLiveQualities(probe?.data ?? {})
-  if (!qualities.length) return parseBiliLiveStreams(probe?.data ?? {})
+  if (!qualities.length) return resolveBiliLiveProbe(probe?.data ?? {}, roomId)
 
   // 2. 逐档重发拿直链。首档(默认档)失败整体报错;其余档失败跳过。
   const streams: Stream[] = []
@@ -126,10 +128,10 @@ async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Promise<S
       if (s) streams.push({ ...s, quality: q.name, rate: q.qn })
     } catch (e) {
       if (idx === 0) throw e
-      console.warn(`[bili:live] 档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, (e as Error)?.message)
+      log.biliLive.warn(`档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, (e as Error)?.message)
     }
   }
-  if (!streams.length) return parseBiliLiveStreams(probe?.data ?? {})
+  if (!streams.length) return resolveBiliLiveProbe(probe?.data ?? {}, roomId)
   // 契约:最高清晰度排最前(player 默认选流取第一个)。accept_qn 顺序不保证高→低,显式降序。
   return R.sortWith([R.descend((s: Stream) => s.rate ?? 0)], streams)
 }
@@ -194,6 +196,16 @@ function codecToUrls(c: Record<string, any>): BiliLiveUrl[] {
  *   hls(fmp4)优先(对直播延迟/兼容更好) → mcdn/scdn 保真 CDN 优先。
  * pathOr 消除 Array.isArray 样板;全部无副作用(无可变 push)。
  */
+/**
+ * probe 兜底解析:probe 无档位 / 逐档全失败时回退解析 probe 全量数据。
+ * 仍无可播流 → 抛错(而非返回空数组,player 会误报「成功 0 条流」)。
+ */
+function resolveBiliLiveProbe(data: Record<string, any>, roomId: string): Stream[] {
+  const probeStreams = parseBiliLiveStreams(data)
+  if (!probeStreams.length) throw new Error(`bili:live 未找到可播流(房间 ${roomId} 可能未开播)`)
+  return probeStreams
+}
+
 function parseBiliLiveStreams(data: Record<string, any>): Stream[] {
   const headers = { referer: "https://live.bilibili.com/", "user-agent": BILIBILI_UA }
   const urls: BiliLiveUrl[] = R.chain(

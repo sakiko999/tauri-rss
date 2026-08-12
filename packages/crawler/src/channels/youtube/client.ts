@@ -16,9 +16,11 @@
  */
 import * as R from "ramda"
 import type { Stream } from "@tauri-playground/xml"
+import { log } from "../../log.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 import { getItag, isPlayableItag } from "./itag.ts"
 import { deobfuscateNParam, hasThrottlingParam } from "./signature.ts"
+
 
 const YOUTUBEI_V1 = "https://www.youtube.com/youtubei/v1"
 const YOUTUBEI_GAPIS_V1 = "https://youtubei.googleapis.com/youtubei/v1"
@@ -414,7 +416,7 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
       const iosHls = ios.streamingData?.hlsManifestUrl
       if (iosHls) return [{ url: iosHls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
     } catch (e) {
-      console.warn("[youtube] iOS live 请求失败:", (e as Error)?.message)
+      log.youtube.warn("iOS live 请求失败:", (e as Error)?.message)
     }
     // iOS 也拿不到 HLS,回退 ANDROID_VR/WEB 的 formats(若有)。
   }

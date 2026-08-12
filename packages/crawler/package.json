@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@tauri-playground/host": "workspace:*",
+    "@tauri-playground/log": "workspace:*",
     "@tauri-playground/xml": "workspace:*",
     "ramda": "^0.32.0"
   },

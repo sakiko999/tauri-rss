@@ -8,13 +8,14 @@
  * 签名只用于 getH5Play(拉 RTMP 直链)。本 channel 产出 Live Item(状态+元数据),
  * playUrls 需额外 H5Play 请求,交由下游 resolveLivePlay 懒解析(同 huya)。
  */
-import * as R from "ramda"
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
+import { log } from "../../log.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
+
 
 const BASE = "https://www.douyu.com"
 const UA =
@@ -69,7 +70,7 @@ export class DouyuLiveChannel implements RssChannel {
         if (s) streams.push({ ...s, quality: q.name, rate: q.rate })
       } catch (e) {
         if (idx === 0) throw e
-        console.warn(`[douyu] 档位 ${q.name}(rate=${q.rate}) 解析失败,跳过:`, (e as Error)?.message)
+        log.douyu.warn(`档位 ${q.name}(rate=${q.rate}) 解析失败,跳过:`, (e as Error)?.message)
       }
     }
     if (!streams.length) {
@@ -78,9 +79,11 @@ export class DouyuLiveChannel implements RssChannel {
       if (s) streams.push(s)
     }
     if (!streams.length) throw new Error(`douyu H5Play: no stream for room ${roomId}`)
-    // 契约:最高清晰度排最前(player 默认选流取第一个)。multirates 服务端顺序
-    // 理论上高档在前,不依赖它,显式按 rate 降序兜底(bili/youtube 同款写法)。
-    return R.sortWith([R.descend((s: Stream) => s.rate ?? 0)], streams)
+    // 契约:最高清晰度排最前(player 默认选流取第一个)。streams 按 multirates 服务端
+    // 顺序(dart 直接遍历不重排,服务端即高档在前)。⚠️ 不能按 rate 数值降序——douyu
+    // 的 rate 是服务端档位 ID 而非清晰度等级(2K60 的 rate 最小),按 rate 排会把它
+    // 排到末尾。
+    return streams
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
@@ -164,7 +167,7 @@ export class DouyuLiveChannel implements RssChannel {
         return { url, format, headers: { referer: `${BASE}/${roomId}`, "user-agent": UA } }
       } catch (e) {
         lastErr = e
-        console.warn(`[douyu] cdn=${cdn} rate=${rate} 失败,换下一个:`, (e as Error)?.message)
+        log.douyu.warn(`cdn=${cdn} rate=${rate} 失败,换下一个:`, (e as Error)?.message)
       }
     }
     throw lastErr ?? new Error(`douyu H5Play: no stream for room ${roomId}`)

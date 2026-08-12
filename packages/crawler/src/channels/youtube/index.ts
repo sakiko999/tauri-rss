@@ -20,19 +20,13 @@ const UA =
 /**
  * 懒解析可播流。真实直链走 InnerTube player API(见 client.ts):
  * ANDROID_VR client(主力,2026-08 起免 poToken)——视频渐进式 mp4(音视频合一)、
- * 直播自带 hlsManifestUrl;失败 fallback WEB / 直播 iOS。直链失败时兜底返回
- * `format: "web"`(watch URL),UI 打开页面播放。
+ * 直播自带 hlsManifestUrl;失败 fallback WEB / 直播 iOS。
+ * ⚠️ 直链失败直接抛错——不兜底 `format:"web"`(watch URL 不可播,会让 player
+ * 误报「成功 N 条流」实则黑屏,日志误导)。解析失败由 player resolveFailed 处理。
  */
 async function resolveYoutubePlay(itemId: string): Promise<Stream[]> {
   const videoId = itemId.replace(/^https?:\/\/www\.youtube\.com\/watch\?v=/, "")
-  try {
-    return await resolveYoutubeStreams(videoId)
-  } catch (e) {
-    console.warn("[youtube] 直链获取失败,兜底页面流:", e)
-    return [
-      { url: `https://www.youtube.com/watch?v=${videoId}`, format: "web", headers: { "user-agent": UA } },
-    ]
-  }
+  return resolveYoutubeStreams(videoId)
 }
 
 export class YoutubeChannel implements RssChannel {
