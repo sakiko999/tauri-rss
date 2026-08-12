@@ -1,17 +1,17 @@
-# YouTube 视频直链提取技术方案
+# YouTube 视频/直播直链提取方案
 
-> 现状缺口:`youtube` channel 用官方 RSS 拿元数据(videoId/缩略图/时长)可跑通,
-> 但 `resolveYoutubePlay` 只返回 `format: "web"` 的 watch URL(打开网页播放),
-> **没有真实可播直链**。本文档记录从 NewPipeExtractor 逆向出的完整方案。
+> 现状(2026-08-12):`youtube`/`youtube:live` channel 已打通真实可播直链——
+> **视频走 DASH 1080p(自拼 MPD, dash.js 合成)、直播走 HLS(自带 1080p)**。
+> 本文档记录从 NewPipeExtractor 逆向出的 InnerTube player API 方案 + 本项目落地。
 >
 > 参考实现:`tmp/NewPipeExtractor`(`extractor/src/main/java/org/schabi/newpipe/extractor/services/youtube/`)
 > 与 yt-dlp 同思路(InnerTube API + player JS 解密),是**零登录**方案的成熟参照。
 
-## 一、总览:四条候选路径与选择
+## 一、总览:候选路径与选择
 
 | 路径 | 方式 | 优缺点 | 结论 |
 |---|---|---|---|
-| **A. InnerTube player API** | `POST youtubei/v1/player` 拿 playerResponse | 官方接口,字段全;带签名/n 参数需解 JS | **推荐** |
+| **A. InnerTube player API** | `POST youtubei/v1/player` 拿 playerResponse | 官方接口,字段全;带签名/n 参数需解 JS | **采用** |
 | B. 网页 `<script src=.../player>` 解析 | 从 watch 页面挖直链 | 抗爬最弱,需额外爬页面 | 不选 |
 | C. embed 页面 | `youtube.com/embed/{id}` 内嵌的 playerResponse | 精简版,依赖少 | A 的变体 |
 | D. 第三方解析服务 | 现成 API(如 cobalt) | 依赖外部服务,不稳定 | 不选(个人部署) |
@@ -24,13 +24,15 @@
 ### 端点
 
 ```
-POST https://www.youtube.com/youtubei/v1/player?prettyPrint=false
+POST https://youtubei.googleapis.com/youtubei/v1/player?prettyPrint=false&t={ts}&id={videoId}
+# gapis 更稳(绕开 www.youtube.com 的地域/风控),NewPipe 同款。t/id 参数 gapis 必需。
+# visitor_id 端点走 www:POST https://www.youtube.com/youtubei/v1/visitor_id?prettyPrint=false
 ```
 
 请求头:
 ```
 User-Agent: 各 client 的 UA(见下)
-X-Goog-Api-Format-Version: 2        (Android/iOS client 必需)
+X-Goog-Api-Format-Version: 2        (Android/iOS/VR client 必需)
 Referer: https://www.youtube.com/    (web client)
 ```
 
@@ -40,50 +42,45 @@ Referer: https://www.youtube.com/    (web client)
 {
   "context": {
     "client": {
-      "clientName": "ANDROID",        // 或 WEB / IOS / TVHTML5_SIMPLY_EMBEDDED_PLAYER
-      "clientVersion": "19.09.37",
-      "androidSdkVersion": 30,
+      "clientName": "ANDROID_VR",     // 或 WEB / IOS
+      "clientVersion": "1.65.10",
+      "deviceMake": "Oculus",
+      "deviceModel": "Quest 3",
+      "androidSdkVersion": 32,
+      "osName": "Android",
+      "osVersion": "12L",
       "hl": "en",
       "visitorData": "..."            // 必填!无则拿不到有效 playerResponse
     }
   },
   "videoId": "xxx",
-  "cpn": "随机13位base64",            // content playback nonce,拼到直链后
+  "cpn": "随机13位base64",            // content playback nonce
   "contentCheckOk": true,
-  "racyCheckOk": true,
-  "playbackContext": {
-    "contentPlaybackContext": {
-      "signatureTimestamp": 19484,    // 从 player JS 的 base.js 里解析
-      "referer": "https://www.youtube.com/watch?v=xxx"
-    }
-  }
+  "racyCheckOk": true
 }
 ```
 
-### client 选择(NewPipe 的轮询顺序)
+### client 选择(本项目主力 + fallback)
 
-NewPipe 依次尝试 **android → visionOS → iOS** 三个 client 的 `streamingData`,
-全部能拿到直链。关键差异:
+**主力 ANDROID_VR(Oculus Quest 3)**——2026-08 起 ANDROID/IOS 标准 client 部分 IP 触发
+poToken(LOGIN_REQUIRED),VR 返回免 token 直链(详见「六、poToken 与 ANDROID_VR」)。`resolveYoutubeStreams`
+fallback 链 = **ANDROID_VR → WEB**(直播无 hls 再 fallback iOS)。
 
-- **WEB client**:`streamingData.formats` 的 URL **绝大多数带 `signatureCipher`**(签名混淆),
-  需解析 player JS 解密;且带 `n` 参数(节流混淆)也需解。
-- **ANDROID client**:URL 通常**直接带 `url` 字段无签名**,或仅带 `n` 参数——最省事。
-  但 HEVC 需 `androidSdkVersion >= 24`,否则只给 H.264。
-- **IOS client**:URL 无签名,带 `n` 参数;`hlsManifestUrl` 在 iOS 上才有。
-
-> **对我们的启示**:优先 ANDROID client(直链最干净,少解一道签名),失败再 fallback
-> WEB(必要时解签名)。与 bilibili 直播「avc 优先」同理——优先能播的。
+各 client 差异(溯源):
+- **ANDROID_VR**:`formats`(渐进式)只有 itag 18(360p);`adaptiveFormats` 有 1080p+
+  avc1(itag 137 等)带 initRange/indexRange;直播自带 hlsManifestUrl + dashManifestUrl。
+  不支持 made-for-kids 视频(无 audio/video_only 流)。
+- **WEB**:`streamingData.formats` 多数带 `signatureCipher`(签名混淆),需解;且带 `n` 参数。
+- **IOS**:URL 无签名带 `n`;`hlsManifestUrl` 在 iOS 上才有(直播兜底)。
 
 ### visitorData 怎么来
 
-visitorData 是必须的,NewPipe 用 `getVisitorDataFromInnertube` 发一个初始请求拿:
+visitorData 是必须的,零登录获取(不需要 cookie/puppeteer):
 
 ```
-POST https://www.youtube.com/youtubei/v1/visitor?prettyPrint=false
-# body 里带 client + androidSdkVersion,拿到的 response.data.visitorData
+POST https://www.youtube.com/youtubei/v1/visitor_id?prettyPrint=false
+# body 带 client + androidSdkVersion;响应在 responseContext.visitorData
 ```
-
-这是**零登录**的——不需要 cookie/puppeteer。
 
 ## 三、playerResponse 解析 → 直链
 
@@ -91,34 +88,30 @@ POST https://www.youtube.com/youtubei/v1/visitor?prettyPrint=false
 
 ```
 playerResponse
-├── videoDetails         # id/title/thumbnail/isLiveContent/isPostLiveDvr...
+├── videoDetails         # id/title/thumbnail/lengthSeconds/isLiveContent...
 ├── playabilityStatus    # status: "OK" / "LOGIN_REQUIRED" / age-restricted...
 ├── streamingData        # ★ 直链核心
-│   ├── formats          # 渐进式(音视频合一,mp4)
-│   ├── adaptiveFormats  # 自适应(纯视频/纯音频,DASH)
-│   ├── hlsManifestUrl   # 直播/部分视频的 HLS
-│   └── dashManifestUrl  # DASH MPD(可自己拼)
+│   ├── formats          # 渐进式(音视频合一,mp4)——仅 itag 18(360p)
+│   ├── adaptiveFormats  # 自适应(纯视频/纯音频,DASH)——1080p+ 高清来源
+│   ├── hlsManifestUrl   # 直播的 HLS(自带 6 档含 1080p)
+│   └── dashManifestUrl  # 直播的原生 DASH MPD(VR 自带)
 └── captions             # 字幕(可选)
 ```
 
 每个 format 字段:
 ```json
 {
-  "itag": 18,
-  "url": "...",                // 或 cipher / signatureCipher(带签名)
-  "mimeType": "video/mp4; codecs=\"avc1.64001f, mp4a.40.2\"",
-  "bitrate": 1081494,
-  "width": 640,
-  "height": 360,
+  "itag": 137,
+  "baseUrl": "...",               // adaptiveFormats 用 baseUrl;formats 用 url(或 cipher/signatureCipher)
+  "mimeType": "video/mp4; codecs=\"avc1.640028\"",
+  "bitrate": 1945652,
+  "width": 1080,
+  "height": 1920,
   "fps": 30,
-  "quality": "medium",
-  "qualityLabel": "360p",
-  "initRange": { "start": "0", "end": "746" },
-  "indexRange": { "start": "747", "end": "2259" },
-  "contentLength": "123456",
-  "audioChannels": 2,
-  "audioSampleRate": "44100",
-  "signatureCipher": "s=xxx&sp=sig&url=xxx"   // 或 cipher
+  "qualityLabel": "1080p",
+  "initRange": { "start": "0", "end": "741" },
+  "indexRange": { "start": "742", "end": "893" },
+  "contentLength": "10434003"
 }
 ```
 
@@ -129,169 +122,114 @@ NewPipe 的 `ItagItem` 是**静态 itag → 格式映射表**(比字段推断可
 - `ItagType.VIDEO`(渐进式):18/22/37(mp4 音视频合一)…
 - `ItagType.VIDEO_ONLY`(纯视频 DASH):160/133/134/135/136/137/299/266…
 
-```
-itagType 决定流分类:
-  AUDIO       → AudioStream
-  VIDEO       → VideoStream(带音轨,渐进式)
-  VIDEO_ONLY  → VideoStream(isVideoOnly=true,需另配音频)
-```
-
-> **对我们的启示**:B 站直播解析已经只留 avc(参照 `parseBiliLiveStreams`),YouTube 同理——
-> itag 表天然按编码分组,按 itag 选型而非 URL 后缀判断,可播性有保证。
+> 本项目 itag 表(`channels/youtube/itag.ts`)只维护 H.264 + AAC 子集
+> (avc/mp4a,过滤 vp9/av1 初期不支持),与 B 站直播解析「只留 avc」同理。
 
 ### 签名与 n 参数(两个反爬点)
 
-**1. `signatureCipher`(仅部分视频 + WEB client 有)**:
+**1. `signatureCipher`(仅 WEB client 的部分视频有)**:
 
 ```
 url=...&sp=sig&s=ZYXWV...      → 需要解 s
 ```
 
-解密:解析 `https://www.youtube.com/s/player/{hash}/.../base.js`(从 watch 页拿),
-用正则挖出解密函数(`YoutubeSignatureUtils.FUNCTION_REGEXES`,6 个候选模式匹配
-`deobfuscate` 函数),再在 JS 引擎里跑:
+解密:从 watch 页拿 `base.js`,用正则挖出解密函数(6 个候选模式),再在 JS 引擎里跑:
 ```
 streamUrl = url + "&" + sp + "=" + deobfuscate(s)
 ```
 
-**2. `n` 参数(所有 HTML5 client 的 URL 都有)**:
+**2. `n` 参数(HTML5 client 的 URL 有)**:
 
-不解 `n` → **限速 ~50KB/s 或 403**。`YoutubeThrottlingParameterUtils.getThrottlingParameterFromStreamingUrl`
-从 URL 里提取 `n=xxx`,再用 player JS 里的 n 函数解密,替换回 URL。
+不解 `n` → **限速 ~50KB/s 或 403**。从 URL 提取 `n=xxx`,再用 player JS 的 n 函数解密
+替换回 URL。`resolveFormatUrl`(client.ts)统一处理 url/签名/n 参数——每个流装配前过一遍。
 
-> ⚠️ **门槛认知**:签名+n 参数都要「从 base.js 挖函数 + JS 引擎执行」。
-> 两条路:
->   1. **用 ANDROID client 绕开签名**(多数视频无 signatureCipher),只剩 n 参数;
->   2. `n` 参数仍要解——yt-dlp 用 JS 引擎,我们也需要。Node 侧可用 `new Function`,
->      桌面 WebView2 同理(已有 `js` 签名执行能力,见 host 的 FunctionJsBackend)。
+> 门槛认知:签名+n 参数都要「从 base.js 挖函数 + JS 引擎执行」。ANDROID_VR 多数视频
+> 无 signatureCipher、无独立 n 参数,所以是主力。n 解密(signature.ts)保留作 WEB fallback。
 
-## 四、DASH/HLS 直链
+## 四、本项目落地:DASH 优先(视频)+ HLS(直播)
 
-- **HLS**:`streamingData.hlsManifestUrl`(iOS/直播才有)→ hls.js 直接播。
-- **DASH**:`streamingData.dashManifestUrl`(或自拼 mpd_version=7),需要 dash.js。
-  NewPipe 对 OTF/直播/post-live 强制 `DeliveryMethod.DASH`。
+**核心决策:视频 DASH 优先,渐进式只作整体降级**。原因:ANDROID_VR 渐进式只到 360p,
+1080p 一直在 adaptiveFormats;且 MediaPlayer 默认选流 `find(isProgressiveVideo)` 会优先
+渐进式——若混排,默认会落 360p 违背 1080p 目标。所以 DASH 装配失败才整体 fallback 渐进式。
 
-> **对我们的启示**:YouTube 视频如果拿到的是 **adaptiveFormats(纯视频 + 纯音频分离)**,
-> 要么用 DASH(dash.js),要么**合并不了**(浏览器不能直接拼流)。
-> 最省事的播法是:优先取 `formats`(渐进式 mp4 音视频合一)的**最大分辨率**那一条。
-> 只有渐进式全缺时才考虑 DASH。
+### 视频:DASH 自拼 MPD(1080p+ 有声)
 
-## 五、落地到本项目的实现路径
+视频 adaptiveFormats 是**音视频分离**(video_only + audio),每个 format 带
+`initRange`/`indexRange`/`contentLength`(如 itag 137: init 0-741 / idx 742-893),
+与 B 站 DASH 完全同构 → 用 `buildMpd`(共享 `packages/crawler/src/utils/mpd.ts`,
+从 bili 抽出)拼 SegmentBase MPD,存 `stream.dashManifest`,`format:"dash"` 由 dash.js
+双 SourceBuffer 合成播放(等价 B 站 MSE)。
 
-### 5.1 目标形态
+- 档位:itag 137(1080p avc1.640028)/136(720p)/135(480p)/134(360p)/133(240p)/160(144p),
+  音频 itag 140(mp4a.40.2)。
+- **每档 MPD 只含该档 video + 公共最高音轨** → dash.js 天然锁档,无 ABR 降档。
+  切档时按 rate(height)换流,不重发请求。
+- 返回 Stream[]:高度降序,默认 `streams[0]` = 1080p。
+- URL 装配统一过 `resolveFormatUrl`(解 n/签名);失败跳过该档。
 
-`youtube` channel 的 `resolvePlay` 从「返回 web 页面」升级为「返回真直链」:
+### 直播:HLS(自带 1080p,无需改动)
 
-```ts
-// packages/crawler/src/channels/youtube/ 下新增
-function resolveYoutubePlay(videoId: string): Promise<Stream[]> {
-  // 1. POST youtubei/v1/player (ANDROID client,零登录)
-  // 2. 解析 streamingData.formats → 取渐进式 mp4 最大分辨率(带 headers: referer+UA)
-  // 3. 失败 fallback: hlsManifestUrl / WEB client 解签名
-}
-```
+`resolveYoutubeStreams` 直播分支返回 `format:"hls"` → hls.js。master manifest 自带
+**6 档 144/240/360/480/720/1080p**(itag 96 = 1080p),`useHls.ts` `currentLevel=max`
+锁最高档 → **直播实际播 1080p**。
 
-### 5.2 拆文件(参照 bili/channels 的组织)
+✅ **新发现:ANDROID_VR 直播自带 `dashManifestUrl`(原生 MPD)**——将来想用 dash.js 播
+直播可直接 `attachSource(dashManifestUrl)` 走原生 MPD,不须自拼。目前 hls.js 已覆盖
+且正常,属可选增强。
 
-```
-packages/crawler/src/channels/youtube/
-  index.ts        # 现有 channel(元数据 + resolvePlay 改调 resolveYoutubePlay)
-  client.ts       # InnerTubeClient: getVisitorData / getPlayerResponse / parseFormats
-  itag.ts         # itag 映射表(ItagItem 的 TS 移植,精简版)
-  signature.ts    # base.js 挖解密函数 + n 参数解密(需要 host.js 执行)
-```
+### 视频 DASH vs 直播 DASH —— 两条路不同
 
-### 5.3 关键顺序
+| 维度 | 视频 | 直播 |
+|---|---|---|
+| 渐进式 | itag 18(360p) | 无 |
+| HLS | 无 | ✅ 有(含 1080p) |
+| 原生 dashManifestUrl | no | ✅ YES(可选增强) |
+| adaptive 是否带 initRange | ✅ 是(自拼 MPD) | 否(分段流,无 Range) |
+| 当前播放 | **DASH 1080p(dash.js)** | **HLS 1080p(hls.js)** |
 
-1. **先拿 ANDROID client 的渐进式 mp4**(最干净:无签名)
-2. **fallback 层**:WEB client 解签名、HLS manifest、DASH(按需)
-3. **itag 表**(只维护本项目需要的编码:avc/mp4a,过滤 vp9/av1 初期可不支持)
+## 五、实测坑(2026-08,重要!)
 
-### 5.5 实测结论(2026-08 已验证,重要!)
-
-- ✅ **ANDROID client 渐进式 mp4 直链可拿到、可直接播**:
-  `resolveYoutubeStreams` 实测返回 itag 18(360p mp4 avc+mp4a),HTTP 206 + MP4 头
-  `00 00 00 24`,带 referer 即可播,`dQw4w9WgXcQ` 和 3Blue1Brown `6XPlmCDNLNc` 都通。
-- ⚠️ **clientVersion 是最大坑**:用过时版本(如 19.09.37 / 2.20240821.00.00)会
-  **400 `Precondition check failed` 或 playability `UNPLAYABLE`**,即使视频可播。
-  必须用**最新版本**(NewPipe 2026-01 的 `21.03.36` / WEB `2.20260120.01.00`)。
-  **版本过旧会静默表现为「视频不可播」,排查时优先怀疑它**。
-- ✅ **ANDROID client 渐进式 URL 没有独立 n 参数**(实测 URL 的 `n=` 实为 `mn=` 多播参数)——
-  **无需 n 参数解密即可播**。n 解密逻辑(signature.ts)保留作 WEB fallback 兜底。
-- ⚠️ **Bun 字符串转义坑**:正则里 `\(` 用字符串/模板拼接会被 Bun 吞反斜杠
-  (未知转义丢 `\`),必须用正则字面量 `/.../`。已踩坑并全部改字面量。
+- ⚠️ **clientVersion 是最大坑**:用过时版本会 **400 `Precondition check failed` 或
+  playability `UNPLAYABLE`**,即使视频可播。**版本过旧会静默表现为「视频不可播」,
+  排查时优先怀疑它**。当前 ANDROID_VR 用 `1.65.10`(yt-dlp master 2026-08);>1.65 可能
+  返回 SABR-only,需随 yt-dlp 更新。
+- ✅ **渐进式分辨率实测修正**:ANDROID 21.03.36 与 ANDROID_VR 的 `formats`(渐进式)
+  **都只有 itag 18(360p)**——**itag 22(720p 渐进式)两个 client 都不返回**。1080p 一直
+  在 adaptiveFormats,旧代码只取 formats 所以 360p 封顶(现已 DASH 优先)。
+- ⚠️ **Bun 字符串转义坑**:正则里 `\(` 用字符串/模板拼接会被 Bun 吞反斜杠(未知转义丢
+  `\`),必须用正则字面量 `/.../`。已踩坑并全部改字面量。
 - ✅ 节点:visitorData 端点是 `youtubei/v1/visitor_id`(不是 `visitor`),响应在
   `responseContext.visitorData`。
-- ✅ **直播实现(2026-08 已实测)**:Claude Code 常驻直播间 `tRsQsTMvPNg` →
-  `resolveYoutubeStreams` 返回 hls,manifest HTTP 200 + `#EXTM3U`(标准 HLS 直播流)。
-  要点:
-  - **判定直播**:`playabilityStatus.liveStreamability` 存在(或 `videoDetails.isLiveContent`)。
-  - **ANDROID client 直播时不返回 hlsManifestUrl**——必须加 **iOS client**
-    (`getIosPlayerResponse`,gapis 端点 + `&t={ts}&id={videoId}`,iOS UA
-    `com.google.ios.youtube/21.03.2(iPhone16,2; U; CPU iOS 18_7_2 like Mac OS X; en)`)。
-  - iOS client 对**普通视频也返回 hlsManifestUrl**(NewPipe 注释:非 Apple client 没有 HLS)。
-    所以只在 `isLiveContent=true` 时用 iOS 拿 hls;普通视频仍走渐进式 mp4。
-- ⚠️ **DASH-only 直播形态(2026-08 实测)**:部分直播(如 Claude FM `tRsQsTMvPNg`
-  当前形态)**iOS 不返回 hlsManifestUrl**,只给 `adaptiveFormats`(音视频分离,无渐进式)。
-  此时 `resolveYoutubeStreams` 直播分支拿不到 HLS → throw → UI 降级 `format:"web"`
-  (打开页面播放)。当前**不支持内嵌 DASH 播放**(需 dash.js,MSE 混流),已知边界。
-  HLS 直播(主流大直播)仍正常内嵌。
-- ✅ **ANDROID/WEB 端点统一走 gapis(2026-08 对齐 NewPipe)**:`getAndroidPlayerResponse`
-  从 `www.youtube.com/youtubei/v1/player` 改为 `youtubei.googleapis.com/youtubei/v1/player`
-  + `&t={ts}&id={videoId}`(NewPipe `YoutubeStreamHelper.java:150` 同款)。gapis 更稳,
-  绕开 www.youtube.com 的地域/风控;iOS 本就同款。
-- ⚠️ **node/example 环境被 YouTube IP 风控(2026-08 实测)**:`injectNodeHost` 直连时
-  ANDROID/WEB/iOS 任意 client 都返回 `playabilityStatus.status = LOGIN_REQUIRED` +
-  "Sign in to confirm you're not a bot"。curl 对比 gapis 与 www.youtube.com 两个端点
-  **结果一致**——是出口 IP 信誉问题,不是端点选择。**youtube 可播性只能在 Tauri 设备
-  环境实测**(真实 IP + webview),node 断言失败 ≠ 实现坏。NewPipe 的 poToken(bot guard)
-  是解决途径,零登录无 poToken 无法绕开 node 环境的 IP 风控。
+- ⚠️ **poToken 风控是「部分 IP」特性,与运行环境无关**:触发 `LOGIN_REQUIRED` "Sign in
+  to confirm you're not a bot" 的是**出口 IP 信誉/风控 ASN**(与 node/tauri/browser
+  无关)。开发机三种环境均正常抓取;另一台机器被风控正是切 ANDROID_VR 的动因。
+  **youtube 可播性断言:同一 IP 下 node / tauri / browser 结果一致,node 断言失败 ≠
+  实现坏,先确认当前 IP 是否被控**。
 
-### 5.6 ANDROID/iOS client 强制 poToken(2026-08)与规避方案
+## 六、poToken 与 ANDROID_VR(2026-08 溯源与兜底)
 
-> ⚠️ **重要更新(2026-08-12,含实测修正)**:2026 年起 **ANDROID / iOS 标准 client 的
-> poToken 要求收紧**——部分 IP(机房/代理/风控 ASN)会触发 `LOGIN_REQUIRED`
-> "Sign in to confirm you're not a bot"。⚠️ **不是所有环境都失效**:实测(2026-08-12)
-> 当前 ANDROID client(`21.03.36`)对普通视频(mp4 直链)和 iOS client 对直播(hls)
-> **仍可正常解析**,触发机器人检测的是**部分 IP**,非「Tauri 一律失效」。规避与溯源如下,
-> 作为 **ANDROID_VR 兜底预案**(当前主 client 仍可用,无需改动)。
+### 根因:NewPipe 已移除 ANDROID/IOS client
 
-#### 根因:NewPipe 已移除 ANDROID/IOS client
+- **NewPipeExtractor PR #1529(2026-08-06)把 ANDROID + IOS client 整体移除**,注释原话
+  *"using them requires poTokens nobody can generate"*——ANDROID 用 **DroidGuard**
+  (Play Services 原生 VM,校验 app 签名/包 ID),iOS 用 **iosGuard**。都不是纯 HTTP/JS
+  能复刻的。
+- 时间线:2025 年初 ANDROID 仍匿名可用;**2025-09 起 poToken 从 visitorData 绑定改为
+  videoId 绑定**(每视频现 mint);**2026 年起 ANDROID/iOS poToken 要求收紧**,但非
+  「全面强制」——受影响的只是**部分 IP**。
 
-- **NewPipeExtractor PR #1529(2026-08-06,AudricV)把 ANDROID + IOS client 整体移除**,
-  注释原话 *"using them requires poTokens nobody can generate"*——ANDROID 用
-  **DroidGuard**(Play Services 原生 VM,校验 app 签名/包 ID,非 root 的 reVanced 都过不了),
-  iOS 用 **iosGuard**(可能依赖 Apple attestation)。两者都不是纯 HTTP/JS 能复刻的。
-- **ANDROID 无 poToken 时 NewPipe 改用 reel 端点兜底**(`getAndroidReelPlayerResponse`,
-  `YoutubeStreamExtractor.fetchAndroidClient`——`androidPoTokenResult == null` 走
-  `reel/reel_item_watch`,Shorts 专用,非常规 player 端点)。我们项目只有常规 player 端点,
-  **在受影响的 IP 上**(NewPipe 语境 ANDROID 已被强制)无 poToken 会撞 LOGIN_REQUIRED;
-  但当前 21.03.36 在正常 IP 上仍可解析(见下实测)。
-- 时间线:2025 年初 ANDROID 仍匿名可用(PR #1272 只是可选加 poToken 支持);
-  **2025-09 起 poToken 从 visitorData 绑定改为 videoId 绑定**(yt-dlp #14471 / FreeTube #8137,
-  每视频现 mint);**2026 年起 ANDROID/iOS poToken 要求收紧**(NewPipe 因无法生成而移除),
-  ⚠️ **但非「全面强制」**:实测(2026-08-12)当前 ANDROID `21.03.36` + iOS 对普通视频/直播
-  **仍可解析**,受影响的只是**部分 IP** 触发机器人检测。
+### 规避:ANDROID_VR 主力(已落地)
 
-#### 规避方案(按推荐序)
+- YouTube 长期给 ANDROID_VR 返回**传统 stream URL(非 SABR),无需 poToken**,多项目
+  2026 实测(yt-dlp 内置、YoutubeExplode/NewPipe 恢复 720p/1080p+)。
+- ⚠️ yt-dlp **默认不用 ANDROID_VR**(靠 `--extractor-args "youtube:player_client=android_vr"`
+  显式指定);YoutubeExplode/ytdown 则当主力。且 **VR 也非绝对免 token**:2026-07 起
+  non-HLS 格式已开始选择性强制,并需 visitorData(无则 LOGIN_REQUIRED)。
+- **本项目结论(2026-08-12 已落地,`92de21a`):本机被风控 → 直接切 ANDROID_VR 为主力**。
+  ⚠️ 非永久保险——保持 fallback 链(VR 失败 → WEB;直播无 hls → iOS)与 clientVersion
+  跟随更新,VR 万一也被封锁时再上彻底方案。
 
-**① 换 ANDROID_VR(Oculus Quest 3)client —— 兜底预案,最小改动**
-
-YouTube 曾长期给此 client 返回**传统 stream URL(非 SABR),无需 poToken**,多项目 2026 实测:
-yt-dlp `youtube.py` 内置、[YoutubeExplode PR #936](https://github.com/Tyrrrz/YoutubeExplode/pull/936)
-(2026-02,用户确认恢复下载)、[NewPipe PR #1498](https://github.com/TeamNewPipe/NewPipeExtractor/pull/1498)
-(2026-05,恢复 720p/1080p+,并检测 SABR-only 响应自动 fallback)。
-
-⚠️ **定位修正(2026-08-12)**:yt-dlp **默认不用 ANDROID_VR**——它的默认链是
-`('tv', 'web', 'mweb', 'android', 'ios')`,ANDROID_VR 靠
-`--extractor-args "youtube:player_client=android_vr"` **显式指定**才启用(非自动 fallback)。
-YoutubeExplode/ytdown 则激进地把它当**主力/首选**。且 **ANDROID_VR 也非绝对免 token**:
-yt-dlp 最新注释 *"Since 2026.07, intermittent/selective POT enforcement has been observed
-for non-HLS formats"* —— non-HLS 格式也已开始选择性强制;并需 visitorData(无则 LOGIN_REQUIRED)。
-**结论:作为 ANDROID 撞机器人检测时的 fallback 使用,不替换主力。**
-
-完整常量(yt-dlp master 2026-08,clientVersion 已从 1.60.19 升到 **1.65.10**;注意
->1.65 可能返回 SABR-only):
+完整常量(yt-dlp master 2026-08,clientVersion `1.65.10`;>1.65 可能 SABR-only):
 
 ```json
 {
@@ -308,60 +246,62 @@ for non-HLS formats"* —— non-HLS 格式也已开始选择性强制;并需 vi
 //   (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip
 ```
 
-落地 = 改 `client.ts` 的 `getAndroidPlayerResponse` 常量 + ANDROID_UA,其余逻辑不变
-(渐进式 mp4 优先 → HLS fallback)。已知限制:**不支持 made-for-kids 视频**(无
-audio/video_only 流,可接受)。注意 AV1 itags(394-401)+ audio(599,600)需入 itag 表才能
-吃到 VR 的高清流;仅用渐进式 mp4(18/22)则无感。
+注意 AV1 itags(394-401)+ audio(599,600)需入 itag 表才能吃到 VR 的高清流;当前 DASH
+装配只吃 avc1(137/136 等),AV1 高清留作未来。
 
-**② 兜底链(ANDROID_VR 万一也被封锁时)**
+### 兜底链(ANDROID_VR 万一也被封锁时)
 
 | client | poToken | 现状(2026-08) | 备注 |
 |---|---|---|---|
-| `ANDROID_VR` | 传统 URL 免;non-HLS 选择性强制 | ⚠️ 2026-07 起 intermittent | fallback;不含 made-for-kids,需 visitorData |
+| `ANDROID_VR` | 传统 URL 免;non-HLS 选择性强制 | ⚠️ 2026-07 起 intermittent | 主力;不含 made-for-kids,需 visitorData |
 | `TVHTML5` / `tv` | 不需要 | ⚠️ 仍返回 URL 但格式 DRM'd | 无 cookie 全 DRM,需登录 |
 | `WEB_EMBEDDED_PLAYER` | 不需要 | ⚠️ 仅可嵌入视频有效 | 换 embed 端点 |
 | `WEB` / `MWEB` | 需要(GVS) | 🔒 2025-02 起锁 SABR-only | adaptiveFormats 被移除 |
 | `ANDROID` / `IOS` | 必须(DroidGuard/iOSGuard) | ❌ NewPipe 已移除 | 无人能生成 |
 | `web_safari` | GVS 暂不需要 | ✅ HLS 免 token | HLS 直播兜底 |
 
-**③ 彻底方案:WebView2 内跑 BotGuard 生成 poToken(后续再议)**
+### 彻底方案:WebView2 内跑 BotGuard 生成 poToken(后续再议)
 
 Web 端 poToken 可**自托管生成**——yt-dlp 官方推荐 `bgutil-ytdlp-pot-provider`
-(= [LuanRT/BgUtils](https://github.com/LuanRT/BgUtils) 跑 BotGuard challenge),但
-PoTokenProvider javadoc 明确:**需「良好 DOM 的 JS 引擎」**。我们 Tauri 就是真实 WebView2,
-天然满足(NewPipe 在 Android 也是用系统 WebView 生成,PR #12027 HtmlUnit 是替代)。
-代价:poToken 现绑定 videoId,每视频 mint;且 @Nonnull 注入 `serviceIntegrityDimensions.poToken`。
-**工程量大,仅当 ① ANDROID_VR 失效才考虑。**
+(= [LuanRT/BgUtils](https://github.com/LuanRT/BgUtils) 跑 BotGuard challenge),但需
+「良好 DOM 的 JS 引擎」——Tauri 就是真实 WebView2,天然满足。代价:poToken 现绑定
+videoId,每视频 mint;注入 `serviceIntegrityDimensions.poToken`。**工程量大,仅当
+ANDROID_VR 失效才考虑。**
 
-#### 本项目的落地指向
+## 七、实现位置(代码对照)
 
-- `packages/crawler/src/channels/youtube/client.ts` 当前 `getAndroidPlayerResponse` 用
-  ANDROID client,实测(2026-08-12)仍可正常解析普通视频(mp4)+ 直播(iOS hls)。
-  **保持 ANDROID 主力不变**;仅当某 IP 撞 LOGIN_REQUIRED(机器人检测)时,在
-  `resolveYoutubeStreams` 的 fallback 链(当前 ANDROID → WEB)插入 ANDROID_VR
-  (带 visitorData,常量见上)作为中间兜底。
-- `resolveYoutubeStreams` 目前只取 `formats`(渐进式 mp4,最高 itag 22=720p);要 1080p+
-  需扩展 adaptiveFormats + DASH 混流(与 bot 规避无关,后续迭代)。
+```
+packages/crawler/src/channels/youtube/
+  index.ts        # youtube / youtube:live channel(fetch 元数据 + resolvePlay/resolveLivePlay)
+  client.ts       # InnerTubeClient: getVisitorData / 三 client player / resolveYoutubeStreams
+  itag.ts         # itag 映射表(H.264/AAC 子集)
+  signature.ts    # base.js 挖解密函数 + n 参数解密(host.js 执行)
+packages/crawler/src/utils/mpd.ts   # 共享 MPD 装配器(从 bili 抽出,bili/youtube 共用)
+```
 
-### 5.4 依赖注入
+- `resolveYoutubeStreams`:直播 → HLS;视频 → DASH(adaptiveFormats 拼 MPD)→ 渐进式 360p
+  → HLS(罕见 VOD)→ throw。
+- player 侧:useHls.ts `isDashStream` → dash.js + DashHostLoader(透传 stream.headers,
+  分片 Range 走 appHost.http 隧道无 CORS);hls.js `HlsHostLoader`(googlevideo 无 CORS)。
 
-`host.js` 已存在(`FunctionJsBackend`,`new Function` 执行 JS)——签名/n 解密天然可用。
-无需 puppeteer,零登录,与 bilibili wbi 签名同级的复杂度。
-
-## 六、参考链接
+## 八、参考链接
 
 - NewPipeExtractor 实现:
-  - `YoutubeStreamHelper.java` — player API 请求构造(5 个 client)
-  - `YoutubeStreamExtractor.java:1130-1408` — getItags / cipher 解析 / itag 元数据
-  - `YoutubeSignatureUtils.java` — base.js 挖解密函数(6 个正则候选)
+  - `YoutubeStreamHelper.java` — player API 请求构造(多 client)
+  - `YoutubeStreamExtractor.java` — getItags / cipher 解析 / itag 元数据
+  - `YoutubeSignatureUtils.java` — base.js 挖解密函数
   - `YoutubeThrottlingParameterUtils.java` — n 参数提取
   - `YoutubeJavaScriptPlayerManager.java` — 签名 + n 参数执行与缓存
   - `ItagItem.java` — itag → 格式/编码/清晰度映射
 - 思路同源:yt-dlp(HTML5 client 解析 + JS 引擎执行)
 
-## 七、风险
+## 九、风险
 
 - **base.js 会变**:函数名/正则匹配需随 YouTube 更新维护(NewPipe 靠社区跟进)。
   缓解:多个正则候选 + 提取失败时回退 watch 页面/HLS。
+- **clientVersion 会变**:>1.65 可能 SABR-only(adaptive 无 baseUrl)→ DASH 装配失败 →
+  降级渐进式 360p / throw。需随 yt-dlp 更新。
 - **visitorData 有生命周期**:过期需重新获取(每次 resolvePlay 现取即可,代价低)。
+- **baseUrl 签名/n 参数过期**:分片 URL 带签名,过期即 403。缓解:每次播放现取(不缓存
+  进 refresh,与 B站同构)。
 - **版权/ToS**:纯技术可行性,仅个人演示用途,不做下载/批量抓取。

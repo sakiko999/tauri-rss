@@ -13,6 +13,7 @@ import * as R from "ramda"
 import type { Stream } from "@tauri-playground/xml"
 import { now } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"
+import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 
 export const BILIBILI_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
@@ -290,90 +291,41 @@ function dashStreamsWithMpd(data: Record<string, any>, headers: Record<string, s
         headers,
         quality: nameOf(qn),
         rate: qn,
-        dashManifest: buildBiliMpd({
-          videos: [v],
-          audio,
+        dashManifest: buildMpd({
+          videos: [toVideoRep(v)],
+          audio: audio ? toAudioRep(audio) : undefined,
           duration,
           minBufferTime,
-          avcOnly: true,
         }),
       }
     }),
   )(videos)
 }
 
-/** dash.video[i] → MPD `<Representation>`(BaseURL + SegmentBase)。 */
-function videoRepresentation(v: Record<string, any>): string {
-  const init = String(v?.SegmentBase?.Initialization ?? v?.segment_base?.Initialization ?? "0-915")
-  const index = String(v?.SegmentBase?.indexRange ?? v?.segment_base?.indexRange ?? "916-2503")
-  const width = Number(v?.width ?? 0)
-  const height = Number(v?.height ?? 0)
-  const codecs = escXml(String(v?.codecs ?? "avc1.640033"))
-  const bandwidth = Number(v?.bandwidth ?? 0)
-  return [
-    `<Representation id="${Number(v?.id ?? 0)}" mimeType="video/mp4" codecs="${codecs}" bandwidth="${bandwidth}" width="${width}" height="${height}">`,
-    `  <BaseURL>${escXml(String(v?.baseUrl ?? ""))}</BaseURL>`,
-    `  <SegmentBase indexRange="${index}">`,
-    `    <Initialization range="${init}" />`,
-    `  </SegmentBase>`,
-    `</Representation>`,
-  ].join("\n")
+/** dash.video[i] → MpdVideoRep(归一化 SegmentBase 字段)。 */
+function toVideoRep(v: Record<string, any>): MpdVideoRep {
+  return {
+    id: Number(v?.id ?? 0),
+    baseUrl: String(v?.baseUrl ?? ""),
+    width: Number(v?.width ?? 0),
+    height: Number(v?.height ?? 0),
+    codecs: String(v?.codecs ?? "avc1.640033"),
+    bandwidth: Number(v?.bandwidth ?? 0),
+    initRange: String(v?.SegmentBase?.Initialization ?? v?.segment_base?.Initialization ?? "0-915"),
+    indexRange: String(v?.SegmentBase?.indexRange ?? v?.segment_base?.indexRange ?? "916-2503"),
+  }
 }
 
-/** dash.audio[i] → MPD `<Representation>`。 */
-function audioRepresentation(a: Record<string, any> | undefined): string {
-  if (!a?.baseUrl) return ""
-  const init = String(a?.SegmentBase?.Initialization ?? a?.segment_base?.Initialization ?? "0-836")
-  const index = String(a?.SegmentBase?.indexRange ?? a?.segment_base?.indexRange ?? "837-2400")
-  const codecs = escXml(String(a?.codecs ?? "mp4a.40.2"))
-  const bandwidth = Number(a?.bandwidth ?? 0)
-  return [
-    `<Representation id="${Number(a?.id ?? 0)}" mimeType="audio/mp4" codecs="${codecs}" bandwidth="${bandwidth}">`,
-    `  <BaseURL>${escXml(String(a?.baseUrl ?? ""))}</BaseURL>`,
-    `  <SegmentBase indexRange="${index}">`,
-    `    <Initialization range="${init}" />`,
-    `  </SegmentBase>`,
-    `</Representation>`,
-  ].join("\n")
-}
-
-/** 把 dash.video/audio 拼成 DASH MPD XML(dash.js 消费)。 */
-function buildBiliMpd(opts: {
-  videos: Array<Record<string, any>>
-  audio?: Record<string, any>
-  duration: number
-  minBufferTime: number
-  avcOnly: boolean
-}): string {
-  const videos = opts.avcOnly ? opts.videos.filter((v) => /avc1|avc/i.test(String(v?.codecs ?? ""))) : opts.videos
-  const videoReps = videos.map(videoRepresentation).join("\n")
-  const audioRep = opts.audio ? audioRepresentation(opts.audio) : ""
-  const duration = opts.duration ? `mediaPresentationDuration="PT${opts.duration.toFixed(3)}S"` : ""
-  return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" type="static" ${duration} minBufferTime="PT${(opts.minBufferTime || 1.5).toFixed(3)}S">`,
-    `  <Period>`,
-    `    <AdaptationSet mimeType="video/mp4" segmentAlignment="true" startWithSAP="1">`,
-    videoReps,
-    `    </AdaptationSet>`,
-    audioRep
-      ? `    <AdaptationSet mimeType="audio/mp4" segmentAlignment="true" startWithSAP="1">\n${audioRep}\n    </AdaptationSet>`
-      : "",
-    `  </Period>`,
-    `</MPD>`,
-  ]
-    .filter(Boolean)
-    .join("\n")
-}
-
-/** XML 转义(B 站 baseUrl 含 & 等)。 */
-function escXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;")
+/** dash.audio[i] → MpdAudioRep(归一化 SegmentBase 字段)。 */
+function toAudioRep(a: Record<string, any>): MpdAudioRep {
+  return {
+    id: Number(a?.id ?? 0),
+    baseUrl: String(a?.baseUrl ?? ""),
+    codecs: String(a?.codecs ?? "mp4a.40.2"),
+    bandwidth: Number(a?.bandwidth ?? 0),
+    initRange: String(a?.SegmentBase?.Initialization ?? a?.segment_base?.Initialization ?? "0-836"),
+    indexRange: String(a?.SegmentBase?.indexRange ?? a?.segment_base?.indexRange ?? "837-2400"),
+  }
 }
 
 /** 从完整 cookie 串提取指定键的值(浏览器复制格式 `k=v; k2=v2`)。 */

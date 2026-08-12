@@ -19,8 +19,9 @@ const UA =
 
 /**
  * 懒解析可播流。真实直链走 InnerTube player API(见 client.ts):
- * ANDROID client 渐进式 mp4(音视频合一)→ HLS fallback。
- * 直链失败时兜底返回 `format: "web"`(watch URL),UI 打开页面播放。
+ * ANDROID_VR client(主力,2026-08 起免 poToken)——视频渐进式 mp4(音视频合一)、
+ * 直播自带 hlsManifestUrl;失败 fallback WEB / 直播 iOS。直链失败时兜底返回
+ * `format: "web"`(watch URL),UI 打开页面播放。
  */
 async function resolveYoutubePlay(itemId: string): Promise<Stream[]> {
   const videoId = itemId.replace(/^https?:\/\/www\.youtube\.com\/watch\?v=/, "")

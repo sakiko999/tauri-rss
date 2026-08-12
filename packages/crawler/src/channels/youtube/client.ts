@@ -16,6 +16,7 @@
  */
 import * as R from "ramda"
 import type { Stream } from "@tauri-playground/xml"
+import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 import { getItag, isPlayableItag } from "./itag.ts"
 import { deobfuscateNParam, hasThrottlingParam } from "./signature.ts"
 
@@ -50,6 +51,8 @@ const IOS_UA = `com.google.ios.youtube/${IOS_CLIENT_VERSION}(${IOS_DEVICE_MODEL}
 export interface PlayerFormat {
   itag: number
   url?: string
+  /** adaptiveFormats 用 baseUrl 而非 url。 */
+  baseUrl?: string
   cipher?: string
   signatureCipher?: string
   mimeType?: string
@@ -58,6 +61,10 @@ export interface PlayerFormat {
   height?: number
   fps?: number
   qualityLabel?: string
+  /** DASH 分片段信息(SegmentBase 用)。 */
+  initRange?: { start: string; end: string }
+  indexRange?: { start: string; end: string }
+  contentLength?: string
 }
 
 interface PlayerResponse {
@@ -289,6 +296,98 @@ function parseCipher(cipherStr: string): Record<string, string> {
   return out
 }
 
+/** 从 `codecs="avc1.640028"` 提取编码串。 */
+function codecsFromMime(mimeType?: string): string | undefined {
+  return /codecs="([^"]+)"/.exec(mimeType ?? "")?.[1]
+}
+
+/** 是否可拼 DASH 的 avc1 视频轨(mp4 + avc1 + 有段 Range + 有可解 URL)。 */
+const isAvcVideo = (f: PlayerFormat): boolean =>
+  /^video\/mp4/i.test(f.mimeType ?? "") &&
+  /avc1/i.test(f.mimeType ?? "") &&
+  !!f.initRange &&
+  !!f.indexRange &&
+  !!(f.baseUrl ?? f.url)
+
+/** 是否可拼 DASH 的 AAC 音轨(mp4 + mp4a + 有段 Range + 有可解 URL)。 */
+const isAacAudio = (f: PlayerFormat): boolean =>
+  /^audio\/mp4/i.test(f.mimeType ?? "") &&
+  /mp4a/i.test(f.mimeType ?? "") &&
+  !!f.initRange &&
+  !!f.indexRange &&
+  !!(f.baseUrl ?? f.url)
+
+/**
+ * 从 adaptiveFormats 装配 DASH 全档位流(复刻 B 站 dashStreamsWithMpd)。
+ *
+ * YouTube adaptiveFormats 是音视频分离(video_only + audio),每个 format 带
+ * initRange/indexRange(与 B 站 DASH 同构)——拼 SegmentBase MPD 存 dashManifest,
+ * dash.js 双 SourceBuffer 合成播放。每档一个 Stream(format:"dash",MPD 只含该档
+ * video + 公共最高音轨),天然锁目标档无 ABR 降档。
+ *
+ * ⚠️ 返回的 URL 必须过 resolveFormatUrl(统一解 n 参数 + 签名);失败跳过该档。
+ * ⚠️ 只拼 avc1(vp9/av1 webm 浏览器 MSE 播不了)+ AAC(mp4a.40.2)。
+ */
+async function youtubeDashStreams(
+  adaptive: PlayerFormat[],
+  duration: number,
+  headers: Record<string, string>,
+): Promise<Stream[]> {
+  // 1. 视频轨:filter(avc + Range) → 逐个解 URL(失败跳过)。
+  const videos: Array<{ f: PlayerFormat; url: string }> = []
+  for (const f of R.filter(isAvcVideo, adaptive)) {
+    const url = await resolveFormatUrl(f)
+    if (url) videos.push({ f, url })
+  }
+  if (!videos.length) return []
+
+  // 2. 音轨:filter(aac + Range) → 取最高码率一档(140/141 皆可,139 低码率被排掉)。
+  const audios = R.filter(isAacAudio, adaptive)
+  const audio = R.last<PlayerFormat>(R.sortBy((a) => Number(a.bitrate ?? 0), audios))
+  const audioUrl = audio ? await resolveFormatUrl(audio) : null
+  const audioRep: MpdAudioRep | undefined =
+    audio && audioUrl
+      ? {
+          id: audio.itag,
+          baseUrl: audioUrl,
+          codecs: codecsFromMime(audio.mimeType) ?? "mp4a.40.2",
+          bandwidth: Number(audio.bitrate ?? 0),
+          initRange: `${audio.initRange!.start}-${audio.initRange!.end}`,
+          indexRange: `${audio.indexRange!.start}-${audio.indexRange!.end}`,
+        }
+      : undefined
+
+  // 3. 按 height 降序(默认选流 = streams[0] = 最高档)。
+  const sorted = R.sortBy((v: { f: PlayerFormat }) => Number(v.f.height ?? 0), videos)
+  const desc = R.reverse(sorted)
+
+  // 4. 每档 map 成 Stream:MPD 只含该档 video + 公共音轨。
+  return R.map(
+    ({ f, url }: { f: PlayerFormat; url: string }): Stream => {
+      const rep: MpdVideoRep = {
+        id: f.itag,
+        baseUrl: url,
+        width: Number(f.width ?? 0),
+        height: Number(f.height ?? 0),
+        codecs: codecsFromMime(f.mimeType) ?? "avc1.640033",
+        bandwidth: Number(f.bitrate ?? 0),
+        initRange: `${f.initRange!.start}-${f.initRange!.end}`,
+        indexRange: `${f.indexRange!.start}-${f.indexRange!.end}`,
+      }
+      const height = Number(f.height ?? 0)
+      return {
+        url: "",
+        format: "dash",
+        headers,
+        quality: f.qualityLabel ?? `${height}p`,
+        rate: height,
+        dashManifest: buildMpd({ videos: [rep], audio: audioRep, duration, minBufferTime: 1.5 }),
+      }
+    },
+    desc,
+  )
+}
+
 /** 组装最终 Stream[](带 referer/UA header,浏览器原生 <video> 能播 mp4)。 */
 export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> {
   const visitorData = await getVisitorData()
@@ -325,17 +424,26 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
     // iOS 也拿不到 HLS,回退 ANDROID_VR/WEB 的 formats(若有)。
   }
 
-  // 非直播(或 live 但 VR/iOS 都无 HLS):渐进式 mp4 优先。
+  // 非直播(或 live 但 VR/iOS 都无 HLS):DASH 优先(1080p+ 有声)。
+  // ⚠️ 渐进式(360p)不混进返回数组——MediaPlayer 默认选流 `find(isProgressiveVideo)`
+  //   会优先渐进式,混排会导致默认落 360p。DASH 装配失败才整体 fallback 渐进式。
+  const headers = { referer: "https://www.youtube.com/", "user-agent": WEB_UA }
+  const adaptive = res.streamingData?.adaptiveFormats ?? []
+  const duration = Number(res.videoDetails?.lengthSeconds ?? 0)
+  const dash = await youtubeDashStreams(adaptive, duration, headers)
+  if (dash.length) return dash
+
+  // DASH 装配失败(无 avc1 / 无 URL / 无 Range)→ 渐进式 mp4 一档。
   const formats = res.streamingData?.formats ?? []
   const best = pickProgressiveVideo(formats)
   if (best) {
     const url = await resolveFormatUrl(best)
     if (url) {
-      return [{ url, format: "mp4", headers: { referer: "https://www.youtube.com/", "user-agent": WEB_UA } }]
+      return [{ url, format: "mp4", headers }]
     }
   }
 
-  // 2. 渐进式拿不到 → 试 HLS manifest(直播)。
+  // 渐进式拿不到 → 试 HLS manifest(直播)。
   const hls = res.streamingData?.hlsManifestUrl
   if (hls) {
     return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/" } }]

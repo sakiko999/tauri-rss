@@ -183,8 +183,9 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   （ui 包装全量 26 个,desktop 只留 dialog）
 - ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
   huya 直播（flv.js HTTP-FLV）、douyin 直播（flv.js HTTP-FLV,5 档）、bilibili 视频
-  （dash.js 双 SourceBuffer,DASH 1080P 有声）、YouTube 视频（原生 mp4 直链）、
-  **YouTube 直播（iOS client → hlsManifestUrl,hls.js 播;ANDROID 直播不返回 HLS,必须 iOS）**
+  （dash.js 双 SourceBuffer,DASH 1080P 有声）、YouTube 视频（adaptiveFormats 拼 MPD,
+  DASH 1080P 有声）、
+  **YouTube 直播（ANDROID_VR client → 自带 hlsManifestUrl,hls.js 播;无 hls 时才 fallback iOS）**
 - ✅ 自动播放：点击「播放」→ 带声自动播（`unlockAudioPlayback` 手势内解 autoplay policy +
   失败降级静音）；全部平台（B站视频/YouTube/douyu/bili live/huya/douyin）一致
 - ✅ 多档位切换：douyu/bili live/bili video/douyin 动态获取档位（服务端 accept_qn/
@@ -199,14 +200,26 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - ✅ dash.js 走 `DashHostLoader`（工厂函数,dash.js extend 用 Object.create;blob MPD 原样
   fetch,分片 Range 补 `bytes=` 前缀走 appHost.http 隧道无 CORS）;hls.js 走 `HlsHostLoader`
   （class,googlevideo.com 无 CORS 时切隧道）;dash/hls 均锁最高档防隧道带宽估算降档
-- ⚠️ YouTube DASH-only 直播（如 Claude FM `tRsQsTMvPNg` 当前形态）：iOS 不返回 hlsManifestUrl、
-  只有 adaptiveFormats（音视频分离）→ 仍降级 `format:"web"` 打开页面。已知边界,
-  见 `docs/youtube-stream-extraction.md` 5.5
-- YouTube 直链实现见 `docs/youtube-stream-extraction.md`（InnerTube ANDROID client,
-  渐进式 mp4 无签名无 n 参数,clientVersion 必须最新 21.03.36;旧版会 400/UNPLAYABLE;
-  直播加 iOS client `getIosPlayerResponse`,live 判定看 `playabilityStatus.liveStreamability`;
-  ANDROID/WEB/iOS 请求端点统一走 gapis `youtubei.googleapis.com` + t/id 参数,NewPipe 同款;
-  ⚠️ node/example 环境被 YouTube IP 风控(LOGIN_REQUIRED),Tauri 设备环境正常）
+- ⚠️ 已知边界：YouTube 视频若 avc1 DASH 装配失败（如 SABR-only / 非 avc1 编码）→ 降级
+  渐进式 360p;直播若 VR 无 hls（罕见形态）→ fallback iOS,仍无则降级 `format:"web"`。
+  内嵌 DASH 播放（视频已支持,见下）;直播的原生 dashManifestUrl 可选增强未用,
+  见 `docs/youtube-stream-extraction.md`「四、本项目落地」
+- YouTube 直链实现见 `docs/youtube-stream-extraction.md`（**主力 client = ANDROID_VR**
+  （Oculus Quest 3,`1.65.10`,yt-dlp master）——2026-08 起 ANDROID/IOS 标准 client 部分
+  IP 触发 poToken(LOGIN_REQUIRED 机器人检测),VR 返回免 token 直链;>1.65 可能
+  SABR-only,需随 yt-dlp 更新;live 判定看 `playabilityStatus.liveStreamability`;
+  请求端点统一走 gapis `youtubei.googleapis.com` + t/id 参数,NewPipe 同款;
+  ⚠️ poToken 风控是**部分 IP 特性**（与 node/tauri/browser 环境无关）——受控 IP 上
+  ANDROID/IOS 才 LOGIN_REQUIRED,当前开发机三环境均正常抓取;换 IP 仍被控时可在
+  fallback 链插 ANDROID_VR 之外再考虑 poToken 方案;
+  ⚠️ **渐进式分辨率实测修正（2026-08-12）**:两个 client 的渐进式都只到 itag 18
+  （360p）,无 720p 渐进式。**视频 1080p 走 DASH**:adaptiveFormats 带 initRange/
+  indexRange,与 B站同构 → 自拼 SegmentBase MPD（共享 `utils/mpd.ts`,从 bili 抽出）,
+  `format:"dash"` + dashManifest 由 dash.js 双 SourceBuffer 合成;每档 MPD 只含该档
+  video + 公共最高音轨锁档。渐进式 360p 不混进返回数组（MediaPlayer 默认选流优先
+  渐进式会落 360p）,DASH 装配失败才 fallback。**直播已 1080p**（HLS 自带 6 档 +
+  currentLevel=max;新发现直播自带 dashManifestUrl 原生 MPD,可选增强,
+  见 `docs/youtube-stream-extraction.md`「四、本项目落地」）
 - huya 直链实现见 `packages/crawler/src/channels/huya/play.ts`（buildAntiCode 纯 MD5/base64,
   `lChannelId` 作 presenterUid;反爬是**频率限制**,连续请求会降级页,单次 resolve 稳定;
   ⚠️ 只返回最高档,`&ratio=` 低档 flv.js 播几秒断）
