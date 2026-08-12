@@ -27,12 +27,20 @@ packages/
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/        ★ @tauri-playground/player — 媒体播放器(video/audio/live 共用),从 ui 拆出。
                    PlayableMedia(懒解析+选流+分发唯一入口) + VideoShell/AudioShell 外壳 +
-                   MediaChrome 式独立控件(controls/)。日志集中 utils/log.ts(语义化模板函数)。
+                   MediaChrome 式独立控件(controls/)。日志走 @tauri-playground/log(域注册+颜色)。
                    依赖 core(MediaStream 类型) + 全局 appHost(hls/flv/dash 走隧道) +
                    hls.js/flv.js/dashjs。依赖链:core ← player ← ui/desktop
+  log/           ★ @tauri-playground/log  — 域注册语义化日志(零依赖叶子包)。
+                   createLogDomain(name,{color,ansi,events}):每模块注册自己的域+模板事件,
+                   颜色 devtools %c CSS / 终端 ANSI。开关 log="0" 全局关 info/debug、
+                   log:<域>="0" 按域关,legacyKey 兼容旧 key(player-log/host-log);
+                   warn/error 永保留。被 player/host/crawler 引用
   ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
                    播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
 ```
+
+依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
+`log` 是零依赖叶子,被 player/host/crawler 引用;`host` 被 crawler/core/desktop/player 共用。
 
 依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
 `host` 被 crawler/core/desktop/player 共用。
@@ -176,9 +184,10 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - `packages/player/` 已落地：`PlayableMedia` 是**唯一入口**（懒解析 + 选流 + 分发三合一,
   原 MediaPlayer 已并入）;`useMediaStream`（hls.js/flv.js/dash.js 生命周期）。
   **选流契约**：crawler 保证返回数组内**最高清晰度排最前**（bili live/video、youtube、
-  douyu、douyin、huya 均显式 `R.sortWith(descend rate)` 降序;youtube 渐进式 360p 不混排
-  DASH,只作整条 fallback）→ player `useStreamSelection` 用 `find` 链取第一个,不做二次排序
-  （渐进式优先=浏览器原生可播最稳,其次 hls/flv 流媒体）。
+  douyin、huya 显式 `R.sortWith(descend rate)` 降序;⚠️ **douyu 除外**——保留 multirates
+  服务端顺序(高档在前),rate 是档位 ID 非清晰度,按 rate 降序会把原画 2K60 排末尾;
+  youtube 渐进式 360p 不混排 DASH,只作整条 fallback）→ player `useStreamSelection`
+  用 `find` 链取第一个,不做二次排序（渐进式优先=浏览器原生可播最稳,其次 hls/flv 流媒体）。
   **控件是 MediaChrome 式独立组件**（`controls/`,窄接口 `{state, ops}`、可自由组合）:
   `MediaPlayButton`/`MediaMuteButton`/`MediaVolumeSlider`/`MediaTimeRange`/`MediaRateButton`/
   `MediaQualityButton`/`MediaFullscreenButton`/`MediaLiveEdgeButton`/`MediaTimeDisplay`;
@@ -186,10 +195,12 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   自动隐藏/键盘快捷键/全屏/缓冲/点击播放暂停(音频保留原生控件)。状态中枢 `useVideoElement`
   （监听 11 媒体事件 → state + ops）。倍速/档位菜单用 **radix primitive**
   （ui 包装全量 26 个,desktop 只留 dialog）
-- **播放日志集中管理**：全包日志走 `packages/player/src/utils/log.ts`（禁止裸 console.*）。
-  语义化模板函数:每个事件一个专属函数(playSuccess/engineError/qualitySwitched…),调用处
-  只传事件数据、不拼文案;文案/级别/`[player:<阶段>]` 前缀集中在 log.ts。阶段 resolve/select/
-  engine/play/loader。开关 `localStorage["player-log"]="0"` 关 info/debug(warn/error 永保留)。
+- **日志域注册（@tauri-playground/log）**：全包日志走独立包（禁止裸 console.*）。
+  `createLogDomain(name, {color, ansi, events})` 每模块注册自己的域 + 模板事件:调用处只传
+  事件数据、不拼文案;文案/级别/颜色集中在各域模板。player 域 resolve/select/engine/play/loader
+  （前缀 `[player:<阶段>]`）、host 域 `[host:http]`、crawler 按 channel 建域（`[bili]`/`[youtube]`
+  等）。开关 `localStorage["log"]="0"` 全局关 info/debug、`log:<域>="0"` 按域关;旧 key
+  `player-log`/`host-log` 兼容(warn/error 永保留)。devtools Console 过滤 `[player:` 看各域颜色。
 - ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
   huya 直播（flv.js HTTP-FLV）、douyin 直播（flv.js HTTP-FLV,5 档）、bilibili 视频
   （dash.js 双 SourceBuffer,DASH 1080P 有声）、YouTube 视频（adaptiveFormats 拼 MPD,
@@ -248,6 +259,14 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - ✅ 三栏阅读器已落地（参考 `tmp/rss-reader`）：Sidebar（订阅树/分组/smart feeds/
   kind tab,含 dark 切换）+ 中栏按 kind 分发（article → ArticleList+ArticleDetail 两栏,
   video/audio/live/social → MediaList 卡片）+ AddFeedDialog
+- ✅ **三栏布局梳理（2026-08-13）**：`showDetail` 按**节点意图**判定——只有 tab:article
+  或真实文章订阅才进 ArticleList 三栏,聚合视图（tab:all/today 等）无论内容是否全
+  article 都走 MediaList（防「今日」误吞进文章栏）。顶栏视图名抽 `viewTitleFor`
+  （store.ts）共用显示真实身份（今日/未读/星标/订阅名）,三栏与中栏一致;
+  MediaList 顶栏活性点（健康隐藏/刷新脉冲蓝/错误红）+ tabular 计数;空态「无信号」环
+  （活性点放大静止版）按场景给方向 + 刷新 CTA。卡片分发统一 **UnifiedCard**
+  （16:9 中卡等尺寸,VirtuosoGrid 网格）,**social 单一视图保留专属卡片 SocialRenderer +
+  MasonryGrid 瀑布流**;列表容器 key 绑 selectedNodeId,切节点滚动归零
 - ⚠️ 分组树仅渲染/展开,不做增删组 UI;分组节点点击只 toggle 不 select
 
 **3. packages/ui 接入 tailwind（✅ 已完成）**
