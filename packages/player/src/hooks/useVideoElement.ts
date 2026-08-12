@@ -14,8 +14,9 @@
  *   - 直播判定:流媒体 `!isFinite(duration)` 或 duration === 0 视为 live;
  *     非流媒体(原生 mp4/audio)用 `duration !== Infinity` 区分(VOD),无限时长视为 live。
  */
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { playableDuration } from "../utils/buffer.ts"
+import { log } from "../utils/log.ts"
 
 export interface BufferedRange {
   start: number
@@ -69,8 +70,14 @@ const INITIAL: VideoPlayState = {
 export function useVideoElement(
   videoRef: React.RefObject<HTMLMediaElement | null>,
   isStreaming: boolean,
+  onMediaError?: (code: number | undefined, msg: string) => void,
 ): { state: VideoPlayState; ops: VideoOps } {
   const [state, setState] = useState<VideoPlayState>(INITIAL)
+
+  // onMediaError 用 ref 持最新(与 onErrorRef 同模式):父组件每次渲染传新函数,
+  // 但监听 effect 不该因它重跑。
+  const onMediaErrorRef = useRef(onMediaError)
+  onMediaErrorRef.current = onMediaError
 
   useEffect(() => {
     const video = videoRef.current
@@ -115,11 +122,26 @@ export function useVideoElement(
     const onProgress = () => read() // 缓冲推进:更新 buffered 段
     const onVolumeChange = () => read()
     const onRateChange = () => read()
-    const onPlay = () => setState((p) => ({ ...p, paused: false, ended: false }))
-    const onPause = () => setState((p) => ({ ...p, paused: true }))
-    const onEnded = () => setState((p) => ({ ...p, paused: true, ended: true }))
-    const onWaiting = () => setState((p) => ({ ...p, waiting: true }))
-    const onPlaying = () => setState((p) => ({ ...p, waiting: false }))
+    const onPlay = () => {
+      log.mediaEvent("play")
+      setState((p) => ({ ...p, paused: false, ended: false }))
+    }
+    const onPause = () => {
+      log.mediaEvent("pause")
+      setState((p) => ({ ...p, paused: true }))
+    }
+    const onEnded = () => {
+      log.mediaEvent("ended")
+      setState((p) => ({ ...p, paused: true, ended: true }))
+    }
+    const onWaiting = () => {
+      log.mediaEvent("waiting")
+      setState((p) => ({ ...p, waiting: true }))
+    }
+    const onPlaying = () => {
+      log.mediaEvent("playing")
+      setState((p) => ({ ...p, waiting: false }))
+    }
     const onCanPlay = () => setState((p) => ({ ...p, waiting: false }))
 
     video.addEventListener("timeupdate", onTimeUpdate)
@@ -133,6 +155,17 @@ export function useVideoElement(
     video.addEventListener("waiting", onWaiting)
     video.addEventListener("playing", onPlaying)
     video.addEventListener("canplay", onCanPlay)
+    // 原生 video 加载失败(403/网络断/格式不支持)的最终信号——流媒体引擎错误
+    // 走 useMediaStream 的 report;原生 mp4/audio 只能靠这里(媒体错误码)。
+    // 打日志 + 上报 onMediaError,让 PlayableMedia 能弹 playError UI/重试。
+    const onError = () => {
+      const el = videoRef.current
+      const code = el?.error?.code
+      const msg = el?.error?.message ?? ""
+      log.mediaError(code, msg)
+      onMediaErrorRef.current?.(code, msg)
+    }
+    video.addEventListener("error", onError)
 
     // 初始读取一次(已有元数据 / 直播自动起播)。
     read()
@@ -149,6 +182,7 @@ export function useVideoElement(
       video.removeEventListener("waiting", onWaiting)
       video.removeEventListener("playing", onPlaying)
       video.removeEventListener("canplay", onCanPlay)
+      video.removeEventListener("error", onError)
     }
   }, [videoRef, isStreaming])
 

@@ -11,6 +11,7 @@
 import Hls from "hls.js"
 import { LoadStats, type Loader, type LoaderCallbacks, type LoaderConfiguration, type LoaderContext, type LoaderStats } from "hls.js"
 import { toArrayBuffer } from "../utils/buffer.ts"
+import { log } from "../utils/log.ts"
 
 /** hls.js 的 Loader 类型作为类实现(`new (config: HlsConfig) => Loader<LoaderContext>`)。 */
 export class HlsHostLoader implements Loader<LoaderContext> {
@@ -22,13 +23,20 @@ export class HlsHostLoader implements Loader<LoaderContext> {
 
   load(context: LoaderContext, _config: LoaderConfiguration, callbacks: LoaderCallbacks<LoaderContext>): void {
     this.context = context
-    this.stats = new LoadStats()
+    // ⚠️ 不要 `this.stats = new LoadStats()`——hls.js 在 `new Loader()` 后、`load()`
+    // 前就捕获了 `frag.stats = loader.stats` 引用(hls.mjs:5798)。重新赋值会让
+    // 所有带宽采样写进 hls.js 从不读取的死对象。必须 mutate 现有 stats。
+    const stats = this.stats
+    stats.loading.start = 0
+    stats.loading.first = 0
+    stats.loaded = 0
+    stats.total = 0
     // hls.js ABR 依赖这三个时间戳采样带宽(tload - tfirst)。不设(=0)会让
     // BandwidthEstimator 拒绝采样 → 估算锁死在 abrEwmaDefaultEstimate(500kbps),
     // ABR 降到低清档永不回升。start/first 在请求发起时打点,end 在完成时打点。
     const t0 = performance.now()
-    this.stats.loading.start = t0
-    this.stats.loading.first = t0
+    stats.loading.start = t0
+    stats.loading.first = t0
     const { url, responseType, headers, rangeStart, rangeEnd } = context
     const isBinary = responseType === "arraybuffer"
 
@@ -52,7 +60,7 @@ export class HlsHostLoader implements Loader<LoaderContext> {
       .then((res) => {
         if (this.aborted) return
         if (res.status < 200 || res.status >= 300) {
-          console.warn("[HlsHostLoader] HTTP", res.status, "for", url.slice(0, 80))
+          log.loaderHttpError("hls", res.status, url)
           callbacks.onError({ code: res.status, text: `HTTP ${res.status}` }, context, null, this.stats)
           return
         }
@@ -73,7 +81,7 @@ export class HlsHostLoader implements Loader<LoaderContext> {
       .catch((err: unknown) => {
         if (this.aborted) return
         const msg = err instanceof Error ? err.message : String(err)
-        console.warn("[HlsHostLoader] err:", msg)
+        log.loaderError("hls", msg)
         callbacks.onError({ code: 0, text: msg }, context, null, this.stats)
       })
   }

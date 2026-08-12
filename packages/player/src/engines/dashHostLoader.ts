@@ -14,6 +14,7 @@
  */
 import { type URLLoader } from "dashjs"
 import { toArrayBuffer } from "../utils/buffer.ts"
+import { log } from "../utils/log.ts"
 
 interface DashLoadConfig {
   request?: {
@@ -52,6 +53,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
     // 若不清除,后续新请求会被误判为 aborted 而无限加载。
     aborted = false
     if (!url) {
+      log.loaderError("dash", "no url")
       config.error?.(new Error("DashHostLoader: no url"))
       return
     }
@@ -63,6 +65,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
         .then((res) => {
           if (aborted) return
           if (!res.ok) {
+            log.loaderHttpError("dash", res.status, url)
             config.error?.(new Error(`HTTP ${res.status}`))
             return
           }
@@ -74,7 +77,9 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
         })
         .catch((e: unknown) => {
           if (aborted) return
-          config.error?.(e instanceof Error ? e : new Error(String(e)))
+          const msg = e instanceof Error ? e.message : String(e)
+          log.loaderError("dash", msg)
+          config.error?.(e instanceof Error ? e : new Error(msg))
         })
       return
     }
@@ -94,6 +99,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
       .then((res) => {
         if (aborted) return
         if (res.status < 200 || res.status >= 300) {
+          log.loaderHttpError("dash", res.status, url)
           config.error?.(new Error(`HTTP ${res.status}`))
           return
         }
@@ -101,14 +107,19 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
           config.success?.(toArrayBuffer(res.body as Uint8Array), String(res.status), url)
           config.complete?.(req, String(res.status))
         } else {
+          // dash.js ManifestLoader/DashParser 期望**字符串**(会调 indexOf/charCodeAt),
+          // 传 ArrayBuffer 会 MANIFEST_LOADER_PARSING_FAILURE。blob 分支传字符串,
+          // http .mpd 分支保持一致。
           const text = typeof res.body === "string" ? res.body : String(res.body)
-          config.success?.(new TextEncoder().encode(text).buffer as ArrayBuffer, String(res.status), url)
+          config.success?.(text, String(res.status), url)
           config.complete?.(req, String(res.status))
         }
       })
       .catch((e: unknown) => {
         if (aborted) return
-        config.error?.(e instanceof Error ? e : new Error(String(e)))
+        const msg = e instanceof Error ? e.message : String(e)
+        log.loaderError("dash", msg)
+        config.error?.(e instanceof Error ? e : new Error(msg))
       })
   }
 

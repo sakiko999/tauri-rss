@@ -25,6 +25,7 @@ import {
   useStreamSelection,
 } from "./hooks/useStreamSelection.ts"
 import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
+import { log } from "./utils/log.ts"
 import { AudioShell } from "./AudioShell.tsx"
 import { VideoShell } from "./VideoShell.tsx"
 
@@ -89,14 +90,16 @@ export function PlayableMedia({
   async function handlePlay() {
     if (!resolve) return
     // 用户手势内解锁 autoplay,resolve 完成后 video 才能带声音自动播。
+    log.resolveStart()
     unlockAudioPlayback()
     setResolving(true)
     setError(null)
     try {
       const result = await resolve()
+      log.resolveSuccess(result.length)
       setResolved(result)
     } catch (err) {
-      console.warn("[PlayableMedia] resolve 失败:", err)
+      log.resolveFailed(err)
       setError(err)
       onError?.(err)
     } finally {
@@ -118,31 +121,26 @@ export function PlayableMedia({
   // 选流 + 档位。
   const { stream, qualityOptions, switchQuality } = useStreamSelection(playStreams)
 
-  // 诊断:打印最终选中的流(URL 域名/截断 + format + headers 键),排查清晰度/来源。
+  // 诊断:打印最终选中的流(url 域名/截断 + format + headers 键),排查清晰度/来源。
   useEffect(() => {
     if (!stream) return
-    let host = ""
-    try {
-      host = new URL(stream.url, "https://x.invalid").hostname
-    } catch {
-      host = stream.url.slice(0, 60)
-    }
-    const path = stream.url.length > 100 ? `…${stream.url.slice(-60)}` : stream.url
-    console.info(
-      "[media] 选择流:",
-      host,
-      "| format:",
-      stream.format ?? "?",
-      "| headers:",
-      Object.keys(stream.headers ?? {}).join(",") || "-",
-      "|",
-      path,
-    )
+    log.streamSelected(stream, Object.keys(stream.headers ?? {}))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream])
 
   // 流媒体驱动(hls/flv/dash)→ useMediaStream 接管 video;原生 src 由 VideoShell 写。
   const needsStreamPlayer = !!stream && isStreamingStream(stream)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+
+  // 引擎选择:流媒体 → useMediaStream(hls/flv/dash);原生 → VideoShell <video>。
+  useEffect(() => {
+    if (!stream) return
+    log.engineSelected(
+      needsStreamPlayer ? "stream" : isProgressiveVideo(stream) ? "video" : isProgressiveAudio(stream) ? "audio" : "fallback",
+      stream.format,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream, needsStreamPlayer])
 
   // autoPlay 语义:用户点过「播放」(resolved !== null)→ 自动带声起播;初始流未点击不自动播。
   const autoPlay = resolved !== null
@@ -215,6 +213,7 @@ export function PlayableMedia({
         <button
           type="button"
           onClick={() => {
+            log.userRetry()
             setPlayError(null)
             setRetryKey((k) => k + 1)
           }}
@@ -250,6 +249,10 @@ export function PlayableMedia({
         qualityOptions={qualityOptions}
         activeQuality={stream.rate}
         onQuality={switchQuality}
+        onMediaError={(code, msg) => {
+          setPlayError(new Error(`原生媒体错误(code=${code ?? "?"}): ${msg}`))
+          onError?.(new Error(msg))
+        }}
         title={headerHintTitle}
         fill={fill}
       />
@@ -262,6 +265,10 @@ export function PlayableMedia({
       <AudioShell
         src={stream.url}
         autoPlay={autoPlay}
+        onError={(e) => {
+          setPlayError(e)
+          onError?.(e)
+        }}
         qualityOptions={qualityOptions}
         activeQuality={stream.rate}
         onQuality={switchQuality}

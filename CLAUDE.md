@@ -26,9 +26,10 @@ packages/
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/        ★ @tauri-playground/player — 媒体播放器(video/audio/live 共用),从 ui 拆出。
-                   MediaPlayer/PlayableMedia/VideoShell + MediaChrome 式独立控件(controls/)。
+                   PlayableMedia(懒解析+选流+分发唯一入口) + VideoShell/AudioShell 外壳 +
+                   MediaChrome 式独立控件(controls/)。日志集中 utils/log.ts(语义化模板函数)。
                    依赖 core(MediaStream 类型) + 全局 appHost(hls/flv/dash 走隧道) +
-                   hls.js/flv.js/dashjs/ramda。依赖链:core ← player ← ui/desktop
+                   hls.js/flv.js/dashjs。依赖链:core ← player ← ui/desktop
   ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
                    播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
 ```
@@ -172,15 +173,23 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 ### Demo 必选（按建议顺序）
 
 **1. 媒体播放闭环（demo 差异化价值）**
-- `packages/ui/src/player/` 已落地：`useMediaStream`（hls.js/flv.js/dash.js 生命周期）+
-  `MediaPlayer`（按 format 选流分发）+ `PlayableMedia`（懒解析+播放），video/audio/live 共用。
+- `packages/player/` 已落地：`PlayableMedia` 是**唯一入口**（懒解析 + 选流 + 分发三合一,
+  原 MediaPlayer 已并入）;`useMediaStream`（hls.js/flv.js/dash.js 生命周期）。
+  **选流契约**：crawler 保证返回数组内**最高清晰度排最前**（bili live/video、youtube、
+  douyu、douyin、huya 均显式 `R.sortWith(descend rate)` 降序;youtube 渐进式 360p 不混排
+  DASH,只作整条 fallback）→ player `useStreamSelection` 用 `find` 链取第一个,不做二次排序
+  （渐进式优先=浏览器原生可播最稳,其次 hls/flv 流媒体）。
   **控件是 MediaChrome 式独立组件**（`controls/`,窄接口 `{state, ops}`、可自由组合）:
   `MediaPlayButton`/`MediaMuteButton`/`MediaVolumeSlider`/`MediaTimeRange`/`MediaRateButton`/
   `MediaQualityButton`/`MediaFullscreenButton`/`MediaLiveEdgeButton`/`MediaTimeDisplay`;
-  `PlayerControls` 是默认组合（等价 `<media-control-bar>`）,`VideoShell` 外壳管
-  自动隐藏/键盘快捷键/全屏/缓冲/点击播放暂停。状态中枢 `useVideoElement`
+  `PlayerControls` 是默认组合（等价 `<media-control-bar>`）,`VideoShell`/`AudioShell` 外壳管
+  自动隐藏/键盘快捷键/全屏/缓冲/点击播放暂停(音频保留原生控件)。状态中枢 `useVideoElement`
   （监听 11 媒体事件 → state + ops）。倍速/档位菜单用 **radix primitive**
   （ui 包装全量 26 个,desktop 只留 dialog）
+- **播放日志集中管理**：全包日志走 `packages/player/src/utils/log.ts`（禁止裸 console.*）。
+  语义化模板函数:每个事件一个专属函数(playSuccess/engineError/qualitySwitched…),调用处
+  只传事件数据、不拼文案;文案/级别/`[player:<阶段>]` 前缀集中在 log.ts。阶段 resolve/select/
+  engine/play/loader。开关 `localStorage["player-log"]="0"` 关 info/debug(warn/error 永保留)。
 - ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
   huya 直播（flv.js HTTP-FLV）、douyin 直播（flv.js HTTP-FLV,5 档）、bilibili 视频
   （dash.js 双 SourceBuffer,DASH 1080P 有声）、YouTube 视频（adaptiveFormats 拼 MPD,

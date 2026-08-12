@@ -23,6 +23,7 @@ export function VideoShell({
   qualityOptions,
   activeQuality,
   onQuality,
+  onMediaError,
   title,
   fill = false,
 }: {
@@ -37,13 +38,15 @@ export function VideoShell({
   qualityOptions: { rate: number; quality: string }[]
   activeQuality?: number
   onQuality: (rate: number) => void
+  /** 原生 video 加载失败(403/断流/格式不支持)上报——让 PlayableMedia 弹 playError UI。 */
+  onMediaError?: (code: number | undefined, msg: string) => void
   /** 悬停提示(如 referer 提示),挂容器 title。 */
   title?: string
   /** 填满父容器(父已定比例)。true 时不自撑比例,避免双算首帧塌缩。 */
   fill?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const { state, ops } = useVideoElement(videoRef, isStreaming)
+  const { state, ops } = useVideoElement(videoRef, isStreaming, onMediaError)
   const { showControls, showSpinner, poke, hide, hover, leave } = useAutoHideControls(state)
   const [fullscreenState, setFullscreenState] = useState<FullscreenApi>({
     isFullscreen: false,

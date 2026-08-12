@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { isFlvStream, isHlsStream } from "./useMediaStream.ts"
+import { log } from "../utils/log.ts"
 
 /** 渐进式视频(mp4/webm/ogg)→ 原生 <video>。 */
 export function isProgressiveVideo(stream: MediaStream): boolean {
@@ -52,7 +53,10 @@ export function useStreamSelection(streams: MediaStream[]): {
   // streams 变化(重新 resolve / props 更新)时重置用户切档态。
   useEffect(() => setActiveStream(null), [streams])
 
-  // 默认选流:渐进式优先(双端兼容),其次 hls/flv(流媒体)。
+  // 默认选流:渐进式优先(浏览器原生可播、无需额外引擎——最稳),
+  // 其次 hls/flv(流媒体,依赖 hls.js/flv.js 引擎兜底)。
+  // 取该格式族**第一个**——crawler 契约保证:返回数组内最高清晰度排最前
+  // (各 channel 产流处显式按 rate 降序)。player 不做二次排序,保持简单。
   const defaultStream =
     streams.find(isProgressiveVideo) ??
     streams.find(isProgressiveAudio) ??
@@ -80,6 +84,7 @@ export function useStreamSelection(streams: MediaStream[]): {
     (rate: number) => {
       const target = streams.find((s) => s.rate === rate)
       if (!target) return
+      log.qualitySwitched(target)
       // 换流:useMediaStream 的 effect 依赖 stream,变化自动销毁旧 hls/flv 实例重建。
       setActiveStream(target)
     },

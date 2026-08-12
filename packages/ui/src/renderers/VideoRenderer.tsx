@@ -29,7 +29,7 @@ export function VideoRenderer({
   const url = item.url
   const duration = fmtDuration(item.duration)
   // 稳定 streams 数组:item.stream 引用不变时数组也复用同引用,避免传导到
-  // MediaPlayer.streams → setActiveStream(null) 空跑 / useMediaStream 重跑。
+  // useStreamSelection → setActiveStream(null) 空跑 / useMediaStream 重跑。
   const initialStreams = useMemo(() => (item.stream ? [item.stream] : undefined), [item.stream])
   return (
     <MediaCard onOpen={url ? () => onOpen?.(url) : undefined} className="h-full">

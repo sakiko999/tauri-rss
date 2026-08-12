@@ -16,6 +16,7 @@ import type { MediaStream } from "@tauri-playground/core"
 import { HlsHostLoader } from "../engines/hlsHostLoader.ts"
 import { DashHostLoader } from "../engines/dashHostLoader.ts"
 import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
+import { log } from "../utils/log.ts"
 
 /** 是否为 m3u8/HLS 流。 */
 export function isHlsStream(stream: MediaStream): boolean {
@@ -122,16 +123,18 @@ export function useMediaStream({
         }
       }
       hls.on(Hls.Events.ERROR, (_evt, data) => {
+        log.engineError("hls", data, !!data.fatal)
         if (data.fatal) report?.(data)
       })
       // 流信息:LEVEL_LOADED 打印实际播放档位(高度/码率),排查清晰度来源。
       hls.on(Hls.Events.LEVEL_LOADED, (_e, d) => {
         const lvl = hls.levels[d.level]
-        console.debug(
-          "[hls] 播放档位",
-          d.details?.live ? "live" : "vod",
-          lvl ? `${lvl.height ?? "?"}p/${Math.round((lvl.bitrate ?? 0) / 1000)}kbps` : `#${d.level}`,
-        )
+        log.hlsLevelLoaded({
+          live: !!d.details?.live,
+          level: d.level,
+          height: lvl?.height,
+          bitrate: lvl?.bitrate,
+        })
       })
       // 起播:autoPlay=true 带声(PlayableMedia 点击时 unlockAudioPlayback 已解除
       // autoplay policy),被拦降级静音重试。统一等 video 的 canplay(浏览器权威
@@ -163,7 +166,10 @@ export function useMediaStream({
         // flv.js 不直接支持自定义 header;referer 靠页面本身,UA 走默认。
       )
       flvRef.current = flv
-      flv.on(flvjs.Events.ERROR, (_t, _d, e) => report?.(e))
+      flv.on(flvjs.Events.ERROR, (_t, _d, e) => {
+        log.engineError("flv", e)
+        report?.(e)
+      })
       flv.attachMediaElement(video)
       flv.load()
       // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
@@ -185,7 +191,10 @@ export function useMediaStream({
     // MPD 生成 blob URL 喂 attachSource——dash.js 走 fetch 解析 XML,分片 BaseURL
     // 是绝对直链,直接请求真实 CDN。dash.js 双 SourceBuffer 同步音视频(等价 B 站官方)。
     if (isDashStream(stream) && stream.dashManifest) {
-      console.info("[dash] dashManifest 到达:", stream.dashManifest.length, "字符, autoPlay:", autoPlay)
+      log.dashManifestReady(stream.dashManifest.length, autoPlay)
+      // 新实例创建前 revoke 旧 blob:旧 dash.js 实例已随上一次 cleanup destroy,
+      // 不会再 refresh 旧 MPD,revoke 安全。避免 DASH 切档/重试逐次泄漏 blob URL。
+      if (dashUrlRef.current) URL.revokeObjectURL(dashUrlRef.current)
       const blob = new Blob([stream.dashManifest], { type: "application/dash+xml" })
       const mpdUrl = URL.createObjectURL(blob)
       dashUrlRef.current = mpdUrl
@@ -193,12 +202,10 @@ export function useMediaStream({
       dashRef.current = player
       player.on(dashjs.MediaPlayer.events.ERROR, (e: unknown) => {
         const msg = (e as { message?: string })?.message
-        console.warn("[dash] ERROR:", msg ?? e)
+        log.engineError("dash", msg ?? e)
         report?.(msg ? new Error(`dash: ${msg}`) : new Error(`dash 播放错误: ${String(e)}`))
       })
-      player.on(dashjs.MediaPlayer.events.MANIFEST_LOADED, () => console.info("[dash] MANIFEST_LOADED"))
-      player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => console.info("[dash] STREAM_INITIALIZED"))
-      player.on(dashjs.MediaPlayer.events.PLAYBACK_STARTED, () => console.info("[dash] PLAYBACK_STARTED"))
+      // 起播成功的权威信号在 useVideoElement 的 playing 事件,这里不重复打。
       player.initialize()
       // B 站分片(mcdn)/ YouTube 分片(googlevideo)无 CORS 头 → 替换 HTTPLoader
       // 走 appHost.http 隧道(无 CORS)。blob MPD 由 DashHostLoader 内部 fetch 原样拉;

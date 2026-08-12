@@ -39,7 +39,7 @@ export function useAutoHideControls(state: VideoPlayState): {
     hideTimer.current = window.setTimeout(() => {
       hideTimer.current = null
       // 计时结束时若已暂停/缓冲则保持显示,否则隐藏。
-      setShowControls(!state.paused && !state.waiting ? false : true)
+      setShowControls(state.paused || state.waiting)
     }, AUTOHIDE_MS)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.paused, state.waiting])
@@ -50,10 +50,13 @@ export function useAutoHideControls(state: VideoPlayState): {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.paused, state.waiting, scheduleHide])
 
+  // 立即隐藏(鼠标离开播放器)。暂停/缓冲时保留控件——否则暂停态移出后
+  // paused 不再变化、显隐 effect 不重跑,控件会永久消失(旧 VideoShell 行为)。
   const hide = useCallback(() => {
     clearHide()
-    setShowControls(false)
-  }, [])
+    setShowControls(state.paused || state.waiting)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.paused, state.waiting])
 
   const hover = useCallback(() => {
     setShowControls(true)
