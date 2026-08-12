@@ -34,10 +34,15 @@ interface DashLoaderInstance {
   resetInitialSettings(): void
 }
 
-/** dash.js 自定义 HTTPLoader 工厂(dash.js 用 Object.create 调用,须返回实例对象)。 */
-export function DashHostLoader(_cfg?: object): DashLoaderInstance {
+/**
+ * dash.js 自定义 HTTPLoader 工厂(dash.js 用 Object.create 调用,须返回实例对象)。
+ * cfg.headers 会并入每个分片请求(与 HlsHostLoader 的 stream.headers 透传对称)。
+ * YouTube googlevideo 分片需要 UA/referer,B站 mcdn 也带 referer——统一透传。
+ */
+export function DashHostLoader(cfg?: { headers?: Record<string, string> }): DashLoaderInstance {
   let aborted = false
   let pending: { cancel: () => void } | null = null
+  const extraHeaders = cfg?.headers ?? {}
 
   function load(config: DashLoadConfig): void {
     const req = config.request ?? {}
@@ -76,7 +81,7 @@ export function DashHostLoader(_cfg?: object): DashLoaderInstance {
     // dash.js 的 request.range 是裸 `start-end`(无 bytes= 前缀),HTTP 标准要求
     // `Range: bytes=0-914`,不补前缀 CDN 会当无 Range 返回完整文件(200)导致解析错位。
     const isBinary = !/\.mpd(\?|#|$)/i.test(url)
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = { ...extraHeaders }
     if (req.range) headers["range"] = req.range.startsWith("bytes=") ? req.range : `bytes=${req.range}`
     globalThis.appHost.http
       .request({

@@ -10,7 +10,7 @@
  */
 import { useEffect } from "react"
 import type { MediaItem, MediaStream } from "@tauri-playground/core"
-import { PlayableMedia, unlockAudioPlayback } from "@tauri-playground/player"
+import { PlayableMedia } from "@tauri-playground/player"
 
 export function ExpandedPlayer({
   item,
@@ -25,11 +25,8 @@ export function ExpandedPlayer({
   resolveLivePlay: (roomId: string) => Promise<MediaStream[]>
   onClose: () => void
 }) {
-  // 打开模态的这次点击本身即手势 → 手势内解锁 autoplay,autoResolve 完成后带声起播。
-  useEffect(() => {
-    unlockAudioPlayback()
-  }, [])
-
+  // 打开模态的这次点击本身即手势 → 手势内解锁 autoplay 已在 MediaList.openExpanded
+  // (setExpandedItem 前,同步手势内)完成,autoResolve 完成后带声起播。
   // ESC 关闭 + 滚动锁定。依赖 onClose 会因父级重渲染重建 → 用 ref 持最新。
   const onCloseRef = { current: onClose }
   onCloseRef.current = onClose

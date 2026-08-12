@@ -15,6 +15,7 @@ import * as dashjs from "dashjs"
 import type { MediaStream } from "@tauri-playground/core"
 import { HlsHostLoader } from "./hlsHostLoader.ts"
 import { DashHostLoader } from "./dashHostLoader.ts"
+import { attemptPlayWithMuteFallback } from "./attemptPlay.ts"
 
 /** 是否为 m3u8/HLS 流。 */
 export function isHlsStream(stream: MediaStream): boolean {
@@ -148,20 +149,7 @@ export function useMediaStream({
       video.muted = !autoPlay
       const attemptPlay = () => {
         if (!video.isConnected) return
-        const p = video.play() as Promise<void> | void
-        if (p && typeof p.catch === "function") {
-          p.catch((e: unknown) => {
-            // 带声被拦 → 降级静音起播(静音 autoplay 恒允许)。
-            if (autoPlay && !video.muted && video.isConnected) {
-              video.muted = true
-              const retry = video.play() as Promise<void> | void
-              if (retry && typeof retry.catch === "function") retry.catch(() => {})
-              return
-            }
-            console.warn("[useMediaStream] hls autoplay 失败:", e)
-            report?.(e)
-          })
-        }
+        attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
       }
       hls.on(Hls.Events.MANIFEST_PARSED, attemptPlay)
       // 兜底:分段缓冲到可播时再试一次(部分 LL-HLS 时序 MANIFEST_PARSED 早于数据)。
@@ -191,19 +179,7 @@ export function useMediaStream({
       // 报 "media was removed"。延迟到下一个 tick 并检查 isConnected,移除的跳过。
       const raf = requestAnimationFrame(() => {
         if (!video.isConnected) return
-        const p = flv.play() as Promise<void> | void
-        if (p && typeof p.catch === "function") {
-          p.catch((e: unknown) => {
-            // 带声被拦 → 降级静音起播。
-            if (autoPlay && !video.muted && video.isConnected) {
-              video.muted = true
-              const retry = flv.play() as Promise<void> | void
-              if (retry && typeof retry.catch === "function") retry.catch(() => {})
-              return
-            }
-            report?.(e)
-          })
-        }
+        attemptPlayWithMuteFallback(video, () => flv.play(), { autoPlay, onFail: report })
       })
       // 记录 raf 供 cleanup 取消。
       pendingRaf.current = raf
@@ -229,9 +205,10 @@ export function useMediaStream({
       player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => console.info("[dash] STREAM_INITIALIZED"))
       player.on(dashjs.MediaPlayer.events.PLAYBACK_STARTED, () => console.info("[dash] PLAYBACK_STARTED"))
       player.initialize()
-      // B 站分片(mcdn)无 CORS 头 → 替换 HTTPLoader 走 appHost.http 隧道(无 CORS)。
-      // blob MPD 由 DashHostLoader 内部 fetch 原样拉;分片走 Rust/浏览器宿主。
-      player.extend("HTTPLoader", DashHostLoader, true)
+      // B 站分片(mcdn)/ YouTube 分片(googlevideo)无 CORS 头 → 替换 HTTPLoader
+      // 走 appHost.http 隧道(无 CORS)。blob MPD 由 DashHostLoader 内部 fetch 原样拉;
+      // 分片走 Rust/浏览器宿主,并透传 stream.headers(referer/UA)。
+      player.extend("HTTPLoader", () => DashHostLoader({ headers: stream.headers }), true)
       // 锁最高档:MPD 已按档单 Representation,关 ABR 防止带宽估算降档(走隧道估算失真)。
       player.updateSettings({
         streaming: {
@@ -244,18 +221,7 @@ export function useMediaStream({
       video.muted = !autoPlay
       const raf = requestAnimationFrame(() => {
         if (!video.isConnected) return
-        const p = video.play() as Promise<void> | void
-        if (p && typeof p.catch === "function") {
-          p.catch((e: unknown) => {
-            if (autoPlay && !video.muted && video.isConnected) {
-              video.muted = true
-              const retry = video.play() as Promise<void> | void
-              if (retry && typeof retry.catch === "function") retry.catch(() => {})
-              return
-            }
-            report?.(e)
-          })
-        }
+        attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
       })
       pendingRaf.current = raf
       return cleanup

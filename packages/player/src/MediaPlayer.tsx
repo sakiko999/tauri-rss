@@ -18,6 +18,7 @@ import * as R from "ramda"
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { isDashStream, isFlvStream, isHlsStream, useMediaStream } from "./useHls.ts"
+import { attemptPlayWithMuteFallback } from "./attemptPlay.ts"
 import { VideoShell } from "./VideoShell.tsx"
 
 /** 渐进式视频(mp4/webm/ogg)→ 原生 <video>。 */
@@ -136,15 +137,8 @@ export function MediaPlayer({
     const attemptUnmuted = () => {
       if (!el.isConnected) return
       el.muted = false
-      const p = el.play() as Promise<void> | void
-      if (p && typeof p.catch === "function") {
-        p.catch(() => {
-          if (!el.isConnected) return
-          el.muted = true
-          const retry = el.play() as Promise<void> | void
-          if (retry && typeof retry.catch === "function") retry.catch(() => {})
-        })
-      }
+      // 带声 play;被 policy 拦 → 静音重试(attemptPlay 内部)。AbortError 不降级。
+      attemptPlayWithMuteFallback(el, () => el.play(), { autoPlay })
     }
     // 只等 canplay(媒体可播)再带声 play——**不要立即 play**:src 刚设媒体未
     // 加载,立即 play 易被判失败 → 降级静音(YouTube video 静音即因此)。
