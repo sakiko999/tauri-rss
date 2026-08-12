@@ -26,6 +26,14 @@ export class TauriHttpBackend implements HttpBackend {
     const method = req.method ?? "GET"
     const responseType = req.responseType ?? "text"
 
+    // 请求经 invoke → Rust reqwest 隧道发出,WebView 的 devtools Network 面板
+    // 只能看到 http_get 这个 IPC 调用、看不到真实 URL。这里打日志补上:
+    //   发起 → console.debug(devtools Console 需勾选 Verbose 才显示)
+    //   完成 → console.info(非 2xx 用 console.warn,显眼标出失败)
+    // devtools 里点开即可看到每次请求的完整路径 + 状态 + 耗时。
+    const started = performance.now()
+    console.debug(`[host:http] → ${method} ${req.url}`)
+
     // The Rust command returns base64 for arraybuffer, utf-8 otherwise.
     // 全局 HttpRequest 无 body 字段;Rust command 支持,此处经 withBody 传递。
     const withBody = req as HttpRequest & { body?: unknown }
@@ -39,6 +47,11 @@ export class TauriHttpBackend implements HttpBackend {
         responseType,
       },
     })
+
+    const elapsed = Math.round(performance.now() - started)
+    const line = `[host:http] ${method} ${req.url} → ${res.status} (${elapsed}ms)`
+    if (res.status >= 400) console.warn(line)
+    else console.info(line)
 
     let body: string | Uint8Array
     if (responseType === "arraybuffer") {
