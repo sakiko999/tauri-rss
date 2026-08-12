@@ -5,6 +5,7 @@
  * 类型来自根 global.d.ts(全局 HttpBackend/HttpRequest/HttpResponse)。
  */
 import { invoke } from "@tauri-apps/api/core"
+import { httpLog } from "../log.ts"
 
 interface TauriHttpResponse {
   status: number
@@ -26,6 +27,12 @@ export class TauriHttpBackend implements HttpBackend {
     const method = req.method ?? "GET"
     const responseType = req.responseType ?? "text"
 
+    // 日志走 @tauri-playground/log 的 host:http 域(requestStart/requestDone/
+    // requestError)——devtools Console 过滤 [host:http] 看完整 URL/状态/耗时。
+    // 开关:localStorage["log:host:http"]="0" 按域关;旧 key host-log 兼容。
+    const started = performance.now()
+    httpLog.requestStart({ method, url: req.url })
+
     // The Rust command returns base64 for arraybuffer, utf-8 otherwise.
     // 全局 HttpRequest 无 body 字段;Rust command 支持,此处经 withBody 传递。
     const withBody = req as HttpRequest & { body?: unknown }
@@ -39,6 +46,10 @@ export class TauriHttpBackend implements HttpBackend {
         responseType,
       },
     })
+
+    const elapsed = Math.round(performance.now() - started)
+    if (res.status >= 400) httpLog.requestError({ method, url: req.url, status: res.status, elapsed })
+    else httpLog.requestDone({ method, url: req.url, status: res.status, elapsed })
 
     let body: string | Uint8Array
     if (responseType === "arraybuffer") {
