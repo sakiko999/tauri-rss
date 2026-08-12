@@ -24,8 +24,6 @@ export function VideoShell({
   activeQuality,
   onQuality,
   onMediaError,
-  title,
-  fill = false,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   /** 是否由 useMediaStream(hls/flv/dash)驱动(决定直播判定)。 */
@@ -40,10 +38,6 @@ export function VideoShell({
   onQuality: (rate: number) => void
   /** 原生 video 加载失败(403/断流/格式不支持)上报——让 PlayableMedia 弹 playError UI。 */
   onMediaError?: (code: number | undefined, msg: string) => void
-  /** 悬停提示(如 referer 提示),挂容器 title。 */
-  title?: string
-  /** 填满父容器(父已定比例)。true 时不自撑比例,避免双算首帧塌缩。 */
-  fill?: boolean
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { state, ops } = useVideoElement(videoRef, isStreaming, onMediaError)
@@ -71,8 +65,10 @@ export function VideoShell({
   }, [])
 
   // 未起播 → 大播放键(autoPlay 起播瞬间不闪);播放中暂停 → 悬停播放键。
-  const showBigPlay = !autoPlay && state.paused && !state.ended && !state.waiting && state.currentTime === 0
-  const showPausedOverlay = state.paused && !showBigPlay && !state.ended
+  // started(video 已起播过):autoPlay 起播等待期(paused 但从未 playing)不显示任何
+  // 播放键——否则大屏打开时 resolve 结束的 spin 会闪现播放按钮再缓冲 spin。
+  const showBigPlay = !autoPlay && !state.started && state.paused && !state.ended && !state.waiting && state.currentTime === 0
+  const showPausedOverlay = state.paused && !showBigPlay && !state.ended && state.started
 
   // ⚠️ video 只填容器(比例由容器管):给 video 加 aspect-ratio 会与 h-full/w-full
   // 冲突,加载中塌成窄黑条。故比例全靠容器撑。
@@ -92,14 +88,12 @@ export function VideoShell({
       }}
       className={[
         "group flex items-center justify-center overflow-hidden bg-black outline-none",
-        // fill(父已定比例):absolute 填满最近 relative 祖先——不能用 h-full(父链无高度
-        // 约束会塌 0)。自撑:relative w-full,靠 padding-top 撑 16:9。
-        isFullscreen ? "h-full w-full relative" : fill ? "absolute inset-0" : "relative w-full rounded",
+        // 统一自撑 16:9:relative w-full + padding-top 撑开(video 未初始化也必然有
+        // 高度),父容器无需定比例。全屏时 h-full w-full 撑满。
+        isFullscreen ? "h-full w-full relative" : "relative w-full rounded",
         className,
       ].join(" ")}
-      // 非全屏且非 fill:padding-top 撑开 16:9(video 未初始化也必然有高度)。
-      style={isFullscreen || fill ? undefined : { paddingTop: "56.25%" }}
-      title={title}
+      style={isFullscreen ? undefined : { paddingTop: "56.25%" }}
     >
       {/* video absolute 填满容器:自撑时 padding-top 后内容区高为 0,必须 absolute。 */}
       <video

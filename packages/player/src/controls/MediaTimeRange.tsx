@@ -152,7 +152,7 @@ export function MediaTimeRange({
           className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded bg-black/80 px-1.5 py-0.5 text-[10px] tabular-nums text-white"
           style={{ left: `${shownPct}%` }}
         >
-          {formatTime(shownPct * duration)}
+          {formatTime((shownPct / 100) * duration)}
         </div>
       )}
     </div>

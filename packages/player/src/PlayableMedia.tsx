@@ -25,9 +25,10 @@ import {
   useStreamSelection,
 } from "./hooks/useStreamSelection.ts"
 import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
-import { log } from "./utils/log.ts"
+import { log } from "./log/index.ts"
 import { AudioShell } from "./AudioShell.tsx"
 import { VideoShell } from "./VideoShell.tsx"
+import { SpinnerIcon } from "./icons.tsx"
 
 /**
  * 在用户手势内解锁浏览器 autoplay policy(带声音自动播放)。
@@ -60,8 +61,7 @@ export function PlayableMedia({
   resolve,
   className,
   onError,
-  autoResolve = false,
-  fill = false,
+  autoResolve = true,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -69,13 +69,10 @@ export function PlayableMedia({
   resolve?: () => Promise<MediaStream[]>
   className?: string
   onError?: (err: unknown) => void
-  /** 挂载后立即懒解析起播(模态大播放器用,无需点按钮)。 */
+  /** 挂载后立即懒解析起播(默认开启,无需点「播放」按钮)。 */
   autoResolve?: boolean
-  /** 填满父容器(父已定比例)——透传给 VideoShell,避免双撑首帧塌缩。 */
-  fill?: boolean
 }) {
   const [resolved, setResolved] = useState<MediaStream[] | null>(null)
-  const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<unknown>(null)
   // 切档后仍要传 error 给 useMediaStream;error 展示由 error state 管。
   const [playError, setPlayError] = useState<unknown>(null)
@@ -89,25 +86,24 @@ export function PlayableMedia({
 
   async function handlePlay() {
     if (!resolve) return
-    // 用户手势内解锁 autoplay,resolve 完成后 video 才能带声音自动播。
+    // 解锁 autoplay(手势内调用最有效;autoResolve 非手势调用时被拦 → attemptPlay 降级静音)。
     log.resolveStart()
     unlockAudioPlayback()
-    setResolving(true)
     setError(null)
     try {
       const result = await resolve()
-      log.resolveSuccess(result.length)
+      // 空数组 = 无可播流,按失败处理(resolveFailed 而非「成功 0 条」误导)。
+      if (!result.length) throw new Error("无可播流")
+      log.resolveSuccess({ streams: result })
       setResolved(result)
     } catch (err) {
-      log.resolveFailed(err)
+      log.resolveFailed({ err })
       setError(err)
       onError?.(err)
-    } finally {
-      setResolving(false)
     }
   }
 
-  // 模态大播放器:挂载即自动懒解析起播(用户点「大屏」按钮时已在手势内,无需再点「播放」)。
+  // autoResolve(默认开启):挂载即自动懒解析起播,无「播放」按钮。
   // 用 ref 持 resolve,effect 只跑一次(StrictMode 双挂载幂等:第二次挂载 resolved 已非空直接播)。
   const startedRef = useRef(false)
   useEffect(() => {
@@ -124,7 +120,7 @@ export function PlayableMedia({
   // 诊断:打印最终选中的流(url 域名/截断 + format + headers 键),排查清晰度/来源。
   useEffect(() => {
     if (!stream) return
-    log.streamSelected(stream, Object.keys(stream.headers ?? {}))
+    log.streamSelected({ stream, headerKeys: Object.keys(stream.headers ?? {}) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream])
 
@@ -135,10 +131,10 @@ export function PlayableMedia({
   // 引擎选择:流媒体 → useMediaStream(hls/flv/dash);原生 → VideoShell <video>。
   useEffect(() => {
     if (!stream) return
-    log.engineSelected(
-      needsStreamPlayer ? "stream" : isProgressiveVideo(stream) ? "video" : isProgressiveAudio(stream) ? "audio" : "fallback",
-      stream.format,
-    )
+    log.engineSelected({
+      mode: needsStreamPlayer ? "stream" : isProgressiveVideo(stream) ? "video" : isProgressiveAudio(stream) ? "audio" : "fallback",
+      format: stream.format,
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream, needsStreamPlayer])
 
@@ -189,15 +185,12 @@ export function PlayableMedia({
   }
 
   if (!hasPlayable) {
+    // 默认 autoResolve:挂载即解析,播放按钮不再需要。解析中/等待解析 → spinner
+    // (与 VideoShell 缓冲 loading 一致);无 resolve 且无流(无播放能力)→ 空占位。
+    if (!resolve) return null
     return (
       <div>
-        <button
-          onClick={handlePlay}
-          disabled={!resolve || resolving}
-          className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-50"
-        >
-          {resolving ? "解析中…" : "▶ 播放"}
-        </button>
+        <SpinnerIcon className="h-12 w-12 animate-spin text-zinc-400" />
       </div>
     )
   }
@@ -234,10 +227,6 @@ export function PlayableMedia({
     )
   }
 
-  // 带 referer 头的渐进式直链原生播可能被 CDN 拒(浏览器无法带自定义 header)。
-  // 作为 title 提示挂外壳,不进流式布局(避免与 video 并列占行)。
-  const headerHintTitle = stream.headers ? "该直链可能需要 referer 头,若播放失败请用浏览器打开" : undefined
-
   // 渐进式视频 / HLS / FLV / DASH → VideoShell 外壳(自定义控件)。
   if (isProgressiveVideo(stream) || needsStreamPlayer) {
     return (
@@ -253,8 +242,6 @@ export function PlayableMedia({
           setPlayError(new Error(`原生媒体错误(code=${code ?? "?"}): ${msg}`))
           onError?.(new Error(msg))
         }}
-        title={headerHintTitle}
-        fill={fill}
       />
     )
   }
@@ -277,10 +264,12 @@ export function PlayableMedia({
     )
   }
 
-  // 未知流类型:兜底原生 <video>。
+  // 未知流类型:兜底原生 <video>(如 youtube 直链失败兜底的 format:"web")。
+  // 统一自撑 16:9(与 VideoShell 对齐):容器 padding-top 撑高,video absolute 填满,
+  // 未初始化的 video 不会以默认 300x150 尺寸悬浮。
   return (
-    <div className="space-y-1">
-      <video ref={videoRef} controls autoPlay={autoPlay} className={["w-full rounded bg-black", className].filter(Boolean).join(" ")} />
+    <div className="relative w-full rounded bg-black" style={{ paddingTop: "56.25%" }}>
+      <video ref={videoRef} controls autoPlay={autoPlay} className="absolute inset-0 h-full w-full object-contain" />
     </div>
   )
 }

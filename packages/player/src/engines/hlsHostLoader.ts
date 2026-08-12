@@ -11,7 +11,7 @@
 import Hls from "hls.js"
 import { LoadStats, type Loader, type LoaderCallbacks, type LoaderConfiguration, type LoaderContext, type LoaderStats } from "hls.js"
 import { toArrayBuffer } from "../utils/buffer.ts"
-import { log } from "../utils/log.ts"
+import { log } from "../log/index.ts"
 
 /** hls.js 的 Loader 类型作为类实现(`new (config: HlsConfig) => Loader<LoaderContext>`)。 */
 export class HlsHostLoader implements Loader<LoaderContext> {
@@ -60,7 +60,7 @@ export class HlsHostLoader implements Loader<LoaderContext> {
       .then((res) => {
         if (this.aborted) return
         if (res.status < 200 || res.status >= 300) {
-          log.loaderHttpError("hls", res.status, url)
+          log.loaderHttpError({ engine: "hls", status: res.status, url })
           callbacks.onError({ code: res.status, text: `HTTP ${res.status}` }, context, null, this.stats)
           return
         }
@@ -81,7 +81,7 @@ export class HlsHostLoader implements Loader<LoaderContext> {
       .catch((err: unknown) => {
         if (this.aborted) return
         const msg = err instanceof Error ? err.message : String(err)
-        log.loaderError("hls", msg)
+        log.loaderError({ engine: "hls", msg })
         callbacks.onError({ code: 0, text: msg }, context, null, this.stats)
       })
   }

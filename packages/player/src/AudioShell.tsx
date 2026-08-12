@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef } from "react"
 import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
-import { log } from "./utils/log.ts"
+import { log } from "./log/index.ts"
 
 export function AudioShell({
   src,
@@ -87,7 +87,7 @@ export function AudioShell({
         // 媒体加载失败 canplay 永不触发,只能靠 error 事件)。
         onError={() => {
           const el = audioRef.current
-          log.mediaError(el?.error?.code, el?.error?.message ?? "")
+          log.mediaError({ code: el?.error?.code, msg: el?.error?.message ?? "" })
           onErrorRef.current?.(new Error(el?.error?.message ?? `audio error(code=${el?.error?.code ?? "?"})`))
         }}
         // audio 无画面:不要黑底(mediaClass 含 bg-black 是给 video 的)。

@@ -14,7 +14,7 @@
  */
 import { type URLLoader } from "dashjs"
 import { toArrayBuffer } from "../utils/buffer.ts"
-import { log } from "../utils/log.ts"
+import { log } from "../log/index.ts"
 
 interface DashLoadConfig {
   request?: {
@@ -53,7 +53,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
     // 若不清除,后续新请求会被误判为 aborted 而无限加载。
     aborted = false
     if (!url) {
-      log.loaderError("dash", "no url")
+      log.loaderError({ engine: "dash", msg: "no url" })
       config.error?.(new Error("DashHostLoader: no url"))
       return
     }
@@ -65,7 +65,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
         .then((res) => {
           if (aborted) return
           if (!res.ok) {
-            log.loaderHttpError("dash", res.status, url)
+            log.loaderHttpError({ engine: "dash", status: res.status, url })
             config.error?.(new Error(`HTTP ${res.status}`))
             return
           }
@@ -78,7 +78,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
         .catch((e: unknown) => {
           if (aborted) return
           const msg = e instanceof Error ? e.message : String(e)
-          log.loaderError("dash", msg)
+          log.loaderError({ engine: "dash", msg })
           config.error?.(e instanceof Error ? e : new Error(msg))
         })
       return
@@ -99,7 +99,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
       .then((res) => {
         if (aborted) return
         if (res.status < 200 || res.status >= 300) {
-          log.loaderHttpError("dash", res.status, url)
+          log.loaderHttpError({ engine: "dash", status: res.status, url })
           config.error?.(new Error(`HTTP ${res.status}`))
           return
         }
@@ -118,7 +118,7 @@ export function DashHostLoader(cfg?: { headers?: Record<string, string> }): Dash
       .catch((e: unknown) => {
         if (aborted) return
         const msg = e instanceof Error ? e.message : String(e)
-        log.loaderError("dash", msg)
+        log.loaderError({ engine: "dash", msg })
         config.error?.(e instanceof Error ? e : new Error(msg))
       })
   }

@@ -1,0 +1,11 @@
+{
+  "name": "@tauri-playground/log",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {}
+}

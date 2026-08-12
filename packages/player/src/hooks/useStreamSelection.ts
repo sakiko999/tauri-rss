@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { isFlvStream, isHlsStream } from "./useMediaStream.ts"
-import { log } from "../utils/log.ts"
+import { log } from "../log/index.ts"
 
 /** 渐进式视频(mp4/webm/ogg)→ 原生 <video>。 */
 export function isProgressiveVideo(stream: MediaStream): boolean {
@@ -84,7 +84,7 @@ export function useStreamSelection(streams: MediaStream[]): {
     (rate: number) => {
       const target = streams.find((s) => s.rate === rate)
       if (!target) return
-      log.qualitySwitched(target)
+      log.qualitySwitched({ stream: target })
       // 换流:useMediaStream 的 effect 依赖 stream,变化自动销毁旧 hls/flv 实例重建。
       setActiveStream(target)
     },

@@ -16,7 +16,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import { playableDuration } from "../utils/buffer.ts"
-import { log } from "../utils/log.ts"
+import { log } from "../log/index.ts"
 
 export interface BufferedRange {
   start: number
@@ -34,6 +34,8 @@ export interface VideoPlayState {
   muted: boolean
   playbackRate: number
   waiting: boolean
+  /** 是否已起播过(playing/play 事件触发后置 true)——区分「自动起播等待」vs「播放后暂停」。 */
+  started: boolean
   /** 直播流(无固定时长)→ 进度条/时间显示按 live 模式渲染。 */
   live: boolean
 }
@@ -64,6 +66,7 @@ const INITIAL: VideoPlayState = {
   muted: false,
   playbackRate: 1,
   waiting: false,
+  started: false,
   live: false,
 }
 
@@ -112,6 +115,7 @@ export function useVideoElement(
         muted: el.muted,
         playbackRate: el.playbackRate,
         waiting: prev.waiting, // 由 waiting/playing 事件精确控制,timeupdate 不改动
+        started: prev.started, // 由 play/playing 事件置位,timeupdate 不改动
         live,
       }))
     }
@@ -123,24 +127,24 @@ export function useVideoElement(
     const onVolumeChange = () => read()
     const onRateChange = () => read()
     const onPlay = () => {
-      log.mediaEvent("play")
-      setState((p) => ({ ...p, paused: false, ended: false }))
+      log.play()
+      setState((p) => ({ ...p, paused: false, ended: false, started: true }))
     }
     const onPause = () => {
-      log.mediaEvent("pause")
+      log.pause()
       setState((p) => ({ ...p, paused: true }))
     }
     const onEnded = () => {
-      log.mediaEvent("ended")
+      log.ended()
       setState((p) => ({ ...p, paused: true, ended: true }))
     }
     const onWaiting = () => {
-      log.mediaEvent("waiting")
+      log.waiting()
       setState((p) => ({ ...p, waiting: true }))
     }
     const onPlaying = () => {
-      log.mediaEvent("playing")
-      setState((p) => ({ ...p, waiting: false }))
+      log.playing()
+      setState((p) => ({ ...p, waiting: false, started: true }))
     }
     const onCanPlay = () => setState((p) => ({ ...p, waiting: false }))
 
@@ -162,7 +166,7 @@ export function useVideoElement(
       const el = videoRef.current
       const code = el?.error?.code
       const msg = el?.error?.message ?? ""
-      log.mediaError(code, msg)
+      log.mediaError({ code, msg })
       onMediaErrorRef.current?.(code, msg)
     }
     video.addEventListener("error", onError)

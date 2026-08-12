@@ -1,4 +1,4 @@
-import { log } from "./log.ts"
+import { log } from "../log/index.ts"
 
 /**
  * attemptPlayWithMuteFallback —— 带声起播 + 被拦降级静音(四格式共用)。
@@ -35,13 +35,13 @@ export function attemptPlayWithMuteFallback(
     // 媒体未就绪/中断(AbortError):非 policy 拦截,不静音——等 canplay/就绪事件再试。
     if (name === "AbortError") return
     if (opts.autoPlay && !media.muted && media.isConnected) {
-      log.playMutedFallback(name ?? "unknown")
+      log.playMutedFallback({ reason: name ?? "unknown" })
       media.muted = true
       const retry = play()
       if (retry && typeof retry.catch === "function") retry.catch(() => {})
       return
     }
-    log.playFailed(e)
+    log.playFailed({ err: e })
     opts.onFail?.(e)
   })
 }

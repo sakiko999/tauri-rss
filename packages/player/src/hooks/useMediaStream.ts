@@ -16,7 +16,7 @@ import type { MediaStream } from "@tauri-playground/core"
 import { HlsHostLoader } from "../engines/hlsHostLoader.ts"
 import { DashHostLoader } from "../engines/dashHostLoader.ts"
 import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
-import { log } from "../utils/log.ts"
+import { log } from "../log/index.ts"
 
 /** 是否为 m3u8/HLS 流。 */
 export function isHlsStream(stream: MediaStream): boolean {
@@ -123,7 +123,7 @@ export function useMediaStream({
         }
       }
       hls.on(Hls.Events.ERROR, (_evt, data) => {
-        log.engineError("hls", data, !!data.fatal)
+        log.engineError({ engine: "hls", err: data, fatal: !!data.fatal })
         if (data.fatal) report?.(data)
       })
       // 流信息:LEVEL_LOADED 打印实际播放档位(高度/码率),排查清晰度来源。
@@ -167,7 +167,7 @@ export function useMediaStream({
       )
       flvRef.current = flv
       flv.on(flvjs.Events.ERROR, (_t, _d, e) => {
-        log.engineError("flv", e)
+        log.engineError({ engine: "flv", err: e })
         report?.(e)
       })
       flv.attachMediaElement(video)
@@ -191,7 +191,7 @@ export function useMediaStream({
     // MPD 生成 blob URL 喂 attachSource——dash.js 走 fetch 解析 XML,分片 BaseURL
     // 是绝对直链,直接请求真实 CDN。dash.js 双 SourceBuffer 同步音视频(等价 B 站官方)。
     if (isDashStream(stream) && stream.dashManifest) {
-      log.dashManifestReady(stream.dashManifest.length, autoPlay)
+      log.dashManifestReady({ len: stream.dashManifest.length, autoPlay })
       // 新实例创建前 revoke 旧 blob:旧 dash.js 实例已随上一次 cleanup destroy,
       // 不会再 refresh 旧 MPD,revoke 安全。避免 DASH 切档/重试逐次泄漏 blob URL。
       if (dashUrlRef.current) URL.revokeObjectURL(dashUrlRef.current)
@@ -202,7 +202,7 @@ export function useMediaStream({
       dashRef.current = player
       player.on(dashjs.MediaPlayer.events.ERROR, (e: unknown) => {
         const msg = (e as { message?: string })?.message
-        log.engineError("dash", msg ?? e)
+        log.engineError({ engine: "dash", err: msg ?? e })
         report?.(msg ? new Error(`dash: ${msg}`) : new Error(`dash 播放错误: ${String(e)}`))
       })
       // 起播成功的权威信号在 useVideoElement 的 playing 事件,这里不重复打。
