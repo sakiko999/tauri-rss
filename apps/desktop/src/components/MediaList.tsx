@@ -20,15 +20,16 @@
  */
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react"
 import { VirtuosoGrid, type GridComponents } from "react-virtuoso"
-import type { MediaItem } from "@tauri-playground/core"
-import { MediaItemView, UnifiedCard } from "@tauri-playground/ui"
+import { RefreshCw, Loader2 } from "lucide-react"
+import type { MediaItem, SocialItem } from "@tauri-playground/core"
+import { SocialRenderer, UnifiedCard } from "@tauri-playground/ui"
 import { unlockAudioPlayback } from "@tauri-playground/player"
 import { cn } from "../lib/cn.ts"
-import { isSmartFeed, isTabNode, useDesktop } from "../store.ts"
+import { isSmartFeed, isTabNode, useDesktop, viewTitleFor } from "../store.ts"
 import { ExpandedPlayer } from "./ExpandedPlayer.tsx"
 import { MasonryGrid } from "./MasonryGrid.tsx"
 
-/** 模块级稳定 onOpen:只依赖参数 url,不捕获组件内状态(供 MediaItemView memo 复用)。 */
+/** 模块级稳定 onOpen:只依赖参数 url,不捕获组件内状态(供 UnifiedCard memo 复用)。 */
 const openUrl = (url: string) => window.open(url, "_blank")
 
 /** 按容器宽度选列数(Folo 断点):80rem≈1280→5、72rem≈1152→4、48rem≈768→3、32rem≈512→2。
@@ -130,6 +131,7 @@ const gridComponents: GridComponents = {
 export function MediaList({ className }: { className?: string }) {
   const {
     items,
+    subscriptions,
     selectedNodeId,
     loading,
     refresh,
@@ -142,15 +144,24 @@ export function MediaList({ className }: { className?: string }) {
 
   // 刷新按钮只对真实订阅显示:tab 视图节点 / smart feed 无「该订阅」可刷。
   const selectedIsSub = !!selectedNodeId && !isSmartFeed(selectedNodeId) && !isTabNode(selectedNodeId)
+  // 顶栏:视图真实身份 + 当前订阅刷新是否出错(活性点信号)。
+  const viewTitle = viewTitleFor(selectedNodeId, subscriptions)
+  const hasRefreshError = !!refreshErrors[selectedNodeId ?? ""]
+  // 空态指引:按场景给方向(错误→说明;订阅源→可刷新;tab/smart feed 本为空→引导)。
+  const emptyHint = hasRefreshError
+    ? `刷新失败：${refreshErrors[selectedNodeId ?? ""]}`
+    : selectedIsSub
+      ? "这个订阅还没有内容，点刷新获取最新"
+      : "这里还没有内容，换个视图看看"
 
   // 模态大播放器:展开的视频/直播条目。按 item 快照(展开后列表可能刷新,用当时的
   // resolve 绑定不失效——resolvePlay/resolveLivePlay 是 store 稳定函数)。
   const [expandedItem, setExpandedItem] = useState<MediaItem | null>(null)
 
   // 视图 kind 判断:
-  //   - 单一 kind(social) → 专属瀑布流;
-  //   - 其余(video/live/audio 单一或混合) → VirtuosoGrid,统一中卡。
-  //     video/live 也用 UnifiedCard(16:9 图在上,与混合视图一致)。
+  //   - 单一 social 视图(内容全是 social,含聚合视图如 tab:social)→ 专属卡片 +
+  //     MasonryGrid 瀑布流——social 图为主、高度不一,瀑布流最自然;
+  //   - 其余(article/video/audio/live 单一或混合)→ UnifiedCard + VirtuosoGrid 网格。
   const kinds = new Set(items.map((it) => it.kind))
   const isSingleKind = items.length > 0 && kinds.size === 1
   const isSocialView = isSingleKind && kinds.has("social")
@@ -173,10 +184,12 @@ export function MediaList({ className }: { className?: string }) {
   }
 
   // 模块级稳定回调:onOpen 只依赖参数 url,可提前绑定。
-  // 卡片分发:video/live 恒走 UnifiedCard(16:9 中卡,统一观感);audio 单一 kind
-  // 走 MediaItemView(AudioRenderer 行式封面);混合视图全走 UnifiedCard(等尺寸)。
+  // 卡片分发:social 单一视图 → SocialRenderer(图为主、瀑布流专属卡);
+  // 其余(article/video/audio/live 单一或混合)→ UnifiedCard(16:9 中卡,等尺寸)。
   const renderItem = (item: (typeof items)[number]) =>
-    item.kind === "video" || item.kind === "live" || !isSingleKind ? (
+    isSocialView ? (
+      <SocialRenderer key={item.id} item={item as SocialItem} onOpen={openUrl} />
+    ) : (
       <UnifiedCard
         key={item.id}
         item={item}
@@ -187,55 +200,82 @@ export function MediaList({ className }: { className?: string }) {
         onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
         onPlayBig={() => openExpanded(item)}
       />
-    ) : (
-      <MediaItemView
-        key={item.id}
-        item={item}
-        onOpen={openUrl}
-        onToggleRead={markRead}
-        onToggleStar={toggleStar}
-        // 这三个捕获 item;引用变化但行为由 item 决定(item 相同则行为相同),
-        // 由 MediaItemView 自定义 memo 比较器跳过比较,不影响 memo 生效。
-        onResolvePlay={(itemId) => resolvePlay(item.subscriptionId, itemId)}
-        onResolveLivePlay={(roomId) => resolveLivePlay(item.subscriptionId, roomId)}
-        onPlayBig={() => openExpanded(item)}
-      />
     )
 
   return (
     // 外层只做布局不滚动(overflow-hidden)——VirtuosoGrid 的 List 自带滚动容器,
     // 若外层也 overflow-y-auto 会出现双滚动条。列表容器 flex-1 min-h-0 撑满剩余高度。
-    <main className={cn("flex h-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden p-2", className)}>
-      {/* 顶部:当前视图名 + 条数徽章 + 刷新。徽章用实心圆底突出计数。 */}
-      <div className="mb-5 px-4 flex shrink-0 items-center gap-3">
-        <h2 className="text-sm font-semibold text-foreground">内容</h2>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {items.length} 条
-        </span>
-        {selectedIsSub && (
-          <button
-            onClick={() => refresh(selectedNodeId!)}
-            disabled={loading}
-            className="ml-auto rounded-md border border-border px-3 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
-          >
-            刷新
-          </button>
-        )}
-        {refreshErrors[selectedNodeId ?? ""] && (
-          <span className="text-sm text-destructive">{refreshErrors[selectedNodeId!]}</span>
-        )}
+    // ⚠️ 不加 p-2:顶栏需与两侧栏(ArticleList/ArticleDetail)贴边对齐;
+    // 列表区水平边距由 GridList/MasonryGrid 自带(paddingLeft/Right 1rem / px-4)。
+    <main className={cn("flex h-full min-w-0 min-h-0 flex-1 flex-col overflow-hidden", className)}>
+      {/* 顶栏:当前视图身份 + 活性点 + 计数 + 刷新。容器与两侧栏统一
+          (h-12 + 两端对齐 + 底分隔线);内部信息有层次——
+          标题是视图真名,活性点编码 feed 健康度(健康隐藏/刷新脉冲蓝/错误红)。 */}
+      <div className="h-12 flex items-center justify-between gap-4 px-4 border-b border-border shrink-0">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="font-medium text-sm truncate">{viewTitle}</span>
+          <span
+            className={cn(
+              "size-2 shrink-0 rounded-full transition-colors",
+              loading ? "bg-blue-500 animate-pulse" : hasRefreshError ? "bg-destructive" : "bg-transparent",
+            )}
+            title={loading ? "刷新中…" : hasRefreshError ? "有刷新错误" : undefined}
+          />
+          <span className="text-xs text-muted-foreground tabular-nums shrink-0">{items.length} 条</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {hasRefreshError && (
+            <span className="max-w-44 truncate text-xs text-destructive">{refreshErrors[selectedNodeId!]}</span>
+          )}
+          {selectedIsSub && (
+            <button
+              onClick={() => refresh(selectedNodeId!)}
+              disabled={loading}
+              title="刷新当前订阅"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              刷新
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 py-4 flex-1">
         {items.length === 0 && !loading ? (
-          <p className="text-sm text-muted-foreground">暂无内容</p>
+          /* 空态:「无信号」环 = 顶栏活性点的放大静止版(同一语言的两个状态)。
+             按场景给方向(错误→说明;订阅源→刷新;tab/smart feed 本为空→引导)。 */
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-4 text-center">
+            <div className="relative flex h-12 w-12 items-center justify-center" aria-hidden>
+              <span className="absolute inset-0 rounded-full border-2 border-border" />
+              <span className="size-2 rounded-full bg-border" />
+            </div>
+            <div className="space-y-0.5">
+              <p className="text-sm font-medium text-foreground">还没有内容</p>
+              <p className="text-xs text-muted-foreground">{emptyHint}</p>
+            </div>
+            {selectedIsSub && (
+              <button
+                onClick={() => refresh(selectedNodeId!)}
+                disabled={loading}
+                title="刷新当前订阅"
+                className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                刷新
+              </button>
+            )}
+          </div>
         ) : isSocialView ? (
           /* social → 瀑布流(CSS columns + 无限加载)。图为主、高度不一,瀑布流最自然。
              VirtuosoGrid 假设等尺寸 item 承载不了变高瀑布流,故独立实现。 */
-          <MasonryGrid items={items} renderItem={renderItem} />
+          <MasonryGrid key={selectedNodeId ?? "all"} items={items} renderItem={renderItem} />
         ) : (
-          /* 其余 kind → VirtuosoGrid 虚拟化网格。 */
+          /* 其余 kind → VirtuosoGrid 虚拟化网格(全部 UnifiedCard,等尺寸)。
+             key 绑 selectedNodeId:切节点时容器卸载重建,滚动位置归零
+             (否则停留在旧视图的 scrollTop,新视图内容少时显示空白)。 */
           <VirtuosoGrid
+            key={selectedNodeId ?? "all"}
             totalCount={items.length}
             components={gridComponents}
             itemContent={(index) => renderItem(items[index])}

@@ -9,7 +9,7 @@ import { Virtuoso } from "react-virtuoso"
 import type { ArticleItem } from "@tauri-playground/core"
 import { Rss } from "lucide-react"
 import { cn } from "../lib/cn.ts"
-import { useDesktop } from "../store.ts"
+import { useDesktop, viewTitleFor } from "../store.ts"
 
 function fmtTime(ts?: number): string {
   if (!ts) return ""
@@ -83,16 +83,17 @@ function ArticleRow({
 }
 
 export function ArticleList() {
-  const { items, selectedArticleId, selectArticle } = useDesktop()
+  const { items, subscriptions, selectedNodeId, selectedArticleId, selectArticle } = useDesktop()
   const articles = items.filter((it): it is ArticleItem => it.kind === "article")
   const unreadCount = articles.filter((a) => a.isUnread).length
 
   return (
     <div className="w-80 h-full bg-background border-r border-border flex flex-col shrink-0">
-      {/* 头 */}
+      {/* 头:视图真实身份(与 MediaList 顶栏一致)——选中「今日」聚合时显示「今日」
+          而非写死的「文章」;tab:article 仍显示「文章」。 */}
       <div className="h-12 flex items-center justify-between px-4 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
-          <span className="font-medium text-sm">文章</span>
+          <span className="font-medium text-sm">{viewTitleFor(selectedNodeId, subscriptions)}</span>
           <span className="text-xs text-muted-foreground">{unreadCount} 未读</span>
         </div>
       </div>

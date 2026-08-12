@@ -45,6 +45,30 @@ export function isTabNode(id: string | null): id is string {
   return !!id && id.startsWith("tab:")
 }
 
+/** tab 节点 → 顶栏标题(与 Sidebar TABS 文案一致)。 */
+const TAB_TITLES: Record<string, string> = {
+  all: "全部",
+  article: "文章",
+  video: "视频",
+  audio: "音频",
+  live: "直播",
+  social: "社交",
+}
+
+/**
+ * 当前视图标题:tab 节点 / smart feed / 订阅源 → 真实身份,而非笼统「内容」。
+ * 中栏(MediaList)与文章左栏(ArticleList)顶栏共用——选中「今日」时顶栏显示
+ * 「今日」而非写死的「文章」。
+ */
+export function viewTitleFor(nodeId: string | null, subscriptions: Subscription[]): string {
+  if (!nodeId) return "全部"
+  if (nodeId === "today") return "今日"
+  if (nodeId === "unread") return "未读"
+  if (nodeId === "starred") return "已星标"
+  if (isTabNode(nodeId)) return TAB_TITLES[nodeId.slice(4)] ?? "内容"
+  return subscriptions.find((s) => s.id === nodeId)?.title ?? "内容"
+}
+
 /**
  * 按「选中节点」查当前视图 items。节点体系统一由 selectedNodeId 承载,
  * dispatch 按 id 前缀/裸 id 分支——未来分组(`group:<id>`)标签(`tag:<id>`)
