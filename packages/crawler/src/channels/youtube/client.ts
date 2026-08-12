@@ -3,11 +3,13 @@
  *
  * 参照 NewPipeExtractor 的 YoutubeStreamHelper/YoutubeStreamExtractor:
  *   1. 拿 visitorData(必须,无则 playerResponse 无效)
- *   2. POST youtubei/v1/player(ANDROID client)→ playerResponse
+ *   2. POST youtubei/v1/player(ANDROID_VR client)→ playerResponse
  *   3. 解析 streamingData.formats/adaptiveFormats → 可播直链
  *
- * 策略:优先 ANDROID client 的**渐进式 mp4(音视频合一)**——直链无签名,
- * 浏览器原生可播。只有它缺失时才考虑纯视频(DASH)或签名解密。
+ * 策略:优先 ANDROID_VR client(Oculus Quest 3)的**渐进式 mp4(音视频合一)**——
+ * 2026-08 起 ANDROID/IOS 标准 client 部分 IP 触发 poToken(LOGIN_REQUIRED),
+ * ANDROID_VR 免 token 直链、直播自带 hlsManifestUrl。渐进式缺失时才考虑
+ * 纯视频(DASH)或签名解密。若 VR 被拒(age/made-for-kids)fallback WEB。
  *
  * n 参数:HTML5 client 的 URL 带 `n=xxx`(节流混淆),不解 → 限速 50KB/s 或 403。
  * 本 client 在 resolve 后统一解 n(见 signature.ts 的 deobfuscateNParam)。
@@ -19,23 +21,26 @@ import { deobfuscateNParam, hasThrottlingParam } from "./signature.ts"
 
 const YOUTUBEI_V1 = "https://www.youtube.com/youtubei/v1"
 const YOUTUBEI_GAPIS_V1 = "https://youtubei.googleapis.com/youtubei/v1"
+/** ANDROID_VR(Oculus Quest 3)UA —— 主力 client,2026-08 起免 poToken 直链。 */
 const ANDROID_UA =
-  "Mozilla/5.0 (Linux; Android 12; Pixel 6 Build/SQ3A.220705.003; wv) " +
-  "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/103.0.0.0 Mobile Safari/537.36"
+  "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; " +
+  "eureka-user Build/SQ3A.220605.009.A1) gzip"
 const WEB_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 
 /**
- * ANDROID client 版本(NewPipe 2026-01 的 ClientsConstants)。
- * ⚠️ 必须跟随 YouTube 更新:clientVersion 过老会被拒(400 Precondition check failed
- * 或 playability UNPLAYABLE)。曾用 19.09.37(2024)全部被拒,升到 21.03.36 即通。
+ * ANDROID_VR client 版本(yt-dlp master 2026-08)。**主力 client**。
+ * ⚠️ ANDROID/IOS 标准 client 2026 年起部分 IP 触发 poToken(LOGIN_REQUIRED),VR
+ * client 仍返回免 token 直链(渐进式 mp4 + adaptiveFormats;直播自带 hlsManifestUrl)。
+ * ⚠️ 必须跟随更新:>1.65 可能返回 SABR-only;过老会被拒。曾用 21.03.36(ANDROID)换到
+ * 1.65.10(ANDROID_VR)。注意:VR 不含 made-for-kids 视频(无 audio/video_only 流)。
  */
-const ANDROID_CLIENT_VERSION = "21.03.36"
+const ANDROID_CLIENT_VERSION = "1.65.10"
 /** WEB client 版本(2026-01,NewPipe 同款)。 */
 const WEB_CLIENT_VERSION = "2.20260120.01.00"
 /**
- * iOS client 版本(NewPipe 2026-01)。**直播必需**:ANDROID client 直播时不返回
- * hlsManifestUrl,iOS/visionOS 才返回 HLS manifest(分离音视频)。
+ * iOS client 版本(NewPipe 2026-01)。**直播兜底**:ANDROID_VR 直播已自带
+ * hlsManifestUrl(实测);iOS 用于 VR 无 hls 的直播形态(分离音视频)。
  */
 const IOS_CLIENT_VERSION = "21.03.2"
 const IOS_DEVICE_MODEL = "iPhone16,2"
@@ -96,7 +101,17 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
 /** 拿 visitorData(零登录,POST visitor_id 端点,response 在 responseContext.visitorData)。 */
 export async function getVisitorData(): Promise<string> {
   const body = {
-    context: { client: { clientName: "ANDROID", clientVersion: ANDROID_CLIENT_VERSION, androidSdkVersion: 30 } },
+    context: {
+      client: {
+        clientName: "ANDROID_VR",
+        clientVersion: ANDROID_CLIENT_VERSION,
+        deviceMake: "Oculus",
+        deviceModel: "Quest 3",
+        androidSdkVersion: 32,
+        osName: "Android",
+        osVersion: "12L",
+      },
+    },
   }
   const res = (await postJson(
     `${YOUTUBEI_V1}/visitor_id?prettyPrint=false`,
@@ -108,15 +123,19 @@ export async function getVisitorData(): Promise<string> {
   return vd
 }
 
-/** 请求 player API(ANDROID client)。 */
+/** 请求 player API(ANDROID_VR client——主力,免 poToken)。 */
 async function getAndroidPlayerResponse(videoId: string, visitorData: string): Promise<PlayerResponse> {
   const cpn = generateCpn()
   const body = {
     context: {
       client: {
-        clientName: "ANDROID",
+        clientName: "ANDROID_VR",
         clientVersion: ANDROID_CLIENT_VERSION,
-        androidSdkVersion: 30,
+        deviceMake: "Oculus",
+        deviceModel: "Quest 3",
+        androidSdkVersion: 32,
+        osName: "Android",
+        osVersion: "12L",
         hl: "en",
         visitorData,
       },
@@ -126,9 +145,9 @@ async function getAndroidPlayerResponse(videoId: string, visitorData: string): P
     contentCheckOk: true,
     racyCheckOk: true,
   }
-  // ANDROID 走 gapis 端点 + t/id 参数(复刻 NewPipe getAndroidPlayerResponse:
+  // ANDROID_VR 走 gapis 端点 + t/id 参数(与 ANDROID 同款,复刻 NewPipe:
   // YoutubeStreamHelper.java:150——YOUTUBEI_V1_GAPIS_URL + "&t=" + generateTParameter()
-  // + "&id=" + videoId)。gapis 更稳定(绕开 www.youtube.com 的地域/风控)。iOS 同款。
+  // + "&id=" + videoId)。gapis 更稳定(绕开 www.youtube.com 的地域/风控)。
   const res = (await postJson(
     `${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`,
     body,
@@ -162,7 +181,7 @@ async function getWebPlayerResponse(videoId: string, visitorData: string): Promi
   return res
 }
 
-/** 请求 player API(iOS client)——直播时返回 hlsManifestUrl(ANDROID 不返回)。 */
+/** 请求 player API(iOS client)——直播兜底(ANDROID_VR 无 hls 时用,分离音视频)。 */
 export async function getIosPlayerResponse(videoId: string, visitorData: string): Promise<PlayerResponse> {
   const cpn = generateCpn()
   const body = {
@@ -274,34 +293,39 @@ function parseCipher(cipherStr: string): Record<string, string> {
 export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> {
   const visitorData = await getVisitorData()
 
-  // 1. ANDROID client(无签名,直链最干净)
+  // 1. ANDROID_VR client(免 poToken 直链,无签名,n 参数需解)。
   let res: PlayerResponse
   try {
     res = await getAndroidPlayerResponse(videoId, visitorData)
     checkPlayability(res, videoId)
   } catch (e) {
-    // ANDROID 失败(如 age-restricted / 地区)→ fallback WEB。
+    // ANDROID_VR 失败(如 age-restricted / 地区 / made-for-kids)→ fallback WEB。
     res = await getWebPlayerResponse(videoId, visitorData)
     checkPlayability(res, videoId)
   }
 
   const live = isLiveContent(res)
-  // 直播:ANDROID 不返回 hlsManifestUrl,必须 iOS client。
+  // 直播:ANDROID_VR 自带 hlsManifestUrl(实测确认)。若没有(部分直播形态),
+  // fallback iOS client(ANDROID 系不返回 hls 时才需要)。
   if (live) {
+    const hls = res.streamingData?.hlsManifestUrl
+    if (hls) {
+      return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
+    }
     try {
       const ios = await getIosPlayerResponse(videoId, visitorData)
       checkPlayability(ios, videoId)
-      const hls = ios.streamingData?.hlsManifestUrl
-      if (hls) {
-        return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
+      const iosHls = ios.streamingData?.hlsManifestUrl
+      if (iosHls) {
+        return [{ url: iosHls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
       }
     } catch (e) {
       console.warn("[youtube] iOS live 请求失败:", (e as Error)?.message)
     }
-    // iOS 拿不到 HLS,回退 ANDROID/WEB 的 formats(若有)。
+    // iOS 也拿不到 HLS,回退 ANDROID_VR/WEB 的 formats(若有)。
   }
 
-  // 非直播(或 live 但 iOS 失败):渐进式 mp4 优先。
+  // 非直播(或 live 但 VR/iOS 都无 HLS):渐进式 mp4 优先。
   const formats = res.streamingData?.formats ?? []
   const best = pickProgressiveVideo(formats)
   if (best) {
@@ -311,7 +335,7 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
     }
   }
 
-  // 2. 渐进式拿不到 → 试 HLS manifest(直播 / iOS)。
+  // 2. 渐进式拿不到 → 试 HLS manifest(直播)。
   const hls = res.streamingData?.hlsManifestUrl
   if (hls) {
     return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/" } }]

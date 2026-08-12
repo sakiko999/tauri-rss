@@ -249,10 +249,12 @@ packages/crawler/src/channels/youtube/
 
 ### 5.6 ANDROID/iOS client 强制 poToken(2026-08)与规避方案
 
-> ⚠️ **重要更新(2026-08-11)**:上述 5.5 的「Tauri 设备环境正常」已失效——
-> 2026 年起 **ANDROID / iOS 标准 client 被强制要求 poToken**,即使 Tauri 真实 IP 也返回
-> `LOGIN_REQUIRED` "Sign in to confirm you're not a bot"。这是 **client 身份问题,
-> 不是 IP 问题**。规避与溯源证据如下。
+> ⚠️ **重要更新(2026-08-12,含实测修正)**:2026 年起 **ANDROID / iOS 标准 client 的
+> poToken 要求收紧**——部分 IP(机房/代理/风控 ASN)会触发 `LOGIN_REQUIRED`
+> "Sign in to confirm you're not a bot"。⚠️ **不是所有环境都失效**:实测(2026-08-12)
+> 当前 ANDROID client(`21.03.36`)对普通视频(mp4 直链)和 iOS client 对直播(hls)
+> **仍可正常解析**,触发机器人检测的是**部分 IP**,非「Tauri 一律失效」。规避与溯源如下,
+> 作为 **ANDROID_VR 兜底预案**(当前主 client 仍可用,无需改动)。
 
 #### 根因:NewPipe 已移除 ANDROID/IOS client
 
@@ -263,33 +265,47 @@ packages/crawler/src/channels/youtube/
 - **ANDROID 无 poToken 时 NewPipe 改用 reel 端点兜底**(`getAndroidReelPlayerResponse`,
   `YoutubeStreamExtractor.fetchAndroidClient`——`androidPoTokenResult == null` 走
   `reel/reel_item_watch`,Shorts 专用,非常规 player 端点)。我们项目只有常规 player 端点,
-  无 poToken 直接撞 LOGIN_REQUIRED。
+  **在受影响的 IP 上**(NewPipe 语境 ANDROID 已被强制)无 poToken 会撞 LOGIN_REQUIRED;
+  但当前 21.03.36 在正常 IP 上仍可解析(见下实测)。
 - 时间线:2025 年初 ANDROID 仍匿名可用(PR #1272 只是可选加 poToken 支持);
   **2025-09 起 poToken 从 visitorData 绑定改为 videoId 绑定**(yt-dlp #14471 / FreeTube #8137,
-  每视频现 mint);**2026 年 ANDROID/iOS 全面强制**。
+  每视频现 mint);**2026 年起 ANDROID/iOS poToken 要求收紧**(NewPipe 因无法生成而移除),
+  ⚠️ **但非「全面强制」**:实测(2026-08-12)当前 ANDROID `21.03.36` + iOS 对普通视频/直播
+  **仍可解析**,受影响的只是**部分 IP** 触发机器人检测。
 
 #### 规避方案(按推荐序)
 
-**① 换免 poToken 的 client —— ANDROID_VR(Oculus Quest 3)【首选,最小改动】**
+**① 换 ANDROID_VR(Oculus Quest 3)client —— 兜底预案,最小改动**
 
-YouTube 至今仍给此 client 返回**传统 stream URL(非 SABR),无需 poToken**。多项目 2026 实测:
+YouTube 曾长期给此 client 返回**传统 stream URL(非 SABR),无需 poToken**,多项目 2026 实测:
 yt-dlp `youtube.py` 内置、[YoutubeExplode PR #936](https://github.com/Tyrrrz/YoutubeExplode/pull/936)
 (2026-02,用户确认恢复下载)、[NewPipe PR #1498](https://github.com/TeamNewPipe/NewPipeExtractor/pull/1498)
-(2026-05,恢复 720p/1080p+,并检测 SABR-only 响应自动 fallback)。完整常量:
+(2026-05,恢复 720p/1080p+,并检测 SABR-only 响应自动 fallback)。
+
+⚠️ **定位修正(2026-08-12)**:yt-dlp **默认不用 ANDROID_VR**——它的默认链是
+`('tv', 'web', 'mweb', 'android', 'ios')`,ANDROID_VR 靠
+`--extractor-args "youtube:player_client=android_vr"` **显式指定**才启用(非自动 fallback)。
+YoutubeExplode/ytdown 则激进地把它当**主力/首选**。且 **ANDROID_VR 也非绝对免 token**:
+yt-dlp 最新注释 *"Since 2026.07, intermittent/selective POT enforcement has been observed
+for non-HLS formats"* —— non-HLS 格式也已开始选择性强制;并需 visitorData(无则 LOGIN_REQUIRED)。
+**结论:作为 ANDROID 撞机器人检测时的 fallback 使用,不替换主力。**
+
+完整常量(yt-dlp master 2026-08,clientVersion 已从 1.60.19 升到 **1.65.10**;注意
+>1.65 可能返回 SABR-only):
 
 ```json
 {
   "clientName": "ANDROID_VR",
-  "clientVersion": "1.60.19",
+  "clientVersion": "1.65.10",
   "deviceMake": "Oculus",
   "deviceModel": "Quest 3",
+  "androidSdkVersion": 32,
   "osName": "Android",
-  "osVersion": "12L",
-  "androidSdkVersion": 32
+  "osVersion": "12L"
 }
 // INNERTUBE_CONTEXT_CLIENT_NAME = 28
-// UA: com.google.android.apps.youtube.vr.oculus/1.60.19
-//   (Linux; U; Android 12L; Quest 3 Build/SQ3A.220605.009.A1) gzip
+// UA: com.google.android.apps.youtube.vr.oculus/1.65.10
+//   (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip
 ```
 
 落地 = 改 `client.ts` 的 `getAndroidPlayerResponse` 常量 + ANDROID_UA,其余逻辑不变
@@ -299,9 +315,9 @@ audio/video_only 流,可接受)。注意 AV1 itags(394-401)+ audio(599,600)需�
 
 **② 兜底链(ANDROID_VR 万一也被封锁时)**
 
-| client | poToken | 现状(2026) | 备注 |
+| client | poToken | 现状(2026-08) | 备注 |
 |---|---|---|---|
-| `ANDROID_VR` | 不需要 | ✅ 传统 URL 免 poToken | 首选;不含 made-for-kids |
+| `ANDROID_VR` | 传统 URL 免;non-HLS 选择性强制 | ⚠️ 2026-07 起 intermittent | fallback;不含 made-for-kids,需 visitorData |
 | `TVHTML5` / `tv` | 不需要 | ⚠️ 仍返回 URL 但格式 DRM'd | 无 cookie 全 DRM,需登录 |
 | `WEB_EMBEDDED_PLAYER` | 不需要 | ⚠️ 仅可嵌入视频有效 | 换 embed 端点 |
 | `WEB` / `MWEB` | 需要(GVS) | 🔒 2025-02 起锁 SABR-only | adaptiveFormats 被移除 |
@@ -320,10 +336,12 @@ PoTokenProvider javadoc 明确:**需「良好 DOM 的 JS 引擎」**。我们 Ta
 #### 本项目的落地指向
 
 - `packages/crawler/src/channels/youtube/client.ts` 当前 `getAndroidPlayerResponse` 用
-  ANDROID client → **换 ANDROID_VR**(常量见上)即可恢复 Tauri 环境可播。
+  ANDROID client,实测(2026-08-12)仍可正常解析普通视频(mp4)+ 直播(iOS hls)。
+  **保持 ANDROID 主力不变**;仅当某 IP 撞 LOGIN_REQUIRED(机器人检测)时,在
+  `resolveYoutubeStreams` 的 fallback 链(当前 ANDROID → WEB)插入 ANDROID_VR
+  (带 visitorData,常量见上)作为中间兜底。
 - `resolveYoutubeStreams` 目前只取 `formats`(渐进式 mp4,最高 itag 22=720p);要 1080p+
   需扩展 adaptiveFormats + DASH 混流(与 bot 规避无关,后续迭代)。
-- 调研记忆见 `[[youtube-android-client-pocomp-removal]]`。
 
 ### 5.4 依赖注入
 
