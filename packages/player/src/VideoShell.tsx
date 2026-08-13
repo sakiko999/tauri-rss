@@ -41,7 +41,7 @@ export function VideoShell({
   onQuality: (rate: number) => void
   /** 原生 video 加载失败(403/断流/格式不支持)上报——让 PlayableMedia 弹 playError UI。 */
   onMediaError?: (code: number | undefined, msg: string) => void
-  /** 弹幕流(App 层注入;无弹幕平台传 undefined 不渲染层)。 */
+  /** 弹幕流(随 resolve 结果附带;无弹幕平台 undefined 不渲染层)。 */
   danmaku?: DanmakuStream
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -110,7 +110,7 @@ export function VideoShell({
 
       {/* 弹幕层:video 之上、控件之下。有 timeMs 的按 currentTime 窗口发射(点播),
           无 timeMs 的实时追加(live);点播暂停冻结,live 暂停照收。 */}
-      {danmaku && <DanmakuLayer stream={danmaku} currentTime={state.currentTime} live={state.live} paused={state.paused} />}
+      {danmaku && <DanmakuLayer danmaku={danmaku} currentTime={state.currentTime} live={state.live} paused={state.paused} />}
 
       {showSpinner && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">

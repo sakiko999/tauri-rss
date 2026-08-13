@@ -48,11 +48,19 @@ export class DouyinLiveChannel implements RssChannel {
       // 弹幕:先 ensureCookie(warmup 抓新鲜 ttwid)再建连——douyin 握手需带
       // cookie(缺则 415 DEVICE_BLOCKED)。ensureCookie 是异步,建连前等它完成。
       getDanmaku: (roomId) => (onItems) => {
+        let stopped = false
         let unsub: (() => void) | undefined
         void this.ensureCookie().then(() => {
+          // ⚠️ ensureCookie(warmup) 是异步:若期间已退订(玩家关闭直播间),必须拦截,
+          // 否则 warmup 完成后仍会创建 douyinDanmakuStream → 建 WS 泄漏
+          // (与 ExpandedPlayer/douyinDanmakuStream 的 stopped 检查同构,此层不可缺)。
+          if (stopped) return
           unsub = douyinDanmakuStream(roomId, this.cookieJar)(onItems)
         })
-        return () => unsub?.()
+        return () => {
+          stopped = true
+          unsub?.()
+        }
       },
     }
   }

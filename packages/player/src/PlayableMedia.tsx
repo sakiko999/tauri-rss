@@ -15,8 +15,7 @@
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
 import { useEffect, useRef, useState } from "react"
-import type { MediaStream } from "@tauri-playground/core"
-import type { DanmakuStream } from "@tauri-playground/crawler"
+import type { MediaStream, ResolvePlayback } from "@tauri-playground/core"
 import { useMediaStream } from "./hooks/useMediaStream.ts"
 import {
   isProgressiveAudio,
@@ -63,20 +62,17 @@ export function PlayableMedia({
   className,
   onError,
   autoResolve = true,
-  danmaku,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
-  /** 懒解析函数:点击播放时调用,返回可播流。 */
-  resolve?: () => Promise<MediaStream[]>
+  /** 懒解析函数:点击播放时调用,返回可播流 + 弹幕能力(core 探测 DanmakuPlayable 附带)。 */
+  resolve?: () => Promise<ResolvePlayback>
   className?: string
   onError?: (err: unknown) => void
   /** 挂载后立即懒解析起播(默认开启,无需点「播放」按钮)。 */
   autoResolve?: boolean
-  /** 弹幕流(App 层注入;仅视频分支生效,音频无画面不接)。 */
-  danmaku?: DanmakuStream
 }) {
-  const [resolved, setResolved] = useState<MediaStream[] | null>(null)
+  const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
   // 切档后仍要传 error 给 useMediaStream;error 展示由 error state 管。
   const [playError, setPlayError] = useState<unknown>(null)
@@ -84,9 +80,10 @@ export function PlayableMedia({
   const resolveRef = useRef(resolve)
   resolveRef.current = resolve
 
-  // 最终播放用的流:初始流或懒解析结果。
-  const playStreams = resolved ?? streams ?? []
+  // 最终播放用的流:初始流或懒解析结果。弹幕随解析结果附带(resolve 前 undefined)。
+  const playStreams = resolved?.streams ?? streams ?? []
   const hasPlayable = playStreams.length > 0
+  const danmaku = resolved?.danmaku
 
   async function handlePlay() {
     if (!resolve) return
@@ -97,8 +94,8 @@ export function PlayableMedia({
     try {
       const result = await resolve()
       // 空数组 = 无可播流,按失败处理(resolveFailed 而非「成功 0 条」误导)。
-      if (!result.length) throw new Error("无可播流")
-      log.resolveSuccess({ streams: result })
+      if (!result.streams.length) throw new Error("无可播流")
+      log.resolveSuccess({ streams: result.streams })
       setResolved(result)
     } catch (err) {
       log.resolveFailed({ err })

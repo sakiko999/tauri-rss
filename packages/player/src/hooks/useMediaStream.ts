@@ -127,8 +127,15 @@ export function useMediaStream({
         if (data.fatal) report?.(data)
       })
       // 流信息:LEVEL_LOADED 打印实际播放档位(高度/码率),排查清晰度来源。
+      // ⚠️ 直播 LL-HLS 持续重载 playlist,每次 LEVEL_LOADED 都打会刷屏;且 B站直播
+      // 的 level 元数据常缺 height/bitrate(0)。只在**档位变化**时打(锁最高档后恒定,
+      // 只首帧打一次),0 高度显示档位 index。
+      let lastLevelKey = ""
       hls.on(Hls.Events.LEVEL_LOADED, (_e, d) => {
         const lvl = hls.levels[d.level]
+        const key = `${d.level}:${lvl?.height ?? 0}:${lvl?.bitrate ?? 0}`
+        if (key === lastLevelKey) return
+        lastLevelKey = key
         log.hlsLevelLoaded({
           live: !!d.details?.live,
           level: d.level,

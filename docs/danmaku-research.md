@@ -9,7 +9,7 @@
 - 其余直播弹幕全是 WebSocket 长连接(bilibili/douyu/huya/douyin)。**WS 方案已定并落地:Rust `ws_connect` 隧道**(`appHost.ws`,可带自定义 header)——douyin 握手服务端校验 UA/Cookie/Origin 完整性(残缺 cookie 417、陈旧 ttwid 415 DEVICE_BLOCKED),浏览器原生 WS 带不了 header,必须走宿主隧道;bili live/douyu/huya 原生无 header 可连,统一接入隧道后更稳。
 - **弹幕渲染:自研 + Canvas 2D**。B站高级弹幕(mode 7)**暂不支持**,降级为普通滚动(mode 1–6 全覆盖)。
 - **时间单位坑**:seg.so proto 的 `progress` 是**毫秒**,XML 弹幕是**秒**,播放器 `currentTime` 是秒,换算勿混淆;YouTube live chat 的 `timestampUsec` 是**微秒**。
-- ✅ **落地状态(2026-08-13)**:B站视频弹幕 + YouTube live chat + player 渲染层(`DanmakuLayer` Canvas)已端到端实现,**接口统一为单一 `DanmakuPlayable.getDanmaku(id) → DanmakuStream`**(订阅即开始,全量或增量由实现方定)——crawler 能力接口 + core `openDanmaku` + desktop `ExpandedPlayer` 组装 + player `DanmakuLayer` 内部订阅分流(有 `timeMs` 按播放时间轴窗口发射 / 无 `timeMs` 实时追加)。实测:seg.so 解码 220 条正确、ytcfg/ytInitialData 提取器工作;tsc crawler/player/core/desktop 全绿。**四平台 WS 直播弹幕已全部打通**(bili live/douyu/huya/douyin 的 getSource 返回 `& DanmakuPlayable`),统一走 `appHost.ws`(Rust ws_connect 隧道 / node ws 包带 header)。`example/test-hot-danmaku.ts` 实测四平台开播房间全收弹幕(bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条)。**douyin 曾卡握手 415**(签名脚本版本 + 环境指纹,详见「四、douyin 落地」),换 douyinLive 2024 webmssdk.js + node 全局遮蔽 + Rust ws 隧道后已通。
+- ✅ **落地状态(2026-08-14)**:B站视频弹幕 + YouTube live chat + player 渲染层(`DanmakuLayer` Canvas)已端到端实现,**接口统一为单一 `DanmakuPlayable.getDanmaku(id) → DanmakuStream`**(订阅即开始,全量或增量由实现方定)——crawler 能力接口 + core `resolvePlay/resolveLivePlay` 返回附带(`ResolvePlayback.danmaku`,探测 `isDanmakuPlayable` 后 `getDanmaku(id)` 一并给,无独立 `openDanmaku` 门面) + player `DanmakuLayer` 内部订阅分流(有 `timeMs` 按播放时间轴窗口发射 / 无 `timeMs` 实时追加);desktop `ExpandedPlayer` 零弹幕逻辑(只传 resolve)。实测:seg.so 解码 220 条正确、ytcfg/ytInitialData 提取器工作;tsc crawler/player/core/desktop 全绿。**四平台 WS 直播弹幕已全部打通**(bili live/douyu/huya/douyin 的 getSource 返回 `& DanmakuPlayable`),统一走 `appHost.ws`(Rust ws_connect 隧道 / node ws 包带 header)。`example/test-hot-danmaku.ts` 实测四平台开播房间全收弹幕(bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条)。**douyin 曾卡握手 415**(签名脚本版本 + 环境指纹,详见「四、douyin 落地」),换 douyinLive 2024 webmssdk.js + node 全局遮蔽 + Rust ws 隧道后已通。
 
 ## 一、B站视频弹幕(主链路,已实测)
 
@@ -274,12 +274,13 @@ interface DanmakuItem {
 ### 架构位置:三层职责
 
 ```
-crawler(数据)  →  core(编排)  →  player(渲染)  ←  App(组装源)
-getDanmaku(id)     dl.openDanmaku         DanmakuLayer
-DanmakuStream                            (内部订阅分流)
+crawler(数据)  →  core(编排)  →  player(渲染)
+getDanmaku(id)   resolvePlay/resolveLivePlay   DanmakuLayer
+DanmakuStream    返回 ResolvePlayback.danmaku   (内部订阅分流)
+                 (探测 isDanmakuPlayable 附带)
 ```
 
-player 保持**平台无感**:只消费统一 `DanmakuStream`(订阅即开始,全量或增量由实现方定),由 App 层(desktop `ExpandedPlayer`)按 item 组装——与现有 `resolve` 注入同一模式(`PlayableMedia` 的 `resolve` 就是 App 层绑定的 `dl.resolvePlay`)。
+player 保持**平台无感**:只消费统一 `DanmakuStream`(订阅即开始,全量或增量由实现方定)。弹幕探测收敛进 core 的 `resolvePlay/resolveLivePlay`(与播放流同一解析结果,`ResolvePlayback.danmaku` 附带),`PlayableMedia` 从 resolve 结果提取传给 `DanmakuLayer`——App 层(desktop `ExpandedPlayer`)零弹幕逻辑,只传 resolve。
 
 ### 数据契约位置(全放 crawler)
 
@@ -311,19 +312,16 @@ interface DanmakuPlayable { getDanmaku(id: string): DanmakuStream }
 ```
 VideoShell 的 `relative` 容器(16:9 自撑)正是覆盖层载体;`useVideoElement.state` 已提供 `currentTime`(秒)/ `live` / `paused`——**零新增状态源**。
 
-**`PlayableMedia.tsx`** — 加透传 `danmaku?: DanmakuStream`(仅视频分支传给 VideoShell;音频无画面不接)。
+**`PlayableMedia.tsx`** — `resolve` 返回 `ResolvePlayback`,内部 `danmaku = resolved?.danmaku` 透传给 VideoShell(仅视频分支;音频无画面不接)。
 
 ### App 层组装(desktop)
 
-`ExpandedPlayer.tsx`(`PlayableMedia` 主调用点,另有 MediaList 内嵌播放):
+弹幕探测收敛进 core resolve——`ExpandedPlayer` 只传 `resolve`(返回 `ResolvePlayback`),`PlayableMedia` 从 resolve 结果提取 `danmaku` 传给 `DanmakuLayer`;desktop 零弹幕逻辑:
 ```ts
-// video(用 item.id)/ live(用 item.roomId)统一取弹幕流;openDanmaku 是 async
-// (core 探测 isDanmakuPlayable)→ stopped flag 先拦,初始化完成后再订阅;
-// 失败静默无弹幕。useMemo 保引用稳定(订阅 effect 依赖 stream 身份)。
-const danmakuId = item.kind === "live" ? item.roomId : item.kind === "video" ? item.id : undefined
-const danmaku = danmakuId ? useMemo(() => (onItems) => { ... }, [danmakuId, openDanmaku]) : undefined
+const resolve = item.kind === "live" ? () => resolveLivePlay(item.roomId) : () => resolvePlay(item.id)
+<PlayableMedia streams={initialStream} resolve={resolve} autoResolve />
 ```
-core data-layer 加 `openDanmaku(subscriptionId, id)`:查 channel → getSource → `isDanmakuPlayable` 探测 → `source.getDanmaku(id)`;desktop store 暴露;无弹幕 channel → 抛错被 catch → `undefined` → VideoShell 不渲染层(零开销)。
+core `resolvePlay/resolveLivePlay`:查 channel → getSource → `isDanmakuPlayable` 探测 → `danmaku = source.getDanmaku(id)`(附带进 `ResolvePlayback`);无弹幕 channel → `danmaku: undefined` → VideoShell 不渲染层(零开销)。`DanmakuLayer` 接收**已探测**的 `DanmakuStream`,内部订阅(退订生命周期收敛本层,入参从「懒探测源」变为「已探测流」)。
 
 ### 决策点
 
@@ -338,7 +336,7 @@ core data-layer 加 `openDanmaku(subscriptionId, id)`:查 channel → getSource 
 ### 落地状态
 
 1. ✅ **crawler**:bili 视频 `biliDanmakuStream`(seg.so,MVP,复用 `resolveCid` + `httpJson`)→ YouTube `createLiveChatPoller`(复用 `extractInlineJson`);4 个 bili video channel + youtube live channel 的 getSource 返回 `... & DanmakuPlayable`。
-2. ✅ **core**:`openDanmaku`(探测 `isDanmakuPlayable`)→ desktop store 透出。
+2. ✅ **core**:`resolvePlay/resolveLivePlay` 返回 `ResolvePlayback`(探测 `isDanmakuPlayable` 附带 `danmaku`,与播放流同一解析结果);无独立 `openDanmaku` 门面,desktop store 透传。
 3. ✅ **player**:`DanmakuLayer` 内部订阅分流(`useDanmaku` hook 已删,订阅逻辑并入渲染层)→ VideoShell/PlayableMedia 接 `DanmakuStream`。
 4. ✅ **四平台 WS 直播弹幕(2026-08-13,已全部打通)**:`danmaku/ws.ts` 通用封装(订阅即建连/退订即断开/指数重连/心跳)+ `danmaku/tars.ts`(Tars codec) + `danmaku/douyin-proto.ts`(PushFrame protobuf) + `douyin/msdk-sign.ts`(kWebMsSDK 签名)。bili live(`danmaku-live.ts`,getDanmuInfo+op=7+protover2 zlib)、douyu(`danmaku.ts`,loginreq/joingroup+mrkl+STT+6色)、huya(`danmaku.ts`,Tars 进房+固定心跳+uri1400)、douyin(`danmaku.ts`,签名+PushFrame hb+gzip)各 channel 的 getSource 返回 `& DanmakuPlayable`,统一走 `appHost.ws`(Rust ws_connect 隧道 / node ws 包带 header)。验证 `example/test-hot-danmaku.ts`:bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 26/10 条(全部在播房间)。douyin 曾卡 415(签名脚本版本 + node 全局遮蔽 + 无 header),见「四、douyin 落地」。
 **live 多房间 + hot 委托(2026-08-13,再改)**:live channel 升级为**多直播间订阅**——sourceInfoTpl 改 `roomIds`(逗号分隔,可多个),fetch 并发查每个房间(单个失败跳过,不影响其余),兼容旧 `roomId` 单房间(`utils/room-ids.ts` 的 `parseRoomIds` 解析);resolveLivePlay/getDanmaku 本就是按 roomId 工作的纯函数,天然支持任一房间。hot channel 是「**特殊的 live channel**」——对外保持独立无参 channel 身份,内部 `getSource` 委托同平台 live channel 的 resolveLivePlay/getDanmaku(点热门卡片即可播放+弹幕)。`example/test-multi-room.ts` 实测:多房间返回 2 item(含 1 失败房间被跳过)、单房间兼容、4 hot 均 livePlayable+danmakuPlayable、hot 委托解析 bili/douyu 热门房间各 4 档播放流。desktop `subscriptions.ts` 已加 4 个 hot 订阅(AddFeedDialog 对 defaultInfo={} 自动一键订阅)。

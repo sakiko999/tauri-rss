@@ -52,6 +52,7 @@ export type {
 } from "./types/media-item.ts"
 export type { LivePlatformId, LiveStatus } from "./types/live.ts"
 export type { MediaQuery } from "./types/query.ts"
+export type { ResolvePlayback } from "./types/playback.ts"
 export { createMediaStore } from "./store/media-store.ts"
 export type { MediaStore, MediaStoreListener } from "./store/media-store.ts"
 

@@ -1,17 +1,25 @@
 /**
  * bilibili 直播弹幕 —— getDanmuInfo(wbi 签名) → wss → op=7 认证 → 心跳 → op=5 弹幕。
  *
- * 协议(16B 大端头 + JSON body;probe-ws 已实测原生 WS 可连):
+ * 协议(16B 大端头 + JSON body):
  *   op:2 心跳 / 3 心跳回 / 5 通知 / 7 认证进房 / 8 进房回
  *   protover:0 JSON / 2 zlib / 3 brotli —— op=5 通知按 protover 解压后按
  *   `[\x00-\x1f]+` 切分成逐条 JSON,`cmd=DANMU_MSG` → info[1] 文本。
- * 匿名可连;getDanmuInfo 带登录 cookie 更稳(probe 实测匿名可能超时)。
+ *
+ * ⚠️ 2026-08 风控:直播弹幕**必须真实登录 uid**——匿名(uid=0)认证被服务器
+ * 1006 拒绝(握手成功即断,probe-bili-cookie 实测:uid=0 1006,真实 nav mid → op=8
+ * {"code":0})。故认证帧 uid = nav 的 mid(cookie 登录态),buvid = cookie 提取的
+ * buvid3。⚠️ **不走宿主隧道**(带 cookie header 会触发 Rust ws_connect 的
+ * sec-websocket-key 握手被服务器拒)——bili 弹幕接受无 header 原生 WS,仅 uid
+ * 真实即可通过。host 的 **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手
+ * 成功但非弹幕服务)。
  */
 import type { DanmakuItem, DanmakuStream } from "../../index.ts"
 import { createWsStream } from "../../danmaku/ws.ts"
 import { createBilibiliClient } from "./client.ts"
 import { log } from "../../log.ts"
 
+const API_MAIN = "https://api.bilibili.com"
 const API_LIVE = "https://api.live.bilibili.com"
 /** 心跳间隔,ms。 */
 const HEARTBEAT_MS = 60000
@@ -100,17 +108,35 @@ async function parseBiliDanmakuFrame(buf: Uint8Array): Promise<DanmakuItem[]> {
   return items
 }
 
-/** getDanmuInfo(wbi 签名) → 弹幕服务器 host + token。 */
-async function getDanmuInfo(roomId: string, cookie?: string): Promise<{ host: string; token: string }> {
+/** getDanmuInfo(wbi 签名) → 弹幕服务器 host + wss_port + token + 登录 uid + buvid3。 */
+async function getDanmuInfo(
+  roomId: string,
+  cookie?: string,
+): Promise<{ host: string; wssPort: number; token: string; uid: number; buvid3: string }> {
   const client = createBilibiliClient({ referer: "https://live.bilibili.com/", live: true, cookie })
   const q = await client.signWeb(`id=${roomId}`)
-  const res = await client.getJson<{ data?: { token?: string; host_list?: Array<{ host?: string }> } }>(
-    `${API_LIVE}/xlive/web-room/v1/index/getDanmuInfo?${q}`,
-  )
-  const host = res?.data?.host_list?.[0]?.host
+  const res = await client.getJson<{
+    data?: { token?: string; host_list?: Array<{ host?: string; wss_port?: number }> }
+  }>(`${API_LIVE}/xlive/web-room/v1/index/getDanmuInfo?${q}`)
+  const first = res?.data?.host_list?.[0]
+  const host = first?.host
+  const wssPort = first?.wss_port ?? 443
   const token = res?.data?.token
   if (!host || !token) throw new Error(`bili:live danmaku: no host/token for room ${roomId}`)
-  return { host, token }
+  // 认证 uid = nav 带 cookie 的 mid(2026 风控:匿名 0 被拒)。buvid3 从 cookie 提取。
+  let uid = 0
+  try {
+    const nav = await client.getJson<{ data?: { mid?: number } }>(
+      `${API_MAIN}/x/web-interface/nav`,
+      { referer: "https://www.bilibili.com/" },
+      { allowCodeError: true },
+    )
+    uid = nav?.data?.mid ?? 0
+  } catch {
+    uid = 0
+  }
+  const buvid3 = (cookie ?? "").match(/buvid3=([^;]+)/)?.[1] ?? ""
+  return { host, wssPort, token, uid, buvid3 }
 }
 
 /** bili 直播弹幕流:订阅时 getDanmuInfo → 建 WS(认证 → 心跳 → 收弹幕),退订断开。 */
@@ -119,18 +145,23 @@ export function biliLiveDanmakuStream(roomId: string, cookie?: string): DanmakuS
     let stopped = false
     let unsub: (() => void) | undefined
     void getDanmuInfo(roomId, cookie)
-      .then(({ host, token }) => {
+      .then(({ host, wssPort, token, uid, buvid3 }) => {
         if (stopped) return
         unsub = createWsStream({
-          url: `wss://${host}/sub`,
+          // 必须拼 wss_port(非标 2245 常见;默认 443 连上非弹幕服务)。
+          url: `wss://${host}:${wssPort}/sub`,
+          // 无 header → 走原生 WebSocket。⚠️ 不能带 cookie header:会走宿主隧道,
+          // Rust ws_connect 对 bili 弹幕服务器握手被拒(sec-websocket-key)。原生
+          // WS + 认证帧 uid/buvid 真实即通过。
+          headers: undefined,
           onOpen: (ws) => {
             ws.send(
               biliFrame(7, {
-                uid: 0,
+                uid,
                 roomid: Number(roomId),
                 // protover:2 请求 zlib(DecompressionStream 标准支持);3=brotli 兼容性差。
                 protover: 2,
-                buvid: "",
+                buvid: buvid3,
                 platform: "web",
                 type: 2,
                 key: token,

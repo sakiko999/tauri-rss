@@ -24,7 +24,11 @@ export const engineLog = createLogDomain("player:engine", {
     hlsLevelLoaded: {
       level: "debug",
       text: (ctx: { live: boolean; level: number; height?: number; bitrate?: number }) => {
-        const desc = ctx.height != null ? `${ctx.height}p/${Math.round((ctx.bitrate ?? 0) / 1000)}kbps` : `#${ctx.level}`
+        // height 为 0/缺失(如 B站 LL-HLS 未声明分辨率)→ 显示档位 index,避免误导性 0p/0kbps。
+        const desc =
+          ctx.height != null && ctx.height > 0
+            ? `${ctx.height}p/${Math.round((ctx.bitrate ?? 0) / 1000)}kbps`
+            : `#${ctx.level}`
         return `hls 播放档位 ${ctx.live ? "live" : "vod"} ${desc}`
       },
     },

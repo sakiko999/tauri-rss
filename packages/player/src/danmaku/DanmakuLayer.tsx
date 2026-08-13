@@ -10,6 +10,7 @@
  */
 import { useEffect, useRef } from "react"
 import type { DanmakuItem, DanmakuStream } from "@tauri-playground/crawler"
+import { log } from "../log/index.ts"
 
 const FONT = '"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif'
 const FONT_SIZE = 22
@@ -71,12 +72,13 @@ function mkActive(item: DanmakuItem, ctx: CanvasRenderingContext2D, w: number, l
 }
 
 export function DanmakuLayer({
-  stream,
+  danmaku,
   currentTime,
   live,
   paused,
 }: {
-  stream: DanmakuStream | undefined
+  /** 弹幕流(随 resolve 结果附带,已探测;无弹幕平台不传,不渲染层)。 */
+  danmaku?: DanmakuStream
   /** 播放时间,秒(VOD 窗口发射用)。 */
   currentTime: number
   /** 媒体是否直播(决定暂停冻结:点播暂停弹幕停,直播暂停聊天照收)。 */
@@ -97,17 +99,25 @@ export function DanmakuLayer({
   const liveRef = useRef(live)
   liveRef.current = live
 
-  // 订阅弹幕流:有 timeMs → 累积 vodPool(待时间窗口);无 timeMs → 直接发射。
+  // 订阅弹幕流(已探测,直接订阅)。有 timeMs → 累积 vodPool(待时间窗口);
+  // 无 timeMs → 直接发射。生命周期(退订)收敛在本层,danmaku 身份由 resolve
+  // 结果决定,身份稳定不反复重订阅。
   useEffect(() => {
-    if (!stream) return
-    return stream((batch) => {
+    if (!danmaku) return
+    log.danmakuSubscribed()
+    const unsub = danmaku((batch) => {
       const vod: DanmakuItem[] = []
       const liveNow: DanmakuItem[] = []
       for (const d of batch) (d.timeMs !== undefined ? vod : liveNow).push(d)
       if (vod.length) vodPoolRef.current.push(...vod)
       if (liveNow.length) pendingRef.current.push(...liveNow)
+      if (vod.length || liveNow.length) log.danmakuBatch({ vod: vod.length, live: liveNow.length })
     })
-  }, [stream])
+    return () => {
+      log.danmakuUnsubscribed()
+      unsub()
+    }
+  }, [danmaku])
 
   // VOD 时间窗口发射(暂停不推进;seek 大幅回跳重置起点,已发射不重发)。
   useEffect(() => {
@@ -128,7 +138,10 @@ export function DanmakuLayer({
         fresh.push(d)
       }
     }
-    if (fresh.length) pendingRef.current.push(...fresh)
+    if (fresh.length) {
+      log.danmakuEmit({ count: fresh.length, windowMs: t - start })
+      pendingRef.current.push(...fresh)
+    }
   }, [currentTime])
 
   // rAF 主循环:同步尺寸/lane → 发射 pending → 推进 active → 绘制。

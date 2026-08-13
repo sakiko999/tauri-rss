@@ -15,11 +15,11 @@ import {
   isRssLiveSource,
   isRssVideoSource,
   registerAllChannels,
-  type DanmakuStream,
 } from "@tauri-playground/crawler"
-import { serializeFeed, type Stream } from "@tauri-playground/xml"
+import { serializeFeed } from "@tauri-playground/xml"
 import { deserializeFeed } from "./xml/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
+import type { ResolvePlayback } from "./types/playback.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem } from "./types/media-item.ts"
@@ -48,14 +48,13 @@ export interface DataLayer {
   }
   /** 刷新一次订阅,把内容写入 store。 */
   refresh(subscriptionId: string): Promise<RefreshResult>
-  /** 懒解析某条 video item 的可播流(播放时调用;URL 带 deadline 签名,不缓存)。 */
-  resolvePlay(subscriptionId: string, itemId: string): Promise<Stream[]>
+  /** 懒解析某条 video item 的可播流(播放时调用;URL 带 deadline 签名,不缓存)。
+   *  返回流 + 弹幕能力(source 具备 DanmakuPlayable 时附带,一次拿齐)。 */
+  resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
   /** 懒解析某直播房间的可播流(播放时调用;playUrls 带 expiry 签名,不缓存)。 */
-  resolveLivePlay(subscriptionId: string, roomId: string): Promise<Stream[]>
+  resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
   /** 热搜词 → 该词下内容流(desktop 热搜三栏右栏;不持久,直接返回 MediaItem[])。 */
   resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]>
-  /** 获取某媒体(id = itemId 视频 / roomId 直播)的弹幕流(订阅即开始,全量或增量由实现方定)。 */
-  openDanmaku(subscriptionId: string, id: string): Promise<DanmakuStream>
 }
 
 export function createDataLayer(): DataLayer {
@@ -115,7 +114,7 @@ export function createDataLayer(): DataLayer {
     }
   }
 
-  async function resolvePlay(subscriptionId: string, itemId: string): Promise<Stream[]> {
+  async function resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback> {
     const sub = await repo.get(subscriptionId)
     if (!sub) throw new Error("subscription not found")
     const channel = getChannel(sub.channelKey)
@@ -126,10 +125,13 @@ export function createDataLayer(): DataLayer {
     if (!isRssVideoSource(source)) {
       throw new Error(`channel ${sub.channelKey} does not support video play resolution`)
     }
-    return source.resolvePlay(itemId)
+    const streams = await source.resolvePlay(itemId)
+    // 弹幕能力随解析结果一并给(同一 source 同 implements DanmakuPlayable 时)。
+    const danmaku = isDanmakuPlayable(source) ? source.getDanmaku(itemId) : undefined
+    return { streams, danmaku }
   }
 
-  async function resolveLivePlay(subscriptionId: string, roomId: string): Promise<Stream[]> {
+  async function resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback> {
     const sub = await repo.get(subscriptionId)
     if (!sub) throw new Error("subscription not found")
     const channel = getChannel(sub.channelKey)
@@ -140,7 +142,10 @@ export function createDataLayer(): DataLayer {
     if (!isRssLiveSource(source)) {
       throw new Error(`channel ${sub.channelKey} does not support live play resolution`)
     }
-    return source.resolveLivePlay(roomId)
+    const streams = await source.resolveLivePlay(roomId)
+    // 弹幕能力随解析结果一并给(直播聊天 / 视频 VOD 同一接口)。
+    const danmaku = isDanmakuPlayable(source) ? source.getDanmaku(roomId) : undefined
+    return { streams, danmaku }
   }
 
   async function resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]> {
@@ -160,19 +165,6 @@ export function createDataLayer(): DataLayer {
     return deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
   }
 
-  async function openDanmaku(subscriptionId: string, id: string): Promise<DanmakuStream> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) throw new Error("subscription not found")
-    const channel = getChannel(sub.channelKey)
-    if (!channel) throw new NoChannelError(sub.channelKey)
-    const info = await sourceInfoFor(sub)
-    const source = channel.getSource(info)
-    if (!isDanmakuPlayable(source)) {
-      throw new Error(`channel ${sub.channelKey} does not support danmaku`)
-    }
-    return source.getDanmaku(id)
-  }
-
   return {
     subscriptions: repo,
     reading,
@@ -187,6 +179,5 @@ export function createDataLayer(): DataLayer {
     resolvePlay,
     resolveLivePlay,
     resolveHotWord,
-    openDanmaku,
   }
 }

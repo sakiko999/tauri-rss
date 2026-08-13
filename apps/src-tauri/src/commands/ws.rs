@@ -24,6 +24,7 @@ use tauri::ipc::Channel;
 use tauri::State;
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, Mutex as AsyncMutex};
+use tokio_tungstenite::tungstenite::client::IntoClientRequest as _;
 use tokio_tungstenite::tungstenite::http;
 use tokio_tungstenite::tungstenite::{Error as WsError, Message};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
@@ -102,29 +103,44 @@ pub async fn ws_connect(
     on_event: Channel<WsEvent>,
     state: State<'_, Arc<WsManager>>,
 ) -> Result<WsConnectResult, String> {
-    // 1. 用 http::Request<()> 带自定义 header 握手(IntoClientRequest 接受 Request<()>)。
-    let mut builder = http::Request::builder().uri(&req.url);
+    // 1. 从 URL 构造完整 WS 请求(IntoClientRequest for &str 自动生成 Sec-WebSocket-Key/
+    //    Host/Connection/Upgrade/Version),再插入自定义 header。
+    //    ⚠️ 不能手动 Request::builder() 构造 Request<()> 再传 connect_async——Request<()>
+    //    的 IntoClientRequest 是 Ok(self) 不补 WS 头,generate_request 校验缺
+    //    Sec-WebSocket-Key 报 InvalidHeader("Missing, duplicated or incorrect header
+    //    sec-websocket-key")(2026-08 实测 douyin/bili 走隧道握手失败根因)。
+    let mut request = req
+        .url
+        .as_str()
+        .into_client_request()
+        .map_err(|e| e.to_string())?;
     for (k, v) in &req.headers {
         if let (Ok(k), Ok(v)) = (
             http::header::HeaderName::try_from(k.as_str()),
             http::header::HeaderValue::try_from(v.as_str()),
         ) {
-            builder = builder.header(k, v);
+            request.headers_mut().insert(k, v);
         }
     }
-    let request = builder.body(()).map_err(|e| e.to_string())?;
 
     // 2. 握手 + 超时。失败 → Err,未注册任何连接,零泄漏。
     let timeout = std::time::Duration::from_millis(req.timeout_ms);
-    let (ws, _resp) = tokio::time::timeout(timeout, connect_async(request))
-        .await
-        .map_err(|_| "ws handshake timed out".to_string())?
-        .map_err(|e| describe_error(&e))?;
+    let res = tokio::time::timeout(timeout, connect_async(request)).await;
+    let (ws, _resp) = res
+        .map_err(|_| {
+            println!("[ws] connect timeout: {}", req.url);
+            "ws handshake timed out".to_string()
+        })?
+        .map_err(|e| {
+            println!("[ws] connect err: {} — {}", req.url, describe_error(&e));
+            describe_error(&e)
+        })?;
 
     let (sink, mut stream) = ws.split();
 
     // 3. 注册连接。id 自增生成(管理器持 std Mutex,并发安全)。
     let connection_id = format!("ws-{}", state.next_id.fetch_add(1, Ordering::Relaxed));
+    println!("[ws] connect ok: {connection_id}");
     let (shutdown_tx, shutdown_rx) = mpsc::channel::<()>(1);
     {
         let mut conns = state.conns.lock().map_err(|e| e.to_string())?;
@@ -181,6 +197,7 @@ pub async fn ws_connect(
             }
         }
         // 任何退出路径都清理:drop stream(读半部)+ 从 map 移除(drop sink 写半部)。
+        println!("[ws] reader ended: {conn_id}");
         manager.remove(&conn_id);
     });
 
@@ -223,6 +240,7 @@ pub async fn ws_close(connection_id: String, state: State<'_, Arc<WsManager>>) -
         conns.remove(&connection_id).map(|c| c.shutdown_tx)
     };
     if let Some(tx) = shutdown_tx {
+        println!("[ws] close: {connection_id}");
         let _ = tx.send(()).await;
     }
     Ok(())

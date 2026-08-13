@@ -9,6 +9,7 @@ import type { DanmakuItem } from "../../danmaku/types.ts"
 import type { DanmakuStream } from "../../index.ts"
 import { decodeDanmakuSeg } from "../../danmaku/proto.ts"
 import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
+import { log } from "../../log.ts"
 
 const API = "https://api.bilibili.com"
 /** 每段弹幕时长,秒。 */
@@ -76,7 +77,9 @@ export function biliDanmakuStream(itemId: string, cookie?: string): DanmakuStrea
       .then((items) => {
         if (!stopped && items.length) onItems(items)
       })
-      .catch(() => {})
+      .catch((e) => {
+        if (!stopped) log.bili.warn("视频弹幕懒解析失败:", (e as Error)?.message)
+      })
     return () => {
       stopped = true
     }

@@ -16,8 +16,11 @@ packages/
   host/          ★ @tauri-playground/host — 宿主后端 + 全局 appHost 门面
                    （node/ 真实网络+内存存储给 example；browser/ 浏览器 fetch+localStorage
                    给纯前端调试；tauri/ Rust http_get+ws_connect+localStorage 给生产。
-                   ws:desktop 走 Rust ws_connect 隧道,example 走 ws 包,均带自定义 header
-                   ——douyin 弹幕握手需 UA/Cookie/Origin）
+                   ws:宿主 ws_connect(node/tauri)只服务需自定义 header 的平台
+                   (douyin UA/Cookie/Origin);无 header 需求(bili/douyu/huya)走原生
+                   WebSocket——Rust native-tls(schannel)对 douyu danmuproxy 8506 证书
+                   校验失败 + bili 弹幕服务器拒 Rust 握手 key,原生 WS 走 webview TLS 栈
+                   无此问题)
   crawler/       ★ @tauri-playground/crawler — 订阅源抓取层（producer 的重构替代）。
                    一切皆 RssChannel：channel 直接 implements RssChannel(+ 能力接口
                    RssVideoChannel/RssLiveChannel/DanmakuPlayable),getSource 用组合工厂
@@ -193,13 +196,35 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 
 - **弹幕获取机制**：`docs/danmaku-research.md`。B站视频弹幕 = 零摩擦入口
   （`bvid→cid→GET /x/v2/dm/web/seg.so?oid&segment_index`,protobuf、6min/段、**匿名可用**）,
-  是弹幕 MVP 首选。直播弹幕 4 平台已全通(bili 16B 大端头+brotli、douyu STT、huya Tars、
-  douyin protobuf+gzip),走 `appHost.ws`(Rust ws_connect 隧道/ws 包,带 header)。
+  是弹幕 MVP 首选。直播弹幕 4 平台已全通(bili 16B 大端头+zlib、douyu STT、huya Tars、
+  douyin protobuf+gzip),走 `appHost.ws`——**仅需自定义 header 的 douyin 走宿主隧道
+  (Rust ws_connect/ws 包,UA/Cookie/Origin);bili/douyu/huya 无 header 需求走原生
+  WebSocket**(Rust native-tls schannel 对 douyu danmuproxy 8506 证书校验失败)。
+  ⚠️ ws.rs 的 ws_connect **必须用 `req.url.as_str().into_client_request()` 从 URL 构造
+  完整请求再插自定义头**——手动 `http::Request::builder()` 构造 Request<()> 缺
+  Sec-WebSocket-Key(tungstenite 的 Request<()> IntoClientRequest 是 Ok(self) 不补 WS 头,
+  generate_request 校验报 "Missing...sec-websocket-key")。曾致 douyin/bili 走隧道握手
+  全失败,已修(2026-08)。
+  ⚠️ **bili 直播弹幕坑(2026-08 风控)**:认证必须真实登录 uid——匿名 uid=0 握手成功即被
+  服务器 1006 拒(probe-bili-cookie 实测:uid=0 1006、真实 nav mid → op=8 code 0 通过)。
+  uid 取 nav 的 mid(cookie 登录态)、buvid 取 cookie 的 buvid3;**不走宿主隧道**(带 cookie
+  header 触发 Rust ws_connect 的 sec-websocket-key 握手被拒)——原生 WS 即通过;host 的
+  **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
+  ⚠️ **弹幕连接释放竞态**:createWsStream 的宿主/原生 onOpen **必须检查 `stopped`**——
+  退订后握手才完成时(宿主 ws_connect 异步),unsub 时 ws 未赋值跳过 close,握手完成 onOpen
+  照发认证帧/心跳 → 连接泄漏(关闭直播间弹幕不释放)。onOpen 遇 stopped 立即 close 刚建的连接。
   ⚠️ **douyin 弹幕坑(2026-08 根因)**:签名脚本必须用 douyinLive 2024 修改版 webmssdk.js
   (`get_sign`,dart 2023 kWebMsSDK 已失效→415 DEVICE_BLOCKED);执行环境须**遮蔽 node 全局**
   (process/Buffer 等,否则走 node 分支指纹被拒)+ window 完整挂载;webcast100 域名 +
   真实 pushID(enter API 的 user.id_str);enter 用 QQBrowser UA(Chrome 150 返空 body)、
   WS 用 Chrome 150 UA。proto `progress` 是毫秒, XML 弹幕是秒,与 currentTime(秒)换算勿混淆。
+  ⚠️ **弹幕探测收敛进 resolve(2026-08-14)**:`resolvePlay/resolveLivePlay` 返回
+  `ResolvePlayback`(`{ streams, danmaku? }`),core 探测 `isDanmakuPlayable` 后
+  `getDanmaku(id)` 一并给,**无独立 `openDanmaku` 门面**;`PlayableMedia` 从 resolve 结果
+  提取 `danmaku` 传给 `DanmakuLayer`(订阅/退订生命周期收敛在 player,接收已探测流),
+  desktop `ExpandedPlayer` 零弹幕逻辑(只传 resolve)。弹幕连接释放竞态同上
+  (onOpen 检查 stopped;douyin channel 层 `getDanmaku` 的 ensureCookie 异步阶段也有
+  stopped 拦截,2026-08-14 补)。
 - **Folo 架构**:`docs/folo-architecture-research.md`。分组=subscriptions 表 `category` 字符串
   + 按 siteUrl 域名自动归类;`Transaction` 四段式乐观更新(store→request→rollback→persist)
   最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;
@@ -226,9 +251,11 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   （ui 包装全量 26 个,desktop 只留 dialog）
 - **日志域注册（@tauri-playground/log）**：全包日志走独立包（禁止裸 console.*）。
   `createLogDomain(name, {color, ansi, events})` 每模块注册自己的域 + 模板事件:调用处只传
-  事件数据、不拼文案;文案/级别/颜色集中在各域模板。player 域 resolve/select/engine/play/loader
-  （前缀 `[player:<阶段>]`）、host 域 `[host:http]`、crawler 按 channel 建域（`[bili]`/`[youtube]`
-  等）。开关 `localStorage["log"]="0"` 全局关 info/debug、`log:<域>="0"` 按域关;旧 key
+  事件数据、不拼文案;文案/级别/颜色集中在各域模板。player 域 resolve/select/engine/play/loader/
+  danmaku（前缀 `[player:<阶段>]`）、host 域 `[host:http]`、crawler 按 channel 建域（`[bili]`/
+  `[youtube]` 等）+ 弹幕通用 WS 层 `[danmaku]`（createWsStream 连接生命周期模板事件:建连/建立/
+  关闭/重连/帧数,`wsConnect`/`wsItems` 为 debug 级可 `log:danmaku="0"` 关）。开关
+  `localStorage["log"]="0"` 全局关 info/debug、`log:<域>="0"` 按域关;旧 key
   `player-log`/`host-log` 兼容(warn/error 永保留)。devtools Console 过滤 `[player:` 看各域颜色。
 - ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
   huya 直播（flv.js HTTP-FLV）、douyin 直播（flv.js HTTP-FLV,5 档）、bilibili 视频

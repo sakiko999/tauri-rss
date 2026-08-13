@@ -4,8 +4,12 @@
  * 二进制帧走 base64(与 http_get 的 arraybuffer 约定一致)。
  *
  * Rust 侧 `commands/ws.rs`:ws_connect 先握手成功才返回 connectionId(失败 reject);
- * 消息经 `Channel<WsEvent>` 回传(Open/Binary/Close/Error)。前端退订调 close →
+ * 消息经 `Channel<WsEvent>` 回传(Binary/Close/Error)。前端退订调 close →
  * Rust 移除连接 + 终止 reader task(Channel 被 GC 也会让 Rust 侧 send 失败自终止)。
+ *
+ * ⚠️ Open 事件不依赖 Rust 的 `WsEvent::Open`(先于 invoke resolve 到达,conn 未赋值,
+ * onOpen(undefined) 会导致认证帧/心跳发不出)——握手成功即连接就绪,connect resolve
+ * 后主动触发 onOpen。见下方注释。
  */
 import { invoke, Channel } from "@tauri-apps/api/core"
 
@@ -45,9 +49,10 @@ export class TauriWsBackend implements WsBackend {
     const onEvent = new Channel<WsEventMsg>()
     onEvent.onmessage = (ev) => {
       switch (ev.event) {
-        case "Open":
-          opts.onOpen?.(conn)
-          break
+        // "Open" 忽略——Rust ws_connect 先 send Open 再返回 connectionId,Channel 事件
+        // 可能先于 invoke resolve 到达,此时 conn 未赋值 → opts.onOpen(undefined) →
+        // 认证帧/心跳发不出(douyin 弹幕实测:连接建立后服务器不发数据,静默挂着)。
+        // 握手成功 = 连接就绪,由下方 invoke resolve 后主动触发 onOpen(conn 已赋值)。
         case "Binary":
           opts.onMessage(base64ToBytes(ev.data as string), conn)
           break
@@ -68,6 +73,8 @@ export class TauriWsBackend implements WsBackend {
       onEvent,
     })
     conn = new TauriWsConnection(res.connectionId)
+    // 主动触发 onOpen:此时 conn 已赋值,认证帧/心跳可靠发送。
+    opts.onOpen?.(conn)
     return conn
   }
 }
