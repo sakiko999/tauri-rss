@@ -13,11 +13,12 @@ import {
   BiliUserVideoChannel,
   BiliLiveChannel,
   BiliDynamicChannel,
+  BiliLiveHotChannel,
 } from "./channels/bili/index.ts"
 import { YoutubeChannel, YoutubeLiveChannel } from "./channels/youtube/index.ts"
-import { HuyaLiveChannel } from "./channels/huya/index.ts"
-import { DouyuLiveChannel } from "./channels/douyu/index.ts"
-import { DouyinLiveChannel } from "./channels/douyin/index.ts"
+import { HuyaLiveChannel, HuyaLiveHotChannel } from "./channels/huya/index.ts"
+import { DouyuLiveChannel, DouyuLiveHotChannel } from "./channels/douyu/index.ts"
+import { DouyinLiveChannel, DouyinLiveHotChannel } from "./channels/douyin/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
 import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
 
@@ -39,18 +40,22 @@ export function registerBuiltinChannels(): void {
   registerChannel(new BiliWeeklyChannel())
   registerChannel(new BiliUserVideoChannel())
   registerChannel(new BiliLiveChannel())
+  registerChannel(new BiliLiveHotChannel())
   registerChannel(new BiliDynamicChannel())
 
   // ── YouTube(官方 RSS 视频 + 直播订阅)──
   registerChannel(new YoutubeChannel())
   registerChannel(new YoutubeLiveChannel())
 
-  // ── huya 直播(纯 HTTP,零签名)──
+  // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──
   registerChannel(new HuyaLiveChannel())
+  registerChannel(new HuyaLiveHotChannel())
 
-  // ── douyu / douyin 直播(需 host.js 执行 cryptojs/abogus blob)──
+  // ── douyu / douyin 直播(需 host.js 执行 cryptojs/abogus blob;单房间 + 热门列表)──
   registerChannel(new DouyuLiveChannel())
+  registerChannel(new DouyuLiveHotChannel())
   registerChannel(new DouyinLiveChannel())
+  registerChannel(new DouyinLiveHotChannel())
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──
   registerChannel(new WeiboUserChannel())

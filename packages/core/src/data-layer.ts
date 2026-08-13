@@ -8,7 +8,15 @@
  * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
-import { getChannel, isHotWordSource, isRssLiveSource, isRssVideoSource, registerAllChannels } from "@tauri-playground/crawler"
+import {
+  getChannel,
+  isDanmakuPlayable,
+  isHotWordSource,
+  isRssLiveSource,
+  isRssVideoSource,
+  registerAllChannels,
+  type DanmakuStream,
+} from "@tauri-playground/crawler"
 import { serializeFeed, type Stream } from "@tauri-playground/xml"
 import { deserializeFeed } from "./xml/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
@@ -46,6 +54,8 @@ export interface DataLayer {
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<Stream[]>
   /** 热搜词 → 该词下内容流(desktop 热搜三栏右栏;不持久,直接返回 MediaItem[])。 */
   resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]>
+  /** 获取某媒体(id = itemId 视频 / roomId 直播)的弹幕流(订阅即开始,全量或增量由实现方定)。 */
+  openDanmaku(subscriptionId: string, id: string): Promise<DanmakuStream>
 }
 
 export function createDataLayer(): DataLayer {
@@ -150,6 +160,19 @@ export function createDataLayer(): DataLayer {
     return deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
   }
 
+  async function openDanmaku(subscriptionId: string, id: string): Promise<DanmakuStream> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) throw new Error("subscription not found")
+    const channel = getChannel(sub.channelKey)
+    if (!channel) throw new NoChannelError(sub.channelKey)
+    const info = await sourceInfoFor(sub)
+    const source = channel.getSource(info)
+    if (!isDanmakuPlayable(source)) {
+      throw new Error(`channel ${sub.channelKey} does not support danmaku`)
+    }
+    return source.getDanmaku(id)
+  }
+
   return {
     subscriptions: repo,
     reading,
@@ -164,5 +187,6 @@ export function createDataLayer(): DataLayer {
     resolvePlay,
     resolveLivePlay,
     resolveHotWord,
+    openDanmaku,
   }
 }

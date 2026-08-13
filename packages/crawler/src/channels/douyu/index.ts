@@ -10,12 +10,14 @@
  */
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { httpGet, httpJson, now } from "../../host.ts"
 import { log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"
+import { parseRoomIds } from "../../utils/room-ids.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
+import { douyuDanmakuStream } from "./danmaku.ts"
 
 
 const BASE = "https://www.douyu.com"
@@ -28,12 +30,14 @@ export class DouyuLiveChannel implements RssChannel {
   readonly key = "live:douyu"
   readonly name = "斗鱼直播房间"
   readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  // 直播源:implements LivePlayable,resolveLivePlay 闭包捕获 this 实例状态(签名重取)。
-  getSource(info: SourceInfo): RssSource & LivePlayable {
+  readonly sourceInfoTpl = [{ key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true }]
+  // 直播源:implements LivePlayable + DanmakuPlayable。resolveLivePlay 闭包捕获 this 实例状态(签名重取)。
+  // fetch 支持多房间(roomIds 逗号分隔);resolveLivePlay/getDanmaku 本就是按 roomId 工作,天然支持任一房间。
+  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolveLivePlay: (roomId) => this.resolveLivePlayImpl(roomId),
+      getDanmaku: (roomId) => douyuDanmakuStream(roomId),
     }
   }
 
@@ -88,14 +92,26 @@ export class DouyuLiveChannel implements RssChannel {
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
-    const roomId = info.roomId ?? ""
-    if (!roomId) throw new Error("live:douyu 需要 roomId")
+    const roomIds = parseRoomIds(info)
+    if (!roomIds.length) throw new Error("live:douyu 需要 roomIds")
+    const t = now()
+    const rooms = await Promise.all(
+      roomIds.map((roomId) =>
+        this.fetchOne(roomId).catch((e) => {
+          log.douyu.warn(`房间 ${roomId} 拉取失败,跳过:`, (e as Error)?.message)
+          return null
+        }),
+      ),
+    )
+    return rooms.filter((r): r is Live => r !== null).map((live) => ({ ...live, fetchedAt: t }))
+  }
 
+  /** 单房间 → Live item(房间失败抛错,由调用方 catch 隔离)。签名 body 存 raw 供下游 resolveLivePlay 复用。 */
+  private async fetchOne(roomId: string): Promise<Live> {
     const roomInfo = await this.getRoomInfo(roomId)
     const crptext = await this.fetchSignPayload(roomId)
     const signed = this.sign(crptext, roomId)
-
-    const live: Live = {
+    return {
       id: `douyu:${roomId}`,
       sourceId: "live:douyu",
       kind: "live",
@@ -113,11 +129,10 @@ export class DouyuLiveChannel implements RssChannel {
       // 签名 body 存 raw,供下游 resolveLivePlay 复用(带 CDN/rate 的 H5Play body)。
       raw: signed,
     }
-    return [live]
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `斗鱼直播 ${info.roomId ?? ""}`, channelLink: `${BASE}/${info.roomId ?? ""}` }
+    return { channelTitle: `斗鱼直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: `${BASE}/${String(info.roomIds ?? info.roomId ?? "")}` }
   }
 
   // ── internals ───────────────────────────────────────────────────────────
@@ -224,3 +239,5 @@ function htmlUnescape(s: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&#x27;/g, "'")
 }
+
+export { DouyuLiveHotChannel } from "./hot.ts"

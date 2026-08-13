@@ -12,13 +12,15 @@
 import * as R from "ramda"
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { httpJson, httpText, now } from "../../host.ts"
 import { log } from "../../log.ts"
 import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { toInt } from "../../utils/number.ts"
+import { parseRoomIds } from "../../utils/room-ids.ts"
 import { ABOGUS_JS } from "./abogus.ts"
+import { douyinDanmakuStream } from "./danmaku.ts"
 
 
 const LIVE = "https://live.douyin.com"
@@ -36,12 +38,22 @@ export class DouyinLiveChannel implements RssChannel {
   readonly key = "live:douyin"
   readonly name = "抖音直播房间"
   readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "roomId", label: "直播间 ID", required: true }]
-  // 直播源:implements LivePlayable,resolveLivePlay 闭包捕获 this 实例状态(ABogus 签名 + cookie jar)。
-  getSource(info: SourceInfo): RssSource & LivePlayable {
+  readonly sourceInfoTpl = [{ key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true }]
+  // 直播源:implements LivePlayable + DanmakuPlayable。resolveLivePlay 闭包捕获 this 实例状态(ABogus 签名 + cookie jar)。
+  // fetch 支持多房间(roomIds 逗号分隔);resolveLivePlay/getDanmaku 本就是按 roomId 工作,天然支持任一房间。
+  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolveLivePlay: (roomId) => this.resolveLivePlayImpl(roomId),
+      // 弹幕:先 ensureCookie(warmup 抓新鲜 ttwid)再建连——douyin 握手需带
+      // cookie(缺则 415 DEVICE_BLOCKED)。ensureCookie 是异步,建连前等它完成。
+      getDanmaku: (roomId) => (onItems) => {
+        let unsub: (() => void) | undefined
+        void this.ensureCookie().then(() => {
+          unsub = douyinDanmakuStream(roomId, this.cookieJar)(onItems)
+        })
+        return () => unsub?.()
+      },
     }
   }
 
@@ -124,9 +136,22 @@ export class DouyinLiveChannel implements RssChannel {
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
-    const roomId = info.roomId ?? ""
-    if (!roomId) throw new Error("live:douyin 需要 roomId")
+    const roomIds = parseRoomIds(info)
+    if (!roomIds.length) throw new Error("live:douyin 需要 roomIds")
+    const t = now()
+    const rooms = await Promise.all(
+      roomIds.map((roomId) =>
+        this.fetchOne(roomId).catch((e) => {
+          log.douyin.warn(`房间 ${roomId} 拉取失败,跳过:`, (e as Error)?.message)
+          return null
+        }),
+      ),
+    )
+    return rooms.filter((r): r is Live => r !== null).map((live) => ({ ...live, fetchedAt: t }))
+  }
 
+  /** 单房间 → Live item(enter API;房间失败抛错,由调用方 catch 隔离)。 */
+  private async fetchOne(roomId: string): Promise<Live> {
     const res = await this.fetchRoomDetail(roomId)
     const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
     const user = (res?.data?.data?.[0]?.user ?? res?.data?.user ?? {}) as Record<string, any>
@@ -135,7 +160,7 @@ export class DouyinLiveChannel implements RssChannel {
     // 4=roomId 一次性(需改用 webRid,见 dart getRoomDetailByRoomId),非直播中。
     const isLive = toInt(room.status) === 2
 
-    const live: Live = {
+    return {
       // id 用长号 id_str(唯一稳定);roomId 必须用订阅传入的 web_rid(短号)——
       // douyin 的 enter API / HTML 页面 / resolveLivePlay 都用 web_rid,不是 room_id。
       id: `douyin:${String(room.id_str ?? roomId)}`,
@@ -154,11 +179,10 @@ export class DouyinLiveChannel implements RssChannel {
       // stream_url 藏 play 数据,供下游 getPlayQualities/Urls(本地解析)。
       raw: streamUrl,
     }
-    return [live]
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `抖音直播 ${info.roomId ?? ""}`, channelLink: `${LIVE}/${info.roomId ?? ""}` }
+    return { channelTitle: `抖音直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: `${LIVE}/${String(info.roomIds ?? info.roomId ?? "")}` }
   }
 
   // ── internals ───────────────────────────────────────────────────────────
@@ -405,3 +429,4 @@ function parseReflowStreams(streamUrl: Record<string, any>): Stream[] {
   }
   return filterPlayable(streams)
 }
+export { DouyinLiveHotChannel } from "./hot.ts"

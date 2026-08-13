@@ -10,10 +10,11 @@
  */
 import type { Article, Item, Stream, Video } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../index.ts"
+import type { DanmakuPlayable, RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { createBilibiliClient } from "./client.ts"
+import { biliDanmakuStream } from "./danmaku.ts"
 
 const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400
@@ -112,10 +113,11 @@ export class BiliPopularChannel implements RssChannel {
   readonly name = "bilibili 综合热门"
   readonly kind = "video" as const
   // 视频源:implements VideoPlayable,resolvePlay 闭包捕获 info(core 层注入 cookie)。
-  getSource(info: SourceInfo): RssSource & VideoPlayable {
+  getSource(info: SourceInfo): RssSource & VideoPlayable & DanmakuPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
+      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
@@ -156,10 +158,11 @@ export class BiliRankingChannel implements RssChannel {
   readonly name = "bilibili 排行榜"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "rid", label: "分区(all/douga/…)", required: false }]
-  getSource(info: SourceInfo): RssSource & VideoPlayable {
+  getSource(info: SourceInfo): RssSource & VideoPlayable & DanmakuPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
+      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
@@ -195,10 +198,11 @@ export class BiliWeeklyChannel implements RssChannel {
   readonly key = "bili:weekly"
   readonly name = "B站每周必看"
   readonly kind = "video" as const
-  getSource(info: SourceInfo): RssSource & VideoPlayable {
+  getSource(info: SourceInfo): RssSource & VideoPlayable & DanmakuPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
+      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
@@ -241,10 +245,11 @@ export class BiliUserVideoChannel implements RssChannel {
   readonly name = "bilibili UP 主投稿"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "uid", label: "UP 主 uid", required: true }]
-  getSource(info: SourceInfo): RssSource & VideoPlayable {
+  getSource(info: SourceInfo): RssSource & VideoPlayable & DanmakuPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
+      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

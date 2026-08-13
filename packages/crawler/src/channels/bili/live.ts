@@ -8,51 +8,35 @@
 import * as R from "ramda"
 import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { log } from "../../log.ts"
+import { parseRoomIds } from "../../utils/room-ids.ts"
 import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
+import { biliLiveDanmakuStream } from "./danmaku-live.ts"
 
 
 const API_LIVE = "https://api.live.bilibili.com"
 
-export class BiliLiveChannel implements RssChannel {
-  readonly key = "bili:live"
-  readonly name = "bilibili 直播房间"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [
-    { key: "roomId", label: "直播间 ID", required: true },
-    {
-      key: "cookie",
-      label: "登录 cookie(可选)",
-      required: false,
-      // 提示:从浏览器 bilibili.com 已登录页面复制完整 cookie 串,解锁登录档位(非大会员 1080p)。
-    },
-  ]
-  // 直播源:implements LivePlayable,resolveLivePlay 按订阅 info 传 cookie(登录态档位)。
-  getSource(info: SourceInfo): RssSource & LivePlayable {
-    return {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolveLivePlay: (roomId) => resolveBiliLivePlay(roomId, info),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
-    const roomId = info.roomId ?? ""
-    if (!roomId) throw new Error("bili:live 需要 roomId")
+/**
+ * 单房间 → Live item(getInfoByRoom)。独立纯函数(hot channel 委托 fetch 时对每个
+ * 热门房间调用)。⚠️ 该方法**不抛错**:无直播信息/接口异常时返回 null(多房间一个失败
+ * 不拖垮全部,单房间订阅由上层把 null 过滤后的空结果处理)。
+ */
+async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | null> {
+  try {
     const client = createBilibiliClient({
       referer: "https://live.bilibili.com/",
       buvid: true,
       live: true,
-      cookie: info.cookie || undefined,
+      cookie: cookie || undefined,
     })
     const params = await client.signLiveParams({ room_id: roomId })
     const res = await client.getJson<{ data?: Record<string, unknown> }>(`${API_LIVE}/xlive/web-room/v1/index/getInfoByRoom?${params}`)
     const ri = (res?.data?.["room_info"] ?? {}) as Record<string, unknown>
     const realRoomId = String(ri["room_id"] ?? roomId)
-    const t = now()
-    const live: Live = {
+    return {
       id: `bilibili:${realRoomId}`,
       sourceId: "bili:live",
       kind: "live",
@@ -60,7 +44,7 @@ export class BiliLiveChannel implements RssChannel {
       url: `https://live.bilibili.com/${realRoomId}`,
       thumbnail: String(ri["cover"] ?? ""),
       author: { name: String(ri["uname"] ?? "") },
-      fetchedAt: t,
+      fetchedAt: now(),
       platform: "bilibili",
       roomId: realRoomId,
       liveStatus: Number(ri["live_status"]) === 1 ? "live" : "offline",
@@ -68,10 +52,46 @@ export class BiliLiveChannel implements RssChannel {
       introduction: ri["description"] ? String(ri["description"]) : undefined,
       showTime: ri["live_start_time"] ? String(ri["live_start_time"]) : undefined,
     }
-    return [live]
+  } catch (e) {
+    log.biliLive.warn(`房间 ${roomId} 拉取失败:`, (e as Error)?.message)
+    return null
   }
+}
+
+export class BiliLiveChannel implements RssChannel {
+  readonly key = "bili:live"
+  readonly name = "bilibili 直播房间"
+  readonly kind = "live" as const
+  readonly sourceInfoTpl = [
+    { key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true },
+    {
+      key: "cookie",
+      label: "登录 cookie(可选)",
+      required: false,
+      // 提示:从浏览器 bilibili.com 已登录页面复制完整 cookie 串,解锁登录档位(非大会员 1080p)。
+    },
+  ]
+  // 直播源:implements LivePlayable + DanmakuPlayable。resolveLivePlay 按订阅 info 传 cookie(登录态档位)。
+  // fetch 支持多房间(roomIds 逗号分隔),一个订阅 = 多个直播间;resolveLivePlay/getDanmaku 本就是
+  // 按 roomId 工作的纯函数,天然支持任一房间。hot channel 通过委托本 source 复用全部能力。
+  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
+    return {
+      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      resolveLivePlay: (roomId) => resolveBiliLivePlay(roomId, info),
+      getDanmaku: (roomId) => biliLiveDanmakuStream(roomId, (info.cookie as string) || undefined),
+    }
+  }
+
+  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+    const roomIds = parseRoomIds(info)
+    if (!roomIds.length) throw new Error("bili:live 需要 roomIds")
+    const t = now()
+    const rooms = await Promise.all(roomIds.map((roomId) => fetchBiliRoom(roomId, info.cookie as string | undefined)))
+    return rooms.filter((r): r is Live => r !== null).map((live) => ({ ...live, fetchedAt: t }))
+  }
+
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `bilibili 直播 ${info.roomId ?? ""}`, channelLink: `https://live.bilibili.com/${info.roomId ?? ""}` }
+    return { channelTitle: `bilibili 直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: "https://live.bilibili.com/" }
   }
 }
 

@@ -17,6 +17,8 @@ const youtubeLog = createLogDomain("youtube", { color: "#ef4444", ansi: 196 })
 const douyinLog = createLogDomain("douyin", { color: "#22d3ee", ansi: 45 })
 /** [douyu] 档位/CDN 降级警告。 */
 const douyuLog = createLogDomain("douyu", { color: "#ff6a00", ansi: 208 })
+/** [huya] 档位/弹幕降级警告。 */
+const huyaLog = createLogDomain("huya", { color: "#ffa52a", ansi: 214 })
 
 export const log = {
   bili: biliLog,
@@ -24,4 +26,5 @@ export const log = {
   youtube: youtubeLog,
   douyin: douyinLog,
   douyu: douyuLog,
+  huya: huyaLog,
 }

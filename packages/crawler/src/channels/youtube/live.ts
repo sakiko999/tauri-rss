@@ -12,10 +12,11 @@
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { resolveYoutubeStreams } from "./client.ts"
+import { createLiveChatPoller } from "./live-chat.ts"
 
 export class YoutubeLiveChannel implements RssChannel {
   readonly key = "youtube:live"
@@ -23,11 +24,14 @@ export class YoutubeLiveChannel implements RssChannel {
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "videoId", label: "直播 ID", required: true }]
 
-  // 直播源:implements LivePlayable,resolveLivePlay 复用视频直链解析(直播 hls)。
-  getSource(info: SourceInfo): RssSource & LivePlayable {
+  // 直播源:implements LivePlayable + DanmakuPlayable(live 形态),resolveLivePlay
+  // 复用视频直链解析(直播 hls);getDanmaku 走 InnerTube continuation 轮询(HTTP),
+  // 增量推送无 timeMs 的聊天消息(消费者实时显示)。
+  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolveLivePlay: (roomId) => resolveYoutubeStreams(roomId),
+      getDanmaku: (roomId) => createLiveChatPoller(roomId),
     }
   }
 
