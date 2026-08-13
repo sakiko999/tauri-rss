@@ -15,14 +15,19 @@ packages/
                    XMLBuilder 编码 / parseFeed 解码）。唯一持有 fast-xml-parser
   host/          ★ @tauri-playground/host — 宿主后端 + 全局 appHost 门面
                    （node/ 真实网络+内存存储给 example；browser/ 浏览器 fetch+localStorage
-                   给纯前端调试；tauri/ Rust http_get+localStorage 给生产）
+                   给纯前端调试；tauri/ Rust http_get+ws_connect+localStorage 给生产。
+                   ws:desktop 走 Rust ws_connect 隧道,example 走 ws 包,均带自定义 header
+                   ——douyin 弹幕握手需 UA/Cookie/Origin）
   crawler/       ★ @tauri-playground/crawler — 订阅源抓取层（producer 的重构替代）。
                    一切皆 RssChannel：channel 直接 implements RssChannel(+ 能力接口
-                   RssVideoChannel/RssLiveChannel),getSource 用组合工厂(factory.ts)
-                   装配——纯函数,每次返回新 source,缓存/去重归 core。直出 RSS 2.0 + tpl:
-                   XML 字符串。XML 即天然类型,不导出数据模型类型。依赖 **ramda** 0.32
-                   （+ @types/ramda devDep）——嵌套解析/排序用 chain/sortWith/pathOr
-                   函数式展开(范式见 bili/live.ts 的 parseBiliLiveStreams)
+                   RssVideoChannel/RssLiveChannel/DanmakuPlayable),getSource 用组合工厂
+                   (factory.ts)装配——纯函数,每次返回新 source,缓存/去重归 core。
+                   直出 RSS 2.0 + tpl: XML 字符串。XML 即天然类型,不导出数据模型类型。
+                   弹幕层在 danmaku/(createWsStream 统一 WS 封装 + 各平台 codec:
+                   proto/tars/douyin-proto),四平台直播 channel 挂 getDanmaku 返回
+                   DanmakuStream。依赖 **ramda** 0.32（+ @types/ramda devDep）——
+                   嵌套解析/排序用 chain/sortWith/pathOr 函数式展开(范式见
+                   bili/live.ts 的 parseBiliLiveStreams)
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/        ★ @tauri-playground/player — 媒体播放器(video/audio/live 共用),从 ui 拆出。
@@ -57,7 +62,7 @@ packages/
 
 ## 宿主注入：全局 appHost 门面
 
-宿主能力（http / js 签名执行 / storage / now / log）经**全局 `globalThis.appHost`** 注入：
+宿主能力（http / ws / js 签名执行 / storage / now / log）经**全局 `globalThis.appHost`** 注入：
 
 - **正常流程**：应用启动时 `injectTauriHost()`（desktop 在 `main.tsx`）。
 - **example / 测试**：`injectNodeHost()`（Node fetch + 内存存储）。
@@ -188,9 +193,13 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 
 - **弹幕获取机制**：`docs/danmaku-research.md`。B站视频弹幕 = 零摩擦入口
   （`bvid→cid→GET /x/v2/dm/web/seg.so?oid&segment_index`,protobuf、6min/段、**匿名可用**）,
-  是弹幕 MVP 首选;直播弹幕全是 WS 长连接(bilibili 16B 大端头+brotli、douyu STT、huya Tars、
-  douyin protobuf+QuickJS 签名),**host 层目前只有 HTTP 是缺口**。proto `progress` 是毫秒,
-  XML 弹幕是秒,与 currentTime(秒)换算勿混淆。
+  是弹幕 MVP 首选。直播弹幕 4 平台已全通(bili 16B 大端头+brotli、douyu STT、huya Tars、
+  douyin protobuf+gzip),走 `appHost.ws`(Rust ws_connect 隧道/ws 包,带 header)。
+  ⚠️ **douyin 弹幕坑(2026-08 根因)**:签名脚本必须用 douyinLive 2024 修改版 webmssdk.js
+  (`get_sign`,dart 2023 kWebMsSDK 已失效→415 DEVICE_BLOCKED);执行环境须**遮蔽 node 全局**
+  (process/Buffer 等,否则走 node 分支指纹被拒)+ window 完整挂载;webcast100 域名 +
+  真实 pushID(enter API 的 user.id_str);enter 用 QQBrowser UA(Chrome 150 返空 body)、
+  WS 用 Chrome 150 UA。proto `progress` 是毫秒, XML 弹幕是秒,与 currentTime(秒)换算勿混淆。
 - **Folo 架构**:`docs/folo-architecture-research.md`。分组=subscriptions 表 `category` 字符串
   + 按 siteUrl 域名自动归类;`Transaction` 四段式乐观更新(store→request→rollback→persist)
   最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;
