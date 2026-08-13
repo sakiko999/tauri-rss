@@ -19,6 +19,7 @@ initAppHost()
 
 export { injectNodeHost } from "./node/inject-node.ts"
 export { nodeBackend } from "./node/node-backend.ts"
+export { nodeWsBackend } from "./node/node-ws.ts"
 export { nodeJsBackend } from "./node/node-js.ts"
 export { memStorage } from "./node/mem-storage.ts"
 
@@ -26,5 +27,6 @@ export { injectBrowserHost } from "./browser/inject-browser.ts"
 
 export { injectTauriHost } from "./tauri/inject-tauri.ts"
 export { TauriHttpBackend } from "./tauri/tauri-http-backend.ts"
+export { TauriWsBackend } from "./tauri/tauri-ws-backend.ts"
 export { LocalStorageBackend } from "./tauri/local-storage-backend.ts"
 export { FunctionJsBackend } from "./tauri/function-js-backend.ts"

@@ -11,5 +11,9 @@
     "@tauri-apps/api": "^2",
     "@tauri-playground/log": "workspace:*"
   },
-  "scripts": {}
+  "scripts": {},
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.21.3"
+  }
 }

@@ -25,6 +25,35 @@ declare global {
     log?: Logger
     /** 时钟(epoch ms);缺失时 core 用 Date.now 兜底。 */
     now?: () => number
+    /** WebSocket 隧道(桌面 Rust ws_connect / node ws 包)。缺失时 crawler 兜底用原生 WS(无自定义 header)。 */
+    ws?: WsBackend
+  }
+
+  /** 一条 WS 长连接(桌面/node 由宿主管理;crawler createWsStream 消费)。 */
+  interface WsConnection {
+    readonly connectionId: string
+    /** 对齐 WebSocket.readyState 常量:0 CONNECTING / 1 OPEN / 3 CLOSED。 */
+    readonly readyState: number
+    /** 发送二进制帧(弹幕心跳/认证)。 */
+    send(data: Uint8Array): void
+    /** 关闭连接(前端退订)。 */
+    close(): void
+  }
+
+  /** WS 连接选项(crawler createWsStream 传入)。 */
+  interface WsConnectOptions {
+    url: string
+    /** 自定义握手 header(douyin 需 UA/Cookie/Origin)。 */
+    headers?: Record<string, string>
+    timeoutMs?: number
+    onOpen?: (conn: WsConnection) => void
+    onMessage: (data: Uint8Array, conn: WsConnection) => void
+    onClose?: (code: number, reason: string) => void
+  }
+
+  /** WebSocket 能力(带自定义 header 的握手,浏览器原生 WS 做不到)。 */
+  interface WsBackend {
+    connect(opts: WsConnectOptions): Promise<WsConnection>
   }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */

@@ -1,3 +1,4 @@
+//! 网络能力:http_get(HTTP 隧道)+ ws 模块(WebSocket 隧道,弹幕)。
 //! CORS-free HTTP passthrough — the only network capability the frontend uses.
 //!
 //! The webview's `fetch()` honors CORS, so RSS feeds and live-platform APIs
@@ -8,6 +9,8 @@
 //! Body transport:
 //!   - `responseType: "text"` | `"json"`  → utf-8 `String` body
 //!   - `responseType: "arraybuffer"`      → base64-encoded bytes (decoded in JS)
+pub mod ws;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]

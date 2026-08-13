@@ -15,6 +15,7 @@ let _js: JsBackend | undefined
 let _storage: StorageBackend | undefined
 let _log: Logger | undefined
 let _now: (() => number) | undefined
+let _ws: WsBackend | undefined
 
 const consoleLogger: Logger = {
   log(level, msg, ctx) {
@@ -50,6 +51,11 @@ export function initAppHost(): void {
     get now(): () => number {
       return _now ?? Date.now
     },
+    // ws 是可选能力:未注入返回 undefined,crawler createWsStream 据此兜底原生 WS
+    // (http/js/storage 必须注入所以抛错,ws 浏览器端天然不支持自定义 header)。
+    get ws(): WsBackend | undefined {
+      return _ws
+    },
   }
 }
 
@@ -60,10 +66,12 @@ export function setHostCaps(caps: {
   storage: StorageBackend
   log?: Logger
   now?: () => number
+  ws?: WsBackend
 }): void {
   _http = caps.http
   _js = caps.js
   _storage = caps.storage
   _log = caps.log
   _now = caps.now
+  _ws = caps.ws
 }
