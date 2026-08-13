@@ -8,23 +8,14 @@
 import type { DanmakuItem } from "../../danmaku/types.ts"
 import type { DanmakuStream } from "../../index.ts"
 import { decodeDanmakuSeg } from "../../danmaku/proto.ts"
+import { deferredStream } from "../../danmaku/deferred.ts"
+import { argbToHex } from "../../danmaku/color.ts"
 import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
 import { log } from "../../log.ts"
 
 const API = "https://api.bilibili.com"
 /** 每段弹幕时长,秒。 */
 const SEGMENT_SEC = 360
-
-/** 十进制 ARGB → #RRGGBB(对齐 dart LiveMessageColor.numberToColor)。 */
-function intColorToHex(intColor: number): string {
-  const hex = intColor.toString(16)
-  let rrggbb: string
-  if (hex.length === 6) rrggbb = hex
-  else if (hex.length === 8) rrggbb = hex.slice(2) // 跳 alpha
-  else if (hex.length === 4) rrggbb = `00${hex}`
-  else rrggbb = "ffffff"
-  return `#${rrggbb}`
-}
 
 /** 抓一段 seg.so(二进制,走宿主 arraybuffer 隧道)。非 200 / 空段返回 null。 */
 async function fetchDanmakuSeg(cid: number, n: number): Promise<Uint8Array | null> {
@@ -60,7 +51,7 @@ export async function resolveBiliDanmaku(itemId: string, cookie?: string): Promi
     const buf = await fetchDanmakuSeg(cid, n)
     if (!buf) break
     for (const e of decodeDanmakuSeg(buf)) {
-      items.push({ text: e.content, mode: e.mode, timeMs: e.progress, color: intColorToHex(e.color) })
+      items.push({ text: e.content, mode: e.mode, timeMs: e.progress, color: argbToHex(e.color) })
     }
   }
   return items
@@ -71,17 +62,11 @@ export async function resolveBiliDanmaku(itemId: string, cookie?: string): Promi
  * 消费者按播放时间轴过滤)。首轮失败(接口异常)静默。
  */
 export function biliDanmakuStream(itemId: string, cookie?: string): DanmakuStream {
-  return (onItems) => {
-    let stopped = false
-    void resolveBiliDanmaku(itemId, cookie)
-      .then((items) => {
-        if (!stopped && items.length) onItems(items)
-      })
-      .catch((e) => {
-        if (!stopped) log.bili.warn("视频弹幕懒解析失败:", (e as Error)?.message)
-      })
-    return () => {
-      stopped = true
-    }
-  }
+  return deferredStream(
+    () => resolveBiliDanmaku(itemId, cookie),
+    (items, onItems) => {
+      if (items.length) onItems(items)
+    },
+    (e) => log.bili.warn("视频弹幕懒解析失败:", (e as Error)?.message),
+  )
 }

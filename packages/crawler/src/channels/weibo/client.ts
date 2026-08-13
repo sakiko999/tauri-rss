@@ -10,6 +10,7 @@ import { httpGet, now } from "../../host.ts"
 import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { fillImageSizes } from "../../utils/img-size.ts"
 import { toInt } from "../../utils/number.ts"
+import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
 export const WB_BASE = "https://m.weibo.cn"
 
@@ -18,8 +19,7 @@ export const WB_UA =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 11_0 like Mac OS X) AppleWebKit/604.1.38 (KHTML, like Gecko) Version/11.0 Mobile/15A372 Safari/604.1"
 
 /** PC 端 UA(hot_band 等 weibo.com 接口)。 */
-export const PC_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+export const PC_UA = DESKTOP_CHROME_UA
 
 /** m.weibo.cn API 需要的 header。 */
 export const apiHeaders: Record<string, string> = {

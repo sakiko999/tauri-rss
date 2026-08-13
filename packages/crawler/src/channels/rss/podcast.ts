@@ -11,9 +11,9 @@ import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
+import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+const UA = DESKTOP_CHROME_UA
 
 export class RssPodcastChannel implements RssChannel {
   readonly key = "rss:podcast"

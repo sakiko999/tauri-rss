@@ -5,10 +5,12 @@
  * 断线指数退避重连(不依赖 React 生命周期);心跳定时;认证帧在 onopen 发。
  * 差异只在「帧编解码」——每平台提供 onMessage(ArrayBuffer → DanmakuItem[])。
  *
- * 连接层:优先走 `globalThis.appHost.ws`(桌面 Rust ws_connect / node ws 包,
- * 握手可带自定义 header——douyin 需要 UA/Cookie/Origin);未注入(纯浏览器调试)
- * 兜底原生 `new WebSocket`(无自定义 header)。bili live/douyu/huya 原生无 header
- * 可连;douyin 必须走宿主隧道。两形态在内部归一成 WsLike 抽象(send/close/readyState)。
+ * 连接层:统一走 `globalThis.appHost.ws`(桌面 Rust ws_connect / node ws 包,
+ * 握手可带自定义 header——douyin 需要 UA/Cookie/Origin);原生 WebSocket 仅兜底
+ * 无宿主环境(纯浏览器调试,无自定义 header)。曾按 opts.headers 分流——「douyu
+ * danmuproxy:8506 schannel 证书校验失败」走原生;2026-08-14 probe 实测 native-tls
+ * 连 douyu 8/8 握手成功(证书 GlobalSign 有效,失败实为集群节点偶发 RST),故统一
+ * 走宿主。两形态在内部归一成 WsLike 抽象(send/close/readyState)。
  */
 import type { DanmakuItem, DanmakuStream } from "../index.ts"
 import { log } from "../log.ts"
@@ -27,8 +29,6 @@ export interface WsStreamOptions {
   /** 心跳帧(定时发送)。 */
   heartbeat?: () => Uint8Array
   heartbeatMs?: number
-  /** 自定义连接(默认走 appHost.ws,缺失时原生 WebSocket)。 */
-  connect?: () => WebSocket
   /** 断线重连最大延迟,ms(指数退避 1s→2s→4s…)。 */
   maxReconnectMs?: number
   /** 连接关闭回调(排查握手失败/被拒)。 */
@@ -64,6 +64,13 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
         ws.send(data)
       }
     }
+    const safeClose = (conn: WsLike): void => {
+      try {
+        conn.close()
+      } catch {
+        /* noop */
+      }
+    }
 
     /** 连接就绪(open)后:发 onOpen 认证帧 + 启动心跳。 */
     function onReady(conn: WsLike): void {
@@ -79,66 +86,48 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       }
     }
 
+    /** 帧分发统一入口(宿主/原生共用):解码 → 过滤已退订/空 → 上报。 */
+    function deliver(data: ArrayBuffer, conn: WebSocket): void {
+      void Promise.resolve(opts.onMessage(data, conn)).then((items) => {
+        if (!stopped && items.length) {
+          log.danmaku.wsItems({ count: items.length })
+          onItems(items)
+        }
+      })
+    }
+
+    /** 连接关闭统一入口:清心跳 + 意外断线 warn + 重连(主动退订的提示在 unsub 统一打)。 */
+    function handleClose(code: number, reason: string): void {
+      clearHeartbeat()
+      if (!userClosed) log.danmaku.wsClosed({ code, reason })
+      opts.onClose?.(code, reason)
+      if (!stopped) scheduleReconnect()
+    }
+
+    /** open 统一入口:退订后握手才完成(异步 connect)时拦截,立即关闭刚建的连接。 */
+    function handleOpen(conn: WsLike): void {
+      if (stopped) {
+        safeClose(conn)
+        return
+      }
+      ws = conn
+      onReady(conn)
+    }
+
     function connect(): void {
       if (stopped) return
       log.danmaku.wsConnect({ url: opts.url })
       const host = globalThis.appHost.ws
 
-      // ⚠️ 有宿主(wss: Rust ws_connect / node ws 包)一律走宿主隧道,统一实现。
-      // 原生 WebSocket 只留给无宿主环境(纯浏览器调试 injectBrowserHost 无 ws)。
-      // 历史:曾按 opts.headers 分流——「douyu danmuproxy:8506 schannel 证书校验
-      // 失败」走原生;2026-08-14 probe 实测 native-tls 连 douyu 8/8 握手成功
-      // (证书 GlobalSign 有效,失败实为集群节点偶发 RST),故统一走宿主。
-      const needHost = !!host
-      if (needHost) {
-        void host!
+      if (host) {
+        void host
           .connect({
             url: opts.url,
             headers: opts.headers,
             timeoutMs: opts.timeoutMs,
-            onOpen: (conn) => {
-              // ⚠️ 退订后握手才完成(宿主 ws_connect 异步):stopped 已 true → 立即关闭
-              // 刚建立的连接,否则认证帧/心跳照发,连接泄漏(关闭直播间弹幕不释放)。
-              if (stopped) {
-                try {
-                  (conn as unknown as WsLike).close()
-                } catch {
-                  /* noop */
-                }
-                return
-              }
-              ws = conn as unknown as WsLike
-              onReady(conn as unknown as WsLike)
-            },
-            onMessage: (data, conn) => {
-              void Promise.resolve(opts.onMessage(data as unknown as ArrayBuffer, conn as unknown as WebSocket)).then(
-                (items) => {
-                  if (!stopped && items.length) {
-                    log.danmaku.wsItems({ count: items.length })
-                    onItems(items)
-                  }
-                },
-              )
-            },
-            onClose: (code, reason) => {
-              clearHeartbeat()
-              // 主动退订的提示在 unsub 统一打(不依赖 onClose 事件——部分平台/连接
-              // 状态 onClose 不触发,会静默);此处只对意外断线打 warn。
-              if (!userClosed) log.danmaku.wsClosed({ code, reason })
-              opts.onClose?.(code, reason)
-              if (!stopped) scheduleReconnect()
-            },
-          })
-          .then((conn) => {
-            // 兜底:握手完成后若已退订(正常路径 onOpen 的 stopped 分支已 close,
-            // 但后端若未调 onOpen 则这里兜底),确保连接关闭不泄漏。
-            if (stopped && conn) {
-              try {
-                (conn as unknown as WsLike).close()
-              } catch {
-                /* noop */
-              }
-            }
+            onOpen: (conn) => handleOpen(conn as unknown as WsLike),
+            onMessage: (data, conn) => deliver(data as unknown as ArrayBuffer, conn as unknown as WebSocket),
+            onClose: handleClose,
           })
           .catch((e) => {
             // 握手失败原因(douyin 415 / TLS 证书 / HTTP 拒绝)——之前被吞,重连循环无迹可循。
@@ -150,7 +139,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
 
       // 原生 WebSocket(webview / 纯浏览器调试;不能带自定义 header)。
       try {
-        ws = (opts.connect ? opts.connect() : new WebSocket(opts.url)) as unknown as WsLike
+        ws = new WebSocket(opts.url) as unknown as WsLike
       } catch (e) {
         log.danmaku.wsHandshakeError({ message: (e as Error)?.message ?? String(e) })
         scheduleReconnect()
@@ -158,33 +147,9 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       }
       const raw = ws as unknown as WebSocket
       raw.binaryType = "arraybuffer"
-      raw.onopen = () => {
-        // 原生 WS 也同竞态:退订后 open 才触发 → 立即关闭。
-        if (stopped) {
-          try {
-            raw.close()
-          } catch {
-            /* noop */
-          }
-          return
-        }
-        onReady(raw as unknown as WsLike)
-      }
-      raw.onmessage = (ev) => {
-        const data = ev.data as ArrayBuffer
-        void Promise.resolve(opts.onMessage(data, raw)).then((items) => {
-          if (!stopped && items.length) {
-            log.danmaku.wsItems({ count: items.length })
-            onItems(items)
-          }
-        })
-      }
-      raw.onclose = (ev) => {
-        clearHeartbeat()
-        if (!userClosed) log.danmaku.wsClosed({ code: ev.code, reason: ev.reason })
-        opts.onClose?.(ev.code, ev.reason)
-        if (!stopped) scheduleReconnect()
-      }
+      raw.onopen = () => handleOpen(raw as unknown as WsLike)
+      raw.onmessage = (ev) => deliver(ev.data as ArrayBuffer, raw)
+      raw.onclose = (ev) => handleClose(ev.code, ev.reason)
       raw.onerror = () => {
         // onclose 跟随触发,重连逻辑在 onclose。
       }
@@ -209,13 +174,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       log.danmaku.wsClosedByUser()
       clearHeartbeat()
       if (reconnectTimer) clearTimeout(reconnectTimer)
-      if (ws) {
-        try {
-          ws.close()
-        } catch {
-          /* noop */
-        }
-      }
+      if (ws) safeClose(ws)
     }
   }
 }

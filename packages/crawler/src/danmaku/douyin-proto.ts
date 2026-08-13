@@ -18,6 +18,10 @@ import type { DanmakuItem } from "../index.ts"
 
 // wire format:tag = varint(field<<3 | wireType);0=varint,1=64bit,2=length,5=32bit。
 
+/** 编解码复用单例(每帧热路径,全量 decode 会重置内部状态,共享安全)。 */
+const TE = new TextEncoder()
+const TD = new TextDecoder()
+
 /** 遍历 protobuf 消息所有字段。bytes=length 内容(仅 wire2);varint=varint 值(仅 wire0)。 */
 function* protoFields(buf: Uint8Array): Generator<{ field: number; wire: number; bytes: Uint8Array; varint: number }> {
   let p = 0
@@ -58,7 +62,7 @@ function* protoFields(buf: Uint8Array): Generator<{ field: number; wire: number;
 
 function pbString(buf: Uint8Array, field: number): string {
   for (const f of protoFields(buf)) {
-    if (f.field === field && f.wire === 2) return new TextDecoder().decode(f.bytes)
+    if (f.field === field && f.wire === 2) return TD.decode(f.bytes)
   }
   return ""
 }
@@ -92,7 +96,7 @@ function concat(...parts: Uint8Array[]): Uint8Array {
   return out
 }
 function pbFieldString(field: number, s: string): Uint8Array {
-  const bytes = new TextEncoder().encode(s)
+  const bytes = TE.encode(s)
   return concat(varintEncode((field << 3) | 2), varintEncode(bytes.length), bytes)
 }
 function pbFieldBytes(field: number, bytes: Uint8Array): Uint8Array {
@@ -109,7 +113,7 @@ export function douyinAckFrame(logId: number, internalExt: string): Uint8Array {
   return concat(
     pbFieldString(2, String(logId)),
     pbFieldString(7, "ack"),
-    pbFieldBytes(8, new TextEncoder().encode(internalExt)),
+    pbFieldBytes(8, TE.encode(internalExt)),
   )
 }
 
@@ -144,7 +148,7 @@ export async function decodeDouyinPushFrame(buf: Uint8Array, onAck: (frame: Uint
   let internalExt = ""
   for (const f of protoFields(resp)) {
     if (f.field === 9 && f.wire === 0) needAck = f.varint !== 0
-    else if (f.field === 5 && f.wire === 2) internalExt = new TextDecoder().decode(f.bytes)
+    else if (f.field === 5 && f.wire === 2) internalExt = TD.decode(f.bytes)
   }
   if (needAck && logId) onAck(douyinAckFrame(logId, internalExt))
 
@@ -160,10 +164,10 @@ export async function decodeDouyinPushFrame(buf: Uint8Array, onAck: (frame: Uint
     for (const cf of protoFields(msgPayload)) {
       if (cf.field === 2 && cf.wire === 2) {
         for (const uf of protoFields(cf.bytes)) {
-          if (uf.field === 3 && uf.wire === 2) nick = new TextDecoder().decode(uf.bytes)
+          if (uf.field === 3 && uf.wire === 2) nick = TD.decode(uf.bytes)
         }
       } else if (cf.field === 3 && cf.wire === 2) {
-        content = new TextDecoder().decode(cf.bytes)
+        content = TD.decode(cf.bytes)
       }
     }
     if (content) items.push({ text: content, user: nick })

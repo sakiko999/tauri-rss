@@ -13,9 +13,9 @@
  */
 import type { Kind, RssChannel, RssSource, SourceInfo, Stream, VideoPlayable } from "../../index.ts"
 import { httpText } from "../../host.ts"
+import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+const UA = DESKTOP_CHROME_UA
 
 export class RawRssChannel implements RssChannel {
   readonly key: string

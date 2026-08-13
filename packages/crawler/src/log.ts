@@ -25,12 +25,15 @@ const huyaLog = createLogDomain("huya", { color: "#ffa52a", ansi: 214 })
  * (建连/建立/关闭/重连/收到帧数),区别于上方各平台一次性自由 warn。
  * debug 级(wsConnect/wsItems)量大,默认显示,可 `log:danmaku="0"` 按域关。
  */
+/** URL 统一截断显示(防超长 query 刷屏)。 */
+const fmtUrl = (url: string): string => url.slice(0, 100)
+
 const danmakuLog = createLogDomain("danmaku", {
   color: "#818cf8", // indigo-400
   ansi: 105,
   events: {
-    wsConnect: { level: "debug", text: (ctx: { url: string }) => `建连 ${ctx.url.slice(0, 100)}` },
-    wsOpen: { level: "info", text: (ctx: { url: string }) => `连接建立(握手成功) ${ctx.url.slice(0, 60)}` },
+    wsConnect: { level: "debug", text: (ctx: { url: string }) => `建连 ${fmtUrl(ctx.url)}` },
+    wsOpen: { level: "info", text: (ctx: { url: string }) => `连接建立(握手成功) ${fmtUrl(ctx.url)}` },
     wsClosed: {
       level: "warn",
       text: (ctx: { code: number; reason: string }) =>

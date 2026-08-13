@@ -15,11 +15,11 @@ import type { DanmakuItem } from "../../danmaku/types.ts"
 import { httpText } from "../../host.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { log } from "../../log.ts"
+import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
 const YOUTUBE = "https://www.youtube.com"
 const CHAT_API = "https://www.youtube.com/youtubei/v1/live_chat/get_live_chat"
-const WEB_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+const WEB_UA = DESKTOP_CHROME_UA
 /** 服务端未给 timeoutMs 时的兜底轮询间隔,ms。 */
 const DEFAULT_TIMEOUT_MS = 5000
 

@@ -26,10 +26,15 @@ packages/
                    一切皆 RssChannel：channel 直接 implements RssChannel(+ 能力接口
                    RssVideoChannel/RssLiveChannel/DanmakuPlayable),getSource 用组合工厂
                    (factory.ts)装配——纯函数,每次返回新 source,缓存/去重归 core。
+                   apiFetch 包 fetch;liveHotSource 收敛 hot 委托(hot 源持同平台 live
+                   source 能力,仅替换自家 fetch)。
                    直出 RSS 2.0 + tpl: XML 字符串。XML 即天然类型,不导出数据模型类型。
-                   弹幕层在 danmaku/(createWsStream 统一 WS 封装 + 各平台 codec:
-                   proto/tars/douyin-proto),四平台直播 channel 挂 getDanmaku 返回
-                   DanmakuStream。依赖 **ramda** 0.32（+ @types/ramda devDep）——
+                   弹幕层在 danmaku/(createWsStream 统一 WS 封装 + deferredStream 收敛
+                   「异步 setup→建流」竞态 + 各平台 codec proto/tars/douyin-proto),
+                   四平台直播 channel 挂 getDanmaku 返回 DanmakuStream。共享工具在
+                   utils/(ua:DESKTOP_CHROME_UA / str:strOr / cookie);douyin 签名层收敛
+                   abogus.ts(UA_ENTER/signDouyinUrl/enterRoomParams)。
+                   依赖 **ramda** 0.32（+ @types/ramda devDep）——
                    嵌套解析/排序用 chain/sortWith/pathOr 函数式展开(范式见
                    bili/live.ts 的 parseBiliLiveStreams)
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
@@ -225,8 +230,9 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   `getDanmaku(id)` 一并给,**无独立 `openDanmaku` 门面**;`PlayableMedia` 从 resolve 结果
   提取 `danmaku` 传给 `DanmakuLayer`(订阅/退订生命周期收敛在 player,接收已探测流),
   desktop `ExpandedPlayer` 零弹幕逻辑(只传 resolve)。弹幕连接释放竞态同上
-  (onOpen 检查 stopped;douyin channel 层 `getDanmaku` 的 ensureCookie 异步阶段也有
-  stopped 拦截,2026-08-14 补)。
+  (onOpen 检查 stopped)。「异步 setup → 建流」的 stopped 拦截统一收敛进
+  `danmaku/deferred.ts` 的 deferredStream(douyin 双层/bili live/huya/bili VOD 共用,
+  2026-08-14 抽)。
 - **Folo 架构**:`docs/folo-architecture-research.md`。分组=subscriptions 表 `category` 字符串
   + 按 siteUrl 域名自动归类;`Transaction` 四段式乐观更新(store→request→rollback→persist)
   最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;

@@ -16,24 +16,18 @@
  */
 import type { DanmakuStream } from "../../index.ts"
 import { createWsStream } from "../../danmaku/ws.ts"
+import { deferredStream } from "../../danmaku/deferred.ts"
 import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "../../danmaku/douyin-proto.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { httpJson } from "../../host.ts"
 import { log } from "../../log.ts"
-import { ABOGUS_JS } from "./abogus.ts"
+import { DEFAULT_TTWID, UA_ENTER, enterRoomParams, signDouyinUrl } from "./abogus.ts"
 import { kWebMsSDK } from "./msdk-sign.ts"
 
 const LIVE = "https://live.douyin.com"
 /** WS 弹幕连接 UA(对齐 douyinLive 现代 Chrome;webmssdk 签名环境也用这套)。 */
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
-/** enter 接口 UA(⚠️ 必须 QQBrowser——douyin enter 对 Chrome 150 返回空 body 200 len0,
- * 实测换 QQBrowser 即返回完整 JSON。同 index.ts 常量)。 */
-const ENTER_UA =
-  "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.97 Safari/537.36 Core/1.116.567.400 QQBrowser/19.7.6764.400"
-/** 默认 ttwid(enter 拿长号用;同 index.ts)。 */
-const DEFAULT_TTWID =
-  "ttwid=1%7CB1qls3GdnZhUov9o2NxOMxxYS2ff6OSvEWbv0ytbES4%7C1680522049%7C280d802d6d478e3e78d0c807f7c487e7ffec0ae4e5fdd6a0fe74c3c6af149511"
 /** 2026 WS 域名(douyinLive 兜底;webcast3/5 已废弃)。 */
 const WS_BASE = "wss://webcast100-ws-web-lf.douyin.com/webcast/im/push/v2/"
 /** douyinLive webcast_sdk_version(签名 msStub 字段;dart 的 1.3.0 已失效)。 */
@@ -105,13 +99,6 @@ var require = (function () {
   return function (name) { return mod }
 })()
 `
-
-function randomMsToken(length: number): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  let out = ""
-  for (let i = 0; i < length; i++) out += chars[Math.floor(Math.random() * chars.length)]
-  return out
-}
 
 /** msStub = md5("live_id=1,aid=6383,...")(douyinLive XMSStub:k=v 逗号连接)。 */
 function getMsStub(roomId: string, userId: string): string {
@@ -200,23 +187,6 @@ function buildWsUrl(roomId: string, userId: string, ua: string): string {
 async function resolveRoomIds(webRid: string, ua: string, cookie?: string): Promise<{ roomId: string; pushId: string }> {
   try {
     const base = `${LIVE}/webcast/room/web/enter/`
-    const params = new URLSearchParams({
-      aid: "6383",
-      app_name: "douyin_web",
-      live_id: "1",
-      device_platform: "web",
-      language: "zh-CN",
-      browser_language: "zh-CN",
-      browser_platform: "Win32",
-      browser_name: "Chrome",
-      browser_version: "125.0.0.0",
-      web_rid: webRid,
-      msToken: "",
-    })
-    const msToken = randomMsToken(107)
-    const withMs = `${base}?${params.toString()}&msToken=${msToken}`
-    const query = withMs.split("?")[1]!
-    const aBogus = String(globalThis.appHost.js.call(ABOGUS_JS, "getABogus", [query, ua]) ?? "")
     const json = await httpJson<{
       data?: {
         data?: Array<{ id_str?: string; owner_user_id_str?: string; owner?: { id_str?: string } }>
@@ -224,7 +194,7 @@ async function resolveRoomIds(webRid: string, ua: string, cookie?: string): Prom
         room?: { owner?: { id_str?: string } }
       }
     }>(
-      `${withMs}&a_bogus=${encodeURIComponent(aBogus)}`,
+      signDouyinUrl(`${base}?${enterRoomParams(webRid)}`, ua),
       {
         "user-agent": ua,
         referer: `${LIVE}/${webRid}`,
@@ -248,41 +218,32 @@ async function resolveRoomIds(webRid: string, ua: string, cookie?: string): Prom
  * 由 channel 的 ensureCookie 提供(example 无则用默认 ttwid)。
  */
 export function douyinDanmakuStream(roomId: string, cookie?: string): DanmakuStream {
-  return (onItems) => {
-    let stopped = false
-    let unsub: (() => void) | undefined
-    void resolveRoomIds(roomId, ENTER_UA, cookie)
-      .then(({ roomId: longId, pushId }) => {
-        if (stopped) return
-        const room = longId || roomId
-        const userId = pushId || roomId
-        unsub = createWsStream({
-          url: buildWsUrl(room, userId, UA),
-          // 对齐 douyinLive websocketDialContext 的握手 headers(UA/Cookie/Origin/Referer)。
-          headers: {
-            "user-agent": UA,
-            cookie: cookie || DEFAULT_TTWID,
-            origin: "https://live.douyin.com",
-            referer: `${LIVE}/${roomId}`,
-          },
-          onOpen: (ws) => {
-            ws.send(douyinHeartbeatFrame() as unknown as ArrayBufferView<ArrayBuffer>)
-          },
-          heartbeat: () => douyinHeartbeatFrame(),
-          heartbeatMs: HEARTBEAT_MS,
-          onClose: (code, reason) => log.douyin.warn(`弹幕 WS 关闭(code=${code} reason=${reason}, room=${room})`),
-          onMessage: (data, ws) =>
-            decodeDouyinPushFrame(new Uint8Array(data), (ack) =>
-              ws.send(ack as unknown as ArrayBufferView<ArrayBuffer>),
-            ),
-        })(onItems)
-      })
-      .catch((e) => {
-        if (!stopped) log.douyin.warn("弹幕初始化失败:", (e as Error)?.message)
-      })
-    return () => {
-      stopped = true
-      unsub?.()
-    }
-  }
+  return deferredStream(
+    () => resolveRoomIds(roomId, UA_ENTER, cookie),
+    ({ roomId: longId, pushId }, onItems) => {
+      const room = longId || roomId
+      const userId = pushId || roomId
+      return createWsStream({
+        url: buildWsUrl(room, userId, UA),
+        // 对齐 douyinLive websocketDialContext 的握手 headers(UA/Cookie/Origin/Referer)。
+        headers: {
+          "user-agent": UA,
+          cookie: cookie || DEFAULT_TTWID,
+          origin: "https://live.douyin.com",
+          referer: `${LIVE}/${roomId}`,
+        },
+        onOpen: (ws) => {
+          ws.send(douyinHeartbeatFrame() as unknown as ArrayBufferView<ArrayBuffer>)
+        },
+        heartbeat: () => douyinHeartbeatFrame(),
+        heartbeatMs: HEARTBEAT_MS,
+        onClose: (code, reason) => log.douyin.warn(`弹幕 WS 关闭(code=${code} reason=${reason}, room=${room})`),
+        onMessage: (data, ws) =>
+          decodeDouyinPushFrame(new Uint8Array(data), (ack) =>
+            ws.send(ack as unknown as ArrayBufferView<ArrayBuffer>),
+          ),
+      })(onItems)
+    },
+    (e) => log.douyin.warn("弹幕初始化失败:", (e as Error)?.message),
+  )
 }

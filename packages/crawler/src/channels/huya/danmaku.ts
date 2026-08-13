@@ -9,6 +9,7 @@
  */
 import type { DanmakuStream } from "../../index.ts"
 import { createWsStream } from "../../danmaku/ws.ts"
+import { deferredStream } from "../../danmaku/deferred.ts"
 import { decodeHuyaDanmakuFrame, TarsWriter } from "../../danmaku/tars.ts"
 import { httpText } from "../../host.ts"
 import { log } from "../../log.ts"
@@ -64,28 +65,18 @@ function encodeHuyaJoin(args: HuyaDanmakuArgs): Uint8Array {
 
 /** huya 弹幕流:订阅时页面解析进房参数 → 建 WS(进房+心跳),退订断开。 */
 export function huyaDanmakuStream(roomId: string): DanmakuStream {
-  return (onItems) => {
-    let stopped = false
-    let unsub: (() => void) | undefined
-    void fetchHuyaDanmakuArgs(roomId)
-      .then((args) => {
-        if (stopped) return
-        unsub = createWsStream({
-          url: WS_URL,
-          onOpen: (ws) => {
-            ws.send(encodeHuyaJoin(args) as unknown as ArrayBufferView<ArrayBuffer>)
-          },
-          heartbeat: () => HEARTBEAT,
-          heartbeatMs: HEARTBEAT_MS,
-          onMessage: (data) => decodeHuyaDanmakuFrame(new Uint8Array(data)),
-        })(onItems)
-      })
-      .catch((e) => {
-        if (!stopped) log.huya.warn("弹幕初始化失败(未开播?):", (e as Error)?.message)
-      })
-    return () => {
-      stopped = true
-      unsub?.()
-    }
-  }
+  return deferredStream(
+    () => fetchHuyaDanmakuArgs(roomId),
+    (args, onItems) =>
+      createWsStream({
+        url: WS_URL,
+        onOpen: (ws) => {
+          ws.send(encodeHuyaJoin(args) as unknown as ArrayBufferView<ArrayBuffer>)
+        },
+        heartbeat: () => HEARTBEAT,
+        heartbeatMs: HEARTBEAT_MS,
+        onMessage: (data) => decodeHuyaDanmakuFrame(new Uint8Array(data)),
+      })(onItems),
+    (e) => log.huya.warn("弹幕初始化失败(未开播?):", (e as Error)?.message),
+  )
 }

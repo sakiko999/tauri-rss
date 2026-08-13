@@ -10,7 +10,7 @@
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetch, liveHotSource } from "../factory.ts"
 import { httpJson, now } from "../../host.ts"
 import { HuyaLiveChannel } from "./index.ts"
 
@@ -24,12 +24,9 @@ export class HuyaLiveHotChannel implements RssChannel {
   readonly defaultInfo = {}
   /** 内部持同平台 live channel,委托其懒解析/弹幕能力(对外 channel 身份仍是 hot)。 */
   getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
-    const room = new HuyaLiveChannel().getSource(info)
-    return {
+    return liveHotSource(new HuyaLiveChannel().getSource(info), {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolveLivePlay: (roomId) => room.resolveLivePlay(roomId),
-      getDanmaku: (roomId) => room.getDanmaku(roomId),
-    }
+    })
   }
 
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {

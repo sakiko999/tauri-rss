@@ -16,6 +16,7 @@ import { httpGet, httpJson, now } from "../../host.ts"
 import { log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"
 import { parseRoomIds } from "../../utils/room-ids.ts"
+import { strOr } from "../../utils/str.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 import { douyuDanmakuStream } from "./danmaku.ts"
 
@@ -223,10 +224,6 @@ export class DouyuLiveChannel implements RssChannel {
   private async getJson(url: string): Promise<Record<string, any>> {
     return httpJson<Record<string, any>>(url, { "user-agent": UA })
   }
-}
-
-function strOr(v: unknown): string | undefined {
-  return v === undefined || v === null || v === "" ? undefined : String(v)
 }
 
 /** 反转 HTML 实体(rtmp_live 常带 &amp; 等)。按 producer 同款表转。 */

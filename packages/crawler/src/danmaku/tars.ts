@@ -9,6 +9,11 @@
  *   字节数组 SIMPLE_LIST(BYTE 头 + 长度 + 数据);struct = BEGIN + 字段 + END。
  */
 import type { DanmakuItem } from "../index.ts"
+import { rgbToHex } from "./color.ts"
+
+/** 编解码复用单例(Tars 字符串读写,共享安全)。 */
+const TE = new TextEncoder()
+const TD = new TextDecoder()
 
 const T = {
   BYTE: 0,
@@ -68,7 +73,7 @@ export class TarsWriter {
   }
 
   writeString(s: string, tag: number): void {
-    const bytes = new TextEncoder().encode(s)
+    const bytes = TE.encode(s)
     if (bytes.length <= 255) {
       this.head(T.STRING1, tag)
       this.out.push(bytes.length)
@@ -235,7 +240,7 @@ export class TarsReader {
     if (h.type === T.STRING1) len = this.byte()
     else if (h.type === T.STRING4) len = this.intBE(4)
     else return ""
-    const out = new TextDecoder().decode(this.buf.subarray(this.p, this.p + len))
+    const out = TD.decode(this.buf.subarray(this.p, this.p + len))
     this.p += len
     return out
   }
@@ -291,13 +296,9 @@ export function decodeHuyaDanmakuFrame(data: Uint8Array): DanmakuItem[] {
   const bullet = hy.readStructAt(6)
   if (bullet) {
     const fontColor = bullet.readInt(0)
-    if (fontColor > 0) color = intToHex(fontColor)
+    if (fontColor > 0) color = rgbToHex(fontColor)
   }
   if (!text) return []
   return [{ text, user, color }]
 }
 
-/** 0xRRGGBB → #RRGGBB(dart LiveMessageColor.numberToColor 对应)。 */
-function intToHex(rgb: number): string {
-  return `#${(rgb & 0xffffff).toString(16).padStart(6, "0")}`
-}

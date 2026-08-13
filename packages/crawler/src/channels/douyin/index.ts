@@ -19,20 +19,15 @@ import { log } from "../../log.ts"
 import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { toInt } from "../../utils/number.ts"
 import { parseRoomIds } from "../../utils/room-ids.ts"
-import { ABOGUS_JS } from "./abogus.ts"
+import { DEFAULT_TTWID, UA_ENTER, enterRoomParams, signDouyinUrl } from "./abogus.ts"
+import { deferredStream } from "../../danmaku/deferred.ts"
+import { strOr } from "../../utils/str.ts"
 import { douyinDanmakuStream } from "./danmaku.ts"
 
 
 const LIVE = "https://live.douyin.com"
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.97 Safari/537.36 Core/1.116.567.400 QQBrowser/19.7.6764.400"
-
-/**
- * 默认 ttwid cookie(复刻 dart douyin_site.dart)。enter/play 接口没有合法 ttwid
- * 会返回空 body(200, len 0);warmup 失败时兜底用它。
- */
-const DEFAULT_TTWID_COOKIE =
-  "ttwid=1%7CB1qls3GdnZhUov9o2NxOMxxYS2ff6OSvEWbv0ytbES4%7C1680522049%7C280d802d6d478e3e78d0c807f7c487e7ffec0ae4e5fdd6a0fe74c3c6af149511"
+/** 模块内 UA 别名(enter/热门 QQBrowser UA,见 abogus.ts UA_ENTER)。 */
+const UA = UA_ENTER
 
 export class DouyinLiveChannel implements RssChannel {
   readonly key = "live:douyin"
@@ -46,22 +41,14 @@ export class DouyinLiveChannel implements RssChannel {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolveLivePlay: (roomId) => this.resolveLivePlayImpl(roomId),
       // 弹幕:先 ensureCookie(warmup 抓新鲜 ttwid)再建连——douyin 握手需带
-      // cookie(缺则 415 DEVICE_BLOCKED)。ensureCookie 是异步,建连前等它完成。
-      getDanmaku: (roomId) => (onItems) => {
-        let stopped = false
-        let unsub: (() => void) | undefined
-        void this.ensureCookie().then(() => {
-          // ⚠️ ensureCookie(warmup) 是异步:若期间已退订(玩家关闭直播间),必须拦截,
-          // 否则 warmup 完成后仍会创建 douyinDanmakuStream → 建 WS 泄漏
-          // (与 ExpandedPlayer/douyinDanmakuStream 的 stopped 检查同构,此层不可缺)。
-          if (stopped) return
-          unsub = douyinDanmakuStream(roomId, this.cookieJar)(onItems)
-        })
-        return () => {
-          stopped = true
-          unsub?.()
-        }
-      },
+      // cookie(缺则 415 DEVICE_BLOCKED)。deferredStream 统一「异步 setup 期间
+      // 退订 → 拦截建连」,防 warmup 完成时已关闭直播间仍建 WS 泄漏。
+      getDanmaku: (roomId) =>
+        deferredStream(
+          () => this.ensureCookie(),
+          (_value, onItems) => douyinDanmakuStream(roomId, this.cookieJar)(onItems),
+          (e) => log.douyin.warn("弹幕初始化失败:", (e as Error)?.message),
+        ),
     }
   }
 
@@ -118,7 +105,7 @@ export class DouyinLiveChannel implements RssChannel {
         "user-agent": UA,
         referer: LIVE,
         authority: "live.douyin.com",
-        cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
+        cookie: this.cookieJar || DEFAULT_TTWID,
       },
     )
     const detail = ((body ?? {}).data?.room ?? (body ?? {}).data ?? {}) as Record<string, any>
@@ -136,7 +123,7 @@ export class DouyinLiveChannel implements RssChannel {
       "user-agent": UA,
       referer: `${LIVE}/${roomId}`,
       authority: "live.douyin.com",
-      cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
+      cookie: this.cookieJar || DEFAULT_TTWID,
     })
     const streams = parseHtmlPullStreams(html)
     if (!streams.length) throw new Error(`douyin HTML: 未找到可播流(房间 ${roomId} 可能未开播)`)
@@ -197,33 +184,10 @@ export class DouyinLiveChannel implements RssChannel {
 
   /** 拉 enter 接口完整响应(room/user/stream_url 同源)。ABogus 签名 + ttwid cookie。 */
   private async fetchRoomDetail(roomId: string): Promise<Record<string, any>> {
-    const base = `${LIVE}/webcast/room/web/enter/`
-    // 参数序列复刻 dart douyin_site.dart:503(含 msToken:"" 空参占位,getAbogusUrl 再追加随机 msToken)。
-    const params = new URLSearchParams({
-      aid: "6383",
-      app_name: "douyin_web",
-      live_id: "1",
-      device_platform: "web",
-      language: "zh-CN",
-      browser_language: "zh-CN",
-      browser_platform: "Win32",
-      browser_name: "Chrome",
-      browser_version: "125.0.0.0",
-      web_rid: roomId,
-      msToken: "",
-    })
-    const url = await this.abogusUrl(`${base}?${params.toString()}`)
+    // 参数序列复刻 dart douyin_site.dart:503;ABogus 签名(signDouyinUrl 追加随机 msToken + a_bogus)。
+    const url = await signDouyinUrl(`${LIVE}/webcast/room/web/enter/?${enterRoomParams(roomId)}`, UA)
     // enter API 用动态 Referer(含房间号)——复刻 dart douyin_site.dart:487(参考 DouyinLiveRecorder)。
     return this.getJson(url, `${LIVE}/${roomId}`)
-  }
-
-  /** ABogus 签名:url + msToken → getABogus(query, UA) → 追加 a_bogus。 */
-  private async abogusUrl(url: string): Promise<string> {
-    const msToken = generateMsToken(107)
-    const withMs = `${url}&msToken=${msToken}`
-    const query = withMs.split("?")[1] ?? ""
-    const aBogus = String(globalThis.appHost.js.call(ABOGUS_JS, "getABogus", [query, UA]) ?? "")
-    return `${withMs}&a_bogus=${encodeURIComponent(aBogus)}`
   }
 
   private async getJson(url: string, referer?: string): Promise<Record<string, any>> {
@@ -232,7 +196,7 @@ export class DouyinLiveChannel implements RssChannel {
       "user-agent": UA,
       referer: referer ?? LIVE,
       authority: "live.douyin.com",
-      cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
+      cookie: this.cookieJar || DEFAULT_TTWID,
     })
     // 空 body(抖音常无合法 ttwid 返回空) → 抛错,不静默产空元数据。
     // httpJson 空 body 返回 null(「无数据」语义),无需 typeof 收窄。
@@ -252,7 +216,7 @@ export class DouyinLiveChannel implements RssChannel {
   /**
    * 首页 warmup 抓新鲜 ttwid(Set-Cookie);失败兜底默认值。memoized。
    * 注意:依赖 HttpBackend 回传 `set-cookie` header(example 的 nodeBackend 返回空
-   * headers,此时会兜底 DEFAULT_TTWID_COOKIE)。真实后端应回传 set-cookie。
+   * headers,此时会兜底 DEFAULT_TTWID)。真实后端应回传 set-cookie。
    */
   private ensureCookie(): Promise<void> {
     if (this.cookieJar) return Promise.resolve()
@@ -271,7 +235,7 @@ export class DouyinLiveChannel implements RssChannel {
             .join("; ")
           if (jar) this.cookieJar = jar
         } catch {
-          this.cookieJar = DEFAULT_TTWID_COOKIE
+          this.cookieJar = DEFAULT_TTWID
         }
       })()
     }
@@ -282,18 +246,6 @@ export class DouyinLiveChannel implements RssChannel {
 /** 过滤 IPv6 host 的直链(WebView 请求 IPv6 CDN 常 404;优先 IPv4/域名)。 */
 function filterPlayable(streams: Stream[]): Stream[] {
   return streams.filter((s) => !/\[[0-9a-f:]+\]/.test(s.url))
-}
-
-function strOr(v: unknown): string | undefined {
-  return v === undefined || v === null || v === "" ? undefined : String(v)
-}
-
-/** 随机 msToken(dart: generateMsToken)。非加密 RNG 可接受。 */
-function generateMsToken(length: number): string {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-  let out = ""
-  for (let i = 0; i < length; i++) out += chars[Math.floor(Math.random() * chars.length)]
-  return out
 }
 
 /**
@@ -348,7 +300,6 @@ function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
  * 按清晰度键名顺序返回(蓝光/高清优先)。
  */
 function parseHtmlPullStreams(html: string): Stream[] {
-  const QUALITY_ORDER = ["FULL_HD1", "HD1", "SD1", "SD2", "ORIGION"]
   const headers = { referer: LIVE, "user-agent": UA, authority: "live.douyin.com" }
   const streams: Stream[] = []
   // 只取 flv_pull_url 对象(到下一个 _pull_url 或片段结束);hls_pull_url 是 m3u8,另论。
@@ -397,6 +348,8 @@ function parseHtmlPullStreams(html: string): Stream[] {
  * 参照 dart_simple_live 的 flv_pull_url 解析(douyin_site.dart:564)。
  * 每档挂 quality 名 + rate(键名顺序倒序,高档 rate 大),供 MediaPlayer 画质切换。
  */
+/** 抖音清晰度键名(键序即清晰度降序;HTML/reflow 解析共用)。 */
+const QUALITY_ORDER = ["FULL_HD1", "HD1", "SD1", "SD2", "ORIGION"]
 const DOUYIN_QUALITY_NAMES: Record<string, string> = {
   FULL_HD1: "蓝光",
   HD1: "高清",
@@ -405,7 +358,6 @@ const DOUYIN_QUALITY_NAMES: Record<string, string> = {
   ORIGION: "原画",
 }
 function parseReflowStreams(streamUrl: Record<string, any>): Stream[] {
-  const QUALITY_ORDER = ["FULL_HD1", "HD1", "SD1", "SD2", "ORIGION"]
   const headers = { referer: LIVE, "user-agent": UA, authority: "live.douyin.com" }
   const streams: Stream[] = []
 

@@ -10,6 +10,9 @@
  *   weight=9(int32) idStr=12(string)
  */
 
+/** 解码复用单例(逐段弹幕元素热路径,共享安全)。 */
+const TD = new TextDecoder()
+
 export interface DanmakuElem {
   /** 出现位置,毫秒。 */
   progress: number
@@ -65,7 +68,7 @@ export function decodeDanmakuSeg(buf: Uint8Array): DanmakuElem[] {
           else if (f2 === 5) color = v
         } else if (w2 === 2) {
           const len = varint()
-          if (f2 === 7) content = new TextDecoder().decode(buf.subarray(p, p + len))
+          if (f2 === 7) content = TD.decode(buf.subarray(p, p + len))
           p += len
         } else {
           p += w2 === 1 ? 8 : 4

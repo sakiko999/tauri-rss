@@ -11,6 +11,10 @@
 import type { DanmakuItem, DanmakuStream } from "../../index.ts"
 import { createWsStream } from "../../danmaku/ws.ts"
 
+/** 编解码复用单例(每帧热路径,共享安全)。 */
+const TE = new TextEncoder()
+const TD = new TextDecoder()
+
 const WS_URL = "wss://danmuproxy.douyu.com:8506"
 /** 心跳间隔,ms(douyu 45s,断连限流严格)。 */
 const HEARTBEAT_MS = 45000
@@ -27,7 +31,7 @@ const DOUYU_COLORS: Record<number, string> = {
 
 /** 12B 小端头 + STT body + 末尾 0x00 → 一帧(client→server packType=689)。 */
 function douyuFrame(body: string): Uint8Array {
-  const bodyBuf = new TextEncoder().encode(body)
+  const bodyBuf = TE.encode(body)
   const full = 9 + bodyBuf.length
   const frame = new Uint8Array(12 + bodyBuf.length + 1)
   const dv = new DataView(frame.buffer)
@@ -60,7 +64,7 @@ function parseDouyuFrame(data: Uint8Array): DanmakuItem[] {
   const full = dv.getUint32(0, true)
   if (dv.getUint16(8, true) !== 690) return [] // server→client
   const bodyLen = full - 9
-  const body = new TextDecoder().decode(data.subarray(12, Math.min(12 + bodyLen, data.length)))
+  const body = TD.decode(data.subarray(12, Math.min(12 + bodyLen, data.length)))
   const obj = sttParse(body)
   if (obj["type"] !== "chatmsg") return []
   // dms 缺失 = 屏蔽弹幕(主播/房管设置的禁言列表,dart 同款跳过)。

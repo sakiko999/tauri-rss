@@ -20,6 +20,7 @@ import { log } from "../../log.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 import { getItag, isPlayableItag } from "./itag.ts"
 import { deobfuscateNParam, hasThrottlingParam } from "./signature.ts"
+import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
 
 const YOUTUBEI_V1 = "https://www.youtube.com/youtubei/v1"
@@ -28,8 +29,7 @@ const YOUTUBEI_GAPIS_V1 = "https://youtubei.googleapis.com/youtubei/v1"
 const ANDROID_UA =
   "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; " +
   "eureka-user Build/SQ3A.220605.009.A1) gzip"
-const WEB_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+const WEB_UA = DESKTOP_CHROME_UA
 
 /**
  * ANDROID_VR client 版本(yt-dlp master 2026-08)。**主力 client**。
@@ -107,29 +107,40 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
   return res.body
 }
 
-/** 拿 visitorData(零登录,POST visitor_id 端点,response 在 responseContext.visitorData)。 */
-export async function getVisitorData(): Promise<string> {
-  const body = {
-    context: {
-      client: {
-        clientName: "ANDROID_VR",
-        clientVersion: ANDROID_CLIENT_VERSION,
-        deviceMake: "Oculus",
-        deviceModel: "Quest 3",
-        androidSdkVersion: 32,
-        osName: "Android",
-        osVersion: "12L",
-      },
-    },
+let visitorDataPromise: Promise<string> | null = null
+
+/** 拿 visitorData(零登录,POST visitor_id 端点,response 在 responseContext.visitorData)。
+ *  session 级(非视频级)缓存:memoize,整个应用会话只 POST 一次;失败不缓存,下次重试。 */
+export function getVisitorData(): Promise<string> {
+  if (!visitorDataPromise) {
+    visitorDataPromise = (async () => {
+      const body = {
+        context: {
+          client: {
+            clientName: "ANDROID_VR",
+            clientVersion: ANDROID_CLIENT_VERSION,
+            deviceMake: "Oculus",
+            deviceModel: "Quest 3",
+            androidSdkVersion: 32,
+            osName: "Android",
+            osVersion: "12L",
+          },
+        },
+      }
+      const res = (await postJson(
+        `${YOUTUBEI_V1}/visitor_id?prettyPrint=false`,
+        body,
+        { "user-agent": ANDROID_UA, "X-Goog-Api-Format-Version": "2" },
+      )) as { responseContext?: Record<string, any>; visitorData?: string }
+      const vd = res?.responseContext?.["visitorData"]
+      if (!vd) throw new Error("YouTube visitorData 获取失败")
+      return vd
+    })().catch((e: unknown) => {
+      visitorDataPromise = null // 失败不缓存,下次调用重试
+      throw e
+    })
   }
-  const res = (await postJson(
-    `${YOUTUBEI_V1}/visitor_id?prettyPrint=false`,
-    body,
-    { "user-agent": ANDROID_UA, "X-Goog-Api-Format-Version": "2" },
-  )) as { responseContext?: Record<string, any>; visitorData?: string }
-  const vd = res?.responseContext?.["visitorData"]
-  if (!vd) throw new Error("YouTube visitorData 获取失败")
-  return vd
+  return visitorDataPromise
 }
 
 /** 请求 player API(ANDROID_VR client——主力,免 poToken)。 */

@@ -16,10 +16,11 @@ import { httpJson, now } from "../../host.ts"
 import { extractCookie } from "../../utils/cookie.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
+import { strOr } from "../../utils/str.ts"
+import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
 
-export const BILIBILI_UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+export const BILIBILI_UA = DESKTOP_CHROME_UA
 
 const API_MAIN = "https://api.bilibili.com"
 
@@ -55,6 +56,8 @@ export interface BilibiliClient {
   signLiveParams(params: Record<string, string>): Promise<string>
   /** 确保 buvid3/4 就绪(仅 buvid:true 有意义)。幂等。 */
   ensureBuvid(): Promise<void>
+  /** 登录态 mid(nav 响应;未登录/无 cookie 为 0)。直播弹幕认证用,与 signWeb 复用同一 nav。 */
+  navMid(): Promise<number>
   /** bvid/aid → 默认分 P 的 cid(/x/web-interface/view,非 wbi 接口)。 */
   resolveCid(bvidOrAid: string): Promise<string>
   /** bvid+cid → durl mp4 直链(/x/player/playurl,qn=80 platform=html5)。 */
@@ -69,7 +72,7 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
   // 显式登录 cookie(含 SESSDATA)。buvid3/4 若在 cookie 里,直接提取不用 spi。
   const userCookie = options.cookie ?? ""
 
-  let mixinKeyPromise: Promise<string> | null = null
+  let navDataPromise: Promise<Record<string, any>> | null = null
   let buvid3 = ""
   let buvid4 = ""
   let cookie = ""
@@ -94,24 +97,34 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
     return data as T
   }
 
+  /** 一次 nav(带 userCookie 取登录态 mid)——wbi 签名 key 与登录 mid 共用同一响应。 */
+  function getNavData(): Promise<Record<string, any>> {
+    if (navDataPromise) return navDataPromise
+    // nav 不走 getJson(nav 合法返回 code:-101)
+    navDataPromise = httpJson<Record<string, any>>(`${API_MAIN}/x/web-interface/nav`, {
+      "user-agent": BILIBILI_UA,
+      referer,
+      ...(userCookie ? { cookie: userCookie } : {}),
+    })
+    return navDataPromise
+  }
+
+  /** 登录态 mid(nav 响应;未登录/无 cookie 返回 0)。直播弹幕认证用。 */
+  async function navMid(): Promise<number> {
+    const data = await getNavData()
+    return Number(data?.data?.mid ?? 0)
+  }
+
   async function getMixinKey(): Promise<string> {
-    if (mixinKeyPromise) return mixinKeyPromise
-    mixinKeyPromise = (async () => {
-      // nav 不走 getJson(nav 合法返回 code:-101)
-      const data = await httpJson<Record<string, any>>(`${API_MAIN}/x/web-interface/nav`, {
-        "user-agent": BILIBILI_UA,
-        referer,
-      })
-      const img = data?.data?.wbi_img
-      const imgKey = fileStem(strOr(img?.img_url) ?? "")
-      const subKey = fileStem(strOr(img?.sub_url) ?? "")
-      if (!imgKey || !subKey) throw new Error("bilibili nav returned no wbi_img (signing unavailable)")
-      const origin = imgKey + subKey
-      let s = ""
-      for (const i of MIXIN_KEY_ENC_TAB) s += origin[i] ?? ""
-      return s.slice(0, 32)
-    })()
-    return mixinKeyPromise
+    const data = await getNavData()
+    const img = data?.data?.wbi_img
+    const imgKey = fileStem(strOr(img?.img_url) ?? "")
+    const subKey = fileStem(strOr(img?.sub_url) ?? "")
+    if (!imgKey || !subKey) throw new Error("bilibili nav returned no wbi_img (signing unavailable)")
+    const origin = imgKey + subKey
+    let s = ""
+    for (const i of MIXIN_KEY_ENC_TAB) s += origin[i] ?? ""
+    return s.slice(0, 32)
   }
 
   async function ensureBuvid(): Promise<void> {
@@ -224,7 +237,7 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
     throw new Error(`bilibili playurl: no playable stream for ${bvidOrAid}`)
   }
 
-  return { getJson, signWeb, signLiveParams, ensureBuvid, resolveCid, resolvePlayUrl }
+  return { getJson, signWeb, signLiveParams, ensureBuvid, navMid, resolveCid, resolvePlayUrl }
 }
 
 function fileStem(url: string): string {
@@ -318,6 +331,3 @@ function toAudioRep(a: Record<string, any>): MpdAudioRep {
   }
 }
 
-function strOr(v: unknown): string | undefined {
-  return v === undefined || v === null || v === "" ? undefined : String(v)
-}

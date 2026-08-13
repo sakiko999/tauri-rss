@@ -9,24 +9,29 @@
  * ⚠️ 2026-08 风控:直播弹幕**必须真实登录 uid**——匿名(uid=0)认证被服务器
  * 1006 拒绝(握手成功即断,probe-bili-cookie 实测:uid=0 1006,真实 nav mid → op=8
  * {"code":0})。故认证帧 uid = nav 的 mid(cookie 登录态),buvid = cookie 提取的
- * buvid3。⚠️ **不走宿主隧道**(带 cookie header 会触发 Rust ws_connect 的
- * sec-websocket-key 握手被服务器拒)——bili 弹幕接受无 header 原生 WS,仅 uid
- * 真实即可通过。host 的 **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手
- * 成功但非弹幕服务)。
+ * buvid3。认证走 WS 帧 op=7 的 uid/buvid,不需 cookie header → 无 header 统一走
+ * 宿主隧道(sec-websocket-key 握手问题已修:into_client_request 构造完整请求)。
+ * host 的 **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
  */
 import type { DanmakuItem, DanmakuStream } from "../../index.ts"
 import { createWsStream } from "../../danmaku/ws.ts"
+import { deferredStream } from "../../danmaku/deferred.ts"
+import { argbToHex } from "../../danmaku/color.ts"
 import { createBilibiliClient } from "./client.ts"
+import { extractCookie } from "../../utils/cookie.ts"
 import { log } from "../../log.ts"
 
-const API_MAIN = "https://api.bilibili.com"
+/** 编解码复用单例(每帧热路径,共享安全)。 */
+const TE = new TextEncoder()
+const TD = new TextDecoder()
+
 const API_LIVE = "https://api.live.bilibili.com"
 /** 心跳间隔,ms。 */
 const HEARTBEAT_MS = 60000
 
 /** 16B 大端头 + JSON body → 一帧。 */
 function biliFrame(op: number, bodyObj: unknown, protover = 0): Uint8Array {
-  const body = new TextEncoder().encode(JSON.stringify(bodyObj))
+  const body = TE.encode(JSON.stringify(bodyObj))
   const frame = new Uint8Array(16 + body.length)
   const dv = new DataView(frame.buffer)
   dv.setUint32(0, 16 + body.length, false)
@@ -71,21 +76,13 @@ async function inflateBiliBody(ver: number, data: Uint8Array): Promise<Uint8Arra
   }
 }
 
-/** 十进制 ARGB → #RRGGBB(与 bili/danmaku.ts 同逻辑)。 */
-function intColorToHex(intColor: number): string {
-  const hex = intColor.toString(16)
-  const rrggbb =
-    hex.length === 8 ? hex.slice(2) : hex.length === 4 ? `00${hex}` : hex.length === 6 ? hex : "ffffff"
-  return `#${rrggbb}`
-}
-
 /** 解析一帧 WS 数据(op=5 弹幕),异步(brotli 解压)。 */
 async function parseBiliDanmakuFrame(buf: Uint8Array): Promise<DanmakuItem[]> {
   const items: DanmakuItem[] = []
   for (const p of parseBiliPackets(buf)) {
     if (p.op !== 5) continue
     const body = await inflateBiliBody(p.ver, p.body)
-    const text = new TextDecoder().decode(body)
+    const text = TD.decode(body)
     for (const line of text.split(/[\x00-\x1f]+/)) {
       if (!line) continue
       let json: { cmd?: string; info?: unknown[] } | null
@@ -101,7 +98,7 @@ async function parseBiliDanmakuFrame(buf: Uint8Array): Promise<DanmakuItem[]> {
       items.push({
         text: msg,
         user: String((info[2] as unknown[] | undefined)?.[1] ?? ""),
-        color: intColorToHex(Number((info[0] as unknown[] | undefined)?.[3] ?? 0xffffff)),
+        color: argbToHex(Number((info[0] as unknown[] | undefined)?.[3] ?? 0xffffff)),
       })
     }
   }
@@ -114,6 +111,9 @@ async function getDanmuInfo(
   cookie?: string,
 ): Promise<{ host: string; wssPort: number; token: string; uid: number; buvid3: string }> {
   const client = createBilibiliClient({ referer: "https://live.bilibili.com/", live: true, cookie })
+  // 认证 uid = nav 带 cookie 的 mid(2026 风控:匿名 0 被拒)。仅 cookie 时发(匿名必 0,
+  // 白打一次);与 getDanmuInfo 并行,且复用 signWeb 的 nav 响应(client.navMid 共享缓存)。
+  const uidPromise = cookie ? client.navMid().catch(() => 0) : Promise.resolve(0)
   const q = await client.signWeb(`id=${roomId}`)
   const res = await client.getJson<{
     data?: { token?: string; host_list?: Array<{ host?: string; wss_port?: number }> }
@@ -123,62 +123,38 @@ async function getDanmuInfo(
   const wssPort = first?.wss_port ?? 443
   const token = res?.data?.token
   if (!host || !token) throw new Error(`bili:live danmaku: no host/token for room ${roomId}`)
-  // 认证 uid = nav 带 cookie 的 mid(2026 风控:匿名 0 被拒)。buvid3 从 cookie 提取。
-  let uid = 0
-  try {
-    const nav = await client.getJson<{ data?: { mid?: number } }>(
-      `${API_MAIN}/x/web-interface/nav`,
-      { referer: "https://www.bilibili.com/" },
-      { allowCodeError: true },
-    )
-    uid = nav?.data?.mid ?? 0
-  } catch {
-    uid = 0
-  }
-  const buvid3 = (cookie ?? "").match(/buvid3=([^;]+)/)?.[1] ?? ""
+  const uid = await uidPromise
+  const buvid3 = extractCookie(cookie ?? "", "buvid3")
   return { host, wssPort, token, uid, buvid3 }
 }
 
 /** bili 直播弹幕流:订阅时 getDanmuInfo → 建 WS(认证 → 心跳 → 收弹幕),退订断开。 */
 export function biliLiveDanmakuStream(roomId: string, cookie?: string): DanmakuStream {
-  return (onItems) => {
-    let stopped = false
-    let unsub: (() => void) | undefined
-    void getDanmuInfo(roomId, cookie)
-      .then(({ host, wssPort, token, uid, buvid3 }) => {
-        if (stopped) return
-        unsub = createWsStream({
-          // 必须拼 wss_port(非标 2245 常见;默认 443 连上非弹幕服务)。
-          url: `wss://${host}:${wssPort}/sub`,
-          // 无 header(认证走 WS 帧 op=7 的 uid/buvid,不需 cookie header)。统一走
-          // 宿主隧道;sec-websocket-key 握手问题已修(into_client_request),bili
-          // 弹幕服务器接受 schannel ClientHello。
-          headers: undefined,
-          onOpen: (ws) => {
-            ws.send(
-              biliFrame(7, {
-                uid,
-                roomid: Number(roomId),
-                // protover:2 请求 zlib(DecompressionStream 标准支持);3=brotli 兼容性差。
-                protover: 2,
-                buvid: buvid3,
-                platform: "web",
-                type: 2,
-                key: token,
-              }) as unknown as ArrayBufferView<ArrayBuffer>,
-            )
-          },
-          heartbeat: () => biliFrame(2, {}),
-          heartbeatMs: HEARTBEAT_MS,
-          onMessage: (data) => parseBiliDanmakuFrame(new Uint8Array(data)),
-        })(onItems)
-      })
-      .catch((e) => {
-        if (!stopped) log.biliLive.warn("直播弹幕初始化失败(未开播?):", (e as Error)?.message)
-      })
-    return () => {
-      stopped = true
-      unsub?.()
-    }
-  }
+  return deferredStream(
+    () => getDanmuInfo(roomId, cookie),
+    ({ host, wssPort, token, uid, buvid3 }, onItems) =>
+      createWsStream({
+        // 必须拼 wss_port(非标 2245 常见;默认 443 连上非弹幕服务)。
+        // 无 header(认证走 WS 帧 op=7 的 uid/buvid,不需 cookie header)——统一走宿主隧道。
+        url: `wss://${host}:${wssPort}/sub`,
+        onOpen: (ws) => {
+          ws.send(
+            biliFrame(7, {
+              uid,
+              roomid: Number(roomId),
+              // protover:2 请求 zlib(DecompressionStream 标准支持);3=brotli 兼容性差。
+              protover: 2,
+              buvid: buvid3,
+              platform: "web",
+              type: 2,
+              key: token,
+            }) as unknown as ArrayBufferView<ArrayBuffer>,
+          )
+        },
+        heartbeat: () => biliFrame(2, {}),
+        heartbeatMs: HEARTBEAT_MS,
+        onMessage: (data) => parseBiliDanmakuFrame(new Uint8Array(data)),
+      })(onItems),
+    (e) => log.biliLive.warn("直播弹幕初始化失败(未开播?):", (e as Error)?.message),
+  )
 }
