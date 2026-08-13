@@ -867,5 +867,4 @@ function crc32(buffer) {
 }
 
 export { Client, PUBLIC_USER_AGENT, X3_PREFIX, XYS_PREFIX, decodeCustomBase64, decodeX3Base64, encodeCustomBase64, encodeX3Base64, generateA1, generateB3TraceId, generateRandomByteInRange, generateRandomInt, generateRandomString, generateXrayTraceId, getLoadTs, registerId };
-//# sourceMappingURL=index.js.map
-//# sourceMappingURL=index.js.map
+// (sourceMappingURL 注释已删:fork 未带 index.js.map,Vite dev 尝试加载报 ENOENT)
