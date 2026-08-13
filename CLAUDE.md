@@ -16,11 +16,12 @@ packages/
   host/          ★ @tauri-playground/host — 宿主后端 + 全局 appHost 门面
                    （node/ 真实网络+内存存储给 example；browser/ 浏览器 fetch+localStorage
                    给纯前端调试；tauri/ Rust http_get+ws_connect+localStorage 给生产。
-                   ws:宿主 ws_connect(node/tauri)只服务需自定义 header 的平台
-                   (douyin UA/Cookie/Origin);无 header 需求(bili/douyu/huya)走原生
-                   WebSocket——Rust native-tls(schannel)对 douyu danmuproxy 8506 证书
-                   校验失败 + bili 弹幕服务器拒 Rust 握手 key,原生 WS 走 webview TLS 栈
-                   无此问题)
+                   ws:弹幕 WS 统一走宿主 ws_connect(node/tauri,可带自定义 header)。
+                   曾按 header 需求分流(douyin 走宿主、bili/douyu/huya 走原生——
+                   误判「schannel 对 douyu danmuproxy:8506 证书校验失败」);2026-08-14
+                   probe 实测 native-tls 连 douyu/bili/huya 弹幕服务器握手全通
+                   (证书 GlobalSign 有效,失败实为集群节点偶发 RST),故一律走宿主,
+                   原生 WebSocket 仅纯浏览器调试兜底(无 appHost.ws))
   crawler/       ★ @tauri-playground/crawler — 订阅源抓取层（producer 的重构替代）。
                    一切皆 RssChannel：channel 直接 implements RssChannel(+ 能力接口
                    RssVideoChannel/RssLiveChannel/DanmakuPlayable),getSource 用组合工厂
@@ -197,9 +198,10 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - **弹幕获取机制**：`docs/danmaku-research.md`。B站视频弹幕 = 零摩擦入口
   （`bvid→cid→GET /x/v2/dm/web/seg.so?oid&segment_index`,protobuf、6min/段、**匿名可用**）,
   是弹幕 MVP 首选。直播弹幕 4 平台已全通(bili 16B 大端头+zlib、douyu STT、huya Tars、
-  douyin protobuf+gzip),走 `appHost.ws`——**仅需自定义 header 的 douyin 走宿主隧道
-  (Rust ws_connect/ws 包,UA/Cookie/Origin);bili/douyu/huya 无 header 需求走原生
-  WebSocket**(Rust native-tls schannel 对 douyu danmuproxy 8506 证书校验失败)。
+  douyin protobuf+gzip),**统一走宿主隧道 `appHost.ws`**(Rust ws_connect/ws 包)。
+  曾按 header 需求分流——误判「schannel 对 douyu danmuproxy:8506 证书校验失败」走原生;
+  2026-08-14 probe 实测 native-tls 连 douyu/bili/huya 弹幕服务器握手全通(证书
+  GlobalSign 有效,失败实为集群节点偶发 RST),故一律走宿主,原生 WS 仅纯浏览器兜底。
   ⚠️ ws.rs 的 ws_connect **必须用 `req.url.as_str().into_client_request()` 从 URL 构造
   完整请求再插自定义头**——手动 `http::Request::builder()` 构造 Request<()> 缺
   Sec-WebSocket-Key(tungstenite 的 Request<()> IntoClientRequest 是 Ok(self) 不补 WS 头,

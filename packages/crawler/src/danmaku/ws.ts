@@ -84,12 +84,12 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       log.danmaku.wsConnect({ url: opts.url })
       const host = globalThis.appHost.ws
 
-      // ⚠️ 只有**需要自定义握手 header**(douyin 的 UA/Cookie/Origin)才走宿主隧道
-      // (Rust ws_connect / node ws 包可带 header);**无 header 需求一律原生 WebSocket**
-      // (douyu/bili/huya 实测原生可连)。不能一律走宿主——Rust native-tls(schannel)
-      // 对部分平台证书校验失败(douyu danmuproxy:8506 实测连不上),而原生 WS 走 webview
-      // 内置 TLS 栈无此问题。判断依据:opts.headers 非空。
-      const needHost = !!host && !!opts.headers && Object.keys(opts.headers).length > 0
+      // ⚠️ 有宿主(wss: Rust ws_connect / node ws 包)一律走宿主隧道,统一实现。
+      // 原生 WebSocket 只留给无宿主环境(纯浏览器调试 injectBrowserHost 无 ws)。
+      // 历史:曾按 opts.headers 分流——「douyu danmuproxy:8506 schannel 证书校验
+      // 失败」走原生;2026-08-14 probe 实测 native-tls 连 douyu 8/8 握手成功
+      // (证书 GlobalSign 有效,失败实为集群节点偶发 RST),故统一走宿主。
+      const needHost = !!host
       if (needHost) {
         void host!
           .connect({

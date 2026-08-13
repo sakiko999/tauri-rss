@@ -150,9 +150,9 @@ export function biliLiveDanmakuStream(roomId: string, cookie?: string): DanmakuS
         unsub = createWsStream({
           // 必须拼 wss_port(非标 2245 常见;默认 443 连上非弹幕服务)。
           url: `wss://${host}:${wssPort}/sub`,
-          // 无 header → 走原生 WebSocket。⚠️ 不能带 cookie header:会走宿主隧道,
-          // Rust ws_connect 对 bili 弹幕服务器握手被拒(sec-websocket-key)。原生
-          // WS + 认证帧 uid/buvid 真实即通过。
+          // 无 header(认证走 WS 帧 op=7 的 uid/buvid,不需 cookie header)。统一走
+          // 宿主隧道;sec-websocket-key 握手问题已修(into_client_request),bili
+          // 弹幕服务器接受 schannel ClientHello。
           headers: undefined,
           onOpen: (ws) => {
             ws.send(
