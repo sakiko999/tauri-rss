@@ -37,10 +37,19 @@ packages/
                    warn/error 永保留。被 player/host/crawler 引用
   ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
                    播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
+  xhshow/        ★ @tauri-playground/xhshow — 小红书签名 xhshow-js 的 MIT fork 适配包装。
+                   vendor/xhshow.js 是 xhshow-js dist 的 fork(MIT,已保留原版权声明;
+                   改 node:crypto → 包内 crypto-shim 纯 JS crypto-js.MD5)→ node/browser
+                   同一份源码可跑,无需 vite alias。全局 Buffer(xhshow 仍引用)由入口
+                   模块注入 PolyfillBuffer(browser;node 用原生跳过)。exports 带
+                   browser/default 双条件(当前同源,预留差异扩展)。仅 crawler 的 xhs
+                   channel 引用,消费方只 import 本包不感知补丁。browser 模拟测试:
+                   `bun run packages/xhshow/src/example/verify-browser.ts`
 ```
 
 依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
-`log` 是零依赖叶子,被 player/host/crawler 引用;`host` 被 crawler/core/desktop/player 共用。
+`log` 是零依赖叶子,被 player/host/crawler 引用;`host` 被 crawler/core/desktop/player 共用；
+`xhshow` 被 crawler(xhs channel) 引用。
 
 依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
 `host` 被 crawler/core/desktop/player 共用。
@@ -157,8 +166,19 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   module_dynamic 在 orig.modules.module_dynamic 下**,非 DynModule 层级)。
   实测半佛 37663924(硬核的半佛仙人,转发为主;⚠️ 37883317 是「DILI念」勿用)、
   DIYgod 2267573(视频为主)。
-- 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/X/小红书
-  是硬反爬（puppeteer+登录+代理），个人不部署 RSSHub 碰不了。
+- 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/小红书走
+  登录 cookie + API 可复刻（见下）；**X 仍是硬反爬**（puppeteer+登录+代理），个人不
+  部署 RSSHub 碰不了。
+- **小红书双通道（2026-08 SSR 改版后）**：`xhs:explore` 发现页仍走 SSR
+  `window.__INITIAL_STATE__`（feed.feeds 的 noteCard，noteId 在 `feeds[i].id` 顶层）；
+  ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——extractInitialState
+  用**平衡大括号截纯 JSON**（非截到 `</script>`）+ 空容器构造归一，RSSHub 的
+  `replaceAll("undefined","null")` 救不了。`xhs:user` 用户笔记改走 **user_posted API**
+  （edith.xiaohongshu.com）——小红书把 user 页笔记改为 JS/API 动态加载，SSR
+  `user.notes` 已空（`[[],[],...]`）。API 需 **xhshow-js 签名**（`x-s/x-s-common/x-t`，
+  xhshow Python 库的 TS 移植，纯算无 eval → webview CSP 安全）+ **登录 cookie
+  （web_session）**（匿名 406、未登录 code:-101）；签名种子 `a1` 取自会话 cookie。
+  实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
 - **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
   空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
   默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
@@ -289,6 +309,11 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
     （PNG 64B / JPEG 1KB,WebP/GIF 同源）,失败退化 4:3。bili:dynamic 用 API 宽高 +
     Range 兜底(archive 封面)。XML `tpl:image` 支持 `@_url/@_width/@_height` 属性,
     core `SocialItem.images` → `SocialImage[]`
+  - **图片防盗链 Referer**：`MediaImage` 内联 `useProxiedImage`(blob 隧道)——命中
+    sinaimg 等防盗链图床的 src 经 `appHost.http` 带站内 Referer 拉取 → Blob URL 显示
+    (`<img>` 原生加载 Referer 固定为页面源,空/错 Referer 均 403)。规则表 host 层
+    `mediaReferrerFor` 唯一权威,ui 不写死域名。Rust 自定义协议方案(伪 scheme + 安全
+    洞)评估见 `docs/image-loading-referrer.md`
 - ui 包依赖：`clsx`（拼类）;lucide-react 只在 desktop，ui 包图标用自包含内联 SVG
   （`renderers/atoms/icons.tsx`）
 - **player 独立包**：播放器已拆到 `@tauri-playground/player`(见目录结构)。

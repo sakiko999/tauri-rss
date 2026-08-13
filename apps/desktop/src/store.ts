@@ -21,6 +21,7 @@ import {
   type SubscriptionGroup,
 } from "@tauri-playground/core"
 import { TEST_SUBSCRIPTIONS } from "./subscriptions"
+import { getChannel } from "@tauri-playground/crawler"
 
 /** 内容 tab:all 显示全部,其余按 kind 过滤中栏。tab 是「默认视图节点」的 kind 部分。 */
 export type ContentTab = "all" | "article" | "video" | "audio" | "live" | "social"
@@ -56,11 +57,16 @@ const TAB_TITLES: Record<string, string> = {
 }
 
 /**
- * 当前视图标题:tab 节点 / smart feed / 订阅源 → 真实身份,而非笼统「内容」。
+ * 当前视图标题:热搜词流(hotWord)/ tab 节点 / smart feed / 订阅源 → 真实身份。
  * 中栏(MediaList)与文章左栏(ArticleList)顶栏共用——选中「今日」时顶栏显示
  * 「今日」而非写死的「文章」。
  */
-export function viewTitleFor(nodeId: string | null, subscriptions: Subscription[]): string {
+export function viewTitleFor(
+  nodeId: string | null,
+  subscriptions: Subscription[],
+  hotWord?: { word: string; items: MediaItem[] } | null,
+): string {
+  if (hotWord) return `热搜：${hotWord.word}`
   if (!nodeId) return "全部"
   if (nodeId === "today") return "今日"
   if (nodeId === "unread") return "未读"
@@ -70,11 +76,29 @@ export function viewTitleFor(nodeId: string | null, subscriptions: Subscription[
 }
 
 /**
+ * 节点固有 kind(非视图专有)——App 布局分发与 queryView 共用。
+ * undefined = 聚合视图(无 kind 维度),字符串 = 有 kind 维度:
+ *   - tab 节点:`tab:<kind>` 自带过滤维度,`tab:all` 是聚合(展示全部)→ undefined;
+ *   - smart feed(today/unread/starred):聚合查询,无 kind 维度 → undefined;
+ *   - 真实订阅:channel kind(article/video/audio/live/social)。
+ */
+export function nodeKindOf(nodeId: string | null, subscriptions: Subscription[]): string | undefined {
+  if (!nodeId) return undefined
+  if (isTabNode(nodeId)) {
+    const kind = nodeId.slice(4) // "tab:" → kind
+    return kind === "all" ? undefined : kind
+  }
+  if (isSmartFeed(nodeId)) return undefined
+  const sub = subscriptions.find((s) => s.id === nodeId)
+  return sub ? getChannel(sub.channelKey)?.kind : undefined
+}
+
+/**
  * 按「选中节点」查当前视图 items。节点体系统一由 selectedNodeId 承载,
  * dispatch 按 id 前缀/裸 id 分支——未来分组(`group:<id>`)标签(`tag:<id>`)
  * 在此加分支即可,不动已选节点体系。
  */
-function queryView(dl: DataLayer, nodeId: string | null): MediaItem[] {
+function queryView(dl: DataLayer, nodeId: string | null, subscriptions: Subscription[]): MediaItem[] {
   // smart feed(裸 id)——全局聚合
   if (nodeId === "today") {
     return dl.store.query({ today: true })
@@ -83,10 +107,10 @@ function queryView(dl: DataLayer, nodeId: string | null): MediaItem[] {
   } else if (nodeId === "starred") {
     return dl.store.query({ starredOnly: true })
   }
-  // tab 节点(前缀 tab:)——全局按 kind 过滤
+  // tab 节点(前缀 tab:)——全局按 kind 过滤(nodeKindOf 把 tab:all 归一为聚合)
   if (isTabNode(nodeId)) {
-    const kind = nodeId.slice(4) // "tab:" → kind
-    return kind === "all" ? dl.store.all() : dl.store.all().filter((it) => it.kind === kind)
+    const kind = nodeKindOf(nodeId, subscriptions)
+    return kind ? dl.store.all().filter((it) => it.kind === kind) : dl.store.all()
   }
   // 真实订阅(裸 id)——单源
   if (nodeId) {
@@ -113,8 +137,12 @@ interface DesktopState {
   expandedGroups: Record<string, boolean>
   loading: boolean
   refreshErrors: Record<string, string>
+  /** 热搜三栏右栏:当前选中的热搜词 + 其下微博流(weibo:hot 订阅内点击词条加载)。 */
+  hotWord: { word: string; items: MediaItem[] } | null
   init(): Promise<void>
   select(nodeId: string | null): void
+  /** 加载热搜词下的微博流(右栏显示)。无 weibo:hot 订阅时 no-op。 */
+  loadHotWord(word: string): Promise<void>
   toggleGroup(groupId: string): void
   selectArticle(id: string | null): void
   refresh(id: string): Promise<void>
@@ -133,8 +161,9 @@ let initPromise: Promise<void> | null = null
 
 export const useDesktop = create<DesktopState>((set, get) => {
   function refreshView(dl: DataLayer): void {
+    const { selectedNodeId, subscriptions } = get()
     set({
-      items: queryView(dl, get().selectedNodeId),
+      items: queryView(dl, selectedNodeId, subscriptions),
       // 全局统计:与选中节点无关(store 每次变更都同步,sidebar 计数恒定)。
       allItems: dl.store.all(),
     })
@@ -175,6 +204,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     expandedGroups: {},
     loading: false,
     refreshErrors: {},
+    hotWord: null,
 
     async init() {
       if (get().dl) return
@@ -194,9 +224,26 @@ export const useDesktop = create<DesktopState>((set, get) => {
     },
 
     select(nodeId) {
-      set({ selectedNodeId: nodeId, selectedArticleId: null })
+      // 切换节点即退出热搜词流(三栏左栏选中其他节点时右栏回到该节点视图)。
+      set({ selectedNodeId: nodeId, selectedArticleId: null, hotWord: null })
       const dl = get().dl
       if (dl) refreshView(dl)
+    },
+
+    async loadHotWord(word) {
+      const dl = get().dl
+      if (!dl) return
+      const hotSub = get().subscriptions.find((s) => s.channelKey === "weibo:hot")
+      if (!hotSub) return
+      // 先置空 items(加载态),成功后填充。
+      set({ hotWord: { word, items: [] } })
+      try {
+        const items = await dl.resolveHotWord(hotSub.id, word)
+        set({ hotWord: { word, items } })
+      } catch {
+        // 失败保留空列表,顶栏仍显示词,方便重试。
+        set({ hotWord: { word, items: [] } })
+      }
     },
 
     toggleGroup(groupId) {

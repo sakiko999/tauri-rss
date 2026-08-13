@@ -18,6 +18,8 @@ import { YoutubeChannel, YoutubeLiveChannel } from "./channels/youtube/index.ts"
 import { HuyaLiveChannel } from "./channels/huya/index.ts"
 import { DouyuLiveChannel } from "./channels/douyu/index.ts"
 import { DouyinLiveChannel } from "./channels/douyin/index.ts"
+import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
+import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
 
 /** 注册所有内置 channel。无守卫——由调用方(index.ts)保证幂等。 */
 export function registerBuiltinChannels(): void {
@@ -49,4 +51,12 @@ export function registerBuiltinChannels(): void {
   // ── douyu / douyin 直播(需 host.js 执行 cryptojs/abogus blob)──
   registerChannel(new DouyuLiveChannel())
   registerChannel(new DouyinLiveChannel())
+
+  // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──
+  registerChannel(new WeiboUserChannel())
+  registerChannel(new WeiboHotChannel())
+
+  // ── 小红书(用户笔记 + 发现页推荐;cookie 纯 HTTP 直连 SSR)──
+  registerChannel(new XhsUserChannel())
+  registerChannel(new XhsExploreChannel())
 }

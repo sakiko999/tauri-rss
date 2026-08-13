@@ -5,12 +5,13 @@
  * 解析宽高,而非完整下载。PNG 只需 64 字节;JPEG 的 SOF 段可能被 Exif/APP 段
  * 推到几百字节后 → 取 1024 字节足够。WebP/GIF 头也在前几十字节。
  *
- * 纯函数 + 依赖 globalThis.appHost.http(跨环境:node fetch / Tauri 隧道)。
- * 与 md5.ts 同范式:无第三方依赖。
+ * 依赖 globalThis.appHost.http(跨环境:node fetch / Tauri 隧道)。与 md5.ts
+ * 同范式:无第三方依赖。
  *
- * 优先用源返回的宽高(B站 API 的 pics width/height),缺省才预取——见
- * channels/bili/dynamic.ts 的用法。
+ * 优先用源返回的宽高(B站 API 的 pics width/height、小红书 SSR cover),缺省才
+ * 预取——fetchImageSize 单张,fillImageSizes 批量(瀑布流 channel 共用)。
  */
+import type { SocialImage } from "@tauri-playground/xml"
 
 /** 图片二进制尺寸,宽高像素。 */
 export interface ImageSize {
@@ -83,11 +84,17 @@ export function parseImageSize(buf: Uint8Array): ImageSize | null {
 /** 文件头请求大小:JPEG SOF 可能被 Exif 推到几百字节后,1024 稳妥。 */
 const HEADER_BYTES = 1024
 
+/** URL → 尺寸缓存(微博等图床 URL 稳定、宽高不变)。失败不缓存(可重试)。 */
+const sizeCache = new Map<string, ImageSize>()
+
 /**
  * 预取图片宽高:Range 请求文件头 + 解析。
  * 失败(非 206 / 无 body / 不可识别)返回 null——调用方据此退化到默认比例。
+ * 已解析过的 URL 直接命中缓存(跨刷新复用,避免每次订阅刷新都重发 Range)。
  */
 export async function fetchImageSize(url: string): Promise<ImageSize | null> {
+  const hit = sizeCache.get(url)
+  if (hit) return hit
   try {
     const res = await globalThis.appHost.http.request({
       url,
@@ -98,8 +105,30 @@ export async function fetchImageSize(url: string): Promise<ImageSize | null> {
     // Range 未支持时可能返回 200 全量;取前 HEADER_BYTES 字节仍可解析。
     const buf = res.body as Uint8Array | undefined
     if (!buf || buf.byteLength === 0) return null
-    return parseImageSize(buf.subarray(0, HEADER_BYTES))
+    const size = parseImageSize(buf.subarray(0, HEADER_BYTES))
+    if (size) sizeCache.set(url, size)
+    return size
   } catch {
     return null
   }
+}
+
+/**
+ * 批量补缺宽高的图(接受 `string | SocialImage`,string 旧协议形态跳过)。
+ * 缺宽高才发请求,命中缓存直接复用。多个 social channel 共用,不在各 channel
+ * 重复「filter 缺 → fetch → 回填」编排。
+ */
+export async function fillImageSizes(images: Array<SocialImage | string>): Promise<void> {
+  await Promise.all(
+    images
+      .filter((img): img is SocialImage => typeof img !== "string")
+      .filter((img) => !img.width || !img.height)
+      .map(async (img) => {
+        const size = await fetchImageSize(img.url)
+        if (size) {
+          img.width = size.width
+          img.height = size.height
+        }
+      }),
+  )
 }

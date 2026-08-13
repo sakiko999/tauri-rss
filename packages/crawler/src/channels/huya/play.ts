@@ -13,6 +13,7 @@
  */
 import type { Stream } from "@tauri-playground/xml"
 import { httpText } from "../../host.ts"
+import { extractInlineJson } from "../../utils/inline-json.ts"
 import { md5Hex } from "../../utils/md5.ts"
 
 const M_HUYA = "https://m.huya.com"
@@ -159,43 +160,15 @@ export async function resolveHuyaLivePlay(roomId: string): Promise<Stream[]> {
 }
 
 /**
- * 解析 `window.HNF_GLOBAL_INIT = {...}`(平衡括号提取,页面嵌套深时非贪婪正则会截断)。
- * channel 元数据解析与 play 解析共用。
+ * 解析 `window.HNF_GLOBAL_INIT = {...}`(共用 extractInlineJson 平衡括号截取,
+ * 页面嵌套深时非贪婪正则会截断)。channel 元数据解析与 play 解析共用。
+ * 虎牙 JSON 里混入函数表达式(`function(){}`),parse 前归一为空串。
  */
 export function parseHnfGlobalInit(html: string): Record<string, any> {
-  const eq = html.indexOf("HNF_GLOBAL_INIT")
-  if (eq < 0) throw new Error("Huya: window.HNF_GLOBAL_INIT not found")
-  const start = html.indexOf("{", eq)
-  if (start < 0) throw new Error("Huya: window.HNF_GLOBAL_INIT block not found")
-  // 平衡括号:从第一个 { 计数直到归零(跳过字符串内的括号)。
-  let depth = 0
-  let inString = false
-  let esc = false
-  let end = -1
-  for (let i = start; i < html.length; i++) {
-    const c = html[i]
-    if (inString) {
-      if (esc) esc = false
-      else if (c === "\\") esc = true
-      else if (c === '"') inString = false
-      continue
-    }
-    if (c === '"') inString = true
-    else if (c === "{") depth++
-    else if (c === "}") {
-      depth--
-      if (depth === 0) {
-        end = i
-        break
-      }
-    }
-  }
-  if (end < 0) throw new Error("Huya: HNF_GLOBAL_INIT unbalanced braces")
-  let raw = html.slice(start, end + 1)
-  raw = raw.replace(/function\s*\([^)]*\)\s*\{[\s\S]*?\}/g, '""')
-  try {
-    return JSON.parse(raw)
-  } catch {
-    throw new Error("Huya: failed to parse HNF_GLOBAL_INIT JSON")
-  }
+  return extractInlineJson(
+    html,
+    "HNF_GLOBAL_INIT",
+    (s) => s.replace(/function\s*\([^)]*\)\s*\{[\s\S]*?\}/g, '""'),
+    "Huya HNF_GLOBAL_INIT",
+  )
 }

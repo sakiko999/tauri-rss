@@ -11,6 +11,7 @@
  */
 import { initAppHost } from "./runtime.ts"
 export { initAppHost, setHostCaps } from "./runtime.ts"
+export { mediaReferrerFor } from "./media-referrer.ts"
 
 // 副作用:import 本包即初始化全局 appHost 门面。之后 inject 只填闭包值。
 // 应用 / example 都经本包的 inject 函数注入,因此门面在 crawler/core 访问前已就位。

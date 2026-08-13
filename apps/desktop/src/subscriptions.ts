@@ -94,4 +94,34 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     enabled: true,
     info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)
   },
+  // 微博(完整登录 cookie 在 core 层 DEFAULT_WEIBO_COOKIE,sourceInfoFor 自动注入)
+  {
+    id: "s-hot-weibo",
+    channelKey: "weibo:hot",
+    title: "微博实时热搜",
+    enabled: true,
+    info: {}, // 热搜三栏:中栏词条列表,点词条右栏该词微博流
+  },
+  {
+    id: "s-user-weibo",
+    channelKey: "weibo:user",
+    title: "微博 · 何炅",
+    enabled: true,
+    info: { uid: "1195230310" },
+  },
+  // 小红书(核心 cookie 在 core 层 DEFAULT_XHS_COOKIE,纯 HTTP SSR)
+  {
+    id: "s-explore-xhs",
+    channelKey: "xhs:explore",
+    title: "小红书发现页",
+    enabled: true,
+    info: {}, // 推荐内容,无参
+  },
+  {
+    id: "s-user-xhs",
+    channelKey: "xhs:user",
+    title: "小红书 · 小宇菇菇",
+    enabled: true,
+    info: { user_id: "593032945e87e77791e03696" },
+  },
 ]

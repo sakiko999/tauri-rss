@@ -28,6 +28,7 @@ import {
 import { cn } from "../lib/cn.ts"
 import { useTheme } from "../theme.ts"
 import { useDesktop, SMART_FEED_IDS, isSmartFeed, isTabNode, type ContentTab } from "../store.ts"
+import { useViewNavigate } from "../router"
 import { FeedTree, type FeedTreeNode } from "./FeedTree.tsx"
 import { AddFeedDialog } from "./AddFeedDialog.tsx"
 
@@ -56,10 +57,11 @@ export function Sidebar() {
     expandedGroups,
     loading,
     refreshErrors,
-    select,
     toggleGroup,
     refreshAll,
   } = useDesktop()
+  // 节点导航走 URL(路由权威):navigate → loader 同步 store.select。
+  const go = useViewNavigate()
   const { theme, toggle: toggleTheme } = useTheme()
   const [addOpen, setAddOpen] = useState(false)
 
@@ -155,7 +157,7 @@ export function Sidebar() {
             return (
               <button
                 key={tab.id}
-                onClick={() => select(`tab:${tab.id}`)}
+                onClick={() => go(`tab:${tab.id}`)}
                 className={cn(
                   // grid 固定两行:图标行(h-5)+ 计数行(h-3 固定占位,空内容不塌缩),
                   // 避免 flex 下 span 无内容高度为 0 导致各 tab 图标垂直错位。
@@ -190,7 +192,7 @@ export function Sidebar() {
               icon: SMART_ICONS[id],
             }))}
             selectedId={isSmartFeed(selectedNodeId) ? selectedNodeId : null}
-            onSelect={select}
+            onSelect={go}
           />
         </div>
 
@@ -203,7 +205,7 @@ export function Sidebar() {
             nodes={tree}
             // 订阅树只高亮真实订阅节点:tab 视图 / smart feed 选中时不传。
             selectedId={!isSmartFeed(selectedNodeId) && !isTabNode(selectedNodeId) ? selectedNodeId : null}
-            onSelect={select}
+            onSelect={go}
             onToggle={toggleGroup}
           />
         </div>

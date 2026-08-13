@@ -22,7 +22,8 @@ import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { createBilibiliClient } from "./client.ts"
-import { fetchImageSize } from "../../utils/img-size.ts"
+import { fillImageSizes } from "../../utils/img-size.ts"
+import { toHttps } from "../../utils/url.ts"
 
 const API = "https://api.bilibili.com"
 
@@ -57,11 +58,6 @@ interface DynItem {
   orig?: DynItem
 }
 
-/** http 封面升 https(bilibili 混用 http,浏览器混载会报错)。 */
-function httpsUrl(u: string): string {
-  return u.replace(/^http:\/\//, "https://")
-}
-
 /** 单个动态模块 → 可渲染字段。按 major 结构(opus/archive)分支,major.type 只是形态标签。 */
 function parseModule(d: DynModule): { content: string; images: SocialImage[]; likes: number; title: string } {
   const dyn = d.module_dynamic
@@ -78,7 +74,7 @@ function parseModule(d: DynModule): { content: string; images: SocialImage[]; li
     const pics = opus.pics ?? []
     for (const p of pics) {
       if (!p?.url) continue
-      const img: SocialImage = { url: httpsUrl(p.url) }
+      const img: SocialImage = { url: toHttps(p.url) }
       if (p.width) img.width = p.width
       if (p.height) img.height = p.height
       images.push(img)
@@ -89,7 +85,7 @@ function parseModule(d: DynModule): { content: string; images: SocialImage[]; li
   // 视频动态:major.archive → 标题 + 封面。desc 为空时正文用标题。
   if (archive) {
     title = archive.title ?? ""
-    if (archive.cover) images.push({ url: httpsUrl(archive.cover) })
+    if (archive.cover) images.push({ url: toHttps(archive.cover) })
     if (!content) content = archive.desc ?? ""
   }
 
@@ -142,21 +138,8 @@ export class BiliDynamicChannel implements RssChannel {
     // 先一次性 parse 全部(缓存结果,map 时复用)——兜底 fill 尺寸的必须是同一个对象,
     // 否则 fill 完再 map 又 parse 一次生成新对象,宽高丢失。
     const parsedItems = items.map((it) => parseItem(it))
-    // 补全缺宽高的图(archive 封面等):Range 预取文件头。失败静默(UI 退化默认比例)。
-    // 仅当存在缺宽高的图才发请求,避免每条动态都网络预取。
-    const needsSize = (img: SocialImage) => !img.width || !img.height
-    await Promise.all(
-      parsedItems.flatMap((p) => {
-        const missing = p.images.filter(needsSize)
-        return missing.map(async (img) => {
-          const size = await fetchImageSize(img.url)
-          if (size) {
-            img.width = size.width
-            img.height = size.height
-          }
-        })
-      }),
-    )
+    // 补全缺宽高的图(archive 封面等):Range 预取文件头,命中缓存复用。失败静默。
+    await Promise.all(parsedItems.map((p) => fillImageSizes(p.images)))
     return items.map((it, i): Social => {
       const idStr = it?.id_str ?? ""
       const mods = it?.modules

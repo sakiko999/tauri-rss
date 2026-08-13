@@ -128,9 +128,16 @@ const gridComponents: GridComponents = {
   Item: GridItem,
 }
 
-export function MediaList({ className }: { className?: string }) {
+export function MediaList({
+  className,
+  itemsOverride,
+}: {
+  className?: string
+  /** 外部传入 items(热搜三栏右栏 = 该词微博流);缺省从 store 读当前视图。 */
+  itemsOverride?: MediaItem[]
+}) {
   const {
-    items,
+    items: storeItems,
     subscriptions,
     selectedNodeId,
     loading,
@@ -140,12 +147,14 @@ export function MediaList({ className }: { className?: string }) {
     resolvePlay,
     resolveLivePlay,
     refreshErrors,
+    hotWord,
   } = useDesktop()
+  const items = itemsOverride ?? storeItems
 
   // 刷新按钮只对真实订阅显示:tab 视图节点 / smart feed 无「该订阅」可刷。
   const selectedIsSub = !!selectedNodeId && !isSmartFeed(selectedNodeId) && !isTabNode(selectedNodeId)
-  // 顶栏:视图真实身份 + 当前订阅刷新是否出错(活性点信号)。
-  const viewTitle = viewTitleFor(selectedNodeId, subscriptions)
+  // 顶栏:视图真实身份(热搜词流时 = 「热搜:{词}」)+ 当前订阅刷新是否出错(活性点信号)。
+  const viewTitle = viewTitleFor(selectedNodeId, subscriptions, hotWord)
   const hasRefreshError = !!refreshErrors[selectedNodeId ?? ""]
   // 空态指引:按场景给方向(错误→说明;订阅源→可刷新;tab/smart feed 本为空→引导)。
   const emptyHint = hasRefreshError

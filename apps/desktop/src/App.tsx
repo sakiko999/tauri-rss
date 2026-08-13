@@ -1,50 +1,86 @@
 /**
  * App — 三栏 RSS 阅读器(参考 tmp/rss-reader 的三栏布局)。
  *
- * 左栏 Sidebar(订阅/分组/smart feeds/tab),中栏按 kind 分发:
- *   - article → 文章列表(ArticleList) + 右栏详情(ArticleDetail),两栏;
- *   - video/audio/live/social → MediaItemView 卡片列表(MediaList),单栏。
- * showDetail 决策:**由选中节点类型驱动**(非内容猜测)——只有「明确的文章视图」
- *   才进文章两栏:选中 tab:article 或真实文章类订阅源(如 HN)。聚合视图
- *   (tab:all / 非 article 的 tab / smart feeds:today·unread·starred)**无论内容
- *   是否恰好全为 article 都走中栏 MediaList**——「今日」聚合不该被吞进文章三栏。
- *   空视图(items 加载中或无数据)不进两栏。
+ * 布局形态**由 URL 节点意图驱动**(非内容猜测),纯函数式分发:
+ *   - 第一步 cond(节点状态 → 类型标签):weibo:hot 订阅 → "hot";article 类节点
+ *     → "article";其余(聚合视图 / 非 article 订阅)→ "media";
+ *   - 第二步 cond(类型标签 → 视图组件):策略表分发到独立视图组件。
+ *
+ * URL 是「视图位置」唯一真相(nodeId 来自 path),store 只是数据镜像
+ * (selectedNodeId 由 router loader 同步)。聚合视图无论内容是否全是 article
+ * 都走 MediaList——「今日」不该被吞进文章三栏;加载中/空内容也不闪跳布局。
  */
 import { useEffect } from "react"
-import { isSmartFeed, isTabNode, useDesktop } from "./store"
+import { useParams } from "react-router"
+import { always, cond, equals, T } from "ramda"
+import type { MediaItem } from "@tauri-playground/core"
+import { nodeKindOf, useDesktop } from "./store"
 import { Sidebar } from "./components/Sidebar.tsx"
 import { ArticleList } from "./components/ArticleList.tsx"
 import { ArticleDetail } from "./components/ArticleDetail.tsx"
 import { MediaList } from "./components/MediaList.tsx"
+import { HotWordList } from "./components/HotWordList.tsx"
+
+/** 视图形态标签(cond 分发的输入/输出)。 */
+type ViewKind = "hot" | "article" | "media"
 
 export default function App() {
-  const { items, selectedNodeId, init } = useDesktop()
+  // URL 是「视图位置」权威:nodeId 来自 path,热搜词来自 search。
+  const { nodeId } = useParams()
+  const { subscriptions, hotWord, init } = useDesktop()
 
   useEffect(() => {
     init()
   }, [init])
 
-  // 面板决策:文章详情三栏 vs 各 kind 卡片单栏。
-  // 文章视图 = 选中 tab:article 或真实订阅源(聚合视图 tab:all/today 等不进三栏,
-  // 即使用户恰好看到的内容全是 article)。
-  // 空视图(items 加载中或无数据)显示卡片空态而非文章列表,避免加载完闪跳。
-  const selectedIsSub = !!selectedNodeId && !isSmartFeed(selectedNodeId) && !isTabNode(selectedNodeId)
-  const showDetail =
-    items.length > 0 &&
-    items.every((it) => it.kind === "article") &&
-    (selectedNodeId === "tab:article" || selectedIsSub)
+  // 节点意图:真实订阅(裸 id)→ 查订阅配置(查不到即非订阅节点)。
+  const sub = nodeId ? subscriptions.find((s) => s.id === nodeId) : undefined
+  // 节点固有 kind 由 store 统一给出(tab / smart feed / 订阅三分支)。
+  const kind = nodeKindOf(nodeId ?? null, subscriptions)
+
+  // 1. 节点状态 → 类型标签(cond 策略表,无布尔中间量):weibo:hot → hot;article → article。
+  const viewKind = cond<[string | undefined, string | undefined], ViewKind>([
+    [(key) => key === "weibo:hot", always("hot")],
+    [(_, kind) => kind === "article", always("article")],
+    [T, always("media")],
+  ])(sub?.channelKey, kind)
+
+  // 2. 类型标签 → 视图组件(策略表分发)。
+  const view = cond<[ViewKind], React.ReactNode>([
+    [equals<ViewKind>("hot"), always(<HotView hotWord={hotWord} />)],
+    [equals<ViewKind>("article"), always(<ArticleView />)],
+    [T, always(<MediaView />)],
+  ])(viewKind)
 
   return (
     <div className="flex h-screen bg-background font-sans overflow-hidden">
       <Sidebar />
-      {showDetail ? (
-        <>
-          <ArticleList />
-          <ArticleDetail />
-        </>
-      ) : (
-        <MediaList />
-      )}
+      {view}
     </div>
   )
+}
+
+/** 热搜三栏:中栏热搜词条 + 右栏该词 social 流。 */
+function HotView({ hotWord }: { hotWord: { word: string; items: MediaItem[] } | null }) {
+  return (
+    <>
+      <HotWordList />
+      <MediaList itemsOverride={hotWord?.items} />
+    </>
+  )
+}
+
+/** 文章三栏:中栏文章列表 + 右栏详情。 */
+function ArticleView() {
+  return (
+    <>
+      <ArticleList />
+      <ArticleDetail />
+    </>
+  )
+}
+
+/** 卡片单栏(聚合视图 / 非 article 订阅)。 */
+function MediaView() {
+  return <MediaList />
 }

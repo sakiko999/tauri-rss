@@ -16,7 +16,7 @@
  * `getChannel/listChannels/registerAllChannels` 都会先确保已注册。
  */
 import { registerBuiltinChannels } from "./register.ts"
-import type { Kind, Stream } from "@tauri-playground/xml"
+import type { Kind, Item, Stream } from "@tauri-playground/xml"
 
 /** channel 产出的 item 种类。 */
 export type { Kind } from "@tauri-playground/xml"
@@ -50,6 +50,12 @@ export interface LivePlayable {
   resolveLivePlay(roomId: string): Promise<Stream[]>
 }
 
+/** 热搜词懒加载能力(可选能力,有该能力的 source 才 implements)。 */
+export interface HotWordSource {
+  /** 热搜词 → 该词下内容流(core 经 serializeFeed/deserializeFeed 消费,无需再进 XML 语义)。 */
+  resolveHotWord(word: string): Promise<Item[]>
+}
+
 /**
  * 类型谓词:运行时探测 + 编译期收窄,消费侧(如 core)能力判定一处定义。
  * 类型由 channel 在 getSource 时 implements 声明静态保证,这里只是把编译期
@@ -61,6 +67,10 @@ export function isRssVideoSource(s: RssSource): s is RssSource & VideoPlayable {
 
 export function isRssLiveSource(s: RssSource): s is RssSource & LivePlayable {
   return "resolveLivePlay" in s
+}
+
+export function isHotWordSource(s: RssSource): s is RssSource & HotWordSource {
+  return "resolveHotWord" in s
 }
 
 /** 渠道参数字段(供 UI 生成"新增订阅"表单)。 */

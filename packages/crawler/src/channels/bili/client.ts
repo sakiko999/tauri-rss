@@ -12,7 +12,8 @@
 import * as R from "ramda"
 import type { Stream } from "@tauri-playground/xml"
 import { log } from "../../log.ts"
-import { now } from "../../host.ts"
+import { httpJson, now } from "../../host.ts"
+import { extractCookie } from "../../utils/cookie.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 
@@ -86,16 +87,7 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
       await ensureBuvid()
       if (cookie) extra.cookie = cookie
     }
-    const res = await globalThis.appHost.http.request({
-      url,
-      method: "GET",
-      responseType: "json",
-      headers: { "user-agent": BILIBILI_UA, referer, ...extra },
-    })
-    if (res.status < 200 || res.status >= 300) {
-      throw new Error(`bilibili HTTP ${res.status}: ${url}`)
-    }
-    const data = parseJson(res.body)
+    const data = await httpJson<Record<string, any>>(url, { "user-agent": BILIBILI_UA, referer, ...extra })
     if (data?.code !== undefined && data.code !== 0 && !opts.allowCodeError) {
       throw new Error(`bilibili API ${data.code}: ${data.message ?? "unknown error"}`)
     }
@@ -106,14 +98,10 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
     if (mixinKeyPromise) return mixinKeyPromise
     mixinKeyPromise = (async () => {
       // nav 不走 getJson(nav 合法返回 code:-101)
-      const res = await globalThis.appHost.http.request({
-        url: `${API_MAIN}/x/web-interface/nav`,
-        method: "GET",
-        responseType: "json",
-        headers: { "user-agent": BILIBILI_UA, referer },
+      const data = await httpJson<Record<string, any>>(`${API_MAIN}/x/web-interface/nav`, {
+        "user-agent": BILIBILI_UA,
+        referer,
       })
-      if (res.status < 200 || res.status >= 300) throw new Error(`bilibili nav HTTP ${res.status}`)
-      const data = parseJson(res.body)
       const img = data?.data?.wbi_img
       const imgKey = fileStem(strOr(img?.img_url) ?? "")
       const subKey = fileStem(strOr(img?.sub_url) ?? "")
@@ -135,14 +123,10 @@ export function createBilibiliClient(options: BilibiliClientOptions = {}): Bilib
       cookie = buvid3 ? userCookie : userCookie + `;buvid3=${buvid3};buvid4=${buvid4};`
       return
     }
-    const res = await globalThis.appHost.http.request({
-      url: `${API_MAIN}/x/frontend/finger/spi`,
-      method: "GET",
-      responseType: "json",
-      headers: { "user-agent": BILIBILI_UA, referer },
+    const parsed = await httpJson<Record<string, any>>(`${API_MAIN}/x/frontend/finger/spi`, {
+      "user-agent": BILIBILI_UA,
+      referer,
     })
-    if (res.status < 200 || res.status >= 300) throw new Error(`bilibili buvid HTTP ${res.status}`)
-    const parsed = parseJson(res.body)
     buvid3 = strOr(parsed?.data?.b_3) ?? ""
     buvid4 = strOr(parsed?.data?.b_4) ?? ""
     cookie = `buvid3=${buvid3};buvid4=${buvid4};`
@@ -332,21 +316,6 @@ function toAudioRep(a: Record<string, any>): MpdAudioRep {
     initRange: String(a?.SegmentBase?.Initialization ?? a?.segment_base?.Initialization ?? "0-836"),
     indexRange: String(a?.SegmentBase?.indexRange ?? a?.segment_base?.indexRange ?? "837-2400"),
   }
-}
-
-/** 从完整 cookie 串提取指定键的值(浏览器复制格式 `k=v; k2=v2`)。 */
-function extractCookie(cookie: string, key: string): string {
-  for (const part of cookie.split(";")) {
-    const i = part.indexOf("=")
-    if (i < 0) continue
-    if (part.slice(0, i).trim() === key) return part.slice(i + 1).trim()
-  }
-  return ""
-}
-
-function parseJson(body: unknown): Record<string, any> {
-  if (typeof body === "string") return JSON.parse(body) as Record<string, any>
-  return (body ?? {}) as Record<string, any>
 }
 
 function strOr(v: unknown): string | undefined {

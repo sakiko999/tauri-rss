@@ -8,13 +8,14 @@
  * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
-import { getChannel, isRssLiveSource, isRssVideoSource, registerAllChannels } from "@tauri-playground/crawler"
-import type { Stream } from "@tauri-playground/xml"
+import { getChannel, isHotWordSource, isRssLiveSource, isRssVideoSource, registerAllChannels } from "@tauri-playground/crawler"
+import { serializeFeed, type Stream } from "@tauri-playground/xml"
 import { deserializeFeed } from "./xml/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem } from "./types/media-item.ts"
+import type { AppSettings } from "./types/settings.ts"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
@@ -43,6 +44,8 @@ export interface DataLayer {
   resolvePlay(subscriptionId: string, itemId: string): Promise<Stream[]>
   /** 懒解析某直播房间的可播流(播放时调用;playUrls 带 expiry 签名,不缓存)。 */
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<Stream[]>
+  /** 热搜词 → 该词下内容流(desktop 热搜三栏右栏;不持久,直接返回 MediaItem[])。 */
+  resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]>
 }
 
 export function createDataLayer(): DataLayer {
@@ -56,11 +59,20 @@ export function createDataLayer(): DataLayer {
   const settings = createSettingsRepository(storage)
   const store = createMediaStore(now)
 
-  /** 合并 core 层默认 cookie 到订阅 info(订阅显式配的 cookie 优先)。bili live/video 自动带登录态。 */
-  async function sourceInfoFor(sub: { info: Record<string, string> }): Promise<Record<string, string>> {
+  /** 按 channelKey 前缀匹配的 core 层默认 cookie(bili/weibo/xhs)。订阅显式 info.cookie 永远优先。 */
+  function cookieFor(channelKey: string, s: AppSettings): string | undefined {
+    if (channelKey.startsWith("bili:")) return s.bilibiliCookie
+    if (channelKey.startsWith("weibo:")) return s.weiboCookie
+    if (channelKey.startsWith("xhs:")) return s.xhsCookie
+    return undefined
+  }
+
+  /** 合并 core 层默认 cookie 到订阅 info。 */
+  async function sourceInfoFor(sub: { channelKey: string; info: Record<string, string> }): Promise<Record<string, string>> {
     const s = await settings.get()
-    if (!s.bilibiliCookie || sub.info["cookie"]) return sub.info
-    return { ...sub.info, cookie: s.bilibiliCookie }
+    const cookie = cookieFor(sub.channelKey, s)
+    if (!cookie || sub.info["cookie"]) return sub.info
+    return { ...sub.info, cookie }
   }
 
   async function refresh(subscriptionId: string): Promise<RefreshResult> {
@@ -121,6 +133,23 @@ export function createDataLayer(): DataLayer {
     return source.resolveLivePlay(roomId)
   }
 
+  async function resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) throw new Error("subscription not found")
+    const channel = getChannel(sub.channelKey)
+    if (!channel) throw new NoChannelError(sub.channelKey)
+    // 能力在 source 上:实例化源 → 探测是否有 resolveHotWord。
+    const info = await sourceInfoFor(sub)
+    const source = channel.getSource(info)
+    if (!isHotWordSource(source)) {
+      throw new Error(`channel ${sub.channelKey} does not support hot word resolution`)
+    }
+    const items = await source.resolveHotWord(word)
+    // 复用全链路 XML 契约:crawler Item[] → XML → core MediaItem[]。
+    const xml = serializeFeed(items, { channelTitle: channel.name })
+    return deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
+  }
+
   return {
     subscriptions: repo,
     reading,
@@ -134,5 +163,6 @@ export function createDataLayer(): DataLayer {
     refresh,
     resolvePlay,
     resolveLivePlay,
+    resolveHotWord,
   }
 }

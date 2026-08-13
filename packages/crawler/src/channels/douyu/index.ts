@@ -12,8 +12,9 @@ import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "../../host.ts"
+import { httpGet, httpJson, now } from "../../host.ts"
 import { log } from "../../log.ts"
+import { toInt } from "../../utils/number.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 
 
@@ -191,45 +192,22 @@ export class DouyuLiveChannel implements RssChannel {
   }
 
   private async getRoomInfo(roomId: string): Promise<Record<string, any>> {
-    const res = await globalThis.appHost.http.request({
-      url: `${BASE}/betard/${roomId}`,
-      method: "GET",
-      responseType: "json",
-      headers: { "user-agent": UA, referer: `${BASE}/${roomId}` },
-    })
+    const res = await httpGet(`${BASE}/betard/${roomId}`, { "user-agent": UA, referer: `${BASE}/${roomId}` })
     if (res.status < 200 || res.status >= 300) throw new Error(`douyu HTTP ${res.status}: betard/${roomId}`)
-    const body = res.body
+    const text = res.bodyText
     // betard 对风控/停播房间可能返回 HTML 提示页(反爬),此时 JSON.parse 报错难读。
-    if (typeof body === "string" && body.trimStart().startsWith("<")) {
+    if (text.trimStart().startsWith("<")) {
       throw new Error(`douyu: 房间 ${roomId} 未返回房间信息(疑似风控,需浏览器环境验证)`)
     }
-    const parsed = objBody(body)
-    // betard 可能双编码(字符串套字符串)。
+    // betard 可能双编码(字符串套字符串),解析后仍是 string 再解一层。
+    const parsed = JSON.parse(text) as Record<string, any>
     const obj: Record<string, any> = typeof parsed === "string" ? (JSON.parse(parsed) as Record<string, any>) : parsed
     return (obj.room ?? obj) as Record<string, any>
   }
 
   private async getJson(url: string): Promise<Record<string, any>> {
-    const res = await globalThis.appHost.http.request({
-      url,
-      method: "GET",
-      responseType: "json",
-      headers: { "user-agent": UA },
-    })
-    if (res.status < 200 || res.status >= 300) throw new Error(`douyu HTTP ${res.status}: ${url}`)
-    // backend 已按 responseType:"json" 解析,body 是对象。
-    return objBody(res.body)
+    return httpJson<Record<string, any>>(url, { "user-agent": UA })
   }
-}
-
-function objBody(body: unknown): Record<string, any> {
-  if (typeof body === "string") return JSON.parse(body) as Record<string, any>
-  return (body ?? {}) as Record<string, any>
-}
-
-function toInt(v: unknown): number | undefined {
-  const n = Number(v)
-  return Number.isFinite(n) && v !== null && v !== undefined && v !== "" ? n : undefined
 }
 
 function strOr(v: unknown): string | undefined {

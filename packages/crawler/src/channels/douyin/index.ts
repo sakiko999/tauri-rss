@@ -14,8 +14,10 @@ import type { Item, Live, Stream } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "../../host.ts"
+import { httpJson, httpText, now } from "../../host.ts"
 import { log } from "../../log.ts"
+import { parseJsonSafe } from "../../utils/inline-json.ts"
+import { toInt } from "../../utils/number.ts"
 import { ABOGUS_JS } from "./abogus.ts"
 
 
@@ -90,20 +92,16 @@ export class DouyinLiveChannel implements RssChannel {
 
     // reflow headers 复刻 dart _getRoomDataByRoomId(douyin_site.dart:522)——用默认 headers
     // (Authority: live.douyin.com),不设 webcast.amemv.com authority。
-    const r = await globalThis.appHost.http.request({
-      url: `https://webcast.amemv.com/webcast/room/reflow/info/?type_id=0&live_id=1&room_id=${longId}&sec_user_id=&version_code=99.99.99&app_id=6383`,
-      method: "GET",
-      responseType: "json",
-      headers: {
+    const body = await httpJson<Record<string, any>>(
+      `https://webcast.amemv.com/webcast/room/reflow/info/?type_id=0&live_id=1&room_id=${longId}&sec_user_id=&version_code=99.99.99&app_id=6383`,
+      {
         "user-agent": UA,
         referer: LIVE,
         authority: "live.douyin.com",
         cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
       },
-    })
-    if (r.status < 200 || r.status >= 300) throw new Error(`douyin reflow HTTP ${r.status}`)
-    const body = (r.body ?? {}) as Record<string, any>
-    const detail = (body.data?.room ?? body.data ?? {}) as Record<string, any>
+    )
+    const detail = ((body ?? {}).data?.room ?? (body ?? {}).data ?? {}) as Record<string, any>
     return parseReflowStreams((detail.stream_url ?? {}) as Record<string, any>)
   }
 
@@ -114,19 +112,12 @@ export class DouyinLiveChannel implements RssChannel {
    * (douyin_site.dart:451)——动态 Referer(含房间号),cookie 用 warmup 或默认 ttwid。
    */
   private async resolveFromHtml(roomId: string): Promise<Stream[]> {
-    const res = await globalThis.appHost.http.request({
-      url: `${LIVE}/${roomId}`,
-      method: "GET",
-      responseType: "text",
-      headers: {
-        "user-agent": UA,
-        referer: `${LIVE}/${roomId}`,
-        authority: "live.douyin.com",
-        cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
-      },
+    const html = await httpText(`${LIVE}/${roomId}`, {
+      "user-agent": UA,
+      referer: `${LIVE}/${roomId}`,
+      authority: "live.douyin.com",
+      cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
     })
-    if (res.status < 200 || res.status >= 300) throw new Error(`douyin HTML HTTP ${res.status}: ${LIVE}/${roomId}`)
-    const html = typeof res.body === "string" ? res.body : String(res.body)
     const streams = parseHtmlPullStreams(html)
     if (!streams.length) throw new Error(`douyin HTML: 未找到可播流(房间 ${roomId} 可能未开播)`)
     return streams
@@ -205,22 +196,17 @@ export class DouyinLiveChannel implements RssChannel {
 
   private async getJson(url: string, referer?: string): Promise<Record<string, any>> {
     await this.ensureCookie()
-    const res = await globalThis.appHost.http.request({
-      url,
-      method: "GET",
-      responseType: "json",
-      headers: {
-        "user-agent": UA,
-        referer: referer ?? LIVE,
-        authority: "live.douyin.com",
-        cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
-      },
+    const json = await httpJson<Record<string, any>>(url, {
+      "user-agent": UA,
+      referer: referer ?? LIVE,
+      authority: "live.douyin.com",
+      cookie: this.cookieJar || DEFAULT_TTWID_COOKIE,
     })
-    if (res.status < 200 || res.status >= 300) throw new Error(`douyin HTTP ${res.status}: ${url.slice(0, 120)}`)
-    // backend 已按 responseType:"json" 解析;空 body 时抛错(抖音常无合法 ttwid 返回空)。
-    const body = res.body
-    if (body === undefined || body === null || body === "") throw new Error(`douyin empty body for ${url.slice(0, 80)}`)
-    const json = typeof body === "string" ? (JSON.parse(body) as Record<string, any>) : (body as Record<string, any>)
+    // 空 body(抖音常无合法 ttwid 返回空) → 抛错,不静默产空元数据。
+    // httpJson 空 body 返回 null(「无数据」语义),无需 typeof 收窄。
+    if (json == null) {
+      throw new Error(`douyin empty body for ${url.slice(0, 80)}`)
+    }
     // 抖音内容级错误:HTTP 200 但 body 带 status_code(如 4001038「内容无法查看」)。
     // 不抛会静默产出空元数据 → UI「直播没反应」且无法定位。抛清晰错误。
     const code = json?.status_code
@@ -261,11 +247,6 @@ export class DouyinLiveChannel implements RssChannel {
   }
 }
 
-function toInt(v: unknown): number | undefined {
-  const n = Number(v)
-  return Number.isFinite(n) && v !== null && v !== undefined && v !== "" ? n : undefined
-}
-
 /** 过滤 IPv6 host 的直链(WebView 请求 IPv6 CDN 常 404;优先 IPv4/域名)。 */
 function filterPlayable(streams: Stream[]): Stream[] {
   return streams.filter((s) => !/\[[0-9a-f:]+\]/.test(s.url))
@@ -297,7 +278,7 @@ function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
   // level 降序(dart: qualities 按 level 从高到低;手写 sort 语义等价 R.sortWith descend)。
   const sorted = R.sortWith([R.descend((q: Record<string, any>) => toInt(q?.level) ?? 0)], qualities)
   // stream_data 可能缺失或非 JSON → 走 flv_pull_url 兜底。
-  const streamData = safeParseJson(String(pullData?.stream_data ?? "").trimStart().startsWith("{") ? String(pullData?.stream_data) : "")
+  const streamData = parseJsonSafe(String(pullData?.stream_data ?? "").trimStart().startsWith("{") ? String(pullData?.stream_data) : "")
 
   // 每档 quality → 一条 Stream(flv 优先,hls 兜底)。两条来源路径产出同一 shape:
   //   主路径:data[sdk_key].main.{flv,hls}(运行时动态键,sdk_key 来自 quality);
@@ -326,14 +307,6 @@ function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
       }
 
   return filterPlayable(R.chain(toStreams, sorted))
-}
-
-function safeParseJson(raw: string): Record<string, any> | null {
-  try {
-    return JSON.parse(raw) as Record<string, any>
-  } catch {
-    return null
-  }
 }
 
 /**
