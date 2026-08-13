@@ -21,7 +21,7 @@ import {
   type SubscriptionGroup,
 } from "@tauri-playground/core"
 import { TEST_SUBSCRIPTIONS } from "./subscriptions"
-import { getChannel } from "@tauri-playground/crawler"
+import { getChannel, type DanmakuStream } from "@tauri-playground/crawler"
 
 /** 内容 tab:all 显示全部,其余按 kind 过滤中栏。tab 是「默认视图节点」的 kind 部分。 */
 export type ContentTab = "all" | "article" | "video" | "audio" | "live" | "social"
@@ -153,6 +153,8 @@ interface DesktopState {
   resolvePlay(subscriptionId: string, itemId: string): Promise<MediaStream[]>
   /** 懒解析直播可播流(播放时调用)。 */
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<MediaStream[]>
+  /** 获取某媒体的弹幕流(id = itemId 视频 / roomId 直播;订阅即开始,全量或增量由实现方定)。 */
+  openDanmaku(subscriptionId: string, id: string): Promise<DanmakuStream>
   /** 新增订阅(给定 channelKey + info),写入并刷新。返回新订阅 id。 */
   addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string | null>
 }
@@ -305,6 +307,12 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const dl = get().dl
       if (!dl) throw new Error("DataLayer 未初始化")
       return dl.resolveLivePlay(subscriptionId, roomId)
+    },
+
+    async openDanmaku(subscriptionId, id) {
+      const dl = get().dl
+      if (!dl) throw new Error("DataLayer 未初始化")
+      return dl.openDanmaku(subscriptionId, id)
     },
 
     async addSubscription(channelKey, title, info) {

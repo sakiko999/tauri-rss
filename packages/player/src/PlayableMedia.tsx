@@ -16,6 +16,7 @@
  */
 import { useEffect, useRef, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
+import type { DanmakuStream } from "@tauri-playground/crawler"
 import { useMediaStream } from "./hooks/useMediaStream.ts"
 import {
   isProgressiveAudio,
@@ -62,6 +63,7 @@ export function PlayableMedia({
   className,
   onError,
   autoResolve = true,
+  danmaku,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -71,6 +73,8 @@ export function PlayableMedia({
   onError?: (err: unknown) => void
   /** 挂载后立即懒解析起播(默认开启,无需点「播放」按钮)。 */
   autoResolve?: boolean
+  /** 弹幕流(App 层注入;仅视频分支生效,音频无画面不接)。 */
+  danmaku?: DanmakuStream
 }) {
   const [resolved, setResolved] = useState<MediaStream[] | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -242,6 +246,7 @@ export function PlayableMedia({
           setPlayError(new Error(`原生媒体错误(code=${code ?? "?"}): ${msg}`))
           onError?.(new Error(msg))
         }}
+        danmaku={danmaku}
       />
     )
   }

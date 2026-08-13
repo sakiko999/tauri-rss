@@ -8,14 +8,16 @@
  * 关闭:ESC / 遮罩点击 / ✕ 按钮。播放器生命周期随挂载卸载(懒解析只在打开时发生)。
  * 打开期间禁用页面滚动(overflow hidden),关闭恢复。
  */
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import type { MediaItem, MediaStream } from "@tauri-playground/core"
+import type { DanmakuStream } from "@tauri-playground/crawler"
 import { PlayableMedia } from "@tauri-playground/player"
 
 export function ExpandedPlayer({
   item,
   resolvePlay,
   resolveLivePlay,
+  openDanmaku,
   onClose,
 }: {
   item: MediaItem
@@ -23,6 +25,8 @@ export function ExpandedPlayer({
   resolvePlay: (itemId: string) => Promise<MediaStream[]>
   /** 懒解析 live 可播流。 */
   resolveLivePlay: (roomId: string) => Promise<MediaStream[]>
+  /** 获取媒体弹幕流(video 传 item.id / live 传 roomId;不支持的 channel 抛错,静默无弹幕)。 */
+  openDanmaku: (id: string) => Promise<DanmakuStream>
   onClose: () => void
 }) {
   // 打开模态的这次点击本身即手势 → 手势内解锁 autoplay 已在 MediaList.openExpanded
@@ -44,6 +48,34 @@ export function ExpandedPlayer({
   }, [])
 
   const resolve = item.kind === "live" ? () => resolveLivePlay(item.roomId) : () => resolvePlay(item.id)
+  // 弹幕:video(用 item.id)/ live(用 item.roomId)统一取弹幕流,消费者只管订阅,
+  // 不关心全量还是增量。openDanmaku 是 async(core 探测 channel)→ stopped flag
+  // 先拦,初始化完成后再订阅;失败静默无弹幕。useMemo 保引用稳定——DanmakuLayer
+  // 的订阅 effect 依赖 stream 身份,若每次渲染新函数会反复退订/重订阅。
+  const danmakuId = item.kind === "live" ? item.roomId : item.kind === "video" ? item.id : undefined
+  const danmaku: DanmakuStream | undefined = useMemo(
+    () =>
+      danmakuId
+        ? (onItems) => {
+            let stopped = false
+            let unsub: (() => void) | undefined
+            void openDanmaku(danmakuId)
+              .then((stream) => {
+                // 已退订(播放器已关)→ 不订阅,防 openDanmaku resolve 后追建连接。
+                if (stopped) return
+                // 记住真 stream 的退订函数:cleanup 时一并调用,停轮询/断开 WS
+                // (live poll 如 YouTube live chat 靠它清 timer + cancelled 才真正停)。
+                unsub = stream(onItems)
+              })
+              .catch(() => {})
+            return () => {
+              stopped = true
+              unsub?.()
+            }
+          }
+        : undefined,
+    [danmakuId, openDanmaku],
+  )
   // 初始流:仅 video/audio 有 stream 字段(联合类型收窄)。
   const initialStream =
     item.kind === "video" || item.kind === "audio" ? (item.stream ? [item.stream] : undefined) : undefined
@@ -86,6 +118,7 @@ export function ExpandedPlayer({
             resolve={resolve}
             autoResolve
             onError={(err) => console.warn("[ExpandedPlayer] 播放失败:", err)}
+            danmaku={danmaku}
           />
         </div>
 

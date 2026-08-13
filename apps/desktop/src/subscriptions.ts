@@ -85,6 +85,36 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     enabled: true,
     info: { roomId: "217952067344" },
   },
+  // 直播热门(开播房间发现源):无参订阅,列表即当前开播房间;
+  // source 委托同平台 live 的 resolveLivePlay/getDanmaku,点卡片即可播放+弹幕。
+  {
+    id: "s-live-hot-bili",
+    channelKey: "bili:live:hot",
+    title: "bilibili 直播热门",
+    enabled: true,
+    info: {}, // 需 cookie 防 getListByArea -352(core DEFAULT_BILIBILI_COOKIE 自动注入)
+  },
+  {
+    id: "s-live-hot-douyu",
+    channelKey: "live:douyu:hot",
+    title: "斗鱼直播热门",
+    enabled: true,
+    info: {},
+  },
+  {
+    id: "s-live-hot-huya",
+    channelKey: "live:huya:hot",
+    title: "虎牙直播热门",
+    enabled: true,
+    info: {},
+  },
+  {
+    id: "s-live-hot-douyin",
+    channelKey: "live:douyin:hot",
+    title: "抖音直播热门",
+    enabled: true,
+    info: {},
+  },
   // social:需登录 cookie(未登录 bili 动态接口返回 code:-101)。core 层
   // DEFAULT_BILIBILI_COOKIE 经 sourceInfoFor 自动注入,桌面端开箱即用。
   {

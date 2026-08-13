@@ -19,9 +19,11 @@ export {
 export { useVideoElement, bindFullscreen } from "./hooks/useVideoElement.ts"
 export type { VideoPlayState, VideoOps, FullscreenApi, BufferedRange } from "./hooks/useVideoElement.ts"
 export { VideoShell } from "./VideoShell.tsx"
+export { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
 export { AudioShell } from "./AudioShell.tsx"
 export { PlayerControls } from "./PlayerControls.tsx"
 export type { MediaStream } from "@tauri-playground/core"
+export type { DanmakuStream } from "@tauri-playground/crawler"
 
 // ── MediaChrome 式独立控件(可自由组合)────────────────────────
 export {

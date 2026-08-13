@@ -8,11 +8,13 @@
  *   - useVideoElement       媒体状态 + 操作
  */
 import { useEffect, useRef, useState } from "react"
+import type { DanmakuStream } from "@tauri-playground/crawler"
 import { bindFullscreen, type FullscreenApi, useVideoElement } from "./hooks/useVideoElement.ts"
 import { useAutoHideControls } from "./hooks/useAutoHideControls.ts"
 import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"
 import { PlayerControls } from "./PlayerControls.tsx"
 import { PlayIcon, SpinnerIcon } from "./icons.tsx"
+import { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
 
 export function VideoShell({
   videoRef,
@@ -24,6 +26,7 @@ export function VideoShell({
   activeQuality,
   onQuality,
   onMediaError,
+  danmaku,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   /** 是否由 useMediaStream(hls/flv/dash)驱动(决定直播判定)。 */
@@ -38,6 +41,8 @@ export function VideoShell({
   onQuality: (rate: number) => void
   /** 原生 video 加载失败(403/断流/格式不支持)上报——让 PlayableMedia 弹 playError UI。 */
   onMediaError?: (code: number | undefined, msg: string) => void
+  /** 弹幕流(App 层注入;无弹幕平台传 undefined 不渲染层)。 */
+  danmaku?: DanmakuStream
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { state, ops } = useVideoElement(videoRef, isStreaming, onMediaError)
@@ -102,6 +107,10 @@ export function VideoShell({
         playsInline
         preload="auto"
       />
+
+      {/* 弹幕层:video 之上、控件之下。有 timeMs 的按 currentTime 窗口发射(点播),
+          无 timeMs 的实时追加(live);点播暂停冻结,live 暂停照收。 */}
+      {danmaku && <DanmakuLayer stream={danmaku} currentTime={state.currentTime} live={state.live} paused={state.paused} />}
 
       {showSpinner && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">

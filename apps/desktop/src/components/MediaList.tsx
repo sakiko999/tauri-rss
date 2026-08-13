@@ -146,6 +146,7 @@ export function MediaList({
     toggleStar,
     resolvePlay,
     resolveLivePlay,
+    openDanmaku,
     refreshErrors,
     hotWord,
   } = useDesktop()
@@ -298,6 +299,7 @@ export function MediaList({
           item={expandedItem}
           resolvePlay={(itemId) => resolvePlay(expandedItem.subscriptionId, itemId)}
           resolveLivePlay={(roomId) => resolveLivePlay(expandedItem.subscriptionId, roomId)}
+          openDanmaku={(id) => openDanmaku(expandedItem.subscriptionId, id)}
           onClose={() => setExpandedItem(null)}
         />
       )}
