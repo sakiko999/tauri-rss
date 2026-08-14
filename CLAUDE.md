@@ -193,6 +193,11 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   xhshow Python 库的 TS 移植，纯算无 eval → webview CSP 安全）+ **登录 cookie
   （web_session）**（匿名 406、未登录 code:-101）；签名种子 `a1` 取自会话 cookie。
   实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
+  ⚠️ **签名已过时(2026-08)**:xhshow-js fork(mns0301)的 x-s 被服务器拒(HTTP 461),
+  xhs 2026-07 升级签名;且签名**约 1 月~1 季度一改 + 按账号/会话灰度分发**,
+  b1 指纹需真实浏览器——纯算法维护成本高。**决策:降级 SSR 匿名刷新**(explore
+  快照+刷新、不做翻页;user 不可用),不维护签名 API。若未来走浏览器注入签名
+  (Playwright/WebView)另议。细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
 - **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
   空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
   默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
