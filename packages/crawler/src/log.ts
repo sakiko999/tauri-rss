@@ -72,6 +72,14 @@ const crawlerLog = createLogDomain("crawler", {
       level: "warn",
       text: (ctx: { source: string; message: string }) => `抓取失败 ${ctx.source}: ${ctx.message}`,
     },
+    fetchMore: {
+      level: "debug",
+      text: (ctx: { source: string; cursor?: string }) => `翻页 ${ctx.source}${ctx.cursor ? ` cursor=${ctx.cursor}` : ""}`,
+    },
+    fetchMoreOk: {
+      level: "info",
+      text: (ctx: { source: string; count: number }) => `翻页到 ${ctx.count} 条 · ${ctx.source}`,
+    },
   },
 })
 

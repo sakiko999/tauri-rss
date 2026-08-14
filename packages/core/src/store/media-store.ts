@@ -16,6 +16,8 @@ export interface MediaStore {
   query(query?: MediaQuery): MediaItem[]
   /** 用一次新抓取替换某订阅的全部条目。 */
   replace(subscriptionId: string, items: MediaItem[]): void
+  /** 追加到某订阅现有条目后(分页加载更多;同订阅内按 id 去重)。 */
+  append(subscriptionId: string, items: MediaItem[]): void
   /** 按 id patch 单条(如标已读、收藏)。 */
   patch(id: string, patch: Partial<MediaItem>): void
   /** 订阅 store 变更;返回退订函数。 */
@@ -58,6 +60,14 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
 
     replace(subscriptionId, next) {
       items = [...items.filter((it) => it.subscriptionId !== subscriptionId), ...next]
+      emit()
+    },
+
+    append(subscriptionId, next) {
+      const existingIds = new Set(items.filter((it) => it.subscriptionId === subscriptionId).map((it) => it.id))
+      const fresh = next.filter((it) => !existingIds.has(it.id))
+      if (!fresh.length) return
+      items = [...items, ...fresh]
       emit()
     },
 

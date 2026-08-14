@@ -10,7 +10,7 @@
  */
 import type { Item, SerializeOptions } from "@tauri-playground/xml"
 import { serializeFeed } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, RssSource } from "../index.ts"
+import type { DanmakuPlayable, LivePlayable, Pageable, RssSource } from "../index.ts"
 import { log } from "../log.ts"
 
 /**
@@ -40,16 +40,44 @@ export function apiFetch(
 }
 
 /**
+ * api channel 的 fetchMore 装配:**数值游标**分页(起步 first、步进 step、本页为空即止)。
+ * 镜像 apiFetch 的序列化/日志/返回形状,把 4 个 hot channel 复制粘贴的翻页样板收敛到这。
+ * 只做通用机制;游标语义(页码 page / 偏移 offset)由调用方以 first/step 表达。
+ */
+export function apiFetchMore(
+  fetchPage: (n: number) => Promise<Item[]>,
+  channelOptions: () => SerializeOptions,
+  opts: { first: number; step: number },
+): (cursor?: string) => Promise<{ xml: string; cursor?: string }> {
+  return async (cursor) => {
+    const n = cursor ? Number(cursor) : opts.first
+    const o = channelOptions()
+    const source = o.channelTitle ?? ""
+    log.crawler.fetchMore({ source, cursor })
+    const items = await fetchPage(n)
+    const xml = serializeFeed(items, o)
+    log.crawler.fetchMoreOk({ source, count: items.length })
+    return { xml, ...(items.length ? { cursor: String(n + opts.step) } : {}) }
+  }
+}
+
+/**
  * hot channel 装配:热门源 fetch 是自家接口,懒解析/弹幕能力委托同平台 live source。
  * bili/douyin/douyu/huya 的 hot 都这个形态(对外独立 channel,机制复用主 channel)。
+ * base 的 resolveLivePlay/getDanmaku 是自包含闭包(只捕获 info),直接透传省一层包装。
  */
 export function liveHotSource(
   base: RssSource & LivePlayable & DanmakuPlayable,
-  overrides: { fetch: () => Promise<string> },
-): RssSource & LivePlayable & DanmakuPlayable {
+  overrides: {
+    fetch: () => Promise<string>
+    /** 翻页能力(直播 hot 加载更多)。hot 源都支持分页,必传。 */
+    fetchMore: (cursor?: string) => Promise<{ xml: string; cursor?: string }>
+  },
+): RssSource & LivePlayable & DanmakuPlayable & Pageable {
   return {
     fetch: overrides.fetch,
-    resolveLivePlay: (roomId) => base.resolveLivePlay(roomId),
-    getDanmaku: (roomId) => base.getDanmaku(roomId),
+    fetchMore: overrides.fetchMore,
+    resolveLivePlay: base.resolveLivePlay,
+    getDanmaku: base.getDanmaku,
   }
 }

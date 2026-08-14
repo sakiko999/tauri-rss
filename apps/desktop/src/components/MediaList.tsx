@@ -122,10 +122,65 @@ const GridItem = forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>
   },
 )
 
+/**
+ * 模块级稳定 Footer(加载更多)。**自己订阅 useDesktop**——visible/loading/ended 变化由
+ * zustand 驱动 re-render(不走模块级变量:Virtuoso 只在 totalCount 变化时重建 Footer,
+ * 模块级变量变化不触发它,曾致按钮空白)。触底自动加载:Footer 进入视口(提前 200px)
+ * 即翻页(无限滚动,不依赖 VirtuosoGrid endReached——实测 Grid 下未触发);按钮保留作手动兜底。
+ */
+function LoadMoreFooter() {
+  const selectedNodeId = useDesktop((s) => s.selectedNodeId)
+  const canLoadMore = useDesktop((s) => s.canLoadMore)
+  const loadMoreEnded = useDesktop((s) => s.loadMoreEnded)
+  const loadingMore = useDesktop((s) => s.loadingMore)
+  const loadMore = useDesktop((s) => s.loadMore)
+  const nodeId = selectedNodeId ?? ""
+  const visible = !!nodeId && !isSmartFeed(nodeId) && !isTabNode(nodeId) && !!canLoadMore[nodeId]
+  const ended = !!loadMoreEnded[nodeId]
+  const ref = useRef<HTMLDivElement>(null)
+  const loadingRef = useRef(loadingMore)
+  loadingRef.current = loadingMore
+
+  // 触底自动加载:Footer 进入视口即翻页(提前 200px,滚动近底预载,不中断)。
+  // IO 只挂一次(依赖 visible/ended/loadMore);loading 用 ref 防重入,避免 IO 重建。
+  useEffect(() => {
+    const el = ref.current
+    if (!el || !visible || ended) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !loadingRef.current) loadMore()
+      },
+      { rootMargin: "200px 0px" },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [visible, ended, loadMore])
+
+  return (
+    <div ref={ref} className="flex justify-center py-4">
+      {visible ? (
+        loadingMore ? (
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        ) : ended ? (
+          <span className="text-xs text-muted-foreground">已加载全部</span>
+        ) : (
+          <button
+            onClick={loadMore}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            加载更多
+          </button>
+        )
+      ) : null}
+    </div>
+  )
+}
+
 /** 模块级稳定 components 对象(Virtuoso 要求 stable identity)。 */
 const gridComponents: GridComponents = {
   List: GridList,
   Item: GridItem,
+  Footer: LoadMoreFooter,
 }
 
 export function MediaList({

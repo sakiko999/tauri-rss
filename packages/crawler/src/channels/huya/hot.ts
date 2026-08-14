@@ -1,18 +1,19 @@
 /**
- * huya 直播热门 —— cache.php LiveList(无鉴权)一次返回一页开播房间。
+ * huya 直播热门 —— cache.php LiveList(无鉴权),支持分页加载更多。
  *
  * 复刻 dart getRecommendRooms(huya_site.dart):`m=LiveList&do=getLiveListByPage&tagAll=0`,
  * `data.datas[]` → {profileRoom, introduction/roomName, nick, screenshot, totalCount}。
+ * 分页:**页码制**(page 递增),`isPageable` 探测 → fetchMore 翻页(本页为空 = 没有更多)。
  *
  * 能力:对外是独立 channel(无参,热门发现);内部**委托同平台 HuyaLiveChannel**
  * 的 resolveLivePlay/getDanmaku(hot 是「特殊的 live channel」——外部区分开,机制复用)。
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, liveHotSource } from "../factory.ts"
+import type { DanmakuPlayable, LivePlayable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import { apiFetch, apiFetchMore, liveHotSource } from "../factory.ts"
 import { httpJson, now } from "../../host.ts"
-import { HuyaLiveChannel } from "./index.ts"
+import { HuyaLiveChannel } from "./live.ts"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
@@ -23,15 +24,17 @@ export class HuyaLiveHotChannel implements RssChannel {
   readonly kind = "live" as const
   readonly defaultInfo = {}
   /** 内部持同平台 live channel,委托其懒解析/弹幕能力(对外 channel 身份仍是 hot)。 */
-  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
+  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable & Pageable {
     return liveHotSource(new HuyaLiveChannel().getSource(info), {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetch(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
+      // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
+      fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), { first: 2, step: 1 }),
     })
   }
 
-  private async fetchItems(_info: SourceInfo): Promise<Item[]> {
+  private async fetchItems(_info: SourceInfo, page: number): Promise<Item[]> {
     const res = await httpJson<{ data?: { datas?: Array<Record<string, any>> } }>(
-      "https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0&page=1",
+      `https://www.huya.com/cache.php?m=LiveList&do=getLiveListByPage&tagAll=0&page=${page}`,
       { "user-agent": UA },
     )
     const t = now()

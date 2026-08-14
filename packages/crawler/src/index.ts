@@ -68,6 +68,15 @@ export interface DanmakuPlayable {
   getDanmaku(id: string): DanmakuStream
 }
 
+/** 翻页能力(可选能力):列表源(直播 hot 等)可翻页加载更多。 */
+export interface Pageable {
+  /**
+   * 翻页:取下一页并返回新 XML + 下一页游标。
+   * cursor 传上次返回的 cursor;首次翻页不传(取第 2 页)。返回的 cursor 省略 = 没有更多。
+   */
+  fetchMore(cursor?: string): Promise<{ xml: string; cursor?: string }>
+}
+
 /**
  * 类型谓词:运行时探测 + 编译期收窄,消费侧(如 core)能力判定一处定义。
  * 类型由 channel 在 getSource 时 implements 声明静态保证,这里只是把编译期
@@ -87,6 +96,10 @@ export function isHotWordSource(s: RssSource): s is RssSource & HotWordSource {
 
 export function isDanmakuPlayable(s: RssSource): s is RssSource & DanmakuPlayable {
   return "getDanmaku" in s
+}
+
+export function isPageable(s: RssSource): s is RssSource & Pageable {
+  return "fetchMore" in s
 }
 
 /** 渠道参数字段(供 UI 生成"新增订阅"表单)。 */

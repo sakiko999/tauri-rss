@@ -139,6 +139,12 @@ interface DesktopState {
   refreshErrors: Record<string, string>
   /** 热搜三栏右栏:当前选中的热搜词 + 其下微博流(weibo:hot 订阅内点击词条加载)。 */
   hotWord: { word: string; items: MediaItem[] } | null
+  /** 订阅是否支持分页(中栏「加载更多」显隐;select 时懒查)。 */
+  canLoadMore: Record<string, boolean>
+  /** 该订阅已翻到底(loadMore 返回 hasMore=false 后置位;refresh 重置)。 */
+  loadMoreEnded: Record<string, boolean>
+  /** 分页加载中。 */
+  loadingMore: boolean
   init(): Promise<void>
   select(nodeId: string | null): void
   /** 加载热搜词下的微博流(右栏显示)。无 weibo:hot 订阅时 no-op。 */
@@ -147,6 +153,8 @@ interface DesktopState {
   selectArticle(id: string | null): void
   refresh(id: string): Promise<void>
   refreshAll(): Promise<void>
+  /** 加载更多:当前订阅翻一页(仅 hot 发现流;其余 no-op)。 */
+  loadMore(): Promise<void>
   markRead(item: MediaItem): void
   toggleStar(item: MediaItem): void
   /** 懒解析视频可播流(播放时调用,按 item 自身 subscriptionId 绑定;返回流 + 弹幕能力)。 */
@@ -166,6 +174,18 @@ export const useDesktop = create<DesktopState>((set, get) => {
       items: queryView(dl, selectedNodeId, subscriptions),
       // 全局统计:与选中节点无关(store 每次变更都同步,sidebar 计数恒定)。
       allItems: dl.store.all(),
+    })
+  }
+
+  /** 懒查订阅是否支持分页并写 canLoadMore(仅真实订阅;已缓存短路)。 */
+  function queryCanLoadMore(nodeId: string): void {
+    const dl = get().dl
+    if (!dl || nodeId in get().canLoadMore) return
+    dl.canLoadMore(nodeId).then((ok) => {
+      // 节点可能已切换,只写当前选中节点的结果。
+      if (get().selectedNodeId === nodeId) {
+        set((s) => ({ canLoadMore: { ...s.canLoadMore, [nodeId]: ok } }))
+      }
     })
   }
 
@@ -203,8 +223,11 @@ export const useDesktop = create<DesktopState>((set, get) => {
     selectedArticleId: null,
     expandedGroups: {},
     loading: false,
+    loadingMore: false,
     refreshErrors: {},
     hotWord: null,
+    canLoadMore: {},
+    loadMoreEnded: {},
 
     async init() {
       if (get().dl) return
@@ -218,6 +241,10 @@ export const useDesktop = create<DesktopState>((set, get) => {
         // 全量变更回调:重查当前视图 items
         dl.store.subscribe(() => refreshView(dl))
         set({ dl })
+        // 刷新恢复的选中节点(router /v/:id)在 dl 就绪前 select 会跳过 canLoadMore 查询
+        // (select 里 `if (dl)` 早退)——这里补查,否则刷新后 Footer 分页失效。
+        const nodeId = get().selectedNodeId
+        if (nodeId && !isSmartFeed(nodeId) && !isTabNode(nodeId)) queryCanLoadMore(nodeId)
         await get().refreshAll()
       })()
       return initPromise
@@ -227,7 +254,11 @@ export const useDesktop = create<DesktopState>((set, get) => {
       // 切换节点即退出热搜词流(三栏左栏选中其他节点时右栏回到该节点视图)。
       set({ selectedNodeId: nodeId, selectedArticleId: null, hotWord: null })
       const dl = get().dl
-      if (dl) refreshView(dl)
+      if (dl) {
+        refreshView(dl)
+        // 真实订阅节点:懒查是否支持分页(决定中栏「加载更多」显隐)。tab/smart feed 不查。
+        if (nodeId && !isSmartFeed(nodeId) && !isTabNode(nodeId)) queryCanLoadMore(nodeId)
+      }
     },
 
     async loadHotWord(word) {
@@ -261,6 +292,8 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const result = await dl.refresh(id)
       set((s) => ({
         loading: false,
+        // 刷新 = 新首页,分页到底标记重置(可重新翻页)。
+        loadMoreEnded: result.error ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: false },
         refreshErrors: result.error
           ? { ...s.refreshErrors, [id]: result.error }
           : (() => {
@@ -269,6 +302,25 @@ export const useDesktop = create<DesktopState>((set, get) => {
               return next
             })(),
       }))
+    },
+
+    /** 加载更多:当前订阅翻一页(仅 hot 发现流;其余订阅 no-op)。 */
+    async loadMore() {
+      const dl = get().dl
+      const id = get().selectedNodeId
+      // 重入防护:按钮点击 + IO 触底可能同时触发,loadingMore 期间直接跳过(防重复请求同页)。
+      if (!dl || !id || isSmartFeed(id) || isTabNode(id) || get().loadingMore) return
+      set({ loadingMore: true })
+      try {
+        const r = await dl.loadMore(id)
+        set((s) => ({
+          loadingMore: false,
+          loadMoreEnded: r.hasMore ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: true },
+        }))
+        // 列表刷新靠 store 订阅(init 已挂 dl.store.subscribe → refreshView),这里不重复调。
+      } catch {
+        set({ loadingMore: false })
+      }
     },
 
     async refreshAll() {

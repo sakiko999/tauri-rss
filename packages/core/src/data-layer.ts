@@ -12,6 +12,7 @@ import {
   getChannel,
   isDanmakuPlayable,
   isHotWordSource,
+  isPageable,
   isRssLiveSource,
   isRssVideoSource,
   registerAllChannels,
@@ -55,6 +56,10 @@ export interface DataLayer {
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
   /** 热搜词 → 该词下内容流(desktop 热搜三栏右栏;不持久,直接返回 MediaItem[])。 */
   resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]>
+  /** 订阅是否支持分页加载更多(hot 发现流;UI 据此显隐「加载更多」)。 */
+  canLoadMore(subscriptionId: string): Promise<boolean>
+  /** 加载更多:翻一页追加进 store。游标由 DataLayer 内部维护,refresh 后重置。 */
+  loadMore(subscriptionId: string): Promise<{ addedCount: number; hasMore: boolean }>
 }
 
 export function createDataLayer(): DataLayer {
@@ -67,6 +72,8 @@ export function createDataLayer(): DataLayer {
   const reading = createReadingRepository(storage, now)
   const settings = createSettingsRepository(storage)
   const store = createMediaStore(now)
+  /** 分页游标:订阅 → 当前翻到的位置(refresh 重置;UI 无感,由 loadMore 内部维护)。 */
+  const pageCursors = new Map<string, string>()
 
   /** 按 channelKey 前缀匹配的 core 层默认 cookie(bili/weibo/xhs)。订阅显式 info.cookie 永远优先。 */
   function cookieFor(channelKey: string, s: AppSettings): string | undefined {
@@ -102,6 +109,7 @@ export function createDataLayer(): DataLayer {
       const xml = await channel.getSource(info).fetch()
       const items = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
       store.replace(subscriptionId, items)
+      pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
     } catch (err) {
       log.log("error", "refresh failed", { subscriptionId, error: String(err) })
@@ -165,6 +173,38 @@ export function createDataLayer(): DataLayer {
     return deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
   }
 
+  /** 订阅是否支持分页加载更多(hot 发现流;UI 据此显隐「加载更多」)。 */
+  async function canLoadMore(subscriptionId: string): Promise<boolean> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) return false
+    const channel = getChannel(sub.channelKey)
+    if (!channel) return false
+    const info = await sourceInfoFor(sub)
+    const supported = isPageable(channel.getSource(info))
+    log.log("debug", "canLoadMore", { subscriptionId, supported })
+    return supported
+  }
+
+  /** 加载更多:翻一页追加进 store。游标内部维护(refresh 后重置);本页为空 = 没有更多。 */
+  async function loadMore(subscriptionId: string): Promise<{ addedCount: number; hasMore: boolean }> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) return { addedCount: 0, hasMore: false }
+    const channel = getChannel(sub.channelKey)
+    if (!channel) return { addedCount: 0, hasMore: false }
+    const info = await sourceInfoFor(sub)
+    const source = channel.getSource(info)
+    if (!isPageable(source)) return { addedCount: 0, hasMore: false }
+    const cursor = pageCursors.get(subscriptionId)
+    log.log("debug", "loadMore", { subscriptionId, cursor })
+    const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
+    const items = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
+    store.append(subscriptionId, items)
+    if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
+    else pageCursors.delete(subscriptionId)
+    log.log("info", "loadMore done", { subscriptionId, addedCount: items.length, hasMore: !!nextCursor })
+    return { addedCount: items.length, hasMore: !!nextCursor }
+  }
+
   return {
     subscriptions: repo,
     reading,
@@ -179,5 +219,7 @@ export function createDataLayer(): DataLayer {
     resolvePlay,
     resolveLivePlay,
     resolveHotWord,
+    canLoadMore,
+    loadMore,
   }
 }
