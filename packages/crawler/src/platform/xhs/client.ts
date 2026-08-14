@@ -16,6 +16,7 @@ import { httpJson, httpText } from "../../host.ts"
 import { parseCookieDict } from "../../utils/cookie.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"
+import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 
 export const XHS_BASE = "https://www.xiaohongshu.com"
 /** API 域名(edith.* 承载全部 web API)。 */
@@ -54,6 +55,26 @@ export function signApiHeaders(cookie: string, uri: string, params: Record<strin
 export function apiJson<T>(url: string, cookie: string, headers: Record<string, string>): Promise<T> {
   return httpJson<T>(url, cookie ? { ...headers, Cookie: cookie } : headers)
 }
+
+/**
+ * 统一 getJson/getHtml 入口(PlatformClient)。
+ * getJson 从 URL 反向提取签名参数(uri = path+search,params = searchParams 保序对象,
+ * 与 channel 显式构造的签名参数同源);无额外 header 需求时内部 signApiHeaders。
+ */
+/** satisfies 保留具体类型(getHtml 非可选),同时校验满足 PlatformClient 接口。 */
+export const xhsClient = {
+  async getJson<T = any>(url: string, opts?: PlatformRequestOptions): Promise<T> {
+    const u = new URL(url)
+    const uri = u.pathname + u.search
+    const params = Object.fromEntries(u.searchParams)
+    const cookie = opts?.cookie ?? ""
+    const headers = opts?.headers ?? signApiHeaders(cookie, uri, params)
+    return apiJson<T>(url, cookie, headers)
+  },
+  async getHtml(url: string, opts?: PlatformRequestOptions): Promise<string> {
+    return fetchHtml(url, opts?.cookie)
+  },
+} satisfies PlatformClient
 
 /** 完整浏览器 headers(SSR 页面需要像真实浏览器请求才返回完整 HTML)。 */
 const BROWSER_HEADERS: Record<string, string> = {

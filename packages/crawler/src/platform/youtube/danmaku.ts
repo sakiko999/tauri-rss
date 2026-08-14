@@ -11,7 +11,7 @@
  * 启动轮询循环,onItems 收增量消息;返回 unsubscribe。首轮失败(未开播/无聊天)
  * 静默(log.warn),不回调 onItems。
  */
-import type { DanmakuItem } from "../../danmaku/types.ts"
+import type { DanmakuItem } from "../../danmaku"
 import { httpText } from "../../host.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { log } from "../../log.ts"

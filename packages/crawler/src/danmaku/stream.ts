@@ -1,9 +1,12 @@
 /**
- * ws —— 弹幕 WebSocket 通用封装。
+ * stream —— 弹幕流原语:异步 setup 竞态守卫(deferredStream)+ WS 连接管理(createWsStream)。
  *
- * 四平台弹幕(channels 各平台 danmaku)共用:订阅即建连、退订即断开;
- * 断线指数退避重连(不依赖 React 生命周期);心跳定时;认证帧在 onopen 发。
- * 差异只在「帧编解码」——每平台提供 onMessage(ArrayBuffer → DanmakuItem[])。
+ * 两个原语都是「构造 DanmakuStream」的基础层,各平台弹幕按需组合:
+ *   - deferredStream:异步 setup(ensureCookie / enter 长号 / getDanmuInfo / 页面解析)→
+ *     建流的 stopped 守卫(setup 完成前已退订则不再建流,连接零泄漏)。bili VOD 只用它。
+ *   - createWsStream:WS 连接生命周期(订阅即建连、退订即断开、指数退避重连、心跳、
+ *     认证帧在 onopen 发)。四平台直播弹幕(bili/douyu/huya/douyin)共用,配合
+ *     deferredStream 组合(先异步 setup 再建 WS)。
  *
  * 连接层:统一走 `globalThis.appHost.ws`(桌面 Rust ws_connect / node ws 包,
  * 握手可带自定义 header——douyin 需要 UA/Cookie/Origin);原生 WebSocket 仅兜底
@@ -12,7 +15,7 @@
  * 连 douyu 8/8 握手成功(证书 GlobalSign 有效,失败实为集群节点偶发 RST),故统一
  * 走宿主。两形态在内部归一成 WsLike 抽象(send/close/readyState)。
  */
-import type { DanmakuItem, DanmakuStream } from "../index.ts"
+import type { DanmakuItem, DanmakuStream } from "./types.ts"
 import { log } from "../log.ts"
 
 export interface WsStreamOptions {
@@ -21,11 +24,11 @@ export interface WsStreamOptions {
   headers?: Record<string, string>
   /** 握手超时,ms(宿主 ws 用)。 */
   timeoutMs?: number
-  /** 连接建立后调用(发认证帧)。 */
-  onOpen?: (ws: WebSocket) => void
+  /** 连接建立后调用(发认证帧)。ws 是 WsLike,直接 send(Uint8Array) 免断言。 */
+  onOpen?: (ws: WsLike) => void
   /** 每帧解码 → 弹幕。可异步(如 bilibili 的 brotli DecompressionStream)。
    *  第二参 ws:用于回执(douyin 的 ack),其余平台忽略。 */
-  onMessage: (data: ArrayBuffer, ws: WebSocket) => DanmakuItem[] | Promise<DanmakuItem[]>
+  onMessage: (data: ArrayBuffer, ws: WsLike) => DanmakuItem[] | Promise<DanmakuItem[]>
   /** 心跳帧(定时发送)。 */
   heartbeat?: () => Uint8Array
   heartbeatMs?: number
@@ -35,8 +38,8 @@ export interface WsStreamOptions {
   onClose?: (code: number, reason: string) => void
 }
 
-/** 连接统一抽象:原生 WebSocket 与宿主 WsConnection 都满足。 */
-interface WsLike {
+/** 连接统一抽象:原生 WebSocket 与宿主 WsConnection 都满足。onOpen/onMessage 暴露它,免断言直接 send(Uint8Array)。 */
+export interface WsLike {
   readonly readyState: number
   send(data: Uint8Array): void
   close(): void
@@ -76,7 +79,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
     function onReady(conn: WsLike): void {
       attempts = 0
       log.danmaku.wsOpen({ url: opts.url })
-      opts.onOpen?.(conn as unknown as WebSocket)
+      opts.onOpen?.(conn)
       if (opts.heartbeat) {
         const hb = (): void => {
           if (!stopped) send(opts.heartbeat!())
@@ -87,13 +90,17 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
     }
 
     /** 帧分发统一入口(宿主/原生共用):解码 → 过滤已退订/空 → 上报。 */
-    function deliver(data: ArrayBuffer, conn: WebSocket): void {
-      void Promise.resolve(opts.onMessage(data, conn)).then((items) => {
+    function deliver(data: ArrayBuffer, conn: WsLike): void {
+      // 快路径:同步解码器(huya/douyu)不经微任务;异步(brotli/ack)才包 Promise。
+      const result = opts.onMessage(data, conn)
+      const report = (items: DanmakuItem[]): void => {
         if (!stopped && items.length) {
           log.danmaku.wsItems({ count: items.length })
           onItems(items)
         }
-      })
+      }
+      if (result instanceof Promise) void result.then(report)
+      else report(result)
     }
 
     /** 连接关闭统一入口:清心跳 + 意外断线 warn + 重连(主动退订的提示在 unsub 统一打)。 */
@@ -126,7 +133,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
             headers: opts.headers,
             timeoutMs: opts.timeoutMs,
             onOpen: (conn) => handleOpen(conn as unknown as WsLike),
-            onMessage: (data, conn) => deliver(data as unknown as ArrayBuffer, conn as unknown as WebSocket),
+            onMessage: (data, conn) => deliver(data as unknown as ArrayBuffer, conn as unknown as WsLike),
             onClose: handleClose,
           })
           .catch((e) => {
@@ -148,7 +155,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       const raw = ws as unknown as WebSocket
       raw.binaryType = "arraybuffer"
       raw.onopen = () => handleOpen(raw as unknown as WsLike)
-      raw.onmessage = (ev) => deliver(ev.data as ArrayBuffer, raw)
+      raw.onmessage = (ev) => deliver(ev.data as ArrayBuffer, raw as unknown as WsLike)
       raw.onclose = (ev) => handleClose(ev.code, ev.reason)
       raw.onerror = () => {
         // onclose 跟随触发,重连逻辑在 onclose。
@@ -175,6 +182,36 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       clearHeartbeat()
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (ws) safeClose(ws)
+    }
+  }
+}
+
+/**
+ * 异步 setup + build 组合成 DanmakuStream。
+ * [setup] 异步探测(返回 build 所需的参数);[build] setup 成功后建流,返回退订函数
+ * (或 void);[onError] setup/build 失败回调(不传则静默吞掉)。
+ * 退订在 setup 未完成时置 stopped,完成后不再建流——连接零泄漏。
+ */
+export function deferredStream<T>(
+  setup: () => Promise<T>,
+  build: (value: T, onItems: (items: DanmakuItem[]) => void) => (() => void) | void,
+  onError?: (error: unknown) => void,
+): DanmakuStream {
+  return (onItems) => {
+    let stopped = false
+    let unsub: (() => void) | undefined
+    void setup()
+      .then((value) => {
+        if (stopped) return
+        const u = build(value, onItems)
+        if (u) unsub = u
+      })
+      .catch((e) => {
+        if (!stopped) onError?.(e)
+      })
+    return () => {
+      stopped = true
+      unsub?.()
     }
   }
 }

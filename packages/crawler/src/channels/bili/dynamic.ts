@@ -21,7 +21,7 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
-import { createBilibiliClient } from "./client.ts"
+import { biliClient } from "../../platform/bili"
 import { fillImageSizes } from "../../utils/img-size.ts"
 import { toHttps } from "../../utils/url.ts"
 
@@ -128,10 +128,9 @@ export class BiliDynamicChannel implements RssChannel {
     const uid = String(info.uid ?? "")
     if (!/^\d+$/.test(uid)) throw new Error(`bili:dynamic 需要数字 uid,收到 "${uid}"`)
     // 登录 cookie:订阅级 info.cookie > core 层 DEFAULT(core 注入 sourceInfoFor)。
-    const client = createBilibiliClient({ cookie: (info.cookie as string) || undefined })
-    const data = await client.getJson<{ data?: { items?: DynItem[] } }>(
+    const data = await biliClient.getJson<{ data?: { items?: DynItem[] } }>(
       `${API}/x/polymer/web-dynamic/v1/feed/space?host_mid=${uid}&platform=web&features=itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote`,
-      { referer: `https://space.bilibili.com/${uid}/` },
+      { referer: `https://space.bilibili.com/${uid}/`, cookie: info.cookie || undefined },
     )
     const items = data?.data?.items ?? []
     const t = now()

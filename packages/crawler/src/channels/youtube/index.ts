@@ -11,7 +11,7 @@ import type { RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../ind
 import { apiFetch } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
-import { resolveYoutubeStreams } from "./client.ts"
+import { resolveYoutubeStreams } from "../../platform/youtube"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 export { YoutubeLiveChannel } from "./live.ts"
 

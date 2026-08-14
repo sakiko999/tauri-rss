@@ -9,7 +9,7 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
-import { XHS_BASE, extractInitialState, fetchHtml, noteCardToSocial, rawOf } from "./client.ts"
+import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient } from "../../platform/xhs"
 
 export class XhsExploreChannel implements RssChannel {
   readonly key = "xhs:explore"
@@ -22,7 +22,7 @@ export class XhsExploreChannel implements RssChannel {
   }
 
   private async fetchItems(cookie?: string): Promise<Item[]> {
-    const html = await fetchHtml(`${XHS_BASE}/explore`, cookie)
+    const html = await xhsClient.getHtml(`${XHS_BASE}/explore`, { cookie })
     const state = extractInitialState(html)
     const feed = rawOf(state.feed)
     const feeds: any[] = feed?.feeds ?? []

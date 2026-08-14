@@ -9,19 +9,14 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpText, now } from "../../host.ts"
+import { now } from "../../host.ts"
 import { parseRoomIds } from "../../utils/room-ids.ts"
 import { log } from "../../log.ts"
-import { parseHnfGlobalInit, resolveHuyaLivePlay } from "./play.ts"
-import { huyaDanmakuStream } from "./danmaku.ts"
-
-const M_HUYA = "https://m.huya.com"
-const UA_MOBILE =
-  "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
+import { M_HUYA, huyaClient, parseHnfGlobalInit, resolveHuyaLivePlay } from "../../platform/huya"
 
 /** 单房间 → Live item(m.huya.com HNF_GLOBAL_INIT)。房间失败抛错,由调用方 catch 隔离。 */
 async function fetchHuyaRoom(roomId: string): Promise<Live> {
-  const html = await httpText(`${M_HUYA}/${roomId}`, { "user-agent": UA_MOBILE })
+  const html = await huyaClient.getHtml(`${M_HUYA}/${roomId}`)
   const roomInfo = parseHnfGlobalInit(html)
   const ri = (roomInfo.roomInfo ?? {}) as Record<string, unknown>
   const tLiveInfo = (ri.tLiveInfo ?? {}) as Record<string, unknown>
@@ -54,7 +49,7 @@ export class HuyaLiveChannel implements RssChannel {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolveLivePlay: resolveHuyaLivePlay,
-      getDanmaku: (roomId) => huyaDanmakuStream(roomId),
+      getDanmaku: (roomId) => huyaClient.getDanmaku(roomId),
     }
   }
 

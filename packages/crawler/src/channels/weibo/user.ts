@@ -12,7 +12,7 @@ import type { Item } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { WB_BASE, mblogCardsToItems, wbJson } from "./client.ts"
+import { WB_BASE, mblogCardsToItems, weiboClient } from "../../platform/weibo"
 
 export class WeiboUserChannel implements RssChannel {
   readonly key = "weibo:user"
@@ -27,22 +27,24 @@ export class WeiboUserChannel implements RssChannel {
     const uid = String(info.uid ?? "").trim()
     if (!/^\d+$/.test(uid)) throw new Error(`weibo:user 需要数字 uid,收到 "${uid}"`)
     const cookie = (info.cookie as string) || undefined
-    const ref = { Referer: `${WB_BASE}/u/${uid}` }
+    const referer = `${WB_BASE}/u/${uid}`
 
     // 1. userInfo + containerid
-    const s1 = await wbJson(`${WB_BASE}/api/container/getIndex?type=uid&value=${uid}`, cookie, ref)
-    if (s1.body?.ok !== 1) throw new Error(`weibo 用户信息失败: ${s1.body?.msg ?? s1.body ?? s1.status}`)
-    const containerId = s1.body.data?.tabsInfo?.tabs?.find((tb: any) => tb.tab_type === "weibo")?.containerid
+    const s1 = await weiboClient.getJson<{ ok?: number; msg?: string; data?: any }>(
+      `${WB_BASE}/api/container/getIndex?type=uid&value=${uid}`,
+      { cookie, referer },
+    )
+    if (s1?.ok !== 1) throw new Error(`weibo 用户信息失败: ${s1?.msg ?? "未知错误"}`)
+    const containerId = s1.data?.tabsInfo?.tabs?.find((tb: any) => tb.tab_type === "weibo")?.containerid
     if (!containerId) throw new Error("weibo: 未找到用户微博 containerid")
 
     // 2. 微博列表 cards(过滤→归一→长文→图尺寸由 mblogCardsToItems 处理)。
-    const s2 = await wbJson(
+    const s2 = await weiboClient.getJson<{ ok?: number; msg?: string; data?: { cards?: any[] } }>(
       `${WB_BASE}/api/container/getIndex?type=uid&value=${uid}&containerid=${containerId}`,
-      cookie,
-      ref,
+      { cookie, referer },
     )
-    if (s2.body?.ok !== 1) throw new Error(`weibo 微博列表失败: ${s2.body?.msg ?? s2.body ?? s2.status}`)
-    return mblogCardsToItems(s2.body.data?.cards ?? [], this.key, cookie)
+    if (s2?.ok !== 1) throw new Error(`weibo 微博列表失败: ${s2?.msg ?? "未知错误"}`)
+    return mblogCardsToItems(s2.data?.cards ?? [], this.key, cookie)
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {

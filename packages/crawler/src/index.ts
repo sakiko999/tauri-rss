@@ -17,14 +17,14 @@
  */
 import { registerBuiltinChannels } from "./register.ts"
 import type { Kind, Item, Stream } from "@tauri-playground/xml"
-import type { DanmakuItem } from "./danmaku/types.ts"
+import type { DanmakuItem, DanmakuStream, DanmakuOptions } from "./danmaku"
 
 /** channel 产出的 item 种类。 */
 export type { Kind } from "@tauri-playground/xml"
 /** 懒解析返回的可播流。 */
 export type { Stream } from "@tauri-playground/xml"
 /** 弹幕统一契约(视频 VOD / 直播 Live 共用)。 */
-export type { DanmakuItem } from "./danmaku/types.ts"
+export type { DanmakuItem, DanmakuStream, DanmakuOptions }
 
 /** 渠道参数字段定义(描述实例化一个 source 需要什么)。 */
 export type SourceInfo = Record<string, string>
@@ -58,9 +58,6 @@ export interface HotWordSource {
   /** 热搜词 → 该词下内容流(core 经 serializeFeed/deserializeFeed 消费,无需再进 XML 语义)。 */
   resolveHotWord(word: string): Promise<Item[]>
 }
-
-/** 弹幕流:订阅即开始,onItems 收批次(全量或增量);返回 unsubscribe。 */
-export type DanmakuStream = (onItems: (items: DanmakuItem[]) => void) => () => void
 
 /** 弹幕能力(可选能力,有该能力的 source 才 implements)。**单一接口**,VOD 视频弹幕
  * 与 live 直播聊天由实现方区分推送,消费者只管订阅、不关心全量还是增量:

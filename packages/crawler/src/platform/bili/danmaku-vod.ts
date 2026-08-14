@@ -5,12 +5,10 @@
  * protobuf 手写 wire 解码(decodeDanmakuSeg)。匿名可用(软风控,带登录 cookie 更稳)。
  * 每段 6 分钟,段数 = ceil(durationSec/360) + 1。
  */
-import type { DanmakuItem } from "../../danmaku/types.ts"
-import type { DanmakuStream } from "../../index.ts"
-import { decodeDanmakuSeg } from "../../danmaku/proto.ts"
-import { deferredStream } from "../../danmaku/deferred.ts"
-import { argbToHex } from "../../danmaku/color.ts"
-import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
+import { argbToHex, deferredStream } from "../../danmaku"
+import type { DanmakuItem, DanmakuStream } from "../../danmaku"
+import { decodeDanmakuSeg } from "./danmaku-proto.ts"
+import { BILIBILI_UA, biliClient } from "./client.ts"
 import { log } from "../../log.ts"
 
 const API = "https://api.bilibili.com"
@@ -35,21 +33,21 @@ async function fetchDanmakuSeg(cid: number, n: number): Promise<Uint8Array | nul
  * 4 个 video channel 的 `resolveDanmaku` 都调它(与 resolveBiliPlay 同范式)。
  */
 export async function resolveBiliDanmaku(itemId: string, cookie?: string): Promise<DanmakuItem[]> {
-  const client = createBilibiliClient({ cookie })
   const id = itemId.startsWith("av") ? `av${itemId.slice(2)}` : itemId
-  const view = await client.getJson<{ data?: { cid?: number; duration?: number } }>(
+  const view = await biliClient.getJson<{ data?: { cid?: number; duration?: number } }>(
     `${API}/x/web-interface/view?bvid=${encodeURIComponent(id)}`,
-    { referer: `https://www.bilibili.com/video/${itemId}` },
+    { referer: `https://www.bilibili.com/video/${itemId}`, cookie },
   )
   const cid = view?.data?.cid
   if (!cid) throw new Error(`bilibili danmaku: no cid for ${itemId}`)
   const durationSec = view?.data?.duration ?? 0
   const segments = Math.max(1, Math.ceil(durationSec / SEGMENT_SEC) + 1)
 
+  // 各段互相独立 → 并行抓(1h 视频约 11 段:串行 N×RTT → 并行 1×)。越界段返回 null 天然跳过。
+  const segs = await Promise.all(Array.from({ length: segments }, (_, i) => fetchDanmakuSeg(cid, i + 1)))
   const items: DanmakuItem[] = []
-  for (let n = 1; n <= segments; n++) {
-    const buf = await fetchDanmakuSeg(cid, n)
-    if (!buf) break
+  for (const buf of segs) {
+    if (!buf) continue
     for (const e of decodeDanmakuSeg(buf)) {
       items.push({ text: e.content, mode: e.mode, timeMs: e.progress, color: argbToHex(e.color) })
     }
@@ -61,7 +59,7 @@ export async function resolveBiliDanmaku(itemId: string, cookie?: string): Promi
  * bili VOD 弹幕流:订阅时一次性 load 全量推给 onItems(items 带 timeMs,
  * 消费者按播放时间轴过滤)。首轮失败(接口异常)静默。
  */
-export function biliDanmakuStream(itemId: string, cookie?: string): DanmakuStream {
+export function biliVodDanmakuStream(itemId: string, cookie?: string): DanmakuStream {
   return deferredStream(
     () => resolveBiliDanmaku(itemId, cookie),
     (items, onItems) => {

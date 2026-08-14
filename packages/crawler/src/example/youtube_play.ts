@@ -9,7 +9,7 @@
  * 用法:bun run packages/crawler/src/example/youtube_play.ts [videoId|直播id]
  */
 import { injectNodeHost } from "@tauri-playground/host"
-import { resolveYoutubeStreams } from "../channels/youtube/client.ts"
+import { resolveYoutubeStreams } from "../platform/youtube"
 
 const VIDEO_ID = process.argv[2] ?? "dQw4w9WgXcQ" // 默认:Rick Astley(人人可播)
 

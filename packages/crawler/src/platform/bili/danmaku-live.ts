@@ -13,11 +13,9 @@
  * 宿主隧道(sec-websocket-key 握手问题已修:into_client_request 构造完整请求)。
  * host 的 **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
  */
-import type { DanmakuItem, DanmakuStream } from "../../index.ts"
-import { createWsStream } from "../../danmaku/ws.ts"
-import { deferredStream } from "../../danmaku/deferred.ts"
-import { argbToHex } from "../../danmaku/color.ts"
-import { createBilibiliClient } from "./client.ts"
+import { argbToHex, createWsStream, deferredStream } from "../../danmaku"
+import type { DanmakuItem, DanmakuStream } from "../../danmaku"
+import { biliClient } from "./client.ts"
 import { extractCookie } from "../../utils/cookie.ts"
 import { log } from "../../log.ts"
 
@@ -110,14 +108,13 @@ async function getDanmuInfo(
   roomId: string,
   cookie?: string,
 ): Promise<{ host: string; wssPort: number; token: string; uid: number; buvid3: string }> {
-  const client = createBilibiliClient({ referer: "https://live.bilibili.com/", live: true, cookie })
   // 认证 uid = nav 带 cookie 的 mid(2026 风控:匿名 0 被拒)。仅 cookie 时发(匿名必 0,
-  // 白打一次);与 getDanmuInfo 并行,且复用 signWeb 的 nav 响应(client.navMid 共享缓存)。
-  const uidPromise = cookie ? client.navMid().catch(() => 0) : Promise.resolve(0)
-  const q = await client.signWeb(`id=${roomId}`)
-  const res = await client.getJson<{
+  // 白打一次);与 getDanmuInfo 并行,且复用 signWeb 的 nav 响应(navCache 按 cookie 缓存)。
+  const uidPromise = cookie ? biliClient.navMid(cookie).catch(() => 0) : Promise.resolve(0)
+  const q = await biliClient.signWeb(`id=${roomId}`, cookie)
+  const res = await biliClient.getJson<{
     data?: { token?: string; host_list?: Array<{ host?: string; wss_port?: number }> }
-  }>(`${API_LIVE}/xlive/web-room/v1/index/getDanmuInfo?${q}`)
+  }>(`${API_LIVE}/xlive/web-room/v1/index/getDanmuInfo?${q}`, { referer: "https://live.bilibili.com/", cookie })
   const first = res?.data?.host_list?.[0]
   const host = first?.host
   const wssPort = first?.wss_port ?? 443
@@ -148,7 +145,7 @@ export function biliLiveDanmakuStream(roomId: string, cookie?: string): DanmakuS
               platform: "web",
               type: 2,
               key: token,
-            }) as unknown as ArrayBufferView<ArrayBuffer>,
+            }),
           )
         },
         heartbeat: () => biliFrame(2, {}),

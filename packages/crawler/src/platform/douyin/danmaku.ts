@@ -14,10 +14,9 @@
  * userId = 主播真实 user id_str(enter API data.user.id_str;dart 的随机 12 位已失效)。
  * roomId 需长号(enter API 的 id_str;失败兜底用订阅 web_rid)。
  */
-import type { DanmakuStream } from "../../index.ts"
-import { createWsStream } from "../../danmaku/ws.ts"
-import { deferredStream } from "../../danmaku/deferred.ts"
-import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "../../danmaku/douyin-proto.ts"
+import { createWsStream, deferredStream } from "../../danmaku"
+import type { DanmakuStream } from "../../danmaku"
+import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "./danmaku-proto.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { httpJson } from "../../host.ts"
 import { log } from "../../log.ts"
@@ -233,14 +232,14 @@ export function douyinDanmakuStream(roomId: string, cookie?: string): DanmakuStr
           referer: `${LIVE}/${roomId}`,
         },
         onOpen: (ws) => {
-          ws.send(douyinHeartbeatFrame() as unknown as ArrayBufferView<ArrayBuffer>)
+          ws.send(douyinHeartbeatFrame())
         },
         heartbeat: () => douyinHeartbeatFrame(),
         heartbeatMs: HEARTBEAT_MS,
         onClose: (code, reason) => log.douyin.warn(`弹幕 WS 关闭(code=${code} reason=${reason}, room=${room})`),
         onMessage: (data, ws) =>
           decodeDouyinPushFrame(new Uint8Array(data), (ack) =>
-            ws.send(ack as unknown as ArrayBufferView<ArrayBuffer>),
+            ws.send(ack),
           ),
       })(onItems)
     },

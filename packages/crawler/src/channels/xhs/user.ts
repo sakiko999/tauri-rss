@@ -10,7 +10,7 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
-import { XHS_API_BASE, XHS_BASE, apiJson, apiNoteToSocial, signApiHeaders } from "./client.ts"
+import { XHS_API_BASE, XHS_BASE, apiNoteToSocial, xhsClient } from "../../platform/xhs"
 
 export class XhsUserChannel implements RssChannel {
   readonly key = "xhs:user"
@@ -25,15 +25,10 @@ export class XhsUserChannel implements RssChannel {
     const userId = String(info.user_id ?? "").trim()
     if (!userId) throw new Error("xhs:user 需要 user_id")
     // 签名种子 a1 来自会话 cookie,无 cookie(匿名)签名无效 → API 406/风控。
+    // xhsClient.getJson 从 URL 反向提取签名参数(uri+params 同源)。
     const cookie = (info.cookie as string) || ""
-    const uri = "/api/sns/web/v1/user_posted"
-    // params 单一数据源:URL query 与签名参数从同一对象推导,保证顺序一致。
-    const params: Record<string, string> = { num: "30", cursor: "", user_id: userId }
-    const query = Object.entries(params)
-      .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
-      .join("&")
-    const url = `${XHS_API_BASE}${uri}?${query}`
-    const body = await apiJson<{ data?: { notes?: any[] } }>(url, cookie, signApiHeaders(cookie, uri, params))
+    const url = `${XHS_API_BASE}/api/sns/web/v1/user_posted?num=30&cursor=&user_id=${userId}`
+    const body = await xhsClient.getJson<{ data?: { notes?: any[] } }>(url, { cookie })
     const notes = body?.data?.notes ?? []
     const t = now()
     return notes

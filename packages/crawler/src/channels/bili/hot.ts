@@ -12,7 +12,7 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, liveHotSource } from "../factory.ts"
 import { now } from "../../host.ts"
-import { createBilibiliClient } from "./client.ts"
+import { biliClient } from "../../platform/bili"
 import { BiliLiveChannel } from "./live.ts"
 
 const API_LIVE = "https://api.live.bilibili.com"
@@ -30,10 +30,12 @@ export class BiliLiveHotChannel implements RssChannel {
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
-    const client = createBilibiliClient({ referer: "https://live.bilibili.com/", cookie: info.cookie })
     const base = `${API_LIVE}/xlive/web-interface/v1/second/getListByArea`
-    const signed = await client.signWeb("platform=web&sort=online&page_size=30&page=1")
-    const res = await client.getJson<{ data?: { list?: Array<Record<string, any>> } }>(`${base}?${signed}`)
+    const signed = await biliClient.signWeb("platform=web&sort=online&page_size=30&page=1", info.cookie)
+    const res = await biliClient.getJson<{ data?: { list?: Array<Record<string, any>> } }>(`${base}?${signed}`, {
+      referer: "https://live.bilibili.com/",
+      cookie: info.cookie,
+    })
     const t = now()
     const list = Array.isArray(res?.data?.list) ? res.data.list : []
     return list.map((item): Live => {

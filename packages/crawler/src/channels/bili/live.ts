@@ -13,8 +13,7 @@ import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { log } from "../../log.ts"
 import { parseRoomIds } from "../../utils/room-ids.ts"
-import { BILIBILI_UA, createBilibiliClient } from "./client.ts"
-import { biliLiveDanmakuStream } from "./danmaku-live.ts"
+import { BILIBILI_UA, biliClient } from "../../platform/bili"
 
 
 const API_LIVE = "https://api.live.bilibili.com"
@@ -26,14 +25,11 @@ const API_LIVE = "https://api.live.bilibili.com"
  */
 async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | null> {
   try {
-    const client = createBilibiliClient({
-      referer: "https://live.bilibili.com/",
-      buvid: true,
-      live: true,
-      cookie: cookie || undefined,
-    })
-    const params = await client.signLiveParams({ room_id: roomId })
-    const res = await client.getJson<{ data?: Record<string, unknown> }>(`${API_LIVE}/xlive/web-room/v1/index/getInfoByRoom?${params}`)
+    const params = await biliClient.signLiveParams({ room_id: roomId }, cookie)
+    const res = await biliClient.getJson<{ data?: Record<string, unknown> }>(
+      `${API_LIVE}/xlive/web-room/v1/index/getInfoByRoom?${params}`,
+      { referer: "https://live.bilibili.com/", buvid: true, cookie },
+    )
     const ri = (res?.data?.["room_info"] ?? {}) as Record<string, unknown>
     const realRoomId = String(ri["room_id"] ?? roomId)
     return {
@@ -78,7 +74,8 @@ export class BiliLiveChannel implements RssChannel {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolveLivePlay: (roomId) => resolveBiliLivePlay(roomId, info),
-      getDanmaku: (roomId) => biliLiveDanmakuStream(roomId, (info.cookie as string) || undefined),
+      getDanmaku: (roomId) =>
+        biliClient.getDanmaku(roomId, { kind: "live", cookie: info.cookie || undefined }),
     }
   }
 
@@ -107,12 +104,8 @@ export class BiliLiveChannel implements RssChannel {
  * 未带 cookie 则零登录(原画/超清封顶)。
  */
 async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Promise<Stream[]> {
-  const client = createBilibiliClient({
-    referer: "https://live.bilibili.com/",
-    buvid: true,
-    live: true,
-    cookie: (info?.cookie as string) || undefined,
-  })
+  const cookie = (info?.cookie as string) || undefined
+  const referer = "https://live.bilibili.com/"
   // 参数复刻 dart bilibili_site.dart:129(getPlayQualites,首请求全 format/codec 探测)。
   const baseParams: Record<string, string> = {
     room_id: roomId,
@@ -122,9 +115,10 @@ async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Promise<S
     platform: "web",
   }
   // 1. 首请求拿档位列表(g_qn_desc + accept_qn)。
-  const probeParams = await client.signLiveParams({ ...baseParams, qn: "10000" })
-  const probe = await client.getJson<{ data?: Record<string, any> }>(
+  const probeParams = await biliClient.signLiveParams({ ...baseParams, qn: "10000" }, cookie)
+  const probe = await biliClient.getJson<{ data?: Record<string, any> }>(
     `${API_LIVE}/xlive/web-room/v2/index/getRoomPlayInfo?${probeParams}`,
+    { referer, buvid: true, cookie },
   )
   const qualities = extractBiliLiveQualities(probe?.data ?? {})
   if (!qualities.length) return resolveBiliLiveProbe(probe?.data ?? {}, roomId)
@@ -134,14 +128,10 @@ async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Promise<S
   for (const [idx, q] of qualities.entries()) {
     try {
       // 取流参数复刻 dart getPlayUrls(bilibili_site.dart:164):format:0,2 + codec:0(只要 avc,不拉 hevc)。
-      const p = await client.signLiveParams({
-        ...baseParams,
-        format: "0,2",
-        codec: "0",
-        qn: String(q.qn),
-      })
-      const r = await client.getJson<{ data?: Record<string, any> }>(
+      const p = await biliClient.signLiveParams({ ...baseParams, format: "0,2", codec: "0", qn: String(q.qn) }, cookie)
+      const r = await biliClient.getJson<{ data?: Record<string, any> }>(
         `${API_LIVE}/xlive/web-room/v2/index/getRoomPlayInfo?${p}`,
+        { referer, buvid: true, cookie },
       )
       const list = parseBiliLiveStreams(r?.data ?? {})
       const s = list[0]

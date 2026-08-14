@@ -7,17 +7,13 @@
  * 心跳固定字节 60s;消息外层 tag0=type(7)→ tag1=HYPushMessage{uri, msg} →
  * uri=1400 → HYMessage{userInfo.nickName, content, bulletFormat.fontColor}。
  */
-import type { DanmakuStream } from "../../index.ts"
-import { createWsStream } from "../../danmaku/ws.ts"
-import { deferredStream } from "../../danmaku/deferred.ts"
-import { decodeHuyaDanmakuFrame, TarsWriter } from "../../danmaku/tars.ts"
-import { httpText } from "../../host.ts"
+import { createWsStream, deferredStream } from "../../danmaku"
+import type { DanmakuStream } from "../../danmaku"
+import { decodeHuyaDanmakuFrame, TarsWriter } from "./danmaku-tars.ts"
 import { log } from "../../log.ts"
+import { M_HUYA, huyaClient } from "./client.ts"
 
 const WS_URL = "wss://cdnws.api.huya.com"
-const M_HUYA = "https://m.huya.com"
-const UA_MOBILE =
-  "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
 /** 心跳间隔,ms(固定字节,60s)。 */
 const HEARTBEAT_MS = 60000
 /** 心跳固定字节(dart base64.decode("ABQdAAwsNgBM"))。 */
@@ -37,7 +33,7 @@ interface HuyaDanmakuArgs {
  * 保证连接尝试(未直播服务器无弹幕,不报错)。
  */
 async function fetchHuyaDanmakuArgs(roomId: string): Promise<HuyaDanmakuArgs> {
-  const html = await httpText(`${M_HUYA}/${roomId}`, { "user-agent": UA_MOBILE })
+  const html = await huyaClient.getHtml(`${M_HUYA}/${roomId}`)
   const ayyuid = Number(html.match(/lYyid":([0-9]+)/)?.[1] ?? 0)
   const topSid = Number(html.match(/lChannelId":([0-9]+)/)?.[1] ?? 0)
   const subSid = Number(html.match(/lSubChannelId":([0-9]+)/)?.[1] ?? 0)
@@ -71,7 +67,7 @@ export function huyaDanmakuStream(roomId: string): DanmakuStream {
       createWsStream({
         url: WS_URL,
         onOpen: (ws) => {
-          ws.send(encodeHuyaJoin(args) as unknown as ArrayBufferView<ArrayBuffer>)
+          ws.send(encodeHuyaJoin(args))
         },
         heartbeat: () => HEARTBEAT,
         heartbeatMs: HEARTBEAT_MS,

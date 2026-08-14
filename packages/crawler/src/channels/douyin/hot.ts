@@ -9,12 +9,11 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, liveHotSource } from "../factory.ts"
-import { httpJson, now } from "../../host.ts"
-import { DEFAULT_TTWID, UA_ENTER, signDouyinUrl } from "./abogus.ts"
+import { now } from "../../host.ts"
+import { douyinClient } from "../../platform/douyin"
 import { DouyinLiveChannel } from "./index.ts"
 
 const LIVE = "https://live.douyin.com"
-const UA = UA_ENTER
 
 export class DouyinLiveHotChannel implements RssChannel {
   readonly key = "live:douyin:hot"
@@ -51,14 +50,10 @@ export class DouyinLiveHotChannel implements RssChannel {
       partition_type: "1",
       req_from: "2",
     })
-    const res = await httpJson<{ data?: { data?: Array<Record<string, any>> } }>(
-      signDouyinUrl(`${base}?${params.toString()}`, UA),
-      {
-        "user-agent": UA,
-        referer: LIVE,
-        authority: "live.douyin.com",
-        cookie: DEFAULT_TTWID,
-      },
+    // 统一走 douyinClient.getJson(内部 ABogus 签名 + warmup ttwid + status_code 校验)。
+    const res = await douyinClient.getJson<{ data?: { data?: Array<Record<string, any>> } }>(
+      `${base}?${params.toString()}`,
+      { referer: LIVE },
     )
     const t = now()
     const list = Array.isArray(res?.data?.data) ? res.data.data : []

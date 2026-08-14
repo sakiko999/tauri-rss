@@ -15,11 +15,8 @@ import type { Stream } from "@tauri-playground/xml"
 import { httpText } from "../../host.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { md5Hex } from "../../utils/md5.ts"
+import { M_HUYA, HUYA_UA } from "./client.ts"
 
-const M_HUYA = "https://m.huya.com"
-/** 抓房间页 UA(移动页 m.huya.com 用移动 UA,PC UA 会被风控返回无数据页)。 */
-const UA_MOBILE =
-  "Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
 /** 播放 FLV 用的 UA(HYSDK PC 端,dart 同款)。 */
 export const HUYA_PLAY_UA =
   "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"
@@ -110,7 +107,7 @@ async function fetchFirstLine(roomId: string): Promise<{
   presenterUid: number
   bitRates: Array<{ bitRate: number; name: string }>
 } | null> {
-  const html = await httpText(`${M_HUYA}/${roomId}`, { "user-agent": UA_MOBILE })
+  const html = await httpText(`${M_HUYA}/${roomId}`, { "user-agent": HUYA_UA })
   const info = parseHnfGlobalInit(html)
   const ri = (info.roomInfo ?? {}) as Record<string, any>
   const tLiveInfo = (ri.tLiveInfo ?? {}) as Record<string, any>

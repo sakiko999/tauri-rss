@@ -7,8 +7,17 @@
  */
 import { listChannels } from "../index.ts"
 import { setupBackends, exampleInfo } from "./backend.ts"
+import { DEFAULT_BILIBILI_COOKIE, DEFAULT_WEIBO_COOKIE, DEFAULT_XHS_COOKIE } from "../../../core/src/bilibili-cookie.ts"
 
 const PREVIEW = 300
+
+/** 平台前缀 → core 默认登录 cookie(bili 解锁登录档位;weibo/xhs 必须登录)。 */
+const COOKIE_BY_PREFIX: Array<[string, string]> = [
+  ["bili:", DEFAULT_BILIBILI_COOKIE],
+  ["weibo:", DEFAULT_WEIBO_COOKIE],
+  ["xhs:", DEFAULT_XHS_COOKIE],
+]
+const cookieFor = (key: string): string | undefined => COOKIE_BY_PREFIX.find(([p]) => key.startsWith(p))?.[1]
 
 async function main() {
   setupBackends()
@@ -18,7 +27,8 @@ async function main() {
 
   for (const ch of channels) {
     console.log(`\n═══ ${ch.key} (${ch.name}) ═══`)
-    const source = ch.getSource(exampleInfo(ch.key))
+    const cookie = cookieFor(ch.key)
+    const source = ch.getSource({ ...exampleInfo(ch.key), ...(cookie ? { cookie } : {}) })
     try {
       const xml = await source.fetch()
       const head = xml.slice(0, PREVIEW)

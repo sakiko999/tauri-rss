@@ -8,8 +8,8 @@
  *   `type@=chatmsg` → txt/nn/col(col 是斗鱼专属 6 色索引,非真 hex)。
  * 心跳 `type@=mrkl/`(45s);进房 loginreq + joingroup。
  */
-import type { DanmakuItem, DanmakuStream } from "../../index.ts"
-import { createWsStream } from "../../danmaku/ws.ts"
+import { createWsStream } from "../../danmaku"
+import type { DanmakuItem, DanmakuStream } from "../../danmaku"
 
 /** 编解码复用单例(每帧热路径,共享安全)。 */
 const TE = new TextEncoder()
@@ -79,7 +79,7 @@ export function douyuDanmakuStream(roomId: string): DanmakuStream {
     url: WS_URL,
     onOpen: (ws) => {
       const send = (body: string): void => {
-        ws.send(douyuFrame(body) as unknown as ArrayBufferView<ArrayBuffer>)
+        ws.send(douyuFrame(body))
       }
       send(`type@=loginreq/roomid@=${roomId}/`)
       send(`type@=joingroup/rid@=${roomId}/gid@=-9999/`)

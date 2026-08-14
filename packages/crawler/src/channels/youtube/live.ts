@@ -15,8 +15,7 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
-import { resolveYoutubeStreams } from "./client.ts"
-import { createLiveChatPoller } from "./live-chat.ts"
+import { resolveYoutubeStreams, youtubeClient } from "../../platform/youtube"
 
 export class YoutubeLiveChannel implements RssChannel {
   readonly key = "youtube:live"
@@ -31,7 +30,7 @@ export class YoutubeLiveChannel implements RssChannel {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolveLivePlay: (roomId) => resolveYoutubeStreams(roomId),
-      getDanmaku: (roomId) => createLiveChatPoller(roomId),
+      getDanmaku: (roomId) => youtubeClient.getDanmaku(roomId),
     }
   }
 

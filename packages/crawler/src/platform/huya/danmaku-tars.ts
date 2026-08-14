@@ -8,8 +8,8 @@
  *   整数按值域选字节宽度(0 用 ZERO_TAG);字符串 STRING1(≤255)/STRING4;
  *   字节数组 SIMPLE_LIST(BYTE 头 + 长度 + 数据);struct = BEGIN + 字段 + END。
  */
-import type { DanmakuItem } from "../index.ts"
-import { rgbToHex } from "./color.ts"
+import type { DanmakuItem } from "../../index.ts"
+import { rgbToHex } from "../../danmaku"
 
 /** 编解码复用单例(Tars 字符串读写,共享安全)。 */
 const TE = new TextEncoder()

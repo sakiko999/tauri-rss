@@ -92,10 +92,10 @@ bun run scripts/tauri.ts help  # 查看全部用法
 
 # crawler example（注入 Node host，真实抓取）
 bun run packages/crawler/src/example/list_channels.ts     # 打印全部 channel（47 个）
-bun run packages/crawler/src/example/list_sources.ts      # 每个 channel 实例化 source
 bun run packages/crawler/src/example/sample_sources.ts live:   # 抽样 fetch，filter=live: 只看直播
-bun run packages/crawler/src/example/resolve_play.ts bili:popular  # 懒解析可播流(视频)
-bun run packages/crawler/src/example/resolve_live_play.ts bili:live 6  # 懒解析直播流(直播)
+bun run packages/crawler/src/example/resolve.ts bili:popular  # 懒解析可播流(视频,video/live 合一)
+bun run packages/crawler/src/example/resolve.ts bili:live 312785  # 懒解析直播流(直播)
+bun run packages/crawler/src/example/test-danmaku.ts 5    # 四平台直播弹幕(热门在播房间)
 
 # core example（基于 crawler 输出的 channel 批量订阅 + 刷新）
 bun run packages/core/src/example/data-layer.ts
@@ -197,6 +197,8 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
   默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
   编辑该文件 → `git update-index --no-skip-worktree` 再改,勿提交真实值。
+  目前 DEFAULT_*_COOKIE 是临时方案;长期目标应用内扫码登录获取完整认证 + 定期保活,
+  可行性见 docs/platform-login-research.md。
 
 ## 调研文档（tmp/ 参考仓库）
 
@@ -231,12 +233,18 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   提取 `danmaku` 传给 `DanmakuLayer`(订阅/退订生命周期收敛在 player,接收已探测流),
   desktop `ExpandedPlayer` 零弹幕逻辑(只传 resolve)。弹幕连接释放竞态同上
   (onOpen 检查 stopped)。「异步 setup → 建流」的 stopped 拦截统一收敛进
-  `danmaku/deferred.ts` 的 deferredStream(douyin 双层/bili live/huya/bili VOD 共用,
+  `danmaku/stream.ts` 的 deferredStream(douyin 双层/bili live/huya/bili VOD 共用,
   2026-08-14 抽)。
 - **Folo 架构**:`docs/folo-architecture-research.md`。分组=subscriptions 表 `category` 字符串
   + 按 siteUrl 域名自动归类;`Transaction` 四段式乐观更新(store→request→rollback→persist)
   最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;
   iframe 嵌入播放差于我们 hls/flv/dash 直链解析,不抄。
+- **平台扫码登录 + 保活**:`docs/platform-login-research.md`。三平台扫码登录全可行
+  (bili 纯 HTTP/dart 参考、weibo JSONP、xhs 需 xhshow 签名)。续期设计:仅 bili 可自动
+  保活——bili_ticket 软性风控因子惰性随补即可,真正要保 SESSDATA(refresh_token 续期
+  闭环,180 天窗口续一次即永久,登录须捕获 refresh_token——dart 参考漏了这步);
+  weibo SUB / xhs web_session 均 ~1 年长效,到期扫码重登。统一兜底:失效检测
+  (code:-101/1006/432/461)→引导重登。
 
 ## 下一步 Todo（阶段性任务）
 

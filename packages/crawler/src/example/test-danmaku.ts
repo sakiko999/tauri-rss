@@ -1,57 +1,71 @@
 /**
- * test-danmaku —— 实测四平台弹幕流(订阅收弹幕)。
+ * test-danmaku —— 四平台直播弹幕回归(热门列表保证在播房间)。
  *
- * 对 bili live / douyu / huya / douyin 调 `getDanmaku(roomId)` 订阅 N 秒收弹幕。
- * 需对应房间正在直播(离线房间无弹幕,判定「0 条」不代表失败)。
- * bili 带 core 默认登录 cookie(getDanmuInfo 更稳);douyin 原生 WS 缺 cookie,可能收不到。
+ * 对 bili/douyu/huya/douyin 的 hot channel fetch 拿开播房间列表,逐个订阅 N 秒收弹幕。
+ * 用热门列表而非固定房间——离线房间 0 条不代表失败,热门保证在播。
+ * bili 带 core 默认登录 cookie(2026 风控:直播弹幕需真实登录 uid)。
  *
- * Run: bun run packages/crawler/src/example/test-danmaku.ts [seconds]
+ * Run: bun run packages/crawler/src/example/test-danmaku.ts [seconds] [perPlatform]
  */
-import { getChannel, isDanmakuPlayable, type DanmakuItem } from "../index.ts"
+import { getChannel, isDanmakuPlayable, type SourceInfo } from "../index.ts"
+import { parseFeed } from "../../../xml/src/xml-parser.ts"
 import { setupBackends } from "./backend.ts"
-import type { SourceInfo } from "../index.ts"
 import { DEFAULT_BILIBILI_COOKIE } from "../../../core/src/bilibili-cookie.ts"
 
-const TESTS: Array<[string, string]> = [
-  ["bili:live", "6"],
-  ["live:douyu", "9999"],
-  ["live:huya", "60066"],
-  ["live:douyin", "217952067344"],
+/** [热门 channel key, 单房间弹幕 channel key]。 */
+const HOT: Array<[string, string]> = [
+  ["bili:live:hot", "bili:live"],
+  ["live:douyu:hot", "live:douyu"],
+  ["live:huya:hot", "live:huya"],
+  ["live:douyin:hot", "live:douyin"],
 ]
 
 async function main() {
   setupBackends()
-  const seconds = Number(process.argv[2] ?? 8)
-  console.log(`probe: 四平台弹幕(订阅 ${seconds}s)\n`)
-  for (const [key, roomId] of TESTS) {
-    const ch = getChannel(key)
-    if (!ch) {
-      console.log(`❌ ${key}: 未知 channel`)
+  const seconds = Number(process.argv[2] ?? 5)
+  const perPlatform = Number(process.argv[3] ?? 3)
+  for (const [hotKey, roomKey] of HOT) {
+    const hotCh = getChannel(hotKey)
+    if (!hotCh) {
+      console.log(`❌ ${hotKey}: 未知 channel`)
       continue
     }
-    const info: SourceInfo = key === "bili:live" ? { cookie: DEFAULT_BILIBILI_COOKIE } : {}
-    const source = ch.getSource(info)
+    let rooms: string[] = []
+    try {
+      const hotInfo: SourceInfo = hotKey === "bili:live:hot" ? { cookie: DEFAULT_BILIBILI_COOKIE } : {}
+      const xml = await hotCh.getSource(hotInfo).fetch()
+      rooms = parseFeed(xml).channel.item
+        .map((i) => String((i.raw as Record<string, unknown> | undefined)?.["tpl:roomId"] ?? ""))
+        .filter(Boolean)
+    } catch (e) {
+      console.log(`⚠️ ${hotKey}: 热门列表失败: ${(e as Error).message}`)
+      continue
+    }
+    console.log(`\n${hotKey}: ${rooms.length} 个开播房间 ${rooms.slice(0, 3).join(", ")}${rooms.length > 3 ? "…" : ""}`)
+
+    const roomCh = getChannel(roomKey)
+    if (!roomCh) continue
+    const info: SourceInfo = roomKey === "bili:live" ? { cookie: DEFAULT_BILIBILI_COOKIE } : {}
+    const source = roomCh.getSource(info)
     if (!isDanmakuPlayable(source)) {
-      console.log(`⚠️ ${key}: 不支持弹幕`)
+      console.log(`  ⚠️ ${roomKey} 不支持弹幕`)
       continue
     }
-    let count = 0
-    const unsub = source.getDanmaku(roomId)((batch) => {
-      count += batch.length
-      const sample = batch
-        .slice(0, 3)
-        .map((d: DanmakuItem) => `${d.user ? `${d.user}: ` : ""}${d.text}${d.color ? ` [${d.color}]` : ""}`)
-        .join(" | ")
-      console.log(`  [${key}] +${batch.length}: ${sample}`)
-    })
-    await new Promise((r) => setTimeout(r, seconds * 1000))
-    unsub()
-    console.log(`${key}(${roomId}): ${count} 条弹幕\n`)
+    for (const rid of rooms.slice(0, perPlatform)) {
+      let count = 0
+      const sample: string[] = []
+      const unsub = source.getDanmaku(rid)((batch) => {
+        count += batch.length
+        for (const d of batch) if (sample.length < 3) sample.push(`${d.user ?? ""}: ${d.text}`)
+      })
+      await new Promise((r) => setTimeout(r, seconds * 1000))
+      unsub()
+      console.log(`  ${roomKey} ${rid}: ${count} 条${sample.length ? " | " + sample.join(" · ") : ""}`)
+    }
   }
 }
 
-// 强制 exit:WS 连接可能挂住事件循环。
-main().then(() => process.exit(0)).catch((err) => {
-  console.error("❌ probe failed:", err)
+main().then(() => process.exit(0)).catch((e) => {
+  console.error("❌ failed:", e)
   process.exit(1)
 })

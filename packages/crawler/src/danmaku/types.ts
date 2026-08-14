@@ -18,3 +18,12 @@ export interface DanmakuItem {
   /** B站视频弹幕 mode:1/2/3 滚动,4 底,5 顶,6 逆向,7 高级(渲染层用)。 */
   mode?: number
 }
+
+/** 弹幕流:订阅即开始,onItems 收批次(全量或增量);返回 unsubscribe。 */
+export type DanmakuStream = (onItems: (items: DanmakuItem[]) => void) => () => void
+
+/** 弹幕请求选项(platform client 的 getDanmaku 能力)。 */
+export interface DanmakuOptions {
+  /** 登录 cookie(部分平台握手需带,如 douyin ttwid / bili 登录态)。 */
+  cookie?: string
+}

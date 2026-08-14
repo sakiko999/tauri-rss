@@ -11,7 +11,7 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { HotWordSource, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { httpJson, now } from "../../host.ts"
-import { PC_UA, WB_BASE, mblogCardsToItems, wbJson } from "./client.ts"
+import { PC_UA, WB_BASE, mblogCardsToItems, weiboClient } from "../../platform/weibo"
 
 export class WeiboHotChannel implements RssChannel {
   readonly key = "weibo:hot"
@@ -55,14 +55,13 @@ export class WeiboHotChannel implements RssChannel {
   /** 热搜词 → 该词下微博流(keyword 搜索,需 cookie)。 */
   private async resolveHotWordImpl(word: string, cookie?: string): Promise<Item[]> {
     const q = encodeURIComponent(word)
-    const s = await wbJson(
+    const body = await weiboClient.getJson<{ ok?: number; msg?: string; data?: { cards?: any[] } }>(
       `${WB_BASE}/api/container/getIndex?containerid=100103type%3D1%26q%3D${q}`,
-      cookie,
-      { Referer: `${WB_BASE}/search?containerid=100103type%3D1%26q%3D${q}` },
+      { cookie, referer: `${WB_BASE}/search?containerid=100103type%3D1%26q%3D${q}` },
     )
-    if (s.body?.ok !== 1) throw new Error(`weibo 热搜词 "${word}" 搜索失败: ${s.body?.msg ?? s.body ?? s.status}`)
+    if (body?.ok !== 1) throw new Error(`weibo 热搜词 "${word}" 搜索失败: ${body?.msg ?? "未知错误"}`)
     // 热搜词流与用户流一致:展开长文 + 补图尺寸(批处理统一)。
-    return mblogCardsToItems(s.body.data?.cards ?? [], this.key, cookie)
+    return mblogCardsToItems(body.data?.cards ?? [], this.key, cookie)
   }
 
   private channelOptions(): SerializeOptions {

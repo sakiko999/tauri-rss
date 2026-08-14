@@ -17,10 +17,9 @@
  *
  * Run: bun run packages/crawler/src/example/probe-ws.ts
  */
-import { createBilibiliClient } from "../channels/bili/client.ts"
+import { biliClient } from "../platform/bili"
 import { brotliDecompressSync, inflateSync } from "node:zlib"
 // 相对路径引用 core 常量(bun 单文件跑解析不到 workspace 包;纯常量文件无副作用)。
-import { DEFAULT_BILIBILI_COOKIE } from "../../../core/src/bilibili-cookie.ts"
 import { setupBackends } from "./backend.ts"
 
 interface WsProbe {
@@ -161,17 +160,16 @@ function decodeBiliBody(ver: number, body: Uint8Array): string[] {
 }
 
 async function probeBiliLive(roomId: string): Promise<WsProbe> {
-  const client = createBilibiliClient({ live: true, cookie: DEFAULT_BILIBILI_COOKIE })
   let host = ""
   let token = ""
   try {
     const q = await Promise.race([
-      client.signWeb(`id=${roomId}`),
+      biliClient.signWeb(`id=${roomId}`),
       new Promise<string>((resolve) => setTimeout(() => resolve(""), 6000)),
     ])
     if (q) {
       const info = await Promise.race([
-        client.getJson<{ data?: { token?: string; host_list?: Array<{ host?: string }> } }>(
+        biliClient.getJson<{ data?: { token?: string; host_list?: Array<{ host?: string }> } }>(
           `${BILI_LIVE}/xlive/web-room/v1/index/getDanmuInfo?${q}`,
         ),
         new Promise<{ data?: { token?: string; host_list?: Array<{ host?: string }> } } | undefined>((resolve) =>

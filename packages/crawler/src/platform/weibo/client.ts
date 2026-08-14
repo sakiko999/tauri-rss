@@ -11,6 +11,7 @@ import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { fillImageSizes } from "../../utils/img-size.ts"
 import { toInt } from "../../utils/number.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
+import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 
 export const WB_BASE = "https://m.weibo.cn"
 
@@ -44,6 +45,23 @@ export async function wbJson(
   if (!text.trimStart().startsWith("{")) return { status: res.status, body: text }
   return { status: res.status, body: parseJsonSafe(text) }
 }
+
+/**
+ * 统一 getJson 入口(PlatformClient)——带 cookie/referer 的 JSON 请求,统一抛错语义:
+ * 非 200 或风控 HTML(非 JSON)抛清晰异常(区别于 wbJson 的 `{status,body}` 诊断语义,
+ * wbJson 保留给需要原始 body 的诊断场景)。
+ */
+export const weiboClient = {
+  async getJson<T = any>(url: string, opts?: PlatformRequestOptions): Promise<T> {
+    const { status, body } = await wbJson(url, opts?.cookie, {
+      ...opts?.headers,
+      ...(opts?.referer ? { Referer: opts.referer } : {}),
+    })
+    if (status !== 200) throw new Error(`weibo HTTP ${status}: ${url.slice(0, 80)}`)
+    if (typeof body === "string") throw new Error(`weibo 返回非 JSON(风控/限流): ${body.slice(0, 60)}`)
+    return body as T
+  },
+} satisfies PlatformClient
 
 /** 微博时间 "Sat Aug 08 16:14:29 +0800 2026" → epoch ms。 */
 export function parseWeiboDate(s: unknown): number | undefined {

@@ -54,6 +54,27 @@ const danmakuLog = createLogDomain("danmaku", {
   },
 })
 
+/**
+ * [crawler] 抓取生命周期(factory.apiFetch 统一装配点)——重复性日志,模板事件。
+ * 每次 fetch 完整打:开始(debug)/ 成功条数(info)/ 失败原因(warn,永保留)。
+ * fetchStart/fetchOk 量大,可 `log:crawler="0"` 按域关。channelTitle 作 source 标识。
+ */
+const crawlerLog = createLogDomain("crawler", {
+  color: "#34d399", // emerald-400
+  ansi: 78,
+  events: {
+    fetchStart: { level: "debug", text: (ctx: { source: string }) => `抓取 ${ctx.source}` },
+    fetchOk: {
+      level: "info",
+      text: (ctx: { source: string; count: number }) => `抓到 ${ctx.count} 条 · ${ctx.source}`,
+    },
+    fetchError: {
+      level: "warn",
+      text: (ctx: { source: string; message: string }) => `抓取失败 ${ctx.source}: ${ctx.message}`,
+    },
+  },
+})
+
 export const log = {
   bili: biliLog,
   biliLive: biliLiveLog,
@@ -62,4 +83,5 @@ export const log = {
   douyu: douyuLog,
   huya: huyaLog,
   danmaku: danmakuLog,
+  crawler: crawlerLog,
 }

@@ -13,8 +13,7 @@ import { type SerializeOptions } from "@tauri-playground/xml"
 import type { DanmakuPlayable, RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
-import { createBilibiliClient } from "./client.ts"
-import { biliDanmakuStream } from "./danmaku.ts"
+import { biliClient } from "../../platform/bili"
 
 const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400
@@ -61,8 +60,8 @@ function ugc(sourceId: string, t: number, v: {
  * info 携带 core 层注入的登录 cookie → 解锁更高档位(登录 1080P+);无则零登录。
  */
 function resolveBiliPlay(itemId: string, info?: SourceInfo): Promise<Stream[]> {
-  const client = createBilibiliClient({ cookie: (info?.cookie as string) || undefined })
-  return client.resolveCid(itemId).then((cid) => client.resolvePlayUrl(itemId, cid))
+  const cookie = info?.cookie || undefined
+  return biliClient.resolveCid(itemId, cookie).then((cid) => biliClient.resolvePlayUrl(itemId, cid, cookie))
 }
 
 // ── bili:square(热搜)────────────────────────────────────────────────────────
@@ -75,9 +74,8 @@ export class BiliSquareChannel implements RssChannel {
     return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
-    const client = createBilibiliClient()
-    const signed = await client.signWeb("limit=50&platform=web")
-    const data = await client.getJson<{ data?: { trending?: { list?: Array<Record<string, unknown>> } } }>(
+    const signed = await biliClient.signWeb("limit=50&platform=web")
+    const data = await biliClient.getJson<{ data?: { trending?: { list?: Array<Record<string, unknown>> } } }>(
       `${API}/x/web-interface/wbi/search/square?${signed}`,
     )
     const list = data?.data?.trending?.list ?? []
@@ -117,12 +115,12 @@ export class BiliPopularChannel implements RssChannel {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
-      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
+      getDanmaku: (itemId) =>
+        biliClient.getDanmaku(itemId, { kind: "vod", cookie: info.cookie || undefined }),
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
-    const client = createBilibiliClient()
-    const data = await client.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
+    const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `${API}/x/web-interface/popular`,
     )
     const list = data?.data?.list ?? []
@@ -162,14 +160,14 @@ export class BiliRankingChannel implements RssChannel {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
-      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
+      getDanmaku: (itemId) =>
+        biliClient.getDanmaku(itemId, { kind: "vod", cookie: info.cookie || undefined }),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const rid = info.rid ?? "all"
     const numericRid = /^\d+$/.test(rid) ? rid : (RID_TABLE[rid] ?? "0")
-    const client = createBilibiliClient()
-    const data = await client.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
+    const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `${API}/x/web-interface/ranking/v2?rid=${numericRid}&type=all&web_location=333.934`,
       { referer: `https://www.bilibili.com/v/popular/rank/${rid}` },
     )
@@ -202,12 +200,12 @@ export class BiliWeeklyChannel implements RssChannel {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
-      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
+      getDanmaku: (itemId) =>
+        biliClient.getDanmaku(itemId, { kind: "vod", cookie: info.cookie || undefined }),
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
-    const client = createBilibiliClient()
-    const status = await client.getJson<{ data?: Array<{ number: number; name: string }> }>(
+    const status = await biliClient.getJson<{ data?: Array<{ number: number; name: string }> }>(
       "https://app.bilibili.com/x/v2/show/popular/selected/series?type=weekly_selected",
       { referer: "https://www.bilibili.com/h5/weekly-recommend" },
     )
@@ -215,7 +213,7 @@ export class BiliWeeklyChannel implements RssChannel {
     const series = status?.data ?? []
     const head = series[0]
     if (!head) throw new Error("bilibili weekly: no series")
-    const data = await client.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
+    const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `https://app.bilibili.com/x/v2/show/popular/selected?type=weekly_selected&number=${head.number}`,
       { referer: `https://www.bilibili.com/h5/weekly-recommend?num=${head.number}&navhide=1` },
     )
@@ -249,17 +247,17 @@ export class BiliUserVideoChannel implements RssChannel {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
       resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
-      getDanmaku: (itemId) => biliDanmakuStream(itemId, (info.cookie as string) || undefined),
+      getDanmaku: (itemId) =>
+        biliClient.getDanmaku(itemId, { kind: "vod", cookie: info.cookie || undefined }),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const uid = info.uid ?? ""
     if (!uid) throw new Error("bili:user_video 需要 uid")
-    const client = createBilibiliClient({ buvid: true })
-    const signed = await client.signWeb(`mid=${uid}&ps=30&pn=1&platform=web&order=pubdate`)
-    const data = await client.getJson<{ data?: { list?: { vlist?: Array<Record<string, unknown>> } } }>(
+    const signed = await biliClient.signWeb(`mid=${uid}&ps=30&pn=1&platform=web&order=pubdate`)
+    const data = await biliClient.getJson<{ data?: { list?: { vlist?: Array<Record<string, unknown>> } } }>(
       `${API}/x/space/wbi/arc/search?${signed}`,
-      { referer: `https://space.bilibili.com/${uid}/video` },
+      { referer: `https://space.bilibili.com/${uid}/video`, buvid: true },
     )
     const vlist = data?.data?.list?.vlist ?? []
     const t = now()

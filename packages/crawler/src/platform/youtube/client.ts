@@ -21,6 +21,8 @@ import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts
 import { getItag, isPlayableItag } from "./itag.ts"
 import { deobfuscateNParam, hasThrottlingParam } from "./signature.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
+import { createLiveChatPoller } from "./danmaku.ts"
+import type { PlatformClient } from "../types.ts"
 
 
 const YOUTUBEI_V1 = "https://www.youtube.com/youtubei/v1"
@@ -455,3 +457,9 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
 
   throw new Error(`YouTube 未找到可播直链: https://www.youtube.com/watch?v=${videoId}`)
 }
+
+/** 无状态 youtube 客户端:弹幕流能力(live chat 轮询)。播放流走 resolveYoutubeStreams 函数。 */
+export const youtubeClient = {
+  /** 直播弹幕(InnerTube continuation 轮询,非 WS)。播放流走 resolveYoutubeStreams。 */
+  getDanmaku: (roomId: string) => createLiveChatPoller(roomId),
+} satisfies PlatformClient
