@@ -12,7 +12,6 @@
     "packages/log",
     "packages/player",
     "packages/ui",
-    "packages/xhshow",
     "packages/xml"
   ],
   "scripts": {

@@ -1,0 +1,105 @@
+name: Bug 报告 | Bug Report
+description: 报告错误或异常行为 | Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你填写此 Bug 报告!
+        Thanks for taking the time to fill out this bug report!
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug 描述 | Bug Description
+      description: 清晰简洁地描述这个 Bug | A clear and concise description of what the bug is
+      placeholder: 告诉我们你遇到了什么 | Tell us what you see
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤 | Steps to Reproduce
+      description: 如何复现这个问题 | Steps to reproduce the behavior
+      placeholder: |
+        1. 导入 xhshow 并调用 '...' | Import xhshow with '...'
+        2. 调用方法 '...' | Call method '...'
+        3. 看到错误 | See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为 | Expected Behavior
+      description: 你期望发生什么 | What you expected to happen
+      placeholder: 应该发生什么? | What should happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为 | Actual Behavior
+      description: 实际发生了什么? | What actually happened?
+      placeholder: 实际发生了什么? | What did happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: 代码示例 | Code Sample
+      description: 请提供能够复现问题的最小代码示例 | Please provide a minimal code sample that reproduces the issue
+      placeholder: |
+        ```python
+        from xhshow import Xhshow
+
+        client = Xhshow()
+        # Your code here
+        ```
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: 错误堆栈 | Error Traceback
+      description: 如果适用,请粘贴完整的错误堆栈 | If applicable, paste the full error traceback
+      render: shell
+
+  - type: input
+    id: version
+    attributes:
+      label: xhshow 版本 | xhshow Version
+      description: 你使用的 xhshow 版本 | Which version of xhshow are you using
+      placeholder: "0.1.8"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python 版本 | Python Version
+      description: 你使用的 Python 版本 | Which version of Python are you using
+      placeholder: "3.12"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统 | Operating System
+      description: 你使用的操作系统 | Which operating system are you using
+      placeholder: "Windows 11 / Ubuntu 22.04 / macOS 14"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息 | Additional Context
+      description: 添加关于此问题的其他信息 | Add any other context about the problem here

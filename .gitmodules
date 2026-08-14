@@ -1,0 +1,3 @@
+[submodule "packages/xhshow"]
+	path = packages/xhshow
+	url = https://github.com/Cloxl/xhshow

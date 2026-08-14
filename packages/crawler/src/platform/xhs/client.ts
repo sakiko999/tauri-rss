@@ -4,16 +4,13 @@
  * 小红书数据双通道(2026-08 起拆分):
  *   - SSR 页面:`/explore` 等仍内嵌 `window.__INITIAL_STATE__`(推荐流 feeds),
  *     fetchHtml + extractInitialState,匿名可用 → explore 用;
- *   - 签名 API:`user_posted` 等用户数据已改为 JS/API 动态加载,SSR 不再内嵌,
- *     且 API 需 x-s/x-s-common/x-t 签名(xhshow-js 纯算),需登录 cookie(web_session)
- *     → user 用。
+ *   - 签名 API:`user_posted` 等需 x-s/x-s-common/x-t 签名 —— ⚠️ 已降级
+ *     (2026-08-15,TS fork 过时 461,见 signApiHeaders TODO)→ user 暂不可用。
  *
  * cookie 由 core 层 DEFAULT_XHS_COOKIE 经 info.cookie 注入。
  */
 import type { Social, SocialImage } from "@tauri-playground/xml"
-import { Client, PUBLIC_USER_AGENT } from "@tauri-playground/xhshow"
 import { httpJson, httpText } from "../../host.ts"
-import { parseCookieDict } from "../../utils/cookie.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
@@ -26,29 +23,21 @@ export const XHS_API_BASE = "https://edith.xiaohongshu.com"
 export const XHS_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
-/** 签名 Client 无状态(signXS/signXSCommon 全从参数取),模块级复用一个实例。 */
-const signClient = new Client()
-
 /**
- * 生成小红书 API 签名请求头(x-s/x-s-common/x-t/x-b3-traceid/x-xray-traceid)。
- * 纯算基于 xhshow(xhshow-js 移植),无需浏览器;缺 a1 时签名无效(API 会 406/风控)。
- * 注意:a1 是签名种子,必须来自该会话真实 cookie。
+ * 生成小红书 API 签名请求头(x-s/x-s-common/x-t/...) —— ⚠️ 已降级。
+ *
+ * 2026-07 底小红书升级签名算法,原 TS fork(@tauri-playground/xhshow)已过时(HTTP 461)。
+ * `packages/xhshow` 已改为 Python 上游(Cloxl/xhshow)+ rustpython 兼容补丁,但 crawler
+ * 侧 RustPython 门面尚未接入 → 所有签名 API(user_posted 等)当前不可用;
+ * explore(SSR 匿名)保留。
+ * TODO(rustpython): appHost.python 门面接入后,改为跑 Python 版 xhshow 生成签名。
  */
-export function signApiHeaders(cookie: string, uri: string, params: Record<string, string>): Record<string, string> {
-  const cookies = parseCookieDict(cookie)
-  const a1 = cookies.a1 ?? ""
-  const ts = signClient.getXT()
-  return {
-    "x-s": signClient.signXS("GET", uri, a1, "xhs-pc-web", params, ts),
-    "x-t": String(ts),
-    "x-b3-traceid": signClient.getB3TraceId(),
-    "x-xray-traceid": signClient.getXrayTraceId(ts, 0),
-    "x-s-common": signClient.signXSCommon({ ...cookies, a1 }),
-    "User-Agent": PUBLIC_USER_AGENT,
-    Accept: "application/json, text/plain, */*",
-    Referer: `${XHS_BASE}/`,
-    Origin: XHS_BASE,
-  }
+export function signApiHeaders(
+  _cookie: string,
+  _uri: string,
+  _params: Record<string, string>,
+): Record<string, string> {
+  throw new Error("xhs 签名已降级:TS fork 过时(461),待 RustPython 接入 packages/xhshow(Python 版)")
 }
 
 /** 调小红书 API(GET),返回解析后 body(签名 headers + cookie 并入)。 */

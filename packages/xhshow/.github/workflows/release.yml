@@ -1,0 +1,154 @@
+name: Release
+
+on:
+  push:
+    tags:
+      # Only publish stable releases (v1.2.3 format, not v1.2.3-dev1)
+      - v[0-9]+.[0-9]+.[0-9]+
+
+jobs:
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION_NO_V="${VERSION#v}"
+
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          # Generate changelog
+          echo "CHANGELOG<<CHANGELOG_EOF" >> $GITHUB_OUTPUT
+          if [ -n "$PREV_TAG" ]; then
+            echo "## What's Changed" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${VERSION}" >> $GITHUB_OUTPUT
+          else
+            echo "Initial release" >> $GITHUB_OUTPUT
+          fi
+          echo "CHANGELOG_EOF" >> $GITHUB_OUTPUT
+
+          echo "VERSION_NO_V=${VERSION_NO_V}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ${{ steps.release_notes.outputs.CHANGELOG }}
+
+            ## Installation
+
+            ```bash
+            pip install xhshow==${{ steps.release_notes.outputs.VERSION_NO_V }}
+            ```
+
+            Or upgrade from previous version:
+
+            ```bash
+            pip install --upgrade xhshow
+            ```
+
+            ## Quick Start
+
+            ```python
+            from xhshow import Xhshow, SessionManager
+
+            # Basic usage
+            client = Xhshow()
+
+            # GET request signature
+            signature = client.sign_xs_get(
+                uri="/api/sns/web/v1/user_posted",
+                a1_value="your_a1_cookie_value",
+                params={"num": "30", "user_id": "123"}
+            )
+
+            # POST request signature
+            signature = client.sign_xs_post(
+                uri="/api/sns/web/v1/comment/post",
+                a1_value="your_a1_cookie_value",
+                payload={"note_id": "123", "content": "Great!"}
+            )
+
+            # Generate complete headers with session management
+            session = SessionManager()
+            headers = client.sign_headers_get(
+                uri="/api/sns/web/v1/homefeed",
+                cookies={"a1": "your_a1_value", "web_session": "..."},
+                params={"page": "1"},
+                session=session
+            )
+            ```
+
+            ## Documentation
+
+            - [GitHub Repository](https://github.com/${{ github.repository }})
+            - [PyPI Package](https://pypi.org/project/xhshow/${{ steps.release_notes.outputs.VERSION_NO_V }}/)
+
+            ## Supported Python Versions
+
+            - Python 3.10+
+            - Python 3.11
+            - Python 3.12
+
+  pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: github-release
+    # Environment and permissions trusted publishing.
+    environment:
+      # Create this environment in the GitHub repository under Settings -> Environments
+      name: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      
+      - name: Build package
+        run: uv build
+      
+      # Check that basic features work and we didn't miss to include crucial files
+      - name: Smoke test (wheel)
+        run: |
+          WHEEL_FILE=$(find dist -name "*.whl" -type f)
+          uv run --isolated --no-project -p 3.12 --with "$WHEEL_FILE" -- python -c "from xhshow import Xhshow, CryptoProcessor; client = Xhshow(); print('Wheel package works'); print('Xhshow module:', client.__class__.__module__)"
+      
+      - name: Smoke test (source distribution)
+        run: |
+          TARBALL_FILE=$(find dist -name "*.tar.gz" -type f)
+          uv run --isolated --no-project -p 3.12 --with "$TARBALL_FILE" -- python -c "from xhshow import Xhshow, CryptoProcessor; client = Xhshow(); print('Source distribution works'); print('Xhshow module:', client.__class__.__module__)"
+      
+      - name: Check if version exists on PyPI
+        run: |
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+          if pip index versions xhshow | grep -q "$VERSION"; then
+            echo "Version $VERSION already exists on PyPI, skipping upload"
+            echo "SKIP_PYPI=true" >> $GITHUB_ENV
+          else
+            echo "Version $VERSION not found on PyPI, proceeding with upload"
+            echo "SKIP_PYPI=false" >> $GITHUB_ENV
+          fi
+      
+      - name: Publish to PyPI
+        if: env.SKIP_PYPI == 'false'
+        run: uv publish --trusted-publishing always

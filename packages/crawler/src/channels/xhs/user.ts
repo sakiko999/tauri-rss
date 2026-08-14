@@ -2,8 +2,9 @@
  * xhs:user —— 小红书用户笔记 channel(kind: social)。
  *
  * 小红书已把用户页笔记改为 JS/API 动态加载,SSR 不再内嵌(`user.notes` 空分组)——
- * 走 `user_posted` API(edith.xiaohongshu.com),需 xhshow-js 签名(x-s/x-s-common/x-t)
- * + **登录 cookie(web_session)**。无登录态返回 code:-101。
+ * 走 `user_posted` API(edith.xiaohongshu.com),需签名 + 登录 cookie(web_session)。
+ * ⚠️ 已降级(2026-08-15):TS fork 签名过时(461),待 RustPython 接入 —— fetch 会抛
+ * 「xhs 签名已降级」错误,不产出条目。
  */
 import type { Item, Social } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"

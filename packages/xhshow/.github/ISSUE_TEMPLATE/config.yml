@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/cloxl/xhshow/discussions
+    about: For general questions and discussions | 一般性问题和讨论
+  - name: Documentation
+    url: https://github.com/cloxl/xhshow#readme
+    about: Check the documentation for usage guides | 查看使用指南和文档
