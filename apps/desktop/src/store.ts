@@ -21,7 +21,6 @@ import {
   type SubscriptionGroup,
 } from "@tauri-playground/core"
 import { TEST_SUBSCRIPTIONS } from "./subscriptions"
-import { getChannel } from "@tauri-playground/crawler"
 
 /** 内容 tab:all 显示全部,其余按 kind 过滤中栏。tab 是「默认视图节点」的 kind 部分。 */
 export type ContentTab = "all" | "article" | "video" | "audio" | "live" | "social"
@@ -90,7 +89,8 @@ export function nodeKindOf(nodeId: string | null, subscriptions: Subscription[])
   }
   if (isSmartFeed(nodeId)) return undefined
   const sub = subscriptions.find((s) => s.id === nodeId)
-  return sub ? getChannel(sub.channelKey)?.kind : undefined
+  // kind 由 core DataLayer.channelKind 提供(apps 不直接碰 crawler 注册表)。
+  return sub ? useDesktop.getState().dl?.channelKind(sub.channelKey) : undefined
 }
 
 /**
@@ -362,11 +362,9 @@ export const useDesktop = create<DesktopState>((set, get) => {
     async addSubscription(channelKey, title, info) {
       const dl = get().dl
       if (!dl) return null
-      const id = `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-      const t = Date.now()
-      await dl.subscriptions.add({ id, channelKey, title, enabled: true, info, createdAt: t, updatedAt: t })
+      // 拼 id + add + refresh 编排收敛在 core DataLayer.addSubscription。
+      const id = await dl.addSubscription(channelKey, title, info)
       set({ subscriptions: await dl.subscriptions.list() })
-      await get().refresh(id)
       return id
     },
   }

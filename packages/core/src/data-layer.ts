@@ -15,15 +15,17 @@ import {
   isPageable,
   isRssLiveSource,
   isRssVideoSource,
+  listChannels as listCrawlerChannels,
   registerAllChannels,
 } from "@tauri-playground/crawler"
 import { serializeFeed } from "@tauri-playground/xml"
 import { deserializeFeed } from "./xml/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
+import type { ChannelInfo } from "./types/channel-info.ts"
 import type { ResolvePlayback } from "./types/playback.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
-import type { MediaItem } from "./types/media-item.ts"
+import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import type { AppSettings } from "./types/settings.ts"
 import {
   createSubscriptionRepository,
@@ -34,6 +36,12 @@ import { createSettingsRepository, type SettingsRepository } from "./repo/settin
 import { createMediaStore } from "./store/media-store.ts"
 
 export interface DataLayer {
+  /** 可用渠道列表(添加订阅对话框;core 收敛 crawler 注册表,apps 不直接碰 crawler)。 */
+  listChannels(): ChannelInfo[]
+  /** 订阅的 channel kind(UI 按 kind 分发用;channelKey 来自 Subscription)。 */
+  channelKind(channelKey: string): MediaKind | undefined
+  /** 创建订阅(channelKey + info)并刷新,返回新订阅 id。 */
+  addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string>
   /** 订阅配置(CRUD + 分组)。 */
   readonly subscriptions: SubscriptionRepository
   /** 阅读状态(已读 / 续播位置)。 */
@@ -205,7 +213,34 @@ export function createDataLayer(): DataLayer {
     return { addedCount: items.length, hasMore: !!nextCursor }
   }
 
+  /** 渠道列表投影(crawler RssChannel → core ChannelInfo,不透 source 装配)。 */
+  function listChannels(): ChannelInfo[] {
+    return listCrawlerChannels().map((c) => ({
+      key: c.key,
+      name: c.name,
+      kind: c.kind,
+      sourceInfoTpl: c.sourceInfoTpl,
+      defaultInfo: c.defaultInfo,
+    }))
+  }
+
+  function channelKind(channelKey: string): MediaKind | undefined {
+    return getChannel(channelKey)?.kind
+  }
+
+  /** 创建订阅并刷新(拼 id + add + refresh 的编排收敛进 core)。 */
+  async function addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string> {
+    const id = `s-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    const t = now()
+    await repo.add({ id, channelKey, title, enabled: true, info, createdAt: t, updatedAt: t })
+    await refresh(id)
+    return id
+  }
+
   return {
+    listChannels,
+    channelKind,
+    addSubscription,
     subscriptions: repo,
     reading,
     settings,

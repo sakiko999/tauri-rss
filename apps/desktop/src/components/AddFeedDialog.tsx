@@ -9,7 +9,6 @@
  */
 import { useEffect, useMemo, useState } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
-import { listChannels } from "@tauri-playground/crawler"
 import { X, Loader2 } from "lucide-react"
 import { useDesktop } from "../store.ts"
 
@@ -25,7 +24,9 @@ export function AddFeedDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const addSubscription = useDesktop((s) => s.addSubscription)
-  const channels = useMemo(() => listChannels(), [])
+  // 渠道列表走 core DataLayer(apps 不直接碰 crawler 注册表);dl 就绪后填充。
+  const dl = useDesktop((s) => s.dl)
+  const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
   const [channelKey, setChannelKey] = useState("")
   const [values, setValues] = useState<Record<string, string>>({})
   const [title, setTitle] = useState("")

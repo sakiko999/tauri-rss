@@ -5,33 +5,27 @@
  * crawler 只输出 RSS 2.0 + `tpl:` XML;core 自己解析 XML、自建渲染模型
  * (MediaItem),不依赖 crawler 的数据模型类型。
  *
- * Public surface:
- *   - 编排:   createDataLayer / DataLayer / RefreshResult
- *   - 订阅:   Subscription / SubscriptionGroup / SubscriptionRepository
- *   - 阅读:   ReadingRepository / ReadRecord / ReadingMap
- *   - 设置:   SettingsRepository / AppSettings / DEFAULT_SETTINGS
- *   - 内容:   MediaItem(判别联合)/ MediaQuery / createMediaStore
- *   - XML:    deserializeFeed(本项目 XML → MediaItem)
- *   - 宿主:   直接访问 globalThis.appHost(门面在 @tauri-playground/host)
+ * Public surface(apps 唯一数据入口 = createDataLayer + 稳定类型):
+ *   - 编排:   createDataLayer / DataLayer / RefreshResult / ChannelInfo
+ *   - 订阅:   Subscription / SubscriptionGroup(CRUD 走 DataLayer.subscriptions)
+ *   - 设置:   AppSettings / DEFAULT_SETTINGS(读写走 DataLayer.settings)
+ *   - 内容:   MediaItem(判别联合)/ MediaStream / MediaQuery / ResolvePlayback
  *   - 错误:   NoChannelError
+ *   - 宿主:   直接访问 globalThis.appHost(门面在 @tauri-playground/host)
+ *
+ * 收敛内部:repo/media-store/xml 反序列化/parseFeed 均不对外(core 内部实现)。
+ * apps 不直接 import crawler(渠道能力经 DataLayer.listChannels/channelKind)。
  */
 export { createDataLayer } from "./data-layer.ts"
 export type { DataLayer } from "./data-layer.ts"
+export type { ChannelInfo } from "./types/channel-info.ts"
 export type { RefreshResult } from "./types/refresh-result.ts"
 
 export type {
   Subscription,
   SubscriptionGroup,
 } from "./types/subscription.ts"
-export { createSubscriptionRepository } from "./repo/subscription-repo.ts"
-export type { SubscriptionRepository } from "./repo/subscription-repo.ts"
 
-export { createReadingRepository } from "./repo/reading-repo.ts"
-export type { ReadingRepository } from "./repo/reading-repo.ts"
-export type { ReadRecord, ReadingMap } from "./types/reading.ts"
-
-export { createSettingsRepository } from "./repo/settings-repo.ts"
-export type { SettingsRepository } from "./repo/settings-repo.ts"
 export type { AppSettings, ViewMode, ThemeMode, Density } from "./types/settings.ts"
 export { DEFAULT_SETTINGS } from "./types/settings.ts"
 
@@ -53,12 +47,5 @@ export type {
 export type { LivePlatformId, LiveStatus } from "./types/live.ts"
 export type { MediaQuery } from "./types/query.ts"
 export type { ResolvePlayback } from "./types/playback.ts"
-export { createMediaStore } from "./store/media-store.ts"
-export type { MediaStore, MediaStoreListener } from "./store/media-store.ts"
-
-export { deserializeFeed } from "./xml/deserialize.ts"
-export type { DeserializeContext } from "./xml/deserialize.ts"
-export { parseFeed } from "@tauri-playground/xml"
-export type { ParsedFeed, ParsedItem } from "@tauri-playground/xml"
 
 export { NoChannelError } from "./errors.ts"
