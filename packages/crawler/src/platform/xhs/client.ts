@@ -5,7 +5,7 @@
  *   - SSR 页面:`/explore` 等仍内嵌 `window.__INITIAL_STATE__`(推荐流 feeds),
  *     fetchHtml + extractInitialState,匿名可用 → explore 用;
  *   - 签名 API:`user_posted` 等需 x-s/x-s-common/x-t 签名 —— ⚠️ 已降级
- *     (2026-08-15,TS fork 过时 461,见 signApiHeaders TODO)→ user 暂不可用。
+ *     (签名库 xhshow 已移至 feat/xhs-rustpython 分支,见 signApiHeaders)→ user 暂不可用。
  *
  * cookie 由 core 层 DEFAULT_XHS_COOKIE 经 info.cookie 注入。
  */
@@ -26,18 +26,17 @@ export const XHS_UA =
 /**
  * 生成小红书 API 签名请求头(x-s/x-s-common/x-t/...) —— ⚠️ 已降级。
  *
- * 2026-07 底小红书升级签名算法,原 TS fork(@tauri-playground/xhshow)已过时(HTTP 461)。
- * `packages/xhshow` 已改为 Python 上游(Cloxl/xhshow)+ rustpython 兼容补丁,但 crawler
- * 侧 RustPython 门面尚未接入 → 所有签名 API(user_posted 等)当前不可用;
- * explore(SSR 匿名)保留。
- * TODO(rustpython): appHost.python 门面接入后,改为跑 Python 版 xhshow 生成签名。
+ * 2026-07 底小红书升级签名算法,签名库 xhshow 已移至 feat/xhs-rustpython 分支
+ * (Python 上游 + RustPython 兼容补丁,随 RustPython 签名 crate 在专门分支维护)。
+ * 主分支不维护签名 API → 所有签名 API(user_posted 等)当前不可用;
+ * explore(SSR 匿名)保留。若需恢复,合并 feat/xhs-rustpython 分支。
  */
 export function signApiHeaders(
   _cookie: string,
   _uri: string,
   _params: Record<string, string>,
 ): Record<string, string> {
-  throw new Error("xhs 签名已降级:TS fork 过时(461),待 RustPython 接入 packages/xhshow(Python 版)")
+  throw new Error("xhs 签名已降级:签名库在 feat/xhs-rustpython 分支,主分支不维护")
 }
 
 /** 调小红书 API(GET),返回解析后 body(签名 headers + cookie 并入)。 */

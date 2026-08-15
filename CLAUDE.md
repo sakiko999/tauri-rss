@@ -51,22 +51,13 @@ packages/
                    warn/error 永保留。被 player/host/crawler 引用
   ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
                    播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
-  xhshow/        ★ @tauri-playground/xhshow — 小红书签名 xhshow-js 的 MIT fork 适配包装。
-                   vendor/xhshow.js 是 xhshow-js dist 的 fork(MIT,已保留原版权声明;
-                   改 node:crypto → 包内 crypto-shim 纯 JS crypto-js.MD5)→ node/browser
-                   同一份源码可跑,无需 vite alias。全局 Buffer(xhshow 仍引用)由入口
-                   模块注入 PolyfillBuffer(browser;node 用原生跳过)。exports 带
-                   browser/default 双条件(当前同源,预留差异扩展)。仅 crawler 的 xhs
-                   channel 引用,消费方只 import 本包不感知补丁。browser 模拟测试:
-                   `bun run packages/xhshow/src/example/verify-browser.ts`
+  ✂️ xhshow(小红书签名库,Python 上游 fork)已移至 **feat/xhs-rustpython** 分支:
+     原 xhshow-js TS fork 过时(2026-07 升级签名后 461),Python 版 + RustPython
+     补丁随签名 crate 一起在专门分支维护,主分支不再包含(见 docs/xhs-signature-research.md)
 ```
 
 依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
-`log` 是零依赖叶子,被 player/host/crawler 引用;`host` 被 crawler/core/desktop/player 共用；
-`xhshow` 被 crawler(xhs channel) 引用。
-
-依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
-`host` 被 crawler/core/desktop/player 共用。
+`log` 是零依赖叶子,被 player/host/crawler 引用;`host` 被 crawler/core/desktop/player 共用。
 读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
 
 ## 宿主注入：全局 appHost 门面
@@ -189,15 +180,16 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   用**平衡大括号截纯 JSON**（非截到 `</script>`）+ 空容器构造归一，RSSHub 的
   `replaceAll("undefined","null")` 救不了。`xhs:user` 用户笔记改走 **user_posted API**
   （edith.xiaohongshu.com）——小红书把 user 页笔记改为 JS/API 动态加载，SSR
-  `user.notes` 已空（`[[],[],...]`）。API 需 **xhshow-js 签名**（`x-s/x-s-common/x-t`，
-  xhshow Python 库的 TS 移植，纯算无 eval → webview CSP 安全）+ **登录 cookie
-  （web_session）**（匿名 406、未登录 code:-101）；签名种子 `a1` 取自会话 cookie。
-  实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
-  ⚠️ **签名已过时(2026-08)**:xhshow-js fork(mns0301)的 x-s 被服务器拒(HTTP 461),
-  xhs 2026-07 升级签名;且签名**约 1 月~1 季度一改 + 按账号/会话灰度分发**,
-  b1 指纹需真实浏览器——纯算法维护成本高。**决策:降级 SSR 匿名刷新**(explore
-  快照+刷新、不做翻页;user 不可用),不维护签名 API。若未来走浏览器注入签名
-  (Playwright/WebView)另议。细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
+  `user.notes` 已空（`[[],[],...]`）。user_posted API 需签名
+  （`x-s/x-s-common/x-t`）+ **登录 cookie（web_session）**（匿名 406、未登录
+  code:-101）；签名种子 `a1` 取自会话 cookie。实现见
+  `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
+  ⚠️ **签名库 xhshow 已移至 feat/xhs-rustpython 分支**:原 TS fork 过时(2026-07
+  升级签名后 461),Python 版 + RustPython 补丁随签名 crate 在专门分支维护;
+  主分支**降级 SSR 匿名刷新**(explore 快照+刷新、不做翻页;user 不可用),
+  不维护签名 API。签名约 1 月~1 季度一改 + 按账号/会话灰度分发,b1 指纹需真实
+  浏览器——纯算法维护成本高;若未来走浏览器注入签名(Playwright/WebView)另议。
+  细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
 - **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
   空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
   默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
@@ -245,7 +237,8 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;
   iframe 嵌入播放差于我们 hls/flv/dash 直链解析,不抄。
 - **平台扫码登录 + 保活**:`docs/platform-login-research.md`。三平台扫码登录全可行
-  (bili 纯 HTTP/dart 参考、weibo JSONP、xhs 需 xhshow 签名)。续期设计:仅 bili 可自动
+  (bili 纯 HTTP/dart 参考、weibo JSONP、xhs 需签名——签名库在 feat/xhs-rustpython)。
+  续期设计:仅 bili 可自动
   保活——bili_ticket 软性风控因子惰性随补即可,真正要保 SESSDATA(refresh_token 续期
   闭环,180 天窗口续一次即永久,登录须捕获 refresh_token——dart 参考漏了这步);
   weibo SUB / xhs web_session 均 ~1 年长效,到期扫码重登。统一兜底:失效检测
