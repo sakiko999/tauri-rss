@@ -30,12 +30,16 @@ print(h['x-s'])
 "
 ```
 
-## 与 crawler 对接（TODO）
+## 与 crawler 对接（✅ 已接入，2026-08-15）
 
-- crawler `platform/xhs/client.ts` 原 import TS fork `@tauri-playground/xhshow` 已降级
-  （xhs:user 签名暂弃，461 本就用不了；explore SSR 保留）。
-- 待接入：tauri Rust 层嵌入 rustpython crate（见 `docs/xhs-signature-sidecar-eval.md`
-  3b 节），appHost 加 `python` 门面，crawler 签名调用点改为跑本仓库 Python 版。
+- crawler `platform/xhs/client.ts` 的 `signApiHeaders` 已改调 `appHost.python` 门面
+  （RustPython 嵌本仓库 Python 版，`sign_format="xyw"` + uri 查询串保序解析，见
+  `crates/rustpython-xhs/res/_xhs_sign.py`）。
+- 接入链路：`crates/rustpython-xhs`（rustpython 0.5.0 + freeze-stdlib + **release 构建**）
+  → src-tauri `xhs_sign` command → host `appHost.python`（TauriPythonBackend）→ crawler。
+- ⚠️ **reqwest 通道 406 待解**：签名本身有效（x-s 与 CPython 逐字节一致），但 crawler
+  走 appHost.http → tauri http_get(reqwest) 会被 406（reqwest TLS 指纹被小红书拦），
+  解后 xhs:user 才真正可用。见主仓库 `docs/xhs-signature-sidecar-eval.md` 6 节。
 - 升级：上游更新时 `git pull` 上游 → 重打上述 2 补丁（若上游改动这两处）。
 
 ## 上游同步

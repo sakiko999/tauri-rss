@@ -51,27 +51,33 @@ packages/
                    warn/error 永保留。被 player/host/crawler 引用
   ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
                    播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
-  xhshow/        ★ @tauri-playground/xhshow — 小红书签名 xhshow-js 的 MIT fork 适配包装。
-                   vendor/xhshow.js 是 xhshow-js dist 的 fork(MIT,已保留原版权声明;
-                   改 node:crypto → 包内 crypto-shim 纯 JS crypto-js.MD5)→ node/browser
-                   同一份源码可跑,无需 vite alias。全局 Buffer(xhshow 仍引用)由入口
-                   模块注入 PolyfillBuffer(browser;node 用原生跳过)。exports 带
-                   browser/default 双条件(当前同源,预留差异扩展)。仅 crawler 的 xhs
-                   channel 引用,消费方只 import 本包不感知补丁。browser 模拟测试:
-                   `bun run packages/xhshow/src/example/verify-browser.ts`
+  xhshow/        ★ 小红书签名 Python 上游(Cloxl/xhshow 的 fork,git submodule)。
+                   原为 xhshow-js 的 TS fork(2026-07 签名升级后 461 过时);已改为
+                   Python 上游 0.2.0 + 2 处 rustpython 兼容补丁(sharding ctypes→纯
+                   Python _int32;fingerprint ARC4→纯 Python RC4),随 RustPython 嵌入
+                   在 tauri Rust 层跑(crates/rustpython-xhs)。不在 bun workspace 内
+                   (根 package.json 已移除),不直接被 crawler import——crawler 走
+                   appHost.python 门面。⚠️ reqwest 通道 406 待解,见
+                   docs/xhs-signature-sidecar-eval.md
+crates/
+  rustpython-xhs/ ★ 小红书签名 RustPython 嵌入 crate(仅此一个 Rust 工作区子 crate)。
+                     rustpython 0.5.0 + freeze-stdlib + **release 构建**(debug 下解释器
+                     essential_init 递归失败)。对外只暴露 sign_xhs(uri,params,cookie)→
+                     XhsSignHeaders;隔离上游 API 漂移 + 锁依赖(根 Cargo.lock precise 锁
+                     malachite-bigint 0.9.2)。跑 packages/xhshow submodule 的 Python 版
+                     (含 2 补丁),wrapper res/_xhs_sign.py(sign_format=xyw + uri 查询串
+                     保序解析)。⚠️ reqwest 通道 406 待解。验证:
+                     cargo test -p rustpython-xhs --release(冒烟) / xhs_verify bin(低频)
 ```
 
 依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
 `log` 是零依赖叶子,被 player/host/crawler 引用;`host` 被 crawler/core/desktop/player 共用；
-`xhshow` 被 crawler(xhs channel) 引用。
-
-依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
-`host` 被 crawler/core/desktop/player 共用。
+`xhshow`(Python submodule) 被 crates/rustpython-xhs 引用;crawler 经 appHost.python 门面调用,不直接 import。
 读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
 
 ## 宿主注入：全局 appHost 门面
 
-宿主能力（http / ws / js 签名执行 / storage / now / log）经**全局 `globalThis.appHost`** 注入：
+宿主能力（http / ws / js / python 签名执行 / storage / now / log）经**全局 `globalThis.appHost`** 注入：
 
 - **正常流程**：应用启动时 `injectTauriHost()`（desktop 在 `main.tsx`）。
 - **example / 测试**：`injectNodeHost()`（Node fetch + 内存存储）。
@@ -99,6 +105,10 @@ bun run packages/crawler/src/example/test-danmaku.ts 5    # 四平台直播弹�
 
 # core example（基于 crawler 输出的 channel 批量订阅 + 刷新）
 bun run packages/core/src/example/data-layer.ts
+
+# rustpython-xhs（小红书签名,RustPython 嵌 Python xhshow;需 release 构建）
+cargo test -p rustpython-xhs --release          # 签名 crate 冒烟测试
+XHS_COOKIE="<cookie>" cargo run --release -p rustpython-xhs --bin xhs_verify  # 低频真实验证
 ```
 
 前端产物输出到根 `dist/<platform>/`（Vite `outDir`），tauri.conf `frontendDist` 指向 `../../dist/<platform>`。
@@ -189,15 +199,16 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   用**平衡大括号截纯 JSON**（非截到 `</script>`）+ 空容器构造归一，RSSHub 的
   `replaceAll("undefined","null")` 救不了。`xhs:user` 用户笔记改走 **user_posted API**
   （edith.xiaohongshu.com）——小红书把 user 页笔记改为 JS/API 动态加载，SSR
-  `user.notes` 已空（`[[],[],...]`）。API 需 **xhshow-js 签名**（`x-s/x-s-common/x-t`，
-  xhshow Python 库的 TS 移植，纯算无 eval → webview CSP 安全）+ **登录 cookie
-  （web_session）**（匿名 406、未登录 code:-101）；签名种子 `a1` 取自会话 cookie。
+  `user.notes` 已空。API 签名走 **appHost.python 门面**（RustPython 嵌 Python xhshow
+  0.2.0，`sign_format="xyw"` + uri 查询串保序解析;crates/rustpython-xhs + src-tauri
+  `xhs_sign` command）+ 登录 cookie（web_session）;签名种子 `a1` 取自会话 cookie。
   实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
-  ⚠️ **签名已过时(2026-08)**:xhshow-js fork(mns0301)的 x-s 被服务器拒(HTTP 461),
-  xhs 2026-07 升级签名;且签名**约 1 月~1 季度一改 + 按账号/会话灰度分发**,
-  b1 指纹需真实浏览器——纯算法维护成本高。**决策:降级 SSR 匿名刷新**(explore
-  快照+刷新、不做翻页;user 不可用),不维护签名 API。若未来走浏览器注入签名
-  (Playwright/WebView)另议。细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
+  ⚠️ **reqwest 通道 406 待解(2026-08-15)**:签名本身验证有效(x-s 与 CPython 逐字节
+  一致;curl 打 API 461/200 已过签名校验),但 crawler 走 appHost.http→tauri http_get
+  (reqwest) 会被 406(签名被拒,reqwest TLS 指纹被拦)——解后 xhs:user 才真正可用。
+  ⚠️ 签名约 1 月~1 季度一改 + 按账号/会话灰度分发;验证**必须低频单次**(反复打
+  user_posted 会触发账号风控 300011/-100,把 cookie 搞下线)。细节见
+  `docs/xhs-signature-sidecar-eval.md` + `docs/xhs-signature-research.md`。
 - **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
   空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
   默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
@@ -245,11 +256,16 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;
   iframe 嵌入播放差于我们 hls/flv/dash 直链解析,不抄。
 - **平台扫码登录 + 保活**:`docs/platform-login-research.md`。三平台扫码登录全可行
-  (bili 纯 HTTP/dart 参考、weibo JSONP、xhs 需 xhshow 签名)。续期设计:仅 bili 可自动
+  (bili 纯 HTTP/dart 参考、weibo JSONP、xhs 需 xhshow 签名——现走 RustPython 嵌入,
+  crates/rustpython-xhs)。续期设计:仅 bili 可自动
   保活——bili_ticket 软性风控因子惰性随补即可,真正要保 SESSDATA(refresh_token 续期
   闭环,180 天窗口续一次即永久,登录须捕获 refresh_token——dart 参考漏了这步);
   weibo SUB / xhs web_session 均 ~1 年长效,到期扫码重登。统一兜底:失效检测
   (code:-101/1006/432/461)→引导重登。
+- **xhs 签名方案选型**:`docs/xhs-signature-sidecar-eval.md` + `docs/xhs-signature-research.md`。
+  RustPython 嵌入最优(crates/rustpython-xhs),签名实测有效(x-s 与 CPython 逐字节一致),
+  但 **reqwest 通道 406 待解**;验证**必须低频单次**(反复打 user_posted 触发账号风控
+  300011/-100,把 cookie 搞下线)。
 
 ## 下一步 Todo（阶段性任务）
 
@@ -397,3 +413,7 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   若要「同参复用实例 / 去重刷新」，在 core 编排层按 `channelKey + info` 持 Map 实现
   （与 `RssChannel.sourceInfoTpl`/`defaultInfo` 参数体系相关，见 `packages/core/src/data-layer.ts`）
 - 离线缓存 + SQLite（P6）
+- **xhs:user 签名链路恢复（reqwest 406 待解）**：crates/rustpython-xhs 签名已实现 +
+  src-tauri `xhs_sign` command + host `appHost.python` 门面已接;但 crawler 走
+  appHost.http→reqwest 隧道会被 406（reqwest TLS 指纹被小红书拦）。解后 xhs:user
+  才真正可用;验证必须低频单次（见 docs/xhs-signature-sidecar-eval.md）。

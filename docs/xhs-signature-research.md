@@ -1,8 +1,9 @@
 # xhs 签名调研：461 根因与升级参照（2026-08-14）
 
-> 状态：**已调研，暂缓实现**。xhs:explore 翻页（homefeed API）与 xhs:user
-> （user_posted API）依赖的 x-s 签名算法已过时，服务器拒绝（HTTP 461）。
-> 本文件记录根因、有效参照（Python xhshow 0.2.0）与未来移植范围。
+> 状态：**已接入 RustPython 嵌入**（2026-08-15，见 `xhs-signature-sidecar-eval.md`）。
+> 原 461 根因 + Python xhshow 0.2.0 有效参照保留为历史；「纯算法 TS 手写移植」方案
+> 已被 RustPython 嵌入取代（免手写、跟随上游）。⚠️ 集成发现 **reqwest 通道 406**
+> 待解（签名有效但 reqwest 客户端被拒，见 sidecar-eval 6 节）。
 
 ## 背景
 
@@ -97,19 +98,24 @@ x-s, x-s-common, x-t, x-b3-traceid, x-xray-traceid, x-mns, xy-direction
 
 社区动向：MediaCrawler 在 2025-10/11 连续签名失效后**整体转向 Playwright 浏览器自动化**（「无需 JS 逆向，通过 JS 表达式获取签名参数」），放弃纯算法维护——用脚投票。
 
-**维护决策（记录，暂缓执行）**：倾向**放弃 xhs 签名 API 维护，xhs 降级为「SSR 匿名刷新」**：
-1. `xhs:explore` 保持 SSR 匿名快照 + 刷新语义（与 weibo 同定位），**不做翻页**。
-2. `xhs:user` 长期不可用（需签名 + b1 指纹，纯算法无解）。
-3. explore 的 Pageable / homefeed / POST 签名代码**已回滚清理**（2026-08-14 /simplify）。
-4. 若将来需要 xhs 深度数据，走**浏览器注入签名**（Playwright/WebView 取签名喂给 appHost）——另一个量级的架构投入，非当前目标。
+**维护决策（2026-08-15 更新：已转向 RustPython 嵌入）**：
+- 原决策（2026-08-14）倾向**放弃签名 API 维护、降级 SSR 匿名刷新**——TS fork 过时、
+  纯算法维护成本高（1 月~1 季度一改 + 灰度）。
+- 2026-08-15 改为 **RustPython 嵌入跑 Python xhshow 0.2.0**（免手写 + 跟随上游，
+  见 `xhs-signature-sidecar-eval.md`）：explore SSR 保留；`xhs:user` 签名链路已接通
+  （`appHost.python` 门面），但 **reqwest 通道 406 待解**——解后 xhs:user 才真正可用。
+- 历史：explore Pageable / homefeed / POST 签名代码已于 2026-08-14 回滚清理。
 
-## 现状代码（2026-08-14 /simplify 已回滚）
+## 现状代码（2026-08-15）
 
-按「降级 SSR 匿名刷新」决策，xhs 分页代码已全部回滚：
-- `explore.ts` 恢复纯 SSR fetch（非 Pageable）；
-- `client.ts` 恢复纯 GET `signApiHeaders`，删除 `homefeed`/`homefeedBody`/`HomefeedPage`；
-- `host.ts` 删除 `httpPostJson`。
+- `explore.ts`：纯 SSR fetch（非 Pageable，匿名）——保留。
+- `client.ts`：`signApiHeaders` 已改调 `appHost.python` 门面（RustPython 嵌 xhshow，
+  `sign_format="xyw"` + uri 查询串保序解析）；无 python 门面（纯前端/Node）抛错降级。
+- `crates/rustpython-xhs`：签名 crate（0.5.0 + freeze-stdlib + release），`sign_xhs`
+  已实现 + 测试通过。
+- `src-tauri` `xhs_sign` command + `appHost.python`（TauriPythonBackend）。
+- ⚠️ **reqwest 通道 406 未解**（见 sidecar-eval.md 6 节）；homefeed 翻页尚未接
+  （xhs:user 打通后可按排障表顺带接）。
 
-若未来要移植新版 XYS_ 签名（让 homefeed 生效），按本文档「排障对照表 + 算法差异」
-重新接入即可；响应结构 `data.items[].note_card`（下划线命名）+ `cursor_score` +
-`has_more` 已记录，不需重新抓包。
+若未来要移植新版签名（纯算法路线），按「排障对照表 + 算法差异」重新接入即可；
+响应结构 `data.items[].note_card`（下划线命名）+ `cursor_score` + `has_more` 已记录。

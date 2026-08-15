@@ -3,8 +3,10 @@
 > 承接 `docs/xhs-signature-research.md`（461 根因 + 降级决策）。本文件回答：
 > 「能否把 Python xhshow 转成可接入本项目的形态（sidecar / wasm / RustPython 嵌入 /
 > 自动转译器），生产可用？」——基于**本机实证**（2026-08-14/15）+ Tauri 官方现状。
-> 结论：**RustPython 嵌入是最优（免手写 + 全链路实测通 + 移动端可行）；sidecar 桌面可用
-> 移动端排除；wasm 不划算；转译器转换率不足。都不解决灰度/b1/过时频率根本问题。**
+> 结论：**RustPython 嵌入是最优（免手写 + 签名实测有效 + 移动端可行）；sidecar 桌面可用
+> 移动端排除；wasm 不划算；转译器转换率不足。都不解决灰度/b1/过时频率根本问题。
+> ⚠️ 集成后发现 reqwest 通道 406（签名有效但 reqwest 客户端被拒），桌面 crawler
+> 生产路径待解（见 3b / 6 节）。**
 
 ## 0. 实测前提（2026-08-14）
 
@@ -61,8 +63,22 @@ xhshow 的 `.py` 源码 + 2 个兼容补丁作为资源随应用分发。**进�
 - 两处无法加载 C 扩展（pycryptodome/ctypes），各打 ~10 行**等价补丁**（不碰算法逻辑）：
   - `utils/sharding.py`：`ctypes.c_int32` → 纯 Python `_int32`（9 输入 + 5 万随机对等价）
   - `generators/fingerprint.py`：`Crypto.Cipher.ARC4` → 纯 Python RC4（2000 组随机等价）
-- **实测链路**：补丁版 xhshow（屏蔽 pycryptodome）→ RustPython 解释器跑签名 →
-  真实请求 **200 code:0 notes:32**；原版/补丁版 x-s 逐字节一致。
+- **实测链路（2026-08-15 接入后复核）**：
+  - 补丁版 xhshow（屏蔽 pycryptodome）→ RustPython 0.5.0 跑签名 → **固定 timestamp 下
+    x-s 与 CPython 逐字节一致**（签名算法正确，补丁等价成立）。x-s-common 每次运行含
+    随机指纹（属正常，非实现差异）。
+  - **sign_format 契约**：data API（user_posted 等）拒 **XYS_** 前缀（HTTP 406），需
+    `sign_format="xyw"`（XYW_ 前缀）——见 xhshow client.py docstring。
+  - **参数顺序坑**：xhshow `_build_content_string`(GET) 按 payload dict 顺序拼 content
+    串再签名，顺序错 → 签名无效（406）。Rust 侧 serde_json::Map 按键排序 → wrapper
+    **改为从 uri 查询串解析**（parse_qsl 保 URL 顺序，与服务器实际请求一致）。
+  - **真实请求差异**：curl（HTTP/2）→ HTTP 200（进登录校验，-100 登录过期）；
+    curl 模拟 reqwest 请求头（HTTP/1.1 + gzip + Accept）→ **461**（300011 账号异常，
+    签名**已过校验**）；**reqwest 实际 → 406（-1，签名被拒）**——reqwest 客户端
+    特征（TLS 指纹 JA3/JA4）被小红书拦截。签名本身有效，**reqwest 通道是集成障碍**
+    （crawler 走 appHost.http → tauri http_get(reqwest) 会被 406），待解见 6 节。
+  - ⚠️ **验证教训**：反复打 user_posted 会触发账号风控（461/300011 账号异常 →
+    -100 登录过期），cookie 会被搞下线——**验证必须低频单次**。
 
 **体积裁剪阶梯（本机实测）**：
 
@@ -78,9 +94,24 @@ xhshow 的 `.py` 源码 + 2 个兼容补丁作为资源随应用分发。**进�
   依赖 unwind 传播 Python 异常。
 - 不 freeze 时 encodings 等纯 Python 模块需外部 pylib（`RUSTPYTHONPATH`）；接入时按
   xhshow 依赖裁剪 pylib 子集。
-- 依赖版本：**crates.io 0.5.0 有 malachite-bigint 版本冲突编译不过**（作者 issue #3805
-  建议 git main）；git main API 不稳（InterpreterBuilder/Scope 重构中）——接入需 pin
-  修复后的 tag 或等 crates.io 修复版。
+- 依赖版本（2026-08-15 实证定稿）：**crates.io rustpython 0.5.0**（2026-03-31 发布，
+  早于 upstream #7587 的 import 递归回归）+ `freeze-stdlib`。踩坑三连（全有解）：
+  - **malachite 冲突**：stdlib 锁 `malachite-bigint ^0.9.1`，pymath 开其 malachite-bigint
+    feature 拉 `^0` → 解析到 0.10 造成双版本 BigInt 类型不匹配。**解法**：`cargo update
+    -p malachite-bigint@0.6.1 --precise 0.9.2` 锁版本（pymath 0.2.0 按 0.9 API 写，
+    0.10 晚于它发布）。⚠️ `[patch.crates-io]` 不能写 crate 内（cargo 要求 workspace 根），
+    且 patch 不能指向 crates.io 同源——用 lock precise。
+  - **动态 stdlib import 递归**：0.5.0 不 freeze 时导入纯 Python re/enum/types →
+    `_frozen_importlib` 递归（同 #7587 的 traceback），debug 直接栈溢出。**解法**：
+    `freeze-stdlib`（纯 Python 标准库内嵌，不走文件导入）。
+  - **essential_init 递归**：freeze 后解释器初始化（比较/哈希递归 ~几百层）在 debug
+    默认限制 256 + 大栈帧下 RecursionError/栈溢出。**解法**：**release 构建**（限制 1000
+    + 优化小栈帧）——embedding 需 release，`bun run tauri` dev 构建跑不了。
+  - git main `d609108`（2026-08-14）另有 import hash 环 bug（`RecursionError: while
+    hashing`），动态/冻结都炸，**弃用**；0.4.0 快照（2025-11）mt19937 编译 bug。
+- **落地形态**：`crates/rustpython-xhs`（workspace crate，即「编译/封装包」，隔离上游
+  API 漂移 + 锁依赖，对外只暴露 `sign_xhs`）。`sign_xhs(uri, params, cookie) ->
+  XhsSignHeaders` 已实现 + release 测试通过（0.11s/次，含解释器初始化）。
 
 ## 3c. Python→Rust 转译器实测（2026-08-15）
 
@@ -111,7 +142,7 @@ fromhex/struct），转译产物类型推断失败、依赖私有运行时、语
 
 | 方案 | 生产可用 | 桌面 | 移动 | 维护成本 | 备注 |
 |---|---|---|---|---|---|
-| **RustPython 嵌入** ⭐ | ✅ 全平台 | 16MB | ✅ 纯 Rust | 低（换 .py + 2 补丁） | 免手写、进程内、全链路已证 |
+| **RustPython 嵌入** ⭐ | ⚠️ 签名✅ reqwest 406 待解 | 16MB | ✅ 纯 Rust | 低（换 .py + 2 补丁） | 签名已验证有效;reqwest 通道被拒(见 6 节) |
 | sidecar（PyInstaller onedir/常驻） | ✅ 桌面可用 | 13-25MB + ~180-750ms | ❌ | 低（跟上游 pip） | 需每平台打包链 + 进程管理 |
 | wasm（pyodide） | ❌ | 10-15MB + 2-5s | ⚠️ 理论可但重 | 低 | 成本全无优势 |
 | 转译器（py2many 等） | ❌ | 几十 KB | ✅ | 低 | 转换率不足，修复 > 手写 |
@@ -129,15 +160,21 @@ fromhex/struct），转译产物类型推断失败、依赖私有运行时、语
 
 ## 6. 落地要点（RustPython 首选 / sidecar 备选）
 
-**RustPython 嵌入**：
-- `apps/src-tauri` 加 `rustpython` crate 依赖（pin 修复后的 tag，避开 crates.io 0.5.0
-  malachite bug 与 git main API 漂移）。
-- xhshow `.py` 源码 + 2 处等价补丁（sharding/fingerprint，见 3b）作为资源文件；最小
-  features（stdlib/importlib/threading）+ pylib 裁剪子集（encodings + xhshow 依赖模块）。
-- Rust 侧暴露 `sign_xhs(uri, method, params, cookie) -> Headers` command，内部跑 Python
-  解释器返回签名 headers（不依赖 print/stdio，直接读返回值）。
-- crawler `platform/xhs/client.ts` 签名调用点从 JS fork 切到 appHost 门面；移动端
-  （纯 Rust）同路径可用。
+**RustPython 嵌入（✅ 已全链路接入）**：
+- `crates/rustpython-xhs`：0.5.0 + freeze-stdlib + release（见 3b 踩坑三连）。`sign_xhs`
+  已实现 + release 测试通过；xhshow 源码走 `packages/xhshow` submodule（含 2 补丁），
+  wrapper `res/_xhs_sign.py`（sign_format=xyw + uri 查询串保序解析）。
+- `apps/src-tauri` 已加 `xhs_sign` command（spawn_blocking 不卡 runtime）；
+  appHost 已加 `python` 门面（TauriPythonBackend → invoke `xhs_sign`）；crawler
+  `platform/xhs/client.ts` 的 `signApiHeaders` 已改调门面（async；无 python 门面时抛错
+  降级，explore SSR 保留）。移动端（纯 Rust）同路径可用。
+- ⚠️ **reqwest 通道 406（当前集成障碍）**：签名本身有效（curl 打 461 证明已过签名
+  校验），但 crawler 真实走 `appHost.http` → tauri `http_get`(reqwest) 会被 406
+  （签名被拒，reqwest TLS 指纹被小红书拦）。待解方向：reqwest 换 rustls TLS 后端 /
+  开 HTTP/2 / xhs 请求绕开 reqwest（如浏览器 fetch 试 edith CORS）。验证必须低频单次
+  （反复打会触发账号风控）。
+- ⚠️ **release 构建约束**：embedding 在 debug 构建（`bun run tauri`）会 essential_init
+  递归失败——目前仅 release（tauri build）可用；dev 下 xhs 签名 API 不可用。
 
 **sidecar 备选**：
 - appHost 门面加 `python.call(code|fn|args)` 对称 js 门面；或 crawler 侧封装

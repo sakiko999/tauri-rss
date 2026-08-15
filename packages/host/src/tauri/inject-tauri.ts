@@ -4,6 +4,7 @@
  *   - storage: localStorage-backed(persist across launches)
  *   - js:      FunctionJsBackend(跑 douyu/douyin 签名 blob;csp:null 允许 new Function)
  *   - ws:      TauriWsBackend(Rust ws_connect 隧道,握手可带 header,弹幕)
+ *   - python:  TauriPythonBackend(RustPython 嵌 xhshow,小红书签名)
  *   - log:     console
  *   - now:     Date.now
  */
@@ -12,6 +13,7 @@ import { TauriHttpBackend } from "./tauri-http-backend.ts"
 import { TauriWsBackend } from "./tauri-ws-backend.ts"
 import { LocalStorageBackend } from "./local-storage-backend.ts"
 import { FunctionJsBackend } from "./function-js-backend.ts"
+import { TauriPythonBackend } from "./tauri-python-backend.ts"
 
 export function injectTauriHost(): void {
   initAppHost()
@@ -20,5 +22,6 @@ export function injectTauriHost(): void {
     storage: new LocalStorageBackend("tauri-rss:"),
     js: new FunctionJsBackend(),
     ws: new TauriWsBackend(),
+    python: new TauriPythonBackend(),
   })
 }

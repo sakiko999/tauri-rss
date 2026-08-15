@@ -1,0 +1,18 @@
+[package]
+name = "rustpython-xhs"
+version = "0.1.0"
+edition = "2021"
+description = "RustPython 嵌入封装——跑 xhshow(Python 小红书签名) 生成签名 headers"
+license = "MIT"
+
+[dependencies]
+# crates.io 0.5.0(2026-03-31 发布)。malachite 冲突用 Cargo.lock precise 锁 0.9.2
+# (stdlib 锁 ^0.9.1 + pymath 开其 malachite-bigint feature 拉 ^0 → 0.10 双版本)。
+# freeze-stdlib 必需:动态 stdlib 导入纯 Python 的 re/enum/types 会
+# _frozen_importlib 递归爆栈(实测 STATUS_STACK_OVERFLOW,同 upstream #7587);
+# 冻结后全部内嵌不走文件导入。去 ssl。
+rustpython = { version = "0.5.0", default-features = false, features = ["threading", "stdlib", "importlib", "stdio", "host_env", "freeze-stdlib"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 临时验证 bin(xhs_verify)用,验证后随 bin 一起移除(dev-dependencies 对 bin 链接异常)。
+reqwest = { version = "0.12", features = ["blocking"] }

@@ -3,6 +3,7 @@
  *
  * `globalThis.appHost` 是只读门面,字段访问时校验:
  *   - http / js / storage: 未注入抛清晰错误
+ *   - ws / python: 可选能力,未注入返回 undefined(crawler 据此兜底)
  *   - log / now: 未注入用兜底(console / Date.now)
  *
  * 注入(injectNodeHost / injectTauriHost / injectBrowserHost)只设闭包变量,
@@ -16,6 +17,7 @@ let _storage: StorageBackend | undefined
 let _log: Logger | undefined
 let _now: (() => number) | undefined
 let _ws: WsBackend | undefined
+let _python: PythonBackend | undefined
 
 const consoleLogger: Logger = {
   log(level, msg, ctx) {
@@ -56,6 +58,11 @@ export function initAppHost(): void {
     get ws(): WsBackend | undefined {
       return _ws
     },
+    // python 同 ws:可选(Tauri 才有 RustPython),未注入返回 undefined,
+    // crawler 的 xhs 签名据此降级(保持现状 461 不可用)。
+    get python(): PythonBackend | undefined {
+      return _python
+    },
   }
 }
 
@@ -67,6 +74,7 @@ export function setHostCaps(caps: {
   log?: Logger
   now?: () => number
   ws?: WsBackend
+  python?: PythonBackend
 }): void {
   _http = caps.http
   _js = caps.js
@@ -74,4 +82,5 @@ export function setHostCaps(caps: {
   _log = caps.log
   _now = caps.now
   _ws = caps.ws
+  _python = caps.python
 }

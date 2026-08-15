@@ -12,6 +12,7 @@ pub fn run() {
             commands::ws::ws_connect,
             commands::ws::ws_send,
             commands::ws::ws_close,
+            commands::xhs::xhs_sign,
         ]);
 
     #[cfg(mobile)]

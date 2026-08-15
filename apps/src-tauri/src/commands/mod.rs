@@ -10,6 +10,7 @@
 //!   - `responseType: "text"` | `"json"`  → utf-8 `String` body
 //!   - `responseType: "arraybuffer"`      → base64-encoded bytes (decoded in JS)
 pub mod ws;
+pub mod xhs;
 
 use serde::{Deserialize, Serialize};
 

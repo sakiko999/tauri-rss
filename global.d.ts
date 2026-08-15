@@ -27,6 +27,15 @@ declare global {
     now?: () => number
     /** WebSocket 隧道(桌面 Rust ws_connect / node ws 包)。缺失时 crawler 兜底用原生 WS(无自定义 header)。 */
     ws?: WsBackend
+    /** Python 执行后端(目前唯一用途:小红书签名 xhshow,RustPython 嵌入)。
+     *  仅 Tauri 宿主注入;纯前端/Node 缺失,crawler 侧降级抛错。 */
+    python?: PythonBackend
+  }
+
+  /** Python 能力(目前仅 xhshow 签名)。 */
+  interface PythonBackend {
+    /** 生成小红书 API 签名 headers(uri 可带查询串,params 单独给;返回 x-s/x-s-common/x-t 等)。 */
+    signXhs(uri: string, params: Record<string, string>, cookie: string): Promise<Record<string, string>>
   }
 
   /** 一条 WS 长连接(桌面/node 由宿主管理;crawler createWsStream 消费)。 */

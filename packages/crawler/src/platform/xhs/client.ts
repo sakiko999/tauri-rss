@@ -4,8 +4,9 @@
  * 小红书数据双通道(2026-08 起拆分):
  *   - SSR 页面:`/explore` 等仍内嵌 `window.__INITIAL_STATE__`(推荐流 feeds),
  *     fetchHtml + extractInitialState,匿名可用 → explore 用;
- *   - 签名 API:`user_posted` 等需 x-s/x-s-common/x-t 签名 —— ⚠️ 已降级
- *     (2026-08-15,TS fork 过时 461,见 signApiHeaders TODO)→ user 暂不可用。
+ *   - 签名 API:`user_posted` 等需 x-s/x-s-common/x-t 签名 —— Tauri 桌面走
+ *     appHost.python(RustPython 嵌 Python xhshow 0.2.0,crates/rustpython-xhs);
+ *     纯前端/Node 无 python 门面 → 抛错降级。
  *
  * cookie 由 core 层 DEFAULT_XHS_COOKIE 经 info.cookie 注入。
  */
@@ -24,20 +25,23 @@ export const XHS_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 /**
- * 生成小红书 API 签名请求头(x-s/x-s-common/x-t/...) —— ⚠️ 已降级。
+ * 生成小红书 API 签名请求头(x-s/x-s-common/x-t/...) —— 走 appHost.python 门面。
  *
- * 2026-07 底小红书升级签名算法,原 TS fork(@tauri-playground/xhshow)已过时(HTTP 461)。
- * `packages/xhshow` 已改为 Python 上游(Cloxl/xhshow)+ rustpython 兼容补丁,但 crawler
- * 侧 RustPython 门面尚未接入 → 所有签名 API(user_posted 等)当前不可用;
- * explore(SSR 匿名)保留。
- * TODO(rustpython): appHost.python 门面接入后,改为跑 Python 版 xhshow 生成签名。
+ * 2026-07 底小红书升级签名算法,原 TS fork 过时(HTTP 461);现改 Tauri Rust 层
+ * RustPython 嵌入跑 Python xhshow(0.2.0)生成签名(crates/rustpython-xhs)。
+ * 仅 Tauri 宿主注入 appHost.python;纯前端/Node 缺失 → 抛清晰错误(签名 API
+ * 如 user_posted 不可用,explore SSR 匿名保留)。
  */
-export function signApiHeaders(
-  _cookie: string,
-  _uri: string,
-  _params: Record<string, string>,
-): Record<string, string> {
-  throw new Error("xhs 签名已降级:TS fork 过时(461),待 RustPython 接入 packages/xhshow(Python 版)")
+export async function signApiHeaders(
+  cookie: string,
+  uri: string,
+  params: Record<string, string>,
+): Promise<Record<string, string>> {
+  const py = globalThis.appHost?.python
+  if (!py) {
+    throw new Error("xhs 签名不可用:appHost.python 未注入(仅 Tauri 桌面有 RustPython 嵌入)")
+  }
+  return py.signXhs(uri, params, cookie)
 }
 
 /** 调小红书 API(GET),返回解析后 body(签名 headers + cookie 并入)。 */
@@ -57,7 +61,7 @@ export const xhsClient = {
     const uri = u.pathname + u.search
     const params = Object.fromEntries(u.searchParams)
     const cookie = opts?.cookie ?? ""
-    const headers = opts?.headers ?? signApiHeaders(cookie, uri, params)
+    const headers = opts?.headers ?? (await signApiHeaders(cookie, uri, params))
     return apiJson<T>(url, cookie, headers)
   },
   async getHtml(url: string, opts?: PlatformRequestOptions): Promise<string> {
