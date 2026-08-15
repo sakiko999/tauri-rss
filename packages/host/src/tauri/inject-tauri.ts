@@ -12,6 +12,7 @@ import { TauriHttpBackend } from "./tauri-http-backend.ts"
 import { TauriWsBackend } from "./tauri-ws-backend.ts"
 import { LocalStorageBackend } from "./local-storage-backend.ts"
 import { FunctionJsBackend } from "./function-js-backend.ts"
+import { TauriBrowserBackend } from "./browser-backend.ts"
 
 export function injectTauriHost(): void {
   initAppHost()
@@ -20,5 +21,6 @@ export function injectTauriHost(): void {
     storage: new LocalStorageBackend("tauri-rss:"),
     js: new FunctionJsBackend(),
     ws: new TauriWsBackend(),
+    browser: new TauriBrowserBackend(),
   })
 }

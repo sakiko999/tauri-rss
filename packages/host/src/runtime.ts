@@ -16,6 +16,7 @@ let _storage: StorageBackend | undefined
 let _log: Logger | undefined
 let _now: (() => number) | undefined
 let _ws: WsBackend | undefined
+let _browser: BrowserBackend | undefined
 
 const consoleLogger: Logger = {
   log(level, msg, ctx) {
@@ -56,6 +57,11 @@ export function initAppHost(): void {
     get ws(): WsBackend | undefined {
       return _ws
     },
+    // browser 同 ws:可选(Tauri spawn 真实 Edge + CDP),未注入返回 undefined →
+    // weibo/xhs user channel 降级现有路径(explore SSR 保留)。
+    get browser(): BrowserBackend | undefined {
+      return _browser
+    },
   }
 }
 
@@ -67,6 +73,7 @@ export function setHostCaps(caps: {
   log?: Logger
   now?: () => number
   ws?: WsBackend
+  browser?: BrowserBackend
 }): void {
   _http = caps.http
   _js = caps.js
@@ -74,4 +81,5 @@ export function setHostCaps(caps: {
   _log = caps.log
   _now = caps.now
   _ws = caps.ws
+  _browser = caps.browser
 }

@@ -34,6 +34,8 @@ packages/
                    四平台直播 channel 挂 getDanmaku 返回 DanmakuStream。共享工具在
                    utils/(ua:DESKTOP_CHROME_UA / str:strOr / cookie);douyin 签名层收敛
                    abogus.ts(UA_ENTER/signDouyinUrl/enterRoomParams)。
+                   浏览器模拟在 browser/cdp.ts(cdpFetch/cdpNavigate/cdpJson,绕 CORS 靠
+                   导航到目标域;weibo/xhs user channel 检测 appHost.browser 走此路径)。
                    依赖 **ramda** 0.32（+ @types/ramda devDep）——
                    嵌套解析/排序用 chain/sortWith/pathOr 函数式展开(范式见
                    bili/live.ts 的 parseBiliLiveStreams)
@@ -62,14 +64,15 @@ packages/
 
 ## 宿主注入：全局 appHost 门面
 
-宿主能力（http / ws / js 签名执行 / storage / now / log）经**全局 `globalThis.appHost`** 注入：
+宿主能力（http / ws / js 签名执行 / browser 浏览器模拟 / storage / now / log）经**全局 `globalThis.appHost`** 注入：
 
 - **正常流程**：应用启动时 `injectTauriHost()`（desktop 在 `main.tsx`）。
 - **example / 测试**：`injectNodeHost()`（Node fetch + 内存存储）。
 - **纯前端调试**：`injectBrowserHost()`（浏览器 fetch，CORS 受限）。
 
 门面在 `@tauri-playground/host`（`packages/host/src/runtime.ts`）——import host 包即初始化；
-字段是 getter，未注入时访问 `http/js/storage` 抛清晰错误，`now/log` 兜底。类型声明在
+字段是 getter，未注入时访问 `http/js/storage` 抛清晰错误，`now/log` 兜底；`ws`/`browser`
+可选（未注入返回 undefined，crawler 据此降级）。类型声明在
 根 `global.d.ts`（`var appHost: AppHost`），被 `tsconfig.app.json` 的 `files` 引用，
 所有 `extends ../../tsconfig.app.json` 的包自动可见。
 
@@ -87,6 +90,7 @@ bun run packages/crawler/src/example/sample_sources.ts live:   # 抽样 fetch，
 bun run packages/crawler/src/example/resolve.ts bili:popular  # 懒解析可播流(视频,video/live 合一)
 bun run packages/crawler/src/example/resolve.ts bili:live 312785  # 懒解析直播流(直播)
 bun run packages/crawler/src/example/test-danmaku.ts 5    # 四平台直播弹幕(热门在播房间)
+./node_modules/.bin/tsx packages/crawler/src/example/browser-sim.ts weibo:user  # 浏览器模拟抓微博(playwright-core;bun 跑会卡,用 tsx/node)
 
 # core example（基于 crawler 输出的 channel 批量订阅 + 刷新）
 bun run packages/core/src/example/data-layer.ts
@@ -188,7 +192,11 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   升级签名后 461),Python 版 + RustPython 补丁随签名 crate 在专门分支维护;
   主分支**降级 SSR 匿名刷新**(explore 快照+刷新、不做翻页;user 不可用),
   不维护签名 API。签名约 1 月~1 季度一改 + 按账号/会话灰度分发,b1 指纹需真实
-  浏览器——纯算法维护成本高;若未来走浏览器注入签名(Playwright/WebView)另议。
+  浏览器——纯算法维护成本高。**浏览器模拟路径(feat/browser-sim 分支,2026-08)**:
+  Tauri spawn 系统 Edge + CDP(appHost.browser 可选门面),weibo/xhs user channel
+  检测到门面则走浏览器页面 fetch(登录态 + 签名 _webmsxyw + 设备指纹全在真实浏览器,
+  绕开 reqwest 406 / 纯算法 461 / b1 死结;未注入时降级现有路径)。weibo:user 已实测
+  通(浏览器同源 fetch 无 CORS,导航到 m.weibo.cn 后);xhs:user 匿名 406 待登录态。
   细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
 - **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
   空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
@@ -390,3 +398,8 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   若要「同参复用实例 / 去重刷新」，在 core 编排层按 `channelKey + info` 持 Map 实现
   （与 `RssChannel.sourceInfoTpl`/`defaultInfo` 参数体系相关，见 `packages/core/src/data-layer.ts`）
 - 离线缓存 + SQLite（P6）
+- **浏览器模拟落地(feat/browser-sim,2026-08)**:Tauri spawn 系统 Edge + CDP
+  (appHost.browser 门面 + browser_ensure/browser_close command + crawler
+  browser/cdp.ts)。weibo:user 实测通;xhs:user 匿名 406 待登录态(Edge profile
+  扫码一次或注入 cookie)后验证签名路径。edge-profile 登录态持久化在 appData;
+  应用退出 browser_close 需确保调用(desktop 生命周期钩子)。

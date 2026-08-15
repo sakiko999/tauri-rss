@@ -62,6 +62,8 @@ pub enum WsEvent {
     Open,
     /// 入站二进制帧,base64 编码(与 http_get arraybuffer 约定一致)。
     Binary(String),
+    /// 入站文本帧,base64 编码(CDP JSON-RPC 用;browser.rs 的 CDP 隧道)。
+    Text(String),
     Close { code: u16, reason: String },
     Error { message: String },
 }
@@ -169,8 +171,9 @@ pub async fn ws_connect(
                             let b64 = base64::engine::general_purpose::STANDARD.encode(b);
                             on_event.send(WsEvent::Binary(b64)).is_err()
                         }
-                        Some(Ok(Message::Text(_))) => {
-                            on_event.send(WsEvent::Error { message: "unexpected text frame".into() }).is_err()
+                        Some(Ok(Message::Text(t))) => {
+                            let b64 = base64::engine::general_purpose::STANDARD.encode(t.as_bytes());
+                            on_event.send(WsEvent::Text(b64)).is_err()
                         }
                         // Ping 自动回 Pong(tungstenite 库本会自动处理,这里显式忽略)。
                         Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => false,
@@ -204,11 +207,13 @@ pub async fn ws_connect(
     Ok(WsConnectResult { connection_id })
 }
 
-/// 按连接发二进制帧(base64 解码)。连接不存在 → Err(前端吞掉)。
+/// 按连接发帧(base64 解码)。`text: true` 发文本帧(CDP JSON-RPC 用),默认二进制
+/// (弹幕协议)。连接不存在 → Err(前端吞掉)。
 #[tauri::command]
 pub async fn ws_send(
     connection_id: String,
     payload: String,
+    text: Option<bool>,
     state: State<'_, Arc<WsManager>>,
 ) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
@@ -223,11 +228,14 @@ pub async fn ws_send(
             .sink
             .clone()
     };
+    let msg = if text.unwrap_or(false) {
+        let s = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+        Message::Text(s)
+    } else {
+        Message::Binary(bytes)
+    };
     let mut guard = sink.lock().await;
-    guard
-        .send(Message::Binary(bytes))
-        .await
-        .map_err(|e| e.to_string())
+    guard.send(msg).await.map_err(|e| e.to_string())
 }
 
 /// 关闭指定连接(前端退订)。幂等:task 已退时 shutdown_tx.send 返回 Err 被 `let _` 吸收。

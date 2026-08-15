@@ -7,11 +7,14 @@ pub fn run() {
         // WS 隧道连接管理(state):弹幕长连接按 connectionId 定位发/关。
         // Arc 包裹供 reader task clone 持引用(跨 command 共享)。
         .manage(std::sync::Arc::new(commands::ws::WsManager::default()))
+        .manage(commands::browser::BrowserManager::default())
         .invoke_handler(tauri::generate_handler![
             commands::http_get,
             commands::ws::ws_connect,
             commands::ws::ws_send,
             commands::ws::ws_close,
+            commands::browser::browser_ensure,
+            commands::browser::browser_close,
         ]);
 
     #[cfg(mobile)]

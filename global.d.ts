@@ -27,6 +27,8 @@ declare global {
     now?: () => number
     /** WebSocket 隧道(桌面 Rust ws_connect / node ws 包)。缺失时 crawler 兜底用原生 WS(无自定义 header)。 */
     ws?: WsBackend
+    /** 浏览器模拟(CDP 附加真实 Edge/Chrome;Tauri 桌面注入)。缺失时 weibo/xhs user 降级现有路径。 */
+    browser?: BrowserBackend
   }
 
   /** 一条 WS 长连接(桌面/node 由宿主管理;crawler createWsStream 消费)。 */
@@ -54,6 +56,22 @@ declare global {
   /** WebSocket 能力(带自定义 header 的握手,浏览器原生 WS 做不到)。 */
   interface WsBackend {
     connect(opts: WsConnectOptions): Promise<WsConnection>
+  }
+
+  /**
+   * 浏览器模拟能力(Tauri spawn 系统 Edge + CDP)。微博/小红书反爬强,
+   * 需真实浏览器提供登录态 + JS 签名 + 设备指纹:
+   *   - evaluate: 页面上下文执行 JS(如 window._webmsxyw 取 x-s、页面内 fetch 数据),
+   *     returnByValue 返回序列化结果 —— CDP 语义(cdp.ts)收敛在 crawler 侧。
+   *   - close: 关闭浏览器进程(应用退出时)。
+   */
+  interface BrowserBackend {
+    evaluate<T = unknown>(
+      expression: string,
+      opts?: { awaitPromise?: boolean; returnByValue?: boolean },
+    ): Promise<T>
+    /** 关闭浏览器进程(应用退出)。 */
+    close(): Promise<void>
   }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */
