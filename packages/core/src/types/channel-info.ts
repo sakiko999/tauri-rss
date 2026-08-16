@@ -18,4 +18,6 @@ export interface ChannelInfo {
   sourceInfoTpl?: SourceInfoField[]
   /** 带默认参数的实例(存在 = 无需输入即可订阅一个合理实例)。 */
   defaultInfo?: Record<string, string>
+  /** 该渠道是否支持扫码登录(channel 级能力 Loginable;UI 据此显登录入口)。 */
+  loginable: boolean
 }

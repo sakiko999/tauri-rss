@@ -68,6 +68,31 @@ export interface DanmakuPlayable {
   getDanmaku(id: string): DanmakuStream
 }
 
+/**
+ * 扫码登录能力(可选能力,channel 级——平台账号登录,无需实例化 source)。
+ * 与 source 能力(VideoPlayable 等)并列,但挂在 channel 上:登录是平台级操作,
+ * 不依赖 info 实例化,且同平台多 channel(xhs:user/explore)共享同一账号。
+ */
+export interface Loginable {
+  /**
+   * 扫码登录。emitQr 回调把二维码 data URL 推给 UI(可空 = 还没出码)。
+   * 成功后 cookie 已落浏览器 profile(Edge --user-data-dir 持久化),返回串
+   * 供 core 落 settings(HTTP 降级路径复用)。无 appHost.browser 时抛错。
+   */
+  scanLogin(
+    emitQr: (qrDataUrl: string | null) => void,
+    opts?: { timeoutMs?: number },
+  ): Promise<LoginResult>
+}
+
+/** 扫码登录结果。cookie 为 document.cookie 全量(含 web_session/a1/webId 等)。 */
+export interface LoginResult {
+  cookie: string
+  user_id?: string
+  /** 原本就已登录(未触发扫码即检测到),UI 据此提示而非展示新二维码。 */
+  alreadyLoggedIn?: boolean
+}
+
 /** 翻页能力(可选能力):列表源(直播 hot 等)可翻页加载更多。 */
 export interface Pageable {
   /**
@@ -100,6 +125,11 @@ export function isDanmakuPlayable(s: RssSource): s is RssSource & DanmakuPlayabl
 
 export function isPageable(s: RssSource): s is RssSource & Pageable {
   return "fetchMore" in s
+}
+
+/** channel 级能力探测:该 channel 是否支持扫码登录。 */
+export function isLoginable(c: RssChannel): c is RssChannel & Loginable {
+  return "scanLogin" in c
 }
 
 /** 渠道参数字段(供 UI 生成"新增订阅"表单)。 */

@@ -25,5 +25,7 @@ base64 = "0.22"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "net", "sync", "time", "macros"] }
 tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 futures-util = "0.3"
+# 隐藏 Edge 窗口(SW_HIDE 启动):真实指纹 + 完全无感(含任务栏),反爬不暴露 headless。
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]

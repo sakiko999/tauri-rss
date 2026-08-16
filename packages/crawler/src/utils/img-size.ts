@@ -12,6 +12,7 @@
  * 预取——fetchImageSize 单张,fillImageSizes 批量(瀑布流 channel 共用)。
  */
 import type { SocialImage } from "@tauri-playground/xml"
+import { mediaReferrerFor } from "@tauri-playground/host"
 
 /** 图片二进制尺寸,宽高像素。 */
 export interface ImageSize {
@@ -96,10 +97,13 @@ export async function fetchImageSize(url: string): Promise<ImageSize | null> {
   const hit = sizeCache.get(url)
   if (hit) return hit
   try {
+    // 防盗链图床(sinaimg 等)Range 请求也须带站内 Referer,否则 403 解析不出宽高
+    // → 瀑布流 cell 高度退化 4:3,与真实比例偏差大 → masonic 测量后重排闪烁。
+    const referrer = mediaReferrerFor(url)
     const res = await globalThis.appHost.http.request({
       url,
       method: "GET",
-      headers: { Range: `bytes=0-${HEADER_BYTES - 1}` },
+      headers: { Range: `bytes=0-${HEADER_BYTES - 1}`, ...(referrer ? { Referer: referrer } : {}) },
       responseType: "arraybuffer",
     })
     // Range 未支持时可能返回 200 全量;取前 HEADER_BYTES 字节仍可解析。

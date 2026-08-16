@@ -13,11 +13,26 @@
  * ⚠️ ws.rs 的 ws_send 已支持 text=true(CDP 用),弹幕二进制调用不受影响。
  */
 import { invoke, Channel } from "@tauri-apps/api/core"
+import { browserLog } from "../log.ts"
 
 /** 与 ws.rs WsEvent(tag/content)对齐;CDP 走 Text 帧。 */
 interface CdpEventMsg {
   event: "Text" | "Close" | "Error" | "Open" | "Binary"
   data?: unknown
+}
+
+/** btoa 只支持 Latin1;CDP 消息可能含中文(URL/签名/页面文本),先 UTF-8 编码再 base64。 */
+function toBase64(str: string): string {
+  const bytes = new TextEncoder().encode(str)
+  let bin = ""
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin)
+}
+
+function fromBase64(b64: string): string {
+  const bin = atob(b64)
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
 }
 
 export class TauriBrowserBackend implements BrowserBackend {
@@ -56,7 +71,7 @@ export class TauriBrowserBackend implements BrowserBackend {
     if (!this.connId) return Promise.reject(new Error("CDP not connected"))
     const id = this.nextId++
     const msg = JSON.stringify({ id, method, params })
-    const payload = btoa(msg)
+    const payload = toBase64(msg)
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject })
       void invoke("ws_send", { connectionId: this.connId, payload, text: true }).catch((e) => {
@@ -68,7 +83,7 @@ export class TauriBrowserBackend implements BrowserBackend {
 
   private handleEvent(ev: CdpEventMsg): void {
     if (ev.event !== "Text") return
-    const msg = JSON.parse(atob(ev.data as string)) as { id?: number; error?: unknown; result?: unknown }
+    const msg = JSON.parse(fromBase64(ev.data as string)) as { id?: number; error?: unknown; result?: unknown }
     if (msg.id === undefined) return // 事件帧(无 id),忽略
     const p = this.pending.get(msg.id)
     if (!p) return
@@ -89,9 +104,25 @@ export class TauriBrowserBackend implements BrowserBackend {
     })) as { exceptionDetails?: unknown; result?: { value?: unknown } }
     if (r.exceptionDetails) {
       const d = (r.exceptionDetails as { text?: string; exception?: { description?: string } }).exception
-      throw new Error(`CDP evaluate 异常: ${d?.description ?? JSON.stringify(r.exceptionDetails)}`)
+      const detail = d?.description ?? JSON.stringify(r.exceptionDetails)
+      // 走 host:browser 日志域(表达式可能含中文/长签名,完整打印便于定位语法错误来源)。
+      browserLog.evalError({ expression, detail })
+      throw new Error(`CDP evaluate 异常: ${detail}`)
     }
     return r.result?.value as T
+  }
+
+  /** 读 cookie(含 HttpOnly)。传 url 只取该域(Network.getCookies urls),否则取全部。
+   *  ⚠️ document.cookie 读不到 HttpOnly(web_session 是 HttpOnly),登录态检测/取 cookie 必须走这里。 */
+  async getCookies(url?: string): Promise<Record<string, string>> {
+    await this.ensureConn()
+    const r = (url
+      ? await this.send("Network.getCookies", { urls: [url] })
+      : await this.send("Network.getAllCookies", {})
+    ) as { cookies?: Array<{ name: string; value: string }> }
+    const out: Record<string, string> = {}
+    for (const c of r.cookies ?? []) out[c.name] = c.value
+    return out
   }
 
   async close(): Promise<void> {

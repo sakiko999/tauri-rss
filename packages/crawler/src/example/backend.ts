@@ -5,6 +5,27 @@
  * 这里只保留 crawler 特有的 exampleInfo(各 channel 示例参数)。
  */
 import { injectNodeHost } from "@tauri-playground/host"
+import type { Page } from "playwright-core"
+
+/**
+ * playwright 页面 → BrowserBackend 适配器(浏览器模拟 example 共用,替换各脚本逐字复制)。
+ * evaluate 收表达式字符串(playwright 自动 awaitPromise+returnByValue,等价 CDP Runtime.evaluate);
+ * getCookies 走 page.context()(含 HttpOnly);close 由调用方注入(browser.close / ctx.close)。
+ */
+export function makePlaywrightBackend(page: Page, close: () => Promise<void>): BrowserBackend {
+  return {
+    async evaluate<T>(expression: string): Promise<T> {
+      return page.evaluate(expression) as Promise<T>
+    },
+    async getCookies(url?: string): Promise<Record<string, string>> {
+      const cookies = await page.context().cookies(url)
+      const out: Record<string, string> = {}
+      for (const c of cookies) out[c.name] = c.value
+      return out
+    },
+    close,
+  }
+}
 
 /** 各 channel 的示例 info(需要参数的 channel 给真实示例值)。 */
 export function exampleInfo(key: string): Record<string, string> {

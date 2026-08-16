@@ -36,5 +36,8 @@
   },
   "peerDependencies": {
     "vite": "^8.1.5"
+  },
+  "dependencies": {
+    "masonic": "^4.1.0"
   }
 }

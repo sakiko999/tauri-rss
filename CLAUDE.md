@@ -178,25 +178,40 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/小红书走
   登录 cookie + API 可复刻（见下）；**X 仍是硬反爬**（puppeteer+登录+代理），个人不
   部署 RSSHub 碰不了。
-- **小红书双通道（2026-08 SSR 改版后）**：`xhs:explore` 发现页仍走 SSR
-  `window.__INITIAL_STATE__`（feed.feeds 的 noteCard，noteId 在 `feeds[i].id` 顶层）；
+- **小红书双通道（2026-08 SSR）**：`xhs:explore` 发现页 + `xhs:user` 用户笔记
+  都走 SSR `window.__INITIAL_STATE__`（explore 的 feed.feeds / user 的
+  `user.notes` 分组数组,flat 后每项 `{ id, noteCard, xsecToken }`,noteId 用外层 id）。
   ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——extractInitialState
-  用**平衡大括号截纯 JSON**（非截到 `</script>`）+ 空容器构造归一，RSSHub 的
-  `replaceAll("undefined","null")` 救不了。`xhs:user` 用户笔记改走 **user_posted API**
-  （edith.xiaohongshu.com）——小红书把 user 页笔记改为 JS/API 动态加载，SSR
-  `user.notes` 已空（`[[],[],...]`）。user_posted API 需签名
-  （`x-s/x-s-common/x-t`）+ **登录 cookie（web_session）**（匿名 406、未登录
-  code:-101）；签名种子 `a1` 取自会话 cookie。实现见
-  `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
+  用**平衡大括号截纯 JSON**（非截到 `</script>`）+ 空容器构造归一,RSSHub 的
+  `replaceAll("undefined","null")` 救不了。⚠️ **user 页不走 user_posted API**
+  （2026-08-16 对照 RSSHub getUserWithCookie + MediaCrawler 修正）:曾误判「SSR
+  user.notes 已空」——那是**匿名**观察(未登录为空分组 `[[],[],...]`);**登录态下
+  SSR 完整渲染笔记**(实测 32 条)。user_posted API 需 xhshow 纯算法签名 +
+  完整参数(image_formats/xsec_token/xsec_source),触发 300011 账号风控;
+  **Edge 内正常浏览无风控的根因:SSR 导航=正常浏览,页面内 fetch API=额外 XHR**。
+  实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
   ⚠️ **签名库 xhshow 已移至 feat/xhs-rustpython 分支**:原 TS fork 过时(2026-07
   升级签名后 461),Python 版 + RustPython 补丁随签名 crate 在专门分支维护;
-  主分支**降级 SSR 匿名刷新**(explore 快照+刷新、不做翻页;user 不可用),
-  不维护签名 API。签名约 1 月~1 季度一改 + 按账号/会话灰度分发,b1 指纹需真实
-  浏览器——纯算法维护成本高。**浏览器模拟路径(feat/browser-sim 分支,2026-08)**:
-  Tauri spawn 系统 Edge + CDP(appHost.browser 可选门面),weibo/xhs user channel
-  检测到门面则走浏览器页面 fetch(登录态 + 签名 _webmsxyw + 设备指纹全在真实浏览器,
-  绕开 reqwest 406 / 纯算法 461 / b1 死结;未注入时降级现有路径)。weibo:user 已实测
-  通(浏览器同源 fetch 无 CORS,导航到 m.weibo.cn 后);xhs:user 匿名 406 待登录态。
+  主分支**全 SSR**(explore 匿名 / user 登录态),不维护签名 API。签名约 1 月~1 季度
+  一改 + 按账号/会话灰度分发,b1 指纹需真实浏览器——纯算法维护成本高。
+  **浏览器模拟路径(feat/browser-sim 分支,2026-08)**:Tauri spawn 系统 Edge + CDP
+  (appHost.browser 可选门面),weibo/xhs user channel 检测到门面则走浏览器:
+  xhs:user 导航 profile 页 → 页面内取 `__INITIAL_STATE__.user.notes`(浏览器已解析
+  new Map 表达式,天然干净;无签名),weibo:user 导航 m.weibo.cn 后同源 fetch API;
+  xhs:user 未注入时降级:HTTP 带 cookie 拉 profile 页 HTML → extractInitialState(user 页
+  SSR,RSSHub getUserWithCookie 同款);weibo:user 未注入时降级:weiboClient.getJson 打
+  container API(cookie 时效短,几分钟失效)。weibo:user 已实测通;xhs:user 已实测 32 条。
+  ⚠️ **xhs:user 分页 = 滚动驱动**(2026-08-16,浏览器路径):fetchMore 滚动 profile 页,
+  小红书前端自己发 user_posted(完整签名 x-s/x-s-common/x-rap-param/x-b3-traceid) →
+  读更新后的 `__INITIAL_STATE__.user.notes` 增量。**不要手拼 user_posted fetch**:页面内
+  `_webmsxyw` 只返回 X-s/X-t 两头,缺 x-s-common/x-rap-param → 300011 账号风控;
+  参数 image_formats 必带、xsec_token/xsec_source 可为空(平台自己就空)。滚动驱动是
+  真实浏览语义,但仍会触发验证码(2026-08-16 实测:瞬间滚到底 300 条触发)——已加固:
+  **窗口化**:每次 fetchMore 只返回 `FETCH_MORE_WINDOW=30` 条,cursor = 「已返回条数」
+  索引定位;平台滚动一次加载 ~120 条留在 state,cursor 递增 30 在缓存内**零滚动秒回**,
+  缓存耗尽才滚一次(每轮查 `.fe-verify-box` 出现即停 + 小步滚动分 3 次触发平台懒加载 +
+  轮询等待 notes 增长,步进/轮询间隔带随机抖动去机械化)。
+  验证码形态以 `.fe-verify-box` 为主(RSSHub 同款),若遇到其他滑块形态需补选择器。
   细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
 - **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
   空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
@@ -360,9 +375,12 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
     暗色主题免费生效;未读圆点/选中态用 `blue-*`（与 Sidebar/ArticleList 一致的唯一提示蓝）
   - 网格响应式：`MediaList` 用 **ResizeObserver** 观察容器宽度 → 断点选列数
     （>=1280→5 / >=1152→4 / >=768→3 / >=512→2 / 否则1），对齐 Folo 断点
-  - **social 瀑布流**：`apps/desktop/src/components/MasonryGrid.tsx`（CSS columns 实现,
-    非 VirtuosoGrid——其假设等尺寸 item 承载不了变高瀑布流）。递增渲染 + 底部哨兵
-    无限加载;图片按 width/height 撑比例
+  - **social 瀑布流**：`apps/desktop/src/components/MasonryGrid.tsx`（**masonic** 虚拟化
+    瀑布流,2026-08-16 换——CSS columns 追加会重排已渲染卡片)。position cache 追加稳定
+    (loadMore 只给新 item 分配位置,已有卡片不动)+ 虚拟化(只渲染视口内,与 VirtuosoGrid
+    口径一致)。⚠️ 内层滚动容器(masonic 默认绑 window):用 usePositioner+useMasonry 手动喂
+    scrollTop/height;append vs 替换(loadMore 保持 positioner / refresh 重建 layoutVersion);
+    item 高度自动测量(渲染后 offsetHeight),crawler 宽高→aspect-ratio 高稳定无需二次校准。
   - **图片宽高方案 A**：`crawler/src/utils/img-size.ts` Range 预取文件头解析
     （PNG 64B / JPEG 1KB,WebP/GIF 同源）,失败退化 4:3。bili:dynamic 用 API 宽高 +
     Range 兜底(archive 封面)。XML `tpl:image` 支持 `@_url/@_width/@_height` 属性,

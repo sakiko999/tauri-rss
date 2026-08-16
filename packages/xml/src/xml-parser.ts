@@ -17,6 +17,8 @@ export interface ParsedFeed {
     link?: string
     description?: string
     item: ParsedItem[]
+    /** 原始 channel 节点(core 读 tpl:total 等 channel 级扩展)。 */
+    raw?: Record<string, unknown>
   }
 }
 
@@ -68,6 +70,8 @@ export function parseFeed(xml: string): ParsedFeed {
         link: asString(channel.link),
         description: asString(channel.description),
         item: ensureArray(channel.item as ParsedItem | ParsedItem[] | undefined).map(normalizeItem),
+        // 保留原始 channel 节点(core 读 tpl:total 等 channel 级扩展)。
+        raw: channel,
       },
     }
   }

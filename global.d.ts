@@ -70,6 +70,10 @@ declare global {
       expression: string,
       opts?: { awaitPromise?: boolean; returnByValue?: boolean },
     ): Promise<T>
+    /** 读指定域 cookie(name → value,含 HttpOnly)。传 url 只取该域(Network.getCookies urls),
+     *  不传取全部(getAllCookies)。
+     *  ⚠️ document.cookie 读不到 HttpOnly(如 xhs web_session),登录态检测/取 cookie 必须走这里。 */
+    getCookies(url?: string): Promise<Record<string, string>>
     /** 关闭浏览器进程(应用退出)。 */
     close(): Promise<void>
   }

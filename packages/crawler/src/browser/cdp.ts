@@ -1,15 +1,31 @@
 /**
  * browser/cdp — 浏览器模拟抓取的 CDP 薄层。
  *
- * 微博/小红书反爬强,需真实浏览器提供登录态 + JS 签名(_webmsxyw)+ 设备指纹。
+ * 微博/小红书反爬强,需真实浏览器提供登录态(Edge profile cookie)+ 设备指纹。
  * 生产宿主是 `appHost.browser`(Tauri spawn 系统 Edge + CDP,见 packages/host
  * tauri/browser-backend.ts);本模块在其 `evaluate` 之上封装页面级操作:
- *   - cdpFetch:      页面上下文 fetch(自动带 Edge profile 登录态 cookie),返回
- *                     { status, bodyText }(形状对齐 host.ts 的 httpGet);
- *   - cdpEnsurePage:  导航到目标站点并等待就绪(xhs 需先加载页面才有 _webmsxyw)。
+ *   - cdpFetch:  页面上下文 fetch(自动带 Edge profile 登录态 cookie),返回
+ *                 { status, bodyText }(形状对齐 host.ts 的 httpGet);
+ *   - cdpJson:   页面内 fetch JSON(weibo API);
+ *   - cdpNavigate:导航到 URL 并等待就绪(默认同址不重载保留 SPA state;forceReload 强刷)。
+ *
+ * ⚠️ 单 Edge 实例单 page target 被多平台 channel(weibo/xhs)共享——「导航到目标域 +
+ * 同域 fetch」必须用 withBrowserLock 包成原子单元,否则并发刷新互相抢页面
+ * (页面停在别的域 fetch → 跨域 Failed to fetch / 匿名 406)。
  *
  * 不直接引用 appHost.browser 类型——经参数传入,channel 侧检测门面存在才调用。
  */
+
+// ── 浏览器操作互斥 ──────────────────────────────────────────────────────────────
+// 全局 promise 链:任何浏览器模拟操作(导航+同域抓取)串行执行,互不交错。
+let browserLock: Promise<void> = Promise.resolve()
+/** 串行执行浏览器操作:持锁直到 fn 完成,期间其他浏览器操作排队。 */
+export function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
+  const prev = browserLock
+  let release!: () => void
+  browserLock = new Promise<void>((r) => (release = r))
+  return prev.then(() => fn()).finally(release)
+}
 
 /** 页面内 fetch 的入参(JSON 序列化传进 expression)。 */
 export interface CdpFetchInit {
@@ -80,8 +96,23 @@ export async function cdpJson<T = unknown>(
   return JSON.parse(text) as T
 }
 
-/** 导航到 URL 并等待 document.readyState==='complete'(xhs 签名脚本随页面加载)。 */
-export async function cdpNavigate(browser: BrowserBackend, url: string): Promise<void> {
+/**
+ * 导航到 URL 并等待 document.readyState==='complete'。
+ * ⚠️ 默认同址不重载:location.href 赋值即使 URL 相同也会整页导航(SPA 的 Vue state 全丢、
+ * 滚动位置归零)。fetchMore 等场景需保留页面 state(已加载内容/滚动进度),同址直接跳过。
+ * forceReload=true(refresh 用)跳过同址检查——refresh 恰恰需要整页重载拿最新 SSR,
+ * 页面停在 profile URL 时 location.href 同 URL 赋值也整页导航,满足刷新语义。
+ */
+export async function cdpNavigate(browser: BrowserBackend, url: string, forceReload = false): Promise<void> {
+  if (!forceReload) {
+    let same = false
+    try {
+      same = await browser.evaluate<boolean>(`location.href === ${JSON.stringify(url)}`)
+    } catch {
+      // 导航过渡/context destroyed 时读 href 抛错——视为不同址,走正常导航。
+    }
+    if (same) return
+  }
   try {
     await browser.evaluate(`location.href = ${JSON.stringify(url)}; true`, {
       awaitPromise: false,
@@ -94,7 +125,7 @@ export async function cdpNavigate(browser: BrowserBackend, url: string): Promise
 }
 
 /**
- * 轮询页面条件直到为 true 或超时。xhs 场景用于等 `window._webmsxyw` 出现。
+ * 轮询页面条件直到为 true 或超时。xhs 场景用于等 `window.__INITIAL_STATE__` 挂载。
  * ⚠️ 导航后 evaluate 可能在旧 execution context 抛错(Execution context was
  * destroyed)——waitUntil 内部把 evaluate 报错视为「未就绪」重试,不冒泡。
  */

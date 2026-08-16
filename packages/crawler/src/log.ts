@@ -20,6 +20,23 @@ const douyinLog = createLogDomain("douyin", { color: "#22d3ee", ansi: 45 })
 const douyuLog = createLogDomain("douyu", { color: "#ff6a00", ansi: 208 })
 /** [huya] 档位/弹幕降级警告。 */
 const huyaLog = createLogDomain("huya", { color: "#ffa52a", ansi: 214 })
+/** [xhs] 扫码登录生命周期(导航/出码/等待/成功/超时)——重复性日志,模板事件。 */
+const xhsLog = createLogDomain("xhs", {
+  color: "#ff2e4d", // 小红书红
+  ansi: 196,
+  events: {
+    loginNavigate: { level: "info", text: (ctx: { url: string }) => `扫码登录导航 ${fmtUrl(ctx.url)}` },
+    qrReady: { level: "info", text: "二维码已捕获(可扫码)" },
+    qrMissing: { level: "warn", text: "二维码未出现(登录弹窗可能未打开)" },
+    loginOk: {
+      level: "info",
+      text: (ctx: { user_id?: string }) => `登录成功${ctx.user_id ? ` · user_id=${ctx.user_id}` : ""}`,
+    },
+    loginTimeout: { level: "warn", text: "扫码登录超时或二维码已失效" },
+    // SSR user.notes 空结果诊断(区分「该用户无笔记」vs「匿名/未登录/页面结构变化」)。
+    userEmpty: { level: "warn", text: (ctx: { body: string }) => `user.notes 空: ${ctx.body}` },
+  },
+})
 /**
  * [danmaku] 弹幕通用 WS 连接层(createWsStream)——连接生命周期模板事件
  * (建连/建立/关闭/重连/收到帧数),区别于上方各平台一次性自由 warn。
@@ -90,6 +107,7 @@ export const log = {
   douyin: douyinLog,
   douyu: douyuLog,
   huya: huyaLog,
+  xhs: xhsLog,
   danmaku: danmakuLog,
   crawler: crawlerLog,
 }

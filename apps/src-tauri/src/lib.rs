@@ -23,7 +23,17 @@ pub fn run() {
         .expect("error while running tauri application");
 
     #[cfg(not(mobile))]
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+    {
+        let app = builder
+            .build(tauri::generate_context!())
+            .expect("error while running tauri application");
+        app.run(|app_handle, event| {
+            // 应用退出时清理浏览器模拟 Edge(RunEvent::Exit 在进程退出前确定触发,
+            // 不依赖 WebView JS 存活)。终止主进程 → Chromium Job Object 连带杀子进程。
+            if let tauri::RunEvent::Exit = event {
+                eprintln!("[tauri] Exit event → browser_close");
+                let _ = commands::browser::browser_close(app_handle.clone());
+            }
+        });
+    }
 }

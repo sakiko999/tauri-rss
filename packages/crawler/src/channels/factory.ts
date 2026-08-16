@@ -13,6 +13,11 @@ import { serializeFeed } from "@tauri-playground/xml"
 import type { DanmakuPlayable, LivePlayable, Pageable, RssSource } from "../index.ts"
 import { log } from "../log.ts"
 
+/** serializeFeed + 可选 total(翻页渠道真实总数,经 tpl:total 带出)。apiFetch / fetchMore 共用。 */
+export function serializeWithTotal(items: Item[], opts: SerializeOptions, total?: number): string {
+  return serializeFeed(items, total !== undefined ? { ...opts, total } : opts)
+}
+
 /**
  * api channel 的 fetch 装配:抓 items → serializeFeed 成 RSS 2.0 XML。
  * 返回无参 `() => Promise<string>`,channel 在 getSource 里绑定 info 后塞进 source.fetch。
@@ -20,7 +25,7 @@ import { log } from "../log.ts"
  * 失败 rethrow(调用方 core 编排层隔离单源失败),channelTitle 作 source 标识。
  */
 export function apiFetch(
-  fetchItems: () => Promise<Item[]>,
+  fetchItems: () => Promise<Item[] | { items: Item[]; total?: number }>,
   channelOptions: () => SerializeOptions,
 ): () => Promise<string> {
   return async () => {
@@ -28,8 +33,11 @@ export function apiFetch(
     const source = opts.channelTitle ?? ""
     log.crawler.fetchStart({ source })
     try {
-      const items = await fetchItems()
-      const xml = serializeFeed(items, opts)
+      // 兼容两种返回:Item[](旧) / { items, total }(翻页渠道带真实总数,如 weibo)。
+      const r = await fetchItems()
+      const items = Array.isArray(r) ? r : r.items
+      const total = Array.isArray(r) ? undefined : r.total
+      const xml = serializeWithTotal(items, opts, total)
       log.crawler.fetchOk({ source, count: items.length })
       return xml
     } catch (e) {

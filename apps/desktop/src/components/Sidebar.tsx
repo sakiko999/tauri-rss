@@ -24,6 +24,7 @@ import {
   Plus,
   Loader2,
   Moon,
+  QrCode,
 } from "lucide-react"
 import { cn } from "../lib/cn.ts"
 import { useTheme } from "../theme.ts"
@@ -31,6 +32,7 @@ import { useDesktop, SMART_FEED_IDS, isSmartFeed, isTabNode, type ContentTab } f
 import { useViewNavigate } from "../router"
 import { FeedTree, type FeedTreeNode } from "./FeedTree.tsx"
 import { AddFeedDialog } from "./AddFeedDialog.tsx"
+import { ScanLoginDialog } from "./ScanLoginDialog.tsx"
 
 const TABS: { id: ContentTab; label: string; icon: typeof Rss }[] = [
   { id: "all", label: "全部", icon: Layers },
@@ -64,6 +66,7 @@ export function Sidebar() {
   const go = useViewNavigate()
   const { theme, toggle: toggleTheme } = useTheme()
   const [addOpen, setAddOpen] = useState(false)
+  const [scanOpen, setScanOpen] = useState(false)
 
   // kind 计数(基于全局 allItems——不随选中订阅变化,侧栏徽章恒定)。
   // allItems 是 store 的全局全部条目;若仍未加载则用当前视图 items 兜底。
@@ -139,6 +142,13 @@ export function Sidebar() {
               <Plus className="h-4 w-4" />
             </button>
             <button
+              onClick={() => setScanOpen(true)}
+              className="p-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded"
+              title="扫码登录"
+            >
+              <QrCode className="h-4 w-4" />
+            </button>
+            <button
               onClick={toggleTheme}
               className="p-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded"
               title={theme === "light" ? "切换到暗色" : "切换到亮色"}
@@ -212,6 +222,7 @@ export function Sidebar() {
       </div>
 
       <AddFeedDialog open={addOpen} onOpenChange={setAddOpen} />
+      <ScanLoginDialog open={scanOpen} onOpenChange={setScanOpen} />
     </>
   )
 }

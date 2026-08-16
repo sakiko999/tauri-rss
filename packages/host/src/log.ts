@@ -32,3 +32,20 @@ export const httpLog = createLogDomain("host:http", {
     },
   },
 })
+
+/**
+ * host:browser 域 —— CDP 浏览器模拟异常日志。
+ * evaluate 失败(表达式语法错/导航跳转中断旧 context)记 evalError(warn)。表达式可能含
+ * 中文/长签名,完整打印便于定位;error 级别永保留。开关 localStorage["log:host:browser"]="0"。
+ */
+export const browserLog = createLogDomain("host:browser", {
+  color: "#34d399", // emerald-400
+  ansi: 78,
+  events: {
+    evalError: {
+      level: "warn",
+      text: (ctx: { expression: string; detail: string }) =>
+        `CDP evaluate 异常\n  expression: ${ctx.expression}\n  detail: ${ctx.detail}`,
+    },
+  },
+})

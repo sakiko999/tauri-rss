@@ -135,9 +135,9 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
   {
     id: "s-user-weibo",
     channelKey: "weibo:user",
-    title: "微博 · 何炅",
+    title: "微博 · LPL",
     enabled: true,
-    info: { uid: "1195230310" },
+    info: { uid: "5756404150" },
   },
   // 小红书(核心 cookie 在 core 层 DEFAULT_XHS_COOKIE,纯 HTTP SSR)
   {
@@ -150,8 +150,8 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
   {
     id: "s-user-xhs",
     channelKey: "xhs:user",
-    title: "小红书 · 小宇菇菇",
+    title: "小红书 · 玛卡巴卡",
     enabled: true,
-    info: { user_id: "593032945e87e77791e03696" },
+    info: { user_id: "5c6d75a400000000100278fa" },
   },
 ]

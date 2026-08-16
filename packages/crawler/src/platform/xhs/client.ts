@@ -180,32 +180,3 @@ export function noteCardToSocial(noteCard: any, sourceId: string, t: number, not
     t,
   )
 }
-
-/**
- * user_posted API note → Social。
- * 结构与 SSR noteCard 不同:`note_id` 顶层、`cover.url`(非 urlDefault)、
- * `display_title`、`interact_info.liked_count`、`user.nick_name`、`time` 已是毫秒。
- */
-export function apiNoteToSocial(note: any, sourceId: string, t: number): Social | null {
-  const noteId = String(note?.note_id ?? "").trim()
-  if (!noteId) return null
-  const title = String(note?.display_title ?? "").trim()
-  const cover = note?.cover ?? {}
-  const user = note?.user ?? {}
-  return noteToSocial(
-    {
-      noteId,
-      title,
-      content: title || "小红书笔记",
-      imgUrl: String(cover.url || cover.urlDefault || ""),
-      imgWidth: cover.width ? Number(cover.width) : undefined,
-      imgHeight: cover.height ? Number(cover.height) : undefined,
-      likes: parseCount(note?.interact_info?.liked_count),
-      authorName: user.nick_name ? String(user.nick_name) : undefined,
-      authorAvatar: user.avatar ? String(user.avatar) : undefined,
-      publishedAtMs: note?.time ? Number(note.time) : undefined,
-    },
-    sourceId,
-    t,
-  )
-}

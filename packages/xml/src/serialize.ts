@@ -15,6 +15,8 @@ export interface SerializeOptions {
   channelTitle?: string
   channelLink?: string
   channelDescription?: string
+  /** 渠道真实总数(翻页渠道,如 weibo cardlistInfo.total)——desktop 顶栏「已加载/总数」。 */
+  total?: number
 }
 
 const builder = new XMLBuilder({
@@ -36,6 +38,7 @@ export function serializeFeed(items: Item[], opts: SerializeOptions = {}): strin
         ...(opts.channelTitle ? { title: opts.channelTitle } : {}),
         ...(opts.channelLink ? { link: opts.channelLink } : {}),
         ...(opts.channelDescription ? { description: opts.channelDescription } : {}),
+        ...(opts.total !== undefined ? { "tpl:total": String(opts.total) } : {}),
         item: items.map(itemToTree),
       },
     },

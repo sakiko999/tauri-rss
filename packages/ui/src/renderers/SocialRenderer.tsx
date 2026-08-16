@@ -21,8 +21,10 @@ function imgRatio(img: { width?: number; height?: number }): number {
 
 export function SocialRenderer({ item, onOpen }: { item: SocialItem } & RendererCallbacks) {
   const url = item.url
+  // 不传 h-full:瀑布流 cell 高度由 MasonryGrid 渲染后测量(自然内容高)修正,撑满 cell
+  // 会让测量拿到 cell 高(=估算)而非真实内容高,估算偏差无法修正。
   return (
-    <MediaCard onOpen={url ? () => onOpen?.(url) : undefined} className="h-full">
+    <MediaCard onOpen={url ? () => onOpen?.(url) : undefined}>
       <div className="flex flex-col gap-2.5 p-3">
         {/* 正文 */}
         {item.content && (
@@ -33,7 +35,9 @@ export function SocialRenderer({ item, onOpen }: { item: SocialItem } & Renderer
         {item.images?.length ? (
           <div className="space-y-2">
             {item.images.map((img, i) => (
-              <MediaImage key={i} src={img.url} ratio={imgRatio(img)} className="rounded" />
+              // eager:masonic 虚拟化已限 DOM(视口+overscan),lazy 在视口外不加载
+              // → 新增 item 渲染在 overscan 区空白,滚动才出图。eager 立即可见。
+              <MediaImage key={i} src={img.url} ratio={imgRatio(img)} className="rounded" loading="eager" />
             ))}
           </div>
         ) : null}

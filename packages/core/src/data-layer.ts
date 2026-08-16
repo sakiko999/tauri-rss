@@ -12,6 +12,7 @@ import {
   getChannel,
   isDanmakuPlayable,
   isHotWordSource,
+  isLoginable,
   isPageable,
   isRssLiveSource,
   isRssVideoSource,
@@ -19,7 +20,7 @@ import {
   registerAllChannels,
 } from "@tauri-playground/crawler"
 import { serializeFeed } from "@tauri-playground/xml"
-import { deserializeFeed } from "./xml/deserialize.ts"
+import { deserializeFeed, deserializeFeedWithTotal } from "./xml/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
 import type { ResolvePlayback } from "./types/playback.ts"
@@ -34,6 +35,17 @@ import {
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createMediaStore } from "./store/media-store.ts"
+
+/**
+ * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
+ * 形状与 crawler LoginResult 一致(结构兼容),保持「core 不 import crawler 类型」边界。
+ */
+export interface LoginResult {
+  cookie: string
+  user_id?: string
+  /** 原本就已登录(未触发扫码即检测到),UI 据此提示而非展示新二维码。 */
+  alreadyLoggedIn?: boolean
+}
 
 export interface DataLayer {
   /** 可用渠道列表(添加订阅对话框;core 收敛 crawler 注册表,apps 不直接碰 crawler)。 */
@@ -68,6 +80,16 @@ export interface DataLayer {
   canLoadMore(subscriptionId: string): Promise<boolean>
   /** 加载更多:翻一页追加进 store。游标由 DataLayer 内部维护,refresh 后重置。 */
   loadMore(subscriptionId: string): Promise<{ addedCount: number; hasMore: boolean }>
+  /** 渠道真实总数(翻页渠道,如 weibo cardlistInfo.total;refresh/loadMore 时更新)。无则 undefined。 */
+  totalOf(subscriptionId: string): number | undefined
+  /** 扫码登录(channel 级能力 Loginable)。emitQr 回调把二维码 data URL 推给 UI
+   *  (可空=还没出码);成功后 cookie 已落浏览器 profile,并按 channelKey 平台前缀写
+   *  settings 对应 cookie 字段(HTTP 降级路径复用)。 */
+  scanLogin(
+    channelKey: string,
+    emitQr: (qrDataUrl: string | null) => void,
+    opts?: { timeoutMs?: number },
+  ): Promise<LoginResult>
 }
 
 export function createDataLayer(): DataLayer {
@@ -82,13 +104,21 @@ export function createDataLayer(): DataLayer {
   const store = createMediaStore(now)
   /** 分页游标:订阅 → 当前翻到的位置(refresh 重置;UI 无感,由 loadMore 内部维护)。 */
   const pageCursors = new Map<string, string>()
+  /** 渠道真实总数:订阅 → 平台总数(weibo cardlistInfo.total;refresh/loadMore 时更新)。 */
+  const pageTotals = new Map<string, number>()
+
+  /** channelKey 前缀 → settings 里存的 cookie 字段(读 cookieFor / 写 scanLogin 共用一张表)。 */
+  function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
+    if (channelKey.startsWith("bili:")) return "bilibiliCookie"
+    if (channelKey.startsWith("weibo:")) return "weiboCookie"
+    if (channelKey.startsWith("xhs:")) return "xhsCookie"
+    return undefined
+  }
 
   /** 按 channelKey 前缀匹配的 core 层默认 cookie(bili/weibo/xhs)。订阅显式 info.cookie 永远优先。 */
   function cookieFor(channelKey: string, s: AppSettings): string | undefined {
-    if (channelKey.startsWith("bili:")) return s.bilibiliCookie
-    if (channelKey.startsWith("weibo:")) return s.weiboCookie
-    if (channelKey.startsWith("xhs:")) return s.xhsCookie
-    return undefined
+    const field = cookieFieldFor(channelKey)
+    return field ? (s[field] as string | undefined) : undefined
   }
 
   /** 合并 core 层默认 cookie 到订阅 info。 */
@@ -115,7 +145,9 @@ export function createDataLayer(): DataLayer {
       if (!channel) throw new NoChannelError(sub.channelKey)
       const info = await sourceInfoFor(sub)
       const xml = await channel.getSource(info).fetch()
-      const items = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
+      const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
+      if (total !== undefined) pageTotals.set(subscriptionId, total)
+      else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       store.replace(subscriptionId, items)
       pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
@@ -205,7 +237,9 @@ export function createDataLayer(): DataLayer {
     const cursor = pageCursors.get(subscriptionId)
     log.log("debug", "loadMore", { subscriptionId, cursor })
     const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
-    const items = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
+    const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
+    if (total !== undefined) pageTotals.set(subscriptionId, total)
+    else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
     store.append(subscriptionId, items)
     if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
     else pageCursors.delete(subscriptionId)
@@ -221,7 +255,24 @@ export function createDataLayer(): DataLayer {
       kind: c.kind,
       sourceInfoTpl: c.sourceInfoTpl,
       defaultInfo: c.defaultInfo,
+      loginable: isLoginable(c),
     }))
+  }
+
+  /** 扫码登录:校验 Loginable → 委托 channel → 成功按平台前缀落 settings cookie。 */
+  async function scanLogin(
+    channelKey: string,
+    emitQr: (qrDataUrl: string | null) => void,
+    opts?: { timeoutMs?: number },
+  ): Promise<LoginResult> {
+    const channel = getChannel(channelKey)
+    if (!channel) throw new NoChannelError(channelKey)
+    if (!isLoginable(channel)) throw new Error(`channel ${channelKey} does not support scan login`)
+    const result = await channel.scanLogin(emitQr, opts)
+    // 按 channelKey 平台前缀落对应 cookie 字段(sourceInfoFor 自动注入后续订阅)。
+    const field = cookieFieldFor(channelKey)
+    if (field) await settings.set({ [field]: result.cookie } as Partial<AppSettings>)
+    return result
   }
 
   function channelKind(channelKey: string): MediaKind | undefined {
@@ -256,5 +307,7 @@ export function createDataLayer(): DataLayer {
     resolveHotWord,
     canLoadMore,
     loadMore,
+    totalOf: (id) => pageTotals.get(id),
+    scanLogin,
   }
 }

@@ -143,6 +143,8 @@ interface DesktopState {
   canLoadMore: Record<string, boolean>
   /** 该订阅已翻到底(loadMore 返回 hasMore=false 后置位;refresh 重置)。 */
   loadMoreEnded: Record<string, boolean>
+  /** 渠道真实总数(翻页渠道,如 weibo cardlistInfo.total;refresh/loadMore 时更新)。 */
+  totals: Record<string, number>
   /** 分页加载中。 */
   loadingMore: boolean
   init(): Promise<void>
@@ -163,6 +165,15 @@ interface DesktopState {
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
   /** 新增订阅(给定 channelKey + info),写入并刷新。返回新订阅 id。 */
   addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string | null>
+}
+
+/** 渠道真实总数并入 state(undefined = 渠道不带 total,保持原样)。refresh/loadMore 共用。 */
+function withTotal(
+  s: Pick<DesktopState, "totals">,
+  id: string,
+  total: number | undefined,
+): Partial<Pick<DesktopState, "totals">> {
+  return total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}
 }
 
 let initPromise: Promise<void> | null = null
@@ -228,6 +239,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     hotWord: null,
     canLoadMore: {},
     loadMoreEnded: {},
+    totals: {},
 
     async init() {
       if (get().dl) return
@@ -290,8 +302,11 @@ export const useDesktop = create<DesktopState>((set, get) => {
       if (!dl) return
       set({ loading: true })
       const result = await dl.refresh(id)
+      const total = dl.totalOf(id)
       set((s) => ({
         loading: false,
+        // 渠道真实总数(翻页渠道,weibo)更新。
+        ...withTotal(s, id, total),
         // 刷新 = 新首页,分页到底标记重置(可重新翻页)。
         loadMoreEnded: result.error ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: false },
         refreshErrors: result.error
@@ -313,13 +328,19 @@ export const useDesktop = create<DesktopState>((set, get) => {
       set({ loadingMore: true })
       try {
         const r = await dl.loadMore(id)
+        const total = dl.totalOf(id)
         set((s) => ({
           loadingMore: false,
+          ...withTotal(s, id, total),
           loadMoreEnded: r.hasMore ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: true },
         }))
         // 列表刷新靠 store 订阅(init 已挂 dl.store.subscribe → refreshView),这里不重复调。
-      } catch {
-        set({ loadingMore: false })
+      } catch (e) {
+        // 翻页失败(如小红书风控验证码)写入 refreshErrors → 顶栏活性点红 + 错误文本可见。
+        set((s) => ({
+          loadingMore: false,
+          refreshErrors: { ...s.refreshErrors, [id]: e instanceof Error ? e.message : String(e) },
+        }))
       }
     },
 

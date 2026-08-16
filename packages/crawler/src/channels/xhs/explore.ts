@@ -6,16 +6,27 @@
  */
 import type { Item, Social } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
-import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient } from "../../platform/xhs"
+import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient, xhsScanLogin } from "../../platform/xhs"
 
-export class XhsExploreChannel implements RssChannel {
+export class XhsExploreChannel implements RssChannel, Loginable {
   readonly key = "xhs:explore"
   readonly name = "小红书发现页"
   readonly kind = "social" as const
   readonly defaultInfo: SourceInfo = {}
+
+  /** 扫码登录(Loginable,channel 级能力)。浏览器路径登录一次,同平台 channel 共享账号。 */
+  scanLogin(
+    emitQr: (qrDataUrl: string | null) => void,
+    opts?: { timeoutMs?: number },
+  ): Promise<LoginResult> {
+    const browser = globalThis.appHost?.browser
+    if (!browser) throw new Error("扫码登录需 Tauri 桌面环境(未注入 appHost.browser)")
+    return xhsScanLogin(browser, emitQr, opts)
+  }
+
   getSource(info: SourceInfo): RssSource {
     const cookie = (info.cookie as string) || undefined
     return { fetch: apiFetch(() => this.fetchItems(cookie), () => this.channelOptions()) }

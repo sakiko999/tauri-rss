@@ -25,8 +25,17 @@ export interface DeserializeContext {
 }
 
 export function deserializeFeed(xml: string, ctx: DeserializeContext): MediaItem[] {
+  return deserializeFeedWithTotal(xml, ctx).items
+}
+
+/** 反序列化 + 渠道真实总数(一次 parseFeed 双产出)。翻页渠道(weibo cardlistInfo.total
+ * 经 tpl:total 带出)在 refresh/loadMore 用;无 total 的 feed 返回 undefined。 */
+export function deserializeFeedWithTotal(
+  xml: string,
+  ctx: DeserializeContext,
+): { items: MediaItem[]; total: number | undefined } {
   const feed = parseFeed(xml)
-  return feed.channel.item.map((it) => {
+  const items = feed.channel.item.map((it) => {
     const kind = str(it.raw?.["tpl:kind"]) ?? ctx.kind ?? "article"
     switch (kind) {
       case "social":
@@ -42,6 +51,15 @@ export function deserializeFeed(xml: string, ctx: DeserializeContext): MediaItem
         return parseArticle(it, ctx)
     }
   })
+  return { items, total: totalFromRaw(feed.channel.raw) }
+}
+
+/** 从已解析 feed 的 channel.raw 读渠道真实总数;无则 undefined。 */
+function totalFromRaw(raw: Record<string, unknown> | undefined): number | undefined {
+  const t = raw?.["tpl:total"]
+  if (t === undefined || t === null || t === "") return undefined
+  const n = Number(t)
+  return Number.isFinite(n) ? n : undefined
 }
 
 // ── shared base reconstruction ───────────────────────────────────────────────

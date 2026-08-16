@@ -12,22 +12,9 @@
  *
  * ⚠️ xhs:user 反复验证会触发账号风控——低频单次。
  */
-import { chromium, type Browser, type Page } from "playwright-core"
+import { chromium } from "playwright-core"
 import { injectNodeHost, setHostCaps, nodeBackend, nodeJsBackend, memStorage } from "@tauri-playground/host"
-import { exampleInfo } from "./backend.ts"
-
-/** 用 playwright-core 构造形状对齐 BrowserBackend 的实现(仅验证用)。 */
-function makeBrowserBackend(browser: Browser, page: Page): BrowserBackend {
-  return {
-    async evaluate<T>(expression: string, _opts?: { awaitPromise?: boolean; returnByValue?: boolean }): Promise<T> {
-      // playwright evaluate 收表达式字符串,自动 awaitPromise + returnByValue(等价 CDP Runtime.evaluate)。
-      return page.evaluate(expression) as Promise<T>
-    },
-    async close() {
-      await browser.close()
-    },
-  }
-}
+import { exampleInfo, makePlaywrightBackend } from "./backend.ts"
 
 async function main() {
   const key = process.argv[2]
@@ -45,7 +32,7 @@ async function main() {
     http: nodeBackend(),
     js: nodeJsBackend(),
     storage: memStorage(),
-    browser: makeBrowserBackend(browser, page),
+    browser: makePlaywrightBackend(page, () => browser.close()),
   })
 
   const info = exampleInfo(key)
