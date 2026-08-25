@@ -33,6 +33,17 @@ export function AddFeedDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
+  // 频道分组:内置(非 rsshub:*) / RSSHub(rsshub:*)
+  // desktop 全走 RSSHub:隐藏 crawler 的原始 rss:* 直链(URL 代理/原生路由已覆盖),
+  // 但 crawler 包内仍注册(register.ts)供 mobile 兜底——这里只在 desktop 消费层过滤。
+  const hiddenPrefixes = ["rss:"]
+  const builtins = channels.filter(
+    (c) => !c.key.startsWith("rsshub:") && !hiddenPrefixes.some((p) => c.key.startsWith(p)),
+  )
+  const rsshubChs = channels.filter((c) => c.key.startsWith("rsshub:"))
+  const builtinsLabel = "内置"
+  const rsshubLabel = "RSSHub"
+
   const channel = channels.find((c) => c.key === channelKey)
 
   // 打开时重置 + 默认选中第一个有 defaultInfo 的 channel
@@ -99,11 +110,22 @@ export function AddFeedDialog({
               }}
               className={inputCls}
             >
-              {channels.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.name} ({c.key})
-                </option>
-              ))}
+              <optgroup label={builtinsLabel}>
+                {builtins.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.name} ({c.key})
+                  </option>
+                ))}
+              </optgroup>
+              {rsshubChs.length > 0 && (
+                <optgroup label={rsshubLabel}>
+                  {rsshubChs.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.name} ({c.key})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
 

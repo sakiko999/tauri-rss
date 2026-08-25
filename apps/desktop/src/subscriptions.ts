@@ -24,10 +24,10 @@ import type { Subscription } from "@tauri-playground/core"
 export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-article",
-    channelKey: "rss:hn",
+    channelKey: "rsshub:feed",
     title: "Hacker News",
     enabled: true,
-    info: {}, // RawRssChannel 用内置 defaultUrl
+    info: { route: "/hackernews" }, // RSSHub 原生 HN 路由(30 条)
   },
   {
     id: "s-video-youtube",
@@ -52,10 +52,12 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
   },
   {
     id: "s-audio",
-    channelKey: "rss:podcast",
+    channelKey: "rsshub:feed",
     title: "Huberman Lab",
     enabled: true,
-    info: { url: "https://feeds.megaphone.fm/hubermanlab" },
+    // RSSHub 泛 URL 代理:任意 feed 直链归一成标准 RSS(crawler 的 rss:podcast 语义由
+    // 加工层 deserialize 从 enclosure/audio 推断,无需专用 podcast 渠道)。
+    info: { route: "/url?u=https%3A%2F%2Ffeeds.megaphone.fm%2Fhubermanlab" },
   },
   {
     id: "s-live-douyu",

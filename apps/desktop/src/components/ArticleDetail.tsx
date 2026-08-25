@@ -8,8 +8,15 @@
  */
 import type { ArticleItem } from "@tauri-playground/core"
 import { Circle, Star, ExternalLink } from "lucide-react"
+import DOMPurify from "dompurify"
 import { cn } from "../lib/cn.ts"
 import { useDesktop } from "../store.ts"
+
+/** RSSHub 等第三方 description 可能带不可信 HTML:进入 innerHTML 前 sanitize。 */
+function sanitizeForDisplay(html: string): string {
+  if (typeof window === "undefined") return html
+  return DOMPurify.sanitize(html)
+}
 
 export function ArticleDetail() {
   const { items, selectedArticleId, markRead, toggleStar } = useDesktop()
@@ -77,7 +84,7 @@ export function ArticleDetail() {
             {isHtml ? (
               <div
                 className="prose prose-sm max-w-none prose-zinc dark:prose-invert"
-                dangerouslySetInnerHTML={{ __html: article.content ?? "" }}
+                dangerouslySetInnerHTML={{ __html: isHtml ? sanitizeForDisplay(article.content ?? "") : (article.content ?? "") }}
               />
             ) : (
               <pre className="whitespace-pre-wrap text-sm leading-relaxed">{article.content}</pre>

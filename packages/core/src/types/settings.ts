@@ -27,6 +27,11 @@ export interface AppSettings {
   weiboCookie: string
   /** 小红书登录 cookie(浏览器复制完整串)。作 core 层默认:xhs:* 订阅自动带上。 */
   xhsCookie: string
+  /**
+   * RSSHub 实例地址(rsshub:* 源默认 baseUrl;订阅级 info.baseUrl 覆盖)。
+   * 自部署或本机 dev(pnpm dev → http://localhost:1200)。
+   */
+  rsshubBaseUrl: string
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -41,4 +46,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   bilibiliCookie: DEFAULT_BILIBILI_COOKIE,
   weiboCookie: DEFAULT_WEIBO_COOKIE,
   xhsCookie: DEFAULT_XHS_COOKIE,
+  rsshubBaseUrl: "http://localhost:1200",
 }

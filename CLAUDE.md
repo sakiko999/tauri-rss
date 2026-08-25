@@ -2,6 +2,12 @@
 
 Tauri 2 monorepo — RSS Reader，桌面 + 移动双端。
 
+⚠️ **双端定位已分离（2026-08-25 决策，打破此前的「完全一致性」原则）**：desktop
+数据供给走**独立爬虫服务**（承载重反爬平台 xhs/weibo 等；形态待选型，初步倾向
+自研 sidecar）；mobile 保持**内置 crawler**，仅有限平台（rss 直链/bili/youtube/
+直播四平台——纯算法或免登录，播放/弹幕不受影响）。决策依据（RSSHub/MediaCrawler
+对照调研）与切分边界见 `docs/desktop-crawler-service.md`。
+
 ## 目录结构
 
 ```
@@ -9,7 +15,8 @@ apps/
   src-tauri/     ★ 唯一 Rust crate（tauri-app），桌面/移动共享 commands/plugins
   desktop/       前端（React 19 + Vite，产物 → dist/desktop）。已接入 crawler/core/appHost
   mobile/        前端（React 19 + Vite，产物 → dist/mobile）。⚠️ 仍是 Tauri 模板，
-                 尚未接入 crawler/core/appHost —— 是后续工作，勿把它当实现参考
+                 尚未接入 crawler/core/appHost —— 是后续工作，勿把它当实现参考。
+                 定位 = 内置 crawler 有限平台（见头部「双端定位已分离」）
 packages/
   xml/           ★ @tauri-playground/xml — RSS 2.0 + tpl: 扩展的编解码（fast-xml-parser v5
                    XMLBuilder 编码 / parseFeed 解码）。唯一持有 fast-xml-parser
@@ -23,22 +30,23 @@ packages/
                    (证书 GlobalSign 有效,失败实为集群节点偶发 RST),故一律走宿主,
                    原生 WebSocket 仅纯浏览器调试兜底(无 appHost.ws))
   crawler/       ★ @tauri-playground/crawler — 订阅源抓取层（producer 的重构替代）。
-                   一切皆 RssChannel：channel 直接 implements RssChannel(+ 能力接口
-                   RssVideoChannel/RssLiveChannel/DanmakuPlayable),getSource 用组合工厂
-                   (factory.ts)装配——纯函数,每次返回新 source,缓存/去重归 core。
-                   apiFetch 包 fetch;liveHotSource 收敛 hot 委托(hot 源持同平台 live
-                   source 能力,仅替换自家 fetch)。
+                   一切皆 RssChannel：channel 直接实现 RssChannel,getSource 返回纯
+                   `{ fetch }`(组合工厂 factory.ts 装配——纯函数,每次返回新 source)。
+                   **能力抽离(2026-08-25)**:channel 只输出基础信息 XML(与 rsshub 一致),
+                   不再绑定流/弹幕解析——统一走 `resolver/`(按 item.url 路由 → platform/)
+                   对 crawler/rsshub 输出一起生效。liveHotSource 已删(4 个 hot channel 改
+                   纯 {fetch, fetchMore})。
                    直出 RSS 2.0 + tpl: XML 字符串。XML 即天然类型,不导出数据模型类型。
                    弹幕层在 danmaku/(createWsStream 统一 WS 封装 + deferredStream 收敛
                    「异步 setup→建流」竞态 + 各平台 codec proto/tars/douyin-proto),
-                   四平台直播 channel 挂 getDanmaku 返回 DanmakuStream。共享工具在
+                   四平台直播弹幕经 resolver.getDanmakuById 分发。共享工具在
                    utils/(ua:DESKTOP_CHROME_UA / str:strOr / cookie);douyin 签名层收敛
                    abogus.ts(UA_ENTER/signDouyinUrl/enterRoomParams)。
                    浏览器模拟在 browser/cdp.ts(cdpFetch/cdpNavigate/cdpJson,绕 CORS 靠
                    导航到目标域;weibo/xhs user channel 检测 appHost.browser 走此路径)。
                    依赖 **ramda** 0.32（+ @types/ramda devDep）——
                    嵌套解析/排序用 chain/sortWith/pathOr 函数式展开(范式见
-                   bili/live.ts 的 parseBiliLiveStreams)
+                   platform/bili/live-play.ts 的 parseBiliLiveStreams)
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/        ★ @tauri-playground/player — 媒体播放器(video/audio/live 共用),从 ui 拆出。
@@ -411,7 +419,15 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
     设计记录见 `docs/technical-plan.md`「live 源与产品形态的错位」——倾向 **B 分组聚合**
     （core 层把同 kind 的 live 订阅合成混合 feed），C 分区/搜索聚合（发现流，参考
     `tmp/dart_simple_live`）后补。瀑布流/短视频前需定稿
-- mobile 接入 appHost + core（当前还是 Tauri 模板）
+- **desktop 爬虫服务化（2026-08-25 决策，形态待选型）**：desktop feed 供给走独立
+  爬虫服务（A 自研 sidecar / B RSSHub 自部署 / C 混合，初步倾向 A）；mobile 保持
+  内置 crawler + channel 环境标记裁掉 desktop-only 平台。调研结论（重反爬平台
+  行业形态 = 常驻服务 + 纯 HTTP 业务请求 + 浏览器仅作登录容器）、切分边界
+  （resolvePlay/getDanmaku 留前端内置）、签名恢复路径（服务进程跑 CPython xhshow，
+  前提变化致 RustPython 评估结论翻案）见 `docs/desktop-crawler-service.md`。
+  落地前需规划：sidecar 生命周期（Tauri spawn/端口协商/随 app 退出）、core feed
+  路由层、channel 环境标记、HTTP 端点设计（与 crawler fetch/fetchMore 契约对齐）
+- mobile 接入 appHost + core（当前还是 Tauri 模板；定位 = 内置 crawler 有限平台）
 - **source 缓存（core 层）**：crawler 的 `getSource` 是纯函数（每次新实例）。
   若要「同参复用实例 / 去重刷新」，在 core 编排层按 `channelKey + info` 持 Map 实现
   （与 `RssChannel.sourceInfoTpl`/`defaultInfo` 参数体系相关，见 `packages/core/src/data-layer.ts`）
