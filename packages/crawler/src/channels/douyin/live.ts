@@ -12,15 +12,14 @@
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"
 import { parseRoomIds } from "../../utils/room-ids.ts"
 import { strOr } from "../../utils/str.ts"
-import { douyinClient, douyinResolveStreams, fetchRoom } from "../../platform/douyin"
-
+import { fetchRoom } from "../../platform/douyin"
 
 const LIVE = "https://live.douyin.com"
 
@@ -29,15 +28,11 @@ export class DouyinLiveChannel implements RssChannel {
   readonly name = "抖音直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true }]
-  // 直播源:implements LivePlayable + DanmakuPlayable。resolveLivePlay 走平台层
-  // douyinResolveStreams(enter/reflow/HTML 三级降级);getDanmaku 走 client。
-  // fetch 支持多房间(roomIds 逗号分隔);resolveLivePlay/getDanmaku 本就是按 roomId
-  // 工作的纯函数,天然支持任一房间。hot channel 通过 liveHotSource 委托复用。
-  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
+  // 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→live.douyin.com)。
+  // fetch 支持多房间(roomIds 逗号分隔)。
+  getSource(info: SourceInfo): RssSource {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolveLivePlay: douyinResolveStreams,
-      getDanmaku: (roomId) => douyinClient.getDanmaku(roomId),
     }
   }
 

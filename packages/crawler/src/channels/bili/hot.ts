@@ -6,16 +6,15 @@
  * 分页:**页码制**(page 递增,page_size 固定 30),`isPageable` 探测 → fetchMore 翻页
  * (本页为空 = 没有更多)。
  *
- * 能力:对外是独立 channel(无参,热门发现);内部**委托同平台 BiliLiveChannel**
- * 的 resolveLivePlay/getDanmaku(hot 是「特殊的 live channel」——外部区分开,机制复用)。
+ * ⚠️ 能力抽离:只输出 Live item 基础信息(与 rsshub 一致)。流/弹幕解析统一走
+ * crawler/resolver(按 item.url→live.bilibili.com/{roomId} 路由)。翻页(Pageable)保留。
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore, liveHotSource } from "../factory.ts"
+import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import { apiFetch, apiFetchMore } from "../factory.ts"
 import { now } from "../../host.ts"
 import { biliClient } from "../../platform/bili"
-import { BiliLiveChannel } from "./live.ts"
 
 const API_LIVE = "https://api.live.bilibili.com"
 const PAGE_SIZE = 30
@@ -25,13 +24,13 @@ export class BiliLiveHotChannel implements RssChannel {
   readonly name = "bilibili 直播热门"
   readonly kind = "live" as const
   readonly defaultInfo = {}
-  /** 内部持同平台 live channel,委托其懒解析/弹幕能力(对外 channel 身份仍是 hot)。 */
-  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable & Pageable {
-    return liveHotSource(new BiliLiveChannel().getSource(info), {
+  /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
+  getSource(info: SourceInfo): RssSource & Pageable {
+    return {
       fetch: apiFetch(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
       // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
       fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), { first: 2, step: 1 }),
-    })
+    }
   }
 
   private async fetchItems(info: SourceInfo, page: number): Promise<Item[]> {

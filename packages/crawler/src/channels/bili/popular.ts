@@ -6,23 +6,20 @@
  */
 import type { Item } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../index.ts"
+import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { biliClient } from "../../platform/bili"
-import { API, resolveBiliPlay, ugc } from "./video-common.ts"
+import { API, ugc } from "./video-common.ts"
 
 export class BiliPopularChannel implements RssChannel {
   readonly key = "bili:popular"
   readonly name = "bilibili 综合热门"
   readonly kind = "video" as const
   // 视频源:implements VideoPlayable,resolvePlay 闭包捕获 info(core 层注入 cookie)。
-  getSource(info: SourceInfo): RssSource & VideoPlayable & DanmakuPlayable {
+  getSource(info: SourceInfo): RssSource {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
-      getDanmaku: (itemId) =>
-        biliClient.getDanmaku(itemId, { kind: "vod", cookie: info.cookie || undefined }),
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {

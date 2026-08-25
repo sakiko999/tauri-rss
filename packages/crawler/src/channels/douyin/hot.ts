@@ -9,11 +9,10 @@
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore, liveHotSource } from "../factory.ts"
+import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import { apiFetch, apiFetchMore } from "../factory.ts"
 import { now } from "../../host.ts"
 import { douyinClient } from "../../platform/douyin"
-import { DouyinLiveChannel } from "./live.ts"
 
 const LIVE = "https://live.douyin.com"
 const COUNT = 15
@@ -23,9 +22,9 @@ export class DouyinLiveHotChannel implements RssChannel {
   readonly name = "抖音直播热门"
   readonly kind = "live" as const
   readonly defaultInfo = {}
-  /** 内部持同平台 live channel,委托其懒解析/弹幕能力(对外 channel 身份仍是 hot)。 */
-  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable & Pageable {
-    return liveHotSource(new DouyinLiveChannel().getSource(info), {
+  /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
+  getSource(info: SourceInfo): RssSource & Pageable {
+    return {
       fetch: apiFetch(() => this.fetchItems(info, 0), () => this.channelOptions(info)),
       // offset 游标(首页 fetch 用 offset=0,翻页每页 COUNT 条递增;本页为空即止)。
       fetchMore: apiFetchMore(
@@ -33,7 +32,7 @@ export class DouyinLiveHotChannel implements RssChannel {
         () => this.channelOptions(info),
         { first: COUNT, step: COUNT },
       ),
-    })
+    }
   }
 
   private async fetchItems(_info: SourceInfo, offset: number): Promise<Item[]> {

@@ -10,7 +10,6 @@
  */
 import type { Item, SerializeOptions } from "@tauri-playground/xml"
 import { serializeFeed } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, Pageable, RssSource } from "../index.ts"
 import { log } from "../log.ts"
 
 /** serializeFeed + 可选 total(翻页渠道真实总数,经 tpl:total 带出)。apiFetch / fetchMore 共用。 */
@@ -69,23 +68,3 @@ export function apiFetchMore(
   }
 }
 
-/**
- * hot channel 装配:热门源 fetch 是自家接口,懒解析/弹幕能力委托同平台 live source。
- * bili/douyin/douyu/huya 的 hot 都这个形态(对外独立 channel,机制复用主 channel)。
- * base 的 resolveLivePlay/getDanmaku 是自包含闭包(只捕获 info),直接透传省一层包装。
- */
-export function liveHotSource(
-  base: RssSource & LivePlayable & DanmakuPlayable,
-  overrides: {
-    fetch: () => Promise<string>
-    /** 翻页能力(直播 hot 加载更多)。hot 源都支持分页,必传。 */
-    fetchMore: (cursor?: string) => Promise<{ xml: string; cursor?: string }>
-  },
-): RssSource & LivePlayable & DanmakuPlayable & Pageable {
-  return {
-    fetch: overrides.fetch,
-    fetchMore: overrides.fetchMore,
-    resolveLivePlay: base.resolveLivePlay,
-    getDanmaku: base.getDanmaku,
-  }
-}

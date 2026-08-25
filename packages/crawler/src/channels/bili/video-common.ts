@@ -1,13 +1,14 @@
 /**
- * bilibili UGC 视频共享装配 —— 多个 video channel 共用的序列化/懒解析。
+ * bilibili UGC 视频共享装配 —— 多个 video channel 共用的序列化装配。
  *
  * `ugc` 把 API 返回的原始视频对象归一成 Video item(kind=video,stream 留空——
- * playurl 直链由下游懒解析);`resolveBiliPlay` 是 4 个 video channel 的 `resolvePlay`
- * 实现(bvid/aid → cid → 全档位 durl mp4 直链)。
+ * playurl 直链由下游懒解析)。`resolveBiliPlay` 已迁 platform/bili/video-play.ts
+ * (能力抽离:resolver/各 channel 从 resolver 或 platform/bili 引用)。
  */
-import type { Stream, Video } from "@tauri-playground/xml"
-import type { SourceInfo } from "../../index.ts"
-import { biliClient } from "../../platform/bili"
+import type { Video } from "@tauri-playground/xml"
+
+// 兼容 re-export:现有 4 video channel 仍引 resolveBiliPlay(M4 收窄后改 resolveBiliVideoPlay)。
+export { resolveBiliVideoPlay as resolveBiliPlay } from "../../platform/bili"
 
 export const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400
@@ -46,15 +47,4 @@ export function ugc(sourceId: string, t: number, v: {
     channel: ownerName ? { name: ownerName } : undefined,
     // playable stream lazily resolved downstream — bilibili playurl needs bvid+cid and URLs carry a deadline signature
   }
-}
-
-/**
- * 共享的 bili 视频懒解析:bvid/aid → cid → 全档位 durl mp4 直链。
- * 4 个 video channel 的 `resolvePlay` 方法都调它(避免重复代码)。
- * info 携带 core 层注入的登录 cookie → 解锁更高档位(登录 1080P+);无则零登录。
- */
-export async function resolveBiliPlay(itemId: string, info?: SourceInfo): Promise<Stream[]> {
-  const cookie = info?.cookie || undefined
-  const cid = await biliClient.resolveCid(itemId, cookie)
-  return biliClient.resolvePlayUrl(itemId, cid, cookie)
 }

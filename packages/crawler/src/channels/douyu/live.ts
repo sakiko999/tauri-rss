@@ -8,17 +8,16 @@
  * 签名只用于 getH5Play(拉 RTMP 直链)。本 channel 产出 Live Item(状态+元数据),
  * playUrls 需额外 H5Play 请求,交由下游 resolveLivePlay 懒解析(同 huya)。
  */
-import type { Item, Live, Stream } from "@tauri-playground/xml"
+import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"
 import { parseRoomIds } from "../../utils/room-ids.ts"
 import { strOr } from "../../utils/str.ts"
-import { douyuClient, douyuResolveStreams, douyuRoomInfo } from "../../platform/douyu"
-
+import { douyuRoomInfo } from "../../platform/douyu"
 
 const BASE = "https://www.douyu.com"
 
@@ -27,22 +26,12 @@ export class DouyuLiveChannel implements RssChannel {
   readonly name = "斗鱼直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true }]
-  // 直播源:implements LivePlayable + DanmakuPlayable。resolveLivePlay 闭包捕获 this 实例状态(签名重取)。
-  // fetch 支持多房间(roomIds 逗号分隔);resolveLivePlay/getDanmaku 本就是按 roomId 工作,天然支持任一房间。
-  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
+  // 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url)。
+  // fetch 支持多房间(roomIds 逗号分隔)。
+  getSource(info: SourceInfo): RssSource {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolveLivePlay: (roomId) => this.resolveLivePlayImpl(roomId),
-      getDanmaku: (roomId) => douyuClient.getDanmaku(roomId),
     }
-  }
-
-  /**
-   * 懒解析直播流:签名 + 列档 + 逐档拉(全流程在 douyuResolveStreams)。
-   * 返回**全档位**(每档一个 Stream,quality=档位名,rate=档位值)。
-   */
-  private async resolveLivePlayImpl(roomId: string): Promise<Stream[]> {
-    return douyuResolveStreams(roomId)
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

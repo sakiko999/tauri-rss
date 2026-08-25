@@ -5,11 +5,11 @@
  */
 import type { Item } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../index.ts"
+import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { biliClient } from "../../platform/bili"
-import { API, resolveBiliPlay, ugc } from "./video-common.ts"
+import { API, ugc } from "./video-common.ts"
 
 const RID_TABLE: Record<string, string> = {
   all: "0", anime: "1", guochuang: "4", documentary: "3", movie: "2", tv: "5", variety: "7",
@@ -23,12 +23,9 @@ export class BiliRankingChannel implements RssChannel {
   readonly name = "bilibili 排行榜"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "rid", label: "分区(all/douga/…)", required: false }]
-  getSource(info: SourceInfo): RssSource & VideoPlayable & DanmakuPlayable {
+  getSource(info: SourceInfo): RssSource {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolvePlay: (itemId) => resolveBiliPlay(itemId, info),
-      getDanmaku: (itemId) =>
-        biliClient.getDanmaku(itemId, { kind: "vod", cookie: info.cookie || undefined }),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

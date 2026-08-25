@@ -3,11 +3,11 @@
  *
  * 核心抽象:一切皆 RssChannel(渠道)。
  *   - channel 是**纯描述**:key/name/kind(默认 item kind)/sourceInfoTpl/defaultInfo;
- *   - `getSource(info)` 产出一个 source(行为载体)——channel 直接拼装对象字面量,
- *     用 `implements` 声明它具备哪些能力;
- *   - `source.fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展);
- *   - 懒解析能力(resolvePlay/resolveLivePlay)是 **source 的能力**,由它在
- *     `getSource` 里实现的 interface 决定。消费方用类型谓词探测后收窄。
+ *   - `getSource(info)` 产出一个 source:只 `{ fetch }`,输出基础信息 XML
+ *     (与 rsshub 一致)——**不再绑定流/弹幕解析能力**;
+ *   - `source.fetch()` 直出 RSS 2.0 XML(标准子集);
+ *   - 流/弹幕解析统一走 `resolver/`(按 item.url 路由到平台解析函数),
+ *     对 crawler/rsshub 输出一起生效。
  *
  * 公共契约只有「渠道 → 参数 → XML」:XML 就是天然类型,下游(core / 任意
  * RSS 阅读器)自己解析 XML,不依赖 crawler 的任何数据模型类型。
@@ -16,7 +16,7 @@
  * `getChannel/listChannels/registerAllChannels` 都会先确保已注册。
  */
 import { registerBuiltinChannels } from "./register.ts"
-import type { Kind, Item, Stream } from "@tauri-playground/xml"
+import type { Kind, Item } from "@tauri-playground/xml"
 import type { DanmakuItem, DanmakuStream, DanmakuOptions } from "./danmaku"
 
 /** channel 产出的 item 种类。 */
@@ -26,31 +26,20 @@ export type { Stream } from "@tauri-playground/xml"
 /** 弹幕统一契约(视频 VOD / 直播 Live 共用)。 */
 export type { DanmakuItem, DanmakuStream, DanmakuOptions }
 
+/** 宿主 HTTP 便捷层(httpText/httpJson/httpGet)——core source 层(rsshub 直传)复用。 */
+export { httpGet, httpText, httpJson } from "./host.ts"
+
 /** 渠道参数字段定义(描述实例化一个 source 需要什么)。 */
 export type SourceInfo = Record<string, string>
 
 /**
- * 可抓取的源实例(行为载体)。`fetch()` 直出 RSS 2.0 XML(标准子集 + `tpl:` 扩展)。
+ * 可抓取的源实例(行为载体)。`fetch()` 直出 RSS 2.0 XML(标准子集)。
  * getSource 是纯函数:每次返回新实例,无缓存状态(复用/去重归 core 编排)。
- *
- * 能力按 interface 组合声明:`RssSource` 只保证 fetch;source 是否还可播放由
- * 它在 getSource 时 `implements` 的 `VideoPlayable`/`LivePlayable` 决定。
+ * 流/弹幕解析不在此——统一走 `resolver/`(by-url)。
  */
 export interface RssSource {
   /** 抓取并返回 RSS 2.0 XML 字符串。 */
   fetch(): Promise<string>
-}
-
-/** 视频懒解析能力(可选能力,有该能力的 source 才 implements)。 */
-export interface VideoPlayable {
-  /** 按 item id(如 bvid)懒解析可播流。URL 带 deadline 签名,播放时调用而非塞进 refresh。 */
-  resolvePlay(itemId: string): Promise<Stream[]>
-}
-
-/** 直播懒解析能力(可选能力,有该能力的 source 才 implements)。 */
-export interface LivePlayable {
-  /** 按 roomId 懒解析可播流。playUrls 带 expiry 签名,播放时调用。 */
-  resolveLivePlay(roomId: string): Promise<Stream[]>
 }
 
 /** 热搜词懒加载能力(可选能力,有该能力的 source 才 implements)。 */
@@ -59,19 +48,9 @@ export interface HotWordSource {
   resolveHotWord(word: string): Promise<Item[]>
 }
 
-/** 弹幕能力(可选能力,有该能力的 source 才 implements)。**单一接口**,VOD 视频弹幕
- * 与 live 直播聊天由实现方区分推送,消费者只管订阅、不关心全量还是增量:
- *   - VOD(视频):订阅后推一次全量,items 带 timeMs,按播放时间轴过滤;
- *   - live(直播聊天):持续推增量,items 无 timeMs,实时显示。
- */
-export interface DanmakuPlayable {
-  getDanmaku(id: string): DanmakuStream
-}
-
 /**
  * 扫码登录能力(可选能力,channel 级——平台账号登录,无需实例化 source)。
- * 与 source 能力(VideoPlayable 等)并列,但挂在 channel 上:登录是平台级操作,
- * 不依赖 info 实例化,且同平台多 channel(xhs:user/explore)共享同一账号。
+ * 登录是平台级操作,不依赖 info 实例化,且同平台多 channel(xhs:user/explore)共享同一账号。
  */
 export interface Loginable {
   /**
@@ -104,23 +83,11 @@ export interface Pageable {
 
 /**
  * 类型谓词:运行时探测 + 编译期收窄,消费侧(如 core)能力判定一处定义。
- * 类型由 channel 在 getSource 时 implements 声明静态保证,这里只是把编译期
- * 已知的信息在运行时恢复出来(standard interface-guard idiom)。
+ * 能力抽离后流/弹幕走 crawler/resolver(by-url),剩余谓词只覆盖
+ * HotWordSource / Pageable / Loginable。
  */
-export function isRssVideoSource(s: RssSource): s is RssSource & VideoPlayable {
-  return "resolvePlay" in s
-}
-
-export function isRssLiveSource(s: RssSource): s is RssSource & LivePlayable {
-  return "resolveLivePlay" in s
-}
-
 export function isHotWordSource(s: RssSource): s is RssSource & HotWordSource {
   return "resolveHotWord" in s
-}
-
-export function isDanmakuPlayable(s: RssSource): s is RssSource & DanmakuPlayable {
-  return "getDanmaku" in s
 }
 
 export function isPageable(s: RssSource): s is RssSource & Pageable {
@@ -203,3 +170,6 @@ export function __resetChannels(): void {
   CHANNELS.clear()
   builtinRegistered = false
 }
+
+// ── resolver:按 item.url 统一解析流/弹幕(crawler/rsshub 输出一起生效) ──
+export * from "./resolver/index.ts"

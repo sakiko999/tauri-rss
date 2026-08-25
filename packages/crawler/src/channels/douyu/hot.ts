@@ -10,10 +10,9 @@
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore, liveHotSource } from "../factory.ts"
+import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import { apiFetch, apiFetchMore } from "../factory.ts"
 import { httpJson, now } from "../../host.ts"
-import { DouyuLiveChannel } from "./live.ts"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
@@ -23,13 +22,13 @@ export class DouyuLiveHotChannel implements RssChannel {
   readonly name = "斗鱼直播热门"
   readonly kind = "live" as const
   readonly defaultInfo = {}
-  /** 内部持同平台 live channel,委托其懒解析/弹幕能力(对外 channel 身份仍是 hot)。 */
-  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable & Pageable {
-    return liveHotSource(new DouyuLiveChannel().getSource(info), {
+  /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
+  getSource(info: SourceInfo): RssSource & Pageable {
+    return {
       fetch: apiFetch(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
       // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
       fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), { first: 2, step: 1 }),
-    })
+    }
   }
 
   private async fetchItems(_info: SourceInfo, page: number): Promise<Item[]> {

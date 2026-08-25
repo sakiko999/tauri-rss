@@ -9,18 +9,17 @@
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
 import {
-  getChannel,
-  isDanmakuPlayable,
   isHotWordSource,
   isLoginable,
   isPageable,
-  isRssLiveSource,
-  isRssVideoSource,
-  listChannels as listCrawlerChannels,
+  getDanmakuByUrl,
   registerAllChannels,
+  resolveLivePlayByUrl as resolveLiveByUrl,
+  resolvePlayByUrl as resolveVideoByUrl,
 } from "@tauri-playground/crawler"
+import { getChannel, listChannels as listAllChannels } from "./source/index.ts"
 import { serializeFeed } from "@tauri-playground/xml"
-import { deserializeFeed, deserializeFeedWithTotal } from "./xml/deserialize.ts"
+import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
 import type { ResolvePlayback } from "./types/playback.ts"
@@ -121,9 +120,13 @@ export function createDataLayer(): DataLayer {
     return field ? (s[field] as string | undefined) : undefined
   }
 
-  /** 合并 core 层默认 cookie 到订阅 info。 */
+  /** 合并 core 层默认 cookie 到订阅 info。rsshub:* 源注入 baseUrl(不带 cookie)。 */
   async function sourceInfoFor(sub: { channelKey: string; info: Record<string, string> }): Promise<Record<string, string>> {
     const s = await settings.get()
+    if (sub.channelKey.startsWith("rsshub:")) {
+      if (sub.info["baseUrl"]) return sub.info
+      return { ...sub.info, baseUrl: s.rsshubBaseUrl }
+    }
     const cookie = cookieFor(sub.channelKey, s)
     if (!cookie || sub.info["cookie"]) return sub.info
     return { ...sub.info, cookie }
@@ -162,38 +165,76 @@ export function createDataLayer(): DataLayer {
     }
   }
 
+  /**
+   * 解析播放:统一走 crawler/resolver(按 item.url 路由到平台解析函数)。
+   * crawler 与 rsshub 源的条目一样处理("统一生效")。不改 MediaItem,不持久化注记。
+   */
   async function resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) throw new Error("subscription not found")
-    const channel = getChannel(sub.channelKey)
-    if (!channel) throw new NoChannelError(sub.channelKey)
-    // 能力在 source 上:实例化源 → 探测是否有 resolvePlay(不依赖 kind)。
-    const info = await sourceInfoFor(sub)
-    const source = channel.getSource(info)
-    if (!isRssVideoSource(source)) {
-      throw new Error(`channel ${sub.channelKey} does not support video play resolution`)
-    }
-    const streams = await source.resolvePlay(itemId)
-    // 弹幕能力随解析结果一并给(同一 source 同 implements DanmakuPlayable 时)。
-    const danmaku = isDanmakuPlayable(source) ? source.getDanmaku(itemId) : undefined
-    return { streams, danmaku }
+    const routed = await resolvePlayByUrl(itemId, subscriptionId)
+    if (routed) return routed
+    throw new Error("该条目不指向可解析的视频链接")
   }
 
   async function resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback> {
+    const routed = await resolveLivePlayByUrl(roomId, subscriptionId)
+    if (routed) return routed
+    throw new Error("该条目不指向可解析的直播链接")
+  }
+
+  /** itemId 可能是 store 的 guid/url/真实 id——按 store 查 url;url 无满月新时回退 itemId 本身。 */
+  function findItemUrl(itemId: string, _subscriptionId: string): string | null {
+    // MediaStore 无按 id 索引 API,用 all().find(首屏)足够验证(B站条目 url 本就是 guid)。
+    const hit = store.all().find((it) => it.id === itemId)
+    const url = hit?.url ?? itemId
+    return url || null
+  }
+
+  /**
+   * 视频播放:crawler/resolver 按 item.url 路由解析。info 用订阅的 sourceInfoFor
+   * (cookie 注入;rsshub 源注入 baseUrl)。
+   */
+  async function resolvePlayByUrl(itemId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
     const sub = await repo.get(subscriptionId)
-    if (!sub) throw new Error("subscription not found")
-    const channel = getChannel(sub.channelKey)
-    if (!channel) throw new NoChannelError(sub.channelKey)
-    // 能力在 source 上:实例化源 → 探测是否有 resolveLivePlay(不依赖 kind)。
-    const info = await sourceInfoFor(sub)
-    const source = channel.getSource(info)
-    if (!isRssLiveSource(source)) {
-      throw new Error(`channel ${sub.channelKey} does not support live play resolution`)
+    if (!sub) return null
+    const url = findItemUrl(itemId, subscriptionId)
+    if (!url) return null
+    try {
+      const info = await sourceInfoFor(sub)
+      const { streams } = await resolveVideoByUrl(url, info)
+      let danmaku
+      try {
+        danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
+      } catch {
+        // 无弹幕能力(如纯图文/音频)不阻塞播放。
+      }
+      return { streams, danmaku }
+    } catch (e) {
+      // resolver 抛错(url 不可路由/平台解析失败)——返回 null 让上层如实报错。
+      void e
+      return null
     }
-    const streams = await source.resolveLivePlay(roomId)
-    // 弹幕能力随解析结果一并给(直播聊天 / 视频 VOD 同一接口)。
-    const danmaku = isDanmakuPlayable(source) ? source.getDanmaku(roomId) : undefined
-    return { streams, danmaku }
+  }
+
+  /** 直播播放:同上,但 kind=live 路由。 */
+  async function resolveLivePlayByUrl(roomId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
+    const sub = await repo.get(subscriptionId)
+    if (!sub) return null
+    const url = findItemUrl(roomId, subscriptionId)
+    if (!url) return null
+    try {
+      const info = await sourceInfoFor(sub)
+      const { streams } = await resolveLiveByUrl(url, info)
+      let danmaku
+      try {
+        danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
+      } catch {
+        // 无弹幕能力不阻塞播放。
+      }
+      return { streams, danmaku }
+    } catch (e) {
+      void e
+      return null
+    }
   }
 
   async function resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]> {
@@ -247,9 +288,9 @@ export function createDataLayer(): DataLayer {
     return { addedCount: items.length, hasMore: !!nextCursor }
   }
 
-  /** 渠道列表投影(crawler RssChannel → core ChannelInfo,不透 source 装配)。 */
+  /** 渠道列表投影(source 聚合层 RssChannel → core ChannelInfo,不透 source 装配)。 */
   function listChannels(): ChannelInfo[] {
-    return listCrawlerChannels().map((c) => ({
+    return listAllChannels().map((c) => ({
       key: c.key,
       name: c.name,
       kind: c.kind,

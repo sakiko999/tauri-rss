@@ -7,12 +7,12 @@
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { DanmakuPlayable, LivePlayable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "../../host.ts"
 import { parseRoomIds } from "../../utils/room-ids.ts"
 import { log } from "../../log.ts"
-import { M_HUYA, huyaClient, parseHnfGlobalInit, resolveHuyaLivePlay } from "../../platform/huya"
+import { M_HUYA, huyaClient, parseHnfGlobalInit } from "../../platform/huya"
 
 /** 单房间 → Live item(m.huya.com HNF_GLOBAL_INIT)。房间失败抛错,由调用方 catch 隔离。 */
 async function fetchHuyaRoom(roomId: string): Promise<Live> {
@@ -43,13 +43,11 @@ export class HuyaLiveChannel implements RssChannel {
   readonly name = "虎牙直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true }]
-  // 直播源:implements LivePlayable + DanmakuPlayable。resolveLivePlay 走 play.ts(HTTP-FLV)。
-  // fetch 支持多房间(roomIds 逗号分隔);resolveLivePlay/getDanmaku 本就是按 roomId 工作,天然支持任一房间。
-  getSource(info: SourceInfo): RssSource & LivePlayable & DanmakuPlayable {
+  // 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url)。
+  // fetch 支持多房间(roomIds 逗号分隔)。
+  getSource(info: SourceInfo): RssSource {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolveLivePlay: resolveHuyaLivePlay,
-      getDanmaku: (roomId) => huyaClient.getDanmaku(roomId),
     }
   }
 

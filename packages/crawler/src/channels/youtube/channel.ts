@@ -5,28 +5,15 @@
  * (thumbnail + description)和 yt:videoId。本 channel 解析它,规范化
  * videoId → watch URL,产 Video Item。
  */
-import type { Item, Stream, Video } from "@tauri-playground/xml"
+import type { Item, Video } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
-import type { RssChannel, RssSource, SourceInfo, VideoPlayable } from "../../index.ts"
+import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { httpText, now } from "../../host.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
-import { resolveYoutubeStreams } from "../../platform/youtube"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
 const UA = DESKTOP_CHROME_UA
-
-/**
- * 懒解析可播流。真实直链走 InnerTube player API(见 client.ts):
- * ANDROID_VR client(主力,2026-08 起免 poToken)——视频渐进式 mp4(音视频合一)、
- * 直播自带 hlsManifestUrl;失败 fallback WEB / 直播 iOS。
- * ⚠️ 直链失败直接抛错——不兜底 `format:"web"`(watch URL 不可播,会让 player
- * 误报「成功 N 条流」实则黑屏,日志误导)。解析失败由 player resolveFailed 处理。
- */
-async function resolveYoutubePlay(itemId: string): Promise<Stream[]> {
-  const videoId = itemId.replace(/^https?:\/\/www\.youtube\.com\/watch\?v=/, "")
-  return resolveYoutubeStreams(videoId)
-}
 
 export class YoutubeChannel implements RssChannel {
   readonly key: string
@@ -50,11 +37,10 @@ export class YoutubeChannel implements RssChannel {
     return this.defaultChannelId ? { channelId: this.defaultChannelId } : undefined
   }
 
-  // 视频源:implements VideoPlayable,resolvePlay 是模块纯函数。
-  getSource(info: SourceInfo): RssSource & VideoPlayable {
+  // 仅输出 Video item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→watch?v=)。
+  getSource(info: SourceInfo): RssSource {
     return {
       fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
-      resolvePlay: resolveYoutubePlay,
     }
   }
 

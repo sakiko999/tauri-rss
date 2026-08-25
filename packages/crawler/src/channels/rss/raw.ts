@@ -1,17 +1,14 @@
 /**
  * RawRssChannel — 原生 RSS/Atom feed 直链,fetch 直接透传上游 XML(无需 serialize)。
  *
- * kind 是构造时传入的宽 `Kind`(上游 feed 类型运行时才知道),只用于产出描述
- * (deserialize 兜底),**不决定能力**。是否实现 VideoPlayable 由构造参数
- * `video: boolean` 显式声明——kind 与能力正交(见 index.ts 注释)。
+ * 能力抽离:只输出上游 XML 基础信息(与 rsshub 一致)。不再声明 VideoPlayable
+ * (video 直链的 `format:"web"` 页面流兜底已在 crawler/resolver 之外移除——
+ * 播放统一走 resolver by-url,上游只有 watch 链接的 feed 本无可播直链)。
  *
- *   - video 直链(如 YouTube 官方 RSS):声明 video=true,resolvePlay 返回
- *     `format:"web"` 页面流(上游只有 watch 链接,无可播直链);
- *   - 非 video:不声明能力,source 仅 { fetch }——`isRssVideoSource` 返回 false,
- *     消费侧如实知道「无可播放力」(旧实现对非 video 挂了抛错的 resolveLivePlay,
- *     反而让谓词谎报 true;现在如实没有更诚实)。
+ * kind 是构造时传入的宽 `Kind`(上游 feed 类型运行时才知道),只用于产出描述
+ * (deserialize 兜底)。
  */
-import type { Kind, RssChannel, RssSource, SourceInfo, Stream, VideoPlayable } from "../../index.ts"
+import type { Kind, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { httpText } from "../../host.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
@@ -23,15 +20,12 @@ export class RawRssChannel implements RssChannel {
   readonly kind: Kind
   readonly sourceInfoTpl = [{ key: "url", label: "Feed URL", required: true }]
   readonly defaultUrl?: string
-  /** 该直链 feed 是否提供视频可播放力(决定 source 是否 implements VideoPlayable)。与 kind 正交。 */
-  private readonly video: boolean
 
-  constructor(key: string, name: string, kind: Kind, defaultUrl?: string, video = false) {
+  constructor(key: string, name: string, kind: Kind, defaultUrl?: string) {
     this.key = key
     this.name = name
     this.kind = kind
     this.defaultUrl = defaultUrl
-    this.video = video
   }
 
   /** 内置直链自带默认可订阅参数。 */
@@ -39,22 +33,9 @@ export class RawRssChannel implements RssChannel {
     return this.defaultUrl ? { url: this.defaultUrl } : undefined
   }
 
-  /**
-   * video 直链:implements VideoPlayable,resolvePlay 返回 `format:"web"` 页面流。
-   * 否则仅返回 { fetch }——不声明能力。
-   */
+  /** 纯 fetch:透传上游 XML。 */
   getSource(info: SourceInfo): RssSource {
-    if (!this.video) return { fetch: () => this.fetchXml(info) }
-    const source: RssSource & VideoPlayable = {
-      fetch: () => this.fetchXml(info),
-      resolvePlay: (itemId) => this.resolvePlayImpl(itemId),
-    }
-    return source
-  }
-
-  /** 懒解析可播流:返回 `format:"web"` 页面流(item 链接)。 */
-  private async resolvePlayImpl(itemId: string): Promise<Stream[]> {
-    return [{ url: itemId, format: "web", headers: { "user-agent": UA } }]
+    return { fetch: () => this.fetchXml(info) }
   }
 
   private async fetchXml(info: SourceInfo): Promise<string> {
