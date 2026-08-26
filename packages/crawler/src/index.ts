@@ -17,17 +17,12 @@
  */
 import { registerBuiltinChannels } from "./register.ts"
 import type { Kind, Item } from "@tauri-playground/xml"
-import type { DanmakuItem, DanmakuStream, DanmakuOptions } from "./danmaku"
 
 /** channel 产出的 item 种类。 */
 export type { Kind } from "@tauri-playground/xml"
-/** 懒解析返回的可播流。 */
-export type { Stream } from "@tauri-playground/xml"
-/** 弹幕统一契约(视频 VOD / 直播 Live 共用)。 */
-export type { DanmakuItem, DanmakuStream, DanmakuOptions }
 
 /** 宿主 HTTP 便捷层(httpText/httpJson/httpGet)——core source 层(rsshub 直传)复用。 */
-export { httpGet, httpText, httpJson } from "./host.ts"
+export { httpGet, httpText, httpJson } from "@tauri-playground/resolve"
 
 /** 渠道参数字段定义(描述实例化一个 source 需要什么)。 */
 export type SourceInfo = Record<string, string>
@@ -171,5 +166,3 @@ export function __resetChannels(): void {
   builtinRegistered = false
 }
 
-// ── resolver:按 item.url 统一解析流/弹幕(crawler/rsshub 输出一起生效) ──
-export * from "./resolver/index.ts"

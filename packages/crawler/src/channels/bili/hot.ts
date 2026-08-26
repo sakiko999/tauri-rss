@@ -13,8 +13,8 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { now } from "../../host.ts"
-import { biliClient } from "../../platform/bili"
+import { now } from "@tauri-playground/resolve"
+import { biliClient } from "@tauri-playground/resolve"
 
 const API_LIVE = "https://api.live.bilibili.com"
 const PAGE_SIZE = 30

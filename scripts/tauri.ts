@@ -60,7 +60,6 @@ const viteBuild = (p: Platform): CmdSpec => ({ label: `前端构建 (${p})`, cmd
 const tauriDev = (p: Platform): CmdSpec => ({ label: `Tauri dev (${p})`, cmd: "bunx", args: ["tauri", "dev", ...TAURI_CFG(p)], cwd: SRC_TAURI });
 const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...TAURI_CFG(p)], cwd: SRC_TAURI });
 /** RSSHub sidecar:desktop 订阅源,`bun run tauri` 时随 Vite+Tauri 一并带起(独立 Node 进程,自起 1200 端口)。 */
-const rsshubSidecar = (): CmdSpec => ({ label: "RSSHub sidecar", cmd: "bun", args: ["run", "scripts/rsshub-server.ts"], cwd: ROOT });
 
 /** 解析 argv → 命令意图。纯函数。 */
 function parseArgs(argv: string[]): { command?: string; platform?: string; flag?: string } {
@@ -88,7 +87,7 @@ function planFor(command: string, platform: Platform, flag?: string): Execution[
             { kind: "once", spec: viteBuild(platform) },
             { kind: "once", spec: tauriBuild(platform) },
           ]
-        : [{ kind: "parallel", specs: [rsshubSidecar(), viteDev(platform), tauriDev(platform)] }];
+        : [{ kind: "parallel", specs: [viteDev(platform), tauriDev(platform)] }];
     default:
       throw new Error(`未知命令，可用: dev | build | tauri`);
   }

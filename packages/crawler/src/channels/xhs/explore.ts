@@ -8,8 +8,8 @@ import type { Item, Social } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "../../host.ts"
-import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient, xhsScanLogin } from "../../platform/xhs"
+import { now } from "@tauri-playground/resolve"
+import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient, xhsScanLogin } from "@tauri-playground/resolve"
 
 export class XhsExploreChannel implements RssChannel, Loginable {
   readonly key = "xhs:explore"

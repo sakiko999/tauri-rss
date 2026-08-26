@@ -123,49 +123,51 @@ board 大概率仍坏（等不到选择器）。另注意：RSSHub 已从 playwr
 sidecar 生命周期（Tauri spawn/端口协商/随 app 退出）、core 的 feed 路由层、
 channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fetchMore 契约对齐）。
 
-## 7. 落地记录（2026-08-25：npm 依赖 + dev 并行代管）
+## 7. 落地记录（2026-08-25 → 2026-08-26 反转）
 
-### 7.1 依赖来源（显式、可复现）
+### 7.0 结论反转（2026-08-26）
 
-- **`tmp/RSSHub` 仅是探针，不属依赖**。正式依赖钉版：
-  `package.json` → `dependencies: "rsshub": "^1.0.0-master.0a5fb34"`（bun.lock 锁定）。
+**「内置 rsshub npm 包 + sidecar」方案废弃**，改 **RSSHub 作可选外挂 HTTP 服务器**：
+
+- 移除：`package.json` 的 `rsshub` 依赖、`scripts/rsshub-server.ts`（已删）、
+  `scripts/tauri.ts` 的 `rsshubSidecar()`。
+- RSSHub 定位 = 「外挂实例」：`settings.rsshubBaseUrl`（默认公网 `https://rsshub.app`，
+  订阅级 `info.baseUrl` 覆盖），`source/rsshub.ts` 直连外部实例，只做信息抓取。
+- **crawler 为主供给**：youtube/bili/播客/直播全走 crawler 自解析，零外部依赖。
+- 保留 1 条 rsshub 示例订阅（`s-article` Hacker News → `rsshub:feed /hackernews`）。
+- 原因：内嵌成本高（依赖大、`request()` 进程内 API 需自序列化、bili 风控需 cookie、
+  youtube 需 YOUTUBE_KEY、xhs 失效、sidecar 生命周期），收益与预想不符。
+  详见 `docs/rsshub-vs-crawler.md`「历史决策教训」。
+
+### 7.1 历史（2026-08-25 内嵌方案，已废弃，仅存档）
+
+- **`tmp/RSSHub` 仅是探针，不属依赖**。曾依赖钉版：
+  `package.json` → `dependencies: "rsshub": "^1.0.0-master.0a5fb34"`（已移除）。
 - `rsshub` 包是**进程内 API**：`init(conf)` + `request(path)` 返回 **RSS 2.0 JS 对象**
   （`{title, link, description, item[]}`），**无自带 HTTP 端口**。
+- `scripts/rsshub-server.ts`（已删）：曾自起 HTTP `1200`——
+  - `GET /healthz` / `GET /url?u=` 泛代理 / `GET /<rsshub-route>` 序列化标准 RSS。
+- `scripts/tauri.ts` 曾 `spawnParallel([rsshubSidecar(), viteDev(), tauriDev()])`。
 
-### 7.2 多进程形态（dev 并行，Tauri 不直接 spawn）
-
-- **不引 `tauri-plugin-shell` / `externalBin` / `capabilities shell:*`**（Node sidecar 进
-  安装包体积不可控，且用户定「不局限于 Tauri」，release 可外部实例兜底）。
-- `scripts/rsshub-server.ts`：独立 Node 进程自起 HTTP `1200`——
-  - `GET /healthz` → 200（探活）
-  - `GET /url?u=<feedUrl>` → **泛 URL 代理**（抓任意 feed XML 原样吐；desktop 订阅
-    rss:* 直链 / podcast 全经此路）
-  - `GET /<rsshub-route>` → `request(path)` 对象 → 序列化成**标准 RSS 2.0**
-    （`title/link/description CDATA/guid/pubDate/author/enclosure/media:thumbnail/
-    media:content`），与 crawler serializeFeed 子集对齐
-- **接入点**：`scripts/tauri.ts` 的 `planFor("tauri", desktop)` → `spawnParallel([rsshubSidecar(),
-  viteDev(), tauriDev()])`，随 `bun run tauri` 一并带起；`taskkill /T` 子树清理沿用。
-
-### 7.3 消费契约（core 层零改动）
+### 7.3 消费契约（外挂模式，core 层保持）
 
 - `packages/core/src/source/rsshub.ts` 仍 `httpText(baseUrl+route)`，`baseUrl` 默认
-  `http://localhost:1200` = sidecar 端口；`sourceInfoFor` 对 `rsshub:` 注入 baseUrl 不附 cookie。
+  `https://rsshub.app`（公网外挂）；`sourceInfoFor` 对 `rsshub:` 注入 baseUrl **不附 cookie**。
 - `deserializeFeed` 已兼容标准 RSS + Atom + media:* 增强，crawler(tpl:) 与 rsshub(标准)
-  被同一加工层消费（`verify-alignment.ts` 断言成立）。
+  被同一加工层消费（`verify-alignment.ts` 断言成立）。播放统一走 resolver by-url。
 
-### 7.4 desktop 迁移（crawler rss:* 隐藏，RSSHub 全接）
+### 7.4 desktop 渠道（crawler 为主）
 
 - `apps/desktop/src/components/AddFeedDialog.tsx`：隐藏 crawler `rss:*` 渠道
-  （`hiddenPrefixes=["rss:"]`），desktop 全走 RSSHub（crawler 包内仍注册，mobile 兜底）。
-- `apps/desktop/src/subscriptions.ts`：`rss:hn` → `rsshub:feed route=/hackernews`；
-  `rss:podcast` → `rsshub:feed route=/url?u=<megaphone>`（泛 URL 代理，enclosure audio
-  推断 kind=audio，435 items 实测）。
+  （`hiddenPrefixes=["rss:"]`）——原始 RSS 直链不常用；crawler 包内仍注册，mobile 兜底。
+- `apps/desktop/src/subscriptions.ts`：crawler 为主（youtube/bili:popular/bili:weekly/
+  rss:podcast/4×live 等）+ 1 条 rsshub 示例（`s-article` → `/hackernews`）。
 
-### 7.5 验证
+### 7.5 验证（反转后）
 
-- `verify-source.ts`：62 渠道（crawler 57 + rsshub 5），weibo:hot 52 条 ✓
 - `verify-alignment.ts`：crawler(tpl:) video + rsshub(标准+media:) article 同 deserialize ✓
 - 全量 tsc（core/desktop/crawler）零错。
+- 外挂链路：`httpText(baseUrl+route)` → 外部实例标准 RSS → deserialize → 播放 resolver。
 
 ### 7.6 遗留
 

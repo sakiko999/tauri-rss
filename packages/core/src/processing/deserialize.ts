@@ -1,17 +1,16 @@
 /**
- * deserializeFeed — RSS 2.0(+ `tpl:` 扩展)XML → MediaItem[]。
+ * deserializeFeed — RSS 2.0 XML → MediaItem[]。
  *
- * 是 crawler `serializeFeed` 的逆操作:从本项目自己发出的 XML 恢复完整渲染
- * 模型。复用通用 `parseFeed`(xml-parser.ts)——它保留整棵树在 `ParsedItem.raw`
- * (属性在 `@_` 下),所有 `tpl:*` 字段无需改解析器即可读回。
+ * 消费 **标准 RSS 2.0 + media: 增强**(与 RSSHub 外部实例、crawler serialize 对齐):
+ *   - title/link/description/guid/pubDate/author
+ *   - enclosure / media:content(附件与可播流)
+ *   - media:thumbnail(缩略图)
+ *   - 最小 `tpl:` 扩展(crawler 自产):`tpl:kind`(kind 判别)、`tpl:total`(翻页总数)
  *
- * app 层语义由 core 注入:subscriptionId 来自 ctx,isUnread 默认 true、
- * isStarred 默认 false(crawler Item 不携带这两个字段)。
- *
- * 范围:仅本项目产出的 XML。第三方标准阅读器重发的 feed 会丢 `tpl:` 命名空间,
- * 退化为纯 `ArticleItem` 默认态——这是下游信息损失,不是解析器 bug。
+ * kind 判别:`tpl:kind` > ctx.kind(channel 声明) > enclosure(mime 推断 audio) > article。
+ * live 的 platform/roomId 从 item.url 推导(复刻 resolver 路由语义,不依赖 crawler)。
+ * app 层语义由 core 注入:subscriptionId 来自 ctx,isUnread 默认 true、isStarred 默认 false。
  */
-import * as R from "ramda"
 import type { MediaAttachment, MediaAuthor, MediaItem, MediaKind, MediaStream, SocialImage, StreamingFormat } from "../types/media-item.ts"
 import type { LivePlatformId, LiveStatus } from "../types/live.ts"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
@@ -28,8 +27,7 @@ export function deserializeFeed(xml: string, ctx: DeserializeContext): MediaItem
   return deserializeFeedWithTotal(xml, ctx).items
 }
 
-/** 反序列化 + 渠道真实总数(一次 parseFeed 双产出)。翻页渠道(weibo cardlistInfo.total
- * 经 tpl:total 带出)在 refresh/loadMore 用;无 total 的 feed 返回 undefined。 */
+/** 反序列化 + 渠道真实总数(一次 parseFeed 双产出)。 */
 export function deserializeFeedWithTotal(
   xml: string,
   ctx: DeserializeContext,
@@ -54,11 +52,13 @@ export function deserializeFeedWithTotal(
   return { items, total: totalFromRaw(feed.channel.raw) }
 }
 
-/** kind 解析:tpl:kind > enclosure-derived > ctx.kind > article。社交由 channel.kind 显式声明。 */
+/** kind 解析:最小 tpl:kind > enclosure/audio(mime)> ctx.kind > article。 */
 function resolveKind(raw: Record<string, unknown>, ctxKind: MediaKind | undefined): MediaKind {
   const tpl = str(raw["tpl:kind"])
-  if (tpl) return tpl as MediaKind
-  // RSSHub 标准 RSS 的 enclosure/media:* 无 tpl:kind 时的推断:仅 enclosure audio 做确定性跨 kind。
+  if (tpl && (tpl === "article" || tpl === "video" || tpl === "audio" || tpl === "live" || tpl === "social")) {
+    return tpl
+  }
+  // enclosure 派生:audio 确定性跨 kind(视频不跨——video 直链也可能 enclosure)。
   const audioFromEnclosure = (() => {
     const enc = enclosureVal(raw["enclosure"])
     if (!enc) return undefined
@@ -82,18 +82,15 @@ function totalFromRaw(raw: Record<string, unknown> | undefined): number | undefi
 function baseFields(it: ParsedItem, ctx: DeserializeContext) {
   const raw = it.raw ?? {}
   const author = toAuthor({
-    // RSSHub 常用 dc:creator 而非 author;tpl: 优先后兜底标准字段(it.author 可能为 "" 空串)。
-    name: str(raw["tpl:authorName"]) || it.author || str(raw["dc:creator"]) || undefined,
-    avatar: str(raw["tpl:authorAvatar"]),
-    handle: str(raw["tpl:authorHandle"]),
+    name: it.author?.trim() || str(raw["dc:creator"]) || undefined,
   })
   return {
     id: it.guid ?? `hash-${it.title ?? ""}`,
     subscriptionId: ctx.subscriptionId,
     title: it.title ?? "(untitled)",
     url: it.link,
-    summary: str(raw["tpl:summary"]) ?? it.description,
-    thumbnail: str(raw["tpl:thumbnail"]) ?? rsshubThumbnail(raw),
+    summary: it.description,
+    thumbnail: rsshubThumbnail(raw),
     author,
     publishedAt: it.pubDate ? tryEpoch(it.pubDate) : undefined,
     fetchedAt: num(raw["tpl:fetchedAt"]) ?? ctx.now,
@@ -115,15 +112,12 @@ function baseFields(it: ParsedItem, ctx: DeserializeContext) {
 function parseArticle(it: ParsedItem, ctx: DeserializeContext): MediaItem {
   const b = baseFields(it, ctx)
   const raw = it.raw ?? {}
-  const tplMedia = parseMedia(raw)
-  // RSSHub 标准 RSS 无 tpl:media;enclosure/媒体附件退化为 article 附件。
-  const rsshubMedia = tplMedia ? undefined : rsshubArticleMedia(raw)
   return {
     ...b,
     kind: "article",
     content: it.content ?? it.description,
     contentFormat: asContentFormat(raw["tpl:contentFormat"]) ?? (it.content ? "html" : undefined),
-    media: tplMedia ?? rsshubMedia,
+    media: rsshubArticleMedia(raw),
   }
 }
 
@@ -134,7 +128,7 @@ function parseSocial(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     ...b,
     kind: "social",
     content: it.content ?? it.description ?? "",
-    images: parseImages(raw["tpl:images"]),
+    images: parseImages(raw["tpl:images"]) ?? parseImagesFromMedia(raw),
     likes: num(raw["tpl:likes"]),
     reposts: num(raw["tpl:reposts"]),
     replies: num(raw["tpl:replies"]),
@@ -149,7 +143,8 @@ function parseVideo(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     ...b,
     kind: "video",
     duration: num(raw["tpl:duration"]),
-    stream: parseStream(raw["tpl:stream"]),
+    // 直链(stream)从标准 enclosure 读;无则 undefined(resolver by-url 重解析)。
+    stream: parseStreamFromEnclosure(raw),
     channel:
       str(raw["tpl:channelName"]) || str(raw["tpl:channelAvatar"])
         ? { name: str(raw["tpl:channelName"]) ?? "", avatar: str(raw["tpl:channelAvatar"]) }
@@ -160,85 +155,43 @@ function parseVideo(it: ParsedItem, ctx: DeserializeContext): MediaItem {
 function parseAudio(it: ParsedItem, ctx: DeserializeContext): MediaItem {
   const b = baseFields(it, ctx)
   const raw = it.raw ?? {}
-  // 标准 RSS 的 audio 由 enclosure 推断 kind(= audio)时,enclosure url 供 stream。
-  const streamFromEnclosure = (() => {
-    if (parseStream(raw["tpl:stream"])) return undefined
-    const enc = enclosureVal(raw["enclosure"])
-    const u = enc ? str(attr(obj(enc), "url")) : undefined
-    return u ? ({ url: u } as MediaStream) : undefined
-  })()
   return {
     ...b,
     kind: "audio",
     duration: num(raw["tpl:duration"]),
     artist: str(raw["tpl:artist"]),
     album: str(raw["tpl:album"]),
-    stream: parseStream(raw["tpl:stream"]) ?? streamFromEnclosure,
+    // audio 的 enclosure 即可播直链。
+    stream: parseStreamFromEnclosure(raw),
   }
 }
 
+/** live:platform/roomId 从 item.url 推导,不依赖 resolver。 */
 function parseLive(it: ParsedItem, ctx: DeserializeContext): MediaItem {
   const b = baseFields(it, ctx)
   const raw = it.raw ?? {}
-  const play = obj(raw["tpl:playUrls"])
-  const playList = arr(play["tpl:play"])
-    .map((o) => str(attr(o, "url")))
-    .filter((v): v is string => !!v)
+  const { platform, roomId } = liveFromUrl(it.link)
   return {
     ...b,
     kind: "live",
-    platform: (str(raw["tpl:platform"]) as LivePlatformId | undefined) ?? "bilibili",
-    roomId: str(raw["tpl:roomId"]) ?? "",
+    platform: (str(raw["tpl:platform"]) as LivePlatformId | undefined) ?? platform,
+    roomId: str(raw["tpl:roomId"]) ?? roomId,
     liveStatus: (str(raw["tpl:liveStatus"]) as LiveStatus | undefined) ?? "unknown",
     online: num(raw["tpl:online"]),
     isRecord: boolTpl(raw["tpl:isRecord"], undefined),
     introduction: str(raw["tpl:introduction"]),
     notice: str(raw["tpl:notice"]),
     showTime: str(raw["tpl:showTime"]),
-    playUrls: playList.length ? playList : undefined,
-    playHeaders: parseHeaders(play["tpl:playHeaders"]),
-    quality: str(play["tpl:quality"]),
-    playUrlsExpiresAt: num(attr(play, "expiresAt")),
+    // 播放流/弹幕由 resolver by-url 解析,XML 不再带 playUrls。
   }
 }
 
-// ── nested parsers ───────────────────────────────────────────────────────────
-
-function parseMedia(raw: Record<string, unknown>): MediaAttachment[] | undefined {
-  const nodes = arr(raw["tpl:media"])
-  if (!nodes.length) return undefined
-  return R.pipe(
-    R.map((o: Record<string, unknown>): MediaAttachment | null => {
-      const kind = str(attr(o, "kind"))
-      const url = str(attr(o, "url"))
-      if (!kind || !url) return null
-      const att: MediaAttachment = {
-        kind: kind as MediaAttachment["kind"],
-        url,
-        title: str(attr(o, "title")),
-        mimeType: str(attr(o, "mimeType")),
-        poster: str(attr(o, "poster")),
-        width: num(attr(o, "width")),
-        height: num(attr(o, "height")),
-        aspectRatio: num(attr(o, "aspectRatio")),
-        durationSec: num(attr(o, "durationSec")),
-        bitrate: num(attr(o, "bitrate")),
-        streamingFormat: asStreamingFormat(attr(o, "streamingFormat")),
-        isLiveNow: bool(attr(o, "isLiveNow")),
-        lang: str(attr(o, "lang")),
-      }
-      // strip undefined holes so deep-equal matches the source shape(pickBy 替代可变 delete)
-      return R.pickBy((v: unknown) => v !== undefined, att) as MediaAttachment
-    }),
-    R.filter((m: MediaAttachment | null): m is MediaAttachment => m !== null),
-  )(nodes)
-}
+// ── nested parsers(标准字段优先 + 最小 tpl 兜底)───────────────────────────
 
 function parseImages(node: unknown): SocialImage[] | undefined {
   const o = obj(node)
   const imgs = asList(o["tpl:image"])
     .map((x) => {
-      // 兼容两种协议:纯文本 URL(旧) / 带 @_url @_width @_height 属性对象(新)。
       if (typeof x === "string") return { url: x }
       const o2 = typeof x === "object" ? (x as Record<string, unknown>) : {}
       const url = str(attr(o2, "url"))
@@ -254,32 +207,35 @@ function parseImages(node: unknown): SocialImage[] | undefined {
   return imgs.length ? imgs : undefined
 }
 
-function parseStream(node: unknown): MediaStream | undefined {
-  const o = obj(node)
-  const url = str(attr(o, "url"))
+/** audio/video enclosure → MediaStream(直链)。 */
+function parseStreamFromEnclosure(raw: Record<string, unknown>): MediaStream | undefined {
+  const enc = enclosureVal(raw["enclosure"])
+  if (!enc) return undefined
+  const url = str(attr(obj(enc as Record<string, unknown>), "url"))
   if (!url) return undefined
-  return {
-    url,
-    format: str(attr(o, "format")),
-    headers: parseHeaders(o["tpl:streamHeaders"]),
-  }
+  return { url, format: typeOfEnclosure(enc) }
 }
 
-function parseHeaders(node: unknown): Record<string, string> | undefined {
-  const o = obj(node)
-  const headers = arr(o["tpl:header"])
-  if (!headers.length) return undefined
-  // name 非空才写入(name 为空 = 残缺节点跳过);fold 为 Record,等价原 for + out[name]=value。
-  const out = R.reduce(
-    (acc: Record<string, string>, h: Record<string, unknown>) => {
-      const name = str(attr(h, "name"))
-      const value = text(h)
-      return name && value !== undefined ? { ...acc, [name]: value } : acc
-    },
-    {},
-    headers,
-  )
-  return Object.keys(out).length ? out : undefined
+/** media:content[medium=image] → SocialImage[](crawler serialize 与 RSSHub 输出兼容)。 */
+function parseImagesFromMedia(raw: Record<string, unknown>): SocialImage[] | undefined {
+  const mc = raw["media:content"]
+  if (!mc) return undefined
+  const imgs: SocialImage[] = []
+  for (const m of asList(mc)) {
+    const o = obj(m as Record<string, unknown>)
+    const medium = String(attr(o, "medium") ?? "")
+    const type = String(attr(o, "type") ?? "")
+    if (medium !== "image" && !type.startsWith("image/")) continue
+    const url = str(attr(o, "url"))
+    if (!url) continue
+    const w = num(attr(o, "width"))
+    const h = num(attr(o, "height"))
+    const img: SocialImage = { url }
+    if (w !== undefined) img.width = w
+    if (h !== undefined) img.height = h
+    imgs.push(img)
+  }
+  return imgs.length ? imgs : undefined
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -297,19 +253,6 @@ function toAuthor(fields: { name?: string; avatar?: string; handle?: string }): 
 /** Coerce an attribute object `{ "@_x": v }` to the `v` value. */
 function attr(o: Record<string, unknown>, name: string): unknown {
   return o?.[`@_${name}`]
-}
-
-/** Extract the text of a node: string, `{ "#text" }`, or `{ "tpl:img" }`. */
-function text(o: unknown): string | undefined {
-  if (typeof o === "string") return o
-  const obj_ = obj(o)
-  return str(obj_["#text"]) ?? str(obj_)
-}
-
-/** Normalize a value to a list of raw nodes, keeping string children as-is. */
-function asList(v: unknown): unknown[] {
-  if (v === undefined || v === null) return []
-  return Array.isArray(v) ? v : [v]
 }
 
 function obj(v: unknown): Record<string, unknown> {
@@ -344,16 +287,9 @@ function boolTpl(v: unknown, fallback: boolean | undefined): boolean | undefined
   return str(v) === "1"
 }
 
-/** Attribute-driven boolean (no fallback — `0|1` literal). */
-function bool(v: unknown): boolean | undefined {
-  if (v === undefined || v === null) return undefined
-  return str(v) === "1"
-}
-
-function arr(v: unknown): Record<string, unknown>[] {
+function asList(v: unknown): unknown[] {
   if (v === undefined || v === null) return []
-  const list = Array.isArray(v) ? v : [v]
-  return list.map((x) => obj(x)).filter((o) => Object.keys(o).length > 0)
+  return Array.isArray(v) ? v : [v]
 }
 
 /** RFC 822 pubDate → epoch ms. */
@@ -376,7 +312,7 @@ function asContentFormat(v: unknown): "html" | "markdown" | "text" | undefined {
   return undefined
 }
 
-// ── RSSHub 增强 helpers(仅当无 tpl: 字段时兜底;自家 XML 原样优先) ───────────────────
+// ── RSSHub 标准 RSS 增强 helpers ─────────────────────────────────────────────
 
 function enclosureVal(v: unknown): unknown {
   if (v === undefined || v === null) return undefined
@@ -394,28 +330,21 @@ function inferKindFromMime(mime: string | undefined): MediaKind | undefined {
   return undefined
 }
 
-/** RSSHub thumbnail 兜底:media:thumbnail@url / media:content[medium=image]@url / itunes:image@href。 */
+/** RSSHub thumbnail:media:thumbnail@url / media:content[medium=image]@url / itunes:image@href。 */
 function rsshubThumbnail(raw: Record<string, unknown>): string | undefined {
   const t = raw["media:thumbnail"]
   if (t) {
     const u = str(attr(obj(t as Record<string, unknown>), "url"))
     if (u) return u
   }
-  // media:content 可多条(list),medium=image 的 url 作缩略图
   const mc = raw["media:content"]
   if (mc) {
     for (const m of asList(mc)) {
       const o = obj(m as Record<string, unknown>)
       const u = str(attr(o, "url"))
       if (u && (String(attr(o, "medium") ?? "") === "image" || String(attr(o, "type") ?? "").startsWith("image/"))) return u
-      // 无 medium 标注时 enclosure image 仍可作 thumb
-      if (u && !attr(o, "medium") && !attr(o, "type")) {
-        // 可能是通用 media:content(图像)——保留为 thumb 候选,但优先级低于 enclosure 推断
-        return u
-      }
     }
   }
-  // itunes:image
   const ii = raw["itunes:image"]
   if (ii) {
     const u = str(attr(obj(ii as Record<string, unknown>), "href"))
@@ -424,7 +353,7 @@ function rsshubThumbnail(raw: Record<string, unknown>): string | undefined {
   return undefined
 }
 
-/** RSSHub article 附件:enclosure(非 audio)与通用 media:content 的非 image 媒体 → Article media[]。 */
+/** RSSHub article 附件:enclosure(非 audio)+ media:content 的非 image 媒体 → Article media[]。 */
 function rsshubArticleMedia(raw: Record<string, unknown>): MediaAttachment[] | undefined {
   const out: MediaAttachment[] = []
   const enc = enclosureVal(raw["enclosure"])
@@ -454,4 +383,21 @@ function rsshubArticleMedia(raw: Record<string, unknown>): MediaAttachment[] | u
     }
   }
   return out.length ? out : undefined
+}
+
+/** 从 live item.url 推导 platform/roomId(复刻 resolver 路由语义,不依赖 crawler)。 */
+function liveFromUrl(url: string | undefined): { platform: LivePlatformId; roomId: string } {
+  const u = url ?? ""
+  const platform: LivePlatformId =
+    /live\.bilibili\.com/.test(u) ? "bilibili"
+    : /(?:^|\.)douyu\.com/.test(u) ? "douyu"
+    : /(?:^|\.)huya\.com/.test(u) ? "huya"
+    : /live\.douyin\.com/.test(u) ? "douyin"
+    : "bilibili"
+  const rid =
+    platform === "bilibili" ? u.match(/live\.bilibili\.com\/(\d+)/)?.[1] ?? ""
+    : platform === "douyu" ? u.match(/douyu\.com\/(\d+)/)?.[1] ?? ""
+    : platform === "huya" ? u.match(/huya\.com\/(\d+)/)?.[1] ?? ""
+    : u.match(/live\.douyin\.com\/(\S+)/)?.[1] ?? ""
+  return { platform, roomId: rid }
 }

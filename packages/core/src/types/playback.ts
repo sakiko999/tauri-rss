@@ -4,7 +4,7 @@
  * resolvePlay/resolveLivePlay 的返回契约:source 具备 DanmakuPlayable 能力时
  * 附带 `danmaku`(source.getDanmaku 已探好),上层无需再单独调 openDanmaku。
  */
-import type { DanmakuStream } from "@tauri-playground/crawler"
+import type { DanmakuStream } from "@tauri-playground/resolve"
 import type { MediaStream } from "./media-item.ts"
 
 export interface ResolvePlayback {

@@ -1,19 +1,23 @@
 /**
- * rsshub provider —— RSSHub 实例源(source 层外部插件)。
+ * rsshub provider —— RSSHub 外挂实例源(source 层外部插件)。
+ *
+ * 定位(2026-08-26 反转):**内置 crawler 为主,RSSHub 作可选的「外挂 HTTP 服务器」**。
+ * 不内嵌 npm 包/不跑 sidecar 进程——直连用户配置的公网实例(自部署 rsshub.app 等)。
+ * 因此 baseUrl 必须存在(settings.rsshubBaseUrl 或订阅 info.baseUrl);无则抛清晰错误,
+ * 而不是静默连不存在的本地端口。
  *
  * import 本模块即自注册(模块副作用,与 injectTauriHost 同模式)——desktop 入口
  * `import "@tauri-playground/core/source/rsshub"`,mobile 不 import 即不进 bundle。
  *
- * 渠道只有 fetch(直传 RSSHub 标准 RSS 2.0 XML):无播放能力——视频/直播/弹幕由
+ * 渠道只有 fetch(直传外部 RSSHub 的标准 RSS 2.0 XML):无播放能力——视频/直播/弹幕由
  * crawler/resolver 按 item.url 统一路由解析(与 crawler 输出一起生效)。
- * baseUrl 注入:订阅 info.baseUrl > settings.rsshubBaseUrl(core 数据层注入)>
- * 本模块兜底。⚠️ 不把平台 cookie 附给 RSSHub 请求(公网实例泄露风险)。
+ * ⚠️ 不把平台 cookie 附给 RSSHub 请求(公网实例泄露风险)。
  */
 import { httpText } from "@tauri-playground/crawler"
 import { registerSourceProvider, type RssChannel, type SourceInfo, type SourceInfoField } from "./index.ts"
 
-/** 本地 dev 实例兜底(settings.rsshubBaseUrl 缺失时)。 */
-const DEFAULT_BASE_URL = "http://localhost:1200"
+/** 公网 RSSHub 实例兜底(settings.rsshubBaseUrl 缺失时用的默认外挂)。 */
+const DEFAULT_BASE_URL = "https://rsshub.app"
 
 /** 请求 UA(与 crawler rss 直传一致的桌面 Chrome)。 */
 const UA =
@@ -77,20 +81,34 @@ const CHANNEL_SPECS: RsshubChannelSpec[] = [
     routeTpl: "/weibo/user/{uid}",
     fields: [{ key: "uid", label: "用户 uid", required: true, placeholder: "1195230310" }],
   },
+  // ── 视频(点击播放走 crawler/resolver by-url:RSSHub 输出 item.link → 平台解析) ──
   {
-    key: "rsshub:bili:ranking",
-    name: "B站排行(RSSHub)",
+    key: "rsshub:bili:popular",
+    name: "B站综合热门(RSSHub)",
     kind: "video",
-    // /0/3/30 路由参数在此 npm 包版本解析为空(200 但 0 items);无参=全站 100 条稳定。
-    routeTpl: "/bilibili/ranking",
+    routeTpl: "/bilibili/popular/all",
     defaultInfo: {},
   },
   {
-    key: "rsshub:bili:user-video",
-    name: "B站用户投稿(RSSHub)",
+    key: "rsshub:bili:weekly",
+    name: "B站每周必看(RSSHub)",
     kind: "video",
-    routeTpl: "/bilibili/user/video/{mid}",
-    fields: [{ key: "mid", label: "用户 mid", required: true, placeholder: "2267573" }],
+    routeTpl: "/bilibili/weekly",
+    defaultInfo: {},
+  },
+  {
+    key: "rsshub:bili:precious",
+    name: "B站入站必刷(RSSHub)",
+    kind: "video",
+    routeTpl: "/bilibili/precious",
+    defaultInfo: {},
+  },
+  {
+    key: "rsshub:youtube:channel",
+    name: "YouTube 频道(RSSHub)",
+    kind: "video",
+    routeTpl: "/youtube/channel/{channelId}",
+    fields: [{ key: "channelId", label: "频道 ID", required: true, placeholder: "UCYO_jab_esuFRV4b17AJtAw" }],
   },
   {
     key: "rsshub:feed",

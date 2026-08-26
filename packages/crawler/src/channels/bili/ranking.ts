@@ -7,8 +7,8 @@ import type { Item } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "../../host.ts"
-import { biliClient } from "../../platform/bili"
+import { now } from "@tauri-playground/resolve"
+import { biliClient } from "@tauri-playground/resolve"
 import { API, ugc } from "./video-common.ts"
 
 const RID_TABLE: Record<string, string> = {

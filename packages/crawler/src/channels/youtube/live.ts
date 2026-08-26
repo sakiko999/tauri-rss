@@ -14,7 +14,7 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "../../host.ts"
+import { now } from "@tauri-playground/resolve"
 
 export class YoutubeLiveChannel implements RssChannel {
   readonly key = "youtube:live"

@@ -1,6 +1,11 @@
 /**
  * 测试订阅清单 —— 覆盖不同 kind + 真实可播演示源。
  *
+ * 数据供给(2026-08-26 反转后)**以内置 crawler 为主**:youtube/bili 视频、播客、
+ * 直播全走 crawler 渠道(自解析,零外部依赖)。
+ * RSSHub 仅作「可选外挂 HTTP 服务器」:留 1 条 `rsshub:feed` 示例(Hacker News,
+ * 指向外挂实例路由),验证外挂通道可用;不内嵌 npm 包/sidecar 进程。
+ *
  * 更新说明:
  *   - live:douyu 替换原 live:huya(当时 huya 未实现;现 huya 已走 HTTP-FLV,见
  *     packages/crawler/src/channels/huya/play.ts)
@@ -9,7 +14,6 @@
  *
  * YouTube 直播订阅方式:**youtube:live channel**(kind 固定 live,零判定请求)——videoId
  * 声明即直播,如 `tRsQsTMvPNg`(Claude FM 常驻直播,hls.js 播放)。
- * 普通视频订阅用 `youtube` channel(channelId 订阅频道 / videoId 订阅单视频)。
  *
  * 直播房间备选(当前房间下播/受限时换用):
  *   - douyu:   9999(yyfyyf)
@@ -27,7 +31,9 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "rsshub:feed",
     title: "Hacker News",
     enabled: true,
-    info: { route: "/hackernews" }, // RSSHub 原生 HN 路由(30 条)
+    // RSSHub 外挂示例:指向配置的实例(settings.rsshubBaseUrl,默认公网 rsshub.app)
+    // 原生 HN 路由。信息抓取,非播放。这是 RSSHub 在「crawler 为主」下的唯一保留订阅。
+    info: { route: "/hackernews" },
   },
   {
     id: "s-video-youtube",
@@ -44,6 +50,13 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     info: {},
   },
   {
+    id: "s-video-bili-weekly",
+    channelKey: "bili:weekly",
+    title: "bilibili 每周必看",
+    enabled: true,
+    info: {},
+  },
+  {
     id: "s-video-youtube-live",
     channelKey: "youtube:live",
     title: "Claude FM 直播",
@@ -52,12 +65,10 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
   },
   {
     id: "s-audio",
-    channelKey: "rsshub:feed",
+    channelKey: "rss:podcast",
     title: "Huberman Lab",
     enabled: true,
-    // RSSHub 泛 URL 代理:任意 feed 直链归一成标准 RSS(crawler 的 rss:podcast 语义由
-    // 加工层 deserialize 从 enclosure/audio 推断,无需专用 podcast 渠道)。
-    info: { route: "/url?u=https%3A%2F%2Ffeeds.megaphone.fm%2Fhubermanlab" },
+    info: { url: "https://feeds.megaphone.fm/hubermanlab" },
   },
   {
     id: "s-live-douyu",

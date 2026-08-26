@@ -11,6 +11,7 @@
     "packages/host",
     "packages/log",
     "packages/player",
+    "packages/resolve",
     "packages/ui",
     "packages/xml"
   ],
@@ -40,7 +41,6 @@
     "vite": "^8.1.5"
   },
   "dependencies": {
-    "masonic": "^4.1.0",
-    "rsshub": "^1.0.0-master.0a5fb34"
+    "masonic": "^4.1.0"
   }
 }

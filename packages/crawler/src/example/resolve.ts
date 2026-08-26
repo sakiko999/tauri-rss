@@ -10,7 +10,8 @@
  *   url      可选:直接指定 item.url(默认取 fetch 首页首个 item)
  */
 import { parseFeed, type Stream } from "@tauri-playground/xml"
-import { getChannel, resolveLivePlayByUrl, resolvePlayByUrl } from "../index.ts"
+import { resolveLivePlayByUrl, resolvePlayByUrl } from "@tauri-playground/resolve"
+import { getChannel } from "../index.ts"
 import { setupBackends, exampleInfo } from "./backend.ts"
 import { DEFAULT_BILIBILI_COOKIE } from "../../../core/src/bilibili-cookie.ts"
 

@@ -8,7 +8,7 @@
 import type { Video } from "@tauri-playground/xml"
 
 // 兼容 re-export:现有 4 video channel 仍引 resolveBiliPlay(M4 收窄后改 resolveBiliVideoPlay)。
-export { resolveBiliVideoPlay as resolveBiliPlay } from "../../platform/bili"
+export { resolveBiliVideoPlay as resolveBiliPlay } from "@tauri-playground/resolve"
 
 export const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400

@@ -9,10 +9,10 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "../../host.ts"
-import { parseRoomIds } from "../../utils/room-ids.ts"
-import { log } from "../../log.ts"
-import { M_HUYA, huyaClient, parseHnfGlobalInit } from "../../platform/huya"
+import { now } from "@tauri-playground/resolve"
+import { parseRoomIds } from "@tauri-playground/resolve"
+import { log } from "@tauri-playground/resolve"
+import { M_HUYA, huyaClient, parseHnfGlobalInit } from "@tauri-playground/resolve"
 
 /** 单房间 → Live item(m.huya.com HNF_GLOBAL_INIT)。房间失败抛错,由调用方 catch 隔离。 */
 async function fetchHuyaRoom(roomId: string): Promise<Live> {

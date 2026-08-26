@@ -12,6 +12,7 @@
     "@tauri-playground/core": "workspace:*",
     "@tauri-playground/crawler": "workspace:*",
     "@tauri-playground/log": "workspace:*",
+    "@tauri-playground/resolve": "workspace:*",
     "dashjs": "^5.2.0",
     "flv.js": "^1",
     "hls.js": "^1",

@@ -6,8 +6,9 @@
  *
  * Run: bun run packages/crawler/src/example/test-danmaku.ts [seconds] [perPlatform]
  */
-import { getChannel, getDanmakuById, type ResolvePlatform, type SourceInfo } from "../index.ts"
-import { parseFeed } from "../../../xml/src/xml-parser.ts"
+import { getDanmakuById, type ResolvePlatform, type SourceInfo } from "@tauri-playground/resolve"
+import { getChannel } from "../index.ts"
+import { parseFeed } from "@tauri-playground/xml"
 import { setupBackends } from "./backend.ts"
 import { DEFAULT_BILIBILI_COOKIE } from "../../../core/src/bilibili-cookie.ts"
 

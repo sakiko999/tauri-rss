@@ -10,8 +10,8 @@ import type { Item } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { HotWordSource, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpJson, now } from "../../host.ts"
-import { PC_UA, WB_BASE, mblogCardsToItems, weiboClient } from "../../platform/weibo"
+import { httpJson, now } from "@tauri-playground/resolve"
+import { PC_UA, WB_BASE, mblogCardsToItems, weiboClient } from "@tauri-playground/resolve"
 
 export class WeiboHotChannel implements RssChannel {
   readonly key = "weibo:hot"

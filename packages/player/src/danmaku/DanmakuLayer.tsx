@@ -9,7 +9,7 @@
  * mode 分支:1/2/3/6 滚动(右→左),4 底 / 5 顶 静态居中停留。
  */
 import { useEffect, useRef } from "react"
-import type { DanmakuItem, DanmakuStream } from "@tauri-playground/crawler"
+import type { DanmakuItem, DanmakuStream } from "@tauri-playground/resolve"
 import { log } from "../log/index.ts"
 
 const FONT = '"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif'

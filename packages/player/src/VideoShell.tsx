@@ -8,7 +8,7 @@
  *   - useVideoElement       媒体状态 + 操作
  */
 import { useEffect, useRef, useState } from "react"
-import type { DanmakuStream } from "@tauri-playground/crawler"
+import type { DanmakuStream } from "@tauri-playground/resolve"
 import { bindFullscreen, type FullscreenApi, useVideoElement } from "./hooks/useVideoElement.ts"
 import { useAutoHideControls } from "./hooks/useAutoHideControls.ts"
 import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"

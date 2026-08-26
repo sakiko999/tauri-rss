@@ -8,15 +8,8 @@
  * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
-import {
-  isHotWordSource,
-  isLoginable,
-  isPageable,
-  getDanmakuByUrl,
-  registerAllChannels,
-  resolveLivePlayByUrl as resolveLiveByUrl,
-  resolvePlayByUrl as resolveVideoByUrl,
-} from "@tauri-playground/crawler"
+import { isHotWordSource, isLoginable, isPageable, registerAllChannels } from "@tauri-playground/crawler"
+import { getDanmakuByUrl, resolveLivePlayByUrl as resolveLiveByUrl, resolvePlayByUrl as resolveVideoByUrl } from "@tauri-playground/resolve"
 import { getChannel, listChannels as listAllChannels } from "./source/index.ts"
 import { serializeFeed } from "@tauri-playground/xml"
 import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
@@ -120,7 +113,12 @@ export function createDataLayer(): DataLayer {
     return field ? (s[field] as string | undefined) : undefined
   }
 
-  /** 合并 core 层默认 cookie 到订阅 info。rsshub:* 源注入 baseUrl(不带 cookie)。 */
+  /**
+   * 合并 core 层默认 cookie 到订阅 info。
+   *   crawler 源:按平台前缀注入 cookie(bili/weibo/xhs)供抓取/解析。
+   *   rsshub 外挂源:只注入 baseUrl(供 fetch 请求外部实例),**不注入平台 cookie**
+   *     ——外挂只做信息抓取,无需登录态;平台 cookie 也不应泄露给公网实例。
+   */
   async function sourceInfoFor(sub: { channelKey: string; info: Record<string, string> }): Promise<Record<string, string>> {
     const s = await settings.get()
     if (sub.channelKey.startsWith("rsshub:")) {

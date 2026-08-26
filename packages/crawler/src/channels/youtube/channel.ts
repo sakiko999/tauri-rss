@@ -9,9 +9,9 @@ import type { Item, Video } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpText, now } from "../../host.ts"
+import { httpText, now } from "@tauri-playground/resolve"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
-import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
+import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
 
 const UA = DESKTOP_CHROME_UA
 

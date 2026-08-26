@@ -29,24 +29,21 @@ packages/
                    probe 实测 native-tls 连 douyu/bili/huya 弹幕服务器握手全通
                    (证书 GlobalSign 有效,失败实为集群节点偶发 RST),故一律走宿主,
                    原生 WebSocket 仅纯浏览器调试兜底(无 appHost.ws))
-  crawler/       ★ @tauri-playground/crawler — 订阅源抓取层（producer 的重构替代）。
-                   一切皆 RssChannel：channel 直接实现 RssChannel,getSource 返回纯
-                   `{ fetch }`(组合工厂 factory.ts 装配——纯函数,每次返回新 source)。
-                   **能力抽离(2026-08-25)**:channel 只输出基础信息 XML(与 rsshub 一致),
-                   不再绑定流/弹幕解析——统一走 `resolver/`(按 item.url 路由 → platform/)
-                   对 crawler/rsshub 输出一起生效。liveHotSource 已删(4 个 hot channel 改
-                   纯 {fetch, fetchMore})。
-                   直出 RSS 2.0 + tpl: XML 字符串。XML 即天然类型,不导出数据模型类型。
-                   弹幕层在 danmaku/(createWsStream 统一 WS 封装 + deferredStream 收敛
-                   「异步 setup→建流」竞态 + 各平台 codec proto/tars/douyin-proto),
-                   四平台直播弹幕经 resolver.getDanmakuById 分发。共享工具在
-                   utils/(ua:DESKTOP_CHROME_UA / str:strOr / cookie);douyin 签名层收敛
-                   abogus.ts(UA_ENTER/signDouyinUrl/enterRoomParams)。
-                   浏览器模拟在 browser/cdp.ts(cdpFetch/cdpNavigate/cdpJson,绕 CORS 靠
-                   导航到目标域;weibo/xhs user channel 检测 appHost.browser 走此路径)。
-                   依赖 **ramda** 0.32（+ @types/ramda devDep）——
-                   嵌套解析/排序用 chain/sortWith/pathOr 函数式展开(范式见
-                   platform/bili/live-play.ts 的 parseBiliLiveStreams)
+  resolve/       ★ @tauri-playground/resolve — **平台解析层**(2026-08-26 架构重构新增)。
+                   platform 与 crawler 解耦,平台全部能力(请求签名/取数/播放解析/弹幕)
+                   集中在此。含 platform/(各平台 client + 播放 + 弹幕 codec)、resolver/
+                   (by-url 路由→播放/弹幕)、danmaku/(createWsStream/deferredStream 原语)、
+                   utils/、browser/(CDP 浏览器模拟)、host/ log(从 crawler 迁入)。
+                   对外契约:按 item.url 懒解析(getDanmakuById/resolvePlayByUrl)+ 平台
+                   client(供 crawler channel 抓数据)。类型自持(SourceInfo/LoginResult/
+                   DanmakuStream),不依赖 crawler。依赖 **ramda** 0.32。
+  crawler/       ★ @tauri-playground/crawler — **订阅源抓取层,只输出订阅数据**。
+                   一切皆 RssChannel：channel 定义 + getSource → `{ fetch }`,抓数据
+                   经 `@tauri-playground/resolve` 的平台 client(依赖 resolve)。
+                   **不绑定流/弹幕解析**(那归 resolve by-url);输出与 rsshub 对齐的
+                   标准 RSS + 最小 tpl:kind/total。channel 抓取调 resolve 的
+                   biliClient/weiboClient 等(bili:signWeb、douyin:fetchRoom、huya:
+                   parseHnfGlobalInit、xhs:SSR)。域名注释见各 channel。
   core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
                    + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/        ★ @tauri-playground/player — 媒体播放器(video/audio/live 共用),从 ui 拆出。
@@ -66,8 +63,9 @@ packages/
      补丁随签名 crate 一起在专门分支维护,主分支不再包含(见 docs/xhs-signature-research.md)
 ```
 
-依赖链：`xml ← crawler ← core ← ui ← desktop`，播放器支线 `core ← player ← ui/desktop`；
-`log` 是零依赖叶子,被 player/host/crawler 引用;`host` 被 crawler/core/desktop/player 共用。
+依赖链：`resolve ← crawler ← core ← ui ← desktop`（crawler 依赖 resolve 拿平台能力抓数据），
+播放器支线 `core ← player ← ui/desktop`；`resolve` 持平台全部能力,被 crawler/core/player
+引用;`log`/`host` 是零依赖叶子,被各包共用。core 播放/弹幕直接依赖 resolve(resolver)。
 读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
 
 ## 宿主注入：全局 appHost 门面

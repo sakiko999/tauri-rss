@@ -10,7 +10,7 @@
  */
 import type { Item, SerializeOptions } from "@tauri-playground/xml"
 import { serializeFeed } from "@tauri-playground/xml"
-import { log } from "../log.ts"
+import { log } from "@tauri-playground/resolve"
 
 /** serializeFeed + 可选 total(翻页渠道真实总数,经 tpl:total 带出)。apiFetch / fetchMore 共用。 */
 export function serializeWithTotal(items: Item[], opts: SerializeOptions, total?: number): string {

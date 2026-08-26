@@ -17,10 +17,10 @@ import type { Item, Social } from "@tauri-playground/xml"
 import { serializeFeed, type SerializeOptions } from "@tauri-playground/xml"
 import type { LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "../../host.ts"
-import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient, xhsScanLogin } from "../../platform/xhs"
-import { cdpNavigate, waitUntil, withBrowserLock } from "../../browser/cdp.ts"
-import { log } from "../../log.ts"
+import { now } from "@tauri-playground/resolve"
+import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient, xhsScanLogin } from "@tauri-playground/resolve"
+import { cdpNavigate, waitUntil, withBrowserLock } from "@tauri-playground/resolve"
+import { log } from "@tauri-playground/resolve"
 
 /** 短延时(滚动翻页等网络/加载)。 */
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))

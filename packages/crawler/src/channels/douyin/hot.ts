@@ -11,8 +11,8 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { now } from "../../host.ts"
-import { douyinClient } from "../../platform/douyin"
+import { now } from "@tauri-playground/resolve"
+import { douyinClient } from "@tauri-playground/resolve"
 
 const LIVE = "https://live.douyin.com"
 const COUNT = 15

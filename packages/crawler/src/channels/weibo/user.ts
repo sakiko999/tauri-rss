@@ -16,8 +16,8 @@ import type { Item } from "@tauri-playground/xml"
 import type { SerializeOptions } from "@tauri-playground/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
-import { WB_BASE, mblogCardsToItems, weiboClient } from "../../platform/weibo"
-import { cdpJson, cdpNavigate, withBrowserLock } from "../../browser/cdp.ts"
+import { WB_BASE, mblogCardsToItems, weiboClient } from "@tauri-playground/resolve"
+import { cdpJson, cdpNavigate, withBrowserLock } from "@tauri-playground/resolve"
 
 export class WeiboUserChannel implements RssChannel {
   readonly key = "weibo:user"

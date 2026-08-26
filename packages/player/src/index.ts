@@ -23,7 +23,7 @@ export { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
 export { AudioShell } from "./AudioShell.tsx"
 export { PlayerControls } from "./PlayerControls.tsx"
 export type { MediaStream } from "@tauri-playground/core"
-export type { DanmakuStream } from "@tauri-playground/crawler"
+export type { DanmakuStream } from "@tauri-playground/resolve"
 
 // ── MediaChrome 式独立控件(可自由组合)────────────────────────
 export {

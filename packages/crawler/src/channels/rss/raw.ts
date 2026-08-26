@@ -9,8 +9,8 @@
  * (deserialize 兜底)。
  */
 import type { Kind, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { httpText } from "../../host.ts"
-import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
+import { httpText } from "@tauri-playground/resolve"
+import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
 
 const UA = DESKTOP_CHROME_UA
 

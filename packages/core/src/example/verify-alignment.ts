@@ -2,12 +2,12 @@
  * verify-alignment —— 验证「crawler 输出与 rsshub 对齐」。
  *
  * 核心断言:同一个 `deserializeFeed`,对
- *   (a) crawler 自家 XML(serializeFeed,带 tpl: 扩展)
- *   (b) RSSHub sidecar 输出(标准 RSS 2.0 + media:* 增强)
+ *   (a) crawler 自家 XML(serializeFeed,收敛为标准 RSS 子集 + tpl:kind)
+ *   (b) RSSHub 外部实例输出(标准 RSS 2.0 + media:* 增强)
  * 能产出语义一致的 MediaItem(kind/id/title/thumbnail/author/content)。
  *
- * 不依赖真实 RSSHub:用与 scripts/rsshub-server.ts serialize 同构的标准 RSS 2.0
- * fixture 对照 crawler 的 serializeFeed。两者被同一 deserialize 正确消费即「对齐」。
+ * 不依赖真实 RSSHub:用标准 RSS 2.0 fixture(与外部 RSSHub 实例输出同构)
+ * 对照 crawler 的 serializeFeed。两者被同一 deserialize 正确消费即「对齐」。
  *
  * Run: bun run packages/core/src/example/verify-alignment.ts
  */
@@ -15,7 +15,7 @@ import "../source/rsshub.ts"
 import { serializeFeed } from "@tauri-playground/xml"
 import { deserializeFeed } from "../processing/deserialize.ts"
 
-/** RSSHub 侧的标准 RSS 2.0(与 scripts/rsshub-server.ts serialize 同构)。 */
+/** RSSHub 侧的标准 RSS 2.0(与外部实例输出同构,含 media:* 增强)。 */
 function rsshubXml(): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:media="http://search.yahoo.com/mrss/">
@@ -75,7 +75,7 @@ async function main() {
   console.log("\n✅ 对齐成立:crawler(tpl:) 与 rsshub(标准 RSS+media:) 被同一 deserializeFeed 正确消费")
 
   // 3. resolver 统一解析:crawler 与 rsshub 的 item.url 都被同一 resolveRoute 路由。
-  const { resolveRoute } = await import("@tauri-playground/crawler")
+  const { resolveRoute } = await import("@tauri-playground/resolve")
   const crawlerUrl = (fromCrawler[0] as { url?: string }).url
   const rsshubUrl = (fromRsshub[0] as { url?: string }).url
   console.log("\n═══ resolver 统一路由 ═══")
