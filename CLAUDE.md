@@ -272,6 +272,24 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   闭环,180 天窗口续一次即永久,登录须捕获 refresh_token——dart 参考漏了这步);
   weibo SUB / xhs web_session 均 ~1 年长效,到期扫码重登。统一兜底:失效检测
   (code:-101/1006/432/461)→引导重登。
+- **CLI 计划**:`docs/cli-plan.md`(2026-08-27 定稿)。apps/cli 调试工具——Bun+cac
+  零构建,ad-hoc 直跑取代 tauri dev 调试循环;浏览器模拟渠道排除;三大探针
+  (fetch/item/dm)收编 example;立起后清退数据路径 debug log(~80%,防回涨约定:
+  bug 先问 CLI 能否复现);file-JSON 按 repo 接口写为 SQLite 切换留门;
+  同时是未来 desktop 爬虫服务(sidecar)的地基。
+- **mpv 外部播放器**:`docs/mpv-playback-research.md`(2026-08-27 调研)。spawn-only
+  替代 ExpandPlayer 弹窗(设置开关,缺 mpv 降级 embedded)——无 CORS/无隧道、header
+  直接满足 Referer 校验、绕开 Webview 自动播政策与 base64 分片失真两包袱;DASH 自拼
+  MPD 因含 audio AdaptationSet + 绝对 BaseURL 可落盘临时 .mpd 直喂(ffmpeg dash demuxer
+  兼容性 = M0 spike 首验项);appHost.player 第三可选门面(tauri spawn / CLI Bun.spawn
+  同参数组装)。弹幕=DanmakuStream 第三渲染器:VOD 转 ASS 轨低成本(M2)、直播走
+  JSON IPC `osd-overlay`(format=ass,mpv ≥0.36)纯 TS 实现——mpv 内嵌脚本(Lua 一等/
+  JS=Duktape 弱 ES)不写,仅捡现成社区件(uosc/thumbfast);控件分工=app 只管启动前
+  选档/列表联动,播放中操作归 mpv(uosc+loadfile 可保进度无缝切档),app 明确不做
+  二等控制 UI;画质增强=GLSL 滤镜参数级(`--glsl-shaders-append`+IPC 热切换,M2
+  设置面板 mpvFilters/mpvExtraArgs 字段)、插帧只透传(SVP-MVTools/RIFE-vs-mlrt 均
+  经 VapourSynth,检测到环境才开开关;⚠️ --interpolation 不是补帧);一律
+  `--config-dir=<appData>/mpv-config/` 隔离配置零污染用户环境。
 
 ## 下一步 Todo（阶段性任务）
 
@@ -435,3 +453,9 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   browser/cdp.ts)。weibo:user 实测通;xhs:user 匿名 406 待登录态(Edge profile
   扫码一次或注入 cookie)后验证签名路径。edge-profile 登录态持久化在 appData;
   应用退出 browser_close 需确保调用(desktop 生命周期钩子)。
+- **apps/cli 调试工具(2026-08-27 计划定稿)**:方案与落地顺序见 `docs/cli-plan.md`。
+  M1 = Bun+cac 骨架 + channels/fetch/item 三大探针(收编 example);M2 dm/align/env +
+  file-JSON settings;M3 打磨;M4 按 §7 清退数据路径 log。约束:不继承 tsconfig.app.json
+  (DOM 环境),types 用 @types/bun;appHost.ws 必须绑 ws 包后端(bili 弹幕要带 cookie
+  握手,Bun 原生 WS 不支持自定义头);JSON 细节不渗出 repo 接口(SQLite 切换留门);
+  浏览器模拟渠道/weibo/xhs/login 搁置。
