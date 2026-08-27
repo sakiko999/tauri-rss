@@ -14,6 +14,7 @@
       "@tauri-playground/log": ["./packages/log/src/index.ts"],
       "@tauri-playground/crawler": ["./packages/crawler/src/index.ts"],
       "@tauri-playground/core": ["./packages/core/src/index.ts"],
+      "@tauri-playground/core/source/rsshub": ["./packages/core/src/source/rsshub.ts"],
       "@tauri-playground/resolve": ["./packages/resolve/src/index.ts"],
       "@tauri-playground/player": ["./packages/player/src/index.ts"],
       "@tauri-playground/ui": ["./packages/ui/src/index.ts"]

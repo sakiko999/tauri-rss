@@ -8,14 +8,12 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@tauri-playground/host": "workspace:*",
-    "@tauri-playground/log": "workspace:*",
     "@tauri-playground/resolve": "workspace:*",
-    "@tauri-playground/xml": "workspace:*",
-    "ramda": "^0.32.0"
+    "@tauri-playground/xml": "workspace:*"
   },
   "scripts": {},
   "devDependencies": {
-    "@types/ramda": "^0.32.0"
+    "@tauri-playground/host": "workspace:*",
+    "playwright-core": "^1.62.1"
   }
 }
