@@ -49,3 +49,9 @@ export type { MediaQuery } from "./types/query.ts"
 export type { ResolvePlayback } from "./types/playback.ts"
 
 export { NoChannelError } from "./errors.ts"
+
+/** SQLite schema(两端共用 DDL:desktop tauri-plugin-sql / CLI bun:sqlite)。 */
+export { KV_TABLE, KV_DDL, MIGRATIONS } from "./db/schema.ts"
+
+/** 订阅抓取内容缓存(KV storage 实现;TTL 判定在 data-layer)。 */
+export { createContentCacheRepo, type ContentCacheEntry, type ContentCacheRepo } from "./repo/content-cache-repo.ts"

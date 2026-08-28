@@ -127,7 +127,7 @@ export function Sidebar() {
           </div>
           <div className="ml-auto flex items-center gap-1">
             <button
-              onClick={refreshAll}
+              onClick={() => refreshAll()}
               disabled={loading}
               className="p-1.5 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded disabled:opacity-50"
               title="刷新全部"

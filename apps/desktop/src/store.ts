@@ -154,7 +154,8 @@ interface DesktopState {
   toggleGroup(groupId: string): void
   selectArticle(id: string | null): void
   refresh(id: string): Promise<void>
-  refreshAll(): Promise<void>
+  /** force=true 强制绕过 TTL 缓存(手动按钮);init 自动刷新传 false 走缓存。 */
+  refreshAll(force?: boolean): Promise<void>
   /** 加载更多:当前订阅翻一页(仅 hot 发现流;其余 no-op)。 */
   loadMore(): Promise<void>
   markRead(item: MediaItem): void
@@ -257,7 +258,8 @@ export const useDesktop = create<DesktopState>((set, get) => {
         // (select 里 `if (dl)` 早退)——这里补查,否则刷新后 Footer 分页失效。
         const nodeId = get().selectedNodeId
         if (nodeId && !isSmartFeed(nodeId) && !isTabNode(nodeId)) queryCanLoadMore(nodeId)
-        await get().refreshAll()
+        // init 自动刷新走 TTL 缓存(缓存命中零网络,启动秒开)。
+        await get().refreshAll(false)
       })()
       return initPromise
     },
@@ -301,7 +303,8 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const dl = get().dl
       if (!dl) return
       set({ loading: true })
-      const result = await dl.refresh(id)
+      // 手动「刷新当前」→ 强制绕过缓存(用户显式点刷=期望拿最新)。
+      const result = await dl.refresh(id, { force: true })
       const total = dl.totalOf(id)
       set((s) => ({
         loading: false,
@@ -344,12 +347,13 @@ export const useDesktop = create<DesktopState>((set, get) => {
       }
     },
 
-    async refreshAll() {
+    async refreshAll(force = true) {
       const dl = get().dl
       if (!dl) return
       const subs = await dl.subscriptions.list()
       set({ loading: true })
-      const results = await Promise.all(subs.map((s) => dl.refresh(s.id)))
+      // force 默认 true = 手动「刷新全部」按钮强制(用户显式点刷);init 自动刷新显式传 false 走 TTL 缓存。
+      const results = await Promise.all(subs.map((s) => dl.refresh(s.id, { force })))
       const errors: Record<string, string> = {}
       for (const r of results) if (r.error) errors[r.subscriptionId] = r.error
       set({ loading: false, refreshErrors: errors })

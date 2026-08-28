@@ -1,26 +1,16 @@
 import { createLogDomain, formatError } from "@tauri-playground/log"
 
-/** engine 域:流媒体引擎(hls/flv/dash)生命周期 + 引擎选择。 */
+/**
+ * engine 域:流媒体引擎(hls/flv/dash)生命周期。
+ * (2026-08-28 log 清退:engineSelected 已删——选型是纯逻辑,streams 的 format 字段
+ * `rss item` 已给;保留 hlsLevelLoaded/dashManifestReady(锁档与装配是 Webview 隧道
+ * 特有行为的案发现场)与 engineError(error)。)
+ */
 export const engineLog = createLogDomain("player:engine", {
   color: "#fbbf24", // amber-400
   ansi: 221,
   legacyKey: "player-log",
   events: {
-    engineSelected: {
-      level: "debug",
-      text: (ctx: { mode: "stream" | "video" | "audio" | "fallback"; format?: string }) => {
-        const { mode, format } = ctx
-        const text =
-          mode === "stream"
-            ? `流媒体引擎(${format ?? "?"})接管`
-            : mode === "video"
-              ? "原生 <video> 播放"
-              : mode === "audio"
-                ? "原生 <audio> 播放"
-                : `未知格式 ${format ?? "?"} 兜底`
-        return text
-      },
-    },
     hlsLevelLoaded: {
       level: "debug",
       text: (ctx: { live: boolean; level: number; height?: number; bitrate?: number }) => {

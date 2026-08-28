@@ -6,7 +6,18 @@
  * `{ id, noteCard, xsecToken }`,noteCard 含标题/封面/点赞。**不走 `user_posted` API**
  * (需签名 + 参数 image_formats/xsec_token/xsec_source,触发 300011 账号风控;
  * 「Edge 内正常浏览无风控」的根因:SSR 导航 = 正常浏览,页面内 fetch API = 额外 XHR)。
- * 匿名时 SSR `user.notes` 是空分组 `[[],[],…]` → 自然空结果。
+ *
+ * ⚠️ 2026-08-28 匿名实测修正(此前误记「匿名时空分组」):匿名 SSR **渲染 32 条卡片**
+ * (标题/封面/点赞/作者/xsecToken 全有),但平台把 noteId 定向抹空(外层 `id` 与
+ * `noteCard.noteId` 全空串,DOM 亦零笔记链接)——无法构造笔记 URL、无稳定 id,
+ * noteCardToSocial 按「无 noteId → null」全过滤 → 自然空结果。即 user 笔记流
+ * **必须登录态**(explore 推荐流匿名不抹 noteId,可用,见 explore.ts)。
+ *
+ * ⚠️ 2026-08-28 浏览器路径定性(playwright 连真实 Edge,匿名全新 context):SSR 抹空
+ * 后**前端水合不拉取真实笔记**——静置 10s 无变化,滚动触发后 notes 被**清空为 0**,
+ * 页面发出的请求全是安全风控探测(`as.xiaohongshu.com/api/sec/v1/*`、redcaptcha、
+ * login/activate、user/me),**零 user_posted 笔记请求**。即浏览器内「不登录可看」
+ * 实为**登录态 Edge profile**(应用自带)的持久化 cookie,匿名无此能力。
  *
  * 双路径(均 SSR,无需签名):
  *   - 浏览器(Tauri appHost.browser,CDP 附加真实 Edge):导航 profile 页 → 页面内取

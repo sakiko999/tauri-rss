@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-sql": "^2",
     "@tauri-playground/log": "workspace:*",
     "ws": "^8.21.3"
   },

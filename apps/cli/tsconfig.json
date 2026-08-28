@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["@types/bun"],
+
+    "moduleResolution": "bundler",
+    "paths": {
+      "@tauri-playground/xml": ["../../packages/xml/src/index.ts"],
+      "@tauri-playground/host": ["../../packages/host/src/index.ts"],
+      "@tauri-playground/log": ["../../packages/log/src/index.ts"],
+      "@tauri-playground/crawler": ["../../packages/crawler/src/index.ts"],
+      "@tauri-playground/core": ["../../packages/core/src/index.ts"],
+      "@tauri-playground/resolve": ["../../packages/resolve/src/index.ts"]
+    },
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"],
+  "files": ["../../global.d.ts"]
+}

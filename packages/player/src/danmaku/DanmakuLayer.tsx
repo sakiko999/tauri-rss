@@ -111,7 +111,6 @@ export function DanmakuLayer({
       for (const d of batch) (d.timeMs !== undefined ? vod : liveNow).push(d)
       if (vod.length) vodPoolRef.current.push(...vod)
       if (liveNow.length) pendingRef.current.push(...liveNow)
-      if (vod.length || liveNow.length) log.danmakuBatch({ vod: vod.length, live: liveNow.length })
     })
     return () => {
       log.danmakuUnsubscribed()
@@ -139,7 +138,6 @@ export function DanmakuLayer({
       }
     }
     if (fresh.length) {
-      log.danmakuEmit({ count: fresh.length, windowMs: t - start })
       pendingRef.current.push(...fresh)
     }
   }, [currentTime])

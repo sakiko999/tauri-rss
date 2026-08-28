@@ -24,6 +24,7 @@ import {
   createSubscriptionRepository,
   type SubscriptionRepository,
 } from "./repo/subscription-repo.ts"
+import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createMediaStore } from "./store/media-store.ts"
@@ -59,8 +60,9 @@ export interface DataLayer {
     patch(id: string, patch: Partial<MediaItem>): void
     subscribe(listener: () => void): () => void
   }
-  /** 刷新一次订阅,把内容写入 store。 */
-  refresh(subscriptionId: string): Promise<RefreshResult>
+  /** 刷新一次订阅,把内容写入 store。opts.force=true 跳过 TTL 缓存强制抓取(手动刷新)。
+   *  默认(force=false)走 TTL:TTL 内命中持久化缓存则跳过网络抓取。 */
+  refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult>
   /** 懒解析某条 video item 的可播流(播放时调用;URL 带 deadline 签名,不缓存)。
    *  返回流 + 弹幕能力(source 具备 DanmakuPlayable 时附带,一次拿齐)。 */
   resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
@@ -91,6 +93,7 @@ export function createDataLayer(): DataLayer {
   const now = globalThis.appHost.now!
   const log = globalThis.appHost.log!
   const repo = createSubscriptionRepository(storage, now)
+  const contentCache = createContentCacheRepo(storage)
   const reading = createReadingRepository(storage, now)
   const settings = createSettingsRepository(storage)
   const store = createMediaStore(now)
@@ -130,7 +133,14 @@ export function createDataLayer(): DataLayer {
     return { ...sub.info, cookie }
   }
 
-  async function refresh(subscriptionId: string): Promise<RefreshResult> {
+  /**
+   * 刷新一次订阅。TTL 缓存语义(2026-08-28 接入):
+   *   - 未 force 且有缓存且未过期 → 从缓存 deserializeFeedWithTotal 重建喂 store,
+   *     跳过网络抓取(减少反爬源被打频率);fetchedAt 回缓存时间。
+   *   - 抓取失败 → 回退旧缓存(即便过期)喂 store,error 字段保留(UI 可见失败不空窗)。
+   *   - TTL = 订阅级 refreshIntervalSec 优先,否则全局 settings.refreshIntervalMin。
+   */
+  async function refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
     const sub = await repo.get(subscriptionId)
     if (!sub) {
       return {
@@ -140,20 +150,61 @@ export function createDataLayer(): DataLayer {
         fetchedAt: now(),
       }
     }
+    // 未注册的 channelKey 是配置错误——throw 后由 catch 统一返回 error 结果。
+    let kind: MediaKind | undefined
     try {
-      // 未注册的 channelKey 是配置错误——throw 后由 catch 统一返回 error 结果。
       const channel = getChannel(sub.channelKey)
       if (!channel) throw new NoChannelError(sub.channelKey)
+      kind = channel.kind
       const info = await sourceInfoFor(sub)
+
+      // ── TTL 短路:未 force 且缓存命中且未过期 → 跳过网络抓取 ──
+      if (!opts?.force) {
+        const cached = await contentCache.get(subscriptionId)
+        if (cached) {
+          const ttlMs = sub.refreshIntervalSec
+            ? sub.refreshIntervalSec * 1000
+            : (await settings.get()).refreshIntervalMin * 60 * 1000
+          if (now() - cached.fetchedAt < ttlMs) {
+            const { items, total } = deserializeFeedWithTotal(cached.xml, {
+              subscriptionId,
+              kind,
+              now: now(),
+            })
+            if (total !== undefined) pageTotals.set(subscriptionId, total)
+            else pageTotals.delete(subscriptionId)
+            store.replace(subscriptionId, items)
+            pageCursors.delete(subscriptionId)
+            return { subscriptionId, itemCount: items.length, fetchedAt: cached.fetchedAt }
+          }
+        }
+      }
+
+      // ── 正常抓取 + 回写缓存 ──
       const xml = await channel.getSource(info).fetch()
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       store.replace(subscriptionId, items)
       pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
+      await contentCache.set(subscriptionId, { fetchedAt: now(), xml })
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
     } catch (err) {
       log.log("error", "refresh failed", { subscriptionId, error: String(err) })
+      // 抓取失败回退旧缓存(即便过期):不空窗,error 保留供 UI 提示。
+      const cached = await contentCache.get(subscriptionId).catch(() => null)
+      if (cached) {
+        try {
+          const { items } = deserializeFeedWithTotal(cached.xml, {
+            subscriptionId,
+            kind,
+            now: now(),
+          })
+          store.replace(subscriptionId, items)
+        } catch {
+          /* 缓存也坏 → 保持空,error 已返回 */
+        }
+      }
       return {
         subscriptionId,
         itemCount: 0,
@@ -259,9 +310,7 @@ export function createDataLayer(): DataLayer {
     const channel = getChannel(sub.channelKey)
     if (!channel) return false
     const info = await sourceInfoFor(sub)
-    const supported = isPageable(channel.getSource(info))
-    log.log("debug", "canLoadMore", { subscriptionId, supported })
-    return supported
+    return isPageable(channel.getSource(info))
   }
 
   /** 加载更多:翻一页追加进 store。游标内部维护(refresh 后重置);本页为空 = 没有更多。 */
@@ -274,7 +323,6 @@ export function createDataLayer(): DataLayer {
     const source = channel.getSource(info)
     if (!isPageable(source)) return { addedCount: 0, hasMore: false }
     const cursor = pageCursors.get(subscriptionId)
-    log.log("debug", "loadMore", { subscriptionId, cursor })
     const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
     const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
     if (total !== undefined) pageTotals.set(subscriptionId, total)
@@ -282,7 +330,6 @@ export function createDataLayer(): DataLayer {
     store.append(subscriptionId, items)
     if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
     else pageCursors.delete(subscriptionId)
-    log.log("info", "loadMore done", { subscriptionId, addedCount: items.length, hasMore: !!nextCursor })
     return { addedCount: items.length, hasMore: !!nextCursor }
   }
 
@@ -331,7 +378,14 @@ export function createDataLayer(): DataLayer {
     listChannels,
     channelKind,
     addSubscription,
-    subscriptions: repo,
+    // 订阅 repo 透传;remove 时一并删内容缓存(订阅没了缓存没意义)。
+    subscriptions: {
+      ...repo,
+      async remove(id) {
+        await repo.remove(id)
+        await contentCache.delete(id).catch(() => {})
+      },
+    },
     reading,
     settings,
     store: {

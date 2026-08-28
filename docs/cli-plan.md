@@ -1,9 +1,18 @@
-# CLI 计划 —— apps/cli 调试工具(2026-08-27 调研定稿)
+# CLI 计划 —— apps/cli 调试工具(2026-08-27 调研定稿,**2026-08-28 落地 M1+M2**)
 
 > 定位:**调试优先**,不是终端版 RSS 阅读器。它是 crawler/resolve/core 的正式观测面——
 > 把散装 example(list_channels/sample_sources/resolve/test-danmaku/verify-*)统一收编
 > 成命令,以 ad-hoc 直跑取代「开 tauri dev + desktop UI 复现」的调试循环。
 > 附带红利:三大探针立起后,**清退大部分数据路径 debug log**(见 §7)。
+>
+> ✅ **落地状态(2026-08-28)**:八命令(channels/fetch/item/play/dm/align/env/refresh)
+> 全部可用(`bun run rss <cmd>`),bili video/live、douyu、youtube 实测通过。落地时的
+> 两个实现修正:① file-repo 不需要——core 三 repo 本就只认 `StorageBackend` 抽象,
+> CLI 只写了一个 file storage backend(apps/cli/.data/storage.json);② bili cookie
+> 不用 hack import——`DEFAULT_SETTINGS` 已内嵌,CLI 从 file settings 读(改 storage.json
+> 的 settings 键即换真实 cookie)。log shim:CLI 无 localStorage,垫了一个默认
+> `log="0"` 的 shim(`RSS_LOG=1` 放开),数据路径 info/debug 不淹没探针输出。
+> 待办:M3 `--log` 域开关、M4 §7 log 清退。
 
 ## 一、范围与非目标
 
@@ -104,18 +113,17 @@ core 数据层认 repo 接口(`subscription/reading/settings-repo` 注入 `creat
 换 backend 不动 core 与命令层:
 
 ```
-现在:  file-JSON (CLI)        /  localStorage (desktop)
-P6 后: bun:sqlite (CLI)       /  tauri-plugin-sql (desktop)
+✅ 已切(2026-08-28):  bun:sqlite (CLI,apps/cli/.data/rss.db)
+                        /  tauri-plugin-sql (desktop,appData/rss.db)
+共用:  DDL 唯一权威 = core db/schema.ts(两端各跑同一份幂等迁移)
 ```
 
-- CLI 的 file-JSON 只是 settings 级小量(baseUrl / bili cookie),不是完整订阅持久化——
-  抓取走 ad-hoc 直跑,不走「先 add 再 refresh」。
-- **姿势要求**:file-JSON 严格按 repo 接口写,JSON 结构细节绝不渗进 commands 层
-  (将来换 sqlite 只换 store 实现,commands 全身而退)。
-- **提前认定:schema/migration 归 core 管**(或独立 migrations 目录),两端共用同一套
-  建表逻辑,禁止各写各的 SQL 导致漂移。
-- SQLite 切换是利好:`bun:sqlite` 内置零依赖同步 API,比 desktop 还顺;若两端指向同一
-  库文件,WAL 下互通退化成"打开同一个文件"(现有 export/import JSON 中转方案将就化取消)。
+- ✅ **已落地**(选型/迁移/验证状态见 `docs/sqlite-storage-research.md`):desktop 用官方
+  tauri-plugin-sql(sqlx 底层,**不用其 Rust 侧 migration**——防与 CLI 各写各的 SQL
+  漂移),CLI 用内置 `bun:sqlite`;StorageBackend 语义保持(KV string),三 repo 与
+  commands 全身而退。desktop 首次访问自动从 localStorage 搬迁 subscriptions/reading/
+  settings 三 key 并删 local 防双源漂移。
+- WAL:两端各持独立库文件、单进程访问,暂不开;sidecar 互通(同库文件)时再开。
 
 ## 七、log 清退联动(CLI 的最大一次性红利)
 
@@ -144,11 +152,13 @@ P6 后: bun:sqlite (CLI)       /  tauri-plugin-sql (desktop)
 
 ## 八、落地顺序
 
-1. **M1 骨架 + 三大探针**:package.json/tsconfig/main.ts + `channels` / `fetch` / `item`
-   打通 workspace 引用链(交付即可开始用它替代 example 调试)
-2. **M2 核心闭环**:`dm` + `align` + `env`;file-JSON settings;`refresh` 冒烟
-3. **M3 打磨**:`play --open`、表格渲染打磨、`--log` 域开关接 `@tauri-playground/log`
-4. **M4 log 清退**:按 §7 分批清退数据路径 log + 精简域
+1. ✅ **M1 骨架 + 三大探针**(2026-08-28):package.json/tsconfig/main.ts + `channels` /
+   `fetch` / `item` 打通 workspace 引用链(交付即可开始用它替代 example 调试)
+2. ✅ **M2 核心闭环**(2026-08-28):`dm` + `align` + `env`;file-JSON settings;
+   `refresh` 冒烟(`play --open` 顺带完成,M3 项)
+3. **M3 打磨**:`--log` 域开关接 `@tauri-playground/log`(现为 RSS_LOG=1 全开)、
+   表格渲染打磨
+4. **M4 log 清退**:按 §7 分批清退数据路径 log + 精简域(探针已在岗,顺序前提满足)
 5. 待办(搁置):Bun 版 browser backend(spawn Edge + CDP over ws 包)→ 解锁 weibo/xhs;
    login 扫码(qr.ts)
 

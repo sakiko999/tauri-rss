@@ -17,6 +17,12 @@ apps/
   mobile/        前端（React 19 + Vite，产物 → dist/mobile）。⚠️ 仍是 Tauri 模板，
                  尚未接入 crawler/core/appHost —— 是后续工作，勿把它当实现参考。
                  定位 = 内置 crawler 有限平台（见头部「双端定位已分离」）
+  cli/           ★ @tauri-playground/cli — 调试探针（2026-08-28 落地）。Bun+cac 零构建：
+                 channels/fetch/item/play/dm/align/env/refresh 收编全部 example；
+                 宿主 = node 后端 + bun:sqlite 存储（apps/cli/.data/rss.db，gitignore；
+                 与 desktop 共用 core db/schema.ts 的 DDL）；
+                 [纪律] ws 必须绑 ws 包后端（Bun 原生 WS 不支持自定义握手头）。
+                 详见 docs/cli-plan.md
 packages/
   xml/           ★ @tauri-playground/xml — RSS 2.0 + tpl: 扩展的编解码（fast-xml-parser v5
                    XMLBuilder 编码 / parseFeed 解码）。唯一持有 fast-xml-parser
@@ -75,6 +81,17 @@ packages/
 - **正常流程**：应用启动时 `injectTauriHost()`（desktop 在 `main.tsx`）。
 - **example / 测试**：`injectNodeHost()`（Node fetch + 内存存储）。
 - **纯前端调试**：`injectBrowserHost()`（浏览器 fetch，CORS 受限）。
+- **storage 三态(2026-08-28 起)**：desktop = `SqliteStorageBackend`(tauri-plugin-sql,
+  appData/rss.db,首次访问自动从 localStorage 搬迁 subscriptions/reading/settings 三 key
+  并删 local 防漂移);CLI = `sqliteStorage`(bun:sqlite,apps/cli/.data/rss.db);
+  example = 内存版。**DDL 唯一权威 = core `db/schema.ts`**(两端共用,插件/库各自的
+  migration 机制都不用,防漂移);选型与迁移细节见 `docs/sqlite-storage-research.md`。
+- **订阅内容缓存(2026-08-28 接入)**：refresh 走 TTL 缓存(KV storage,key `content:<subId>`,
+  value = `{fetchedAt, xml}` 序列化 RSS XML)——TTL 内命中跳过网络抓取(防反爬源被打频率),
+  命中复用 deserializeFeedWithTotal 重建 items;TTL = 订阅级 `refreshIntervalSec` 优先,
+  否则全局 `settings.refreshIntervalMin`(默认 30min);`refresh(id, {force})` force=true
+  强制抓取(desktop 手动刷新按钮/CLI 默认传 true),init 自动刷新走 TTL;抓取失败回退旧缓存
+  不空窗;订阅 remove 一并删缓存。实现:`packages/core/src/repo/content-cache-repo.ts`。
 
 门面在 `@tauri-playground/host`（`packages/host/src/runtime.ts`）——import host 包即初始化；
 字段是 getter，未注入时访问 `http/js/storage` 抛清晰错误，`now/log` 兜底；`ws`/`browser`
@@ -89,6 +106,16 @@ bun run dev                    # Vite dev（纯前端）
 bun run tauri                  # Vite dev + Tauri dev 并行（完整应用热重载）
 bun run tauri:build            # 前端构建 + release 构建
 bun run scripts/tauri.ts help  # 查看全部用法
+
+# CLI 调试探针（收编全部 example，已实测；详见 docs/cli-plan.md）
+bun run rss channels                       # 渠道注册表（57 个，--kind/--json）
+bun run rss fetch bili:popular             # 单渠道抓取：耗时+条数+样本（--xml/--json）
+bun run rss item <url>                     # by-url：路由+streams 全档位+弹幕元信息
+bun run rss play <url> --open              # 解析直链，--open 丢系统播放器
+bun run rss dm <url> -s 5                  # 弹幕：VOD 样本 / 直播窗口统计
+bun run rss env --probe                    # appHost 门面自检（http/js/storage 实测）
+bun run rss refresh bili:popular           # core DataLayer 编排冒烟（file 持久化）
+bun run rss align                          # crawler/rsshub 同构断言
 
 # crawler example（注入 Node host，真实抓取）
 bun run packages/crawler/src/example/list_channels.ts     # 打印全部 channel（47 个）
@@ -187,12 +214,25 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - **小红书双通道（2026-08 SSR）**：`xhs:explore` 发现页 + `xhs:user` 用户笔记
   都走 SSR `window.__INITIAL_STATE__`（explore 的 feed.feeds / user 的
   `user.notes` 分组数组,flat 后每项 `{ id, noteCard, xsecToken }`,noteId 用外层 id）。
-  ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——extractInitialState
-  用**平衡大括号截纯 JSON**（非截到 `</script>`）+ 空容器构造归一,RSSHub 的
-  `replaceAll("undefined","null")` 救不了。⚠️ **user 页不走 user_posted API**
-  （2026-08-16 对照 RSSHub getUserWithCookie + MediaCrawler 修正）:曾误判「SSR
-  user.notes 已空」——那是**匿名**观察(未登录为空分组 `[[],[],...]`);**登录态下
-  SSR 完整渲染笔记**(实测 32 条)。user_posted API 需 xhshow 纯算法签名 +
+  ⚠️ **匿名可用性（2026-08-28 CLI 实测定稿）**:explore **匿名稳定可用**（31/29 条,
+  noteId 齐全可点开）;user 匿名 SSR **渲染 32 条卡片但 noteId 定向抹空**（外层 id 与
+  noteCard.noteId 全空串,DOM 零笔记链接）→ 无法构造 URL/无稳定 id,全过滤 → 0 条
+  ——**user 笔记流必须登录态**（此前「匿名空分组」的记载不准确;RSSHub 同款分叉
+  `if (cookie)` 才走 getUserWithCookie）。⚠️ **匿名浏览器亦不可用（2026-08-28
+  playwright 连真实 Edge 实测）**:SSR 抹空 noteId 后前端水合**不拉取真实笔记**
+  （静置 10s 无变化;滚动触发后 notes 被**清空为 0**;发出的请求全是风控探测
+  `as.xiaohongshu.com/api/sec/v1/*`/redcaptcha/login-activate/user-me,**零笔记请求**）
+  ——浏览器「不登录可看」实为**登录态 Edge profile** 的持久化 cookie,匿名无此能力。
+  ⚠️ **笔记详情页匿名可用（2026-08-28 实测）**:
+  匿名 GET `/explore/<noteId>?xsec_token=<列表项的>&xsec_source=pc_feed` → SSR
+  `note.noteDetailMap[<noteId>]` 全量详情（title/desc 正文/imageList/tagList/
+  interactInfo/time/ipLocation/user,video 类含 video 字段），**是纯 JSON 对象**
+  （非 `new Map` 表达式,extractInitialState 直接解析）,3/3 无风控;**不带
+  xsec_token 则 noteDetailMap 为空 `{}`**——列表项的 xsecToken 是详情开关。⚠️ 登录态 SSR 的 JSON 混入 JS 表达式
+  （`"noteDetailMap":new Map([])`）——extractInitialState 用**平衡大括号截纯 JSON**
+  （非截到 `</script>`）+ 空容器构造归一,RSSHub 的 `replaceAll("undefined","null")`
+  救不了。⚠️ **user 页不走 user_posted API**（2026-08-16 对照 RSSHub
+  getUserWithCookie + MediaCrawler 修正）:user_posted API 需 xhshow 纯算法签名 +
   完整参数(image_formats/xsec_token/xsec_source),触发 300011 账号风控;
   **Edge 内正常浏览无风控的根因:SSR 导航=正常浏览,页面内 fetch API=额外 XHR**。
   实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
@@ -453,9 +493,12 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   browser/cdp.ts)。weibo:user 实测通;xhs:user 匿名 406 待登录态(Edge profile
   扫码一次或注入 cookie)后验证签名路径。edge-profile 登录态持久化在 appData;
   应用退出 browser_close 需确保调用(desktop 生命周期钩子)。
-- **apps/cli 调试工具(2026-08-27 计划定稿)**:方案与落地顺序见 `docs/cli-plan.md`。
-  M1 = Bun+cac 骨架 + channels/fetch/item 三大探针(收编 example);M2 dm/align/env +
-  file-JSON settings;M3 打磨;M4 按 §7 清退数据路径 log。约束:不继承 tsconfig.app.json
-  (DOM 环境),types 用 @types/bun;appHost.ws 必须绑 ws 包后端(bili 弹幕要带 cookie
-  握手,Bun 原生 WS 不支持自定义头);JSON 细节不渗出 repo 接口(SQLite 切换留门);
-  浏览器模拟渠道/weibo/xhs/login 搁置。
+- **apps/cli 调试工具(2026-08-28 落地 M1+M2)**:`bun run rss <cmd>` ——
+  channels/fetch/item/play(--open)/dm/align/env(--probe)/refresh 八命令全通,
+  bili video(dash)/bili live(hls)/douyu(flv)/youtube(hls) 实测过。宿主 =
+  node 后端 + bun:sqlite 存储(apps/cli/.data/rss.db,gitignore;改 settings
+  键换真实 bili cookie 解锁登录档位)。**防回涨约定已生效**:bug 先问
+  「CLI 能否复现」,能 → 修探针不埋 log。剩余:M3 `--log` 域开关接
+  @tauri-playground/log(现为 RSS_LOG=1 全开);浏览器模拟渠道/weibo/xhs/
+  login 仍搁置。坑:自定义握手 header 的弹幕必须走 ws 包后端(CLI 的
+  node-host.ts 组装,勿透传 Bun 原生 WebSocket)。

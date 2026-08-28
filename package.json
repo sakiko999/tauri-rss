@@ -6,6 +6,7 @@
   "workspaces": [
     "apps/desktop",
     "apps/mobile",
+    "apps/cli",
     "packages/core",
     "packages/crawler",
     "packages/host",
@@ -26,7 +27,8 @@
     "tauri:desktop": "bun run scripts/tauri.ts tauri desktop",
     "tauri:mobile": "bun run scripts/tauri.ts tauri mobile",
     "tauri:build": "bun run scripts/tauri.ts tauri desktop build",
-    "tauri:build:mobile": "bun run scripts/tauri.ts tauri mobile build"
+    "tauri:build:mobile": "bun run scripts/tauri.ts tauri mobile build",
+    "rss": "bun run apps/cli/src/main.ts"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

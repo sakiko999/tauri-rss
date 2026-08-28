@@ -21,3 +21,4 @@ logs
 **/src-tauri/gen/schemas
 
 # 敏感配置(本地 cookie 等,不进版本库)
+apps/cli/.data/

@@ -27,6 +27,7 @@ export { injectBrowserHost } from "./browser/inject-browser.ts"
 
 export { injectTauriHost } from "./tauri/inject-tauri.ts"
 export { TauriHttpBackend } from "./tauri/tauri-http-backend.ts"
+export { SqliteStorageBackend } from "./tauri/sqlite-storage-backend.ts"
 export { TauriWsBackend } from "./tauri/tauri-ws-backend.ts"
 export { LocalStorageBackend } from "./tauri/local-storage-backend.ts"
 export { FunctionJsBackend } from "./tauri/function-js-backend.ts"

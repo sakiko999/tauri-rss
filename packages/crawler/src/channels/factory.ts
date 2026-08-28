@@ -20,8 +20,8 @@ export function serializeWithTotal(items: Item[], opts: SerializeOptions, total?
 /**
  * api channel 的 fetch 装配:抓 items → serializeFeed 成 RSS 2.0 XML。
  * 返回无参 `() => Promise<string>`,channel 在 getSource 里绑定 info 后塞进 source.fetch。
- * 统一挂抓取生命周期日志(`[crawler]` 域):开始 debug / 成功条数 info / 失败 warn。
- * 失败 rethrow(调用方 core 编排层隔离单源失败),channelTitle 作 source 标识。
+ * 仅挂失败 warn(`[crawler]` 域;成功路径日志已清退——CLI `rss fetch` 给结构化
+ * 耗时/条数,见 docs/cli-plan.md §7)。失败 rethrow(调用方 core 编排层隔离单源失败)。
  */
 export function apiFetch(
   fetchItems: () => Promise<Item[] | { items: Item[]; total?: number }>,
@@ -29,18 +29,14 @@ export function apiFetch(
 ): () => Promise<string> {
   return async () => {
     const opts = channelOptions()
-    const source = opts.channelTitle ?? ""
-    log.crawler.fetchStart({ source })
     try {
       // 兼容两种返回:Item[](旧) / { items, total }(翻页渠道带真实总数,如 weibo)。
       const r = await fetchItems()
       const items = Array.isArray(r) ? r : r.items
       const total = Array.isArray(r) ? undefined : r.total
-      const xml = serializeWithTotal(items, opts, total)
-      log.crawler.fetchOk({ source, count: items.length })
-      return xml
+      return serializeWithTotal(items, opts, total)
     } catch (e) {
-      log.crawler.fetchError({ source, message: (e as Error)?.message ?? String(e) })
+      log.crawler.fetchError({ source: opts.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
       throw e
     }
   }
@@ -48,7 +44,7 @@ export function apiFetch(
 
 /**
  * api channel 的 fetchMore 装配:**数值游标**分页(起步 first、步进 step、本页为空即止)。
- * 镜像 apiFetch 的序列化/日志/返回形状,把 4 个 hot channel 复制粘贴的翻页样板收敛到这。
+ * 镜像 apiFetch 的序列化/返回形状,把 4 个 hot channel 复制粘贴的翻页样板收敛到这。
  * 只做通用机制;游标语义(页码 page / 偏移 offset)由调用方以 first/step 表达。
  */
 export function apiFetchMore(
@@ -59,11 +55,8 @@ export function apiFetchMore(
   return async (cursor) => {
     const n = cursor ? Number(cursor) : opts.first
     const o = channelOptions()
-    const source = o.channelTitle ?? ""
-    log.crawler.fetchMore({ source, cursor })
     const items = await fetchPage(n)
     const xml = serializeFeed(items, o)
-    log.crawler.fetchMoreOk({ source, count: items.length })
     return { xml, ...(items.length ? { cursor: String(n + opts.step) } : {}) }
   }
 }

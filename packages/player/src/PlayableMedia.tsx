@@ -88,14 +88,12 @@ export function PlayableMedia({
   async function handlePlay() {
     if (!resolve) return
     // 解锁 autoplay(手势内调用最有效;autoResolve 非手势调用时被拦 → attemptPlay 降级静音)。
-    log.resolveStart()
     unlockAudioPlayback()
     setError(null)
     try {
       const result = await resolve()
       // 空数组 = 无可播流,按失败处理(resolveFailed 而非「成功 0 条」误导)。
       if (!result.streams.length) throw new Error("无可播流")
-      log.resolveSuccess({ streams: result.streams })
       setResolved(result)
     } catch (err) {
       log.resolveFailed({ err })
@@ -118,26 +116,9 @@ export function PlayableMedia({
   // 选流 + 档位。
   const { stream, qualityOptions, switchQuality } = useStreamSelection(playStreams)
 
-  // 诊断:打印最终选中的流(url 域名/截断 + format + headers 键),排查清晰度/来源。
-  useEffect(() => {
-    if (!stream) return
-    log.streamSelected({ stream, headerKeys: Object.keys(stream.headers ?? {}) })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stream])
-
   // 流媒体驱动(hls/flv/dash)→ useMediaStream 接管 video;原生 src 由 VideoShell 写。
   const needsStreamPlayer = !!stream && isStreamingStream(stream)
   const videoRef = useRef<HTMLVideoElement | null>(null)
-
-  // 引擎选择:流媒体 → useMediaStream(hls/flv/dash);原生 → VideoShell <video>。
-  useEffect(() => {
-    if (!stream) return
-    log.engineSelected({
-      mode: needsStreamPlayer ? "stream" : isProgressiveVideo(stream) ? "video" : isProgressiveAudio(stream) ? "audio" : "fallback",
-      format: stream.format,
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stream, needsStreamPlayer])
 
   // autoPlay 语义:用户点过「播放」(resolved !== null)→ 自动带声起播;初始流未点击不自动播。
   const autoPlay = resolved !== null

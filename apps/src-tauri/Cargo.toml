@@ -15,6 +15,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
+# SQLite 存储(desktop/移动共用):sqlx 底层,经 JS bindings 走 StorageBackend。
+# migration 不用插件的(Rust 侧)——DDL 归 core(db/schema.ts),与 CLI bun:sqlite 共用。
+tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "gzip"] }

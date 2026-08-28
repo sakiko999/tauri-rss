@@ -78,7 +78,6 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
     /** 连接就绪(open)后:发 onOpen 认证帧 + 启动心跳。 */
     function onReady(conn: WsLike): void {
       attempts = 0
-      log.danmaku.wsOpen({ url: opts.url })
       opts.onOpen?.(conn)
       if (opts.heartbeat) {
         const hb = (): void => {
@@ -94,10 +93,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       // 快路径:同步解码器(huya/douyu)不经微任务;异步(brotli/ack)才包 Promise。
       const result = opts.onMessage(data, conn)
       const report = (items: DanmakuItem[]): void => {
-        if (!stopped && items.length) {
-          log.danmaku.wsItems({ count: items.length })
-          onItems(items)
-        }
+        if (!stopped && items.length) onItems(items)
       }
       if (result instanceof Promise) void result.then(report)
       else report(result)
@@ -123,7 +119,6 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
 
     function connect(): void {
       if (stopped) return
-      log.danmaku.wsConnect({ url: opts.url })
       const host = globalThis.appHost.ws
 
       if (host) {
@@ -172,13 +167,11 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
 
     connect()
 
-    // 退订:断开 WS + 清心跳/重连定时器(「退订即断开」)。
-    // ⚠️ 主动退订的提示在这里打(unsub 同步执行,必然触发)——不能依赖 onClose 事件:
-    // 部分平台服务器优雅关闭时 onClose 不触发(或连接已断 ws 为 null),会静默无日志。
+    // 退订:断开 WS + 清心跳/重连定时器(「退订即断开」,正常关闭零日志;
+    // 意外断线的 warn 由 handleClose 按 userClosed 区分)。
     return () => {
       stopped = true
       userClosed = true
-      log.danmaku.wsClosedByUser()
       clearHeartbeat()
       if (reconnectTimer) clearTimeout(reconnectTimer)
       if (ws) safeClose(ws)
