@@ -1,5 +1,5 @@
 /**
- * 验证脚本:CDP 隧道 + 浏览器模拟抓取(weibo:user / xhs:user)。
+ * browser-sim —— 验证脚本:CDP 隧道 + 浏览器模拟抓取(weibo:user / xhs:user)。
  *
  * 生产路径:appHost.browser = Tauri spawn 系统 Edge + CDP(packages/host tauri/
  * browser-backend.ts)。本脚本在 **Node 环境**用 playwright-core 连系统 Chrome/Edge
@@ -11,10 +11,40 @@
  *   bun run packages/crawler/src/example/browser-sim.ts xhs:user
  *
  * ⚠️ xhs:user 反复验证会触发账号风控——低频单次。
+ * ⚠️ 用 tsx/node 跑(bun 会卡)。
  */
 import { chromium } from "playwright-core"
+import type { Page } from "playwright-core"
 import { injectNodeHost, setHostCaps, nodeBackend, nodeJsBackend, memStorage } from "@tauri-playground/host"
-import { exampleInfo, makePlaywrightBackend } from "./backend.ts"
+
+/**
+ * playwright 页面 → BrowserBackend 适配器(从原 shared backend.ts 迁入,自包含)。
+ * evaluate 收表达式字符串(playwright 自动 awaitPromise+returnByValue,等价 CDP Runtime.evaluate);
+ * getCookies 走 page.context()(含 HttpOnly);close 由调用方注入(browser.close)。
+ */
+function makePlaywrightBackend(page: Page, close: () => Promise<void>): BrowserBackend {
+  return {
+    async evaluate<T>(expression: string): Promise<T> {
+      return page.evaluate(expression) as Promise<T>
+    },
+    async getCookies(url?: string): Promise<Record<string, string>> {
+      const cookies = await page.context().cookies(url)
+      const out: Record<string, string> = {}
+      for (const c of cookies) out[c.name] = c.value
+      return out
+    },
+    close,
+  }
+}
+
+/** 各 channel 的示例 info(browser-sim 用;来自原 shared backend.ts,保持同参)。 */
+function exampleInfo(key: string): Record<string, string> {
+  switch (key) {
+    case "weibo:user": return { uid: "1195230310" } // 微博·何炅(desktop 测试源)
+    case "xhs:user": return { user_id: "593032945e87e77791e03696" } // 小红书·小宇菇菇(desktop 测试源)
+    default: return {}
+  }
+}
 
 async function main() {
   const key = process.argv[2]

@@ -1,5 +1,5 @@
 /**
- * align — 收编 core/example/verify-alignment.ts:验证「crawler 输出与 rsshub 对齐」。
+ * align — 验证「crawler 输出与 rsshub 对齐」(收编原 core example/verify-alignment.ts)。
  *
  * 断言:同一个 deserializeFeed 对 (a) crawler 自家 serializeFeed XML
  * (b) RSSHub 同构标准 RSS fixture 产出语义一致的 MediaItem;且两者的
