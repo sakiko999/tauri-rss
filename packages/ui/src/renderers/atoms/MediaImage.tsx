@@ -152,10 +152,12 @@ export function MediaImage({
   className,
   imgClassName,
   loading = "lazy",
+  fill = false,
+  contain = false,
 }: {
   src?: string
   alt?: string
-  /** 宽高比(默认 16:9)。容器按此撑开高度。 */
+  /** 宽高比(默认 16:9)。容器按此撑开高度。fill 且无 imageRatio 时用。 */
   ratio?: number
   className?: string
   imgClassName?: string
@@ -164,6 +166,14 @@ export function MediaImage({
    * lazy 在视口外不加载,新增 item 渲染在 overscan 区会显示空白,滚动进视口才出图。
    */
   loading?: "lazy" | "eager"
+  /**
+   * 填充容器(详情轮播/封面等):容器 w-full h-full,img object-cover 填满。
+   * 调用方负责给容器定比例(详情弹窗图区按图片比例 swiper/flex 定高定宽)——
+   * 父容器与图片同比例时 cover=contain,恰好填满,无 contain 留缝、无 cover 裁剪。
+   */
+  fill?: boolean
+  /** 完整显示模式(比例超范围的图,如 16:9 banner/超竖长图):容器定高,img object-contain 完整显示,可留背景缝。 */
+  contain?: boolean
 }) {
   // 初始命中缓存 → 直接显示图(避免虚拟化重挂载闪骨架)。
   const [loaded, setLoaded] = useState(() => (src ? loadedUrls.has(src) : false))
@@ -180,10 +190,14 @@ export function MediaImage({
 
   const showImage = !!src && !failed && !proxiedFailed && (loaded || loadedUrls.has(src))
 
+  // contain:容器 w-full h-full,img object-contain(完整显示,可留背景缝)。
+  // fill:容器 w-full h-full,img object-cover(填满,调用方定等比容器则无缝隙无裁剪)。
+  // 普通:按 ratio 撑高 object-cover(标准卡片/瀑布流)。
+  const isFillOrContain = fill || contain
   return (
     <div
-      className={`relative w-full overflow-hidden bg-muted ${className ?? ""}`}
-      style={{ aspectRatio: ratio }}
+      className={`relative overflow-hidden bg-muted ${isFillOrContain ? "h-full w-full" : "w-full"} ${className ?? ""}`}
+      style={isFillOrContain ? undefined : { aspectRatio: ratio }}
     >
       {/* img 始终渲染:opacity 控制显隐(loaded 淡入)。onLoad/onError 只在 img 挂载后触发,
           条件渲染会因 loaded=false 永不挂载 → 永远 skeleton。 */}
@@ -193,7 +207,7 @@ export function MediaImage({
           alt={alt}
           loading={loading}
           referrerPolicy="no-referrer"
-          className={`absolute inset-0 size-full object-cover transition-opacity duration-200 ${
+          className={`absolute inset-0 size-full ${contain ? "object-contain" : "object-cover"} transition-opacity duration-200 ${
             showImage ? "opacity-100" : "opacity-0"
           } ${imgClassName ?? ""}`}
           onLoad={() => {

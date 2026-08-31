@@ -35,6 +35,7 @@ export type {
   MediaItemBase,
   ArticleItem,
   SocialItem,
+  SocialImage,
   VideoItem,
   AudioItem,
   LiveItem,

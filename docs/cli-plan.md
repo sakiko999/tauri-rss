@@ -90,6 +90,8 @@ rss dm <url> [-n 50]                # 弹幕探针:VOD 前 N 条样本 / 直播�
 rss align                           # 收编 verify-alignment:crawler XML 与 rsshub 同构消费断言
 rss env                             # ★ appHost 各门面自检(http/ws/js/storage 可用性+caps)
 rss refresh [sub]                   # core createDataLayer 编排冒烟(file settings 存 baseUrl/cookie)
+rss hot <词>                        # weibo:hot resolveHotWord 热搜词流(需登录 cookie;纯匿名失败)
+rss detail [url|--latest]           # xhs 单条详情补全(匿名 noteDetail,--latest 用当前列表首条)
 ```
 
 ★ = 使用频率最高的三条探针,M1 优先交付。可观测性是一等公民:**每个命令默认给耗时,
@@ -97,15 +99,19 @@ rss refresh [sub]                   # core createDataLayer 编排冒烟(file set
 
 ## 五、example → 子命令收编映射
 
-散装 example 正式转正;之后新增调试能力只写一处(example 保留兼容入口不动):
+散装 example 已全部收编转正,并已清退(2026-08-31);新增调试能力只写一处(CLI):
 
-| 现有脚本 | 收编为 |
-|---|---|
-| crawler `list_channels.ts` | `rss channels` |
-| crawler `sample_sources.ts` | `rss fetch`(加参数传递与计时) |
-| crawler `resolve.ts` | `rss item` / `rss play` |
-| crawler `test-danmaku.ts` | `rss dm` |
-| core `verify-alignment.ts` | `rss align` |
+| 现有脚本 | 收编为 | 状态 |
+|---|---|---|
+| crawler `list_channels.ts` | `rss channels` | ✅ 已收编并清退 |
+| crawler `sample_sources.ts` | `rss fetch`(加参数传递与计时) | ✅ 已收编并清退 |
+| crawler `resolve.ts` | `rss item` / `rss play` | ✅ 已收编并清退 |
+| crawler `test-danmaku.ts` | `rss dm`(单 url 版) | ✅ 已收编并清退(批量多平台版不补——fetch+dm 组合即可) |
+| crawler `test-multi-room.ts` | (一次性验证) | ✅ 清退(多房间用 `rss fetch --kv roomIds=`) |
+| core `verify-alignment.ts` | `rss align` | ✅ 已收编并清退 |
+| core `verify-new-channels.ts` | `rss hot`(resolveHotWord 部分) | ✅ 收编;清退 |
+| core `data-layer.ts` / `source-groups.ts` / `verify-source.ts` / `can-loadmore-check.ts` | (一次性/架构验证) | ✅ 清退 |
+| crawler `browser-sim.ts` | (保留为独立脚本) | ⬅️ **唯一保留**——CLI 排除浏览器模拟渠道,需 playwright-core + 系统浏览器 |
 
 ## 六、存储:file-JSON 起步,为 SQLite 切换留门
 
@@ -156,9 +162,14 @@ core 数据层认 repo 接口(`subscription/reading/settings-repo` 注入 `creat
    `fetch` / `item` 打通 workspace 引用链(交付即可开始用它替代 example 调试)
 2. ✅ **M2 核心闭环**(2026-08-28):`dm` + `align` + `env`;file-JSON settings;
    `refresh` 冒烟(`play --open` 顺带完成,M3 项)
-3. **M3 打磨**:`--log` 域开关接 `@tauri-playground/log`(现为 RSS_LOG=1 全开)、
+3. ✅ **M2.5 example 清退 + hot 命令**(2026-08-31):删除 crawler/core 全部被收编/
+   一次性 example,仅留 `browser-sim.ts`(浏览器模拟,CLI 排除);新增 `rss hot <词>`
+   (weibo:hot resolveHotWord,desktop 热搜三栏能力)
+4. **M3 打磨**:`--log` 域开关接 `@tauri-playground/log`(现为 RSS_LOG=1 全开)、
    表格渲染打磨
-4. **M4 log 清退**:按 §7 分批清退数据路径 log + 精简域(探针已在岗,顺序前提满足)
+5. **M4 log 清退**:按 §7 分批清退数据路径 log + 精简域(探针已在岗,顺序前提满足)
+6. 待办(搁置):Bun 版 browser backend(spawn Edge + CDP over ws 包)→ 解锁 weibo/xhs;
+   login 扫码(qr.ts)
 5. 待办(搁置):Bun 版 browser backend(spawn Edge + CDP over ws 包)→ 解锁 weibo/xhs;
    login 扫码(qr.ts)
 

@@ -84,6 +84,8 @@ export interface SocialItem extends MediaItemBase {
   reposts?: number
   replies?: number
   isLiked?: boolean
+  /** 小红书笔记详情开关(列表项 xsec_token;匿名 GET /explore/<id> 需带才返回 noteDetailMap)。 */
+  xsecToken?: string
 }
 
 /** 可播流 + 投递提示。 */

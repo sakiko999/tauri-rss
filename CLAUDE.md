@@ -18,7 +18,9 @@ apps/
                  尚未接入 crawler/core/appHost —— 是后续工作，勿把它当实现参考。
                  定位 = 内置 crawler 有限平台（见头部「双端定位已分离」）
   cli/           ★ @tauri-playground/cli — 调试探针（2026-08-28 落地）。Bun+cac 零构建：
-                 channels/fetch/item/play/dm/align/env/refresh 收编全部 example；
+                 channels/fetch/item/play/dm/hot/align/env/refresh 收编全部 example；
+                 (hot = weibo:hot 热搜词 resolveHotWord,2026-08-31 补);
+                 example 已清退,仅留 browser-sim.ts(浏览器模拟,CLI 排除,见下);
                  宿主 = node 后端 + bun:sqlite 存储（apps/cli/.data/rss.db，gitignore；
                  与 desktop 共用 core db/schema.ts 的 DDL）；
                  [纪律] ws 必须绑 ws 包后端（Bun 原生 WS 不支持自定义握手头）。
@@ -113,20 +115,16 @@ bun run rss fetch bili:popular             # 单渠道抓取：耗时+条数+样
 bun run rss item <url>                     # by-url：路由+streams 全档位+弹幕元信息
 bun run rss play <url> --open              # 解析直链，--open 丢系统播放器
 bun run rss dm <url> -s 5                  # 弹幕：VOD 样本 / 直播窗口统计
+bun run rss hot <词>                       # 热搜词下微博流（weibo:hot resolveHotWord，需登录 cookie——纯匿名下会失败）
+bun run rss detail --latest                # xhs 单条详情补全（匿名 noteDetail，--latest 用当前列表首条）
+bun run rss detail <url>                   # xhs 单条详情（url 的 noteId 需在当前 explore 列表匹配到 xsec_token）
 bun run rss env --probe                    # appHost 门面自检（http/js/storage 实测）
-bun run rss refresh bili:popular           # core DataLayer 编排冒烟（file 持久化）
+bun run rss refresh bili:popular           # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                          # crawler/rsshub 同构断言
 
-# crawler example（注入 Node host，真实抓取）
-bun run packages/crawler/src/example/list_channels.ts     # 打印全部 channel（47 个）
-bun run packages/crawler/src/example/sample_sources.ts live:   # 抽样 fetch，filter=live: 只看直播
-bun run packages/crawler/src/example/resolve.ts bili:popular  # 懒解析可播流(视频,video/live 合一)
-bun run packages/crawler/src/example/resolve.ts bili:live 312785  # 懒解析直播流(直播)
-bun run packages/crawler/src/example/test-danmaku.ts 5    # 四平台直播弹幕(热门在播房间)
-./node_modules/.bin/tsx packages/crawler/src/example/browser-sim.ts weibo:user  # 浏览器模拟抓微博(playwright-core;bun 跑会卡,用 tsx/node)
-
-# core example（基于 crawler 输出的 channel 批量订阅 + 刷新）
-bun run packages/core/src/example/data-layer.ts
+# 浏览器模拟验证脚本（唯一保留的 example——CLI 排除浏览器模拟渠道；需 playwright-core + 系统浏览器，用 tsx/node）
+./node_modules/.bin/tsx packages/crawler/src/example/browser-sim.ts weibo:user  # 浏览器模拟抓微博
+./node_modules/.bin/tsx packages/crawler/src/example/browser-sim.ts xhs:user     # 浏览器模拟抓小红书（低频，防账号风控）
 ```
 
 前端产物输出到根 `dist/<platform>/`（Vite `outDir`），tauri.conf `frontendDist` 指向 `../../dist/<platform>`。
@@ -231,7 +229,14 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   xsec_token 则 noteDetailMap 为空 `{}`**——列表项的 xsecToken 是详情开关。⚠️ 登录态 SSR 的 JSON 混入 JS 表达式
   （`"noteDetailMap":new Map([])`）——extractInitialState 用**平衡大括号截纯 JSON**
   （非截到 `</script>`）+ 空容器构造归一,RSSHub 的 `replaceAll("undefined","null")`
-  救不了。⚠️ **user 页不走 user_posted API**（2026-08-16 对照 RSSHub
+  救不了。
+  ✅ **noteDetail 已落地(2026-08-31)**:`Social.xsecToken` 经 `tpl:xsecToken` 序列化
+  (xhs explore/user 抓列表时存列表项 xsec_token,此前被丢弃)→ core `SocialItem.xsecToken`
+  → `ItemDetailSource.resolveDetail(item)`(xhs explore/user 挂在 source 上)→ 匿名
+  GET `/explore/<id>?xsec_token=` + `extractNoteDetail` 解析 `noteDetailMap[<id>].note`
+  → `noteDetailToSocial` 补全文/多图/tag/video。desktop social 卡片点击 = 详情弹窗
+  (bili/weibo 列表已完整直接展示,xhs 异步 resolveDetail 补全);CLI `rss detail [url|--latest]`
+  独立验证(匿名,实测完全通)。⚠️ **user 页不走 user_posted API**（2026-08-16 对照 RSSHub
   getUserWithCookie + MediaCrawler 修正）:user_posted API 需 xhshow 纯算法签名 +
   完整参数(image_formats/xsec_token/xsec_source),触发 300011 账号风控;
   **Edge 内正常浏览无风控的根因:SSR 导航=正常浏览,页面内 fetch API=额外 XHR**。
@@ -259,12 +264,16 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   轮询等待 notes 增长,步进/轮询间隔带随机抖动去机械化)。
   验证码形态以 `.fe-verify-box` 为主(RSSHub 同款),若遇到其他滑块形态需补选择器。
   细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
-- **bilibili 登录档位**：`packages/core/src/bilibili-cookie.ts` 存默认 cookie（gitignore +
-  空占位提交 + skip-worktree 保护,见 `.example`），`settings.bilibiliCookie` 作 core 层
-  默认值,data-layer `sourceInfoFor` 合并到所有 bili 订阅解锁登录档位。改本地 cookie:
-  编辑该文件 → `git update-index --no-skip-worktree` 再改,勿提交真实值。
-  目前 DEFAULT_*_COOKIE 是临时方案;长期目标应用内扫码登录获取完整认证 + 定期保活,
-  可行性见 docs/platform-login-research.md。
+- **平台 cookie 纯匿名方案(2026-08-31 决策)**：`packages/core/src/bilibili-cookie.ts`
+  三个 DEFAULT_*_COOKIE **全部置空**=零登录(见 `.example` 模板)。匿名行为:
+  bili 视频列表(popular/ranking/square/user_video/weekly)稳定、视频播放 720P/直播 250 超清
+  降档;bili dynamic(-101)/live:hot(-352)/直播弹幕(1006)需登录**匿名失败**;weibo
+  热搜列表(hot_band)匿名可用、resolveHotWord/weibo:user 需登录失败;xhs explore 匿名 SSR
+  稳定、xhs user 匿名 0 条、**笔记详情页匿名可用**(带列表项 xsec_token)。desktop
+  weibo:user/xhs:user 可有 appHost.browser(Edge profile 登录态)兜底。恢复登录:三常量填
+  真实 cookie → `git update-index --no-skip-worktree` 再改,勿提交真实值。渐进降级:
+  settings 已持久化的 xxxCookie 仍优先于空 DEFAULT(settings-repo merge)。长期目标
+  应用内扫码登录,见 docs/platform-login-research.md。
 
 ## 调研文档（tmp/ 参考仓库）
 

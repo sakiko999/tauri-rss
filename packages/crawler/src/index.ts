@@ -43,6 +43,12 @@ export interface HotWordSource {
   resolveHotWord(word: string): Promise<Item[]>
 }
 
+/** 单条详情能力(可选能力):列表 item 缺全文/多图时(如 xhs 列表只有单图摘要),按需抓详情。 */
+export interface ItemDetailSource {
+  /** 单条 → 完整详情 Item(xhs 匿名 GET /explore/<id>?xsec_token= 补全文/多图/tag/video)。 */
+  resolveDetail(item: Item): Promise<Item | null>
+}
+
 /**
  * 扫码登录能力(可选能力,channel 级——平台账号登录,无需实例化 source)。
  * 登录是平台级操作,不依赖 info 实例化,且同平台多 channel(xhs:user/explore)共享同一账号。
@@ -83,6 +89,11 @@ export interface Pageable {
  */
 export function isHotWordSource(s: RssSource): s is RssSource & HotWordSource {
   return "resolveHotWord" in s
+}
+
+/** item 单条详情能力探测(xhs 等列表 item 缺完整详情的源)。 */
+export function isItemDetailSource(s: RssSource): s is RssSource & ItemDetailSource {
+  return "resolveDetail" in s
 }
 
 export function isPageable(s: RssSource): s is RssSource & Pageable {

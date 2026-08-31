@@ -26,10 +26,10 @@
  */
 import type { Item, Social } from "@tauri-playground/xml"
 import { serializeFeed, type SerializeOptions } from "@tauri-playground/xml"
-import type { LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { ItemDetailSource, LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "@tauri-playground/resolve"
-import { XHS_BASE, extractInitialState, noteCardToSocial, rawOf, xhsClient, xhsScanLogin } from "@tauri-playground/resolve"
+import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@tauri-playground/resolve"
 import { cdpNavigate, waitUntil, withBrowserLock } from "@tauri-playground/resolve"
 import { log } from "@tauri-playground/resolve"
 
@@ -62,13 +62,28 @@ export class XhsUserChannel implements RssChannel, Loginable {
     return xhsScanLogin(browser, emitQr, opts)
   }
 
-  getSource(info: SourceInfo): RssSource & Partial<Pageable> {
+  getSource(info: SourceInfo): RssSource & Partial<Pageable> & ItemDetailSource {
     const userId = String(info.user_id ?? "").trim()
     const browser = globalThis.appHost?.browser
     const fetch = apiFetch(() => this.fetchItems(info), () => this.channelOptions(info))
-    return browser
+    const base = (browser
       ? { fetch, fetchMore: (cursor?: string) => this.fetchMoreViaBrowser(browser, userId, cursor) }
-      : { fetch }
+      : { fetch }) as RssSource & Partial<Pageable> & ItemDetailSource
+    // 单条详情:user 流 item 也是 xhs note,详情页补全(匿名可用),与 explore 同逻辑。
+    base.resolveDetail = (item: Item) => this.resolveDetail(item)
+    return base
+  }
+
+  /** 单条笔记详情(列表 item 缺全文/多图/标签,详情页补全)。匿名可用需列表项 xsec_token。 */
+  private async resolveDetail(item: Item): Promise<Item | null> {
+    const noteId = String(item.url ?? "").match(/\/explore\/([^?/?#]+)/)?.[1] ?? ""
+    if (!noteId) return null
+    const xsec = (item as Social).xsecToken
+    const url = `${XHS_BASE}/explore/${noteId}${xsec ? `?xsec_token=${encodeURIComponent(xsec)}&xsec_source=pc_feed` : ""}`
+    const html = await xhsClient.getHtml(url, {})
+    const note = extractNoteDetail(html, noteId)
+    if (!note) return null
+    return noteDetailToSocial(note, this.key, now())
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
@@ -86,11 +101,13 @@ export class XhsUserChannel implements RssChannel, Loginable {
     return this.notesToItems(extractSsrNotes(extractInitialState(html)))
   }
 
-  /** SSR 扁平笔记数组 → Item[](noteCard → Social,noteId 用外层 id)。 */
+  /** SSR 扁平笔记数组 → Item[](noteCard → Social,noteId 用外层 id,xsecToken 在外层)。 */
   private notesToItems(notes: any[]): Item[] {
     const t = now()
     return notes
-      .map((n: any): Social | null => (n?.noteCard ? noteCardToSocial(n.noteCard, this.key, t, n.id) : null))
+      .map((n: any): Social | null =>
+        n?.noteCard ? noteCardToSocial(n.noteCard, this.key, t, n.id, n.xsecToken) : null,
+      )
       .filter((x): x is Social => !!x)
   }
 

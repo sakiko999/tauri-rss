@@ -105,6 +105,8 @@ export interface Social extends Base {
   reposts?: number
   replies?: number
   isLiked?: boolean
+  /** 小红书笔记详情开关(列表项 xsec_token)。匿名 GET /explore/<id>?xsec_token= 才返回 noteDetailMap。 */
+  xsecToken?: string
 }
 
 export interface Video extends Base {

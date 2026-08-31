@@ -19,12 +19,13 @@ function imgRatio(img: { width?: number; height?: number }): number {
   return 4 / 3
 }
 
-export function SocialRenderer({ item, onOpen }: { item: SocialItem } & RendererCallbacks) {
+export function SocialRenderer({ item, onOpen, onSelect }: { item: SocialItem } & RendererCallbacks) {
   const url = item.url
   // 不传 h-full:瀑布流 cell 高度由 MasonryGrid 渲染后测量(自然内容高)修正,撑满 cell
   // 会让测量拿到 cell 高(=估算)而非真实内容高,估算偏差无法修正。
+  // 点击:优先 onSelect(打开详情弹窗,传完整 item);无则 onOpen(url,打开原文)。
   return (
-    <MediaCard onOpen={url ? () => onOpen?.(url) : undefined}>
+    <MediaCard onOpen={url ? () => (onSelect ? onSelect(item) : onOpen?.(url)) : undefined}>
       <div className="flex flex-col gap-2.5 p-3">
         {/* 正文 */}
         {item.content && (

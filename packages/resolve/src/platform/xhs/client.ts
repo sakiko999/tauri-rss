@@ -123,6 +123,8 @@ interface NoteFields {
   authorAvatar?: string
   /** epoch ms(两适配器各自换算单位)。 */
   publishedAtMs?: number
+  /** 小红书笔记详情开关(匿名 get /explore/<id> 需带列表项 xsec_token)。 */
+  xsecToken?: string
 }
 
 /**
@@ -148,14 +150,22 @@ function noteToSocial(f: NoteFields, sourceId: string, t: number): Social | null
     author: f.authorName ? { name: f.authorName, avatar: f.authorAvatar } : undefined,
     publishedAt: f.publishedAtMs,
     fetchedAt: t,
+    xsecToken: f.xsecToken,
   }
 }
 
 /**
  * SSR noteCard → Social。
  * 封面用 cover.urlDefault(原图),SSR 自带宽高 → 无需 Range 预取。content 用标题+摘要。
+ * xsecToken 是详情页开关(匿名 get /explore/<id> 的 xsec_token 参数),存进 Social 供详情弹窗用。
  */
-export function noteCardToSocial(noteCard: any, sourceId: string, t: number, noteIdFromOuter?: string): Social | null {
+export function noteCardToSocial(
+  noteCard: any,
+  sourceId: string,
+  t: number,
+  noteIdFromOuter?: string,
+  xsecToken?: string,
+): Social | null {
   // noteId 已从 noteCard 内移到外层(feeds[i].id / note.id)——小红书 SSR 结构变更(2026-08)。
   const noteId = String(noteIdFromOuter ?? noteCard?.noteId ?? "").trim()
   if (!noteId) return null
@@ -175,8 +185,68 @@ export function noteCardToSocial(noteCard: any, sourceId: string, t: number, not
       authorName: user.nickname ? String(user.nickname) : undefined,
       authorAvatar: user.avatar ? String(user.avatar) : undefined,
       publishedAtMs: noteCard?.time ? Number(noteCard.time) * 1000 : undefined,
+      xsecToken,
     },
     sourceId,
     t,
   )
+}
+
+// ── 详情页(单条 note 完整内容):noteDetailMap 解析 ────────────────────────────
+
+/**
+ * 从详情页 html 提取单条 note 完整内容。
+ * 匿名 GET /explore/<noteId>?xsec_token=<列表项的>&xsec_source=pc_feed → SSR
+ * `note.noteDetailMap[<noteId>].note`。**不带 xsec_token 则 noteDetailMap 为空 {}**。
+ * 返回 note 对象(含 title/desc/imageList/tagList/interactInfo/user/video)。
+ */
+export function extractNoteDetail(html: string, noteId: string): any {
+  const noteMap = rawOf(extractInitialState(html)?.note)?.noteDetailMap
+  if (!noteMap) return null
+  const entry = noteMap[noteId]
+  return entry ? rawOf(entry.note) ?? rawOf(entry) : null
+}
+
+/**
+ * note 详情 → 完整 Social(覆盖列表 noteCard 的单图摘要,补全文/多图/标签/视频)。
+ * 图片来自 imageList(每项 url/urlDefault),tagList 作 #标签# 并入正文,interactInfo 取赞/评。
+ */
+export function noteDetailToSocial(note: any, sourceId: string, t: number): Social | null {
+  const noteId = String(note?.noteId ?? "").trim()
+  if (!noteId) return null
+  const images: SocialImage[] = (note?.imageList ?? [])
+    .map((img: any): SocialImage | null => {
+      const url = String(img?.urlDefault || img?.url || "").trim()
+      if (!url) return null
+      const out: SocialImage = { url: toHttps(url) }
+      if (img.width) out.width = Number(img.width)
+      if (img.height) out.height = Number(img.height)
+      return out
+    })
+    .filter((x: SocialImage | null): x is SocialImage => !!x)
+
+  const title = String(note?.title ?? "").trim()
+  const desc = String(note?.desc ?? "").trim()
+  // tagList 并入正文尾部(RSSHub 同款:tags 以 #话题# 形式展示)。
+  const tags = (note?.tagList ?? []).map((tag: any) => `#${String(tag?.name ?? "").trim()}#`).filter(Boolean)
+  const content = [desc, ...tags].filter(Boolean).join("\n") || title
+  const user = note?.user ?? {}
+  const interact = note?.interactInfo ?? {}
+
+  return {
+    id: `xhs-${noteId}`,
+    sourceId,
+    kind: "social",
+    title: title || content.slice(0, 30) || "小红书笔记",
+    url: `${XHS_BASE}/explore/${noteId}`,
+    content,
+    images: images.length ? images : undefined,
+    likes: parseCount(interact.likedCount),
+    reposts: parseCount(interact.shareCount),
+    replies: parseCount(interact.commentCount),
+    author: user.nickname ? { name: String(user.nickname), avatar: user.avatar ? String(user.avatar) : undefined } : undefined,
+    publishedAt: note?.time ? Number(note.time) * 1000 : undefined,
+    fetchedAt: t,
+    xsecToken: note?.xsecToken ?? undefined,
+  }
 }

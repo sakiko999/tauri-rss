@@ -133,6 +133,8 @@ interface DesktopState {
   selectedNodeId: string | null
   /** 文章详情选中条目。 */
   selectedArticleId: string | null
+  /** social 详情弹窗单独条目(点击卡片打开;bili/weibo 直接展示,xhs 异步拉详情补全)。 */
+  socialDetail: { item: MediaItem; full?: MediaItem | null } | null
   /** 分组树展开态(纯内存)。 */
   expandedGroups: Record<string, boolean>
   loading: boolean
@@ -153,6 +155,9 @@ interface DesktopState {
   loadHotWord(word: string): Promise<void>
   toggleGroup(groupId: string): void
   selectArticle(id: string | null): void
+  /** 打开 social 详情弹窗(点击卡片);xhs 异步拉详情补全,其余平台直接展示列表数据。 */
+  openSocialDetail(item: MediaItem): void
+  closeSocialDetail(): void
   refresh(id: string): Promise<void>
   /** force=true 强制绕过 TTL 缓存(手动按钮);init 自动刷新传 false 走缓存。 */
   refreshAll(force?: boolean): Promise<void>
@@ -233,6 +238,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     // 默认选中「全部」tab——等价原 activeTab:"all"。
     selectedNodeId: "tab:all",
     selectedArticleId: null,
+    socialDetail: null,
     expandedGroups: {},
     loading: false,
     loadingMore: false,
@@ -297,6 +303,22 @@ export const useDesktop = create<DesktopState>((set, get) => {
 
     selectArticle(id) {
       set({ selectedArticleId: id })
+    },
+
+    openSocialDetail(item) {
+      // 先立即显示列表数据(bili/weibo 已完整;xhs 缺详情,同步缓),xhs 异步补全。
+      set({ socialDetail: { item, full: null } })
+      const dl = get().dl
+      if (!dl || item.kind !== "social") return
+      // xhs 等列表缺完整详情的源:异步拉详情补全后更新 full(弹窗消费 full?若完成)。
+      void dl
+        .resolveSocialDetail(item.subscriptionId, item.id)
+        .then((full) => set((s) => (s.socialDetail?.item.id === item.id ? { socialDetail: { ...s.socialDetail, full } } : s)))
+        .catch(() => {}) // 详情失败保持列表数据,不报错遮弹窗
+    },
+
+    closeSocialDetail() {
+      set({ socialDetail: null })
     },
 
     async refresh(id) {

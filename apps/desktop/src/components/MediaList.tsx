@@ -29,6 +29,7 @@ import { isSmartFeed, isTabNode, useDesktop, viewTitleFor } from "../store.ts"
 import { ExpandedPlayer } from "./ExpandedPlayer.tsx"
 import { MasonryGrid } from "./MasonryGrid.tsx"
 import { LoadMoreFooter } from "./LoadMoreFooter.tsx"
+import { SocialDetailModal } from "./SocialDetailModal.tsx"
 
 /** 模块级稳定 onOpen:只依赖参数 url,不捕获组件内状态(供 UnifiedCard memo 复用)。 */
 const openUrl = (url: string) => window.open(url, "_blank")
@@ -152,6 +153,7 @@ export function MediaList({
     refreshErrors,
     hotWord,
     totals,
+    openSocialDetail,
   } = useDesktop()
   const items = itemsOverride ?? storeItems
 
@@ -203,7 +205,8 @@ export function MediaList({
   // 其余(article/video/audio/live 单一或混合)→ UnifiedCard(16:9 中卡,等尺寸)。
   const renderItem = (item: (typeof items)[number]) =>
     isSocialView ? (
-      <SocialRenderer key={item.id} item={item as SocialItem} onOpen={openUrl} />
+      // social 点击 → 详情弹窗(传完整 item);onOpen 兜底打开原文(弹窗内也有「打开原文」)。
+      <SocialRenderer key={item.id} item={item as SocialItem} onSelect={openSocialDetail} onOpen={openUrl} />
     ) : (
       <UnifiedCard
         key={item.id}
@@ -309,6 +312,9 @@ export function MediaList({
           onClose={() => setExpandedItem(null)}
         />
       )}
+
+      {/* social 详情弹窗:点击 social 卡片打开(xhs 异步补全详情)。自订阅 store。 */}
+      <SocialDetailModal />
     </main>
   )
 }

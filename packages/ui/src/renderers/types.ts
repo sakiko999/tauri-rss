@@ -6,6 +6,8 @@ import type { MediaItem, ResolvePlayback } from "@tauri-playground/core"
 export interface RendererCallbacks {
   /** 点击条目时打开 URL(浏览器 / 详情视图)。 */
   onOpen?: (url: string) => void
+  /** 点击条目选中(social 详情弹窗用;传 item 而非 url,供弹窗消费完整数据)。 */
+  onSelect?: (item: MediaItem) => void
   /** 切换已读状态。 */
   onToggleRead?: (item: MediaItem) => void
   /** 切换收藏。 */

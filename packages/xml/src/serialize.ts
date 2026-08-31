@@ -82,6 +82,11 @@ function itemToTree(item: Item): Record<string, unknown> {
   // 最小 tpl: kind(deserialize kind 判别核心)。
   setTpl(tree, "kind", item.kind)
 
+  // 小红书详情页开关(xhs 列表项 xsec_token;匿名 GET /explore/<id> 需带)。
+  // 仅 sort 序列化到 XML,deserialize 读回 SocialItem.xsecToken 供详情弹窗。
+  const xsec = (item as { xsecToken?: string }).xsecToken
+  if (xsec) setTpl(tree, "xsecToken", xsec)
+
   return tree
 }
 

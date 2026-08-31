@@ -131,3 +131,24 @@ body {
  * Chromium 滚动条——`::-webkit-scrollbar-*` CSS 对它完全无效(实测),
  * 不要在这里加滚动条样式。纯前端 dev(浏览器,无 Tauri)会回退系统默认滚动条,
  * 仅调试环境,可接受。 */
+
+/* ── swiper 轮播(detail 弹窗图区)──
+ * dark/图片上默认黑箭头/黑分页点不可见,统一覆盖成亮色半透明。
+ * - navigation 箭头:白 60% 半透明,悬停加深,图片上清晰。
+ * - pagination 分页点:white/50,当前页 white(active),暗背景可见。 */
+.swiper-button-next,
+.swiper-button-prev {
+  color: rgba(255, 255, 255, 0.8);
+}
+.swiper-button-next:hover,
+.swiper-button-prev:hover {
+  color: #fff;
+}
+.swiper-pagination-bullet {
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0.8;
+}
+.swiper-pagination-bullet-active {
+  background: #fff;
+  opacity: 1;
+}

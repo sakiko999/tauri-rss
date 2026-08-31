@@ -133,6 +133,8 @@ function parseSocial(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     reposts: num(raw["tpl:reposts"]),
     replies: num(raw["tpl:replies"]),
     isLiked: boolTpl(raw["tpl:isLiked"], undefined),
+    // 小红书详情页开关(匿名 GET /explore/<id> 需带列表项 xsec_token)。
+    xsecToken: str(raw["tpl:xsecToken"]),
   }
 }
 

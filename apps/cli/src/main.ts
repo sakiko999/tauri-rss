@@ -23,6 +23,8 @@ import { runDm } from "./commands/dm.ts"
 import { runAlign } from "./commands/align.ts"
 import { runEnv } from "./commands/env.ts"
 import { runRefresh } from "./commands/refresh.ts"
+import { runHot } from "./commands/hot.ts"
+import { runDetail } from "./commands/detail.ts"
 
 // 先注入宿主(file storage / node http+js+ws / log shim)再进命令逻辑。
 setupHost()
@@ -90,6 +92,18 @@ cli
 cli
   .command("align", "crawler XML 与 rsshub 同构消费断言(收编 verify-alignment)")
   .action(guard(() => runAlign()))
+
+cli
+  .command("hot <word>", "★ 热搜词下微博流(weibo:hot resolveHotWord,收编 verify-new-channels)")
+  .option("--json", "JSON 输出")
+  .option("-n <n>", "样本条数(默认 8)")
+  .action(guard((word: string, opts: { json?: boolean; n?: number }) => runHot(word, opts)))
+
+cli
+  .command("detail [url]", "social 单条详情补全(xhs noteDetail 匿名拉全文/多图/tag;--latest 用当前列表首条)")
+  .option("--json", "JSON 输出")
+  .option("--latest", "用当前 explore 列表首条(推荐流随机,用户 URL 的 noteId 可能不在最新列表)")
+  .action(guard((url: string | undefined, opts: { json?: boolean; latest?: boolean }) => runDetail(url ?? "", opts)))
 
 cli
   .command("env", "appHost 门面自检(http/js/storage/ws 注入状态)")
