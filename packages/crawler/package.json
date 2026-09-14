@@ -13,7 +13,6 @@
   },
   "scripts": {},
   "devDependencies": {
-    "@tauri-playground/host": "workspace:*",
-    "playwright-core": "^1.62.1"
+    "@tauri-playground/host": "workspace:*"
   }
 }

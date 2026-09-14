@@ -111,7 +111,7 @@ rss detail [url|--latest]           # xhs 单条详情补全(匿名 noteDetail,-
 | core `verify-alignment.ts` | `rss align` | ✅ 已收编并清退 |
 | core `verify-new-channels.ts` | `rss hot`(resolveHotWord 部分) | ✅ 收编;清退 |
 | core `data-layer.ts` / `source-groups.ts` / `verify-source.ts` / `can-loadmore-check.ts` | (一次性/架构验证) | ✅ 清退 |
-| crawler `browser-sim.ts` | (保留为独立脚本) | ⬅️ **唯一保留**——CLI 排除浏览器模拟渠道,需 playwright-core + 系统浏览器 |
+| crawler `browser-sim.ts` | (保留为独立脚本) | ⬅️ **唯一保留**——CLI 排除浏览器模拟渠道。**2026-09-11 起零依赖**:bun 内置 WebSocket 直连 CDP(edge-cdp skill 起的 Windows Edge),不再需 playwright-core/tsx |
 
 ## 六、存储:file-JSON 起步,为 SQLite 切换留门
 

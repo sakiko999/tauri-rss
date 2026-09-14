@@ -122,9 +122,11 @@ bun run rss env --probe                    # appHost 门面自检（http/js/stor
 bun run rss refresh bili:popular           # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                          # crawler/rsshub 同构断言
 
-# 浏览器模拟验证脚本（唯一保留的 example——CLI 排除浏览器模拟渠道；需 playwright-core + 系统浏览器，用 tsx/node）
-./node_modules/.bin/tsx packages/crawler/src/example/browser-sim.ts weibo:user  # 浏览器模拟抓微博
-./node_modules/.bin/tsx packages/crawler/src/example/browser-sim.ts xhs:user     # 浏览器模拟抓小红书（低频，防账号风控）
+# 浏览器模拟验证脚本（唯一保留的 example——CLI 排除浏览器模拟渠道）
+# 先起干净 Edge（edge-cdp skill），再跑 sim；脚本自己连 CDP，零额外依赖
+bash <edge-cdp>/scripts/launch_clean_edge.sh          # 干净实例 :9322；--keep 复用登录态 profile
+bun run packages/crawler/src/example/browser-sim.ts weibo:user  # 浏览器模拟抓微博
+bun run packages/crawler/src/example/browser-sim.ts xhs:user     # 浏览器模拟抓小红书（低频，防账号风控）
 ```
 
 前端产物输出到根 `dist/<platform>/`（Vite `outDir`），tauri.conf `frontendDist` 指向 `../../dist/<platform>`。
