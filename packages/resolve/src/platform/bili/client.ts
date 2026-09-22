@@ -54,6 +54,8 @@ export interface BilibiliClient extends PlatformClient {
   signLiveParams(params: Record<string, string>, cookie?: string): Promise<string>
   /** 确保匿名 buvid3/4 就绪(模块级一次,幂等)。 */
   ensureBuvid(): Promise<void>
+  /** 匿名 buvid3(finger/spi;直播弹幕**未登录**时认证用)。 */
+  anonBuvid3(): Promise<string>
   /** 登录态 mid(nav 响应;未登录/无 cookie 为 0)。直播弹幕认证用,与 signWeb 复用同一 nav。 */
   navMid(cookie?: string): Promise<number>
   /** bvid/aid → 默认分 P 的 cid(/x/web-interface/view,非 wbi 接口)。 */
@@ -119,6 +121,17 @@ async function ensureBuvid(): Promise<void> {
     })()
   }
   await buvidPromise
+}
+
+/**
+ * 匿名 buvid3(供直播弹幕认证)。
+ * ⚠️ 2026-09 实测:匿名直播弹幕可用——uid=0 + finger/spi 的匿名 buvid3 → op=8
+ * {"code":0} 且收到真实 DANMU_MSG。此前误以为匿名被 1006 拒,实为 buvid3 空所致
+ * (从 cookie 提取,匿名时必然为空)。参考项目 pure_live 同法(bilibili_site.dart getBuvid)。
+ */
+async function anonBuvid3(): Promise<string> {
+  await ensureBuvid()
+  return /buvid3=([^;]+)/.exec(anonBuvid)?.[1] ?? ""
 }
 
 async function signWeb(query: string, cookie?: string): Promise<string> {
@@ -247,6 +260,7 @@ export const biliClient: BilibiliClient = {
   signWeb,
   signLiveParams,
   ensureBuvid,
+  anonBuvid3,
   navMid,
   resolveCid,
   resolvePlayUrl,

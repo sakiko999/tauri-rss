@@ -15,9 +15,10 @@
 - **架构红利**：crawler「XML 即天然类型」——channel 输出本就是 RSS 2.0 XML 字符串，
   服务化只是把进程内调用变 HTTP GET 返回同一字符串，core 层不动（自解析 XML 建
   MediaItem）。等于自造 mini-RSSHub，路由表 = channel 注册表。
-- **旧文档前提变化**：`docs/xhs-signature-sidecar-eval.md` 推荐 RustPython 嵌入的
+- **旧文档前提变化**：原 `xhs-signature-sidecar-eval.md` 推荐 RustPython 嵌入的
   主要理由是移动端兼容；desktop 服务化后**服务进程可直接跑 CPython xhshow**
-  （不受 Tauri 移动端 sidecar 限制），签名恢复路径比 RustPython 更简单。
+  （不受 Tauri 移动端 sidecar 限制），签名恢复路径比 RustPython 更简单
+  （该文档已删，结论并入 `xhs-signature-research.md`）。
 
 ## 2. RSSHub / MediaCrawler 对照调研（2026-08-25，两只读 agent 实读代码）
 
@@ -98,8 +99,8 @@ board 大概率仍坏（等不到选择器）。另注意：RSSHub 已从 playwr
 - **mobile 裁剪**：channel 加环境标记（xhs/weibo = desktop-only），mobile 构建时裁掉。
   实际能力损失小——丢的只有 xhs/weibo feed，rss 直链/bili/youtube/直播四平台全保留
   （纯算法或免登录）；mobile 播放/弹幕能力不受影响。
-- **架构对齐**：`docs/core-architecture-refactor.md` 已有的 core 层 HTTP 化路线
-  （feed 路由层）可与本决策合并落地。
+- **架构对齐**：core 层 HTTP 化路线（feed 路由层）可与本决策合并落地
+  （原 `core-architecture-refactor.md` 已实施完并入本文，该文档已删）。
 - **签名恢复路径（若选 A）**：服务进程跑 CPython + `pip install xhshow`，失效时
   `pip install -U xhshow` 即恢复——比 RustPython 嵌入（16MB + 每平台打包链）简单，
   原评估结论的前提（移动端兼容）已随本决策消解。
@@ -110,67 +111,18 @@ board 大概率仍坏（等不到选择器）。另注意：RSSHub 已从 playwr
   本决策的「desktop 服务化」正是其「未来若需恢复」的载体。
 - `docs/mobile-cdp-feasibility.md`：移动端不做浏览器模拟——**仍有效**，是本决策
   移动侧的依据。
-- `docs/core-architecture-refactor.md`：core 层 HTTP 化路线——**仍有效**，第 4 节已对齐。
+- `docs/capability-gaps.md`：平台能力补齐路线图（分区/搜索等发现层缺口）——**规划依据**。
 - `docs/platform-login-research.md`：三平台扫码登录全可行——**仍有效**，登录能力
   随服务化沉淀到服务侧。
 - `docs/folo-architecture-research.md`：Folo 云端聚合不能照搬的前提已变——现在可以
   拿它的生产者/消费者分离，服务放本机。**前提变化**，结论可部分翻案。
-- `docs/xhs-signature-sidecar-eval.md`：RustPython 推荐结论的前提（移动端兼容）消解，
-  但其运行时形态对比表仍有效。
+- `docs/xhs-signature-research.md`：461 根因 + 频率证据仍有效；原 sidecar-eval 的
+  RustPython 推荐前提（移动端兼容）已消解、文档已删，结论（服务进程直接跑 CPython）
+  即本节「签名恢复路径」。
 
 ## 6. 后续落地需回答（规划另起任务）
 
 sidecar 生命周期（Tauri spawn/端口协商/随 app 退出）、core 的 feed 路由层、
 channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fetchMore 契约对齐）。
 
-## 7. 落地记录（2026-08-25 → 2026-08-26 反转）
-
-### 7.0 结论反转（2026-08-26）
-
-**「内置 rsshub npm 包 + sidecar」方案废弃**，改 **RSSHub 作可选外挂 HTTP 服务器**：
-
-- 移除：`package.json` 的 `rsshub` 依赖、`scripts/rsshub-server.ts`（已删）、
-  `scripts/tauri.ts` 的 `rsshubSidecar()`。
-- RSSHub 定位 = 「外挂实例」：`settings.rsshubBaseUrl`（默认公网 `https://rsshub.app`，
-  订阅级 `info.baseUrl` 覆盖），`source/rsshub.ts` 直连外部实例，只做信息抓取。
-- **crawler 为主供给**：youtube/bili/播客/直播全走 crawler 自解析，零外部依赖。
-- 保留 1 条 rsshub 示例订阅（`s-article` Hacker News → `rsshub:feed /hackernews`）。
-- 原因：内嵌成本高（依赖大、`request()` 进程内 API 需自序列化、bili 风控需 cookie、
-  youtube 需 YOUTUBE_KEY、xhs 失效、sidecar 生命周期），收益与预想不符。
-  详见 `docs/rsshub-vs-crawler.md`「历史决策教训」。
-
-### 7.1 历史（2026-08-25 内嵌方案，已废弃，仅存档）
-
-- **`tmp/RSSHub` 仅是探针，不属依赖**。曾依赖钉版：
-  `package.json` → `dependencies: "rsshub": "^1.0.0-master.0a5fb34"`（已移除）。
-- `rsshub` 包是**进程内 API**：`init(conf)` + `request(path)` 返回 **RSS 2.0 JS 对象**
-  （`{title, link, description, item[]}`），**无自带 HTTP 端口**。
-- `scripts/rsshub-server.ts`（已删）：曾自起 HTTP `1200`——
-  - `GET /healthz` / `GET /url?u=` 泛代理 / `GET /<rsshub-route>` 序列化标准 RSS。
-- `scripts/tauri.ts` 曾 `spawnParallel([rsshubSidecar(), viteDev(), tauriDev()])`。
-
-### 7.3 消费契约（外挂模式，core 层保持）
-
-- `packages/core/src/source/rsshub.ts` 仍 `httpText(baseUrl+route)`，`baseUrl` 默认
-  `https://rsshub.app`（公网外挂）；`sourceInfoFor` 对 `rsshub:` 注入 baseUrl **不附 cookie**。
-- `deserializeFeed` 已兼容标准 RSS + Atom + media:* 增强，crawler(tpl:) 与 rsshub(标准)
-  被同一加工层消费（`verify-alignment.ts` 断言成立）。播放统一走 resolver by-url。
-
-### 7.4 desktop 渠道（crawler 为主）
-
-- `apps/desktop/src/components/AddFeedDialog.tsx`：隐藏 crawler `rss:*` 渠道
-  （`hiddenPrefixes=["rss:"]`）——原始 RSS 直链不常用；crawler 包内仍注册，mobile 兜底。
-- `apps/desktop/src/subscriptions.ts`：crawler 为主（youtube/bili:popular/bili:weekly/
-  rss:podcast/4×live 等）+ 1 条 rsshub 示例（`s-article` → `/hackernews`）。
-
-### 7.5 验证（反转后）
-
-- `verify-alignment.ts`：crawler(tpl:) video + rsshub(标准+media:) article 同 deserialize ✓
-- 全量 tsc（core/desktop/crawler）零错。
-- 外挂链路：`httpText(baseUrl+route)` → 外部实例标准 RSS → deserialize → 播放 resolver。
-
-### 7.6 遗留
-
-- release 构建侧：用户手动起 sidecar / 外部实例；Rust `RunEvent::Exit` 的 spawn 形态
-  留作后续（如需完全内建）。
-- RSSHub bilibili/ranking 偶发 503（上游间歇），非本项目问题；weibo/search/hot 稳定。
+> 落地记录与 RSSHub 对照已并入 `docs/rsshub-vs-crawler.md`（消费契约 / 验证 / 遗留）。

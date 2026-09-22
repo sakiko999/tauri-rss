@@ -108,19 +108,16 @@ w_rid    = MD5(sortedParams & wts & mixinKey)
 ## 六、当前测试订阅全貌
 
 内置 RSS 直链全量清单在 `packages/crawler/src/channels/rss/builtin.ts`（36 条，含上表多数源）。
-desktop 测试订阅为 6 个（`apps/desktop/src/subscriptions.ts`），覆盖不同 kind：
+desktop 测试订阅见 `apps/desktop/src/subscriptions.ts`（**19 条**，覆盖全部 kind 与平台）：
 
-| 订阅 | channel | kind |
-|---|---|---|
-| Hacker News | `rss:hn` | article |
-| YouTube · 3Blue1Brown | `youtube` | video |
-| bilibili 综合热门 | `bili:popular` | video |
-| Huberman Lab | `rss:podcast` | audio |
-| 斗鱼直播 · yyfyyf | `live:douyu` | live |
-| bilibili 直播 | `bili:live` | live |
+- **article**：`rsshub:feed`（Hacker News，唯一保留的外挂示例）
+- **video**：`youtube` / `bili:popular` / `bili:weekly` / `bili:dynamic`
+- **audio**：`rss:podcast`
+- **live**：`live:douyu` / `live:huya` / `live:douyin` / `bili:live` / `youtube:live`
+  + 4× 热门（`bili:live:hot` / `live:douyu:hot` / `live:huya:hot` / `live:douyin:hot`）
+- **social**：`weibo:hot` / `weibo:user` / `xhs:explore` / `xhs:user`
 
-> 虎牙 `live:huya` 不在默认订阅(演示源够用),但已实现可播:HTTP-FLV,
-> 见 `packages/crawler/src/channels/huya/play.ts`(纯计算无 Tars)。
+> 平台能力（播放/弹幕）与发现层缺口（分区/搜索）见 `docs/capability-gaps.md`。
 
 ## 七、不建议碰的（反爬 / 无原生）
 

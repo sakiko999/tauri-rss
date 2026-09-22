@@ -1,7 +1,8 @@
 /**
  * dm — 弹幕探针(收编 crawler example/test-danmaku.ts 的单 url 版)。
  * VOD:等首批(全量分段)打印前 n 条;live:固定窗口采集 + 连接帧数统计。
- * bili 登录 cookie 由 settings 自动注入(直播握手必须真实 uid,匿名被 1006 拒)。
+ * bili 登录 cookie 由 settings 自动注入(可选;直播弹幕 2026-09 实测**匿名可用**,见
+ * resolve/platform/bili/danmaku-live.ts)。
  */
 import pc from "picocolors"
 import type { DanmakuItem } from "@tauri-playground/resolve"

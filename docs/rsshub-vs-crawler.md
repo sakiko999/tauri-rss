@@ -73,3 +73,19 @@
 - **外挂模式更合适**:crawler 自解析稳定平台(YouTube 官方 RSS / bili API 可复刻),
   重反爬平台本身 crawler 已降级 SSR/浏览器模拟;RSSHub 只作可选信息补充,不参与播放,
   部署成本转移到用户自选实例。
+
+## 消费契约（外挂模式，core 层）
+
+- `packages/core/src/source/rsshub.ts` 走 `httpText(baseUrl+route)`，`baseUrl` 默认公网
+  `https://rsshub.app`；`sourceInfoFor` 对 `rsshub:` 注入 baseUrl 但**不附平台 cookie**。
+- `deserializeFeed` 兼容标准 RSS + Atom + media:* 增强——crawler(`tpl:`) 与 rsshub(标准)
+  被**同一加工层**消费（`verify-alignment.ts` 断言成立）。播放统一走 resolver by-url。
+- desktop `AddFeedDialog` 隐藏 crawler `rss:*` 渠道（`hiddenPrefixes=["rss:"]`），
+  crawler 包内仍注册供 mobile 兜底。
+
+## 验证与遗留（反转后）
+
+- `verify-alignment.ts`：crawler(tpl:) video + rsshub(标准+media:) article 同 deserialize ✓；
+  全量 tsc（core/desktop/crawler）零错。
+- 遗留：release 构建侧用户需手动起外部实例；Rust `RunEvent::Exit` 的 spawn 形态留作后续
+  （如需完全内建）。RSSHub `bilibili/ranking` 偶发 503（上游间歇），非本项目问题。

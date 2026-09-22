@@ -74,7 +74,8 @@ Demo 之后：react-query + 无限滚动、瀑布流/短视频模式、mobile �
 
 ## 更多文档
 
-- `docs/technical-plan.md` — 整体技术方案（UI 三模式 / 数据流边界 / Tauri 插件调研）
+- `docs/technical-plan.md` — 整体技术方案（目标态 / UI 三模式 / 数据流边界）
 - `docs/domestic-feed-availability.md` — 国内平台 feed 可用性梳理
-- `docs/rsshub-catalog.md` — RSSHub 路由静态摘录
+- `docs/capability-gaps.md` — 平台能力补齐路线图（对照参照项目）
+- `bun run scripts/rsshub-catalog.ts` — 生成 RSSHub 路由静态摘录（输出不进仓库）
 - `CLAUDE.md` — 项目约定与工程环境细节

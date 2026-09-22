@@ -6,11 +6,13 @@
  *   protover:0 JSON / 2 zlib / 3 brotli —— op=5 通知按 protover 解压后按
  *   `[\x00-\x1f]+` 切分成逐条 JSON,`cmd=DANMU_MSG` → info[1] 文本。
  *
- * ⚠️ 2026-08 风控:直播弹幕**必须真实登录 uid**——匿名(uid=0)认证被服务器
- * 1006 拒绝(握手成功即断,probe-bili-cookie 实测:uid=0 1006,真实 nav mid → op=8
- * {"code":0})。故认证帧 uid = nav 的 mid(cookie 登录态),buvid = cookie 提取的
- * buvid3。认证走 WS 帧 op=7 的 uid/buvid,不需 cookie header → 无 header 统一走
- * 宿主隧道(sec-websocket-key 握手问题已修:into_client_request 构造完整请求)。
+ * ⚠️ 2026-09 实测修正:直播弹幕**匿名可用**(uid=0 + finger/spi 匿名 buvid3 →
+ * op=8 {"code":0} 且收到真实 DANMU_MSG;probe 实测房间 24022841)。此前记的
+ * 「匿名被 1006 拒」实为 buvid3 取自 cookie、匿名时为空所致,非 uid 问题。
+ * 故认证帧 uid = nav 的 mid(cookie 登录态,匿名为 0),buvid3 登录时取 cookie、
+ * 否则取匿名指纹(biliClient.anonBuvid3)。认证走 WS 帧 op=7 的 uid/buvid,
+ * 不需 cookie header → 无 header 统一走宿主隧道
+ * (sec-websocket-key 握手问题已修:into_client_request 构造完整请求)。
  * host 的 **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
  */
 import { argbToHex, createWsStream, deferredStream } from "../../danmaku"
@@ -108,9 +110,11 @@ async function getDanmuInfo(
   roomId: string,
   cookie?: string,
 ): Promise<{ host: string; wssPort: number; token: string; uid: number; buvid3: string }> {
-  // 认证 uid = nav 带 cookie 的 mid(2026 风控:匿名 0 被拒)。仅 cookie 时发(匿名必 0,
-  // 白打一次);与 getDanmuInfo 并行,且复用 signWeb 的 nav 响应(navCache 按 cookie 缓存)。
+  // 认证 uid = nav 带 cookie 的 mid;匿名时 nav 为 -101 → 0(实测匿名可用)。
   const uidPromise = cookie ? biliClient.navMid(cookie).catch(() => 0) : Promise.resolve(0)
+  // buvid3:登录时取 cookie 里的,否则取匿名指纹(finger/spi)。匿名留空会被拒。
+  const cookieBuvid3 = extractCookie(cookie ?? "", "buvid3")
+  const buvid3Promise = cookieBuvid3 ? Promise.resolve(cookieBuvid3) : biliClient.anonBuvid3().catch(() => "")
   const q = await biliClient.signWeb(`id=${roomId}`, cookie)
   const res = await biliClient.getJson<{
     data?: { token?: string; host_list?: Array<{ host?: string; wss_port?: number }> }
@@ -121,7 +125,7 @@ async function getDanmuInfo(
   const token = res?.data?.token
   if (!host || !token) throw new Error(`bili:live danmaku: no host/token for room ${roomId}`)
   const uid = await uidPromise
-  const buvid3 = extractCookie(cookie ?? "", "buvid3")
+  const buvid3 = await buvid3Promise
   return { host, wssPort, token, uid, buvid3 }
 }
 

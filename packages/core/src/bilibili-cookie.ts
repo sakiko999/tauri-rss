@@ -2,8 +2,9 @@
  * 平台登录 cookie(core 层默认值,敏感——**当前纯匿名方案,全为空占位**)。
  *
  * ⚠️ 本文件三个常量**全部留空** = 零登录(2026-08-31 决策,暂时纯匿名):
- *   - bili:直播原画/超清封顶,视频 720P 封顶;bili:dynamic/bili:live:hot/直播弹幕
- *     需登录,匿名会失败(符合「纯匿名」预期)。
+ *   - bili:直播原画/超清封顶,视频 720P 封顶;bili:dynamic/bili:live:hot 需登录,
+ *     匿名会失败(符合「纯匿名」预期)。**直播弹幕匿名可用**(2026-09 实测更正:
+ *     只要带上 finger/spi 的匿名 buvid3,uid=0 即可,不依赖登录)。
  *   - weibo:weibo:user / 热搜词流 resolveHotWord 需登录,匿名失败;
  *     weibo:hot 热搜列表(hot_band)匿名可用。
  *   - xhs:xhs:explore(推荐流)匿名 SSR 可用;xhs:user 匿名 noteId 抹空 → 0 条;

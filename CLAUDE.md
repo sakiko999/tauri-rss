@@ -186,8 +186,9 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 
 ## 测试数据源（RSSHub 摘录 + bilibili 复刻）
 
-- `tmp/RSSHub` 是 RSSHub 的 git clone（已 gitignore）。`docs/rsshub-catalog.*` 由
-  `bun run scripts/rsshub-catalog.ts` 静态摘录生成——只把 RSSHub 当**数据源目录**抄，
+- `tmp/RSSHub` 是 RSSHub 的 git clone（已 gitignore）。catalog 由
+  `bun run scripts/rsshub-catalog.ts` 静态摘录**按需生成**（生成物不进仓库——
+  1MB 且含大量冷门 namespace 噪声）——只把 RSSHub 当**数据源目录**抄，
   **不跑它的运行时**（`@/` alias、config、cache、registry 太重，与不部署的诉求冲突）。
 - RSSHub 里**绝大多数 handler 是定制 scraper，无现成原生 feed URL**；只有少量真·原生
   feed 直传（catalog 已高亮）。判断源可用性先 `curl` 实测（检查 200 + `<rss`/`<feed` 头，
@@ -269,7 +270,8 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 - **平台 cookie 纯匿名方案(2026-08-31 决策)**：`packages/core/src/bilibili-cookie.ts`
   三个 DEFAULT_*_COOKIE **全部置空**=零登录(见 `.example` 模板)。匿名行为:
   bili 视频列表(popular/ranking/square/user_video/weekly)稳定、视频播放 720P/直播 250 超清
-  降档;bili dynamic(-101)/live:hot(-352)/直播弹幕(1006)需登录**匿名失败**;weibo
+  降档;**直播弹幕匿名可用**(2026-09 更正,见下);bili dynamic(-101)/live:hot(-352)
+  需登录**匿名失败**;weibo
   热搜列表(hot_band)匿名可用、resolveHotWord/weibo:user 需登录失败;xhs explore 匿名 SSR
   稳定、xhs user 匿名 0 条、**笔记详情页匿名可用**(带列表项 xsec_token)。desktop
   weibo:user/xhs:user 可有 appHost.browser(Edge profile 登录态)兜底。恢复登录:三常量填
@@ -291,10 +293,13 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   Sec-WebSocket-Key(tungstenite 的 Request<()> IntoClientRequest 是 Ok(self) 不补 WS 头,
   generate_request 校验报 "Missing...sec-websocket-key")。曾致 douyin/bili 走隧道握手
   全失败,已修(2026-08)。
-  ⚠️ **bili 直播弹幕坑(2026-08 风控)**:认证必须真实登录 uid——匿名 uid=0 握手成功即被
-  服务器 1006 拒(probe-bili-cookie 实测:uid=0 1006、真实 nav mid → op=8 code 0 通过)。
-  uid 取 nav 的 mid(cookie 登录态)、buvid 取 cookie 的 buvid3;**不走宿主隧道**(带 cookie
-  header 触发 Rust ws_connect 的 sec-websocket-key 握手被拒)——原生 WS 即通过;host 的
+  ⚠️ **bili 直播弹幕(2026-09 实测更正)**:匿名**可用**——uid=0 + finger/spi 的匿名 buvid3
+  → op=8 {"code":0} 且收到真实 DANMU_MSG(用户名被遮为 `肆***` 式,与 pure_live 观察一致)。
+  此前记的「匿名被 1006 拒」**是误判**:真实原因是 buvid3 取自 cookie、匿名时必然为空
+  (空 buvid 触发拒连),非 uid 问题。故 buvid3 = cookie 有则取 cookie、否则取
+  `biliClient.anonBuvid3()`(`/x/frontend/finger/spi`);uid = nav 的 mid(匿名为 0)。
+  带 cookie header 会触发 Rust ws_connect 的 sec-websocket-key 握手被拒,故弹幕认证
+  走 WS 帧 op=7 的 uid/buvid、**不走宿主隧道**(无 header 统一走隧道);host 的
   **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
   ⚠️ **弹幕连接释放竞态**:createWsStream 的宿主/原生 onOpen **必须检查 `stopped`**——
   退订后握手才完成时(宿主 ws_connect 异步),unsub 时 ws 未赋值跳过 close,握手完成 onOpen
@@ -481,7 +486,7 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
 
 - react-query 数据流 + 无限滚动（列表化内容不再一次性全量；MediaList 当前用
   IntersectionObserver + PAGE=50 本地切片）
-- 三模式 UI：三分栏 ✅ / 瀑布流 / 短视频（technical-plan 的 P2–P4;三分栏已实现）
+- 三模式 UI：三分栏 ✅ / 瀑布流 / 短视频（见 `docs/technical-plan.md`「三模式实现要点」;三分栏已实现）
   - ⚠️ **live 源是 1:1、其他源是 1:N 的错位**：live 单房间订阅在列表/瀑布流是孤条。
     设计记录见 `docs/technical-plan.md`「live 源与产品形态的错位」——倾向 **B 分组聚合**
     （core 层把同 kind 的 live 订阅合成混合 feed），C 分区/搜索聚合（发现流，参考

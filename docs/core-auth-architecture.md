@@ -81,8 +81,11 @@ interface LoginService {
 }
 ```
 
-- **协议在 crawler**：`platform/<平台>/login.ts` 实现 `createQR()/poll()/collectCredential()`，
-  只做协议（B站纯 HTTP、weibo JSONP、xhs 走 xhshow 签名），不管理生命周期。
+- **协议在 resolve**：`packages/resolve/src/platform/<平台>/login.ts` 实现
+  `createQR()/poll()/collectCredential()`，只做协议（B站纯 HTTP、weibo JSONP、
+  xhs 已落地——`platform/xhs/login.ts` 走 CDP 读二维码 + 轮询 HttpOnly `web_session`），
+  不管理生命周期。（原写 `crawler/...`、`xhshow 签名`——均已过时：平台能力 2026-08-26
+  重构后全归 `resolve`，xhshow 已移出主分支。）
 - **生命周期在 core**：LoginService 驱动 编排→确认→持久化→保活→失效。
 
 ### 平台归属：crawler channel 声明
@@ -93,7 +96,7 @@ interface LoginService {
 ## 3. 数据流（改造后）
 
 ```
-desktop UI ──LoginService──► crawler platform/<平台>/login.ts  (createQR / poll / collectCredential)
+desktop UI ──LoginService──► resolve platform/<平台>/login.ts  (createQR / poll / collectCredential)
     │                                    │
     ▼                                    ▼
 credential-repo (storage "auth")    PlatformCredential (bili 含 refreshToken)
@@ -123,7 +126,7 @@ bili -101 / 弹幕 1006），core 在 refresh/resolve 的 catch 里捕获 → �
 ## 5. 实施阶段
 
 - **Phase 1（crawler 声明层）**：`RssChannel.platform?` + `AuthError` + 三平台
-  `platform/<平台>/login.ts` 协议（先 bili，纯 HTTP 无签名）。验证：bili 扫码拿 cookie +
+  resolve `platform/<平台>/login.ts` 协议（先 bili，纯 HTTP 无签名）。验证：bili 扫码拿 cookie +
   refreshToken 打通。
 - **Phase 2（core/auth 子系统）**：`types` + `credential-repo` + `login-service`（bili 闭环：
   扫码登录 → 持久化 → bili_ticket 惰性刷 → SESSDATA 续期）。
@@ -134,8 +137,9 @@ bili -101 / 弹幕 1006），core 在 refresh/resolve 的 catch 里捕获 → �
 
 ## 6. 复用与不改动
 
-- **复用**：`packages/xhshow` 签名（xhs 扫码）；`appHost.http/js/storage` 门面；repo 的
-  「storage key + JSON 全量」持久化模式（auth repo 同款）。
+- **复用**：`appHost.http/js/storage` 门面；repo 的「storage key + JSON 全量」持久化模式
+  （auth repo 同款）。（原引 `packages/xhshow` 签名已失效——该包已移 `feat/xhs-rustpython`；
+  xhs 扫码现走 CDP，不依赖签名库。）
 - **不改动**：`MediaStore` 内容存储、`deserializeFeed` 解析、订阅/阅读 repo 逻辑（只加
   auth 并联）。
 
