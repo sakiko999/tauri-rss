@@ -13,6 +13,7 @@ import { createLogDomain } from "@tauri-playground/log"
 const biliLog = createLogDomain("bili", { color: "#fb7299", ansi: 211 })
 /** [bili:live] 直播档位降级警告。 */
 const biliLiveLog = createLogDomain("bili:live", { color: "#f43f5e", ansi: 203 })
+const biliLoginLog = createLogDomain("bili:login", { color: "#fb7185", ansi: 204 })
 /** [youtube] 直链降级/兜底警告。 */
 const youtubeLog = createLogDomain("youtube", { color: "#ef4444", ansi: 196 })
 /** [douyin] enter/reflow/HTML 降级警告。 */
@@ -86,6 +87,7 @@ const crawlerLog = createLogDomain("crawler", {
 export const log = {
   bili: biliLog,
   biliLive: biliLiveLog,
+  biliLogin: biliLoginLog,
   youtube: youtubeLog,
   douyin: douyinLog,
   douyu: douyuLog,

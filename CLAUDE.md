@@ -66,9 +66,10 @@ packages/
                    warn/error 永保留。被 player/host/crawler 引用
   ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
                    播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
-  ✂️ xhshow(小红书签名库,Python 上游 fork)已移至 **feat/xhs-rustpython** 分支:
-     原 xhshow-js TS fork 过时(2026-07 升级签名后 461),Python 版 + RustPython
-     补丁随签名 crate 一起在专门分支维护,主分支不再包含(见 docs/xhs-signature-research.md)
+  ✂️ xhshow(小红书签名库)已移至 **feat/xhs-rustpython** 分支:主分支不再包含。
+     归因见下方「xhs 双通道」段的 2026-09-23 复核(当初跟错了 TS 移植分支;
+     活跃上游是 Python 版,但当前正处失效期,故维持全 SSR 不重启)
+     ——详见 docs/xhs-signature-research.md「社区现状复核」
 ```
 
 依赖链：`resolve ← crawler ← core ← ui ← desktop`（crawler 依赖 resolve 拿平台能力抓数据），
@@ -110,7 +111,7 @@ bun run tauri:build            # 前端构建 + release 构建
 bun run scripts/tauri.ts help  # 查看全部用法
 
 # CLI 调试探针（收编全部 example，已实测；详见 docs/cli-plan.md）
-bun run rss channels                       # 渠道注册表（63 个，--kind/--json）
+bun run rss channels                       # 渠道注册表（67 个，--kind/--json）
 bun run rss fetch bili:popular             # 单渠道抓取：耗时+条数+样本（--xml/--json）
 bun run rss item <url>                     # by-url：路由+streams 全档位+弹幕元信息
 bun run rss play <url> --open              # 解析直链，--open 丢系统播放器
@@ -244,10 +245,20 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   完整参数(image_formats/xsec_token/xsec_source),触发 300011 账号风控;
   **Edge 内正常浏览无风控的根因:SSR 导航=正常浏览,页面内 fetch API=额外 XHR**。
   实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
-  ⚠️ **签名库 xhshow 已移至 feat/xhs-rustpython 分支**:原 TS fork 过时(2026-07
-  升级签名后 461),Python 版 + RustPython 补丁随签名 crate 在专门分支维护;
-  主分支**全 SSR**(explore 匿名 / user 登录态),不维护签名 API。签名约 1 月~1 季度
-  一改 + 按账号/会话灰度分发,b1 指纹需真实浏览器——纯算法维护成本高。
+  ⚠️ **签名库 xhshow 已移至 feat/xhs-rustpython 分支**:⚠️ **2026-09-23 复核修正归因**
+  ——当初记「TS fork 过时(2026-07 升级签名后 461)」属实,但**是跟错了分支**:
+  `renmu123/xhshow-js`(我们跟的 TS 移植)**2026-03 后停更**(5 star);活跃的是
+  **Python 上游 `Cloxl/xhshow`**(1080 star,v0.2.0,支持 x-rap-param/SessionManager)。
+  即「TS 移植停滞 ≠ 纯算法路线夭折」。**但纯算法当前正失效**(上游 2026-09-13 未修
+  的「20260913 代码失效」:加密核心仍对,只是模板版本号 `x0="4.3.5"` 过旧致翻页静默
+  返空,改 `x0="4.4.3"`/`x4=""` 即修)。主分支**维持全 SSR**(explore 匿名 / user 登录态),
+  **不重启签名**——重启的收益仅 `xhs:user` 分页转 HTTP,代价是 1 月~1 季一失效的依赖。
+  触发条件与社区架构参考(`XHS_RS_TOOLS`:浏览器仅作登录容器)见
+  `docs/xhs-signature-research.md`「社区现状复核」。
+  ⚠️ **勿逆向 App Store 第三方客户端**(如 Rouge):已评估**不建议**——可发现性低
+  (要的签名算法社区已开源,它独有的 tvOS UI 我们不需要)、且其自身风控也未解决;
+  逆向门槛还受机型限制(palera1n 仅覆盖 A8~A11,ATV 4K 2nd/3rd gen 不可)。
+  详见同文档「Rouge 逆向可行性评估」。
   **浏览器模拟路径(feat/browser-sim 分支,2026-08)**:Tauri spawn 系统 Edge + CDP
   (appHost.browser 可选门面),weibo/xhs user channel 检测到门面则走浏览器:
   xhs:user 导航 profile 页 → 页面内取 `__INITIAL_STATE__.user.notes`(浏览器已解析
@@ -301,6 +312,12 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   带 cookie header 会触发 Rust ws_connect 的 sec-websocket-key 握手被拒,故弹幕认证
   走 WS 帧 op=7 的 uid/buvid、**不走宿主隧道**(无 header 统一走隧道);host 的
   **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
+  ⚠️ **token 寿命 + refresh 重连(2026-09-23)**:`getDanmuInfo` 的 token 会过期。
+  `createWsStream` 新增 `refresh` 钩子(重连前调用,返回 false=放弃)+ `url` 可传函数
+  (动态求值 host/token)+ 解码抛错→主动断开走重连;bili 侧重取 token,上限 3 次。
+  ⚠️ **实测修正**:token 无效时服务器**直接 `1006` 断连**(非 op=8 code!=0;op=8 检测
+  仍保留);真价值是**重连不再复用过期 token**。`MAX_CREDENTIAL_REFRESH=3` 经注入
+  无效 token 实测确认生效(恰好重连 3 次即停)。
   ⚠️ **弹幕连接释放竞态**:createWsStream 的宿主/原生 onOpen **必须检查 `stopped`**——
   退订后握手才完成时(宿主 ws_connect 异步),unsub 时 ws 未赋值跳过 close,握手完成 onOpen
   照发认证帧/心跳 → 连接泄漏(关闭直播间弹幕不释放)。onOpen 遇 stopped 立即 close 刚建的连接。
@@ -323,6 +340,11 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   iframe 嵌入播放差于我们 hls/flv/dash 直链解析,不抄。
 - **平台扫码登录 + 保活**:`docs/platform-login-research.md`。三平台扫码登录全可行
   (bili 纯 HTTP/dart 参考、weibo JSONP、xhs 需签名——签名库在 feat/xhs-rustpython)。
+  ✅ **bili 扫码协议已落地(2026-09-23)**:`resolve/platform/bili/login.ts`
+  (`qrcode/generate` + `qrcode/poll` 纯 HTTP,cookie 从 Set-Cookie 取,含
+  refresh_token;状态机 86101/86090/0/86038)。⚠️ 与 xhs 的 CDP 路径不同,不需
+  `appHost.browser`;但 `Loginable.scanLogin` 的 emitQr 要**图片 data URL**,
+  bili 只给**二维码内容**(131 字符),接 channel 时需 QR 编码库(桌面端暂无)。
   续期设计:仅 bili 可自动
   保活——bili_ticket 软性风控因子惰性随补即可,真正要保 SESSDATA(refresh_token 续期
   闭环,180 天窗口续一次即永久,登录须捕获 refresh_token——dart 参考漏了这步);
@@ -413,28 +435,37 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   渐进式会落 360p）,DASH 装配失败才 fallback。**直播已 1080p**（HLS 自带 6 档 +
   currentLevel=max;新发现直播自带 dashManifestUrl 原生 MPD,可选增强,
   见 `docs/youtube-stream-extraction.md`「四、本项目落地」）
-- huya 直链实现见 `packages/crawler/src/channels/huya/play.ts`（buildAntiCode 纯 MD5/base64,
-  `lChannelId` 作 presenterUid;反爬是**频率限制**,连续请求会降级页,单次 resolve 稳定;
-  ⚠️ 只返回最高档,`&ratio=` 低档 flv.js 播几秒断）
+- huya 直链见 `packages/resolve/src/platform/huya/play.ts`（**2026-09 重写**：
+  数据源 `mp.huya.com/.../profileRoom` JSON API —— flv+hls 双协议 × 5 CDN × 全档位，
+  `multiLine[].url` 已含签名，**`buildAntiCode` 已删**。⚠️ 旧结论「PC 版被风控无线路」
+  与「`ratio=` 低档 flv.js 播几秒断」均已推翻：前者实为可用，后者仅对 flv 成立
+  ——**低档只产 HLS**（走 `ratio=` 切档）。房间元数据（`live.ts`）同批迁到该 API；
+  `huyaClient.getHtml` 现仅供弹幕取进房参数）
 - douyin 直链见 `packages/crawler/src/channels/douyin/index.ts`（enter API ABogus 签名 →
   stream_url 的 live_core_sdk_data.stream_data(JSON sdk_key 展开)/flv_pull_url 索引,reflow
   长号兜底,HTML flv_pull_url 末级兜底;liveStatus **status==2 才是直播中**(复刻 dart,
   ==4 是 roomId 一次性需换 webRid);resolveLivePlay 用 **web_rid(短号)**)
-- **发现层:分区 + 搜索(2026-09-23 落地)**：四平台分区 + 三平台搜索。取数层统一在
-  `resolve/platform/<平台>/discover.ts`,channel 层薄封装。
+- **发现层:分区 + 搜索(2026-09-23 落地)**：四平台分区 + 四平台搜索(房间)+ 三平台搜主播。
+  取数层统一在 `resolve/platform/<平台>/discover.ts`,channel 层薄封装。
   - 分区列房:`live:douyin:category`(partition+partitionType)/`live:huya:category`(gameId)/
     `live:douyu:category`(areaId)。
-  - 搜索:`bili:search`/`live:huya:search`/`live:douyu:search`(参数均 keyword)。
+  - 搜房间:`bili:search`/`live:huya:search`/`live:douyu:search`/`live:douyin:search`(keyword)。
+  - 搜主播:`bili:anchor`/`live:huya:anchor`/`live:douyu:anchor`(keyword)。
   - ⚠️ **douyin `partition_type` 不是常量**:顶层 type=4、子 type=1,必须与 id 配套
     ——`hot.ts` 硬编码 `type=1` 即因它直接列子分区层。
-  - ⚠️ **虎牙搜索不可分页**(接口 `start` 实测无效),故不声明 `Pageable`。
+  - ⚠️ **douyin 搜索有硬边界**:三路中只 `partition/search` 匿名可用,它只按分区名匹配
+    且**只认游戏名级**(`原神` 有结果,`舞蹈`/`美食` 返空);前两路 `2483 需登录`。
+  - ⚠️ **虎牙搜索/搜主播不可分页**(接口 `start` 实测无效),故不声明 `Pageable`。
   - ⚠️ **bili 按分区列房未做**:`second/getList` 需登录态,匿名带 buvid3/access_id/wbi
     实测**仍 `-352`**。bili 分区树走 `Area/getList`(匿名可用,已实现未挂 channel)。
-  - 抖音搜索未做;搜主播(`searchAnchors`)三平台均未做。缺口与后续见
-    `docs/capability-gaps.md`。
+  - 抖音搜主播未做(仅分区、无主播出口)。缺口与后续见 `docs/capability-gaps.md`。
 - bili live/video 登录档位：`DEFAULT_BILIBILI_COOKIE` 作 core 层默认值(core 层 settings.
   bilibiliCookie),data-layer `sourceInfoFor` 合并到所有 bili 订阅,解锁登录档位;
   cookie 文件 gitignore + 空占位 + skip-worktree 保护(见 `packages/core/src/bilibili-cookie.ts`)
+  ⚠️ **直播档位按实际值标注(2026-09-23)**:B 站对访客**降档**——匿名请求 `qn=10000`
+  (原画)实测只给 `current_qn=250`(超清),且多档请求**收敛到同一值**。`live-play.ts`
+  现读 `current_qn` 标注(如 `超清(请求原画)`)并按实际档位**去重**(否则菜单出现三个
+  重复档)。此前用请求档位命名,UI 会说谎。
 
 **2. 订阅管理 UI（已完成）**
 - ✅ `apps/desktop/src/components/AddFeedDialog.tsx`：`listChannels()` 选渠道 →

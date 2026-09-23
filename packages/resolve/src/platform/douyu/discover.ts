@@ -110,3 +110,40 @@ export async function searchDouyuRooms(keyword: string, page = 1, pageSize = 20)
     })
     .filter((x): x is Live => x !== null)
 }
+
+/** 搜索主播(匿名可用)。分页 page 从 1 起。 */
+export async function searchDouyuAnchors(keyword: string, page = 1, pageSize = 20): Promise<Item[]> {
+  const size = Math.min(Math.max(pageSize, 1), 50)
+  const res = await httpJson<{ data?: { relateUser?: Array<Record<string, any>> } }>(
+    `https://www.douyu.com/japi/search/api/searchUser?kw=${encodeURIComponent(keyword)}&page=${page}&pageSize=${size}&filterType=1`,
+    {
+      "user-agent": UA,
+      origin: "https://www.douyu.com",
+      referer: "https://www.douyu.com/search/",
+    },
+  )
+  const t = now()
+  const list = Array.isArray(res?.data?.relateUser) ? res.data.relateUser : []
+  return list
+    .map((item): Live | null => {
+      const a = (item.anchorInfo ?? {}) as Record<string, any>
+      const rid = String(a.rid ?? "")
+      if (!rid) return null
+      const live = Number(a.isLive ?? 0) === 1 && Number(a.roomType ?? 0) === 0
+      return {
+        id: `douyu:${rid}`,
+        sourceId: "live:douyu:anchor",
+        kind: "live",
+        title: String(a.nickName ?? ""),
+        url: `https://www.douyu.com/${rid}`,
+        thumbnail: a.avatar ? String(a.avatar) : undefined,
+        author: a.nickName ? { name: String(a.nickName) } : undefined,
+        fetchedAt: t,
+        platform: "douyu",
+        roomId: rid,
+        liveStatus: live ? "live" : "offline",
+        online: Number(a.hot ?? 0) || 0,
+      }
+    })
+    .filter((x): x is Live => x !== null)
+}

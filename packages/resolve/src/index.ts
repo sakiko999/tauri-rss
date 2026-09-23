@@ -18,6 +18,8 @@ export interface LoginResult {
   cookie: string
   user_id?: string
   alreadyLoggedIn?: boolean
+  /** 续期凭证(bili 扫码返回;bili 可自动保活,见 docs/platform-login-research.md)。 */
+  refreshToken?: string
 }
 
 export type { DanmakuItem, DanmakuOptions, DanmakuStream } from "./danmaku/index.ts"

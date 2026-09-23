@@ -4,5 +4,6 @@
  */
 export * from "./client.ts"
 export * from "./discover.ts"
+export * from "./login.ts"
 export * from "./live-play.ts"
 export * from "./video-play.ts"

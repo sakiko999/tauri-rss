@@ -3,6 +3,6 @@
  * import 统一从 `../../platform/douyin` 进,不直连内部文件。
  */
 export * from "./abogus.ts"
-export * from "./category.ts"
 export * from "./client.ts"
+export * from "./discover.ts"
 export * from "./stream.ts"

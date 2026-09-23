@@ -96,3 +96,35 @@ export async function searchBiliRooms(keyword: string, page = 1, pageSize = 20):
     })
     .filter((x): x is Live => x !== null)
 }
+
+/** 搜索主播(`search_type=live_user`,匿名可用)。⚠️ 该接口无 `page_size`。 */
+export async function searchBiliAnchors(keyword: string, page = 1): Promise<Item[]> {
+  const params = new URLSearchParams({ search_type: "live_user", keyword, page: String(page) })
+  const res = await biliClient.getJson<{
+    data?: { result?: Array<Record<string, any>> }
+  }>(`${API_MAIN}/x/web-interface/search/type?${params.toString()}`, {
+    referer: "https://search.bilibili.com/",
+    buvid: true,
+  })
+  const list = res?.data?.result ?? []
+  const t = now()
+  return list
+    .map((item): Live | null => {
+      const roomId = String(item.roomid ?? "")
+      if (!roomId) return null
+      return {
+        id: `bilibili:${roomId}`,
+        sourceId: "bili:anchor",
+        kind: "live",
+        title: stripEm(item.uname),
+        url: `${LIVE}/${roomId}`,
+        thumbnail: coverUrl(item.uface),
+        author: item.uname ? { name: stripEm(item.uname) } : undefined,
+        fetchedAt: t,
+        platform: "bilibili",
+        roomId,
+        liveStatus: Number(item.is_live ?? 0) === 1 ? "live" : "offline",
+      }
+    })
+    .filter((x): x is Live => x !== null)
+}

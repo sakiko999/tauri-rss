@@ -42,6 +42,8 @@ export async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Pr
 
   // 2. 逐档重发拿直链。首档(默认档)失败整体报错;其余档失败跳过。
   const streams: Stream[] = []
+  /** 已产出的**实际**档位(降档后多请求会收敛,须去重)。 */
+  const seen = new Set<number>()
   for (const [idx, q] of qualities.entries()) {
     try {
       // 取流参数复刻 dart getPlayUrls(bilibili_site.dart:164):format:0,2 + codec:0(只要 avc,不拉 hevc)。
@@ -52,7 +54,17 @@ export async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Pr
       )
       const list = parseBiliLiveStreams(r?.data ?? {})
       const s = list[0]
-      if (s) streams.push({ ...s, quality: q.name, rate: q.qn })
+      if (s) {
+        // ⚠️ 服务端会对访客**降档**:请求 qn=10000(原画)实测只给 current_qn=250(超清),
+        // 且**多个请求档位会收敛到同一实际档位**( anonymity 下 10000/400/250 全返 250)。
+        // 故:按**实际档位**去重(否则菜单出现三个「超清」),名称标注实际值 + 请求值。
+        const applied = extractBiliLiveAppliedQn(r?.data ?? {}) ?? q.qn
+        if (seen.has(applied)) continue
+        seen.add(applied)
+        const name =
+          applied === q.qn ? q.name : `${qnDescName(probe?.data ?? {}, applied)}(请求${q.name})`
+        streams.push({ ...s, quality: name, rate: applied })
+      }
     } catch (e) {
       if (idx === 0) throw e
       // log 域保留在调用方(channel/resolver);此处静默跳过后续档位失败。
@@ -64,21 +76,39 @@ export async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Pr
 }
 
 /**
+ * g_qn_desc 全表里查 qn 的中文名(查不到返回 `档位${qn}`)。
+ * g_qn_desc:[{qn, desc}] 是 qn→中文名全表(房间无关,响应里稳定携带)。
+ */
+function qnDescName(data: Record<string, any>, qn: number): string {
+  const playurl = (data?.playurl_info?.playurl ?? {}) as Record<string, any>
+  const qnDesc = (Array.isArray(playurl?.g_qn_desc) ? playurl.g_qn_desc : []) as Array<Record<string, any>>
+  const desc = qnDesc.find((g) => Number(g?.qn) === qn)?.desc
+  return desc ? String(desc) : `档位${qn}`
+}
+
+/**
+ * 读**实际生效**档位 `current_qn`(服务端对访客降档后的值)。
+ * ⚠️ 2026-09 实测:匿名请求 qn=10000 时 current_qn=250(B 站对访客降档)。
+ * 无该字段(旧响应形态)返回 null,调用方回退到请求值。
+ */
+function extractBiliLiveAppliedQn(data: Record<string, any>): number | null {
+  const playurl = (data?.playurl_info?.playurl ?? {}) as Record<string, any>
+  const codec = (playurl?.stream?.[0]?.format?.[0]?.codec?.[0] ?? {}) as Record<string, any>
+  const n = Number(codec?.current_qn)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
  * 从 getRoomPlayInfo 响应提取档位列表(动态)。
  * g_qn_desc:[{qn, desc}] 是 qn→中文名全表;stream[0].format[0].codec[0].accept_qn
  * 是本房间当前可用档位(服务端按房间/登录态裁)。按 accept_qn 顺序返回(qn 值 + 名称)。
  */
 function extractBiliLiveQualities(data: Record<string, any>): Array<{ qn: number; name: string }> {
   const playurl = (data?.playurl_info?.playurl ?? {}) as Record<string, any>
-  const qnDesc = (Array.isArray(playurl?.g_qn_desc) ? playurl.g_qn_desc : []) as Array<Record<string, any>>
   const codec = (playurl?.stream?.[0]?.format?.[0]?.codec?.[0] ?? {}) as Record<string, any>
   const acceptQn = Array.isArray(codec?.accept_qn) ? (codec.accept_qn as unknown[]) : []
   return acceptQn
-    .map((qn) => {
-      const n = Number(qn)
-      const desc = qnDesc.find((g) => Number(g?.qn) === n)?.desc
-      return { qn: n, name: desc ? String(desc) : `档位${n}` }
-    })
+    .map((qn) => ({ qn: Number(qn), name: qnDescName(data, Number(qn)) }))
     .filter((q) => Number.isFinite(q.qn) && q.qn > 0)
 }
 

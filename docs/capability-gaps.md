@@ -34,35 +34,61 @@
 > 且匿名实测**仍 `-352` 风控**(带 buvid3/access_id/wbi 均无效)，必须登录态。
 > ⚠️ bili 分区树(`Area/getList`)已实现但未挂 channel(它并非 feed)。
 
-**搜索**——参照侧几乎标配；**四平台已落地**：
+**搜索**——参照侧几乎标配；**四平台已落地（房间 + 主播）**：
 
-| 平台 | 参照实现 | 我们的现状 |
+| 平台 | 房间 | 主播 |
 |---|---|---|
-| bili | `bilibili_site.dart:712`(房间)/`:757`(主播) | ✅ `bili:search`(房间) |
-| 虎牙 | `huya_site.dart:871`(房间)/`:923`(主播) | ✅ `live:huya:search`(房间) |
-| 斗鱼 | `douyu_site.dart:515`(房间)/`:562`(主播) | ✅ `live:douyu:search`(房间) |
-| 抖音 | 三路降级 `douyin_search.dart:319/350/377` | ❌ 未做 |
-| 小红书 | 均无 | — |
+| bili | ✅ `bili:search` | ✅ `bili:anchor` |
+| 虎牙 | ✅ `live:huya:search` | ✅ `live:huya:anchor` |
+| 斗鱼 | ✅ `live:douyu:search` | ✅ `live:douyu:anchor` |
+| 抖音 | ✅ `live:douyin:search`（⚠️ 见下） | ❌ 未做 |
+| 小红书 | — | — |
 
-> ✅ **三平台搜索（2026-09-23）**：全部**匿名可用**(实测)，无需 cookie。
+> ✅ **四平台搜索（2026-09-23）**：全部**匿名可用**(实测)，无需 cookie。
+> ⚠️ **抖音搜索有硬边界**——三路中只有 `partition/search` 匿名可用，它**只按
+> 分区名匹配且只认游戏名级**：`原神`/`英雄联盟` 有结果，`舞蹈`/`美食`/`聊天`
+> **返空**。前两路(`aweme/v1/web/live/search`、`general/search/stream`)返
+> `2483 请先登录`——补它们需登录态。故抖音搜索目前**只对游戏类关键词有效**。
 > ⚠️ **虎牙搜索不可分页**——接口 `start` 参数实测无效(`start=0` 返 20 条、
 > `start>=20` 一律返同一批 40 条)，故只取首页、不声明 `Pageable`。
 > ⚠️ 参照项目斗鱼搜索带设备 DID cookie，**实测匿名响应一致**，故不注入。
-> 搜主播(`searchAnchors`)未做——先做房间，主播按需再补。
+> ⚠️ 抖音搜主播未做(`partition/search` 只出分区、无主播)。
 
 ## P2 —— 健壮性
 
-- **bili 弹幕 `op=8` 鉴权失败无感知**——`parseBiliDanmakuFrame` 只处理 op=5，
-  **完全忽略 op=8**。参照侧在 `bilibili_danmaku.dart:316` 做「code!=0 → 刷新 token 重连」
-  （上限 3 次），另有 `:130` 8s 未连超时重连、`:601` 多线路降级。约 20 行可补。
-- **bili 视频播放 `applied-qn` 无确认**——B 站会对访客降档，UI 无反馈（`bilibili_site.dart:214`）。
+- ✅ **bili 弹幕 token 刷新重连（2026-09-23 落地）**：`createWsStream` 新增 `refresh`
+  钩子（重连前重新求值）+ `url` 支持函数（动态 host/token）+ 解码抛错→主动断开走重连。
+  bili 侧接 `getDanmuInfo` 重取 token，上限 3 次后放弃。
+  ⚠️ **实测修正**：token 无效时服务器**直接 `1006` 断连**，**不是** op=8 code!=0
+  （op=8 检测仍保留，覆盖未来形态）；真正的价值是**重连不再复用过期 token**。
+  实测验证：注入无效 token → 恰好重连 3 次后停止（上限生效），不再无限重连。
+- ✅ **bili 直播 `current_qn` 实测确认（2026-09-23 落地）**：读响应的 `current_qn`
+  （实际生效档位）而非请求的 `qn`，并在收敛时**按实际档位去重**。
+  ⚠️ **实测**：匿名请求 `qn=10000`（原画）服务器只给 `current_qn=250`（超清），
+  且 `10000/400/250` 三个请求**全部收敛到 250** —— 此前会把这一档标成「原画」，
+  UI 说谎且菜单会出现三个重复档。现显示为 `超清(请求原画)`。
 - **弹幕连接释放竞态**（已有记忆，见 CLAUDE.md）——保持现状即可。
 
 ## P3 —— 播放层
 
-- **虎牙线路/协议单一**——我们只取**首条 flv 线路 + 只返最高档**（`resolve/huya/play.ts:119-132,154`）；
-  参照有**多 CDN 并行 + HLS/FLV 双协议 + 全档位 + Tars token 租约**
-  （`huya_site.dart:278,623-676,1145`）。斗鱼播放侧已接近对等，仅缺 `getH5PlayV1` 与按线路重解析。
+- ✅ **虎牙多线路 + 双协议 + 全档位（2026-09-23 落地）**：数据源从
+  `m.huya.com` HTML（首条 flv 线路、只返最高档）换成 **`mp.huya.com/.../profileRoom`
+  JSON API** —— 一次给 flv + hls 双协议、各 5 条 CDN 线路、全部档位，且
+  `multiLine[].url` **已含完整签名**（不再需要 `buildAntiCode`，该函数已删）。
+  实测：4 档（蓝光10M/4M/超清/流畅）× 5 CDN × 2 协议 = 25 条；四档 HLS 全 200 +
+  有效 m3u8；flv 标准 FLV 头可播。
+  ⚠️ **两处旧结论被推翻**：①「PC 版被风控无线路」——实为可用；②「`ratio=` 低档
+  flv.js 播几秒断」——仅对 **flv** 成立，HLS 走 `ratio=` 切档无此问题（故低档只产 HLS）。
+  `live.ts` 房间元数据同批迁到该 API（去掉 HTML 解析），`getHtml` 现仅供弹幕用。
+- **虎牙 Tars token 租约**（参照 `huya_site.dart:1144`，`wup.huya.com` 的
+  `getCdnTokenInfoEx`）——**不做，条件触发**：当前 `profileRoom` 返回的 URL 已带
+  完整签名（`wsSecret`/`fm`/`wsTime`）且实测可播；仅当虎牙开始**对无令牌请求限流/拒绝**
+  时才补（成本高：需移植 Tars 二进制编解码 ~200 行）。
+- **斗鱼 `getH5PlayV1`**——**不做，条件触发**：参照用 V1 是因为它把 CDN 基址与签名
+  路径分开返回，参照代码里因此踩过「拼出 `https://cdn/live/https://other/live.flv`
+  这种语法合法但放不了的 URL」的坑（`douyu_site.dart:344-356` 注释）。我们的
+  `getH5Play` 直接返拼好的 URL，**没有这个坑**；仅当旧接口下线时才迁移。
+  斗鱼播放侧已接近对等（全档位 + 多 CDN 轮询降级）。
 - **抖音清晰度兜底路径按位置 join**——主路径（`stream_data` 为 JSON，按 sdk_key 取）**实测正常**，
   无需改；兜底路径 `resolve/douyin/stream.ts:132-133` 用 `flvList[length - level]` 按位置索引，
   理论上会取到 `undefined`（level 是业务档位号如 5，列表长度仅 3）。参照侧一律**按 key join**
@@ -70,10 +96,18 @@
 
 ## P4 —— 产品化
 
-- **bili 扫码登录**——我们目前只能手工贴 cookie（`sourceInfoTpl`）。参照有完整体系：
-  扫码 `tmp/pure_live/lib/modules/account/bilibili/qr_login_controller.dart:274`（generate+poll，纯 HTTP）
-  + web 登录 + 账号服务 `bilibili_account_service.dart:191`（`/x/member/web/account` 拉昵称/uid）。
-  xhs 侧我们**已有**扫码登录（`resolve/platform/xhs/login.ts`），bili 可参照补齐。
+- ✅ **bili 扫码登录协议（2026-09-23 落地）**：`resolve/platform/bili/login.ts` ——
+  **纯 HTTP**（`qrcode/generate` + `qrcode/poll`，cookie 从 Set-Cookie 取，
+  含 `refresh_token`）。状态机 86101 未扫 / 86090 已扫待确认 / 0 成功 / 86038 过期。
+  实测：generate 拿到 key、poll 返 `86101 未扫码`、超时分支正常抛出。
+  ⚠️ **与 xhs 路径的差异**：xhs 走 CDP 读页面 DOM（`platform/xhs/login.ts`），
+  bili 是纯 HTTP 协议，**不依赖 `appHost.browser`**（移动端同样可用）。
+  ⚠️ **待接 channel 的 `Loginable`**：`Loginable.scanLogin` 的 `emitQr` 契约是
+  **图片 data URL**，而 bili 的 generate 返回的是**二维码内容字符串**（131 字符），
+  需前端用 QR 库编码成图片。桌面端目前无 QR 库（`apps/desktop` 依赖表已确认）——
+  接入时需引入一个（或复用 `ScanLoginDialog` 的渲染路径）。
+- **bili 账号服务**（参照 `bilibili_account_service.dart:191`）——未做。用于登录后
+  拉昵称/uid 展示（`/x/member/web/account`）。
 - **微博无扫码登录**——`DEFAULT_WEIBO_COOKIE` 为空，冷 cookie 几分钟即失效（自述于 `weibo/user.ts:9-13`）。
 - **抖音观众数单指标**——我们只用 `room_view_stats.display_value`，可能把**累计值当并发**显示；
   参照 `douyin_audience.dart` 把 online/total 分离成两个指标。
