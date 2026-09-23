@@ -1,4 +1,4 @@
-# 能力补齐路线图（对照参照项目，2026-09-22）
+# 能力补齐路线图（对照参照项目，2026-09-23）
 
 > **背景**：对照开源参照项目 `tmp/pure_live`（Flutter 直播聚合器，23 平台，zrfme-live 的
 > 主要知识来源）逐平台比对后梳理的差距与后续目标。**只列差距**——我们独有的能力
@@ -18,33 +18,37 @@
 
 ## P1 —— 发现层（最大结构性缺口，全平台一致）
 
-**分区浏览**——参照侧几乎标配；**抖音已落地（2026-09-23）**：
+**分区浏览**——参照侧几乎标配；**四平台已落地（2026-09-23）**：
 
 | 平台 | 参照实现 | 我们的现状 |
 |---|---|---|
-| bili | `bilibili_site.dart:65`(分区树)/`:96`(按分区列房) | 无 |
-| 虎牙 | `huya_site.dart:155/173/197` | 无 |
-| 斗鱼 | `douyu_site.dart:36/63/87` | 无 |
+| bili | `bilibili_site.dart:65`(分区树)/`:96`(按分区列房) | 分区树✅(`Area/getList` 已实现,未挂 channel);**按分区列房未做** |
+| 虎牙 | `huya_site.dart:155/173/197` | ✅ **已落地** `live:huya:category` |
+| 斗鱼 | `douyu_site.dart:36/63/87` | ✅ **已落地** `live:douyu:category` |
 | 抖音 | `douyin_site.dart:133`(抓首页 `categoryData`)/`:177` | ✅ **已落地** `live:douyin:category` |
 
-> ✅ **抖音分区（2026-09-23）**：`resolve/platform/douyin/category.ts`(SSR `categoryData`
-> 解析) + `crawler/channels/douyin/category.ts`(参数化 `partition`/`partitionType`)。
-> 实测 8 顶层 + 7 子分区共 15 个可订阅,顶层/子分区列房均 15 条,分页游标正确(页间零重叠)。
-> ⚠️ 关键发现:`partition_type` **不是常量**——顶层 type=4、子 type=1,必须配套(LIVE
-> 实测),hot.ts 的硬编码 `type=1` 即因它直接列子分区层。
+> ✅ **四平台分区（2026-09-23）**：取数层 `resolve/platform/<平台>/discover.ts`，
+> channel 层薄封装。实测分区树：斗鱼 10+518、虎牙 4 顶层(硬编码)+105 二级、
+> bili 12+462、抖音 8+7。列房间均 120/15 条，分页验证通过。
+> ⚠️ **bili 按分区列房未做**——`second/getList` 需 wbi 签名 + access_id + cookie，
+> 且匿名实测**仍 `-352` 风控**(带 buvid3/access_id/wbi 均无效)，必须登录态。
+> ⚠️ bili 分区树(`Area/getList`)已实现但未挂 channel(它并非 feed)。
 
-**搜索**——全平台缺失（微博除外，我们有热搜词路径）：
+**搜索**——参照侧几乎标配；**四平台已落地**：
 
-| 平台 | 参照实现 |
-|---|---|
-| bili | `:712` 直播房间 + `:757` 主播（走 `search/type`，无签名门槛） |
-| 虎牙 | `:871` 房间 + `:923` 主播（`search.cdn.huya.com`） |
-| 斗鱼 | `:515` 房间 + `:562` 主播（`japi/search`） |
-| 抖音 | 三路降级 `douyin_search.dart:319/350/377`（匿名 ttwid 即可） |
-| 小红书 | 均无 |
+| 平台 | 参照实现 | 我们的现状 |
+|---|---|---|
+| bili | `bilibili_site.dart:712`(房间)/`:757`(主播) | ✅ `bili:search`(房间) |
+| 虎牙 | `huya_site.dart:871`(房间)/`:923`(主播) | ✅ `live:huya:search`(房间) |
+| 斗鱼 | `douyu_site.dart:515`(房间)/`:562`(主播) | ✅ `live:douyu:search`(房间) |
+| 抖音 | 三路降级 `douyin_search.dart:319/350/377` | ❌ 未做 |
+| 小红书 | 均无 | — |
 
-> **判断**：这些端点大多**无签名门槛**，是纯工作量而非反爬难题。
-> 建议先做**抖音分区**（我们已在调同一接口 `partition/detail/room/v2`，只需参数化）。
+> ✅ **三平台搜索（2026-09-23）**：全部**匿名可用**(实测)，无需 cookie。
+> ⚠️ **虎牙搜索不可分页**——接口 `start` 参数实测无效(`start=0` 返 20 条、
+> `start>=20` 一律返同一批 40 条)，故只取首页、不声明 `Pageable`。
+> ⚠️ 参照项目斗鱼搜索带设备 DID cookie，**实测匿名响应一致**，故不注入。
+> 搜主播(`searchAnchors`)未做——先做房间，主播按需再补。
 
 ## P2 —— 健壮性
 

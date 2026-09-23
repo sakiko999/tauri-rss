@@ -3,4 +3,5 @@
  * import 统一从 `../../platform/douyu` 进,不直连内部文件。
  */
 export * from "./client.ts"
+export * from "./discover.ts"
 export * from "./cryptojs.ts"

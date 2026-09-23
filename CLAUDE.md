@@ -110,7 +110,7 @@ bun run tauri:build            # 前端构建 + release 构建
 bun run scripts/tauri.ts help  # 查看全部用法
 
 # CLI 调试探针（收编全部 example，已实测；详见 docs/cli-plan.md）
-bun run rss channels                       # 渠道注册表（58 个，--kind/--json）
+bun run rss channels                       # 渠道注册表（63 个，--kind/--json）
 bun run rss fetch bili:popular             # 单渠道抓取：耗时+条数+样本（--xml/--json）
 bun run rss item <url>                     # by-url：路由+streams 全档位+弹幕元信息
 bun run rss play <url> --open              # 解析直链，--open 丢系统播放器
@@ -420,13 +420,18 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   stream_url 的 live_core_sdk_data.stream_data(JSON sdk_key 展开)/flv_pull_url 索引,reflow
   长号兜底,HTML flv_pull_url 末级兜底;liveStatus **status==2 才是直播中**(复刻 dart,
   ==4 是 roomId 一次性需换 webRid);resolveLivePlay 用 **web_rid(短号)**)
-- **douyin 分区浏览(2026-09-23 落地)**：`live:douyin:category`(参数 `partition` +
-  `partitionType`)。分区树从首页 SSR `categoryData` 抽(复刻 pure_live
-  `douyin_site.dart:111` 的平衡大括号 + 反转义),解析在
-  `resolve/platform/douyin/category.ts`,实测 8 顶层 + 7 子分区。
-  ⚠️ **`partition_type` 不是常量**:顶层分区 type=4、子分区 type=1,必须与 id 配套
-  (LIVE 实测)——`hot.ts` 硬编码 `type=1` 即因它直接列子分区层。能力缺口与后续见
-  `docs/capability-gaps.md`。
+- **发现层:分区 + 搜索(2026-09-23 落地)**：四平台分区 + 三平台搜索。取数层统一在
+  `resolve/platform/<平台>/discover.ts`,channel 层薄封装。
+  - 分区列房:`live:douyin:category`(partition+partitionType)/`live:huya:category`(gameId)/
+    `live:douyu:category`(areaId)。
+  - 搜索:`bili:search`/`live:huya:search`/`live:douyu:search`(参数均 keyword)。
+  - ⚠️ **douyin `partition_type` 不是常量**:顶层 type=4、子 type=1,必须与 id 配套
+    ——`hot.ts` 硬编码 `type=1` 即因它直接列子分区层。
+  - ⚠️ **虎牙搜索不可分页**(接口 `start` 实测无效),故不声明 `Pageable`。
+  - ⚠️ **bili 按分区列房未做**:`second/getList` 需登录态,匿名带 buvid3/access_id/wbi
+    实测**仍 `-352`**。bili 分区树走 `Area/getList`(匿名可用,已实现未挂 channel)。
+  - 抖音搜索未做;搜主播(`searchAnchors`)三平台均未做。缺口与后续见
+    `docs/capability-gaps.md`。
 - bili live/video 登录档位：`DEFAULT_BILIBILI_COOKIE` 作 core 层默认值(core 层 settings.
   bilibiliCookie),data-layer `sourceInfoFor` 合并到所有 bili 订阅,解锁登录档位;
   cookie 文件 gitignore + 空占位 + skip-worktree 保护(见 `packages/core/src/bilibili-cookie.ts`)

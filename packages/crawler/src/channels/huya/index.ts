@@ -4,3 +4,5 @@
  */
 export * from "./live.ts"
 export * from "./hot.ts"
+export * from "./category.ts"
+export * from "./search.ts"

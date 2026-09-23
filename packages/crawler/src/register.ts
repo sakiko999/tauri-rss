@@ -14,10 +14,11 @@ import {
   BiliLiveChannel,
   BiliDynamicChannel,
   BiliLiveHotChannel,
+  BiliSearchChannel,
 } from "./channels/bili/index.ts"
 import { YoutubeChannel, YoutubeLiveChannel } from "./channels/youtube/index.ts"
-import { HuyaLiveChannel, HuyaLiveHotChannel } from "./channels/huya/index.ts"
-import { DouyuLiveChannel, DouyuLiveHotChannel } from "./channels/douyu/index.ts"
+import { HuyaLiveChannel, HuyaLiveHotChannel, HuyaCategoryChannel, HuyaSearchChannel } from "./channels/huya/index.ts"
+import { DouyuLiveChannel, DouyuLiveHotChannel, DouyuCategoryChannel, DouyuSearchChannel } from "./channels/douyu/index.ts"
 import { DouyinLiveChannel, DouyinLiveHotChannel, DouyinCategoryChannel } from "./channels/douyin/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
 import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
@@ -41,6 +42,7 @@ export function registerBuiltinChannels(): void {
   registerChannel(new BiliLiveChannel())
   registerChannel(new BiliLiveHotChannel())
   registerChannel(new BiliDynamicChannel())
+  registerChannel(new BiliSearchChannel())
 
   // ── YouTube(官方 RSS 视频 + 直播订阅)──
   registerChannel(new YoutubeChannel())
@@ -49,10 +51,14 @@ export function registerBuiltinChannels(): void {
   // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──
   registerChannel(new HuyaLiveChannel())
   registerChannel(new HuyaLiveHotChannel())
+  registerChannel(new HuyaCategoryChannel())
+  registerChannel(new HuyaSearchChannel())
 
   // ── douyu / douyin 直播(需 host.js 执行 cryptojs/abogus blob;单房间 + 热门列表)──
   registerChannel(new DouyuLiveChannel())
   registerChannel(new DouyuLiveHotChannel())
+  registerChannel(new DouyuCategoryChannel())
+  registerChannel(new DouyuSearchChannel())
   registerChannel(new DouyinLiveChannel())
   registerChannel(new DouyinLiveHotChannel())
   registerChannel(new DouyinCategoryChannel())

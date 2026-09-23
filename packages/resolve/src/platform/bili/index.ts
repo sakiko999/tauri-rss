@@ -3,5 +3,6 @@
  * import 统一从 `../../platform/bili` 进,不直连内部文件。
  */
 export * from "./client.ts"
+export * from "./discover.ts"
 export * from "./live-play.ts"
 export * from "./video-play.ts"
