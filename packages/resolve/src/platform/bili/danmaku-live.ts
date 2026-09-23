@@ -6,6 +6,11 @@
  *   protover:0 JSON / 2 zlib / 3 brotli —— op=5 通知按 protover 解压后按
  *   `[\x00-\x1f]+` 切分成逐条 JSON,`cmd=DANMU_MSG` → info[1] 文本。
  *
+ * ⚠️ **token 有寿命 + op=8 鉴权回**:`getDanmuInfo` 的 token 过期后认证会被拒
+ * (op=8 code!=0)。故 `createWsStream` 传 `refresh` 钩子——断线/鉴权失败重连前
+ * 重新 `getDanmuInfo`(上限 3 次,超限放弃)。此前忽略 op=8,鉴权失败无感知、
+ * 只反复拿过期 token 重连(参照 pure_live `bilibili_danmaku.dart:316` 同款修法)。
+ *
  * ⚠️ 2026-09 实测修正:直播弹幕**匿名可用**(uid=0 + finger/spi 匿名 buvid3 →
  * op=8 {"code":0} 且收到真实 DANMU_MSG;probe 实测房间 24022841)。此前记的
  * 「匿名被 1006 拒」实为 buvid3 取自 cookie、匿名时为空所致,非 uid 问题。
@@ -76,10 +81,29 @@ async function inflateBiliBody(ver: number, data: Uint8Array): Promise<Uint8Arra
   }
 }
 
-/** 解析一帧 WS 数据(op=5 弹幕),异步(brotli 解压)。 */
+/**
+ * op=8 进房回:鉴权结果。`code != 0` = 认证失败,须刷新 token 重连
+ * (参照 pure_live `bilibili_danmaku.dart:316` 同款,上限 3 次)。
+ * 返回 true = 鉴权失败(调用方应 close 触发重连)。
+ */
+function isAuthRejected(p: { op: number; body: Uint8Array }): boolean {
+  if (p.op !== 8) return false
+  const text = TD.decode(p.body).trim()
+  if (!text) return false // 空 body 视为成功(参照同款:code 缺省 0)
+  try {
+    const json = JSON.parse(text) as { code?: number }
+    return Number(json?.code ?? 0) !== 0
+  } catch {
+    return false
+  }
+}
+
+/** 解析一帧 WS 数据(op=5 弹幕 / op=8 鉴权结果),异步(brotli 解压)。 */
 async function parseBiliDanmakuFrame(buf: Uint8Array): Promise<DanmakuItem[]> {
   const items: DanmakuItem[] = []
   for (const p of parseBiliPackets(buf)) {
+    // 鉴权失败(op=8 code!=0):抛给 stream 层 → 触发 refresh 重连。
+    if (isAuthRejected(p)) throw new Error(`bili:live 弹幕鉴权被拒(op=8)`)
     if (p.op !== 5) continue
     const body = await inflateBiliBody(p.ver, p.body)
     const text = TD.decode(body)
@@ -129,33 +153,47 @@ async function getDanmuInfo(
   return { host, wssPort, token, uid, buvid3 }
 }
 
+/** token 刷新重试上限(参照 pure_live `_credentialRefreshCount >= 3` 即放弃)。 */
+const MAX_CREDENTIAL_REFRESH = 3
+
 /** bili 直播弹幕流:订阅时 getDanmuInfo → 建 WS(认证 → 心跳 → 收弹幕),退订断开。 */
 export function biliLiveDanmakuStream(roomId: string, cookie?: string): DanmakuStream {
   return deferredStream(
     () => getDanmuInfo(roomId, cookie),
-    ({ host, wssPort, token, uid, buvid3 }, onItems) =>
-      createWsStream({
+    (initial, onItems) => {
+      // token 有寿命 → 断线重连须重新 getDanmuInfo,否则拿过期 key 认证被拒。
+      let cred = initial
+      let refreshes = 0
+      const refresh = async (): Promise<boolean> => {
+        if (refreshes >= MAX_CREDENTIAL_REFRESH) return false
+        refreshes += 1
+        cred = await getDanmuInfo(roomId, cookie)
+        return true
+      }
+      return createWsStream({
         // 必须拼 wss_port(非标 2245 常见;默认 443 连上非弹幕服务)。
-        // 无 header(认证走 WS 帧 op=7 的 uid/buvid,不需 cookie header)——统一走宿主隧道。
-        url: `wss://${host}:${wssPort}/sub`,
+        // 动态求值:重连时 host/token 已被 refresh 更新。
+        url: () => `wss://${cred.host}:${cred.wssPort}/sub`,
+        refresh,
         onOpen: (ws) => {
           ws.send(
             biliFrame(7, {
-              uid,
+              uid: cred.uid,
               roomid: Number(roomId),
               // protover:2 请求 zlib(DecompressionStream 标准支持);3=brotli 兼容性差。
               protover: 2,
-              buvid: buvid3,
+              buvid: cred.buvid3,
               platform: "web",
               type: 2,
-              key: token,
+              key: cred.token,
             }),
           )
         },
         heartbeat: () => biliFrame(2, {}),
         heartbeatMs: HEARTBEAT_MS,
         onMessage: (data) => parseBiliDanmakuFrame(new Uint8Array(data)),
-      })(onItems),
+      })(onItems)
+    },
     (e) => log.biliLive.warn("直播弹幕初始化失败(未开播?):", (e as Error)?.message),
   )
 }

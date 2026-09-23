@@ -19,15 +19,22 @@ import type { DanmakuItem, DanmakuStream } from "./types.ts"
 import { log } from "../log.ts"
 
 export interface WsStreamOptions {
-  url: string
+  /** 连接地址。传函数 = 每次建连重新求值(重连时 host/token 可能已变)。 */
+  url: string | (() => string)
   /** 自定义握手 header(透传给宿主 ws;douyin 带 UA/Cookie/Origin)。 */
   headers?: Record<string, string>
   /** 握手超时,ms(宿主 ws 用)。 */
   timeoutMs?: number
+  /**
+   * **每次重连前**调用(bili 直播:token 有寿命,断线重连须刷新 getDanmuInfo;
+   * 鉴权失败 op=8 code!=0 也走此路径——onMessage 里 close() 触发)。
+   * 返回 false = 放弃重连(刷新重试超限)。首次连接不调用。
+   */
+  refresh?: () => Promise<boolean>
   /** 连接建立后调用(发认证帧)。ws 是 WsLike,直接 send(Uint8Array) 免断言。 */
   onOpen?: (ws: WsLike) => void
   /** 每帧解码 → 弹幕。可异步(如 bilibili 的 brotli DecompressionStream)。
-   *  第二参 ws:用于回执(douyin 的 ack),其余平台忽略。 */
+   *  第二参 ws:用于回执(douyin 的 ack)/ 鉴权失败时 close() 触发重连,其余平台忽略。 */
   onMessage: (data: ArrayBuffer, ws: WsLike) => DanmakuItem[] | Promise<DanmakuItem[]>
   /** 心跳帧(定时发送)。 */
   heartbeat?: () => Uint8Array
@@ -90,13 +97,23 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
 
     /** 帧分发统一入口(宿主/原生共用):解码 → 过滤已退订/空 → 上报。 */
     function deliver(data: ArrayBuffer, conn: WsLike): void {
-      // 快路径:同步解码器(huya/douyu)不经微任务;异步(brotli/ack)才包 Promise。
-      const result = opts.onMessage(data, conn)
       const report = (items: DanmakuItem[]): void => {
         if (!stopped && items.length) onItems(items)
       }
-      if (result instanceof Promise) void result.then(report)
-      else report(result)
+      // 解码抛错(bili op=8 鉴权被拒)= 当前连接不可用 → 主动断开走重连(含 refresh)。
+      const onError = (e: unknown): void => {
+        if (stopped || userClosed) return
+        log.danmaku.wsHandshakeError({ message: (e as Error)?.message ?? String(e) })
+        safeClose(conn)
+      }
+      // 快路径:同步解码器(huya/douyu)不经微任务;异步(brotli/ack)才包 Promise。
+      try {
+        const result = opts.onMessage(data, conn)
+        if (result instanceof Promise) result.then(report).catch(onError)
+        else report(result)
+      } catch (e) {
+        onError(e)
+      }
     }
 
     /** 连接关闭统一入口:清心跳 + 意外断线 warn + 重连(主动退订的提示在 unsub 统一打)。 */
@@ -104,7 +121,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       clearHeartbeat()
       if (!userClosed) log.danmaku.wsClosed({ code, reason })
       opts.onClose?.(code, reason)
-      if (!stopped) scheduleReconnect()
+      if (!stopped) void beforeReconnect()
     }
 
     /** open 统一入口:退订后握手才完成(异步 connect)时拦截,立即关闭刚建的连接。 */
@@ -117,6 +134,9 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       onReady(conn)
     }
 
+    /** 当前连接地址(opts.url 传函数则每次重新求值)。 */
+    const currentUrl = (): string => (typeof opts.url === "function" ? opts.url() : opts.url)
+
     function connect(): void {
       if (stopped) return
       const host = globalThis.appHost.ws
@@ -124,7 +144,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       if (host) {
         void host
           .connect({
-            url: opts.url,
+            url: currentUrl(),
             headers: opts.headers,
             timeoutMs: opts.timeoutMs,
             onOpen: (conn) => handleOpen(conn as unknown as WsLike),
@@ -134,17 +154,17 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
           .catch((e) => {
             // 握手失败原因(douyin 415 / TLS 证书 / HTTP 拒绝)——之前被吞,重连循环无迹可循。
             log.danmaku.wsHandshakeError({ message: (e as Error)?.message ?? String(e) })
-            if (!stopped) scheduleReconnect()
+            if (!stopped) void beforeReconnect()
           })
         return
       }
 
       // 原生 WebSocket(webview / 纯浏览器调试;不能带自定义 header)。
       try {
-        ws = new WebSocket(opts.url) as unknown as WsLike
+        ws = new WebSocket(currentUrl()) as unknown as WsLike
       } catch (e) {
         log.danmaku.wsHandshakeError({ message: (e as Error)?.message ?? String(e) })
-        scheduleReconnect()
+        void beforeReconnect()
         return
       }
       const raw = ws as unknown as WebSocket
@@ -155,6 +175,25 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       raw.onerror = () => {
         // onclose 跟随触发,重连逻辑在 onclose。
       }
+    }
+
+    /**
+     * 重连前置:先刷新凭证(bili token 有寿命),再排重连。
+     * refresh 返回 false = 刷新重试超限,放弃(不再排重连)。
+     */
+    async function beforeReconnect(): Promise<void> {
+      if (stopped) return
+      if (opts.refresh) {
+        let ok = false
+        try {
+          ok = await opts.refresh()
+        } catch (e) {
+          log.danmaku.wsHandshakeError({ message: `刷新凭证失败: ${(e as Error)?.message ?? String(e)}` })
+        }
+        if (stopped) return
+        if (!ok) return
+      }
+      scheduleReconnect()
     }
 
     function scheduleReconnect(): void {
