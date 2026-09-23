@@ -18,7 +18,7 @@ import {
 import { YoutubeChannel, YoutubeLiveChannel } from "./channels/youtube/index.ts"
 import { HuyaLiveChannel, HuyaLiveHotChannel } from "./channels/huya/index.ts"
 import { DouyuLiveChannel, DouyuLiveHotChannel } from "./channels/douyu/index.ts"
-import { DouyinLiveChannel, DouyinLiveHotChannel } from "./channels/douyin/index.ts"
+import { DouyinLiveChannel, DouyinLiveHotChannel, DouyinCategoryChannel } from "./channels/douyin/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
 import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
 
@@ -55,6 +55,7 @@ export function registerBuiltinChannels(): void {
   registerChannel(new DouyuLiveHotChannel())
   registerChannel(new DouyinLiveChannel())
   registerChannel(new DouyinLiveHotChannel())
+  registerChannel(new DouyinCategoryChannel())
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──
   registerChannel(new WeiboUserChannel())

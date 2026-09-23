@@ -18,14 +18,20 @@
 
 ## P1 —— 发现层（最大结构性缺口，全平台一致）
 
-**分区浏览**——全平台缺失；参照侧几乎标配：
+**分区浏览**——参照侧几乎标配；**抖音已落地（2026-09-23）**：
 
 | 平台 | 参照实现 | 我们的现状 |
 |---|---|---|
 | bili | `bilibili_site.dart:65`(分区树)/`:96`(按分区列房) | 无 |
 | 虎牙 | `huya_site.dart:155/173/197` | 无 |
 | 斗鱼 | `douyu_site.dart:36/63/87` | 无 |
-| 抖音 | `douyin_site.dart:133`(抓首页 `categoryData`)/`:177` | 仅硬编码 `partition=720`（`crawler/channels/douyin/hot.ts:57`） |
+| 抖音 | `douyin_site.dart:133`(抓首页 `categoryData`)/`:177` | ✅ **已落地** `live:douyin:category` |
+
+> ✅ **抖音分区（2026-09-23）**：`resolve/platform/douyin/category.ts`(SSR `categoryData`
+> 解析) + `crawler/channels/douyin/category.ts`(参数化 `partition`/`partitionType`)。
+> 实测 8 顶层 + 7 子分区共 15 个可订阅,顶层/子分区列房均 15 条,分页游标正确(页间零重叠)。
+> ⚠️ 关键发现:`partition_type` **不是常量**——顶层 type=4、子 type=1,必须配套(LIVE
+> 实测),hot.ts 的硬编码 `type=1` 即因它直接列子分区层。
 
 **搜索**——全平台缺失（微博除外，我们有热搜词路径）：
 
