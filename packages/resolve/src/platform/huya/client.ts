@@ -1,8 +1,10 @@
 /**
- * huya 平台客户端 —— 页面抓取(纯 HTTP,无签名)。
+ * huya 平台客户端 —— 纯 HTTP,无签名。
  *
- * 无状态单例。huya 无 JSON API,统一入口是 getHtml(m.huya.com 房间页,
- * HNF_GLOBAL_INIT 由 parseHnfGlobalInit 解析——保留在 play.ts)。
+ * 无状态单例。getHtml 保留给**弹幕**(danmaku.ts 要从 m.huya.com 房间页取
+ * subSid/topSid 等进房参数);房间元数据与播放解析已改用 **JSON API**
+ * `mp.huya.com/.../profileRoom`(见 play.ts / channels/huya/live.ts,
+ * 2026-09 迁移——此前爬 HTML 的 HNF_GLOBAL_INIT 路径已删除)。
  */
 import { httpText } from "../../host.ts"
 import { huyaDanmakuStream } from "./danmaku.ts"

@@ -1,171 +1,122 @@
 /**
  * huya play —— 虎牙直播可播流解析(懒解析,resolveLivePlay 用)。
  *
- * 复刻 dart_simple_live 的 huya_site.dart buildAntiCode。**纯 HTTP + 计算**,
- * 无 Tars 二进制 codec 依赖(之前误判为需要 Tars 而跳过,已实测推翻):
- *   1. 抓 `m.huya.com/{roomId}` 的 HNF_GLOBAL_INIT
- *   2. 取 vStreamInfo.value[] 线路(sFlvUrl + sFlvAntiCode + sStreamName)
- *   3. 从 HTML 提取 lChannelId(主播 uid,作 presenterUid)
- *   4. buildAntiCode(纯 MD5/base64/位运算)重建签名参数
- *   5. 拼 `sFlvUrl/sStreamName.flv?anticode&codec=264`
+ * 数据源:`mp.huya.com/cache.php?m=Live&do=profileRoom`(**干净 JSON API**)——
+ * 一次拿全「线路 × 档位」,且 `stream.{flv,hls}.multiLine[].url` **已是拼好签名的
+ * 完整直链**(含 wsSecret/fm/ctype=tars_mp),**不需要自己 buildAntiCode**。
  *
- * 实测(2026-08):HTTP 200 + 前 4 字节 `FLV\x01`(标准 FLV 头),flv.js 可播。
+ * ⚠️ **2026-09 重写**(此前只取 m.huya.com HTML 的**首条 flv 线路 + 最高档**):
+ *   1. 数据源换成 profileRoom API —— flv + hls **双协议**、每协议 5 条 CDN 线路;
+ *   2. `hls.multiLine[].url` 自带 `ratio=` 档位参数 → **HLS 可切档**;
+ *      flv 的 url 无 ratio(只出最高档),故低档位只产 HLS。
+ *   3. 旧注释「PC 版被风控无线路」实测推翻(mp.huya.com 与 www.huya.com 均可用);
+ *      旧注释「`&ratio=` 低档 flv.js 播几秒断」仅对 **flv** 成立,HLS 无此问题。
+ *   4. `buildAntiCode` 随旧 HTML 路径一并删除(新 API 的 url 已含签名)。
+ *
+ * 档位(实测):蓝光10M(iBitRate=0,最高)/ 蓝光4M(4000)/ 超清(2000)/ 流畅(500)。
+ * 选流契约:最高清晰度在前(档位原序输出)。
+ *
  */
 import type { Stream } from "@tauri-playground/xml"
-import { httpText } from "../../host.ts"
-import { extractInlineJson } from "../../utils/inline-json.ts"
-import { md5Hex } from "../../utils/md5.ts"
+import { httpJson } from "../../host.ts"
 import { M_HUYA, HUYA_UA } from "./client.ts"
 
 /** 播放 FLV 用的 UA(HYSDK PC 端,dart 同款)。 */
 export const HUYA_PLAY_UA =
   "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"
 
-/** 从 HNF_GLOBAL_INIT 里取的一条可播线路。 */
-interface HuyaStreamLine {
-  flvUrl: string
-  streamName: string
-  flvAntiCode: string
-}
-
-/** rotl64 低 32 位循环左移 8 位(JS 用 32 位无符号模拟)。 */
-function rotl64(v: number): number {
-  const low = v >>> 0
-  return ((low << 8) | (low >>> 24)) >>> 0
-}
-
-/** base64 → utf8(dart utf8.decode(base64.decode()) 对应;浏览器/Node 通用)。 */
-function base64ToUtf8(b64: string): string {
-  const bin = atob(b64)
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return new TextDecoder("utf-8").decode(bytes)
-}
-
 /**
- * 重建 anticode(dart HuyaSite.buildAntiCode 的 TS 移植)。
- * @param stream        sStreamName
- * @param presenterUid  lChannelId(主播 uid)
- * @param antiCodeQuery 页面 sFlvAntiCode(完整 query 串,含 fm/wsTime/ctype/t)
- * @param nowMs         当前 epoch ms(测试可注入)
+ * 从 `mp.huya.com/cache.php?m=Live&do=profileRoom` 取**全线路 + 全档位**。
+ * ⚠️ 相较 m.huya.com HTML(HNF_GLOBAL_INIT):该 API 一次给 flv + hls **双协议**、
+ * 每协议 5 条 CDN,且 `multiLine[].url` **已含完整签名**(wsSecret/fm/ctype=tars_mp)
+ * ——**不需要 buildAntiCode**。
  */
-export function buildAntiCode(stream: string, presenterUid: number, antiCodeQuery: string, nowMs: number): string {
-  const params = new URLSearchParams(antiCodeQuery)
-  // 强制 PC 平台(ctype=huya_pc_exe, t=0):移动页面(m.huya.com)线路是 tars_mobile,
-  // flv.js 播不稳;用 PC anticode 让同一条 CDN 线路按 PC 平台出流(可稳定播放)。
-  // fm/wsTime 仍取自页面签名(与平台无关的密钥)。
-  const ctype = "huya_pc_exe"
-  const platformId = 0
-  const isWap = false
-
-  const seqId = presenterUid + nowMs
-  const secretHash = md5Hex(`${seqId}|${ctype}|${platformId}`)
-  const convertUid = rotl64(presenterUid)
-  const calcUid = isWap ? presenterUid : convertUid
-  const fmRaw = params.get("fm") ?? ""
-  const fm = decodeURIComponent(fmRaw)
-  const secretPrefix = base64ToUtf8(fm).split("_")[0]
-  const wsTime = params.get("wsTime") ?? ""
-  const secretStr = `${secretPrefix}_${calcUid}_${stream}_${secretHash}_${wsTime}`
-  const wsSecret = md5Hex(secretStr)
-
-  // 随机因子(uuid / ct)——dart 用 Random,这里 Math.random 即可。
-  const ct = Math.floor((parseInt(wsTime, 16) + Math.random()) * 1000)
-  const uuid = Math.floor((((ct % 1e10) + Math.random()) * 1e3) % 0xffffffff).toString()
-
-  const out: Record<string, string> = {
-    wsSecret,
-    wsTime,
-    seqid: String(seqId),
-    ctype,
-    ver: "1",
-    fs: params.get("fs") ?? "",
-    fm: encodeURIComponent(fmRaw),
-    t: String(platformId),
+function parseProfile(data: Record<string, any>): HuyaApiProfile {
+  const stream = (data.stream ?? {}) as Record<string, any>
+  const byCdn = new Map<string, HuyaApiLine>()
+  const touch = (cdn: string): HuyaApiLine => {
+    const e = byCdn.get(cdn)
+    if (e) return e
+    const created: HuyaApiLine = { cdn, flvUrl: "", hlsUrl: "" }
+    byCdn.set(cdn, created)
+    return created
   }
-  if (isWap) {
-    out.uid = String(presenterUid)
-    out.uuid = uuid
-  } else {
-    out.u = String(convertUid)
-  }
-  return Object.entries(out)
-    .map(([k, v]) => `${k}=${v}`)
-    .join("&")
-}
-
-/**
- * 抓房间页(移动版 m.huya.com,应用环境抓取稳定) + 解析线路/档位。
- * 移动版数据在 `window.HNF_GLOBAL_INIT = {...}`:
- *   roomInfo.tLiveInfo.tLiveStreamInfo.vStreamInfo.value[] → 线路
- *   roomInfo.tLiveInfo.tLiveStreamInfo.vBitRateInfo.value[] → 档位
- * 线路虽是移动版 CDN(tars_mobile),但 buildAntiCode 强制 PC 平台出流(dart 同款思路)。
- * ⚠️ 不用 PC 版 www.huya.com(hyPlayerConfig)——Tauri Rust 隧道抓取被虎牙风控(无线路)。
- */
-async function fetchFirstLine(roomId: string): Promise<{
-  line: HuyaStreamLine
-  presenterUid: number
-  bitRates: Array<{ bitRate: number; name: string }>
-} | null> {
-  const html = await httpText(`${M_HUYA}/${roomId}`, { "user-agent": HUYA_UA })
-  const info = parseHnfGlobalInit(html)
-  const ri = (info.roomInfo ?? {}) as Record<string, any>
-  const tLiveInfo = (ri.tLiveInfo ?? {}) as Record<string, any>
-  const tLiveStreamInfo = (tLiveInfo.tLiveStreamInfo ?? {}) as Record<string, any>
-  const lines = Array.isArray(tLiveStreamInfo?.vStreamInfo?.value)
-    ? (tLiveStreamInfo.vStreamInfo.value as Record<string, any>[])
-    : []
-  if (!lines.length) return null
-  for (const l of lines) {
-    const flvUrl = String(l.sFlvUrl ?? "")
-    const streamName = String(l.sStreamName ?? "")
-    const flvAntiCode = String(l.sFlvAntiCode ?? "")
-    if (flvUrl && streamName && flvAntiCode) {
-      const presenterUid = Number(html.match(/lChannelId":([0-9]+)/)?.[1] ?? 0)
-      // 档位(vBitRateInfo)。过滤 HDR;顺序保留(原画/蓝光在前)。
-      const bitRates = (Array.isArray(tLiveStreamInfo?.vBitRateInfo?.value)
-        ? (tLiveStreamInfo.vBitRateInfo.value as Record<string, any>[])
-        : []
-      )
-        .map((b) => ({ bitRate: Number(b?.iBitRate ?? 0), name: String(b?.sDisplayName ?? "") }))
-        .filter((b) => b.name && !b.name.includes("HDR"))
-      return { line: { flvUrl, streamName, flvAntiCode }, presenterUid, bitRates }
+  const collect = (raw: unknown, key: "flvUrl" | "hlsUrl"): void => {
+    for (const item of Array.isArray(raw) ? (raw as Record<string, any>[]) : []) {
+      const cdn = String(item?.cdnType ?? "")
+      const url = String(item?.url ?? "")
+      if (cdn && url) touch(cdn)[key] = url
     }
   }
-  return null
+  collect(stream?.flv?.multiLine, "flvUrl")
+  collect(stream?.hls?.multiLine, "hlsUrl")
+
+  const rawBitRates = data?.liveData?.bitRateInfo
+  let parsed: Array<Record<string, any>> = []
+  if (typeof rawBitRates === "string" && rawBitRates.trim()) {
+    try {
+      const d = JSON.parse(rawBitRates)
+      if (Array.isArray(d)) parsed = d
+    } catch {
+      /* 档位拿不到 → 走单流 */
+    }
+  } else if (Array.isArray(rawBitRates)) {
+    parsed = rawBitRates
+  }
+  const bitRates = parsed
+    .map((b) => ({ name: String(b?.sDisplayName ?? ""), bitRate: Number(b?.iBitRate ?? 0) }))
+    .filter((b) => b.name && !b.name.includes("HDR"))
+  return { lines: [...byCdn.values()].filter((l) => l.flvUrl || l.hlsUrl), bitRates }
+}
+
+/** 覆盖/追加 HLS url 的 ratio 档位参数。 */
+function withRatio(url: string, bitRate: number): string {
+  if (!url) return ""
+  return /[?&]ratio=\d+/.test(url)
+    ? url.replace(/([?&]ratio=)\d+/, `$1${bitRate}`)
+    : `${url}${url.includes("?") ? "&" : "?"}ratio=${bitRate}`
 }
 
 /**
- * 懒解析虎牙直播流,返回**最高档**(无 ratio 参数,稳定)。
- * ⚠️ 实测:huya 的 `&ratio=` 低档在 flv.js 下播几秒即断(服务端分段重连),只有
- * 最高档(bitRate=0, 不带 ratio)能稳定持续播放。所以只返回最高档——档位切换
- * 在 douyu/bili/douyin 已可用,huya 的 ratio 方案受 flv.js 限制放弃。
- * 若无档位信息则返回单流(原始 base)。
+ * 懒解析虎牙直播流:**全档位 × 多线路**(flv + hls)。
+ *
+ * 数据源 `mp.huya.com/.../profileRoom`(干净 JSON,签名已拼好)——
+ * 相较此前「m.huya.com HTML 首条 flv 线路 + 只返最高档」:
+ *   - 双协议:hls 走 `ratio=` 切档(hls.js 无 flv 的分段重连问题),flv 仅最高档;
+ *   - 多线路:每档展开各 CDN(CDN 名进 quality 后缀,player 按 rate 去重只取首条,
+ *     其余留作后续失败降级的备选)。
+ *
+ * 选流契约:最高清晰度在前(档位原序),player `find` 链自然选到最高档。
  */
 export async function resolveHuyaLivePlay(roomId: string): Promise<Stream[]> {
-  const found = await fetchFirstLine(roomId)
-  if (!found) throw new Error(`huya: no stream for room ${roomId}(未开播或无线路)`)
-  const { line, presenterUid, bitRates } = found
-  const anticode = buildAntiCode(line.streamName, presenterUid, line.flvAntiCode, Date.now())
-  const headers = { referer: `${M_HUYA}/${roomId}`, "user-agent": HUYA_PLAY_UA }
-  const base = `${line.flvUrl}/${line.streamName}.flv?${anticode}&codec=264`
-
-  // 最高档 = bitRate 最小(原画/蓝光20M),不加 ratio(加 ratio 的档 flv.js 播不稳)。
-  const top = bitRates[0]
-  if (!top) return [{ url: base, format: "flv", headers }]
-  return [{ url: base, format: "flv", headers, quality: top.name, rate: top.bitRate }]
-}
-
-/**
- * 解析 `window.HNF_GLOBAL_INIT = {...}`(共用 extractInlineJson 平衡括号截取,
- * 页面嵌套深时非贪婪正则会截断)。channel 元数据解析与 play 解析共用。
- * 虎牙 JSON 里混入函数表达式(`function(){}`),parse 前归一为空串。
- */
-export function parseHnfGlobalInit(html: string): Record<string, any> {
-  return extractInlineJson(
-    html,
-    "HNF_GLOBAL_INIT",
-    (s) => s.replace(/function\s*\([^)]*\)\s*\{[\s\S]*?\}/g, '""'),
-    "Huya HNF_GLOBAL_INIT",
+  const res = await httpJson<{ status?: number; data?: Record<string, any> }>(
+    `https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=${encodeURIComponent(roomId)}&showSecret=1`,
+    { "user-agent": HUYA_UA, referer: "https://www.huya.com/", origin: "https://www.huya.com" },
   )
+  const data = res?.data
+  if (Number(res?.status) !== 200 || !data) throw new Error(`huya: profileRoom 失败(room ${roomId})`)
+  const { lines, bitRates } = parseProfile(data)
+  if (!lines.length) throw new Error(`huya: no stream for room ${roomId}(未开播或无线路)`)
+
+  const headers = { referer: `${M_HUYA}/${roomId}`, "user-agent": HUYA_PLAY_UA }
+  // 无档位 → 单流(HLS 优先,flv 兜底)。
+  if (!bitRates.length) {
+    const l = lines[0]!
+    const url = l.hlsUrl || l.flvUrl
+    return url ? [{ url, format: l.hlsUrl ? "hls" : "flv", headers }] : []
+  }
+  const out: Stream[] = []
+  for (const [i, br] of bitRates.entries()) {
+    const isTop = i === 0
+    for (const line of lines) {
+      // 每档都给 HLS(带该档 ratio)——低档也可切(flv 低档播不稳,故不产)。
+      if (line.hlsUrl) {
+        out.push({ url: withRatio(line.hlsUrl, br.bitRate), format: "hls", headers, quality: `${br.name}·${line.cdn}`, rate: br.bitRate })
+      }
+      if (isTop && line.flvUrl) {
+        out.push({ url: line.flvUrl, format: "flv", headers, quality: `${br.name}·${line.cdn}`, rate: br.bitRate })
+      }
+    }
+  }
+  return out
 }

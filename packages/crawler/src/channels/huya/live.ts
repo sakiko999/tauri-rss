@@ -1,40 +1,45 @@
 /**
  * huya 直播房间 channel —— 纯 HTTP,无签名。
  *
- * 复刻 producer 的 HuyaSite.getRoomDetail:爬 `m.huya.com/{roomId}` 取
- * `window.HNF_GLOBAL_INIT` JSON,产 Live Item(状态 + 元数据)。
- * resolveLivePlay 走 play.ts(HTTP-FLV,纯计算,实测可播)。
+ * 数据源 `mp.huya.com/cache.php?m=Live&do=profileRoom`(与 play.ts 同源,干净 JSON)——
+ * **2026-09 迁移**:此前爬 `m.huya.com/{roomId}` HTML 的 `HNF_GLOBAL_INIT`,现改用
+ * 同一 API(字段等价:`liveData.*`),省掉 HTML 解析且与播放解析共用一次抓取。
+ * ⚠️ 关播房间 `data.stream` 为空但 `liveData` 仍在,状态看 `liveStatus`(ON/OFF)。
+ * resolveLivePlay 走 play.ts(profileRoom → 全档位 × 多线路)。
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
+import { httpJson, now } from "@tauri-playground/resolve"
 import { parseRoomIds } from "@tauri-playground/resolve"
 import { log } from "@tauri-playground/resolve"
-import { M_HUYA, huyaClient, parseHnfGlobalInit } from "@tauri-playground/resolve"
+import { HUYA_UA } from "@tauri-playground/resolve"
 
-/** 单房间 → Live item(m.huya.com HNF_GLOBAL_INIT)。房间失败抛错,由调用方 catch 隔离。 */
+/** 单房间 → Live item(profileRoom API)。房间失败抛错,由调用方 catch 隔离。 */
 async function fetchHuyaRoom(roomId: string): Promise<Live> {
-  const html = await huyaClient.getHtml(`${M_HUYA}/${roomId}`)
-  const roomInfo = parseHnfGlobalInit(html)
-  const ri = (roomInfo.roomInfo ?? {}) as Record<string, unknown>
-  const tLiveInfo = (ri.tLiveInfo ?? {}) as Record<string, unknown>
-  const tProfileInfo = (ri.tProfileInfo ?? {}) as Record<string, unknown>
+  const res = await httpJson<{ status?: number; data?: Record<string, any> }>(
+    `https://mp.huya.com/cache.php?m=Live&do=profileRoom&roomid=${encodeURIComponent(roomId)}&showSecret=1`,
+    { "user-agent": HUYA_UA, referer: "https://www.huya.com/", origin: "https://www.huya.com" },
+  )
+  const data = res?.data
+  if (Number(res?.status) !== 200 || !data) throw new Error(`huya: profileRoom 失败(room ${roomId})`)
+  const ld = (data.liveData ?? {}) as Record<string, unknown>
+  const profileRoom = String(ld.profileRoom ?? roomId)
   return {
-    id: `huya:${String(tLiveInfo.lProfileRoom ?? roomId)}`,
+    id: `huya:${profileRoom}`,
     sourceId: "live:huya",
     kind: "live",
-    title: String(tLiveInfo.sIntroduction ?? tLiveInfo.sRoomName ?? ""),
+    title: String(ld.introduction ?? ld.roomName ?? ""),
     url: `https://www.huya.com/${roomId}`,
-    thumbnail: String(tLiveInfo.sScreenshot ?? ""),
-    author: { name: String(tProfileInfo.sNick ?? "") },
+    thumbnail: String(ld.screenshot ?? ""),
+    author: { name: String(ld.nick ?? "") },
     fetchedAt: now(),
     platform: "huya",
-    roomId: String(tLiveInfo.lProfileRoom ?? roomId),
-    liveStatus: ri.eLiveStatus === 2 ? "live" : "offline",
-    online: Number(tLiveInfo.lTotalCount ?? 0),
-    introduction: tLiveInfo.sIntroduction ? String(tLiveInfo.sIntroduction) : undefined,
+    roomId: profileRoom,
+    liveStatus: String(data.liveStatus ?? "").toUpperCase() === "ON" ? "live" : "offline",
+    online: Number(ld.totalCount ?? 0),
+    introduction: ld.introduction ? String(ld.introduction) : undefined,
   }
 }
 

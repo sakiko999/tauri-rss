@@ -100,3 +100,42 @@ export async function searchHuyaRooms(keyword: string, page = 1, pageSize = 20):
     })
     .filter((x): x is Live => x !== null)
 }
+
+/**
+ * 搜索主播。与 `searchHuyaRooms` 同端点,**唯一区别 `v=1`**(房间是 v=4)。
+ * 取主播桶 `response["1"].docs`(房间桶那个是 v=4 才有的)。
+ * ⚠️ 同样**不可分页**(`start` 无效,同 searchRooms)。
+ */
+export async function searchHuyaAnchors(keyword: string, pageSize = 20): Promise<Item[]> {
+  const rows = Math.min(Math.max(pageSize, 1), 50)
+  const url =
+    `https://search.cdn.huya.com/?m=Search&do=getSearchContent&q=${encodeURIComponent(keyword)}` +
+    `&uid=0&v=1&typ=-5&livestate=0&rows=${rows}&start=0`
+  const res = await httpJson<{ response?: Record<string, { docs?: Array<Record<string, any>> }> }>(url, {
+    "user-agent": UA_DESKTOP,
+    referer: "https://www.huya.com/",
+  })
+  const anchors = res?.response?.["1"]?.docs ?? []
+  const t = now()
+  return anchors
+    .map((item): Live | null => {
+      const roomId = String(item.room_id ?? "")
+      if (!roomId) return null
+      const live = item.gameLiveOn === true || String(item.gameLiveOn) === "true"
+      return {
+        id: `huya:${roomId}`,
+        sourceId: "live:huya:anchor",
+        kind: "live",
+        title: String(item.game_nick ?? ""),
+        url: `https://www.huya.com/${roomId}`,
+        thumbnail: String(item.game_avatarUrl180 ?? "") || undefined,
+        author: item.game_nick ? { name: String(item.game_nick) } : undefined,
+        fetchedAt: t,
+        platform: "huya",
+        roomId,
+        liveStatus: live ? "live" : "offline",
+        online: Number(item.game_total_count ?? 0),
+      }
+    })
+    .filter((x): x is Live => x !== null)
+}
