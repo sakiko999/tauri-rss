@@ -47,9 +47,11 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
 
     query(query = {}) {
       const startOfDay = query.today ? dayStart(now()) : -Infinity
+      const idSet = query.subscriptionIds ? new Set(query.subscriptionIds) : null
       return items
         .filter((it) => {
           if (query.subscriptionId && it.subscriptionId !== query.subscriptionId) return false
+          if (idSet && !idSet.has(it.subscriptionId)) return false
           if (query.today && (it.publishedAt ?? 0) < startOfDay) return false
           if (query.unreadOnly && !it.isUnread) return false
           if (query.starredOnly && !it.isStarred) return false

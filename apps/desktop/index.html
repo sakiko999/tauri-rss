@@ -1,13 +1,36 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RSS Reader</title>
+    <meta name="color-scheme" content="dark light" />
+    <title>RSS Reader — 订阅工作台</title>
+    <script>
+      /* 首帧前决定主题/密度/动效/字号，避免闪白。
+       * 偏好在 localStorage(ui-prefs)，与 src/store/prefs.ts 共用同一形状。 */
+      (function () {
+        try {
+          var p = JSON.parse(localStorage.getItem("ui-prefs") || "{}");
+          var t = p.theme || "dark";
+          if (t === "system") {
+            t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          var root = document.documentElement;
+          root.dataset.theme = t;
+          if (p.density) root.dataset.density = p.density;
+          if (p.motion) root.dataset.motion = p.motion;
+          if (p.measure) root.dataset.measure = p.measure;
+          if (p.fontSize) root.style.setProperty("--article-fs", p.fontSize + "px");
+        } catch (e) {}
+      })();
+    </script>
   </head>
 
   <body>
+    <a class="skip-link" href="#main-region">跳到主要内容</a>
     <div id="root"></div>
+    <div id="overlay-root" class="overlay-root"></div>
+    <div id="toast-root" class="toast-root" role="status" aria-live="polite"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

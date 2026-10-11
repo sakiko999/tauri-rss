@@ -13,7 +13,12 @@ Tauri 2 monorepo — RSS Reader，桌面 + 移动双端。
 ```
 apps/
   src-tauri/     ★ 唯一 Rust crate（tauri-app），桌面/移动共享 commands/plugins
-  desktop/       前端（React 19 + Vite，产物 → dist/desktop）。已接入 crawler/core/appHost
+  desktop/       前端（React 19 + Vite + Tailwind 4，产物 → dist/desktop）。已接入 core/appHost。
+                 **形态 = 订阅工作台**（2026-10-11 按 new_desktop 重写）：rail 侧栏 +
+                 内容类型/智能订阅/分组树 + 阅读三栏(article) / 媒体网格 / 热搜(weibo:hot)
+                 两栏 / 发现页 / 管理页(设置·账号凭证·订阅 CRUD) / 播放页 / ⌘K 命令面板。
+                 状态在 `src/store/`（nodes 节点语法 / selectors 派生查询 / prefs 表现型偏好 /
+                 index 动作编排），视图在 `src/views/`；URL 仍是位置权威（/v/:nodeId + /play/:itemId）
   mobile/        前端（React 19 + Vite，产物 → dist/mobile）。⚠️ 仍是 Tauri 模板，
                  尚未接入 crawler/core/appHost —— 是后续工作，勿把它当实现参考。
                  定位 = 内置 crawler 有限平台（见头部「双端定位已分离」）
@@ -199,8 +204,10 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   `MD5(排序参数&wts&mixinKey)`。范式见 `packages/crawler/src/channels/bili/`
   （wbi 签名在 client.ts，channel 在 channels.ts/live.ts）。换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源。
 - 内置 RSS 直链清单在 `packages/crawler/src/channels/rss/builtin.ts`（36 条，按 kind 标注）。
-  desktop 测试订阅在 `apps/desktop/src/subscriptions.ts`（覆盖 article/video/audio/live/social，
-  含 douyu/bili live/huya/douyin 在播房间 + bili:dynamic 半佛仙人）。可用性结论见
+  desktop 的**首启种子**在 `apps/desktop/src/subscriptions.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS，
+  覆盖 article/video/audio/live/social，含 douyu/bili live/huya/douyin 在播房间 + bili:dynamic
+  半佛仙人）。⚠️ **只在空库（首次运行）写入**——之后再启动不覆盖，否则用户 CRUD 的订阅会被
+  启动时删掉（旧实现是「每次启动与种子对齐」，已改）。可用性结论见
   `docs/domestic-feed-availability.md`。新源先 curl 验证再并入。
 - **bili:dynamic 用户动态 channel**（`packages/crawler/src/channels/bili/dynamic.ts`）：
   用 RSSHub 同款 `GET /x/polymer/web-dynamic/v1/feed/space?host_mid={uid}`（非 dynamic_new
@@ -467,23 +474,26 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   现读 `current_qn` 标注(如 `超清(请求原画)`)并按实际档位**去重**(否则菜单出现三个
   重复档)。此前用请求档位命名,UI 会说谎。
 
-**2. 订阅管理 UI（已完成）**
-- ✅ `apps/desktop/src/components/AddFeedDialog.tsx`：`listChannels()` 选渠道 →
-  按 `sourceInfoTpl` 动态渲染参数字段;有 `defaultInfo` 的 channel 一键订阅。
-  走 `useDesktop.addSubscription`（dl.subscriptions.add + refresh）。已换 **radix Dialog**
-  （焦点陷阱/ESC/ARIA）替代裸 div modal
-- ✅ 三栏阅读器已落地（参考 `tmp/rss-reader`）：Sidebar（订阅树/分组/smart feeds/
-  kind tab,含 dark 切换）+ 中栏按 kind 分发（article → ArticleList+ArticleDetail 两栏,
-  video/audio/live/social → MediaList 卡片）+ AddFeedDialog
-- ✅ **三栏布局梳理（2026-08-13）**：`showDetail` 按**节点意图**判定——只有 tab:article
-  或真实文章订阅才进 ArticleList 三栏,聚合视图（tab:all/today 等）无论内容是否全
-  article 都走 MediaList（防「今日」误吞进文章栏）。顶栏视图名抽 `viewTitleFor`
-  （store.ts）共用显示真实身份（今日/未读/星标/订阅名）,三栏与中栏一致;
-  MediaList 顶栏活性点（健康隐藏/刷新脉冲蓝/错误红）+ tabular 计数;空态「无信号」环
-  （活性点放大静止版）按场景给方向 + 刷新 CTA。卡片分发统一 **UnifiedCard**
-  （16:9 中卡等尺寸,VirtuosoGrid 网格）,**social 单一视图保留专属卡片 SocialRenderer +
-  MasonryGrid 瀑布流**;列表容器 key 绑 selectedNodeId,切节点滚动归零
-- ⚠️ 分组树仅渲染/展开,不做增删组 UI;分组节点点击只 toggle 不 select
+**2. 订阅管理 UI + 工作台形态（已完成）**
+- ✅ **2026-10-11 按 `apps/new_desktop`（vanilla JS 演示品）重写 desktop**：移植它的
+  **信息架构 / 视觉令牌 / 交互与文案**，但**技术栈不变**（React 19 + Vite + Tailwind 4 +
+  radix + react-router + zustand + virtuoso/masonic），并把它的每一处 fake 换成真实现：
+  - 视觉：`apps/desktop/src/styles.css` 用 new_desktop 的冷调深灰 + 琥珀信号色（oklch 264 色相）
+    **重新取值现有的 shadcn 语义令牌**（`--background/--card/--border/--muted-foreground`），
+    所以 `packages/ui` 的 renderer 自动跟随，**不引入第二套令牌**。用户偏好走 `store/prefs.ts`
+    的 `ui-prefs`（localStorage，**首帧脚本必须同步可读**，故不放 core settings）；
+    功能型设置（刷新间隔/自动播放/弹幕/画质/图片代理/cookie）走 core `dl.settings`。
+  - 导航：**仍保留 URL 路由**（`/v/:nodeId`、`/play/:itemId?from=`），nodeMeta.type 驱动外壳
+    （reader 三栏 / media 网格 / hot 热搜两栏 / page 整页 / player 播放页）
+  - 视图：`src/views/{library,player,discover,manage,palette}/`；卡片 `src/components/cards.tsx`
+  - 真实现成的：播放页用 `PlayableMedia`（不是封面占位）；发现页走新增的 core
+    `previewChannel(channelKey, info)`（**不建订阅取一次数据**，能力矩阵从渠道注册表推导）；
+    凭证页扫码走真 `dl.scanLogin`；阅读正文仍经 **DOMPurify**
+  - 删掉的旧件：Sidebar/FeedTree/ArticleList/ArticleDetail/MediaList/HotWordList/ExpandedPlayer/
+    ScanLoginDialog/AddFeedDialog/theme.ts/store.ts；`cn.ts` 与 desktop 的 swiper/ramda/clsx/
+    tailwind-merge 依赖一并移除
+- ⚠️ **桌面不再用 `packages/ui` 的 UnifiedCard/SocialRenderer 做卡片**（改用自己的
+  `components/cards.tsx`），只复用它的原子件与 `MediaImage`（防盗链隧道）
 
 **3. packages/ui 接入 tailwind（✅ 已完成）**
 - ✅ renderer 已全部改走 **Tailwind 4 类**（desktop `@tailwindcss/vite` + `@source` 扫 ui 包）。
@@ -495,9 +505,9 @@ git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "
   - 卡片形态：video 紧凑横向小卡（长列表塞更多）、live 纵向大图（16:9 + 状态角标）、
     audio 行式方形封面、social 瀑布流（见下）、article 列表行式
   - **关键**：全部从固定 `zinc-*` 迁到**语义令牌**（bg-card/border-border/text-muted-foreground），
-    暗色主题免费生效;未读圆点/选中态用 `blue-*`（与 Sidebar/ArticleList 一致的唯一提示蓝）
-  - 网格响应式：`MediaList` 用 **ResizeObserver** 观察容器宽度 → 断点选列数
-    （>=1280→5 / >=1152→4 / >=768→3 / >=512→2 / 否则1），对齐 Folo 断点
+    暗色主题免费生效;未读圆点/选中态用琥珀 `--accent`
+  - 网格响应式：媒体网格改由 CSS `grid-template-columns: repeat(auto-fill, minmax(252px,1fr))`
+    撑开(desktop 自己写,见 `.media-grid`),不再用 ResizeObserver 算列数
   - **social 瀑布流**：`apps/desktop/src/components/MasonryGrid.tsx`（**masonic** 虚拟化
     瀑布流,2026-08-16 换——CSS columns 追加会重排已渲染卡片)。position cache 追加稳定
     (loadMore 只给新 item 分配位置,已有卡片不动)+ 虚拟化(只渲染视口内,与 VirtuosoGrid

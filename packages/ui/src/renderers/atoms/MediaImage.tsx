@@ -106,8 +106,32 @@ async function loadProxiedBlob(src: string, referrer: string): Promise<string> {
  *     由调用方显示 ImageOff 占位;**不回退原 src**——防盗链原样必 403,回退会反复
  *     请求同一失败图(虚拟化滚动放大)。
  */
+/**
+ * 宿主注入的全局渲染开关(不经 props 层层传参)。
+ *   - imageProxy:关闭后命中防盗链图床的图直接 403 —— 这是设置项的本意。
+ *   - dataSaver:省流模式,完全不加载图片,只留占位。
+ * 两者默认 true / false(与 AppSettings 默认一致);未注入的环境行为不变。
+ */
+function runtimeFlags(): { imageProxy: boolean; dataSaver: boolean } {
+  try {
+    const a = (globalThis as { appHost?: { imageProxy?: boolean; dataSaver?: boolean } }).appHost
+    return { imageProxy: a?.imageProxy !== false, dataSaver: a?.dataSaver === true }
+  } catch {
+    return { imageProxy: true, dataSaver: false }
+  }
+}
+
 function useProxiedImage(src?: string): { src?: string; failed: boolean } {
-  const referrer = src ? mediaReferrerFor(src) : undefined
+  const flags = runtimeFlags()
+  // ⚠️ 没注入 http(纯浏览器调试)时不能走隧道:那是给「原生 <img> 带不了 Referer」
+  // 准备的,缺了它反而把图弄丢。此时退回原 src(这类图床在浏览器里本来就可能 403)。
+  let hasHttp = true
+  try {
+    hasHttp = !!globalThis.appHost?.http
+  } catch {
+    hasHttp = false
+  }
+  const referrer = !flags.imageProxy || !hasHttp ? undefined : src ? mediaReferrerFor(src) : undefined
   // 失败负缓存:该 src 曾隧道失败 → 直接占位,重挂不再请求(防虚拟化滚动反复请求同一失败图)。
   const failedBefore = src ? failedSrcs.has(src) : false
   // 首渲染同步读缓存:滚动重挂载同图直接命中,不闪骨架。
@@ -178,9 +202,12 @@ export function MediaImage({
   // 初始命中缓存 → 直接显示图(避免虚拟化重挂载闪骨架)。
   const [loaded, setLoaded] = useState(() => (src ? loadedUrls.has(src) : false))
   const [failed, setFailed] = useState(false)
+  // 省流模式:完全不请求图片,只留骨架占位(卡片/列表高度由容器 aspect-ratio 撑住)。
+  const dataSaver = runtimeFlags().dataSaver
   // 防盗链图床(sinaimg 等)经宿主隧道加载,未就绪返回 undefined 不挂原 src;
   // proxiedFailed = 隧道失败(不走原生 <img> onError,须在此出 ImageOff)。
-  const { src: imgSrc, failed: proxiedFailed } = useProxiedImage(src)
+  const { src: proxied, failed: proxiedFailed } = useProxiedImage(dataSaver ? undefined : src)
+  const imgSrc = dataSaver ? undefined : proxied
 
   // src 变化时重置状态(React 不自动做,列表 item 复用实例时 src 会变)。
   useEffect(() => {
@@ -188,7 +215,7 @@ export function MediaImage({
     setFailed(false)
   }, [src])
 
-  const showImage = !!src && !failed && !proxiedFailed && (loaded || loadedUrls.has(src))
+  const showImage = !dataSaver && !!src && !failed && !proxiedFailed && (loaded || loadedUrls.has(src))
 
   // contain:容器 w-full h-full,img object-contain(完整显示,可留背景缝)。
   // fill:容器 w-full h-full,img object-cover(填满,调用方定等比容器则无缝隙无裁剪)。

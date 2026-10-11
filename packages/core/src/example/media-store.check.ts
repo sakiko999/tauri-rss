@@ -1,0 +1,65 @@
+/**
+ * media-store 查询自检 —— 覆盖 `subscriptionIds`(分组聚合)与既有分支。
+ * 跑:`bun packages/core/src/example/media-store.check.ts`
+ *
+ * 用最小断言(非框架):仓库没有测试基础设施,这里只做「谁的逻辑坏了就先炸」的那一层。
+ */
+import assert from "node:assert/strict"
+import { createMediaStore } from "../store/media-store.ts"
+import type { MediaItem } from "../types/media-item.ts"
+
+const NOW = Date.parse("2026-10-11T12:00:00Z")
+
+function item(id: string, subscriptionId: string, extra: Partial<MediaItem> = {}): MediaItem {
+  return {
+    id,
+    subscriptionId,
+    kind: "video",
+    title: id,
+    fetchedAt: NOW,
+    ...extra,
+  } as MediaItem
+}
+
+const store = createMediaStore(() => NOW)
+store.replace("s-a", [
+  item("a1", "s-a", { publishedAt: NOW - 1000, isUnread: true }),
+  item("a2", "s-a", { publishedAt: NOW - 3000, isStarred: true }),
+])
+store.replace("s-b", [item("b1", "s-b", { publishedAt: NOW - 2000, isUnread: true })])
+store.replace("s-c", [item("c1", "s-c", { publishedAt: NOW - 4000 })])
+
+// 单一订阅。
+assert.deepEqual(store.query({ subscriptionId: "s-a" }).map((i) => i.id), ["a1", "a2"])
+
+// ⭐ subscriptionIds(分组聚合):组 = {s-a, s-b},不包含 s-c。
+assert.deepEqual(store.query({ subscriptionIds: ["s-a", "s-b"] }).map((i) => i.id), ["a1", "b1", "a2"])
+assert.deepEqual(store.query({ subscriptionIds: [] }).map((i) => i.id), [], "空数组 = 空组,不是「不过滤」")
+
+// subscriptionIds 与其它条件取交集。
+assert.deepEqual(store.query({ subscriptionIds: ["s-a", "s-b"], unreadOnly: true }).map((i) => i.id), ["a1", "b1"])
+assert.deepEqual(store.query({ subscriptionIds: ["s-a", "s-b"], starredOnly: true }).map((i) => i.id), ["a2"])
+
+// 既有分支不回归。
+assert.equal(store.query({ unreadOnly: true }).length, 2)
+assert.deepEqual(store.query({ starredOnly: true }).map((i) => i.id), ["a2"])
+assert.equal(store.query({ today: true }).length, 4)
+assert.equal(store.all().length, 4)
+
+// 排序:publishedAt 降序。
+assert.deepEqual(store.query().map((i) => i.id), ["a1", "b1", "a2", "c1"])
+
+// patch 就地合并 + 触发订阅回调。
+let emits = 0
+store.subscribe(() => emits++)
+store.patch("a1", { isUnread: false })
+assert.equal(store.query({ unreadOnly: true }).length, 1)
+assert.equal(emits, 1)
+store.patch("nope", { isUnread: false })
+assert.equal(emits, 1, "不存在的 id 不该触发回调")
+
+// append 同订阅内按 id 去重。
+store.append("s-b", [item("b1", "s-b"), item("b2", "s-b", { publishedAt: NOW })])
+assert.deepEqual(store.query({ subscriptionId: "s-b" }).map((i) => i.id), ["b2", "b1"])
+
+console.log("✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / append)")

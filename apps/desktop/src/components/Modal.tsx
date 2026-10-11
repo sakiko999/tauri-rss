@@ -1,0 +1,127 @@
+/**
+ * Modal / Menu —— 浮层原语(radix primitive + 设计系统类名)。
+ *
+ * new_desktop 自造了 mount/modal/confirm/menu(app.js 里手写焦点陷阱与
+ * z-index 栈)。React 侧直接用 radix:焦点陷阱 / ESC / ARIA 都是现成的,
+ * 只把外观换成 .scrim/.modal/.menu 类。
+ */
+import type { ReactNode } from "react"
+import * as Dialog from "@radix-ui/react-dialog"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import { Icon } from "./Icon.tsx"
+
+export function Modal({
+  open,
+  onOpenChange,
+  title,
+  desc,
+  children,
+  footer,
+  size = "default",
+  dismissable = true,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  desc?: string
+  children: ReactNode
+  footer?: ReactNode
+  size?: "default" | "wide"
+  dismissable?: boolean
+}) {
+  return (
+    <Dialog.Root open={open} onOpenChange={(o) => (dismissable || !o ? onOpenChange(o) : undefined)}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="scrim" />
+        {/* ⚠️ Radix 的 Content 与 Overlay 是**兄弟**节点,不是子节点——不能靠 .scrim 的
+            grid 居中,必须自己绝对居中。 */}
+        <Dialog.Content
+          aria-describedby={desc ? undefined : undefined}
+          className={`modal${size === "wide" ? " modal-wide" : ""}`}
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "50%",
+            translate: "-50% -50%",
+            zIndex: "var(--z-modal)",
+          }}
+        >
+          <div className="modal-head">
+            <div className="modal-head-text">
+              <Dialog.Title className="modal-title">{title}</Dialog.Title>
+              {desc ? <Dialog.Description className="modal-desc">{desc}</Dialog.Description> : null}
+            </div>
+            <Dialog.Close className="icon-btn sm" aria-label="关闭">
+              <Icon name="close" size={15} />
+            </Dialog.Close>
+          </div>
+          <div className="modal-body">{children}</div>
+          {footer ? <div className="modal-foot">{footer}</div> : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+/** 下拉菜单(单选高亮 + 分隔 + 快捷键提示)。 */
+export function Menu({
+  trigger,
+  children,
+  align = "end",
+}: {
+  trigger: ReactNode
+  children: ReactNode
+  align?: "start" | "end"
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align={align}
+          sideOffset={6}
+          className="menu"
+          style={{ position: "relative", zIndex: 60 }}
+        >
+          {children}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  )
+}
+
+export function MenuItem({
+  onSelect,
+  checked,
+  hint,
+  icon,
+  danger,
+  children,
+  disabled,
+}: {
+  onSelect?: () => void
+  checked?: boolean
+  hint?: string
+  icon?: string
+  danger?: boolean
+  children: ReactNode
+  disabled?: boolean
+}) {
+  return (
+    <DropdownMenu.Item
+      className="menu-item"
+      disabled={disabled}
+      onSelect={onSelect}
+      style={danger ? { color: "var(--danger)" } : undefined}
+    >
+      {icon ? <Icon name={icon} size={14} /> : null}
+      <span style={{ flex: 1 }}>{children}</span>
+      {checked ? <Icon name="check" size={13} className="check" /> : null}
+      {hint ? <span className="menu-hint">{hint}</span> : null}
+    </DropdownMenu.Item>
+  )
+}
+
+export function MenuSeparator() {
+  return <DropdownMenu.Separator className="menu-sep" />
+}

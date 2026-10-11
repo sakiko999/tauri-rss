@@ -20,6 +20,8 @@ export interface SubscriptionRepository {
   update(id: string, patch: Partial<Omit<Subscription, "id">>): Promise<Subscription | undefined>
   remove(id: string): Promise<void>
   addGroup(group: SubscriptionGroup): Promise<void>
+  /** 改组名/图标;返回更新后的组。 */
+  updateGroup(id: string, patch: Partial<Omit<SubscriptionGroup, "id">>): Promise<SubscriptionGroup | undefined>
   removeGroup(id: string): Promise<void>
 }
 
@@ -86,6 +88,16 @@ export function createSubscriptionRepository(
       const state = await load()
       state.groups.push(group)
       await save(state)
+    },
+
+    async updateGroup(id, patch) {
+      const state = await load()
+      const idx = state.groups.findIndex((g) => g.id === id)
+      if (idx === -1) return undefined
+      const next: SubscriptionGroup = { ...state.groups[idx]!, ...patch, id }
+      state.groups[idx] = next
+      await save(state)
+      return next
     },
 
     async removeGroup(id) {

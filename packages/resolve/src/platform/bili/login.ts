@@ -102,15 +102,21 @@ export interface BiliScanLoginOptions {
   timeoutMs?: number
   /** 轮询到「已扫待确认」时回调一次(供 UI 提示「请在手机上确认」)。 */
   onScanned?: () => void
+  /**
+   * 已在别处 generate 过的二维码(供 UI 先拿到 url 显示)。
+   * ⚠️ 必须传:否则本函数会**再生成一个**,轮询的是新 key,而 UI 展示的是旧码
+   * —— 用户扫的那个永远不会成功。
+   */
+  qr?: BiliQrCode
 }
 
 /**
- * 完整扫码登录:generate → 循环 poll 直到成功/过期/超时。
+ * 完整扫码登录:generate(或复用传入的 qr)→ 循环 poll 直到成功/过期/超时。
  * 返回 LoginResult(cookie 由 core 落 settings)。
  */
 export async function biliScanLogin(opts: BiliScanLoginOptions = {}): Promise<LoginResult> {
   const deadline = Date.now() + (opts.timeoutMs ?? 180_000)
-  const qr = await biliQrGenerate()
+  const qr = opts.qr ?? (await biliQrGenerate())
   let scannedNotified = false
   for (;;) {
     if (Date.now() > deadline) throw new Error("bili 扫码: 超时未完成")

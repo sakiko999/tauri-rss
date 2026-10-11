@@ -2,6 +2,8 @@
 export interface MediaQuery {
   /** 限定单一订阅。省略 = 全部。 */
   subscriptionId?: string
+  /** 限定一组订阅(分组聚合节点 `group:<gid>`)。与 subscriptionId 同时给出时取交集。 */
+  subscriptionIds?: string[]
   today?: boolean
   unreadOnly?: boolean
   starredOnly?: boolean

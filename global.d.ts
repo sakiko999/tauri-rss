@@ -29,6 +29,18 @@ declare global {
     ws?: WsBackend
     /** 浏览器模拟(CDP 附加真实 Edge/Chrome;Tauri 桌面注入)。缺失时 weibo/xhs user 降级现有路径。 */
     browser?: BrowserBackend
+    /**
+     * 打开外部链接(系统默认浏览器)。桌面走 Tauri opener 插件(WebView 会拦
+     * `window.open`);纯浏览器环境兜底 `window.open`。
+     */
+    openExternal(url: string): Promise<void>
+    /**
+     * 防盗链图片是否经宿主隧道转发(镜像 settings.imageProxy;ui 的 MediaImage 直读)。
+     * 由 app 层在设置变化时写入。undefined = 默认开启。
+     */
+    imageProxy?: boolean
+    /** 省流模式:不加载任何图片(镜像 settings.dataSaver;ui 的 MediaImage 直读)。 */
+    dataSaver?: boolean
   }
 
   /** 一条 WS 长连接(桌面/node 由宿主管理;crawler createWsStream 消费)。 */

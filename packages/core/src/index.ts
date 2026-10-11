@@ -26,7 +26,13 @@ export type {
   SubscriptionGroup,
 } from "./types/subscription.ts"
 
-export type { AppSettings, ViewMode, ThemeMode, Density } from "./types/settings.ts"
+/**
+ * ⚠️ 只导出 `AppSettings` 与需要的联合类型。`ViewMode` / `ThemeMode` / `Density`
+ * 是 AppSettings 的字段类型,**不导出** —— 表现型偏好(主题/密度/字号)在桌面端归
+ * `apps/desktop/src/store/prefs.ts`(localStorage,首帧脚本要同步读),那里有各自的
+ * 取值域(如 Density 是 relaxed|standard|compact)。两边同名不同义,导出会变成陷阱。
+ */
+export type { AppSettings, QualityMode } from "./types/settings.ts"
 export { DEFAULT_SETTINGS } from "./types/settings.ts"
 
 export type {

@@ -23,14 +23,24 @@
  *              ⚠️ room.status==2 才是直播中,==4 是 roomId 一次性需换 webRid,见 dart)
  *   huya 在播房间可从 www.huya.com/l 页实时列表取(WebFetch 可见)。
  */
-import type { Subscription } from "@tauri-playground/core"
+import type { Subscription, SubscriptionGroup } from "@tauri-playground/core"
 
-export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
+/**
+ * 分组种子(rail 的分组树)。只在**首次运行(空库)**写入,之后不覆盖。
+ */
+export const SEED_GROUPS: SubscriptionGroup[] = [
+  { id: "g-video", title: "视频" },
+  { id: "g-live", title: "直播" },
+  { id: "g-social", title: "社交" },
+]
+
+export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-article",
     channelKey: "rsshub:feed",
     title: "Hacker News",
     enabled: true,
+    groupId: null,
     // RSSHub 外挂示例:指向配置的实例(settings.rsshubBaseUrl,默认公网 rsshub.app)
     // 原生 HN 路由。信息抓取,非播放。这是 RSSHub 在「crawler 为主」下的唯一保留订阅。
     info: { route: "/hackernews" },
@@ -40,6 +50,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "youtube",
     title: "YouTube · 3Blue1Brown",
     enabled: true,
+    groupId: "g-video",
     info: { channelId: "UCYO_jab_esuFRV4b17AJtAw" },
   },
   {
@@ -47,6 +58,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "bili:popular",
     title: "bilibili 综合热门",
     enabled: true,
+    groupId: "g-video",
     info: {},
   },
   {
@@ -54,6 +66,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "bili:weekly",
     title: "bilibili 每周必看",
     enabled: true,
+    groupId: "g-video",
     info: {},
   },
   {
@@ -61,6 +74,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "youtube:live",
     title: "Claude FM 直播",
     enabled: true,
+    groupId: "g-live",
     info: { videoId: "tRsQsTMvPNg" },
   },
   {
@@ -68,6 +82,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "rss:podcast",
     title: "Huberman Lab",
     enabled: true,
+    groupId: null,
     info: { url: "https://feeds.megaphone.fm/hubermanlab" },
   },
   {
@@ -75,6 +90,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "live:douyu",
     title: "斗鱼直播 · yyfyyf",
     enabled: true,
+    groupId: "g-live",
     info: { roomId: "9999" },
   },
   {
@@ -82,6 +98,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "bili:live",
     title: "bilibili 直播",
     enabled: true,
+    groupId: "g-live",
     info: { roomId: "6" },
   },
   {
@@ -89,6 +106,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "live:huya",
     title: "虎牙直播 · 骚男",
     enabled: true,
+    groupId: "g-live",
     info: { roomId: "60066" },
   },
   {
@@ -96,6 +114,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "live:douyin",
     title: "抖音直播 · 享受问号",
     enabled: true,
+    groupId: "g-live",
     info: { roomId: "217952067344" },
   },
   // 直播热门(开播房间发现源):无参订阅,列表即当前开播房间;
@@ -105,6 +124,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "bili:live:hot",
     title: "bilibili 直播热门",
     enabled: true,
+    groupId: "g-live",
     info: {}, // 需 cookie 防 getListByArea -352(core DEFAULT_BILIBILI_COOKIE 自动注入)
   },
   {
@@ -112,6 +132,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "live:douyu:hot",
     title: "斗鱼直播热门",
     enabled: true,
+    groupId: "g-live",
     info: {},
   },
   {
@@ -119,6 +140,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "live:huya:hot",
     title: "虎牙直播热门",
     enabled: true,
+    groupId: "g-live",
     info: {},
   },
   {
@@ -126,6 +148,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "live:douyin:hot",
     title: "抖音直播热门",
     enabled: true,
+    groupId: "g-live",
     info: {},
   },
   // social:需登录 cookie(未登录 bili 动态接口返回 code:-101)。core 层
@@ -135,6 +158,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "bili:dynamic",
     title: "bilibili 动态 · 半佛仙人",
     enabled: true,
+    groupId: "g-social",
     info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)
   },
   // 微博(完整登录 cookie 在 core 层 DEFAULT_WEIBO_COOKIE,sourceInfoFor 自动注入)
@@ -143,6 +167,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "weibo:hot",
     title: "微博实时热搜",
     enabled: true,
+    groupId: "g-social",
     info: {}, // 热搜三栏:中栏词条列表,点词条右栏该词微博流
   },
   {
@@ -150,6 +175,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "weibo:user",
     title: "微博 · LPL",
     enabled: true,
+    groupId: "g-social",
     info: { uid: "5756404150" },
   },
   // 小红书(核心 cookie 在 core 层 DEFAULT_XHS_COOKIE,纯 HTTP SSR)
@@ -158,6 +184,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "xhs:explore",
     title: "小红书发现页",
     enabled: true,
+    groupId: "g-social",
     info: {}, // 推荐内容,无参
   },
   {
@@ -165,6 +192,7 @@ export const TEST_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     channelKey: "xhs:user",
     title: "小红书 · 玛卡巴卡",
     enabled: true,
+    groupId: "g-social",
     info: { user_id: "5c6d75a400000000100278fa" },
   },
 ]

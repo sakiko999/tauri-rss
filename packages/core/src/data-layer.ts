@@ -47,6 +47,9 @@ export interface DataLayer {
   channelKind(channelKey: string): MediaKind | undefined
   /** 创建订阅(channelKey + info)并刷新,返回新订阅 id。 */
   addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string>
+  /** 预览一次渠道(不建订阅、不落 store、不写缓存):发现页的分区浏览/搜索据此取真实数据。
+   *  info 里没给 cookie/baseUrl 时按 channelKey 前缀补 core 层默认值。 */
+  previewChannel(channelKey: string, info: Record<string, string>): Promise<{ items: MediaItem[]; total?: number }>
   /** 订阅配置(CRUD + 分组)。 */
   readonly subscriptions: SubscriptionRepository
   /** 阅读状态(已读 / 续播位置)。 */
@@ -136,6 +139,27 @@ export function createDataLayer(): DataLayer {
   }
 
   /**
+   * 把持久化的阅读态(已读/星标)回填到刚重建的条目上。
+   *
+   * ⚠️ 必需的原因:deserialize 每次都按「新条目」处理(isUnread=true、isStarred=false),
+   * 而 refresh 是整批 replace。不回填的话每次刷新/重启,已读与星标都会被抹掉
+   * —— 星标只 patch 内存 store(reading 无 starred 字段)时尤其明显。
+   */
+  async function applyReadingState(items: MediaItem[]): Promise<MediaItem[]> {
+    if (!items.length) return items
+    const map = await reading.getAll().catch(() => null)
+    if (!map) return items
+    return items.map((it) => {
+      const rec = map[it.id]
+      if (!rec) return it
+      const next: Partial<MediaItem> = {}
+      if (rec.read && it.isUnread) next.isUnread = false
+      if (rec.starred && !it.isStarred) next.isStarred = true
+      return Object.keys(next).length ? ({ ...it, ...next } as MediaItem) : it
+    })
+  }
+
+  /**
    * 刷新一次订阅。TTL 缓存语义(2026-08-28 接入):
    *   - 未 force 且有缓存且未过期 → 从缓存 deserializeFeedWithTotal 重建喂 store,
    *     跳过网络抓取(减少反爬源被打频率);fetchedAt 回缓存时间。
@@ -152,6 +176,27 @@ export function createDataLayer(): DataLayer {
         fetchedAt: now(),
       }
     }
+    // ── 停用订阅:不抓取、不报错,但**照常从缓存复用内容** ──
+    // refreshAll 会遍历全部订阅;没有这一支的话「停用」只是 rail 上的一个徽标,
+    // 网络请求照发(设置页那个开关的语义就落空了)。
+    if (!sub.enabled) {
+      const cached = await contentCache.get(subscriptionId).catch(() => null)
+      if (cached) {
+        try {
+          const { items, total } = deserializeFeedWithTotal(cached.xml, {
+            subscriptionId,
+            kind: getChannel(sub.channelKey)?.kind,
+            now: now(),
+          })
+          if (total !== undefined) pageTotals.set(subscriptionId, total)
+          store.replace(subscriptionId, await applyReadingState(items))
+        } catch {
+          /* 缓存坏了 → 保持现状,不报错(停用不是错误) */
+        }
+      }
+      return { subscriptionId, itemCount: 0, fetchedAt: now() }
+    }
+
     // 未注册的 channelKey 是配置错误——throw 后由 catch 统一返回 error 结果。
     let kind: MediaKind | undefined
     try {
@@ -175,7 +220,7 @@ export function createDataLayer(): DataLayer {
             })
             if (total !== undefined) pageTotals.set(subscriptionId, total)
             else pageTotals.delete(subscriptionId)
-            store.replace(subscriptionId, items)
+            store.replace(subscriptionId, await applyReadingState(items))
             pageCursors.delete(subscriptionId)
             return { subscriptionId, itemCount: items.length, fetchedAt: cached.fetchedAt }
           }
@@ -187,7 +232,7 @@ export function createDataLayer(): DataLayer {
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
-      store.replace(subscriptionId, items)
+      store.replace(subscriptionId, await applyReadingState(items))
       pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
       await contentCache.set(subscriptionId, { fetchedAt: now(), xml })
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
@@ -202,7 +247,7 @@ export function createDataLayer(): DataLayer {
             kind,
             now: now(),
           })
-          store.replace(subscriptionId, items)
+          store.replace(subscriptionId, await applyReadingState(items))
         } catch {
           /* 缓存也坏 → 保持空,error 已返回 */
         }
@@ -232,11 +277,23 @@ export function createDataLayer(): DataLayer {
     throw new Error("该条目不指向可解析的直播链接")
   }
 
-  /** itemId 可能是 store 的 guid/url/真实 id——按 store 查 url;url 无满月新时回退 itemId 本身。 */
-  function findItemUrl(itemId: string, _subscriptionId: string): string | null {
-    // MediaStore 无按 id 索引 API,用 all().find(首屏)足够验证(B站条目 url 本就是 guid)。
-    const hit = store.all().find((it) => it.id === itemId)
-    const url = hit?.url ?? itemId
+  /**
+   * 入参 → 可路由的 URL。resolver 的 `resolveRoute` **只认 URL**(平台域名 + 路径),
+   * 所以这里必须先把条目查出来取 `item.url`,不能把入参直接当 URL 用。
+   *
+   * ⚠️ 按 **id 或 roomId** 命中:直播条目的两者不同
+   * (bilibili 房间 → `id: "bilibili:6"`、`roomId: "6"`、`url: "https://live.bilibili.com/6"`),
+   * 而历史调用方(ui 包的 UnifiedCard)传的是 `item.roomId`、新调用方传 `item.id`
+   * ——两种都接受,免得各调用方各踩一遍。
+   *
+   * 兜底:入参本身就是 URL(`://`)时直接用它(如条目已不在 store 里)。
+   */
+  function findItemUrl(itemId: string): string | null {
+    const items = store.all()
+    const hit =
+      items.find((it) => it.id === itemId) ??
+      items.find((it) => (it as { roomId?: string }).roomId === itemId)
+    const url = hit?.url ?? (itemId.includes("://") ? itemId : null)
     return url || null
   }
 
@@ -247,7 +304,7 @@ export function createDataLayer(): DataLayer {
   async function resolvePlayByUrl(itemId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
     const sub = await repo.get(subscriptionId)
     if (!sub) return null
-    const url = findItemUrl(itemId, subscriptionId)
+    const url = findItemUrl(itemId)
     if (!url) return null
     try {
       const info = await sourceInfoFor(sub)
@@ -270,7 +327,7 @@ export function createDataLayer(): DataLayer {
   async function resolveLivePlayByUrl(roomId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
     const sub = await repo.get(subscriptionId)
     if (!sub) return null
-    const url = findItemUrl(roomId, subscriptionId)
+    const url = findItemUrl(roomId)
     if (!url) return null
     try {
       const info = await sourceInfoFor(sub)
@@ -353,7 +410,7 @@ export function createDataLayer(): DataLayer {
     const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
     if (total !== undefined) pageTotals.set(subscriptionId, total)
     else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
-    store.append(subscriptionId, items)
+    store.append(subscriptionId, await applyReadingState(items))
     if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
     else pageCursors.delete(subscriptionId)
     return { addedCount: items.length, hasMore: !!nextCursor }
@@ -400,10 +457,40 @@ export function createDataLayer(): DataLayer {
     return id
   }
 
+  /**
+   * 预览一次渠道——发现页「不建订阅先看内容」。
+   * 与 refresh 的抓取段同构,但:**不读也不写缓存、不落 store**(预览是临时的,不该污染
+   * 订阅内容的 TTL 与分页账本);总数字段照常解析便于显示。
+   */
+  async function previewChannel(
+    channelKey: string,
+    info: Record<string, string>,
+  ): Promise<{ items: MediaItem[]; total?: number }> {
+    const channel = getChannel(channelKey)
+    if (!channel) throw new NoChannelError(channelKey)
+    const s = await settings.get()
+    // 与 sourceInfoFor 同规则:rsshub 只补 baseUrl;其余按平台前缀补 cookie。
+    let merged = info
+    if (channelKey.startsWith("rsshub:")) {
+      if (!info["baseUrl"]) merged = { ...info, baseUrl: s.rsshubBaseUrl }
+    } else if (!info["cookie"]) {
+      const cookie = cookieFor(channelKey, s)
+      if (cookie) merged = { ...info, cookie }
+    }
+    const xml = await channel.getSource(merged).fetch()
+    const { items, total } = deserializeFeedWithTotal(xml, {
+      subscriptionId: `preview:${channelKey}`,
+      kind: channel.kind,
+      now: now(),
+    })
+    return { items, total }
+  }
+
   return {
     listChannels,
     channelKind,
     addSubscription,
+    previewChannel,
     // 订阅 repo 透传;remove 时一并删内容缓存(订阅没了缓存没意义)。
     subscriptions: {
       ...repo,

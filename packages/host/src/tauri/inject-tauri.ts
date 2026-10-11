@@ -4,9 +4,11 @@
  *   - storage: SqliteStorageBackend(tauri-plugin-sql;首次访问自动从 localStorage 搬迁)
  *   - js:      FunctionJsBackend(跑 douyu/douyin 签名 blob;csp:null 允许 new Function)
  *   - ws:      TauriWsBackend(Rust ws_connect 隧道,握手可带 header,弹幕)
+ *   - openExternal: tauri-plugin-opener(WebView 会拦 window.open)
  *   - log:     console
  *   - now:     Date.now
  */
+import { openUrl } from "@tauri-apps/plugin-opener"
 import { initAppHost, setHostCaps } from "../runtime.ts"
 import { TauriHttpBackend } from "./tauri-http-backend.ts"
 import { TauriWsBackend } from "./tauri-ws-backend.ts"
@@ -22,5 +24,9 @@ export function injectTauriHost(): void {
     js: new FunctionJsBackend(),
     ws: new TauriWsBackend(),
     browser: new TauriBrowserBackend(),
+    // ⚠️ 不要退回 window.open:Tauri WebView 会拦掉(「打开原文」无反应)。
+    openExternal: async (url) => {
+      await openUrl(url)
+    },
   })
 }

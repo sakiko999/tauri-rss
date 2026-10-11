@@ -62,6 +62,7 @@ export function PlayableMedia({
   className,
   onError,
   autoResolve = true,
+  showDanmaku = true,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -71,6 +72,8 @@ export function PlayableMedia({
   onError?: (err: unknown) => void
   /** 挂载后立即懒解析起播(默认开启,无需点「播放」按钮)。 */
   autoResolve?: boolean
+  /** 是否渲染弹幕层(设置总开关;false 时解析结果里的 danmaku 直接丢弃)。 */
+  showDanmaku?: boolean
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -83,7 +86,8 @@ export function PlayableMedia({
   // 最终播放用的流:初始流或懒解析结果。弹幕随解析结果附带(resolve 前 undefined)。
   const playStreams = resolved?.streams ?? streams ?? []
   const hasPlayable = playStreams.length > 0
-  const danmaku = resolved?.danmaku
+  // 弹幕总开关关闭时不把流交给弹幕层(不建连接,而非建了再隐藏)。
+  const danmaku = showDanmaku ? resolved?.danmaku : undefined
 
   async function handlePlay() {
     if (!resolve) return

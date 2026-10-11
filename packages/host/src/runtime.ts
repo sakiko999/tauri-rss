@@ -17,6 +17,8 @@ let _log: Logger | undefined
 let _now: (() => number) | undefined
 let _ws: WsBackend | undefined
 let _browser: BrowserBackend | undefined
+/** 打开外部链接(系统浏览器)。Tauri 注入 opener 插件;其余环境兜底 window.open。 */
+let _openExternal: ((url: string) => Promise<void>) | undefined
 
 const consoleLogger: Logger = {
   log(level, msg, ctx) {
@@ -62,6 +64,16 @@ export function initAppHost(): void {
     get browser(): BrowserBackend | undefined {
       return _browser
     },
+    /**
+     * 打开外部链接(系统默认浏览器)。
+     *
+     * ⚠️ 桌面端**不能直接 `window.open`**:Tauri 的 WebView 会拦掉,表现为「点了
+     * 打开原文没反应」。Tauri 注入 opener 插件(经 capability 授权);纯浏览器/CLI
+     * 环境兜底 window.open(带 noopener)。
+     */
+    async openExternal(url: string): Promise<void> {
+      await (_openExternal ?? (async (u: string) => void window.open(u, "_blank", "noopener")))(url)
+    },
   }
 }
 
@@ -74,6 +86,7 @@ export function setHostCaps(caps: {
   now?: () => number
   ws?: WsBackend
   browser?: BrowserBackend
+  openExternal?: (url: string) => Promise<void>
 }): void {
   _http = caps.http
   _js = caps.js
@@ -82,4 +95,5 @@ export function setHostCaps(caps: {
   _now = caps.now
   _ws = caps.ws
   _browser = caps.browser
+  _openExternal = caps.openExternal
 }

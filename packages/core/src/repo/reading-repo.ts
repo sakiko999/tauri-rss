@@ -9,6 +9,7 @@ export interface ReadingRepository {
   getAll(): Promise<ReadingMap>
   get(itemId: string): Promise<ReadRecord | undefined>
   markRead(itemId: string, read?: boolean): Promise<void>
+  setStarred(itemId: string, starred: boolean): Promise<void>
   setPosition(itemId: string, positionSec: number): Promise<void>
   setScrollRatio(itemId: string, scrollRatio: number): Promise<void>
 }
@@ -49,6 +50,9 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
     },
     async markRead(itemId, read = true) {
       await patch(itemId, { read })
+    },
+    async setStarred(itemId, starred) {
+      await patch(itemId, { starred })
     },
     async setPosition(itemId, positionSec) {
       await patch(itemId, { positionSec })

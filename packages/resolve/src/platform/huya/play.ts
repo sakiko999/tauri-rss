@@ -25,6 +25,19 @@ import { M_HUYA, HUYA_UA } from "./client.ts"
 export const HUYA_PLAY_UA =
   "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"
 
+/** profileRoom API → 按 CDN 归拢的一条线路(flv/hls 各一个完整签名直链)。 */
+interface HuyaApiLine {
+  cdn: string
+  flvUrl: string
+  hlsUrl: string
+}
+
+/** parseProfile 的产物:线路 + 档位(最高清晰度在前)。 */
+interface HuyaApiProfile {
+  lines: HuyaApiLine[]
+  bitRates: Array<{ name: string; bitRate: number }>
+}
+
 /**
  * 从 `mp.huya.com/cache.php?m=Live&do=profileRoom` 取**全线路 + 全档位**。
  * ⚠️ 相较 m.huya.com HTML(HNF_GLOBAL_INIT):该 API 一次给 flv + hls **双协议**、

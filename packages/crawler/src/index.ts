@@ -55,12 +55,20 @@ export interface ItemDetailSource {
  */
 export interface Loginable {
   /**
-   * 扫码登录。emitQr 回调把二维码 data URL 推给 UI(可空 = 还没出码)。
-   * 成功后 cookie 已落浏览器 profile(Edge --user-data-dir 持久化),返回串
-   * 供 core 落 settings(HTTP 降级路径复用)。无 appHost.browser 时抛错。
+   * 扫码登录。emitQr 回调把二维码推给 UI(可空 = 还没出码)。
+   *
+   * ⚠️ **推的是字符串,语义按平台不同**:
+   *   - `data:image/...` 的 data URL → 浏览器路径(xhs)已经编码好了,UI 直接当
+   *     `<img src>` 用;
+   *   - 其余视作**二维码内容**(bili 走纯 HTTP 协议,上游只给一段 URL)→ UI 侧
+   *     用自己的 QR 编码器画出来。
+   * 这样纯 HTTP 的登录不必把 QR 编码器拖进 crawler(编码是展示关切)。
+   *
+   * 成功后 cookie 已落浏览器 profile 或由本方法返回(HTTP 路径),返回串供 core
+   * 落 settings。无 appHost.browser 的路径(xhs)会抛错,bili 纯 HTTP 不需要。
    */
   scanLogin(
-    emitQr: (qrDataUrl: string | null) => void,
+    emitQr: (qr: string | null) => void,
     opts?: { timeoutMs?: number },
   ): Promise<LoginResult>
 }
