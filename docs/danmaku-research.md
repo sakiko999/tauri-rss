@@ -9,7 +9,7 @@
 - 其余直播弹幕全是 WebSocket 长连接(bilibili/douyu/huya/douyin),统一走 **`appHost.ws`**(Rust `ws_connect` 隧道可带自定义 header;CLI/example = node `ws` 包带 header;未注入兜底原生 WS)。douyin 握手校验 UA/Cookie/Origin 完整性(残缺 cookie 417、陈旧 ttwid 415 DEVICE_BLOCKED),原生 WS 带不了 header,**必须隧道**;bili live/douyu/huya 原生无 header 可连,顺带统一接入。
 - **渲染:自研 + Canvas 2D**。B站高级弹幕(mode 7)**暂不支持**,降级普通滚动(mode 1–6 全覆盖)。
 - **时间单位坑**:seg.so proto 的 `progress` 是**毫秒**,XML 弹幕是**秒**,播放器 `currentTime` 是秒;YouTube live chat 的 `timestampUsec` 是**微秒**。
-- ✅ **落地状态(2026-09 复核)**:B站视频弹幕 + YouTube live chat + 四平台 WS 直播弹幕(bili live/douyu/huya/douyin)+ player `DanmakuLayer`(Canvas)已端到端实现。接口统一为 `DanmakuPlayable.getDanmaku(id) → DanmakuStream`(订阅即开始,全量/增量由实现方定):crawler 能力接口 → core `resolvePlay/resolveLivePlay` 探测 `isDanmakuPlayable` 后附带 `ResolvePlayback.danmaku`(无独立 `openDanmaku` 门面)→ player `DanmakuLayer` 内部订阅分流;desktop `ExpandedPlayer` 零弹幕逻辑。四平台 channel 的 getSource 返回 `& DanmakuPlayable`。实测开播房间全收弹幕(bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条)。**剩余**:desktop 实机验证 Rust ws_connect 隧道 + 渲染。tsc crawler/player/core/desktop 全绿。
+- ✅ **落地状态(2026-09 复核)**:B站视频弹幕 + YouTube live chat + 四平台 WS 直播弹幕(bili live/douyu/huya/douyin)+ player `DanmakuLayer`(Canvas)已端到端实现。接口统一为 `DanmakuPlayable.getDanmaku(id) → DanmakuStream`(订阅即开始,全量/增量由实现方定):crawler 能力接口 → core `resolvePlay/resolveLivePlay` 探测 `isDanmakuPlayable` 后附带 `ResolvePlayback.danmaku`(无独立 `openDanmaku` 门面)→ player `DanmakuLayer` 内部订阅分流;desktop 播放页**零弹幕逻辑**(只把 resolve 交给 `PlayableMedia`,2026-10 重写后入口是 `src/views/player/PlayerPage.tsx`,原 `ExpandedPlayer` 已删)。四平台 channel 的 getSource 返回 `& DanmakuPlayable`。实测开播房间全收弹幕(bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条)。**剩余**:desktop 实机验证 Rust ws_connect 隧道 + 渲染。tsc crawler/player/core/desktop 全绿。
 
 ## 一、B站视频弹幕(主链路,已实测)
 
@@ -231,11 +231,16 @@ DanmakuStream    返回 ResolvePlayback.danmaku   (内部订阅分流)
 
 player 保持**平台无感**:只消费统一 `DanmakuStream`。弹幕探测收敛进 core(与播放流同一解析结果,`ResolvePlayback.danmaku` 附带),无弹幕 channel → `danmaku: undefined` → VideoShell 不渲染层(零开销);无独立 `openDanmaku` 门面。
 
-App 层(desktop `ExpandedPlayer`)零弹幕逻辑,只传 resolve:
+App 层(desktop 播放页)零弹幕逻辑,只传 resolve:
 ```ts
-const resolve = item.kind === "live" ? () => resolveLivePlay(item.roomId) : () => resolvePlay(item.id)
-<PlayableMedia streams={initialStream} resolve={resolve} autoResolve />
+// 统一传 item.id:core 的 findItemUrl 按 id 或 roomId 命中条目,再取 item.url 去路由。
+const resolve = isLive
+  ? () => resolveLivePlay(item.subscriptionId, item.id)
+  : () => resolvePlay(item.subscriptionId, item.id)
+<PlayableMedia key={item.id} resolve={resolve} autoResolve showDanmaku={danmakuOn} />
 ```
+（`showDanmaku` 是弹幕总开关:关闭时 PlayableMedia 直接丢弃 resolve 结果里的 danmaku,
+不建连接。）
 
 ### player 内部
 

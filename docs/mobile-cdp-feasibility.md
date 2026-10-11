@@ -28,7 +28,7 @@
 
 1. **不做**移动端浏览频繁模拟。移动端定位 = HTTP/SSR + 登录 cookie。
 2. 补三个实际缺口（复用现有体系）：
-   - 接入 **Loginable 扫码登录**（已有 `scanLogin` + `ScanLoginDialog` + cookie 落 settings）——随移动端 appHost 接入；
+   - 接入 **Loginable 扫码登录**（已有 `scanLogin` + 凭证页 `QrImage` + cookie 落 settings）——随移动端 appHost 接入；
    - weibo HTTP 降级冷 cookie 时效 → 失效检测 + 引导重登；
    - 若未来必须真浏览器环境（weibo 用户页 API 等）→ 唯一复用桌面 CDP 代码的路径 = **远程服务端跑 Chromium**，移动端经 API/WS 调用（Puppeteer-on-iOS 的普遍替代），不在设备上跑。
 

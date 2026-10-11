@@ -2,572 +2,266 @@
 
 Tauri 2 monorepo — RSS Reader，桌面 + 移动双端。
 
-⚠️ **双端定位已分离（2026-08-25 决策，打破此前的「完全一致性」原则）**：desktop
-数据供给走**独立爬虫服务**（承载重反爬平台 xhs/weibo 等；形态待选型，初步倾向
-自研 sidecar）；mobile 保持**内置 crawler**，仅有限平台（rss 直链/bili/youtube/
-直播四平台——纯算法或免登录，播放/弹幕不受影响）。决策依据（RSSHub/MediaCrawler
-对照调研）与切分边界见 `docs/desktop-crawler-service.md`。
+桌面 = **订阅工作台**（抓取/播放/管理全功能）；移动 = 待接入的模板。
+两端定位分离：desktop 数据供给走独立爬虫服务（承载重反爬平台），mobile 保持内置
+crawler 仅有限平台。决策见 `docs/desktop-crawler-service.md`。
 
 ## 目录结构
 
 ```
 apps/
-  src-tauri/     ★ 唯一 Rust crate（tauri-app），桌面/移动共享 commands/plugins
-  desktop/       前端（React 19 + Vite + Tailwind 4，产物 → dist/desktop）。已接入 core/appHost。
-                 **形态 = 订阅工作台**（2026-10-11 按 new_desktop 重写）：rail 侧栏 +
-                 内容类型/智能订阅/分组树 + 阅读三栏(article) / 媒体网格 / 热搜(weibo:hot)
-                 两栏 / 发现页 / 管理页(设置·账号凭证·订阅 CRUD) / 播放页 / ⌘K 命令面板。
-                 状态在 `src/store/`（nodes 节点语法 / selectors 派生查询 / prefs 表现型偏好 /
-                 index 动作编排），视图在 `src/views/`；URL 仍是位置权威（/v/:nodeId + /play/:itemId）
-  mobile/        前端（React 19 + Vite，产物 → dist/mobile）。⚠️ 仍是 Tauri 模板，
-                 尚未接入 crawler/core/appHost —— 是后续工作，勿把它当实现参考。
-                 定位 = 内置 crawler 有限平台（见头部「双端定位已分离」）
-  cli/           ★ @tauri-playground/cli — 调试探针（2026-08-28 落地）。Bun+cac 零构建：
-                 channels/fetch/item/play/dm/hot/align/env/refresh 收编全部 example；
-                 (hot = weibo:hot 热搜词 resolveHotWord,2026-08-31 补);
-                 example 已清退,仅留 browser-sim.ts(浏览器模拟,CLI 排除,见下);
-                 宿主 = node 后端 + bun:sqlite 存储（apps/cli/.data/rss.db，gitignore；
-                 与 desktop 共用 core db/schema.ts 的 DDL）；
-                 [纪律] ws 必须绑 ws 包后端（Bun 原生 WS 不支持自定义握手头）。
-                 详见 docs/cli-plan.md
+  src-tauri/   唯一 Rust crate（tauri-app），双端共享 commands/plugins
+  desktop/     React 19 + Vite + Tailwind 4，产物 → dist/desktop
+               形态 = 订阅工作台：rail 侧栏（内容类型/智能订阅/分组树）+ 五视图
+               reader 三栏 / media 网格 / hot 热搜两栏 / page 整页 / player。
+               状态 src/store/（nodes 节点语法 · selectors 派生查询 · prefs 表现型偏好 ·
+               index 动作编排），视图 src/views/，卡片 src/components/cards.tsx。
+               位置权威 = URL（/v/:nodeId、/play/:itemId）
+  mobile/      React 19 + Vite，产物 → dist/mobile。⚠️ 仍是模板，勿当实现参考
+  cli/         ★ 调试探针（Bun + cac 零构建）。channels/fetch/item/play/dm/hot/
+               align/env/refresh 收编全部 example；宿主 = node 后端 + bun:sqlite
+               （apps/cli/.data/rss.db）。详见 docs/cli-plan.md
 packages/
-  xml/           ★ @tauri-playground/xml — RSS 2.0 + tpl: 扩展的编解码（fast-xml-parser v5
-                   XMLBuilder 编码 / parseFeed 解码）。唯一持有 fast-xml-parser
-  host/          ★ @tauri-playground/host — 宿主后端 + 全局 appHost 门面
-                   （node/ 真实网络+内存存储给 example；browser/ 浏览器 fetch+localStorage
-                   给纯前端调试；tauri/ Rust http_get+ws_connect+localStorage 给生产。
-                   ws:弹幕 WS 统一走宿主 ws_connect(node/tauri,可带自定义 header)。
-                   曾按 header 需求分流(douyin 走宿主、bili/douyu/huya 走原生——
-                   误判「schannel 对 douyu danmuproxy:8506 证书校验失败」);2026-08-14
-                   probe 实测 native-tls 连 douyu/bili/huya 弹幕服务器握手全通
-                   (证书 GlobalSign 有效,失败实为集群节点偶发 RST),故一律走宿主,
-                   原生 WebSocket 仅纯浏览器调试兜底(无 appHost.ws))
-  resolve/       ★ @tauri-playground/resolve — **平台解析层**(2026-08-26 架构重构新增)。
-                   platform 与 crawler 解耦,平台全部能力(请求签名/取数/播放解析/弹幕)
-                   集中在此。含 platform/(各平台 client + 播放 + 弹幕 codec)、resolver/
-                   (by-url 路由→播放/弹幕)、danmaku/(createWsStream/deferredStream 原语)、
-                   utils/、browser/(CDP 浏览器模拟)、host/ log(从 crawler 迁入)。
-                   对外契约:按 item.url 懒解析(getDanmakuById/resolvePlayByUrl)+ 平台
-                   client(供 crawler channel 抓数据)。类型自持(SourceInfo/LoginResult/
-                   DanmakuStream),不依赖 crawler。依赖 **ramda** 0.32。
-  crawler/       ★ @tauri-playground/crawler — **订阅源抓取层,只输出订阅数据**。
-                   一切皆 RssChannel：channel 定义 + getSource → `{ fetch }`,抓数据
-                   经 `@tauri-playground/resolve` 的平台 client(依赖 resolve)。
-                   **不绑定流/弹幕解析**(那归 resolve by-url);输出与 rsshub 对齐的
-                   标准 RSS + 最小 tpl:kind/total。channel 抓取调 resolve 的
-                   biliClient/weiboClient 等(bili:signWeb、douyin:fetchRoom、huya:
-                   parseHnfGlobalInit、xhs:SSR)。域名注释见各 channel。
-  core/          @tauri-playground/core — 订阅维护者。基于 crawler 输出维护订阅列表 + 分组
-                   + 刷新编排 + 持久化。自解析 XML 建 MediaItem（不依赖 crawler 类型）
-  player/        ★ @tauri-playground/player — 媒体播放器(video/audio/live 共用),从 ui 拆出。
-                   PlayableMedia(懒解析+选流+分发唯一入口) + VideoShell/AudioShell 外壳 +
-                   MediaChrome 式独立控件(controls/)。日志走 @tauri-playground/log(域注册+颜色)。
-                   依赖 core(MediaStream 类型) + 全局 appHost(hls/flv/dash 走隧道) +
-                   hls.js/flv.js/dashjs。依赖链:core ← player ← ui/desktop
-  log/           ★ @tauri-playground/log  — 域注册语义化日志(零依赖叶子包)。
-                   createLogDomain(name,{color,ansi,events}):每模块注册自己的域+模板事件,
-                   颜色 devtools %c CSS / 终端 ANSI。开关 log="0" 全局关 info/debug、
-                   log:<域>="0" 按域关,legacyKey 兼容旧 key(player-log/host-log);
-                   warn/error 永保留。被 player/host/crawler 引用
-  ui/            @tauri-playground/ui   — UI 组件库（按 kind 分发的媒体渲染器 + 原子组件）。
-                   播放器已拆到 player 包,此处 re-export 保持旧入口;新代码直接引 player
-  ✂️ xhshow(小红书签名库)已移至 **feat/xhs-rustpython** 分支:主分支不再包含。
-     归因见下方「xhs 双通道」段的 2026-09-23 复核(当初跟错了 TS 移植分支;
-     活跃上游是 Python 版,但当前正处失效期,故维持全 SSR 不重启)
-     ——详见 docs/xhs-signature-research.md「社区现状复核」
+  xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
+  host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。
+               node/ 真实网络+内存存储 · browser/ fetch+localStorage · tauri/ Rust
+               http_get+ws_connect+sqlite+opener。ws 统一走宿主隧道（可带自定义握手头）
+  resolve/     ★ 平台解析层。platform/（各平台 client + 播放解析 + 弹幕 codec）、
+               resolver/（by-url 路由 → 播放/弹幕）、danmaku/（createWsStream/
+               deferredStream 原语）、utils/、browser/（CDP 模拟）。
+               契约：按 item.url 懒解析 + 平台 client 供 crawler 取数。类型自持，不依赖 crawler
+  crawler/     ★ 订阅源抓取层，**只输出订阅数据**。一切皆 RssChannel：channel 定义 +
+               getSource → { fetch }，取数经 resolve 的平台 client。
+               不绑定流/弹幕解析（归 resolve by-url）。输出标准 RSS + 最小 tpl:kind/total
+  core/        订阅维护者。基于 crawler 输出维护订阅/分组/刷新编排/持久化；
+               自解析 XML 建 MediaItem（不依赖 crawler 类型）
+  player/      ★ 媒体播放器（video/audio/live 共用）。PlayableMedia = 唯一入口
+               （懒解析 + 选流 + 分发）+ VideoShell/AudioShell 外壳 + MediaChrome 式
+               独立控件（controls/）。依赖 core 类型 + appHost 隧道 + hls/flv/dash.js
+  log/         ★ 域注册语义化日志（零依赖叶子包）。createLogDomain(name,{color,ansi,events})
+               → 每模块自己的域 + 模板事件；开关 log="0" 全局关 / log:<域>="0" 按域关
+  ui/          ⚠️ **只剩原子件在用**：desktop 仅引 MediaImage（防盗链隧道）与 fmtCount。
+               renderers/ 下的 UnifiedCard / MediaItemView / 各 *Renderer **已无消费者**
+               （2026-10-11 desktop 重写后改用自己的 components/cards.tsx）——待清理
 ```
 
-依赖链：`resolve ← crawler ← core ← ui ← desktop`（crawler 依赖 resolve 拿平台能力抓数据），
-播放器支线 `core ← player ← ui/desktop`；`resolve` 持平台全部能力,被 crawler/core/player
-引用;`log`/`host` 是零依赖叶子,被各包共用。core 播放/弹幕直接依赖 resolve(resolver)。
-读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
+依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`，`ui` 是原子件；
+`log`/`host` 是零依赖叶子。读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
 
 ## 宿主注入：全局 appHost 门面
 
-宿主能力（http / ws / js 签名执行 / browser 浏览器模拟 / storage / now / log）经**全局 `globalThis.appHost`** 注入：
+宿主能力经全局 `globalThis.appHost` 注入，门面在 `packages/host/src/runtime.ts`
+（import 即初始化）。类型声明在根 `global.d.ts`，经 `tsconfig.app.json` 的 `files` 传递。
 
-- **正常流程**：应用启动时 `injectTauriHost()`（desktop 在 `main.tsx`）。
-- **example / 测试**：`injectNodeHost()`（Node fetch + 内存存储）。
-- **纯前端调试**：`injectBrowserHost()`（浏览器 fetch，CORS 受限）。
-- **storage 三态(2026-08-28 起)**：desktop = `SqliteStorageBackend`(tauri-plugin-sql,
-  appData/rss.db,首次访问自动从 localStorage 搬迁 subscriptions/reading/settings 三 key
-  并删 local 防漂移);CLI = `sqliteStorage`(bun:sqlite,apps/cli/.data/rss.db);
-  example = 内存版。**DDL 唯一权威 = core `db/schema.ts`**(两端共用,插件/库各自的
-  migration 机制都不用,防漂移);选型与迁移细节见 `docs/sqlite-storage-research.md`。
-- **订阅内容缓存(2026-08-28 接入)**：refresh 走 TTL 缓存(KV storage,key `content:<subId>`,
-  value = `{fetchedAt, xml}` 序列化 RSS XML)——TTL 内命中跳过网络抓取(防反爬源被打频率),
-  命中复用 deserializeFeedWithTotal 重建 items;TTL = 订阅级 `refreshIntervalSec` 优先,
-  否则全局 `settings.refreshIntervalMin`(默认 30min);`refresh(id, {force})` force=true
-  强制抓取(desktop 手动刷新按钮/CLI 默认传 true),init 自动刷新走 TTL;抓取失败回退旧缓存
-  不空窗;订阅 remove 一并删缓存。实现:`packages/core/src/repo/content-cache-repo.ts`。
+- **注入**：desktop `injectTauriHost()`（main.tsx）· example/测试 `injectNodeHost()` ·
+  纯前端调试 `injectBrowserHost()`（CORS 受限）
+- **必填**：`http` / `js`（签名脚本执行）/ `storage`。未注入时访问抛清晰错误
+- **可选**（未注入返回 undefined，消费侧据此降级）：`ws`（弹幕隧道）、`browser`（CDP 模拟）
+- **兜底**：`log`（console）、`now`（Date.now）
+- **`openExternal(url)`**：打开外链。⚠️ 桌面必须走它（Tauri opener 插件）——
+  WebView 会拦掉 `window.open`，表现为「点了没反应」
+- **`imageProxy` / `dataSaver`**：渲染管线开关（AppSettings 的镜像，ui 的 MediaImage
+  直读，避免层层传 props）。由 app 层在设置变化时写入
 
-门面在 `@tauri-playground/host`（`packages/host/src/runtime.ts`）——import host 包即初始化；
-字段是 getter，未注入时访问 `http/js/storage` 抛清晰错误，`now/log` 兜底；`ws`/`browser`
-可选（未注入返回 undefined，crawler 据此降级）。类型声明在
-根 `global.d.ts`（`var appHost: AppHost`），被 `tsconfig.app.json` 的 `files` 引用，
-所有 `extends ../../tsconfig.app.json` 的包自动可见。
+**storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db，
+首次访问自动从 localStorage 搬迁）· CLI `sqliteStorage`（bun:sqlite）· example 内存版。
+**DDL 唯一权威 = core `db/schema.ts`**（两端共用，插件自带的 migration 机制不用，防漂移）。
+
+**内容缓存**：refresh 走 TTL 缓存（KV key `content:<subId>`，value = `{fetchedAt, xml}`）
+——TTL 内命中跳过网络抓取（防反爬源被打）。TTL = 订阅级 `refreshIntervalSec` 优先，
+否则 `settings.refreshIntervalMin`（默认 30min）。`refresh(id, {force:true})` 强制抓取
+（手动刷新 / CLI 默认）；抓取失败回退旧缓存不空窗；退订一并删缓存。
+`packages/core/src/repo/content-cache-repo.ts`。
 
 ## 关键命令
 
 ```bash
-bun run dev                    # Vite dev（纯前端）
-bun run tauri                  # Vite dev + Tauri dev 并行（完整应用热重载）
-bun run tauri:build            # 前端构建 + release 构建
-bun run scripts/tauri.ts help  # 查看全部用法
+bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
+bun run scripts/tauri.ts help       # 全部用法
 
-# CLI 调试探针（收编全部 example，已实测；详见 docs/cli-plan.md）
-bun run rss channels                       # 渠道注册表（67 个，--kind/--json）
-bun run rss fetch bili:popular             # 单渠道抓取：耗时+条数+样本（--xml/--json）
-bun run rss item <url>                     # by-url：路由+streams 全档位+弹幕元信息
-bun run rss play <url> --open              # 解析直链，--open 丢系统播放器
-bun run rss dm <url> -s 5                  # 弹幕：VOD 样本 / 直播窗口统计
-bun run rss hot <词>                       # 热搜词下微博流（weibo:hot resolveHotWord，需登录 cookie——纯匿名下会失败）
-bun run rss detail --latest                # xhs 单条详情补全（匿名 noteDetail，--latest 用当前列表首条）
-bun run rss detail <url>                   # xhs 单条详情（url 的 noteId 需在当前 explore 列表匹配到 xsec_token）
-bun run rss env --probe                    # appHost 门面自检（http/js/storage 实测）
-bun run rss refresh bili:popular           # core DataLayer 编排冒烟（SQLite 持久化）
-bun run rss align                          # crawler/rsshub 同构断言
+# CLI 调试探针（收编全部 example；详见 docs/cli-plan.md）
+bun run rss channels                    # 渠道注册表（--kind/--json）
+bun run rss fetch bili:popular          # 单渠道抓取（--xml/--json）
+bun run rss item <url>                  # by-url：路由 + streams 全档位 + 弹幕元信息
+bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
+bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计
+bun run rss hot <词>                    # 热搜词下微博流（需登录 cookie）
+bun run rss detail [url|--latest]       # xhs 单条详情补全（匿名 noteDetail）
+bun run rss env --probe                 # appHost 门面自检
+bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
+bun run rss align                       # crawler/rsshub 同构断言
 
-# 浏览器模拟验证脚本（唯一保留的 example——CLI 排除浏览器模拟渠道）
-# 先起干净 Edge（edge-cdp skill），再跑 sim；脚本自己连 CDP，零额外依赖
-bash <edge-cdp>/scripts/launch_clean_edge.sh          # 干净实例 :9322；--keep 复用登录态 profile
-bun run packages/crawler/src/example/browser-sim.ts weibo:user  # 浏览器模拟抓微博
-bun run packages/crawler/src/example/browser-sim.ts xhs:user     # 浏览器模拟抓小红书（低频，防账号风控）
+# 自检脚本（仓库无测试基建，用最小断言）
+bun packages/core/src/example/media-store.check.ts   # 查询分支（分组聚合等）
+bun packages/core/src/example/data-layer.check.ts    # 停用订阅不抓取 / reading 回填
+bun packages/host/src/example/host-check.ts          # 门面字段（openExternal/imageProxy）
+
+# 浏览器模拟（先起干净 Edge，见 edge-cdp skill；脚本自连 CDP，零额外依赖）
+bun packages/crawler/src/example/browser-sim.ts weibo:user   # 或 xhs:user（低频防风控）
 ```
 
-前端产物输出到根 `dist/<platform>/`（Vite `outDir`），tauri.conf `frontendDist` 指向 `../../dist/<platform>`。
+产物输出到根 `dist/<platform>/`（Vite outDir；tauri.conf 的 frontendDist 指过去）。
+CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不会自建）。
 
-## ⚠️ 环境要求：MSVC linker（重要）
+## ⚠️ 环境要求
 
-**必须从 "x64 Native Tools Command Prompt for VS 2022" 启动 VSCode / 终端**，否则 Rust 链接会失败。
+**必须从 "x64 Native Tools Command Prompt for VS 2022" 启动终端**，否则 Rust 链接失败。
 
-### 坑：Git Bash 的 `link` 抢 MSVC
+- **Git Bash 的 `/usr/bin/link` 抢 MSVC** → 报 `/usr/bin/link: extra operand`。
+  确保 MSVC 的 `bin\Hostx64\x64` 在 PATH 最前（Native Tools 启动即前置）。
+  Bash 工具调用间 env 不持久，每次 cargo 命令前内联 `export PATH`。
+  **不要在 `.cargo/config.toml` 里写死 linker**（硬编码 MSVC 版本，VS 更新必坏）。
+- `cargo test/build` 前若 tauri-app.exe 仍在跑会锁二进制报 `拒绝访问 (os error 5)`，
+  先 `taskkill //F //IM tauri-app.exe`。增量编译偶报同错，无害，忽略。
+- tsc 用根 `./node_modules/.bin/tsc -p <项目>`；**不要** `npx tsc`（会误装 tsc@2.0.3），
+  **不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪声）。
+- ⚠️ **改源码一律用 Edit/Write，不要用 PowerShell `Set-Content -Encoding utf8` 整份重写**
+  ——中文/UTF-8 会按代码页往返损坏成乱码（曾一次弄坏 4 个文件）。
+- **Git 身份未全局配置**，提交需内联：
+  `git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "..."`
+- `tmp/` 是 gitignore 的参考项目（RSSHub / MediaCrawler / dart_simple_live / producer /
+  NewPipe 等），**不要对它跑构建/测试**。
 
-Git Bash 自带 `/usr/bin/link`（GNU 链接器），如果它在 PATH 里排在 MSVC 前面，cargo 链接时用它，会报：
+## 平台现状与坑
 
-```
-/usr/bin/link: extra operand '...cgu.0.rcgu.o'
-```
+**bilibili**
+- **wbi 签名零登录可复刻**：`GET /x/web-interface/nav` 未登录（code:-101）仍返回
+  `data.wbi_img`，无需 cookie/puppeteer，纯 `MD5(排序参数&wts&mixinKey)`。
+  换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源
+- **bili:dynamic**（`channels/bili/dynamic.ts`）：`GET /x/polymer/web-dynamic/v1/feed/space?host_mid={uid}`
+  （⚠️ 非 dynamic_new——那个返回关注流）。**需登录 cookie**。转发展开 `orig`
+  （⚠️ `module_dynamic` 在 `orig.modules.module_dynamic` 下，非 DynModule 层级）。
+  实测 uid：半佛仙人 37663924（⚠️ 37883317 是「DILI念」勿用）
+- **直播档位按实际值标注**：B 站对访客降档——匿名请求 `qn=10000`（原画）实测只给
+  `current_qn=250`（超清），且多档请求会收敛到同一值。故读 `current_qn` 标注并按实际值去重
+- **按分区列房未做**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
+  分区树走 `Area/getList`（匿名可用，已实现未挂 channel）
+- **扫码登录**：纯 HTTP（`passport.bilibili.com` qrcode/generate + poll），不需
+  `appHost.browser`。⚠️ 上游只给**二维码内容 URL**，编码在 UI 侧（`QrImage`）；
+  `biliScanLogin` 必须复用已生成的码，否则它会自己再生成一个、轮询的 key 与你展示的不是同一个
 
-**解决**：确保 MSVC 的 `bin\Hostx64\x64` 在 PATH 最前（Native Tools 启动即自动前置）。
+**斗鱼 / 虎牙 / 抖音**
+- **douyu `rate` 是档位 ID 不是清晰度** —— 按 rate 降序会把原画 2K60 排到末尾。
+  保留服务端 multirates 顺序
+- **huya**（`resolve/platform/huya/play.ts`）：数据源 `mp.huya.com/.../profileRoom` JSON API，
+  flv+hls 双协议 × 多 CDN × 全档位，`multiLine[].url` 已含签名（`buildAntiCode` 已删）。
+  ⚠️ **低档位只产 HLS**（`ratio=` 切档）；`ratio=` 低档 flv.js 播几秒断
+- **douyin**（`channels/douyin/index.ts`）：enter API ABogus 签名 → `stream_url`。
+  ⚠️ `liveStatus ==2` 才是直播中（`==4` 是 roomId 一次性，需换 webRid）
+- **发现层**（分区/搜索，`resolve/platform/*/discover.ts`）：douyin 三路搜索只
+  `partition/search` 匿名可用且只认游戏名级；虎牙搜索/搜主播不可分页；抖音搜主播未做。
+  缺口见 `docs/capability-gaps.md`
 
-> 本机实际版本：`/c/Program Files (x86)/Microsoft Visual Studio/18/BuildTools/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64`。
-> **Bash 工具调用间 env 不持久**——每次 cargo 命令前都要内联 `export PATH`（写在同一条命令里）。
+**YouTube**（`docs/youtube-stream-extraction.md`）
+- 主力 client = **ANDROID_VR**：2026-08 起 ANDROID/IOS 标准 client 在部分 IP 触发
+  poToken（LOGIN_REQUIRED）。⚠️ poToken 风控是**部分 IP 特性**，与 node/tauri/browser
+  环境无关。端点走 gapis `youtubei.googleapis.com`
+- 渐进式只到 itag 18（360p）→ **视频 1080p 走 DASH**：adaptiveFormats 自拼 SegmentBase
+  MPD（共享 `utils/mpd.ts`）。360p 不混进返回数组（默认选流会落 360p），DASH 装配失败才 fallback
 
-> 之前 `.cargo/config.toml` 硬编码过 linker 路径，已删除（硬编码 MSVC 版本号，VS 更新后必坏）。**不要在 cargo config 里写死 linker**，保持 PATH 方案。
+**小红书**（细节见 `docs/xhs-signature-research.md`）
+- 主分支**全 SSR**：`xhs:explore` 匿名稳定可用；**`xhs:user` 必须登录态**（匿名 SSR
+  渲染卡片但 noteId 被抹空 → 0 条）；**笔记详情页匿名可用**，但**必须带列表项的
+  xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）
+- ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——
+  `extractInitialState` 用**平衡大括号截纯 JSON** + 空容器归一
+- ⚠️ **不要手拼 user_posted fetch**（页面内 `_webmsxyw` 只返回部分头 → 300011 风控）。
+  `xhs:user` 分页是**滚动驱动**（浏览器路径），已加窗口化 + 验证码检测
+- 签名库 xhshow 在 **feat/xhs-rustpython** 分支（主分支含则触发风控与维护成本）；
+  纯算法当前处于上游失效期，故维持全 SSR
 
-## Git 提交身份
+**cookie / 登录**
+- `packages/core/src/bilibili-cookie.ts` 三个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。
+  匿名行为：bili 视频列表稳定、直播 250 超清封顶；weibo 热搜列表可用但 user/词流需登录；
+  xhs explore/详情可用、user 需登录
+- 恢复登录：填真实 cookie → `git update-index --no-skip-worktree` 再改，**勿提交真实值**
+  （文件有 skip-worktree 保护 + 空占位模板 `.example`）
+- 扫码登录是 **channel 级能力 `Loginable`**（平台级操作，不依赖 info 实例化）。
+  `emitQr` 载荷语义：`data:image/...`（浏览器路径已编码）**或**待编码文本（纯 HTTP 路径）
 
-本机未配置全局 git 身份，直接 `git commit` 会报 `Author identity unknown`。提交时显式内联：
+## 播放
 
-```bash
-git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "..."
-```
+**选流契约**：crawler 保证返回数组内**最高清晰度排最前**（bili/youtube/douyin/huya 显式
+按 rate 降序；douyu 例外见上）。player `useStreamSelection` 取第一个，不做二次排序
+（渐进式优先=原生可播最稳，其次 hls/flv）。
 
-## 其他注意事项
+- **HLS/DASH 锁最高档**（`currentLevel=max`，ABR 关闭）。原因：宿主隧道的固定开销
+  （Rust reqwest + base64）让 ABR 带宽估算失真（1080p 实测仅 ~1Mbps），自动降档会骤降
+  144p 永不回升。`defaultQuality: "auto"` 因此**不做**，设置页只留只读的「锁最高档」
+- **带声自动播放**：`unlockAudioPlayback()` 必须在**用户手势的同步调用栈内**调
+  （不能挪进 effect）。原生 mp4 分支要**等 `canplay` 再带声 play** —— src 刚设立即 play
+  媒体未加载，易被 policy 判断失败而降级静音
+- ⚠️ desktop 若自定义 `additionalBrowserArgs`（Windows）会**覆盖** wry 默认 args，
+  必须显式带上 `--autoplay-policy=no-user-gesture-required`，否则带声播放回归静音
 
-- tsc 用根 `./node_modules/.bin/tsc -p <项目>`（各包/desktop/scripts 各自校验）；**不要** `npx tsc`
-  （会误装 tsc@2.0.3），**不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪音）。
-- cargo test/build 前若 tauri-app.exe 仍在运行会锁二进制报 `拒绝访问 (os error 5)`，先 `taskkill //F //IM tauri-app.exe`。
-- `tmp/` 是 gitignore 的迁移源 / 参考项目，**不要对它跑任何构建/测试**：
-  - `RSSHub` — 路由静态摘录数据源目录（`scripts/rsshub-catalog.ts` 抄它的 handler）
-  - `MediaCrawler` — 微博/小红书等反爬平台爬虫对照（确认为什么这些平台搞不定）
-  - `dart_simple_live` — 直播流获取参考（虎牙/斗鱼/bilibili/抖音，Dart 实现，
-    与 crawler 直播 channel 同源平台）
-  - `producer` — 旧订阅生产者源码（无代码引用，保留参考：source/bilibili、douyin abogus、
-    douyu cryptojs、huya、rss 的实现范式）
-- Rust 增量编译偶尔报 `拒绝访问 os error 5`，是无害警告，忽略。
-- Tauri dev 的 `devUrl` 是 `http://localhost:1420`，脚本并行启动 Vite dev server + tauri dev。
-- `apps/src-tauri/tauri.conf.json` 是桌面配置，`tauri.conf.mobile.json` 是移动端。
-- **WebView 自动播放(带声)默认放行**(wry `WebViewAttributes.autoplay=true`):Windows
-  加 `--autoplay-policy=no-user-gesture-required`、macOS `setMediaTypesRequiring
-  UserActionForPlayback:0`、Linux WebKitGTK `AutoplayPolicy::Allow`、Android
-  `setMediaPlaybackRequiresUserGesture(false)`。⚠️ **实测存疑**:此前所有播放
-  都是静音(唯一有声的是走流媒体库 hls/flv/dash 的源),说明该「默认无手势配置」
-  **未必真的生效**——`unlockAudioPlayback()`(AudioContext.resume)也未解决问题。
-  player 层实际修复是:原生 mp4 分支「src 刚设立即 play」媒体未加载致降级静音
-  → 改等 `canplay` 再带声(与 hls/flv 分支对称),已解决。⚠️ **坑**:desktop 若
-  自定义 `additionalBrowserArgs`(Windows)会**覆盖** wry 默认 browser args,必须
-  显式带上 `--autoplay-policy=no-user-gesture-required`,否则带声播放回归静音。
+## 弹幕（细节见 `docs/danmaku-research.md`）
 
-## 测试数据源（RSSHub 摘录 + bilibili 复刻）
+四平台直播弹幕已全通（bili 16B 大端头+zlib、douyu STT、huya Tars、douyin protobuf+gzip），
+B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名可用）。
 
-- `tmp/RSSHub` 是 RSSHub 的 git clone（已 gitignore）。catalog 由
-  `bun run scripts/rsshub-catalog.ts` 静态摘录**按需生成**（生成物不进仓库——
-  1MB 且含大量冷门 namespace 噪声）——只把 RSSHub 当**数据源目录**抄，
-  **不跑它的运行时**（`@/` alias、config、cache、registry 太重，与不部署的诉求冲突）。
-- RSSHub 里**绝大多数 handler 是定制 scraper，无现成原生 feed URL**；只有少量真·原生
-  feed 直传（catalog 已高亮）。判断源可用性先 `curl` 实测（检查 200 + `<rss`/`<feed` 头，
-  注意新浪科技带 `xml-stylesheet` 会误判 HTML，实为真 RSS）。
-- **bilibili wbi 签名零登录可复刻**（关键发现）：`GET /x/web-interface/nav` 未登录
-  （`code:-101`）仍返回 `data.wbi_img`，无需 cookie/puppeteer，纯
-  `MD5(排序参数&wts&mixinKey)`。范式见 `packages/crawler/src/channels/bili/`
-  （wbi 签名在 client.ts，channel 在 channels.ts/live.ts）。换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源。
-- 内置 RSS 直链清单在 `packages/crawler/src/channels/rss/builtin.ts`（36 条，按 kind 标注）。
-  desktop 的**首启种子**在 `apps/desktop/src/subscriptions.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS，
-  覆盖 article/video/audio/live/social，含 douyu/bili live/huya/douyin 在播房间 + bili:dynamic
-  半佛仙人）。⚠️ **只在空库（首次运行）写入**——之后再启动不覆盖，否则用户 CRUD 的订阅会被
-  启动时删掉（旧实现是「每次启动与种子对齐」，已改）。可用性结论见
-  `docs/domestic-feed-availability.md`。新源先 curl 验证再并入。
-- **bili:dynamic 用户动态 channel**（`packages/crawler/src/channels/bili/dynamic.ts`）：
-  用 RSSHub 同款 `GET /x/polymer/web-dynamic/v1/feed/space?host_mid={uid}`（非 dynamic_new
-  时间线——那个返回关注流,`desc.uid` 不匹配目标用户）。**需登录 cookie**（未登录 code:-101,
-  core 层 DEFAULT 自动注入）。动态类型靠 `modules.module_dynamic.major` 的 opus(图文/专栏)/
-  archive(视频)分支;转发展开 `orig` 被转内容(**orig 是完整 DynItem,
-  module_dynamic 在 orig.modules.module_dynamic 下**,非 DynModule 层级)。
-  实测半佛 37663924(硬核的半佛仙人,转发为主;⚠️ 37883317 是「DILI念」勿用)、
-  DIYgod 2267573(视频为主)。
-- 热门平台判定：YouTube 走官方 RSS 可直接用；bilibili 走 API 可复刻；微博/小红书走
-  登录 cookie + API 可复刻（见下）；**X 仍是硬反爬**（puppeteer+登录+代理），个人不
-  部署 RSSHub 碰不了。
-- **小红书双通道（2026-08 SSR）**：`xhs:explore` 发现页 + `xhs:user` 用户笔记
-  都走 SSR `window.__INITIAL_STATE__`（explore 的 feed.feeds / user 的
-  `user.notes` 分组数组,flat 后每项 `{ id, noteCard, xsecToken }`,noteId 用外层 id）。
-  ⚠️ **匿名可用性（2026-08-28 CLI 实测定稿）**:explore **匿名稳定可用**（31/29 条,
-  noteId 齐全可点开）;user 匿名 SSR **渲染 32 条卡片但 noteId 定向抹空**（外层 id 与
-  noteCard.noteId 全空串,DOM 零笔记链接）→ 无法构造 URL/无稳定 id,全过滤 → 0 条
-  ——**user 笔记流必须登录态**（此前「匿名空分组」的记载不准确;RSSHub 同款分叉
-  `if (cookie)` 才走 getUserWithCookie）。⚠️ **匿名浏览器亦不可用（2026-08-28
-  playwright 连真实 Edge 实测）**:SSR 抹空 noteId 后前端水合**不拉取真实笔记**
-  （静置 10s 无变化;滚动触发后 notes 被**清空为 0**;发出的请求全是风控探测
-  `as.xiaohongshu.com/api/sec/v1/*`/redcaptcha/login-activate/user-me,**零笔记请求**）
-  ——浏览器「不登录可看」实为**登录态 Edge profile** 的持久化 cookie,匿名无此能力。
-  ⚠️ **笔记详情页匿名可用（2026-08-28 实测）**:
-  匿名 GET `/explore/<noteId>?xsec_token=<列表项的>&xsec_source=pc_feed` → SSR
-  `note.noteDetailMap[<noteId>]` 全量详情（title/desc 正文/imageList/tagList/
-  interactInfo/time/ipLocation/user,video 类含 video 字段），**是纯 JSON 对象**
-  （非 `new Map` 表达式,extractInitialState 直接解析）,3/3 无风控;**不带
-  xsec_token 则 noteDetailMap 为空 `{}`**——列表项的 xsecToken 是详情开关。⚠️ 登录态 SSR 的 JSON 混入 JS 表达式
-  （`"noteDetailMap":new Map([])`）——extractInitialState 用**平衡大括号截纯 JSON**
-  （非截到 `</script>`）+ 空容器构造归一,RSSHub 的 `replaceAll("undefined","null")`
-  救不了。
-  ✅ **noteDetail 已落地(2026-08-31)**:`Social.xsecToken` 经 `tpl:xsecToken` 序列化
-  (xhs explore/user 抓列表时存列表项 xsec_token,此前被丢弃)→ core `SocialItem.xsecToken`
-  → `ItemDetailSource.resolveDetail(item)`(xhs explore/user 挂在 source 上)→ 匿名
-  GET `/explore/<id>?xsec_token=` + `extractNoteDetail` 解析 `noteDetailMap[<id>].note`
-  → `noteDetailToSocial` 补全文/多图/tag/video。desktop social 卡片点击 = 详情弹窗
-  (bili/weibo 列表已完整直接展示,xhs 异步 resolveDetail 补全);CLI `rss detail [url|--latest]`
-  独立验证(匿名,实测完全通)。⚠️ **user 页不走 user_posted API**（2026-08-16 对照 RSSHub
-  getUserWithCookie + MediaCrawler 修正）:user_posted API 需 xhshow 纯算法签名 +
-  完整参数(image_formats/xsec_token/xsec_source),触发 300011 账号风控;
-  **Edge 内正常浏览无风控的根因:SSR 导航=正常浏览,页面内 fetch API=额外 XHR**。
-  实现见 `packages/crawler/src/channels/xhs/{client,user,explore}.ts`。
-  ⚠️ **签名库 xhshow 已移至 feat/xhs-rustpython 分支**:⚠️ **2026-09-23 复核修正归因**
-  ——当初记「TS fork 过时(2026-07 升级签名后 461)」属实,但**是跟错了分支**:
-  `renmu123/xhshow-js`(我们跟的 TS 移植)**2026-03 后停更**(5 star);活跃的是
-  **Python 上游 `Cloxl/xhshow`**(1080 star,v0.2.0,支持 x-rap-param/SessionManager)。
-  即「TS 移植停滞 ≠ 纯算法路线夭折」。**但纯算法当前正失效**(上游 2026-09-13 未修
-  的「20260913 代码失效」:加密核心仍对,只是模板版本号 `x0="4.3.5"` 过旧致翻页静默
-  返空,改 `x0="4.4.3"`/`x4=""` 即修)。主分支**维持全 SSR**(explore 匿名 / user 登录态),
-  **不重启签名**——重启的收益仅 `xhs:user` 分页转 HTTP,代价是 1 月~1 季一失效的依赖。
-  触发条件与社区架构参考(`XHS_RS_TOOLS`:浏览器仅作登录容器)见
-  `docs/xhs-signature-research.md`「社区现状复核」。
-  ⚠️ **勿逆向 App Store 第三方客户端**(如 Rouge):已评估**不建议**——可发现性低
-  (要的签名算法社区已开源,它独有的 tvOS UI 我们不需要)、且其自身风控也未解决;
-  逆向门槛还受机型限制(palera1n 仅覆盖 A8~A11,ATV 4K 2nd/3rd gen 不可)。
-  详见同文档「Rouge 逆向可行性评估」。
-  **浏览器模拟路径(feat/browser-sim 分支,2026-08)**:Tauri spawn 系统 Edge + CDP
-  (appHost.browser 可选门面),weibo/xhs user channel 检测到门面则走浏览器:
-  xhs:user 导航 profile 页 → 页面内取 `__INITIAL_STATE__.user.notes`(浏览器已解析
-  new Map 表达式,天然干净;无签名),weibo:user 导航 m.weibo.cn 后同源 fetch API;
-  xhs:user 未注入时降级:HTTP 带 cookie 拉 profile 页 HTML → extractInitialState(user 页
-  SSR,RSSHub getUserWithCookie 同款);weibo:user 未注入时降级:weiboClient.getJson 打
-  container API(cookie 时效短,几分钟失效)。weibo:user 已实测通;xhs:user 已实测 32 条。
-  ⚠️ **xhs:user 分页 = 滚动驱动**(2026-08-16,浏览器路径):fetchMore 滚动 profile 页,
-  小红书前端自己发 user_posted(完整签名 x-s/x-s-common/x-rap-param/x-b3-traceid) →
-  读更新后的 `__INITIAL_STATE__.user.notes` 增量。**不要手拼 user_posted fetch**:页面内
-  `_webmsxyw` 只返回 X-s/X-t 两头,缺 x-s-common/x-rap-param → 300011 账号风控;
-  参数 image_formats 必带、xsec_token/xsec_source 可为空(平台自己就空)。滚动驱动是
-  真实浏览语义,但仍会触发验证码(2026-08-16 实测:瞬间滚到底 300 条触发)——已加固:
-  **窗口化**:每次 fetchMore 只返回 `FETCH_MORE_WINDOW=30` 条,cursor = 「已返回条数」
-  索引定位;平台滚动一次加载 ~120 条留在 state,cursor 递增 30 在缓存内**零滚动秒回**,
-  缓存耗尽才滚一次(每轮查 `.fe-verify-box` 出现即停 + 小步滚动分 3 次触发平台懒加载 +
-  轮询等待 notes 增长,步进/轮询间隔带随机抖动去机械化)。
-  验证码形态以 `.fe-verify-box` 为主(RSSHub 同款),若遇到其他滑块形态需补选择器。
-  细节/频率证据/维护成本见 `docs/xhs-signature-research.md`。
-- **平台 cookie 纯匿名方案(2026-08-31 决策)**：`packages/core/src/bilibili-cookie.ts`
-  三个 DEFAULT_*_COOKIE **全部置空**=零登录(见 `.example` 模板)。匿名行为:
-  bili 视频列表(popular/ranking/square/user_video/weekly)稳定、视频播放 720P/直播 250 超清
-  降档;**直播弹幕匿名可用**(2026-09 更正,见下);bili dynamic(-101)/live:hot(-352)
-  需登录**匿名失败**;weibo
-  热搜列表(hot_band)匿名可用、resolveHotWord/weibo:user 需登录失败;xhs explore 匿名 SSR
-  稳定、xhs user 匿名 0 条、**笔记详情页匿名可用**(带列表项 xsec_token)。desktop
-  weibo:user/xhs:user 可有 appHost.browser(Edge profile 登录态)兜底。恢复登录:三常量填
-  真实 cookie → `git update-index --no-skip-worktree` 再改,勿提交真实值。渐进降级:
-  settings 已持久化的 xxxCookie 仍优先于空 DEFAULT(settings-repo merge)。长期目标
-  应用内扫码登录,见 docs/platform-login-research.md。
+- **统一走宿主隧道 `appHost.ws`**（Rust ws_connect）。⚠️ ws.rs 的 `ws_connect` **必须
+  用 `req.url.as_str().into_client_request()` 从 URL 构造完整请求再插自定义头** ——
+  手动 `http::Request::builder()` 缺 `Sec-WebSocket-Key`，握手报
+  "Missing...sec-websocket-key"
+- ⚠️ **bili 直播弹幕匿名可用**：uid=0 + 匿名 buvid3（`biliClient.anonBuvid3()`）即可。
+  **buvid3 = cookie 有则取 cookie、否则取 anon** —— 曾误判「匿名被 1006 拒」，
+  真实原因是匿名时 buvid3 为空。认证走 WS 帧 op=7（**不带 cookie header**，
+  否则触发隧道握手被拒）；host 的 `wss_port` 非标（常见 2245）**必须拼端口**
+- ⚠️ **连接释放竞态**：`createWsStream` 的 onOpen **必须检查 `stopped`** —— 退订后
+  握手才完成时会泄漏连接（关闭直播间弹幕不释放）。「异步 setup → 建流」的拦截统一收敛进
+  `deferredStream`
+- ⚠️ **douyin**：签名脚本须用 2024 修改版 webmssdk.js（`get_sign`；2023 版已失效→415），
+  执行环境须遮蔽 node 全局（否则走 node 分支指纹被拒）；enter 用 QQBrowser UA、
+  WS 用 Chrome 150 UA。proto `progress` 是毫秒，XML 弹幕是秒
 
-## 调研文档（tmp/ 参考仓库）
+## 其他约定
 
-- **弹幕获取机制**：`docs/danmaku-research.md`。B站视频弹幕 = 零摩擦入口
-  （`bvid→cid→GET /x/v2/dm/web/seg.so?oid&segment_index`,protobuf、6min/段、**匿名可用**）,
-  是弹幕 MVP 首选。直播弹幕 4 平台已全通(bili 16B 大端头+zlib、douyu STT、huya Tars、
-  douyin protobuf+gzip),**统一走宿主隧道 `appHost.ws`**(Rust ws_connect/ws 包)。
-  曾按 header 需求分流——误判「schannel 对 douyu danmuproxy:8506 证书校验失败」走原生;
-  2026-08-14 probe 实测 native-tls 连 douyu/bili/huya 弹幕服务器握手全通(证书
-  GlobalSign 有效,失败实为集群节点偶发 RST),故一律走宿主,原生 WS 仅纯浏览器兜底。
-  ⚠️ ws.rs 的 ws_connect **必须用 `req.url.as_str().into_client_request()` 从 URL 构造
-  完整请求再插自定义头**——手动 `http::Request::builder()` 构造 Request<()> 缺
-  Sec-WebSocket-Key(tungstenite 的 Request<()> IntoClientRequest 是 Ok(self) 不补 WS 头,
-  generate_request 校验报 "Missing...sec-websocket-key")。曾致 douyin/bili 走隧道握手
-  全失败,已修(2026-08)。
-  ⚠️ **bili 直播弹幕(2026-09 实测更正)**:匿名**可用**——uid=0 + finger/spi 的匿名 buvid3
-  → op=8 {"code":0} 且收到真实 DANMU_MSG(用户名被遮为 `肆***` 式,与 pure_live 观察一致)。
-  此前记的「匿名被 1006 拒」**是误判**:真实原因是 buvid3 取自 cookie、匿名时必然为空
-  (空 buvid 触发拒连),非 uid 问题。故 buvid3 = cookie 有则取 cookie、否则取
-  `biliClient.anonBuvid3()`(`/x/frontend/finger/spi`);uid = nav 的 mid(匿名为 0)。
-  带 cookie header 会触发 Rust ws_connect 的 sec-websocket-key 握手被拒,故弹幕认证
-  走 WS 帧 op=7 的 uid/buvid、**不走宿主隧道**(无 header 统一走隧道);host 的
-  **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
-  ⚠️ **token 寿命 + refresh 重连(2026-09-23)**:`getDanmuInfo` 的 token 会过期。
-  `createWsStream` 新增 `refresh` 钩子(重连前调用,返回 false=放弃)+ `url` 可传函数
-  (动态求值 host/token)+ 解码抛错→主动断开走重连;bili 侧重取 token,上限 3 次。
-  ⚠️ **实测修正**:token 无效时服务器**直接 `1006` 断连**(非 op=8 code!=0;op=8 检测
-  仍保留);真价值是**重连不再复用过期 token**。`MAX_CREDENTIAL_REFRESH=3` 经注入
-  无效 token 实测确认生效(恰好重连 3 次即停)。
-  ⚠️ **弹幕连接释放竞态**:createWsStream 的宿主/原生 onOpen **必须检查 `stopped`**——
-  退订后握手才完成时(宿主 ws_connect 异步),unsub 时 ws 未赋值跳过 close,握手完成 onOpen
-  照发认证帧/心跳 → 连接泄漏(关闭直播间弹幕不释放)。onOpen 遇 stopped 立即 close 刚建的连接。
-  ⚠️ **douyin 弹幕坑(2026-08 根因)**:签名脚本必须用 douyinLive 2024 修改版 webmssdk.js
-  (`get_sign`,dart 2023 kWebMsSDK 已失效→415 DEVICE_BLOCKED);执行环境须**遮蔽 node 全局**
-  (process/Buffer 等,否则走 node 分支指纹被拒)+ window 完整挂载;webcast100 域名 +
-  真实 pushID(enter API 的 user.id_str);enter 用 QQBrowser UA(Chrome 150 返空 body)、
-  WS 用 Chrome 150 UA。proto `progress` 是毫秒, XML 弹幕是秒,与 currentTime(秒)换算勿混淆。
-  ⚠️ **弹幕探测收敛进 resolve(2026-08-14)**:`resolvePlay/resolveLivePlay` 返回
-  `ResolvePlayback`(`{ streams, danmaku? }`),core 探测 `isDanmakuPlayable` 后
-  `getDanmaku(id)` 一并给,**无独立 `openDanmaku` 门面**;`PlayableMedia` 从 resolve 结果
-  提取 `danmaku` 传给 `DanmakuLayer`(订阅/退订生命周期收敛在 player,接收已探测流),
-  desktop `ExpandedPlayer` 零弹幕逻辑(只传 resolve)。弹幕连接释放竞态同上
-  (onOpen 检查 stopped)。「异步 setup → 建流」的 stopped 拦截统一收敛进
-  `danmaku/stream.ts` 的 deferredStream(douyin 双层/bili live/huya/bili VOD 共用,
-  2026-08-14 抽)。
-- **Folo 架构**:`docs/folo-architecture-research.md`。分组=subscriptions 表 `category` 字符串
-  + 按 siteUrl 域名自动归类;`Transaction` 四段式乐观更新(store→request→rollback→persist)
-  最值得抄。它是云端聚合架构(抓取在服务端),我们 crawler 本地抓取不能照搬;
-  iframe 嵌入播放差于我们 hls/flv/dash 直链解析,不抄。
-- **平台扫码登录 + 保活**:`docs/platform-login-research.md`。三平台扫码登录全可行
-  (bili 纯 HTTP/dart 参考、weibo JSONP、xhs 需签名——签名库在 feat/xhs-rustpython)。
-  ✅ **bili 扫码协议已落地(2026-09-23)**:`resolve/platform/bili/login.ts`
-  (`qrcode/generate` + `qrcode/poll` 纯 HTTP,cookie 从 Set-Cookie 取,含
-  refresh_token;状态机 86101/86090/0/86038)。⚠️ 与 xhs 的 CDP 路径不同,不需
-  `appHost.browser`;但 `Loginable.scanLogin` 的 emitQr 要**图片 data URL**,
-  bili 只给**二维码内容**(131 字符),接 channel 时需 QR 编码库(桌面端暂无)。
-  续期设计:仅 bili 可自动
-  保活——bili_ticket 软性风控因子惰性随补即可,真正要保 SESSDATA(refresh_token 续期
-  闭环,180 天窗口续一次即永久,登录须捕获 refresh_token——dart 参考漏了这步);
-  weibo SUB / xhs web_session 均 ~1 年长效,到期扫码重登。统一兜底:失效检测
-  (code:-101/432/461;bili 直播弹幕匿名可用,非失效信号)→引导重登。
-- **CLI 计划**:`docs/cli-plan.md`(2026-08-27 定稿)。apps/cli 调试工具——Bun+cac
-  零构建,ad-hoc 直跑取代 tauri dev 调试循环;浏览器模拟渠道排除;三大探针
-  (fetch/item/dm)收编 example;立起后清退数据路径 debug log(~80%,防回涨约定:
-  bug 先问 CLI 能否复现);file-JSON 按 repo 接口写为 SQLite 切换留门;
-  同时是未来 desktop 爬虫服务(sidecar)的地基。
-- **mpv 外部播放器**:`docs/mpv-playback-research.md`(2026-08-27 调研)。spawn-only
-  替代 ExpandPlayer 弹窗(设置开关,缺 mpv 降级 embedded)——无 CORS/无隧道、header
-  直接满足 Referer 校验、绕开 Webview 自动播政策与 base64 分片失真两包袱;DASH 自拼
-  MPD 因含 audio AdaptationSet + 绝对 BaseURL 可落盘临时 .mpd 直喂(ffmpeg dash demuxer
-  兼容性 = M0 spike 首验项);appHost.player 第三可选门面(tauri spawn / CLI Bun.spawn
-  同参数组装)。弹幕=DanmakuStream 第三渲染器:VOD 转 ASS 轨低成本(M2)、直播走
-  JSON IPC `osd-overlay`(format=ass,mpv ≥0.36)纯 TS 实现——mpv 内嵌脚本(Lua 一等/
-  JS=Duktape 弱 ES)不写,仅捡现成社区件(uosc/thumbfast);控件分工=app 只管启动前
-  选档/列表联动,播放中操作归 mpv(uosc+loadfile 可保进度无缝切档),app 明确不做
-  二等控制 UI;画质增强=GLSL 滤镜参数级(`--glsl-shaders-append`+IPC 热切换,M2
-  设置面板 mpvFilters/mpvExtraArgs 字段)、插帧只透传(SVP-MVTools/RIFE-vs-mlrt 均
-  经 VapourSynth,检测到环境才开开关;⚠️ --interpolation 不是补帧);一律
-  `--config-dir=<appData>/mpv-config/` 隔离配置零污染用户环境。
+- **图片防盗链**：`MediaImage` 内联 `useProxiedImage`（blob 隧道）——命中 sinaimg 等
+  防盗链图床的 src 经 `appHost.http` 带站内 Referer 拉取 → Blob URL。
+  规则表 host 层 `mediaReferrerFor` 是唯一权威，ui 不写死域名
+- **图片宽高**：`resolve/src/utils/img-size.ts` Range 预取文件头解析（PNG 64B / JPEG 1KB），
+  失败退化 4:3。XML `tpl:image` 带 `@_url/@_width/@_height`
+- **social 瀑布流**用 **masonic** 虚拟化（CSS columns 追加会重排已渲染卡片）。
+  ⚠️ 内层滚动容器（masonic 默认绑 window）需用 `usePositioner + useMasonry` 手动喂
+  `scrollTop/height`；append 保持 positioner，refresh 重建 layoutVersion
+- **列表虚拟化**：网格 = VirtuosoGrid，文章列表 = Virtuoso。⚠️ 尺寸走
+  `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
+  List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱
+- **首启种子订阅**在 `apps/desktop/src/subscriptions.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS）。
+  ⚠️ **只在空库写入** —— 之后再启动不覆盖，否则用户 CRUD 的订阅会被启动时删掉
+- 内置 RSS 直链清单 `packages/crawler/src/channels/rss/builtin.ts`；可用性结论见
+  `docs/domestic-feed-availability.md`。新源先 curl 验证再并入（注意新浪科技带
+  `xml-stylesheet`，会误判 HTML，实为真 RSS）
 
-## 下一步 Todo（阶段性任务）
+## 调研文档索引
 
-### Demo 必选（按建议顺序）
+| 文档 | 内容 |
+| --- | --- |
+| `docs/platform-login-research.md` | 三平台扫码登录 + 保活设计（仅 bili 可自动续期） |
+| `docs/danmaku-research.md` | 弹幕机制（VOD 分段 / 直播四平台 codec） |
+| `docs/youtube-stream-extraction.md` | YouTube 直链（ANDROID_VR / poToken / DASH 自拼） |
+| `docs/xhs-signature-research.md` | 小红书签名史与社区现状复核 |
+| `docs/desktop-crawler-service.md` | desktop 爬虫服务化选型与切分边界 |
+| `docs/capability-gaps.md` | 各平台能力缺口（分区/搜索/主播） |
+| `docs/technical-plan.md` | 三模式 UI、live 源与产品形态的错位 |
+| `docs/cli-plan.md` | apps/cli 调试工具计划 |
+| `docs/sqlite-storage-research.md` | 存储三态与迁移 |
+| `docs/domestic-feed-availability.md` | 国内 feed 可用性实测 |
+| `docs/image-loading-referrer.md` | 防盗链图方案（含 Rust 自定义协议评估） |
+| `docs/rsshub-vs-crawler.md` | RSSHub 对照结论 |
+| `docs/folo-architecture-research.md` | Folo 架构调研（云端聚合，不能照搬） |
+| `docs/core-auth-architecture.md` | core 认证架构 |
+| `docs/mpv-playback-research.md` | 外部播放器 mpv 接入（未做） |
+| `docs/mobile-cdp-feasibility.md` | 移动端 CDP 可行性（未做） |
 
-**1. 媒体播放闭环（demo 差异化价值）**
-- `packages/player/` 已落地：`PlayableMedia` 是**唯一入口**（懒解析 + 选流 + 分发三合一,
-  原 MediaPlayer 已并入）;`useMediaStream`（hls.js/flv.js/dash.js 生命周期）。
-  **选流契约**：crawler 保证返回数组内**最高清晰度排最前**（bili live/video、youtube、
-  douyin、huya 显式 `R.sortWith(descend rate)` 降序;⚠️ **douyu 除外**——保留 multirates
-  服务端顺序(高档在前),rate 是档位 ID 非清晰度,按 rate 降序会把原画 2K60 排末尾;
-  youtube 渐进式 360p 不混排 DASH,只作整条 fallback）→ player `useStreamSelection`
-  用 `find` 链取第一个,不做二次排序（渐进式优先=浏览器原生可播最稳,其次 hls/flv 流媒体）。
-  **控件是 MediaChrome 式独立组件**（`controls/`,窄接口 `{state, ops}`、可自由组合）:
-  `MediaPlayButton`/`MediaMuteButton`/`MediaVolumeSlider`/`MediaTimeRange`/`MediaRateButton`/
-  `MediaQualityButton`/`MediaFullscreenButton`/`MediaLiveEdgeButton`/`MediaTimeDisplay`;
-  `PlayerControls` 是默认组合（等价 `<media-control-bar>`）,`VideoShell`/`AudioShell` 外壳管
-  自动隐藏/键盘快捷键/全屏/缓冲/点击播放暂停(音频保留原生控件)。状态中枢 `useVideoElement`
-  （监听 11 媒体事件 → state + ops）。倍速/档位菜单用 **radix primitive**
-  （ui 包装全量 26 个,desktop 只留 dialog）
-- **日志域注册（@tauri-playground/log）**：全包日志走独立包（禁止裸 console.*）。
-  `createLogDomain(name, {color, ansi, events})` 每模块注册自己的域 + 模板事件:调用处只传
-  事件数据、不拼文案;文案/级别/颜色集中在各域模板。player 域 resolve/select/engine/play/loader/
-  danmaku（前缀 `[player:<阶段>]`）、host 域 `[host:http]`、crawler 按 channel 建域（`[bili]`/
-  `[youtube]` 等）+ 弹幕通用 WS 层 `[danmaku]`（createWsStream 连接生命周期模板事件:建连/建立/
-  关闭/重连/帧数,`wsConnect`/`wsItems` 为 debug 级可 `log:danmaku="0"` 关）。开关
-  `localStorage["log"]="0"` 全局关 info/debug、`log:<域>="0"` 按域关;旧 key
-  `player-log`/`host-log` 兼容(warn/error 永保留)。devtools Console 过滤 `[player:` 看各域颜色。
-- ✅ 已通：Audio（mp3 原生）、douyu 直播（flv.js HTTP-FLV）、bilibili 直播（hls.js + avc 过滤）、
-  huya 直播（flv.js HTTP-FLV）、douyin 直播（flv.js HTTP-FLV,5 档）、bilibili 视频
-  （dash.js 双 SourceBuffer,DASH 1080P 有声）、YouTube 视频（adaptiveFormats 拼 MPD,
-  DASH 1080P 有声）、
-  **YouTube 直播（ANDROID_VR client → 自带 hlsManifestUrl,hls.js 播;无 hls 时才 fallback iOS）**
-- ✅ 自动播放：点击「播放」→ 带声自动播（`unlockAudioPlayback` 手势内解 autoplay policy +
-  失败降级静音）；全部平台（B站视频/YouTube/douyu/bili live/huya/douyin）一致
-- ✅ 多档位切换：douyu/bili live/bili video/douyin 动态获取档位（服务端 accept_qn/
-  multirates/accept_quality,非硬编码）,MediaPlayer 档位条切换（同 rate 去重）
-- ✅ B站视频 DASH：playurl `fnval=16` 拿 dash.video(avc)+dash.audio(AAC),crawler 拼 MPD
-  （每档单 Representation,SegementBase Range）存 `stream.dashManifest`,dash.js 双
-  SourceBuffer 合成播放(等价 B 站官方 MSE)。登录后 avc 有 1080P（非会员也）;
-  `url:""` + `format:"dash"` + dashManifest 由 `isDashStream`(format==="dash")识别
-- ✅ HLS 档位：video/live **锁最高档**（`currentLevel=max`,ABR 关闭）。原因：宿主隧道
-  （Rust reqwest + base64）的固定开销让 ABR 带宽估算失真（1080p 4561kbps 测得仅 ~1Mbps），
-  自动降档会骤降 144p 永不回升。档位选择后续在播放器开放，用户手动选
-- ✅ dash.js 走 `DashHostLoader`（工厂函数,dash.js extend 用 Object.create;blob MPD 原样
-  fetch,分片 Range 补 `bytes=` 前缀走 appHost.http 隧道无 CORS）;hls.js 走 `HlsHostLoader`
-  （class,googlevideo.com 无 CORS 时切隧道）;dash/hls 均锁最高档防隧道带宽估算降档
-- ⚠️ 已知边界：YouTube 视频若 avc1 DASH 装配失败（如 SABR-only / 非 avc1 编码）→ 降级
-  渐进式 360p;直播若 VR 无 hls（罕见形态）→ fallback iOS,仍无则降级 `format:"web"`。
-  内嵌 DASH 播放（视频已支持,见下）;直播的原生 dashManifestUrl 可选增强未用,
-  见 `docs/youtube-stream-extraction.md`「四、本项目落地」
-- YouTube 直链实现见 `docs/youtube-stream-extraction.md`（**主力 client = ANDROID_VR**
-  （Oculus Quest 3,`1.65.10`,yt-dlp master）——2026-08 起 ANDROID/IOS 标准 client 部分
-  IP 触发 poToken(LOGIN_REQUIRED 机器人检测),VR 返回免 token 直链;>1.65 可能
-  SABR-only,需随 yt-dlp 更新;live 判定看 `playabilityStatus.liveStreamability`;
-  请求端点统一走 gapis `youtubei.googleapis.com` + t/id 参数,NewPipe 同款;
-  ⚠️ poToken 风控是**部分 IP 特性**（与 node/tauri/browser 环境无关）——受控 IP 上
-  ANDROID/IOS 才 LOGIN_REQUIRED,当前开发机三环境均正常抓取;换 IP 仍被控时可在
-  fallback 链插 ANDROID_VR 之外再考虑 poToken 方案;
-  ⚠️ **渐进式分辨率实测修正（2026-08-12）**:两个 client 的渐进式都只到 itag 18
-  （360p）,无 720p 渐进式。**视频 1080p 走 DASH**:adaptiveFormats 带 initRange/
-  indexRange,与 B站同构 → 自拼 SegmentBase MPD（共享 `utils/mpd.ts`,从 bili 抽出）,
-  `format:"dash"` + dashManifest 由 dash.js 双 SourceBuffer 合成;每档 MPD 只含该档
-  video + 公共最高音轨锁档。渐进式 360p 不混进返回数组（MediaPlayer 默认选流优先
-  渐进式会落 360p）,DASH 装配失败才 fallback。**直播已 1080p**（HLS 自带 6 档 +
-  currentLevel=max;新发现直播自带 dashManifestUrl 原生 MPD,可选增强,
-  见 `docs/youtube-stream-extraction.md`「四、本项目落地」）
-- huya 直链见 `packages/resolve/src/platform/huya/play.ts`（**2026-09 重写**：
-  数据源 `mp.huya.com/.../profileRoom` JSON API —— flv+hls 双协议 × 5 CDN × 全档位，
-  `multiLine[].url` 已含签名，**`buildAntiCode` 已删**。⚠️ 旧结论「PC 版被风控无线路」
-  与「`ratio=` 低档 flv.js 播几秒断」均已推翻：前者实为可用，后者仅对 flv 成立
-  ——**低档只产 HLS**（走 `ratio=` 切档）。房间元数据（`live.ts`）同批迁到该 API；
-  `huyaClient.getHtml` 现仅供弹幕取进房参数）
-- douyin 直链见 `packages/crawler/src/channels/douyin/index.ts`（enter API ABogus 签名 →
-  stream_url 的 live_core_sdk_data.stream_data(JSON sdk_key 展开)/flv_pull_url 索引,reflow
-  长号兜底,HTML flv_pull_url 末级兜底;liveStatus **status==2 才是直播中**(复刻 dart,
-  ==4 是 roomId 一次性需换 webRid);resolveLivePlay 用 **web_rid(短号)**)
-- **发现层:分区 + 搜索(2026-09-23 落地)**：四平台分区 + 四平台搜索(房间)+ 三平台搜主播。
-  取数层统一在 `resolve/platform/<平台>/discover.ts`,channel 层薄封装。
-  - 分区列房:`live:douyin:category`(partition+partitionType)/`live:huya:category`(gameId)/
-    `live:douyu:category`(areaId)。
-  - 搜房间:`bili:search`/`live:huya:search`/`live:douyu:search`/`live:douyin:search`(keyword)。
-  - 搜主播:`bili:anchor`/`live:huya:anchor`/`live:douyu:anchor`(keyword)。
-  - ⚠️ **douyin `partition_type` 不是常量**:顶层 type=4、子 type=1,必须与 id 配套
-    ——`hot.ts` 硬编码 `type=1` 即因它直接列子分区层。
-  - ⚠️ **douyin 搜索有硬边界**:三路中只 `partition/search` 匿名可用,它只按分区名匹配
-    且**只认游戏名级**(`原神` 有结果,`舞蹈`/`美食` 返空);前两路 `2483 需登录`。
-  - ⚠️ **虎牙搜索/搜主播不可分页**(接口 `start` 实测无效),故不声明 `Pageable`。
-  - ⚠️ **bili 按分区列房未做**:`second/getList` 需登录态,匿名带 buvid3/access_id/wbi
-    实测**仍 `-352`**。bili 分区树走 `Area/getList`(匿名可用,已实现未挂 channel)。
-  - 抖音搜主播未做(仅分区、无主播出口)。缺口与后续见 `docs/capability-gaps.md`。
-- bili live/video 登录档位：`DEFAULT_BILIBILI_COOKIE` 作 core 层默认值(core 层 settings.
-  bilibiliCookie),data-layer `sourceInfoFor` 合并到所有 bili 订阅,解锁登录档位;
-  cookie 文件 gitignore + 空占位 + skip-worktree 保护(见 `packages/core/src/bilibili-cookie.ts`)
-  ⚠️ **直播档位按实际值标注(2026-09-23)**:B 站对访客**降档**——匿名请求 `qn=10000`
-  (原画)实测只给 `current_qn=250`(超清),且多档请求**收敛到同一值**。`live-play.ts`
-  现读 `current_qn` 标注(如 `超清(请求原画)`)并按实际档位**去重**(否则菜单出现三个
-  重复档)。此前用请求档位命名,UI 会说谎。
+## 下一步
 
-**2. 订阅管理 UI + 工作台形态（已完成）**
-- ✅ **2026-10-11 按 `apps/new_desktop`（vanilla JS 演示品）重写 desktop**：移植它的
-  **信息架构 / 视觉令牌 / 交互与文案**，但**技术栈不变**（React 19 + Vite + Tailwind 4 +
-  radix + react-router + zustand + virtuoso/masonic），并把它的每一处 fake 换成真实现：
-  - 视觉：`apps/desktop/src/styles.css` 用 new_desktop 的冷调深灰 + 琥珀信号色（oklch 264 色相）
-    **重新取值现有的 shadcn 语义令牌**（`--background/--card/--border/--muted-foreground`），
-    所以 `packages/ui` 的 renderer 自动跟随，**不引入第二套令牌**。用户偏好走 `store/prefs.ts`
-    的 `ui-prefs`（localStorage，**首帧脚本必须同步可读**，故不放 core settings）；
-    功能型设置（刷新间隔/自动播放/弹幕/画质/图片代理/cookie）走 core `dl.settings`。
-  - 导航：**仍保留 URL 路由**（`/v/:nodeId`、`/play/:itemId?from=`），nodeMeta.type 驱动外壳
-    （reader 三栏 / media 网格 / hot 热搜两栏 / page 整页 / player 播放页）
-  - 视图：`src/views/{library,player,discover,manage,palette}/`；卡片 `src/components/cards.tsx`
-  - 真实现成的：播放页用 `PlayableMedia`（不是封面占位）；发现页走新增的 core
-    `previewChannel(channelKey, info)`（**不建订阅取一次数据**，能力矩阵从渠道注册表推导）；
-    凭证页扫码走真 `dl.scanLogin`；阅读正文仍经 **DOMPurify**
-  - 删掉的旧件：Sidebar/FeedTree/ArticleList/ArticleDetail/MediaList/HotWordList/ExpandedPlayer/
-    ScanLoginDialog/AddFeedDialog/theme.ts/store.ts；`cn.ts` 与 desktop 的 swiper/ramda/clsx/
-    tailwind-merge 依赖一并移除
-- ⚠️ **桌面不再用 `packages/ui` 的 UnifiedCard/SocialRenderer 做卡片**（改用自己的
-  `components/cards.tsx`），只复用它的原子件与 `MediaImage`（防盗链隧道）
-
-**3. packages/ui 接入 tailwind（✅ 已完成）**
-- ✅ renderer 已全部改走 **Tailwind 4 类**（desktop `@tailwindcss/vite` + `@source` 扫 ui 包）。
-  媒体卡片体系参考 **Folo entry-column** 完整重设计（素色主题,不学 Folo accent 彩色）:
-  - `renderers/atoms/` 原子组件：`MediaCard`（统一卡片壳 border-border/bg-card/hover）、
-    `CardThumb`（aspect-ratio 撑开 + 角标）、`MediaImage`（lazy + error 占位 +
-    loadedUrls 模块级缓存防虚拟化重挂载闪骨架）、`Skeleton`（animate-pulse）、
-    `UnreadDot`（accent 蓝未读圆点,已读收缩）、`RelativeTime`、`format.ts`
-  - 卡片形态：video 紧凑横向小卡（长列表塞更多）、live 纵向大图（16:9 + 状态角标）、
-    audio 行式方形封面、social 瀑布流（见下）、article 列表行式
-  - **关键**：全部从固定 `zinc-*` 迁到**语义令牌**（bg-card/border-border/text-muted-foreground），
-    暗色主题免费生效;未读圆点/选中态用琥珀 `--accent`
-  - 网格响应式：媒体网格改由 CSS `grid-template-columns: repeat(auto-fill, minmax(252px,1fr))`
-    撑开(desktop 自己写,见 `.media-grid`),不再用 ResizeObserver 算列数
-  - **social 瀑布流**：`apps/desktop/src/components/MasonryGrid.tsx`（**masonic** 虚拟化
-    瀑布流,2026-08-16 换——CSS columns 追加会重排已渲染卡片)。position cache 追加稳定
-    (loadMore 只给新 item 分配位置,已有卡片不动)+ 虚拟化(只渲染视口内,与 VirtuosoGrid
-    口径一致)。⚠️ 内层滚动容器(masonic 默认绑 window):用 usePositioner+useMasonry 手动喂
-    scrollTop/height;append vs 替换(loadMore 保持 positioner / refresh 重建 layoutVersion);
-    item 高度自动测量(渲染后 offsetHeight),crawler 宽高→aspect-ratio 高稳定无需二次校准。
-  - **图片宽高方案 A**：`crawler/src/utils/img-size.ts` Range 预取文件头解析
-    （PNG 64B / JPEG 1KB,WebP/GIF 同源）,失败退化 4:3。bili:dynamic 用 API 宽高 +
-    Range 兜底(archive 封面)。XML `tpl:image` 支持 `@_url/@_width/@_height` 属性,
-    core `SocialItem.images` → `SocialImage[]`
-  - **图片防盗链 Referer**：`MediaImage` 内联 `useProxiedImage`(blob 隧道)——命中
-    sinaimg 等防盗链图床的 src 经 `appHost.http` 带站内 Referer 拉取 → Blob URL 显示
-    (`<img>` 原生加载 Referer 固定为页面源,空/错 Referer 均 403)。规则表 host 层
-    `mediaReferrerFor` 唯一权威,ui 不写死域名。Rust 自定义协议方案(伪 scheme + 安全
-    洞)评估见 `docs/image-loading-referrer.md`
-- ui 包依赖：`clsx`（拼类）;lucide-react 只在 desktop，ui 包图标用自包含内联 SVG
-  （`renderers/atoms/icons.tsx`）
-- **player 独立包**：播放器已拆到 `@tauri-playground/player`(见目录结构)。
-  ui 的 `index.ts` re-export 保持旧入口;新代码直接引 player 包。
-  desktop `styles.css` `@source` 需同时扫 ui/src + player/src(拆包后补过)
-- **IntelliSense**：ui/player 包各有一个 dev-only `src/styles/tailwind.css`
-  （`@import "tailwindcss"` + `@source "../"`）,不进 bundle,给 VSCode 插件识别类名
-
-**4. 阅读体验**
-- ✅ 文章详情已落地（ArticleDetail:HTML 渲染/正文/pre 纯文本/已读/星标/打开原文）
-- 图片懒加载 / 阅读进度等仍可加强
-
-### Demo 之后（产品化）
-
-- react-query 数据流 + 无限滚动（列表化内容不再一次性全量；MediaList 当前用
-  IntersectionObserver + PAGE=50 本地切片）
-- 三模式 UI：三分栏 ✅ / 瀑布流 / 短视频（见 `docs/technical-plan.md`「三模式实现要点」;三分栏已实现）
-  - ⚠️ **live 源是 1:1、其他源是 1:N 的错位**：live 单房间订阅在列表/瀑布流是孤条。
-    设计记录见 `docs/technical-plan.md`「live 源与产品形态的错位」——倾向 **B 分组聚合**
-    （core 层把同 kind 的 live 订阅合成混合 feed），C 分区/搜索聚合（发现流，参考
-    `tmp/dart_simple_live`）后补。瀑布流/短视频前需定稿
-- **desktop 爬虫服务化（2026-08-25 决策，形态待选型）**：desktop feed 供给走独立
-  爬虫服务（A 自研 sidecar / B RSSHub 自部署 / C 混合，初步倾向 A）；mobile 保持
-  内置 crawler + channel 环境标记裁掉 desktop-only 平台。调研结论（重反爬平台
-  行业形态 = 常驻服务 + 纯 HTTP 业务请求 + 浏览器仅作登录容器）、切分边界
-  （resolvePlay/getDanmaku 留前端内置）、签名恢复路径（服务进程跑 CPython xhshow，
-  前提变化致 RustPython 评估结论翻案）见 `docs/desktop-crawler-service.md`。
-  落地前需规划：sidecar 生命周期（Tauri spawn/端口协商/随 app 退出）、core feed
-  路由层、channel 环境标记、HTTP 端点设计（与 crawler fetch/fetchMore 契约对齐）
-- mobile 接入 appHost + core（当前还是 Tauri 模板；定位 = 内置 crawler 有限平台）
-- **source 缓存（core 层）**：crawler 的 `getSource` 是纯函数（每次新实例）。
-  若要「同参复用实例 / 去重刷新」，在 core 编排层按 `channelKey + info` 持 Map 实现
-  （与 `RssChannel.sourceInfoTpl`/`defaultInfo` 参数体系相关，见 `packages/core/src/data-layer.ts`）
-- 离线缓存 + SQLite（P6）
-- **浏览器模拟落地(feat/browser-sim,2026-08)**:Tauri spawn 系统 Edge + CDP
-  (appHost.browser 门面 + browser_ensure/browser_close command + crawler
-  browser/cdp.ts)。weibo:user 实测通;xhs:user 匿名 406 待登录态(Edge profile
-  扫码一次或注入 cookie)后验证签名路径。edge-profile 登录态持久化在 appData;
-  应用退出 browser_close 需确保调用(desktop 生命周期钩子)。
-- **apps/cli 调试工具(2026-08-28 落地 M1+M2)**:`bun run rss <cmd>` ——
-  channels/fetch/item/play(--open)/dm/align/env(--probe)/refresh 八命令全通,
-  bili video(dash)/bili live(hls)/douyu(flv)/youtube(hls) 实测过。宿主 =
-  node 后端 + bun:sqlite 存储(apps/cli/.data/rss.db,gitignore;改 settings
-  键换真实 bili cookie 解锁登录档位)。**防回涨约定已生效**:bug 先问
-  「CLI 能否复现」,能 → 修探针不埋 log。剩余:M3 `--log` 域开关接
-  @tauri-playground/log(现为 RSS_LOG=1 全开);浏览器模拟渠道/weibo/xhs/
-  login 仍搁置。坑:自定义握手 header 的弹幕必须走 ws 包后端(CLI 的
-  node-host.ts 组装,勿透传 Bun 原生 WebSocket)。
+- **ui 包 renderer 清理**：UnifiedCard / MediaItemView / 各 *Renderer 已无消费者，待删
+- **mobile 接入** appHost + core（当前仍是模板）
+- **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
+  `docs/desktop-crawler-service.md`
+- **三模式 UI**：三分栏 ✅ / 瀑布流 / 短视频。⚠️ live 源是 1:1、其他源是 1:N 的错位，
+  倾向分组聚合，设计见 `docs/technical-plan.md`
+- **续播与阅读进度**：core 的 `reading.setPosition` / `setScrollRatio` 无消费者
+- **OPML 导入导出**（未做）
+- **自动保活**（未做，仅 bili 可行）

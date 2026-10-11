@@ -105,7 +105,7 @@
   ⚠️ **待接 channel 的 `Loginable`**：`Loginable.scanLogin` 的 `emitQr` 契约是
   **图片 data URL**，而 bili 的 generate 返回的是**二维码内容字符串**（131 字符），
   需前端用 QR 库编码成图片。桌面端目前无 QR 库（`apps/desktop` 依赖表已确认）——
-  接入时需引入一个（或复用 `ScanLoginDialog` 的渲染路径）。
+  接入时需引入一个（或复用凭证页 `QrImage` 的渲染路径 —— 它已同时支持 data URL 与待编码文本）。
 - **bili 账号服务**（参照 `bilibili_account_service.dart:191`）——未做。用于登录后
   拉昵称/uid 展示（`/x/member/web/account`）。
 - **微博无扫码登录**——`DEFAULT_WEIBO_COOKIE` 为空，冷 cookie 几分钟即失效（自述于 `weibo/user.ts:9-13`）。

@@ -85,7 +85,7 @@ interface PlayerHost {
 
 ### desktop 数据流改动
 
-MediaList 卡片点击处(store.playback 之前)插一个分流:
+卡片/列表的播放入口(`views/player/usePlayerNav.ts`,2026-10 前是 `MediaList`)插一个分流:
 
 ```
 resolvePlay() ──► playbackBackend === "mpv" && appHost.player

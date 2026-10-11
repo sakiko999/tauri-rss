@@ -11,7 +11,7 @@
 - **resolve 是平台解析层**(2026-08-26 架构重构):platform 与 crawler 解耦,平台
   全部能力(签名/取数/播放/弹幕)集中在此。crawler channel 依赖它抓数据,core 依赖它播放。
 - **RSSHub 是可选外挂**:用户配置 `settings.rsshubBaseUrl`(默认公网 `https://rsshub.app`
-  或自部署实例),AddFeedDialog 可选 `rsshub:*` 渠道补充 crawler 未覆盖的信息源。
+  或自部署实例),添加订阅对话框可选 `rsshub:*` 渠道补充 crawler 未覆盖的信息源。
   只做信息抓取,不注入平台 cookie,不承担播放。
 - **播放统一走 resolve/resolver by-url**:无论 crawler 还是 RSSHub 输出的 item,
   item.link 指向平台详情页,resolve 的 resolver 按 url 路由解析可播流
@@ -79,13 +79,13 @@
 - `packages/core/src/source/rsshub.ts` 走 `httpText(baseUrl+route)`，`baseUrl` 默认公网
   `https://rsshub.app`；`sourceInfoFor` 对 `rsshub:` 注入 baseUrl 但**不附平台 cookie**。
 - `deserializeFeed` 兼容标准 RSS + Atom + media:* 增强——crawler(`tpl:`) 与 rsshub(标准)
-  被**同一加工层**消费（`verify-alignment.ts` 断言成立）。播放统一走 resolver by-url。
-- desktop `AddFeedDialog` 隐藏 crawler `rss:*` 渠道（`hiddenPrefixes=["rss:"]`），
+  被**同一加工层**消费（`bun run rss align` 断言成立）。播放统一走 resolver by-url。
+- desktop 添加订阅对话框隐藏 crawler `rss:*` 渠道（`views/manage/AddSubscriptionDialog.tsx`），
   crawler 包内仍注册供 mobile 兜底。
 
 ## 验证与遗留（反转后）
 
-- `verify-alignment.ts`：crawler(tpl:) video + rsshub(标准+media:) article 同 deserialize ✓；
-  全量 tsc（core/desktop/crawler）零错。
+- `bun run rss align`（收编自原 `verify-alignment.ts`）：crawler(tpl:) video +
+  rsshub(标准+media:) article 同 deserialize ✓；全量 tsc 零错。
 - 遗留：release 构建侧用户需手动起外部实例；Rust `RunEvent::Exit` 的 spawn 形态留作后续
   （如需完全内建）。RSSHub `bilibili/ranking` 偶发 503（上游间歇），非本项目问题。

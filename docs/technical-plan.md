@@ -151,8 +151,11 @@ export interface AppSettings {
 - ✅ **实际方案**:CSS columns 实现(`apps/desktop/src/components/MasonryGrid.tsx`)。
   列优先填充、高度错落;递增渲染数 + 底部哨兵 IntersectionObserver 无限加载;
   `loading="lazy"` 懒加载。social 源按图片 width/height 撑比例(方案 A:Range 预取
-  文件头解析,`crawler/src/utils/img-size.ts`),未知比例退化 4:3。
-- 按 kind 分发:MediaList 中 social → MasonryGrid,其余 → VirtuosoGrid
+  文件头解析,`resolve/src/utils/img-size.ts`),未知比例退化 4:3。
+- ⚠️ **2026-08-16 再修正**:上面的 CSS columns 方案在**追加**时会重排已渲染卡片,
+  故 `MasonryGrid` 改用 **masonic** 虚拟化(position cache 只给新 item 分配位置,
+  已有卡片不动 + 只渲染视口内)。
+- 按 kind 分发:`MediaMain` 中 social → MasonryGrid,其余 → VirtuosoGrid
 
 **3. 短视频**（`ShortVideoFeed`）
 - Swiper vertical + Virtual + Cube/Flip，只渲染可视 ±1
