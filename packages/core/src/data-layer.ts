@@ -171,7 +171,7 @@ export function createDataLayer(): DataLayer {
    *   - 抓取失败 → 回退旧缓存(即便过期)喂 store,error 字段保留(UI 可见失败不空窗)。
    *   - TTL = 订阅级 refreshIntervalSec 优先,否则全局 settings.refreshIntervalMin。
    */
-  async function refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
+  async function doRefresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
     const sub = await repo.get(subscriptionId)
     if (!sub) {
       return {
@@ -235,14 +235,28 @@ export function createDataLayer(): DataLayer {
       // ── 正常抓取 + 回写缓存 ──
       const xml = await channel.getSource(info).fetch()
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
+      // ⚠️ 抓取「成功」但解析出 0 条(源临时故障 / 反爬返回空壳页)= 不能当成功处理:
+      //   往下走会用空数组 replace(清空列表) 并把空 XML 写进缓存,内容在内存和磁盘上
+      //   一起消失,直到源恢复。已有内容时保留原样并如实报错。
+      if (items.length === 0 && store.query({ subscriptionId }).length > 0) {
+        return { subscriptionId, itemCount: 0, error: "本次抓取解析出 0 条,已保留原有内容", fetchedAt: now() }
+      }
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       store.replace(subscriptionId, await applyReadingState(items))
       pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
-      await contentCache.set(subscriptionId, { fetchedAt: now(), xml })
+      // 缓存写失败(磁盘满/IO)只记日志,不能触发下面的 catch —— 那会把刚写好的新内容
+      // 用旧缓存 replace 回去,用户看到「刷新失败」却其实是抓取成功了。
+      try {
+        await contentCache.set(subscriptionId, { fetchedAt: now(), xml })
+      } catch (e) {
+        log.log("warn", "content cache write failed", { subscriptionId, error: String(e) })
+      }
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
     } catch (err) {
       log.log("error", "refresh failed", { subscriptionId, error: String(err) })
+      // 失败后总数字段已不可信(是上一次成功抓取的残留),清掉免得 UI 计数与内容不符。
+      pageTotals.delete(subscriptionId)
       // 抓取失败回退旧缓存(即便过期):不空窗,error 保留供 UI 提示。
       const cached = await contentCache.get(subscriptionId).catch(() => null)
       if (cached) {
@@ -264,6 +278,33 @@ export function createDataLayer(): DataLayer {
         fetchedAt: now(),
       }
     }
+  }
+
+  /** 按订阅串行化(不同订阅仍可并发;refreshAll 的并行不受影响)。 */
+  const chains = new Map<string, Promise<unknown>>()
+  function serialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = chains.get(key) ?? Promise.resolve()
+    const next = prev.then(fn, fn)
+    chains.set(
+      key,
+      next.then(
+        () => undefined,
+        () => undefined,
+      ),
+    )
+    return next
+  }
+
+  /**
+   * 刷新一次订阅(同订阅重入排队)。
+   *
+   * ⚠️ 必须与 loadMore 共用同一条链:两者共享 pageCursors/pageTotals,而 loadMore 的
+   * `fetchMore(cursor)` 要 await 网络 —— 若 refresh 在 await 期间完成,`replace` +
+   * `pageCursors.delete` 会与 loadMore 的 append/set 交错,第 2 页条目混进新首页、
+   * 游标指向已失效的序列,表现为重复或跳过整页。
+   */
+  function refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
+    return serialized(`sub:${subscriptionId}`, () => doRefresh(subscriptionId, opts))
   }
 
   /**
@@ -401,24 +442,27 @@ export function createDataLayer(): DataLayer {
     return isPageable(channel.getSource(info))
   }
 
-  /** 加载更多:翻一页追加进 store。游标内部维护(refresh 后重置);本页为空 = 没有更多。 */
-  async function loadMore(subscriptionId: string): Promise<{ addedCount: number; hasMore: boolean }> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) return { addedCount: 0, hasMore: false }
-    const channel = getChannel(sub.channelKey)
-    if (!channel) return { addedCount: 0, hasMore: false }
-    const info = await sourceInfoFor(sub)
-    const source = channel.getSource(info)
-    if (!isPageable(source)) return { addedCount: 0, hasMore: false }
-    const cursor = pageCursors.get(subscriptionId)
-    const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
-    const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
-    if (total !== undefined) pageTotals.set(subscriptionId, total)
-    else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
-    store.append(subscriptionId, await applyReadingState(items))
-    if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
-    else pageCursors.delete(subscriptionId)
-    return { addedCount: items.length, hasMore: !!nextCursor }
+  /** 加载更多:翻一页追加进 store。游标内部维护(refresh 后重置);本页为空 = 没有更多。
+   *  与 refresh 共用同一条链,避免 refresh 在 fetchMore 的 await 期间换掉首页与游标。 */
+  function loadMore(subscriptionId: string): Promise<{ addedCount: number; hasMore: boolean }> {
+    return serialized(`sub:${subscriptionId}`, async () => {
+      const sub = await repo.get(subscriptionId)
+      if (!sub) return { addedCount: 0, hasMore: false }
+      const channel = getChannel(sub.channelKey)
+      if (!channel) return { addedCount: 0, hasMore: false }
+      const info = await sourceInfoFor(sub)
+      const source = channel.getSource(info)
+      if (!isPageable(source)) return { addedCount: 0, hasMore: false }
+      const cursor = pageCursors.get(subscriptionId)
+      const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
+      const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
+      if (total !== undefined) pageTotals.set(subscriptionId, total)
+      else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
+      store.append(subscriptionId, await applyReadingState(items))
+      if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
+      else pageCursors.delete(subscriptionId)
+      return { addedCount: items.length, hasMore: !!nextCursor }
+    })
   }
 
   /** 渠道列表投影(source 聚合层 RssChannel → core ChannelInfo,不透 source 装配)。 */
@@ -511,11 +555,15 @@ export function createDataLayer(): DataLayer {
     channelKind,
     addSubscription,
     previewChannel,
-    // 订阅 repo 透传;remove 时一并删内容缓存(订阅没了缓存没意义)。
+    // 订阅 repo 透传;remove 时一并清内容缓存 + 内存条目 + 分页账本。
+    // ⚠️ 不清 store 的话,退订后条目仍留在内存里,继续出现在「全部/未读/已星标」视图。
     subscriptions: {
       ...repo,
       async remove(id) {
         await repo.remove(id)
+        store.clear(id)
+        pageCursors.delete(id)
+        pageTotals.delete(id)
         await contentCache.delete(id).catch(() => {})
       },
     },

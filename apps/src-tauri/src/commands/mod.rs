@@ -45,15 +45,59 @@ fn default_method() -> String {
 fn default_timeout() -> u64 {
     20_000
 }
+/// Timeout clamp. Unbounded means a caller passing `u64::MAX` parks a connection and a
+/// task effectively forever (no cancellation path), and one hung renderer request can
+/// exhaust the pool. 5 min is far above any legitimate platform fetch.
+const MAX_TIMEOUT_MS: u64 = 300_000;
+const MIN_TIMEOUT_MS: u64 = 1_000;
+/// Reject URLs aimed at private / link-local / mDNS hosts.
+///
+/// This tunnel takes any URL from the webview by design (feeds and platform APIs live on
+/// arbitrary hosts; there is no fixed allowlist), and it hands the response body back to
+/// JS. What it must not do is let feed-supplied content (e.g. a hostile `image` URL) turn
+/// the renderer into a LAN scanner or reach a cloud metadata endpoint — `169.254.169.254`
+/// is the classic credential-theft target and lives in link-local.
+///
+/// ⚠️ **Loopback is deliberately allowed**: the browser-simulation path drives the Edge
+/// instance we spawn ourselves over `127.0.0.1:<cdp-port>` (both the `/json/list` HTTP
+/// probe and the CDP websocket). Blocking it breaks weibo/xhs/douyin crawling outright.
+/// Residual risk: loopback-only probing from hostile content. Acceptable — it yields no
+/// readable body in any current sink (see docs/security-review notes).
+pub(crate) fn is_blocked_host(url: &str) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return true; // unparseable → refuse rather than pass through
+    };
+    let Some(host) = parsed.host_str() else {
+        return true;
+    };
+    // IPv6 literals arrive bracketed from Url::host_str.
+    let host = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    if host.ends_with(".local") || host.ends_with(".internal") {
+        return true; // mDNS / split-horizon names resolving inside a LAN
+    }
+    match host.parse::<std::net::IpAddr>() {
+        Ok(ip) => match ip {
+            std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
+            std::net::IpAddr::V6(v6) => v6.is_unique_local() || (v6.segments()[0] & 0xffc0) == 0xfe80,
+        },
+        // 非 IP 字面量(域名)放行:解析结果不在此校验,公网域名正常可达。
+        Err(_) => false,
+    }
+}
+
 fn default_response_type() -> String {
     "text".to_string()
 }
 
 #[tauri::command]
 pub async fn http_get(req: HttpGetRequest) -> Result<HttpResponse, String> {
+    if is_blocked_host(&req.url) {
+        return Err("refused: target address is not routable (loopback/link-local/private)".into());
+    }
+    let timeout = req.timeout_ms.clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::limited(5))
-        .timeout(std::time::Duration::from_millis(req.timeout_ms))
+        .timeout(std::time::Duration::from_millis(timeout))
         .build()
         .map_err(|e| e.to_string())?;
 

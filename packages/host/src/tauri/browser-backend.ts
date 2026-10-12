@@ -45,12 +45,49 @@ export class TauriBrowserBackend implements BrowserBackend {
   private connId: string | null = null
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
   private nextId = 1
+  /**
+   * 当前在途的 invoke promise(ensureConn / send / getCookies 都记在这里)。
+   *
+   * ⚠️ 这是「取消」的唯一抓手:Rust 侧的 invoke **没有超时**,一次不回话就永久挂起;
+   * 而抓取层是在 withBrowserLock 里 await 它。调用方(desktop refreshAll)对整条
+   * 刷新套了 45s 超时,但超时只 reject 了**外层** promise —— 这条被挂住的 invoke
+   * 仍持有浏览器锁,后续所有浏览器操作排队到天荒地老。
+   * abortPending() 至少让持锁的那个 await 立刻以错误返回,锁得以释放。
+   */
+  private inflight = new Set<Promise<unknown>>()
+
+  /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。 */
+  private track<T>(p: Promise<T>): Promise<T> {
+    this.inflight.add(p)
+    const drop = () => this.inflight.delete(p)
+    void p.then(drop, drop)
+    return p
+  }
+
+  /**
+   * 中止所有在途 invoke:把 pending 的 CDP 命令逐一 reject(让 send 立刻返回错误,
+   * 而不是等到 CDP_CMD_TIMEOUT_MS),并断开连接。
+   *
+   * ⚠️ 底层 Rust invoke 本身无法真正取消(没有 abort 通道),所以这里做的是
+   * 「不再等待」而非「停止执行」—— 对上层足够:等待者立刻拿到错误、释放锁,
+   * 迟到的回复到达时 pending 里已无对应 id,按无主回复丢弃。
+   */
+  abortPending(reason: string): void {
+    const err = new Error(reason)
+    for (const [, p] of this.pending) p.reject(err)
+    this.pending.clear()
+    if (this.connId) {
+      const id = this.connId
+      this.connId = null
+      void this.track(invoke("ws_close", { connectionId: id })).catch(() => {})
+    }
+  }
 
   /** 惰性建连(首次 evaluate 时)。返回的 ws 连到 page target 的 CDP 端点。 */
   private async ensureConn(): Promise<void> {
     if (this.connId) return
 
-    const port = await invoke<number>("browser_ensure")
+    const port = await this.track(invoke<number>("browser_ensure"))
     // 找第一个 page target 的 webSocketDebuggerUrl(/json/list 返回 page/background_page 等)。
     const res = await globalThis.appHost.http.request({
       url: `http://127.0.0.1:${port}/json/list`,
@@ -65,10 +102,12 @@ export class TauriBrowserBackend implements BrowserBackend {
     const onEvent = new Channel<CdpEventMsg>()
     onEvent.onmessage = (ev) => this.handleEvent(ev)
 
-    const c = await invoke<{ connectionId: string }>("ws_connect", {
-      req: { url: page.webSocketDebuggerUrl, headers: {}, timeoutMs: 10_000 },
-      onEvent,
-    })
+    const c = await this.track(
+      invoke<{ connectionId: string }>("ws_connect", {
+        req: { url: page.webSocketDebuggerUrl, headers: {}, timeoutMs: 10_000 },
+        onEvent,
+      }),
+    )
     this.connId = c.connectionId
   }
 
@@ -93,7 +132,7 @@ export class TauriBrowserBackend implements BrowserBackend {
         fn(v)
       }
       this.pending.set(id, { resolve: settle(resolve), reject: settle(reject) })
-      void invoke("ws_send", { connectionId: this.connId, payload, text: true }).catch((e) => {
+      void this.track(invoke("ws_send", { connectionId: this.connId, payload, text: true })).catch((e) => {
         if (!this.pending.delete(id)) return
         clearTimeout(timer)
         reject(e instanceof Error ? e : new Error(String(e)))
@@ -147,10 +186,10 @@ export class TauriBrowserBackend implements BrowserBackend {
 
   async close(): Promise<void> {
     if (this.connId) {
-      await invoke("ws_close", { connectionId: this.connId }).catch(() => {})
+      await this.track(invoke("ws_close", { connectionId: this.connId })).catch(() => {})
       this.connId = null
     }
-    await invoke("browser_close").catch(() => {})
+    await this.track(invoke("browser_close")).catch(() => {})
   }
 
   /** 清空 profile(Rust 侧 browser_reset_profile:杀我们的 Edge 树 + 删目录)。 */

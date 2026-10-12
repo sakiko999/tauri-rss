@@ -10,13 +10,21 @@
  *
  * 输入框内不拦截(j/k 等)。
  */
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
 import { useViewNavigate } from "../router.tsx"
 
 export function useGlobalShortcuts(): void {
   const go = useViewNavigate()
+  /**
+   * ⚠️ 记住「上次读到第几条」而不是只靠 selectedArticleId 在当前列表里找。
+   *
+   * 开着「仅未读」时,打开一条即标已读 → 该条当场从 view.list 移除。此时
+   * findIndex 返回 -1,旧实现直接取 list[0] —— 用户按 j 会跳回**列表最顶端**,
+   * 而不是下一条未读。记住索引并在条目消失时用它继续前进。
+   */
+  const lastIndexRef = useRef(0)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,11 +53,23 @@ export function useGlobalShortcuts(): void {
         const s = useDesktop.getState()
         const list = s.view.list.filter((i) => i.kind === "article")
         if (!list.length) return
-        const idx = list.findIndex((i) => i.id === s.selectedArticleId)
         const down = e.key === "j" || e.key === "ArrowDown"
-        const next = idx < 0 ? list[0] : list[Math.max(0, Math.min(list.length - 1, idx + (down ? 1 : -1)))]
+        const found = list.findIndex((i) => i.id === s.selectedArticleId)
+        // 选中项还在 → 以它为准并更新记忆;已离场(刚被标已读)→ 用记忆的索引
+        // 继续前进(down 时不 +1,因为那一格已经被后面的条目顶上来了)。
+        let idx: number
+        if (found >= 0) {
+          lastIndexRef.current = found
+          idx = found
+        } else {
+          idx = Math.min(lastIndexRef.current, list.length - 1)
+          // 上一条已离场时,当前 index 已经是「下一条」;但要往回走(k)就得再退一格。
+          if (!down) idx = Math.max(0, idx - 1)
+        }
+        const next = list[Math.max(0, Math.min(list.length - 1, idx + (found >= 0 && down ? 1 : 0)))]
         if (!next || next.id === s.selectedArticleId) return
         e.preventDefault()
+        lastIndexRef.current = list.indexOf(next)
         s.selectArticle(next.id)
         if (next.isUnread && (s.settings?.markReadOnOpen ?? true)) s.markRead(next)
         // 让列表滚动到选中项。

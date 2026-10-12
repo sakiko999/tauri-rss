@@ -71,6 +71,35 @@ export function itemKey(item: MediaItem | undefined | null, index = 0): string {
   return `${item.subscriptionId}:${item.id}`
 }
 
+/**
+ * 列表摘要 —— 去掉 URL 噪声后仍够长才返回,否则返回空(不渲染)。
+ *
+ * ⚠️ 很多源(Hacker News 系、部分 RSSHub 路由)的 `description` 就是
+ * 「Article URL: <链接> Comments URL: <链接> Points: 3」这类模板,剥掉 HTML 后
+ * 剩下的仍是链接复读。把这种当摘要显示,等于在标题下面又印一遍 URL,纯噪声。
+ * 规则:删掉 URL/裸域名后可见文字不足 8 个字 → 认为没有可用摘要。
+ */
+export function excerptOf(item: MediaItem): string {
+  const raw = (item.summary ?? "").trim()
+  if (!raw) return ""
+  // 链接聚合类源的固定模板(HN 系 / Reddit 系)——剥掉 URL 后剩「Article URL:
+  // Comments URL: Points: 3」这种标签串,仍然不是可读摘要,整条丢掉。
+  if (/\b(article url|comments url|submitted by)\b|(^|\s)(points|#\s*comments):/i.test(raw)) return ""
+  const stripped = raw
+    .replace(/https?:\/\/\S+/gi, "")
+    .replace(/\bwww\.\S+/gi, "")
+    .replace(/\b[\w-]+\.(com|org|net|io|dev|cn|co|me|ai|news|blog)\b\S*/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+  return stripped.length >= 8 ? raw : ""
+}
+
+/** 条目主图原始宽度(px);未知返回 Infinity —— 未知不该被门槛挡掉。 */
+export function heroWidth(item: MediaItem): number {
+  const it = item as { width?: number; images?: Array<{ width?: number }> }
+  return it.width ?? it.images?.[0]?.width ?? Infinity
+}
+
 /** 条目主图宽高比(默认 16:9)。 */export function ratioOf(item: MediaItem): number {
   const it = item as {
     aspectRatio?: number

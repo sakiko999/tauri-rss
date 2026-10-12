@@ -1,81 +1,101 @@
-# Tauri Playground
+# Tauri Playground — RSS Reader
 
-Tauri 2 monorepo —— RSS Reader，桌面 + 移动双端。
+Tauri 2 monorepo 的本地订阅阅读器：把 **RSS / 视频 / 直播 / 社交** 聚到一个桌面工作台。
+抓取、播放解析、弹幕、内容缓存全部在本机完成，数据存本地 SQLite，不经中转服务器。
 
-## 包结构
-
-```
-apps/
-  src-tauri/     ★ 唯一 Rust crate（tauri-app），桌面/移动共享 commands/plugins
-  desktop/       前端（React 19 + Vite，产物 → dist/desktop）。已接入 crawler/core/appHost
-  mobile/        前端（React 19 + Vite，产物 → dist/mobile）。⚠️ 未接入架构，仍是 Tauri 模板
-packages/
-  xml/           RSS 2.0 + `tpl:` 扩展编解码（fast-xml-parser v5）
-  host/          宿主后端 + 全局 appHost 门面（node / browser / tauri 三环境）
-  crawler/       订阅源抓取层 —— 一切皆 RssChannel：channel → source → RSS XML
-  core/          订阅维护者 —— 订阅列表/分组/刷新编排/持久化（基于 crawler 输出）
-  ui/            UI 组件库（按 kind 分发的媒体渲染器）
-```
-
-依赖链：`xml ← crawler ← core ← ui ← desktop`；`host` 共用。
-
-## 核心思路
-
-- **crawler 的公共契约只有「渠道 → 参数 → XML」**：`channel.getSource(info).fetch()` 直出
-  RSS 2.0 + `tpl:` 扩展 XML。XML 就是天然类型，下游自己解析，不依赖 crawler 的数据模型。
-- **宿主能力全局注入**：`globalThis.appHost` 门面（http / js 签名执行 / storage / now / log）。
-  生产走 `injectTauriHost()`，example/测试走 `injectNodeHost()`，纯前端调试走 `injectBrowserHost()`。
-- **core 自建渲染模型**：`deserializeFeed(xml)` → 判别联合 `MediaItem`（article/social/video/audio/live），
-  `ui` 按 kind 分发渲染器。
+- **桌面** = 订阅工作台（抓取 / 播放 / 管理全功能）
+- **移动** = 模板，尚未接入 `appHost` + `core`
 
 ## 快速开始
 
 ```bash
 bun install
-bun run dev                    # Vite dev（纯前端）
-bun run tauri                  # Vite dev + Tauri dev 并行
-bun run tauri:build            # 前端构建 + release 构建
 
-# crawler example（真实抓取，注入 Node host）
-bun run packages/crawler/src/example/list_channels.ts
-bun run packages/crawler/src/example/sample_sources.ts live:
-
-# core example（从 channel 批量订阅 + 刷新）
-bun run packages/core/src/example/data-layer.ts
+bun run dev              # 只起 Vite dev（纯前端，宿主能力缺失）
+bun run tauri            # Vite dev + Tauri dev 并行（完整应用，热重载）
+bun run tauri:build      # 前端构建 + release 构建
 ```
 
-> ⚠️ Rust 侧要求从 "x64 Native Tools Command Prompt for VS 2022" 启动终端（MSVC linker），详见 CLAUDE.md。
+> ⚠️ **必须从 "x64 Native Tools Command Prompt for VS 2022" 启动终端**，否则 Rust 链接失败。
+> 完整环境要求见 `CLAUDE.md`。
 
-## 参考项目（`tmp/`，gitignore）
+首次运行会写入一批种子订阅（只在空库时写；之后再启动不覆盖用户数据）。
 
-| 项目 | 用途 |
-|---|---|
-| `tmp/RSSHub` | 路由静态摘录数据源目录（`scripts/rsshub-catalog.ts` 抄 handler） |
-| `tmp/MediaCrawler` | 微博/小红书等反爬平台爬虫对照（确认为什么搞不定） |
-| `tmp/dart_simple_live` | 直播流获取参考（虎牙/斗鱼/bilibili/抖音） |
-| `tmp/producer` | 旧订阅生产者源码（已无代码引用，保留实现范式参考） |
+### 调试 CLI
 
-## 进度
+仓库自带一个零构建的调试探针（Bun + cac），收编了全部 example，覆盖抓取 / 解析 / 弹幕 /
+热搜 / 登录态自检：
 
-Demo 必选：
-- ✅ **1 媒体播放闭环**：`packages/ui/src/player/`（useMediaStream + MediaPlayer + PlayableMedia）
-  video/audio/live 共用。已通：Audio、douyu/huya/douyin 直播（flv.js）、bilibili 直播
-  （hls.js + avc）、bilibili 视频（dash.js 双 SourceBuffer，DASH 1080P 有声）、YouTube 视频
-  （mp4 直链）/ 直播（iOS client HLS）。多档位切换（douyu/bili live/video/douyin 动态获取）
-- ✅ **2 订阅管理 UI**：AddFeedDialog 按 `RssChannel.sourceInfoTpl` 动态生成表单，一键订阅
-- ✅ **3 三栏阅读器**：Sidebar（订阅树/分组/smart feeds/tab/dark）+ 文章列表/详情 +
-  各 kind 媒体卡片（已接入真实 DataLayer）
-- ⏳ **4 packages/ui 接入 tailwind**：renderer 从内联 style 迁到 Tailwind 4（desktop 已接好）
-- ⏳ **5 阅读体验增强**：图片懒加载 / 阅读进度
+```bash
+bun run rss channels                 # 渠道注册表
+bun run rss fetch bili:popular       # 单渠道抓取
+bun run rss item <url>               # by-url 解析：路由 + 全档位流 + 弹幕元信息
+bun run rss play <url> --open        # 解析直链并丢给系统播放器
+bun run rss dm <url>                 # 弹幕样本（VOD 分段 / 直播窗口）
+bun run rss env --probe              # appHost 门面自检
+```
 
-Demo 之后：react-query + 无限滚动、瀑布流/短视频模式、mobile 接入、离线缓存 + SQLite。
+详见 `docs/cli-plan.md`。
 
-完整清单见 CLAUDE.md「下一步 Todo」。
+## 包结构
+
+```
+apps/
+  src-tauri/     唯一 Rust crate（tauri-app）—— http/ws 隧道、CDP 浏览器、SQLite、opener
+  desktop/       React 19 + Vite + Tailwind 4，产物 → dist/desktop
+  mobile/        React 19 + Vite，产物 → dist/mobile。⚠️ 仍是模板
+  cli/           ★ 调试探针（Bun + cac，零构建）
+packages/
+  xml/           RSS 2.0 + tpl: 编解码（fast-xml-parser v5）
+  host/          宿主后端 + 全局 appHost 门面（node / browser / tauri 三环境）
+  resolve/       平台解析：播放直链 + 弹幕 + 各平台 client
+  crawler/       订阅源抓取层，只输出订阅数据（一切皆 RssChannel → RSS XML）
+  core/          订阅维护者：订阅/分组/刷新编排/持久化/TTL 缓存
+  player/        媒体播放器（video/audio/live 共用，hls/flv/dash）
+  ui/            ⚠️ 只剩 MediaImage 与 fmtCount 在被用；旧 renderers 已删
+  log/           域注册语义化日志
+```
+
+依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`；`log`/`host` 是零依赖叶子。
+
+## 核心契约
+
+- **crawler → 下游只走 XML**：`channel.getSource(info).fetch()` 直出 RSS 2.0 + `tpl:` 扩展。
+  下游自己解析，不依赖 crawler 的数据模型。
+- **core 是数据权威**：`deserializeFeed(xml)` → 判别联合 `MediaItem`
+  （article / social / video / audio / live）。
+- **宿主能力全局注入**：`globalThis.appHost`（http / js / storage / ws / browser）。
+  未注入时访问抛清晰错误；可选能力缺失时消费侧降级。
+- **URL 是视图位置权威**：`/v/:nodeId`、`/play/:itemId`，store 只做镜像。
+
+架构细节与平台坑位见 `CLAUDE.md`。
+
+## 自检
+
+仓库没有测试框架，用最小断言脚本守住高风险路径：
+
+```bash
+bun packages/core/src/example/media-store.check.ts      # 查询分支
+bun packages/core/src/example/data-layer.check.ts       # 停用订阅不抓取 / reading 回填
+bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不丢数据
+bun packages/host/src/example/host-check.ts             # 宿主门面字段
+```
+
+类型检查（**不要**用 `npx tsc`，会误装 tsc 2.x）：
+
+```bash
+./node_modules/.bin/tsc -p apps/desktop/tsconfig.json
+```
 
 ## 更多文档
 
-- `docs/technical-plan.md` — 整体技术方案（目标态 / UI 三模式 / 数据流边界）
-- `docs/domestic-feed-availability.md` — 国内平台 feed 可用性梳理
-- `docs/capability-gaps.md` — 平台能力补齐路线图（对照参照项目）
-- `bun run scripts/rsshub-catalog.ts` — 生成 RSSHub 路由静态摘录（输出不进仓库）
-- `CLAUDE.md` — 项目约定与工程环境细节
+| 文档 | 内容 |
+| --- | --- |
+| `docs/platform-login-research.md` | 三平台扫码登录 + 保活 |
+| `docs/danmaku-research.md` | 弹幕机制（VOD 分段 / 直播四平台 codec） |
+| `docs/youtube-stream-extraction.md` | YouTube 直链（ANDROID_VR / poToken / DASH） |
+| `docs/capability-gaps.md` | 各平台能力缺口 |
+| `docs/technical-plan.md` | 三模式 UI 与 live 源的产品错位 |
+| `docs/cli-plan.md` | 调试探针设计 |
+
+`tmp/` 是 gitignore 的参考项目（RSSHub / MediaCrawler / dart_simple_live 等），**不要对它跑构建**。

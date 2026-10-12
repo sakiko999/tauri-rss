@@ -13,8 +13,10 @@ import { Icon } from "./Icon.tsx"
 export function QrImage({ payload, size = 200 }: { payload: string; size?: number }) {
   const isDataUrl = payload.startsWith("data:image/")
   const [src, setSrc] = useState<string | null>(isDataUrl ? payload : null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
+    setFailed(false)
     if (isDataUrl) {
       setSrc(payload)
       return
@@ -26,7 +28,8 @@ export function QrImage({ payload, size = 200 }: { payload: string; size?: numbe
         if (!cancelled) setSrc(url)
       })
       .catch(() => {
-        if (!cancelled) setSrc(null)
+        // 编码失败要落到失败态,否则 src 一直是 null → 永久转圈的 loader。
+        if (!cancelled) setFailed(true)
       })
     return () => {
       cancelled = true
@@ -35,7 +38,16 @@ export function QrImage({ payload, size = 200 }: { payload: string; size?: numbe
 
   return (
     <div className="qr-frame" style={{ width: size + 24, height: size + 24 }}>
-      {src ? <img src={src} alt="登录二维码" width={size} height={size} /> : <Icon name="loader" size={24} className="animate-spin" />}
+      {src ? (
+        <img src={src} alt="登录二维码" width={size} height={size} />
+      ) : failed ? (
+        <span className="stack" style={{ gap: "var(--sp-2)", alignItems: "center", textAlign: "center" }}>
+          <Icon name="alert" size={24} />
+          <span className="t-micro t-dim">二维码生成失败,请关闭后重试</span>
+        </span>
+      ) : (
+        <Icon name="loader" size={24} className="animate-spin" />
+      )}
     </div>
   )
 }

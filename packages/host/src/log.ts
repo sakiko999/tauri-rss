@@ -11,6 +11,26 @@ import { createLogDomain } from "@tauri-playground/log"
  * 开关:localStorage["log:host:http"]="0" 只关本域 info/debug;旧 key
  * `host-log`="0" 仍兼容(legacyKey)。warn/error 永保留。
  */
+/**
+ * 日志里的 URL 先脱敏再打印。
+ *
+ * ⚠️ 平台接口的 query 里带着凭据:抖音 `msToken`、小红书 `xsec_token`、
+ * bilibili 的 `w_rid`/`access_key`、各家 `sign`/`token`。这些 URL 原样进 devtools
+ * console 后,用户一旦截图报障就把登录态贴出去了。保 `?x=…&y=…` 的键名便于定位,
+ * 值统一打码(长度也一并抹掉,免得被当作特征)。
+ */
+function redactUrl(raw: string): string {
+  try {
+    const u = new URL(raw)
+    const keys = [...u.searchParams.keys()]
+    if (!keys.length) return raw
+    for (const k of keys) u.searchParams.set(k, "***")
+    return u.toString()
+  } catch {
+    return raw
+  }
+}
+
 export const httpLog = createLogDomain("host:http", {
   color: "#60a5fa", // blue-400
   ansi: 75,
@@ -18,17 +38,17 @@ export const httpLog = createLogDomain("host:http", {
   events: {
     requestStart: {
       level: "debug",
-      text: (ctx: { method: string; url: string }) => `→ ${ctx.method} ${ctx.url}`,
+      text: (ctx: { method: string; url: string }) => `→ ${ctx.method} ${redactUrl(ctx.url)}`,
     },
     requestDone: {
       level: "info",
       text: (ctx: { method: string; url: string; status: number; elapsed: number }) =>
-        `${ctx.method} ${ctx.url} → ${ctx.status} (${ctx.elapsed}ms)`,
+        `${ctx.method} ${redactUrl(ctx.url)} → ${ctx.status} (${ctx.elapsed}ms)`,
     },
     requestError: {
       level: "warn",
       text: (ctx: { method: string; url: string; status: number; elapsed: number }) =>
-        `${ctx.method} ${ctx.url} → ${ctx.status} (${ctx.elapsed}ms)`,
+        `${ctx.method} ${redactUrl(ctx.url)} → ${ctx.status} (${ctx.elapsed}ms)`,
     },
   },
 })

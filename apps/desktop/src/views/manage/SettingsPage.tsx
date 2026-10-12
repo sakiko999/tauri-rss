@@ -5,13 +5,15 @@
  * 另含订阅与分组管理(CRUD)与存储诊断。
  */
 import { useState } from "react"
+import { useSearchParams } from "react-router"
 import type { Subscription } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
 import { usePrefs, type Density, type Measure, type Motion, type ThemeMode } from "../../store/prefs.ts"
 import { SideCard, StateBlock } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
-import { Menu, MenuItem, MenuSeparator, Modal } from "../../components/Modal.tsx"
+import { Menu, MenuItem, MenuSeparator, Switch } from "../../components/Modal.tsx"
 import { useViewNavigate } from "../../router.tsx"
+import { EditSubscriptionDialog } from "./EditSubscriptionDialog.tsx"
 
 type Tab = "appearance" | "reading" | "playback" | "subscriptions" | "diagnostics"
 
@@ -24,7 +26,11 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
 ]
 
 export function SettingsPage() {
-  const [tab, setTab] = useState<Tab>("appearance")
+  // 支持深链:侧栏/命令面板的「管理分组」跳到 page:settings?tab=subscriptions,
+  // 否则会落在默认的「外观」上 —— 点「管理分组」看到主题设置是明显的入口错位。
+  const [sp] = useSearchParams()
+  const initial = (sp.get("tab") as Tab) || "appearance"
+  const [tab, setTab] = useState<Tab>(TABS.some((t) => t.id === initial) ? initial : "appearance")
   return (
     <div className="page">
       <div className="scroll-area page-scroll">
@@ -59,12 +65,6 @@ function Row({ label, help, children }: { label: string; help?: string; children
       </span>
       <span className="setting-control">{children}</span>
     </div>
-  )
-}
-
-function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <button className="switch" role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)} />
   )
 }
 
@@ -217,7 +217,8 @@ function Subscriptions() {
   const addGroup = useDesktop((s) => s.addGroup)
   const renameGroup = useDesktop((s) => s.renameGroup)
   const removeGroup = useDesktop((s) => s.removeGroup)
-  const updateSubscription = useDesktop((s) => s.updateSubscription)
+  const autoGroupByKind = useDesktop((s) => s.autoGroupByKind)
+  const orphanCount = subscriptions.filter((s) => !s.groupId).length
   const refresh = useDesktop((s) => s.refresh)
   const go = useViewNavigate()
   const [editing, setEditing] = useState<Subscription | null>(null)
@@ -226,6 +227,16 @@ function Subscriptions() {
   return (
     <>
       <SideCard title="分组" icon="folder">
+        {/* 一键归组:未分组订阅多起来后,逐条改分组太慢。按内容类型归入
+            「视频/直播/社交/播客/文章」,带撤销。 */}
+        {orphanCount > 0 ? (
+          <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
+            <button className="btn btn-secondary btn-sm" onClick={() => void autoGroupByKind()}>
+              <Icon name="sparkle" size={14} /> 把 {orphanCount} 条未分组按类型归类
+            </button>
+            <span className="t-micro t-dim">可撤销</span>
+          </div>
+        ) : null}
         {groups.length === 0 ? <p className="rail-empty">还没有分组。建一个把订阅归类。</p> : null}
         {groups.map((g) => {
           const n = subscriptions.filter((s) => s.groupId === g.id).length
@@ -238,7 +249,16 @@ function Subscriptions() {
                   aria-label="分组名"
                   onBlur={(e) => {
                     const v = e.target.value.trim()
-                    if (v && v !== g.title) void renameGroup(g.id, v)
+                    // 改空了回退显示旧名,避免留下一个无名分组。
+                    if (!v) {
+                      e.target.value = g.title
+                      return
+                    }
+                    if (v !== g.title) void renameGroup(g.id, v)
+                  }}
+                  onKeyDown={(e) => {
+                    // 回车即时提交(只靠 onBlur 时,回车后焦点没动 = 什么都没发生)。
+                    if (e.key === "Enter") e.currentTarget.blur()
                   }}
                 />
               </span>
@@ -250,7 +270,7 @@ function Subscriptions() {
                   className="icon-btn"
                   aria-label="删除分组"
                   onClick={() => {
-                    if (confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`)) void removeGroup(g.id)
+                    if (window.confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`)) void removeGroup(g.id)
                   }}
                 >
                   <Icon name="trash" />
@@ -286,7 +306,7 @@ function Subscriptions() {
         </div>
       </SideCard>
 
-      <SideCard title={`订阅 · ${subscriptions.length}`} icon="rss">
+      <SideCard title={`订阅 ${subscriptions.length}`} icon="rss">
         {subscriptions.length === 0 ? (
           <StateBlock icon="rss" tight title="还没有订阅" text="到「发现」浏览,或点侧栏的 + 添加。" />
         ) : (
@@ -339,7 +359,7 @@ function Subscriptions() {
                           danger
                           icon="trash"
                           onSelect={() => {
-                            if (confirm(`退订「${s.title}」？内容缓存也会一并删除。`)) void removeSubscription(s.id)
+                            if (window.confirm(`退订「${s.title}」？内容缓存也会一并删除。`)) void removeSubscription(s.id)
                           }}
                         >
                           退订
@@ -354,114 +374,8 @@ function Subscriptions() {
         )}
       </SideCard>
 
-      <EditSubscriptionDialog
-        sub={editing}
-        groups={groups}
-        onClose={() => setEditing(null)}
-        onSave={async (patch) => {
-          if (!editing) return
-          await updateSubscription(editing.id, patch)
-          setEditing(null)
-        }}
-      />
+      <EditSubscriptionDialog sub={editing} onClose={() => setEditing(null)} />
     </>
-  )
-}
-
-function EditSubscriptionDialog({
-  sub,
-  groups,
-  onClose,
-  onSave,
-}: {
-  sub: Subscription | null
-  groups: Array<{ id: string; title: string }>
-  onClose: () => void
-  onSave: (patch: Partial<Omit<Subscription, "id">>) => Promise<void>
-}) {
-  const [title, setTitle] = useState("")
-  const [groupId, setGroupId] = useState("")
-  const [ttl, setTtl] = useState(0)
-  const [enabled, setEnabled] = useState(true)
-
-  // 打开时同步一次(sub 变化 → 重置表单)。
-  const [prevId, setPrevId] = useState<string | null>(null)
-  if (sub && sub.id !== prevId) {
-    setPrevId(sub.id)
-    setTitle(sub.title)
-    setGroupId(sub.groupId ?? "")
-    setTtl(sub.refreshIntervalSec ? Math.round(sub.refreshIntervalSec / 60) : 0)
-    setEnabled(sub.enabled)
-  }
-  if (!sub) {
-    if (prevId) setPrevId(null)
-    return null
-  }
-
-  return (
-    <Modal
-      open
-      onOpenChange={(o) => !o && onClose()}
-      title="编辑订阅"
-      desc={sub.channelKey}
-      footer={
-        <>
-          <span className="spacer" />
-          <button className="btn btn-secondary" onClick={onClose}>
-            取消
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={() =>
-              void onSave({
-                title: title.trim() || sub.title,
-                groupId: groupId || null,
-                refreshIntervalSec: ttl > 0 ? ttl * 60 : undefined,
-                enabled,
-              })
-            }
-          >
-            保存
-          </button>
-        </>
-      }
-    >
-      <div className="field">
-        <label className="field-label" htmlFor="ed-title">
-          标题
-        </label>
-        <input id="ed-title" className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-      <div className="field">
-        <label className="field-label" htmlFor="ed-group">
-          分组
-        </label>
-        <select id="ed-group" className="select" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-          <option value="">未分组</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.title}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="field">
-        <label className="field-label" htmlFor="ed-ttl">
-          独立刷新间隔（分钟，0 = 跟随全局）
-        </label>
-        <input
-          id="ed-ttl"
-          type="number"
-          className="input input-number"
-          value={ttl}
-          min={0}
-          onChange={(e) => setTtl(Number(e.target.value))}
-        />
-      </div>
-      <Row label="启用" help="停用后不会参与刷新。">
-        <Switch checked={enabled} label="启用" onChange={setEnabled} />
-      </Row>
-    </Modal>
   )
 }
 
@@ -487,6 +401,14 @@ function Diagnostics() {
   }
 
   async function clearCache() {
+    if (
+      !window.confirm(
+        "清空内容缓存？\n\n" +
+          "会删除全部订阅的已抓取内容(TTL 缓存)。已显示的条目保留在列表里," +
+          "但下次刷新会真正走网络重新抓取。\n不影响:订阅列表、阅读状态、凭证。",
+      )
+    )
+      return
     try {
       const keys = await globalThis.appHost.storage.keys("content:")
       for (const k of keys) await globalThis.appHost.storage.delete(k)
@@ -502,7 +424,7 @@ function Diagnostics() {
   /** 清掉 CDP 用的 Edge profile(扩展/账户态越养越脏)。走后端命令,不自己删目录。 */
   async function clearBrowserProfile() {
     if (
-      !confirm(
+      !window.confirm(
         "清理浏览器数据?\n\n" +
           "会结束 CDP 用的 Edge 并删除它的 profile(扩展、缓存、登录态)。\n" +
           "影响:微博/小红书等需要重新登录;下次抓取会重建全新 profile。\n" +
@@ -563,7 +485,7 @@ function Diagnostics() {
         </p>
       </SideCard>
 
-      <SideCard title={`最近的抓取错误 · ${errs.length}`} icon="alert">
+      <SideCard title={`最近的抓取错误 ${errs.length}`} icon="alert">
         {errs.length === 0 ? (
           <StateBlock icon="checkCircle" tone="ok" tight title="没有错误" text="最近一次刷新全部成功。" />
         ) : (

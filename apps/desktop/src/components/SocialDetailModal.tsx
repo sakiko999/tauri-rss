@@ -15,7 +15,8 @@ import { useDesktop } from "../store/index.ts"
 import { Modal } from "./Modal.tsx"
 import { Icon } from "./Icon.tsx"
 import { MediaImage, fmtCount } from "@tauri-playground/ui"
-import { fmtAgo, mediaUrl } from "../lib/media.ts"
+import { fmtAgo, mediaUrl, socialRatio } from "../lib/media.ts"
+import { openExternalSafely } from "../lib/host.ts"
 
 export function SocialDetailModal() {
   const detail = useDesktop((s) => s.socialDetail)
@@ -34,7 +35,9 @@ export function SocialDetailModal() {
    */
   useEffect(() => setImgIndex(0), [item?.id])
   useEffect(() => {
-    if (!multi) return
+    // ⚠️ 只在弹窗真正打开时挂监听:本组件常驻在 App 里,无条件监听会让 ←/→ 在
+    // 任何页面(阅读视图、播放页)被吞掉 —— 播放页的左右键是跳转/快进。
+    if (!detail || !multi) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") setImgIndex((i) => (i - 1 + imgs.length) % imgs.length)
       else if (e.key === "ArrowRight") setImgIndex((i) => (i + 1) % imgs.length)
@@ -43,7 +46,7 @@ export function SocialDetailModal() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [multi, imgs.length])
+  }, [detail, multi, imgs.length])
 
   if (!detail || !item) return null
 
@@ -51,6 +54,11 @@ export function SocialDetailModal() {
   /** 媒体源兼容:SocialItem 走 images[0];article 类兜 thumbnail/poster。 */
   const cover = mediaUrl(item, imgIndex)
   const stepImg = (d: number) => setImgIndex((i) => (i + d + imgs.length) % imgs.length)
+  /** 当前图片真实比例。容器比例 === 图片比例时 contain 恰好填满,不留缝也不裁切。 */
+  const imgRatio = (() => {
+    const it = item as { aspectRatio?: number; width?: number; height?: number; images?: Array<{ width?: number; height?: number }> }
+    return socialRatio(it.images?.[imgIndex] ?? { width: it.width, height: it.height })
+  })()
   const likes = (item as { likes?: number }).likes
   const replies = (item as { replies?: number }).replies
   const reposts = (item as { reposts?: number }).reposts
@@ -59,8 +67,8 @@ export function SocialDetailModal() {
    * 的源(bili/weibo,列表数据已完整)原样返回 item,`full` 永远停在 null,
    * 那样会把完整内容一直显示成「正在补全」。只有 xhs 靠 xsec_token 拉详情。
    */
-  const resolving = detail.full === null && !!(item as { xsecToken?: string }).xsecToken
-
+  const resolving = detail.full === null && !detail.error && !!(item as { xsecToken?: string }).xsecToken
+  const resolveFailed = !!detail.error
   return (
     <Modal
       open
@@ -68,7 +76,7 @@ export function SocialDetailModal() {
       size="wide"
       flush
       title={item.title || item.author?.name || "详情"}
-      desc={item.author?.name ? `${item.author.name} · ${fmtAgo(item.publishedAt)}` : fmtAgo(item.publishedAt)}
+      desc={item.author?.name ? `${item.author.name} — ${fmtAgo(item.publishedAt)}` : fmtAgo(item.publishedAt)}
       footer={
         <>
           <button
@@ -82,7 +90,7 @@ export function SocialDetailModal() {
           </button>
           {item.url ? (
             /* ⚠️ 走宿主门面(WebView 拦 window.open)。 */
-            <button className="btn btn-quiet" onClick={() => void globalThis.appHost.openExternal(item.url!)}>
+            <button className="btn btn-quiet" onClick={() => openExternalSafely(item.url)}>
               <Icon name="external" size={14} /> 打开原文
             </button>
           ) : null}
@@ -98,7 +106,11 @@ export function SocialDetailModal() {
           {/* ⚠️ 缩略图条**不能**放在 media 与 info 之间:它 grid-column:1/-1 会占满
               第一行两列,把 info 自动推到第三行。放在 info 之后,自动放置才会是
               media=1/1 → info=1/2 → thumbs=第二行整行。 */}
-          <div className="social-detail-media">
+          {/* 媒体列的宽度按**当前图片的比例**反推(--detail-media-ratio),media
+              容器再按同一比例定宽。这样网格的 1.4fr/1fr 折中值就不会把竖图挤成一条。
+              比例异常的图(超长截图 / 超宽 banner)在 CSS 里被 clamp 到 0.5~1.9,
+              此时 contain 留一点缝是有意的(完整显示 > 填满裁剪)。 */}
+          <div className="social-detail-media" style={{ "--detail-media-ratio": String(imgRatio) } as React.CSSProperties}>
             {cover ? (
               <>
                 {imgs.length > 1 ? (
@@ -124,6 +136,8 @@ export function SocialDetailModal() {
                     </button>
                   </>
                 ) : null}
+                {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
+                    媒体列的宽度就跟着变。 */}
                 <MediaImage src={cover} alt={item.title} loading="eager" contain />
               </>
             ) : (
@@ -149,30 +163,49 @@ export function SocialDetailModal() {
                 <span className="skeleton sk-line" style={{ width: "78%" }} />
                 <span className="skeleton sk-line" style={{ width: "64%" }} />
               </span>
-            ) : (
+            ) : text ? (
               <p className="social-detail-text">{text}</p>
+            ) : (
+              // 空正文占位:没有这一支时,正文区是一大片空白,用户分不清
+              // 「还在加载」还是「本来就没正文」。
+              <p className="social-detail-text t-dim">（这条没有正文，只有图片）</p>
             )}
-            <div className="social-detail-stats">
-              {likes ? (
-                <span>
-                  <Icon name="heart" size={13} /> {fmtCount(likes)}
-                </span>
-              ) : null}
-              {replies ? (
-                <span>
-                  <Icon name="message" size={13} /> {fmtCount(replies)}
-                </span>
-              ) : null}
-              {reposts ? (
-                <span>
-                  <Icon name="refresh" size={13} /> {fmtCount(reposts)}
-                </span>
-              ) : null}
-            </div>
+            {/* 三项统计全为 0/缺失时不渲染 —— 否则只剩一条纯噪声的横线。 */}
+            {likes || replies || reposts ? (
+              <div className="social-detail-stats">
+                {likes ? (
+                  <span>
+                    <Icon name="heart" size={13} /> {fmtCount(likes)}
+                  </span>
+                ) : null}
+                {replies ? (
+                  <span>
+                    <Icon name="message" size={13} /> {fmtCount(replies)}
+                  </span>
+                ) : null}
+                {reposts ? (
+                  <span>
+                    <Icon name="refresh" size={13} /> {fmtCount(reposts)}
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {/* 源站补全说明:脚注形态,不与正文争权重。 */}
             <p className="social-detail-note">
-              {resolving ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="info" size={13} />}
-              <span>{resolving ? "正在向源站补全详情…" : "列表页只带封面与标题；详情按列表项的 xsec_token 补全，匿名可读全文与多图。"}</span>
+              {resolving ? (
+                <Icon name="loader" size={13} className="animate-spin" />
+              ) : resolveFailed ? (
+                <Icon name="alert" size={13} />
+              ) : (
+                <Icon name="info" size={13} />
+              )}
+              <span>
+                {resolving
+                  ? "正在向源站补全详情…"
+                  : resolveFailed
+                    ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
+                    : "列表页只带封面与标题；详情按列表项的 xsec_token 补全，匿名可读全文与多图。"}
+              </span>
             </p>
           </div>
 

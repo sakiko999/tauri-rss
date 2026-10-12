@@ -31,6 +31,8 @@ export function ArticlePane() {
   const setSort = useDesktop((s) => s.setSort)
   const refreshErrors = useDesktop((s) => s.refreshErrors)
   const busy = useDesktop((s) => s.busy)
+  const loading = useDesktop((s) => s.loading)
+  const query = useDesktop((s) => s.query)
   const meta = useNodeMeta(nodeId)
   const settings = useDesktop((s) => s.settings)
   const go = useViewNavigate()
@@ -55,11 +57,13 @@ export function ArticlePane() {
           <h2 className="pane-title">{viewTitleFor(meta, hotWord)}</h2>
           <div className="pane-meta">
             <span className="status-dot" data-state={health} />
-            <span className="num">{items.length} 条</span>
+            {/* ⚠️ 用 view.total(筛选后总数),不是 items.length(分页窗口 ≤60)——
+                否则侧栏说 900、表头说 60。与 MediaMain 口径一致。 */}
+            <span className="num">{view.total} 条</span>
             {meta.sub?.refreshIntervalSec ? (
-              <span>· {Math.round(meta.sub.refreshIntervalSec / 60)} 分钟刷新</span>
+              <span>每 {Math.round(meta.sub.refreshIntervalSec / 60)} 分钟刷新</span>
             ) : null}
-            {health === "error" ? <span className="err-text">· 抓取失败</span> : null}
+            {health === "error" ? <span className="err-text">抓取失败</span> : null}
           </div>
         </div>
         <div className="pane-tools">
@@ -110,7 +114,9 @@ export function ArticlePane() {
         </div>
       ) : null}
 
-      {items.length === 0 ? (
+      {loading && items.length === 0 && !query ? (
+        <StateBlock icon="loader" title="正在加载…" text="首次抓取或刷新进行中。" />
+      ) : items.length === 0 ? (
         <EmptyState nodeId={nodeId} hasSub={!!meta.sub} disabled={meta.sub ? !meta.sub.enabled : false} onGo={go} />
       ) : (
         <Virtuoso
@@ -148,12 +154,14 @@ function EmptyState({
 }) {
   const query = useDesktop((s) => s.query)
   const offline = useDesktop((s) => s.offline)
-  if (query) return <StateBlock icon="search" title="没有匹配的内容" text={`当前列表里没有包含「${query}」的条目。`} />
+  if (query) return <StateBlock icon="search" title="没有匹配的内容" text={`当前列表里没有包含「${query}」的条目。只搜索标题、作者与摘要。`} />
   if (offline) return <StateBlock icon="offline" title="离线模式" text="已跳过网络抓取。切回在线后再刷新。" />
+  // ⚠️ 智能订阅的「空」优先于 hasSub:点「全部标为已读」后列表清空,说「还没有内容」
+  // 是错的,应该告诉用户「全部读完」。
+  if (nodeId === "unread") return <StateBlock icon="checkCircle" tone="ok" title="全部已读" text="没有未读条目了。" />
+  if (nodeId === "starred") return <StateBlock icon="star" title="还没有星标条目" text="在列表里点星标图标收藏。" />
   if (disabled) return <StateBlock icon="lock" title="订阅已停用" text="在「设置 → 订阅」里重新启用它。" />
   if (hasSub) return <StateBlock icon="inbox" title="这个订阅还没有内容" text="点侧栏的刷新按钮抓一次,或等下一个刷新周期。" />
-  if (nodeId === "starred") return <StateBlock icon="star" title="还没有星标条目" text="在列表里点星标图标收藏。" />
-  if (nodeId === "unread") return <StateBlock icon="checkCircle" tone="ok" title="全部已读" text="没有未读条目了。" />
   return (
     <StateBlock
       icon="rss"

@@ -30,6 +30,50 @@ import { AudioShell } from "./AudioShell.tsx"
 import { VideoShell } from "./VideoShell.tsx"
 import { SpinnerIcon } from "./icons.tsx"
 
+/** 状态块内的次要按钮(与 desktop 的 .btn-secondary 同形,但 player 不能依赖 desktop)。 */
+const MS_BTN =
+  "rounded-md border border-[var(--border-strong)] bg-[var(--surface-1)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition-colors hover:bg-[var(--surface-hover)]"
+
+/**
+ * 播放器内的加载 / 失败 / 空态统一样式块。
+ *
+ * 为什么不用 desktop 的 StateBlock:player 是独立包(desktop 依赖它,不能反向依赖)。
+ * 这里给一份同形的最小实现 —— 关键是**自身撑出 16:9**,这样解析完成后画面接管,
+ * 舞台高度不跳(旧实现是 48px 空白环,左上角,解析完整个区域突然撑开)。
+ * 颜色走主题变量(surface / text 系列),与全站一致。
+ */
+function MediaState({
+  tone = "neutral",
+  title,
+  detail,
+  action,
+}: {
+  tone?: "neutral" | "error" | "loading"
+  title: string
+  detail?: string
+  action?: React.ReactNode
+}) {
+  // 圆角与 VideoShell / PlayerControls 同档(rounded-xl):加载态与播放态切换时
+  // 舞台四角不变形。
+  return (
+    <div className="flex aspect-video w-full flex-col items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-[var(--surface-2)] p-6 text-center">
+      {tone === "loading" ? (
+        <SpinnerIcon className="h-8 w-8 animate-spin text-[var(--text-dim)]" />
+      ) : (
+        <span
+          className="grid h-9 w-9 place-items-center rounded-full bg-[var(--surface-3)] text-base font-semibold text-[var(--text-dim)]"
+          aria-hidden
+        >
+          {tone === "error" ? "!" : "∅"}
+        </span>
+      )}
+      <p className="text-sm font-medium text-[var(--text)]">{title}</p>
+      {detail ? <p className="max-w-[46ch] text-xs leading-relaxed text-[var(--text-dim)]">{detail}</p> : null}
+      {action ? <div className="mt-1">{action}</div> : null}
+    </div>
+  )
+}
+
 /**
  * 在用户手势内解锁浏览器 autoplay policy(带声音自动播放)。
  *
@@ -106,6 +150,13 @@ export function PlayableMedia({
     }
   }
 
+  /** 重试解析:清错误后重跑一次(解析失败/无可播流两个态的出口)。 */
+  function retryResolve() {
+    setError(null)
+    log.userRetry()
+    void handlePlay()
+  }
+
   // autoResolve(默认开启):挂载即自动懒解析起播,无「播放」按钮。
   // 用 ref 持 resolve,effect 只跑一次(StrictMode 双挂载幂等:第二次挂载 resolved 已非空直接播)。
   const startedRef = useRef(false)
@@ -163,26 +214,47 @@ export function PlayableMedia({
 
   // 解析失败展示。
   if (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    // 需要登录是最常见的一类失败(weibo:user / xhs 匿名拿不到),单独成一个态 ——
+    // 把原始英文报错直接甩给用户,他不知道下一步该去「账号与凭证」。
+    const needLogin = /登录|cookie|未授权|login|401|403/i.test(msg)
     return (
-      <div className="rounded border border-red-300 p-2 text-sm text-red-600">
-        解析失败:{error instanceof Error ? error.message : String(error)}
-      </div>
+      <MediaState
+        tone="error"
+        title={needLogin ? "需要登录" : "解析失败"}
+        detail={
+          needLogin
+            ? "这个源需要登录态。到「账号与凭证」扫码或粘贴 cookie 后重试。"
+            : msg
+        }
+        action={
+          <button type="button" className={MS_BTN} onClick={retryResolve}>
+            重试
+          </button>
+        }
+      />
     )
   }
 
   if (!hasPlayable) {
-    // 默认 autoResolve:挂载即解析,播放按钮不再需要。解析中/等待解析 → spinner
-    // (与 VideoShell 缓冲 loading 一致);无 resolve 且无流(无播放能力)→ 空占位。
+    // 默认 autoResolve:挂载即解析。解析中占住 16:9 —— 旧实现是无样式 div 里的
+    // 48px 空白环,挤在舞台左上角,解析完成后画面撑开导致整页跳一下。
     if (!resolve) return null
-    return (
-      <div>
-        <SpinnerIcon className="h-12 w-12 animate-spin text-zinc-400" />
-      </div>
-    )
+    return <MediaState tone="loading" title="正在解析…" detail="正在向平台取直链。" />
   }
 
   if (!stream) {
-    return <div className="rounded border border-zinc-300 p-4 text-center text-sm text-zinc-500">无可播流</div>
+    return (
+      <MediaState
+        title="暂时没有可播流"
+        detail="房间可能未开播,或该内容已下架。稍后重试,或到订阅里刷新一次。"
+        action={
+          <button type="button" className={MS_BTN} onClick={retryResolve}>
+            重试
+          </button>
+        }
+      />
+    )
   }
 
   if (playError) {
@@ -255,7 +327,7 @@ export function PlayableMedia({
   // 统一自撑 16:9(与 VideoShell 对齐):容器 padding-top 撑高,video absolute 填满,
   // 未初始化的 video 不会以默认 300x150 尺寸悬浮。
   return (
-    <div className="relative w-full rounded bg-black" style={{ paddingTop: "56.25%" }}>
+    <div className="relative w-full rounded-xl bg-black" style={{ paddingTop: "56.25%" }}>
       <video ref={videoRef} controls autoPlay={autoPlay} className="absolute inset-0 h-full w-full object-contain" />
     </div>
   )

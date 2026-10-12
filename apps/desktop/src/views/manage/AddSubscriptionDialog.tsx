@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useState } from "react"
 import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
-import { Modal } from "../../components/Modal.tsx"
+import { Modal, Select } from "../../components/Modal.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
 import { KIND_META } from "../../store/nodes.ts"
@@ -376,7 +376,7 @@ export function AddSubscriptionDialog({
               <button className="btn btn-secondary btn-sm" disabled={searching || !keyword.trim()} onClick={() => void runSearch()}>
                 {searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />} 搜索
               </button>
-              <span className="field-help">候选来自平台**实时搜索接口**，与是否已订阅无关。</span>
+              <span className="field-help">候选来自平台实时搜索接口，与是否已订阅无关。</span>
             </div>
           </div>
 
@@ -571,14 +571,13 @@ export function AddSubscriptionDialog({
             <label className="field-label" htmlFor="add-group">
               归入分组
             </label>
-            <select id="add-group" className="select" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-              <option value="">不归入分组</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.title}
-                </option>
-              ))}
-            </select>
+            <Select
+              id="add-group"
+              value={groupId}
+              onChange={setGroupId}
+              placeholder="不归入分组"
+              options={[{ value: "", label: "不归入分组" }, ...groups.map((g) => ({ value: g.id, label: g.title }))]}
+            />
           </div>
 
           <div className="field">

@@ -20,40 +20,45 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: oklch(0.155 0.008 264);
-  --surface-1: oklch(0.196 0.009 264);
-  --surface-2: oklch(0.235 0.01 264);
-  --surface-3: oklch(0.275 0.011 264);
-  --surface-hover: oklch(0.255 0.01 264);
+  /* 暖石墨底(色相 72 / 极低彩度)。旧值 hue 264 是泛蓝的近黑 —— 冷调高对比看久了
+     发紧,而且让琥珀色成为冷底上唯一的暖点、像一个孤立的信号灯。暖中性是「阅读
+     工具」的语言,也让 accent 归入同一色系而非跳出来。 */
+  --bg: oklch(0.168 0.006 72);
+  --surface-1: oklch(0.207 0.007 72);
+  --surface-2: oklch(0.245 0.008 72);
+  --surface-3: oklch(0.285 0.009 72);
+  --surface-hover: oklch(0.265 0.008 72);
 
-  --text: oklch(0.965 0.003 264);
-  --text-muted: oklch(0.735 0.012 264);
-  --text-dim: oklch(0.605 0.012 264);
+  /* 正文不用纯白:0.925 比 0.965 柔一档,长文不刺眼,对比仍 ≈12:1。
+     --text-dim 保持 ≥4.5:1(WCAG AA),用 scripts/ui-design-audit.ts 复测。 */
+  --text: oklch(0.925 0.004 80);
+  --text-muted: oklch(0.735 0.008 80);
+  --text-dim: oklch(0.69 0.008 80);
 
   --border: oklch(1 0 0 / 9%);
   --border-strong: oklch(1 0 0 / 16%);
 
-  --accent: oklch(0.745 0.155 58);
-  --accent-hover: oklch(0.79 0.155 58);
-  --accent-soft: oklch(0.745 0.155 58 / 15%);
-  --accent-ink: oklch(0.18 0.02 58);
-  --accent-line: oklch(0.745 0.155 58 / 42%);
+  --accent: oklch(0.745 0.15 62);
+  --accent-hover: oklch(0.79 0.15 62);
+  --accent-soft: oklch(0.745 0.15 62 / 15%);
+  --accent-ink: oklch(0.2 0.03 62);
+  --accent-line: oklch(0.745 0.15 62 / 42%);
 
-  --success: oklch(0.72 0.15 152);
-  --success-soft: oklch(0.72 0.15 152 / 16%);
-  --danger: oklch(0.665 0.2 25);
-  --danger-soft: oklch(0.665 0.2 25 / 16%);
-  --warning: oklch(0.8 0.14 85);
-  --warning-soft: oklch(0.8 0.14 85 / 16%);
-  --live: oklch(0.635 0.225 22);
+  --success: oklch(0.72 0.14 152);
+  --success-soft: oklch(0.72 0.14 152 / 16%);
+  --danger: oklch(0.67 0.19 27);
+  --danger-soft: oklch(0.67 0.19 27 / 16%);
+  --warning: oklch(0.8 0.13 88);
+  --warning-soft: oklch(0.8 0.13 88 / 16%);
+  --live: oklch(0.65 0.21 25);
 
   --shadow-1: 0 1px 2px oklch(0 0 0 / 40%);
   --shadow-2: 0 8px 24px oklch(0 0 0 / 45%);
-  --scrim: oklch(0.12 0.01 264 / 72%);
+  --scrim: oklch(0.14 0.008 72 / 74%);
 
-  --logo-plate: oklch(0.965 0.003 264);
-  --logo-ink: oklch(0.155 0.008 264);
-  --stage-bg: oklch(0.1 0.008 264);
+  --logo-plate: oklch(0.925 0.004 80);
+  --logo-ink: oklch(0.168 0.006 72);
+  --stage-bg: oklch(0.11 0.006 72);
   --on-media: oklch(0.98 0 0);
 }
 
@@ -61,49 +66,95 @@
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg: oklch(0.985 0.002 264);
+  /* 与深色同一色相(暖中性 72),两套主题才是一个身份而不是两套皮。 */
+  --bg: oklch(0.985 0.003 75);
   --surface-1: oklch(1 0 0);
-  --surface-2: oklch(0.965 0.004 264);
-  --surface-3: oklch(0.935 0.005 264);
-  --surface-hover: oklch(0.955 0.005 264);
+  --surface-2: oklch(0.965 0.005 75);
+  --surface-3: oklch(0.935 0.006 75);
+  --surface-hover: oklch(0.955 0.006 75);
 
-  --text: oklch(0.2 0.012 264);
-  --text-muted: oklch(0.5 0.012 264);
-  --text-dim: oklch(0.6 0.012 264);
+  --text: oklch(0.22 0.012 72);
+  --text-muted: oklch(0.48 0.012 72);
+  /* ⚠️ 0.6 在浅底上实测 3.96:1(< AA 4.5)。0.52 实测 ≈5.4:1。 */
+  --text-dim: oklch(0.52 0.012 72);
 
-  --border: oklch(0.2 0.012 264 / 10%);
-  --border-strong: oklch(0.2 0.012 264 / 18%);
+  --border: oklch(0.22 0.012 72 / 11%);
+  --border-strong: oklch(0.22 0.012 72 / 20%);
 
-  --accent: oklch(0.55 0.15 48);
-  --accent-hover: oklch(0.49 0.15 48);
-  --accent-soft: oklch(0.55 0.15 48 / 12%);
+  --accent: oklch(0.55 0.15 52);
+  --accent-hover: oklch(0.49 0.15 52);
+  --accent-soft: oklch(0.55 0.15 52 / 12%);
   --accent-ink: oklch(0.99 0 0);
-  --accent-line: oklch(0.55 0.15 48 / 45%);
+  --accent-line: oklch(0.55 0.15 52 / 45%);
 
-  --success: oklch(0.55 0.14 152);
-  --success-soft: oklch(0.55 0.14 152 / 12%);
-  --danger: oklch(0.53 0.2 25);
-  --danger-soft: oklch(0.53 0.2 25 / 12%);
-  --warning: oklch(0.7 0.15 82);
-  --warning-soft: oklch(0.7 0.15 82 / 18%);
-  --live: oklch(0.55 0.22 22);
+  --success: oklch(0.53 0.13 152);
+  --success-soft: oklch(0.53 0.13 152 / 12%);
+  --danger: oklch(0.53 0.19 27);
+  --danger-soft: oklch(0.53 0.19 27 / 12%);
+  --warning: oklch(0.62 0.13 82);
+  --warning-soft: oklch(0.62 0.13 82 / 18%);
+  --live: oklch(0.55 0.21 25);
 
-  --shadow-1: 0 1px 2px oklch(0.2 0.02 264 / 8%);
-  --shadow-2: 0 8px 24px oklch(0.2 0.02 264 / 12%);
-  --scrim: oklch(0.25 0.02 264 / 48%);
+  --shadow-1: 0 1px 2px oklch(0.25 0.02 72 / 8%);
+  --shadow-2: 0 8px 24px oklch(0.25 0.02 72 / 12%);
+  --scrim: oklch(0.25 0.015 72 / 48%);
 
-  --logo-plate: oklch(0.2 0.012 264);
-  --logo-ink: oklch(0.985 0.002 264);
-  --stage-bg: oklch(0.2 0.01 264);
+  --logo-plate: oklch(0.22 0.012 72);
+  --logo-ink: oklch(0.985 0.003 75);
+  --stage-bg: oklch(0.22 0.01 72);
   --on-media: oklch(0.99 0 0);
+}
+
+/* ---------- 字体 ----------
+ * IBM Plex 超家族,自托管(public/fonts,~136KB,离线可用 —— Tauri 不能依赖 CDN)。
+ *   Sans  → UI/标题/导航
+ *   Serif → **正文**(长文用衬线是「阅读舒适」最直接的一档;serif 行高给足)
+ *   Mono  → 数字、通道 key、代码
+ * 中文不随包(思源黑体 ~10MB):回落到系统中文栈,跟在拉丁字体之后。
+ */
+@font-face {
+  font-family: "Plex Sans";
+  src: url("/fonts/plex-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Sans";
+  src: url("/fonts/plex-sans-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Sans";
+  src: url("/fonts/plex-sans-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Serif";
+  src: url("/fonts/plex-serif-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Serif";
+  src: url("/fonts/plex-serif-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Mono";
+  src: url("/fonts/plex-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
 }
 
 /* ---------- 与主题无关的令牌 ---------- */
 :root {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI",
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
-    sans-serif;
-  --font-mono: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+  --font-sans: "Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-serif: "Plex Serif", "Songti SC", "SimSun", Georgia, serif;
+  --font-mono: "Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
 
   --fs-display: 30px;
   --lh-display: 1.25;
@@ -374,6 +425,7 @@ a:hover {
 .spacer {
   flex: 1;
 }
+.clamp-1,
 .clamp-2,
 .clamp-3 {
   display: -webkit-box;
@@ -383,6 +435,9 @@ a:hover {
 }
 .clamp-2 {
   -webkit-line-clamp: 2;
+}
+.clamp-1 {
+  -webkit-line-clamp: 1;
 }
 .clamp-3 {
   -webkit-line-clamp: 3;
@@ -688,6 +743,13 @@ a:hover {
 }
 .rail.rail-collapsed .group-children {
   padding-left: 0;
+  margin-left: 0;
+  border-left: 0;
+}
+.rail.rail-collapsed .group-head-plain .nav-label,
+.rail.rail-collapsed .group-head-plain .nav-count,
+.rail.rail-collapsed .group-empty {
+  display: none;
 }
 .rail.rail-collapsed .sub-row,
 .rail.rail-collapsed .sub-dot {
@@ -820,14 +882,85 @@ a:hover {
   font-weight: 560;
 }
 
-/* 订阅子项缩进对齐分组标题的文本起点 */
+/* 订阅子项缩进:对齐分组标题的**图标列**,让「组 → 成员」从缩进就能读出层级。
+   缩进过深(旧 sp-6)在 268px 侧栏里既浪费宽度又和分组标题对不齐。 */
 .group-children {
   display: grid;
   grid-template-columns: 1fr;
-  padding-left: var(--sp-6);
+  padding-left: var(--sp-5);
+  /* 层级提示线:一眼看出这几行属于上面那个分组。 */
+  border-left: 1px solid var(--border);
+  margin-left: var(--sp-3);
+}
+/* 分组区之间留一点呼吸,否则连续两组糊成一片 */
+.group-block + .group-block,
+.group-block + div,
+div + .group-block {
+  margin-top: var(--sp-2);
+}
+/* 「未分组」的伪分组标题(不可折叠、不可删)——只作分区标识。 */
+.group-head-plain {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.group-head-plain svg {
+  flex: none;
+}
+.group-empty {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+/* 订阅行 = 可点主体 + 右侧管理菜单。菜单与行内编号共用一个槽位:两者同时出现时
+   挤在窄栏会换行,所以槽位显隐做互斥 —— 悬停/聚焦时优先露出「更多」。 */
+.sub-row-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.sub-row-wrap > .sub-row {
+  flex: 1;
+  min-width: 0;
+}
+.sub-more {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-in);
+}
+.sub-row-wrap:hover .sub-more,
+.sub-row-wrap:focus-within .sub-more {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* 露出「更多」时把行内槽位(未读数等)让出来,避免重叠。 */
+.sub-row-wrap:hover .sub-slot,
+.sub-row-wrap:focus-within .sub-slot {
+  opacity: 0;
+}
+.sub-slot {
+  display: flex;
+  align-items: center;
+  transition: opacity var(--dur-fast) var(--ease-in);
 }
 .sub-row {
-  padding-left: var(--sp-2);
+  padding-left: var(--sp-3);
+}
+/* ⚠️ 选中子项**不加粗**:分组只有一条成员时,加粗的白色子项在视觉上比分组标题
+   还重,层级倒挂(用户会以为那是分组名)。靠背景高亮 + 左侧强调条区分就够。 */
+.sub-row[aria-current="page"] {
+  font-weight: 500;
 }
 .sub-dot {
   width: 6px;
@@ -980,6 +1113,10 @@ a:hover {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  /* ⚠️ 徽标在 grid 容器里(.info-val 是 display:grid)会被拉伸成整行宽 ——
+     「已配置」那条绿条就是这么来的。给回自身宽度。 */
+  justify-self: start;
+  align-self: center;
   height: 20px;
   padding-inline: var(--sp-2);
   border-radius: var(--r-xs);
@@ -1164,13 +1301,51 @@ a:hover {
 .input-wide {
   max-width: 320px;
 }
+/* Select 触发器(radix):不靠 background-image 画箭头,图标是真实元素,能跟随主题色。 */
 .select {
-  appearance: none;
-  padding-right: var(--sp-8);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
   cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right var(--sp-3) center;
+  text-align: left;
+}
+.select-caret {
+  flex: none;
+  color: var(--text-dim);
+}
+/* 下拉浮层:radix 自己渲染,深色主题可控(原生 select 弹的是亮色系统菜单)。 */
+.select-pop {
+  z-index: var(--z-modal);
+  min-width: var(--radix-select-trigger-width);
+  max-height: min(320px, var(--radix-select-content-available-height));
+  overflow: hidden;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  box-shadow: 0 12px 32px oklch(0 0 0 / 45%);
+}
+.select-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-small);
+  color: var(--text);
+  cursor: pointer;
+  outline: none;
+}
+.select-item[data-highlighted] {
+  background: var(--surface-hover);
+}
+.select-item[data-state="checked"] {
+  font-weight: 560;
+}
+.select-check {
+  margin-left: auto;
+  color: var(--accent);
 }
 .input-group {
   position: relative;
@@ -1198,33 +1373,38 @@ a:hover {
 }
 
 /* 开关 */
+/* radix Switch:轨道是 .switch,滑块是它的子元素 .switch-thumb(不再是 ::after)。 */
 .switch {
   position: relative;
   flex: none;
   width: 38px;
   height: 22px;
+  padding: 0;
   border-radius: var(--r-full);
   background: var(--surface-3);
   border: 1px solid var(--border);
+  cursor: pointer;
   transition: background var(--dur-base) var(--ease-in), border-color var(--dur-base) var(--ease-in);
 }
-.switch::after {
-  content: "";
-  position: absolute;
-  top: 2px;
-  left: 2px;
+.switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.switch-thumb {
+  display: block;
   width: 16px;
   height: 16px;
   border-radius: var(--r-full);
   background: var(--text-muted);
+  translate: 2px 0;
   transition: translate var(--dur-base) var(--ease-in), background var(--dur-base) var(--ease-in);
 }
-.switch[aria-checked="true"] {
+.switch[data-state="checked"] {
   background: var(--accent);
   border-color: transparent;
 }
-.switch[aria-checked="true"]::after {
-  translate: 16px 0;
+.switch[data-state="checked"] .switch-thumb {
+  translate: 18px 0;
   background: var(--accent-ink);
 }
 
@@ -1310,9 +1490,20 @@ a:hover {
   margin-inline: auto;
   min-height: 60%;
 }
+/* 内联空态(卡片 / 窄栏里):不要「居中孤岛」那套 —— 整页空态居中是对的,
+   但塞进宽卡片时会缩成 460px 的一小块飘在正中,看着像布局坏了(诊断页的
+   「没有错误」实测就是一大片空卡片)。改为左对齐的紧凑消息。 */
 .state-block-tight {
   padding: var(--sp-4) var(--sp-3);
   gap: var(--sp-2);
+  justify-items: start;
+  text-align: left;
+  max-width: none;
+  margin-inline: 0;
+}
+.state-block-tight .state-glyph {
+  width: 34px;
+  height: 34px;
 }
 .state-glyph {
   display: grid;
@@ -1586,8 +1777,10 @@ a:hover {
   gap: var(--sp-3);
   width: 100%;
   align-items: flex-start;
-  padding: var(--sp-3);
-  border-radius: var(--r-lg);
+  /* 上紧下松:行距靠 gap 给,行内 padding 收窄 —— 摘要收到一行后行高约 76px,
+     一屏能多露出两三条。 */
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
   text-align: left;
   color: inherit;
   transition: background var(--dur-fast) var(--ease-in);
@@ -1611,13 +1804,32 @@ a:hover {
   letter-spacing: -0.005em;
   color: var(--text);
 }
+/* 已读态:压低到 --text-dim(曾经的 --text-muted 太接近正文,读过的和没读过的
+   看着差不多,「未读」这个信息就白给了)。 */
 .list-row[data-read="true"] .list-title {
-  color: var(--text-muted);
+  color: var(--text-dim);
   font-weight: 480;
 }
 .list-excerpt {
   font-size: var(--fs-small);
   color: var(--text-muted);
+}
+.list-kind {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-dim);
+}
+/* 元信息不再是「作者 · 时间」的一串,而是标签在左、时间贴右的编排。 */
+.list-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-time {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-dim);
 }
 .list-meta {
   display: flex;
@@ -1625,7 +1837,8 @@ a:hover {
   gap: var(--sp-2);
   font-size: var(--fs-micro);
   color: var(--text-dim);
-  flex-wrap: wrap;
+  /* 不换行:作者名超长时省略,时间靠右固定 —— 换行会让行高不齐、列表失去节奏。 */
+  min-width: 0;
 }
 .list-thumb {
   flex: none;
@@ -1777,9 +1990,12 @@ a:hover {
   object-fit: cover;
   display: block;
 }
+/* 正文用衬线:长文在同等字号下衬线的可读性明显更好(笔画对比给出更强的字词轮廓)。
+   行高按 serif 惯例再给宽一点(1.8)。标题/导航保持无衬线 —— 衬线只服务长文。 */
 .article-body {
+  font-family: var(--font-serif);
   font-size: var(--article-fs);
-  line-height: 1.78;
+  line-height: 1.8;
 }
 .article-body > * + * {
   margin-top: var(--sp-5);
@@ -1944,6 +2160,17 @@ a:hover {
   color: var(--text);
   /* 固定 2 行占位:标题长短不一时卡片等高,网格不会参差。 */
   min-height: calc(2 * 1.42em);
+}
+.card-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.card-time {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-dim);
 }
 .card-meta {
   display: flex;
@@ -2181,6 +2408,20 @@ a:hover {
   gap: var(--sp-6);
   align-items: start;
 }
+/* ⚠️ .stage 原本没有任何规则:视频高度 = 56.25% × 容器宽(由 VideoShell 的
+   padding-top 撑),在窄窗(1080 断点下播放页变单栏)真实宽度可达 940px → 视频
+   528px,加上标题/操作就超出视口,"除了画面什么都看不到",标题都要滚才看到。
+   按视口高度反推宽度上限,并把舞台居中 —— 首屏始终留得下标题与操作按钮。 */
+.stage {
+  max-width: calc((100dvh - 300px) / 0.5625);
+  margin-inline: auto;
+}
+/* 极矮窗口下(如横屏小窗)保证舞台仍有最小可视高度,不被压成一条 */
+@media (max-height: 520px) {
+  .stage {
+    max-width: none;
+  }
+}
 .player-meta {
   display: grid;
   gap: var(--sp-3);
@@ -2198,6 +2439,10 @@ a:hover {
   gap: var(--sp-3);
   flex-wrap: wrap;
   font-size: var(--fs-small);
+  color: var(--text-dim);
+}
+.player-time {
+  margin-left: auto;
   color: var(--text-dim);
 }
 .player-actions {
@@ -2799,13 +3044,33 @@ kbd {
   display: grid;
   gap: var(--sp-2);
   justify-items: end;
+  /* 400px 的吐司在网格视图里会横跨两列、盖住卡片正文。收紧并限宽。 */
+  max-width: min(360px, 32vw);
   pointer-events: none;
+}
+/* 吐司里的动作按钮(如「撤销」)。 */
+.toast-action {
+  flex: none;
+  align-self: center;
+  height: 26px;
+  padding-inline: var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 560;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.toast-action:hover {
+  background: var(--surface-3);
 }
 .toast {
   display: flex;
   align-items: flex-start;
   gap: var(--sp-3);
-  max-width: 400px;
+  max-width: 100%;
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
@@ -2939,6 +3204,12 @@ kbd {
   overflow: hidden;
   padding: 0;
 } /* 滚动交给内层信息列,弹窗自身不滚;内边距由 .social-detail 自带 */
+/* ⚠️ flush 弹窗(社交详情)必须有**确定高度**:只有 max-height 时,`1fr` 行没有
+   可填的高度,弹窗高度退化成信息列的 min-content(实测 186px)→ 媒体区被压成
+   一条 138px 的横条。给一个偏高的 height,再靠 max-height 封顶。 */
+.modal-flush {
+  height: min(86vh, 720px);
+}
 #social-detail {
   height: 100%;
   min-height: 0;
@@ -2947,20 +3218,32 @@ kbd {
   display: grid;
   gap: var(--sp-6);
   padding: var(--sp-6);
+  /* ⚠️ 媒体列的宽度曾是 1.4fr/1fr 的折中(≈1.2 比例),套到 0.575 的竖图上,
+     contain 只能把图压成中间一条、两侧留大片空(截图里「简历」那张就是)。
+     现在:列仍是 1.4fr,但 `.social-detail-media` 自己按**图片比例**定宽并在
+     单元格里居中 —— 容器比例 === 图片比例时 contain 恰好填满,不留缝不裁切。 */
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   align-items: stretch;
   height: 100%;
   min-height: 0;
+  --detail-media-ratio: 0.8;
 }
 /* 媒体框必须有「确定的 height」,图片的百分比尺寸才有基准;
    只给 max-height 会让容器高度退化成 auto,图片按自然尺寸绘制、
    再由 overflow:hidden 裁掉超出部分(就是「撑满 + 截断」的成因)。
    图片用 object-fit: contain:完整显示原图、按比例缩放、不裁切、不溢出。 */
+/* 媒体框:按**图片比例**定比例,宽度吃满单元格、高度由比例反推,在单元格里居中。
+   容器比例 === 图片比例 → contain 恰好填满(不留缝、不裁切、不被压成一条)。
+   比例钳 0.5~1.9:超长截图 / 超宽 banner 不撑爆布局(那类图留一点缝是有意的)。 */
 .social-detail-media {
   position: relative;
+  /* 高度吃满单元格,宽度由 aspect-ratio 反推(媒体框必须有**确定的一个维度**,
+     只给 aspect-ratio 会算出 0×0)。列宽上限由 max-width 兜住。 */
   height: 100%;
-  min-height: 0;
+  justify-self: center;
+  max-width: 100%;
+  aspect-ratio: clamp(0.5, var(--detail-media-ratio, 0.8), 1.9);
   border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--surface-2);
@@ -3142,10 +3425,18 @@ kbd {
     --rail: 64px;
     --col: 316px;
   }
-  .rail-label,
+  /* ⚠️ 这里必须写真实类名 `.nav-label`。曾误写成 `.rail-label`(不存在)→ 选择器
+     空转:窄栏收到 64px 但标签没隐藏,`.nav-label`(flex:1)被压到 ~9px 宽 → 中文
+     逐字竖排。改类名时同步 `.rail-collapsed` 那组规则。
+     ⚠️ 两份隐藏列表必须**逐项对齐**:曾漏掉 `.group-empty`,同一根因复发 —— 长提示
+     文案在 64px 栏里逐字竖排。 */
+  .nav-label,
   .rail-section-title,
   .nav-caret-btn,
-  .nav-count {
+  .nav-count,
+  .nav-warn,
+  .rail-empty,
+  .group-empty {
     display: none;
   }
   .rail-head {
@@ -3166,6 +3457,8 @@ kbd {
   }
   .group-children {
     padding-left: 0;
+    margin-left: 0;
+    border-left: 0;
   }
   .sub-row {
     padding-left: 0;

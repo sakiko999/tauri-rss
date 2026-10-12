@@ -38,8 +38,10 @@ export function MediaMain() {
   const hotWord = useDesktop((s) => s.hotWord)
   const query = useDesktop((s) => s.query)
   const offline = useDesktop((s) => s.offline)
+  const loading = useDesktop((s) => s.loading)
   const refreshErrors = useDesktop((s) => s.refreshErrors)
   const busy = useDesktop((s) => s.busy)
+  const loadHotWord = useDesktop((s) => s.loadHotWord)
   const meta = useNodeMeta(nodeId)
   const actions = usePlayerNav()
   const go = useViewNavigate()
@@ -52,21 +54,74 @@ export function MediaMain() {
   const health = meta.sub ? healthOf(meta.sub, refreshErrors, busy) : "ok"
   const hasMix = liveItems.length > 0 && restItems.length > 0
 
-  // 热搜词流加载中(词已选中但内容还没回来)——别闪「空」。
+  // ⚠️ 必须放在**所有 hook 之后**:早返回会让这一支少跑 useMemo,
+  //    切换视图时 React 抛「Rendered fewer hooks than expected」整页崩掉。
+  // 热搜视图(左栏是词榜)但还没选词:右栏原本会把 51 个热搜词当卡片列一遍 ——
+  // 与左栏「热搜榜」完全重复,而且每张卡都显示「未知作者」。没选词时给引导,不复读。
+  if (meta.type === "hot" && !hotWord) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        <GridHead title={meta.title} />
+        <StateBlock icon="speed" title="选一个热搜词" text="点左侧榜单里的任意词，这里会显示该词下的微博。" />
+      </div>
+    )
+  }
+
+  // 热搜词流:加载中 / 失败 / 空 三态必须分开 —— 失败若与加载中同态,右栏会永久
+  // 停在「正在取…」且没有重试入口。
   if (hotWord && hotWord.items.length === 0) {
+    const retry = () => void loadHotWord(hotWord.word)
     return (
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <GridHead title={viewTitleFor(meta, hotWord)} />
-        <StateBlock icon="loader" title={`正在取「${hotWord.word}」下的微博…`} text="热搜词流依赖登录 cookie;若失败会给出提示。" />
+        {hotWord.loading ? (
+          <StateBlock icon="loader" title={`正在取「${hotWord.word}」下的微博…`} text="热搜词流依赖登录 cookie;若失败会给出提示。" />
+        ) : hotWord.error ? (
+          <StateBlock
+            tone="error"
+            icon="alert"
+            title={`热搜「${hotWord.word}」加载失败`}
+            text={hotWord.error}
+            actions={
+              <button className="btn btn-secondary" onClick={retry}>
+                <Icon name="refresh" size={14} /> 重试
+              </button>
+            }
+          />
+        ) : (
+          <StateBlock
+            icon="inbox"
+            title={`「${hotWord.word}」暂无内容`}
+            text="这个词下没有取到微博,换个词或稍后再试。"
+            actions={
+              <button className="btn btn-secondary" onClick={retry}>
+                <Icon name="refresh" size={14} /> 重新获取
+              </button>
+            }
+          />
+        )}
       </div>
     )
   }
 
   if (items.length === 0) {
+    // 冷启动首轮刷新还没回来 → 别闪「这里还没有内容」。(有搜索词时优先报「没有匹配」)
+    if (loading && !query) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+          <GridHead title={viewTitleFor(meta, hotWord)} />
+          <StateBlock icon="loader" title="正在加载…" text="首次抓取或刷新进行中。" />
+        </div>
+      )
+    }
     return <MediaEmpty nodeId={nodeId} query={query} offline={offline} hasSub={!!meta.sub} disabled={meta.sub ? !meta.sub.enabled : false} onGo={go} />
   }
 
-  const pageHead = <GridHead title={viewTitleFor(meta, hotWord)} sub={`${items.length} 条`} health={health} />
+  // ⚠️ 计数用 view.total(筛选后的**总数**),不是 items.length —— 后者是分页窗口
+  // 内的条数(默认 60,滚动加载才增长)。用窗口长度会出现「侧栏说 900、表头说 240」
+  // 的同一视图两个数字。热搜词流不是窗口(全量返回),仍用长度。
+  const total = hotWord ? items.length : view.total
+  const pageHead = <GridHead title={viewTitleFor(meta, hotWord)} sub={`${total} 条`} health={health} />
 
   if (socialOnly) {
     return (
@@ -111,6 +166,7 @@ export function MediaMain() {
           listClassName="media-grid"
           itemClassName="media-card-item"
           components={{
+            // 这只是「其余内容」子网格自身的窗口计数(与上面的总数口径不同,但自洽)。
             Header: () => <GridHead title="其余内容" sub={`${restItems.length} 条`} />,
             Footer: LoadMoreFooter,
           }}

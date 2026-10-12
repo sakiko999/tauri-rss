@@ -8,6 +8,8 @@
 import type { ReactNode } from "react"
 import * as Dialog from "@radix-ui/react-dialog"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import * as SelectPrimitive from "@radix-ui/react-select"
+import * as SwitchPrimitive from "@radix-ui/react-switch"
 import { Icon } from "./Icon.tsx"
 
 export function Modal({
@@ -127,4 +129,61 @@ export function MenuItem({
 
 export function MenuSeparator() {
   return <DropdownMenu.Separator className="menu-sep" />
+}
+
+/** 开关(radix Switch：内建键盘/ARIA/受控语义，样式仍是我们的 .switch)。 */
+export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <SwitchPrimitive.Root className="switch" checked={checked} onCheckedChange={onChange} aria-label={label}>
+      <SwitchPrimitive.Thumb className="switch-thumb" />
+    </SwitchPrimitive.Root>
+  )
+}
+
+/**
+ * Select —— 下拉选择(radix 原语 + 设计系统类名)。
+ *
+ * ⚠️ 不用原生 `<select>`:它的下拉面板由 WebView/系统渲染,深色主题下弹出的是
+ * **亮色系统菜单**且 CSS 管不到(截图里就是这块跳出来最刺眼)。radix 的
+ * Select 自己渲染浮层,样式、键盘、读屏行为都归我们。
+ */
+export function Select({
+  value,
+  onChange,
+  options,
+  placeholder,
+  id,
+  ariaLabel,
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: Array<{ value: string; label: string }>
+  placeholder?: string
+  id?: string
+  ariaLabel?: string
+}) {
+  return (
+    <SelectPrimitive.Root value={value || undefined} onValueChange={(v) => onChange(v)}>
+      <SelectPrimitive.Trigger id={id} className="select" aria-label={ariaLabel}>
+        <SelectPrimitive.Value placeholder={placeholder ?? "请选择"} />
+        <SelectPrimitive.Icon className="select-caret">
+          <Icon name="chevronDown" size={15} />
+        </SelectPrimitive.Icon>
+      </SelectPrimitive.Trigger>
+      <SelectPrimitive.Portal>
+        <SelectPrimitive.Content className="select-pop" position="popper" sideOffset={4}>
+          <SelectPrimitive.Viewport>
+            {options.map((o) => (
+              <SelectPrimitive.Item key={o.value || "__none"} className="select-item" value={o.value || "__none"}>
+                <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
+                <SelectPrimitive.ItemIndicator className="select-check">
+                  <Icon name="check" size={13} />
+                </SelectPrimitive.ItemIndicator>
+              </SelectPrimitive.Item>
+            ))}
+          </SelectPrimitive.Viewport>
+        </SelectPrimitive.Content>
+      </SelectPrimitive.Portal>
+    </SelectPrimitive.Root>
+  )
 }

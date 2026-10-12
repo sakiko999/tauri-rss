@@ -37,7 +37,7 @@ export function PlayerControls({
   onQuality: (rate: number) => void
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-b-lg bg-linear-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
+    <div className="flex flex-col gap-1 rounded-b-xl bg-linear-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
       {/* Seek(直播只显示缓冲状态,不可拖拽;带「回直播」按钮) */}
       <div className="flex items-center gap-2">
         <MediaLiveEdgeButton state={state} ops={ops} />

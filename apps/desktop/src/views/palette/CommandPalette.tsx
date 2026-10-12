@@ -7,6 +7,7 @@ import { useDesktop } from "../../store/index.ts"
 import { PAGES, SMART, TABS } from "../../store/nodes.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
+import { usePrefs } from "../../store/prefs.ts"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
 
 interface Entry {
@@ -89,7 +90,13 @@ export function CommandPalette() {
       { id: "cmd:discover", group: "命令", title: "打开发现", icon: "compass", run: () => go("page:discover") },
       { id: "cmd:groups", group: "命令", title: "管理分组", icon: "folder", run: () => go("page:settings") },
       { id: "cmd:offline", group: "命令", title: "切换离线模式", icon: "offline", run: () => useDesktop.getState().setOffline(!useDesktop.getState().offline) },
-      { id: "cmd:theme", group: "命令", title: "切换明暗主题", icon: "sun", run: () => useDesktop.getState().toast("info", "主题", "在顶栏右侧或「设置 → 外观」切换") },
+      {
+        id: "cmd:theme",
+        group: "命令",
+        title: "切换明暗主题",
+        icon: "sun",
+        run: () => usePrefs.getState().set({ theme: usePrefs.getState().theme === "dark" ? "light" : "dark" }),
+      },
       {
         id: "cmd:queue",
         group: "命令",

@@ -60,7 +60,7 @@ export function AccountPage() {
           <Banner tone="info" icon="info">
             <span className="banner-title">凭证到期了怎么办</span>
             登录态是有期限的(各平台从几天到数月不等)。失效时抓取会失败、侧栏对应订阅标红,
-            但**旧缓存会保留展示**,不会出现内容空窗。重新扫码或粘贴新 cookie 即可恢复。
+            但旧缓存会保留展示,不会出现内容空窗。重新扫码或粘贴新 cookie 即可恢复。
             <span className="t-dim">（未做自动保活——不会替你续期。bilibili 与小红书支持扫码。）</span>
           </Banner>
 
@@ -80,8 +80,8 @@ export function AccountPage() {
 
           <SideCard title="匿名可用范围" icon="info">
             <ul className="platform-notes" style={{ padding: "var(--sp-2) 0" }}>
-              <li>bilibili：热门 / 排行榜 / 视频 720P 与**直播弹幕**匿名可用;动态与登录档位需 cookie。</li>
-              <li>微博：热搜**列表**匿名可用;关注人时间线与热搜词流需登录。</li>
+              <li>bilibili：热门 / 排行榜 / 视频 720P 与直播弹幕匿名可用;动态与登录档位需 cookie。</li>
+              <li>微博：热搜列表匿名可用;关注人时间线与热搜词流需登录。</li>
               <li>小红书：推荐流（explore）匿名可用;用户主页需登录。</li>
               <li>斗鱼 / 虎牙 / 抖音 / YouTube 流:全部匿名可解析。</li>
             </ul>
@@ -152,6 +152,9 @@ function CredentialCard({
             try {
               await onSave(draft.trim())
               onToast("ok", `${meta.label} 凭证已保存`, "后续同平台订阅的抓取会自动带上。")
+            } catch (e) {
+              // 保存失败必须可见(旧代码无 catch → 只有 unhandled rejection,界面静默)。
+              onToast("error", `${meta.label} 凭证保存失败`, e instanceof Error ? e.message : String(e))
             } finally {
               setBusy(false)
             }
@@ -166,11 +169,18 @@ function CredentialCard({
         ) : null}
         <button
           className="btn btn-quiet"
-          disabled={!configured}
-          onClick={() => {
-            if (!confirm(`清除 ${meta.label} 凭证？相关订阅会退回匿名档位。`)) return
-            void onSave("")
-            onToast("warn", `${meta.label} 凭证已清除`)
+          disabled={!configured || busy}
+          onClick={async () => {
+            if (!window.confirm(`清除 ${meta.label} 凭证？相关订阅会退回匿名档位。`)) return
+            setBusy(true)
+            try {
+              await onSave("")
+              onToast("warn", `${meta.label} 凭证已清除`)
+            } catch (e) {
+              onToast("error", `${meta.label} 凭证清除失败`, e instanceof Error ? e.message : String(e))
+            } finally {
+              setBusy(false)
+            }
           }}
         >
           <Icon name="trash" size={14} /> 清除
@@ -233,7 +243,7 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
     <Modal
       open
       onOpenChange={(o) => !o && onClose()}
-      title={`扫码登录 · ${label}`}
+      title={`扫码登录 ${label}`}
       desc="用手机 App 扫码并在手机端确认"
       footer={
         <>

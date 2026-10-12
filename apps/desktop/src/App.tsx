@@ -46,6 +46,7 @@ export default function App() {
   const storeNodeId = useDesktop((s) => s.selectedNodeId)
   const nodeId = isPlay ? null : storeNodeId
   const init = useDesktop((s) => s.init)
+  const initError = useDesktop((s) => s.initError)
   const selectedArticleId = useDesktop((s) => s.selectedArticleId)
   const meta = useNodeMeta(nodeId)
   const railCollapsed = usePrefs((s) => s.railCollapsed)
@@ -57,6 +58,25 @@ export default function App() {
 
   // 播放页:独立视图,不走节点分发。
   const viewType: NodeType = isPlay ? "player" : meta.type
+
+  // 数据层没起来(宿主未注入 / 库损坏)→ 整页错误,不要白屏。
+  if (initError) {
+    return (
+      <div className="app-shell">
+        <TitleBar />
+        <div className="state-block">
+          <p className="state-title">应用数据初始化失败</p>
+          <p className="state-text">{initError}</p>
+          <div className="state-actions">
+            <button className="btn btn-primary" onClick={() => void init()}>
+              重试
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // data-sel 供窄屏在「列表 ⇄ 正文」间切换(见 styles.css 的 900px 断点)。
   const sel = viewType === "reader" ? !!selectedArticleId : false
 
@@ -71,7 +91,10 @@ export default function App() {
       >
         <Rail />
         {viewType === "reader" ? <ArticlePane /> : viewType === "hot" ? <HotPane /> : null}
-        <main id="main-region" className="main-region" tabIndex={-1}>
+        {/* ⚠️ key=nodeId:换节点时重挂主区。不这么做的话 Virtuoso/VirtuosoGrid 会保留
+            上一个 feed 的 scrollTop(切换订阅后停在原位置,列表看着像空的)。
+            key 只在节点变化时变 —— 热搜词切换(同一节点换 ?word=)不重挂,不会闪。 */}
+        <main id="main-region" key={nodeId ?? "home"} className="main-region" tabIndex={-1}>
           {isPlay ? (
             <PlayerPage />
           ) : meta.type === "reader" ? (

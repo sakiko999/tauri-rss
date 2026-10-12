@@ -24,6 +24,41 @@ function badged(item: MediaItem, actions: CardActions) {
     },
   }
 }
+
+/**
+ * 这张卡的主操作是「播放」吗?
+ *
+ * ⚠️ 只有 video / audio / live 有可播流。article 与 social 点「播放」都会掉进
+ * 「该条目不指向可解析的视频链接」的破碎播放页 —— 主操作必须是「打开原文」
+ * (article)/「打开详情」(social),封面也不该摆播放按钮(参考实现
+ * `new_desktop/js/components.js` 的 cardMini 只给 video/audio 出 play 图标)。
+ */
+export function isPlayableKind(kind: MediaItem["kind"]): boolean {
+  return kind === "video" || kind === "audio" || kind === "live"
+}
+
+/**
+ * 卡片脚注的「加入队列」按钮。
+ *
+ * ⚠️ 之前只有一个 + 大小的裸图标:没有 aria-label,屏幕阅读器只念「按钮」;
+ * 而且和整卡点击(播放)是两个完全不同的动作,必须点明。
+ */
+function QueueButton({ item, onQueue }: { item: MediaItem; onQueue: (item: MediaItem) => void }) {
+  return (
+    <button
+      className="icon-btn sm"
+      aria-label="加入播放队列"
+      title="加入播放队列"
+      onClick={(e) => {
+        e.stopPropagation()
+        onQueue(item)
+      }}
+    >
+      <Icon name="plus" size={13} />
+    </button>
+  )
+}
+
 /**
  * 网格媒体卡(video / audio / live 通用;live 加在线与脉冲角标)。
  *
@@ -33,11 +68,17 @@ function badged(item: MediaItem, actions: CardActions) {
 export function MediaCard({ item, actions }: { item: MediaItem; actions: CardActions }) {
   const img = mediaUrl(item)
   const live = item.kind === "live"
+  // ⚠️ 这张卡也会收到 article/social(混合 feed:「全部」/分组/智能订阅)。它们**没有
+  // 可播流**,主操作必须是「打开原文/详情」而不是播放 —— 否则点一下必然跳到
+  // 「该条目不指向可解析的视频链接」的破碎播放页。(整屏社交走 SocialCard/MasonryGrid。)
+  const playable = isPlayableKind(item.kind)
   const isLiveNow = live && (item as { liveStatus?: string }).liveStatus !== "offline"
   const dur = (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
   const online = onlineOf(item)
   const platform = platformOf(item)
   const b = badged(item, actions)
+  // article 同 social:没有可播流,整卡点击应是「打开原文」而不是播放。
+  const primary = playable ? () => actions.onPlay(item) : () => actions.onOpen?.(item)
 
   return (
     <article
@@ -45,11 +86,14 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
       role="button"
       tabIndex={0}
       aria-label={item.title}
-      onClick={() => actions.onPlay(item)}
+      onClick={primary}
       onKeyDown={(e) => {
+        // 卡片内的「加入队列」按钮的 Enter/Space 会冒泡到这里 —— 不区分 target 会把
+        // 加队列的键盘操作变成开播。
+        if (e.target !== e.currentTarget) return
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault()
-          actions.onPlay(item)
+          primary()
         }
       }}
     >
@@ -64,19 +108,21 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
         ) : null}
         {live && online ? <span className="live-online num">{fmtCount(online)} 人在看</span> : null}
         {/* .card-play 是 pointer-events:none(整卡可点),内层要自己接管点击,
-            否则「播放」按钮形同虚设。 */}
-        <span className="card-play">
-          <span onClick={b.onSelect} role="presentation" style={{ pointerEvents: "auto" }}>
-            <Icon name="play" size={18} />
+            否则「播放」按钮形同虚设。article/social 没有可播流 → 不摆播放按钮。 */}
+        {playable ? (
+          <span className="card-play">
+            <span onClick={b.onSelect} role="presentation" style={{ pointerEvents: "auto" }}>
+              <Icon name="play" size={18} />
+            </span>
           </span>
-        </span>
+        ) : null}
       </div>
       <div className="card-body">
         <span className="card-title clamp-2">{item.title}</span>
+        {/* 作者 + 时间不再用 `·` 连接;时间贴右,作者名超长省略。 */}
         <span className="card-meta">
-          {item.author?.name ? <span className="od-truncate">{item.author.name}</span> : null}
-          {item.author?.name ? <span className="dot-sep" /> : null}
-          <span>{fmtAgo(item.publishedAt)}</span>
+          {item.author?.name ? <span className="card-author">{item.author.name}</span> : <span className="spacer" />}
+          <span className="card-time">{fmtAgo(item.publishedAt)}</span>
         </span>
         <span className="card-foot">
           {platform ? (
@@ -88,36 +134,29 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
             <span className="od-truncate">{kindLabel(item.kind)}</span>
           )}
           <span className="spacer" />
-          {actions.onQueue ? (
-            <button
-              className="icon-btn sm"
-              aria-label="加入队列"
-              onClick={(e) => {
-                e.stopPropagation()
-                actions.onQueue?.(item)
-              }}
-            >
-              <Icon name="plus" size={13} />
-            </button>
-          ) : null}
+          {/* 队列是播放特性:不可播的 kind(article/social)加进去也播不出。 */}
+          {actions.onQueue && playable ? <QueueButton item={item} onQueue={actions.onQueue} /> : null}
         </span>
       </div>
     </article>
   )
 }
 
-/** 紧凑小卡(同源推荐 / 搜索结果)。 */
+/** 紧凑小卡(同源推荐 / 搜索结果;文章也走这里 —— 见 isPlayableKind)。 */
 export function CardMini({ item, actions }: { item: MediaItem; actions: CardActions }) {
   const img = mediaUrl(item)
+  const playable = isPlayableKind(item.kind)
   return (
-    <button className="card" onClick={() => actions.onPlay(item)} aria-label={item.title}>
+    <button className="card" onClick={() => (playable ? actions.onPlay(item) : actions.onOpen?.(item))} aria-label={item.title}>
       <div className="card-media" style={{ aspectRatio: "16 / 9" }}>
         <MediaImage src={img} ratio={16 / 9} fill />
-        <span className="card-play">
-          <span>
-            <Icon name="play" size={16} />
+        {playable ? (
+          <span className="card-play">
+            <span>
+              <Icon name="play" size={16} />
+            </span>
           </span>
-        </span>
+        ) : null}
       </div>
       <div className="card-body" style={{ padding: "var(--sp-3)" }}>
         <span className="card-title clamp-2" style={{ fontSize: "var(--fs-small)" }}>

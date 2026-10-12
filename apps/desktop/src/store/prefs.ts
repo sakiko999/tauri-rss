@@ -91,3 +91,14 @@ export const usePrefs = create<PrefsState>((set, get) => ({
 
 // 模块加载即应用一次(React 挂载前就位,避免首帧后又跳一下)。
 applyPrefs(usePrefs.getState())
+
+// 「跟随系统」时监听 OS 明暗切换:resolveTheme 只在 applyPrefs 里取一次快照,
+// 不监听的话系统切了主题要重载应用才生效。
+try {
+  window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+    const s = usePrefs.getState()
+    if (s.theme === "system") applyPrefs(s)
+  })
+} catch {
+  /* 不支持 matchMedia 的环境忽略 */
+}

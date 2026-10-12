@@ -39,7 +39,16 @@ const ROOT = import.meta.dir + "/..";
 const APP = (p: Platform) => `${ROOT}/apps/${p}`;
 const SRC_TAURI = `${ROOT}/apps/src-tauri`;
 /** 移动端 dev/build 走独立 tauri.conf.mobile.json。 */
-const TAURI_CFG = (p: Platform) => (p === "mobile" ? ["--config", `${SRC_TAURI}/tauri.conf.mobile.json`] : []);
+const MOBILE_CFG = (p: Platform) => (p === "mobile" ? ["--config", `${SRC_TAURI}/tauri.conf.mobile.json`] : []);
+/**
+ * dev 额外叠 tauri.conf.dev.json(只开 CDP 调试端口 9222)。
+ * ⚠️ 端口**不加进 tauri.conf.json**:那里是 release 构建用的,带上等于给发布版开一个
+ * 无鉴权的远程调试口 —— 本机任意进程 attach 后能读改 localStorage 与 SQLite 里的 cookie。
+ */
+const DEV_CFG = (p: Platform) => [
+  ...MOBILE_CFG(p),
+  ...(p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.dev.json`] : []),
+];
 
 const HELP = `
 RSS Reader 调试脚本
@@ -57,8 +66,8 @@ RSS Reader 调试脚本
 /** 命令描述工厂（纯数据）。 */
 const viteDev = (p: Platform): CmdSpec => ({ label: `Vite dev (${p})`, cmd: "bun", args: ["run", "dev"], cwd: APP(p) });
 const viteBuild = (p: Platform): CmdSpec => ({ label: `前端构建 (${p})`, cmd: "bun", args: ["run", "build"], cwd: APP(p) });
-const tauriDev = (p: Platform): CmdSpec => ({ label: `Tauri dev (${p})`, cmd: "bunx", args: ["tauri", "dev", ...TAURI_CFG(p)], cwd: SRC_TAURI });
-const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...TAURI_CFG(p)], cwd: SRC_TAURI });
+const tauriDev = (p: Platform): CmdSpec => ({ label: `Tauri dev (${p})`, cmd: "bunx", args: ["tauri", "dev", ...DEV_CFG(p)], cwd: SRC_TAURI });
+const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...MOBILE_CFG(p)], cwd: SRC_TAURI });
 /** RSSHub sidecar:desktop 订阅源,`bun run tauri` 时随 Vite+Tauri 一并带起(独立 Node 进程,自起 1200 端口)。 */
 
 /** 解析 argv → 命令意图。纯函数。 */

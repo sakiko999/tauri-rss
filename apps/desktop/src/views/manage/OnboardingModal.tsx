@@ -23,7 +23,7 @@ export function OnboardingModal() {
       footer={
         <>
           <span className="t-micro t-dim" style={{ flex: 1 }}>
-            当前 {subscriptions.length} 个订阅 · {allItems.length} 条内容
+            当前 {subscriptions.length} 个订阅，{allItems.length} 条内容
           </span>
           <button className="btn btn-primary" onClick={() => setPrefs({ onboarded: true })}>
             开始使用
@@ -34,7 +34,7 @@ export function OnboardingModal() {
       <ol className="steps-list">
         <li>
           <span>
-            <b>侧栏</b>是订阅树:内容类型 / 智能订阅（今日·未读·星标）/ 分组下的各个源。顶部的 + 添加新源。
+            <b>侧栏</b>是订阅树：内容类型 / 智能订阅（今日、未读、星标）/ 分组下的各个源。顶部的 + 添加新源。
           </span>
         </li>
         <li>

@@ -11,7 +11,8 @@ import { useDesktop } from "../../store/index.ts"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { MediaImage } from "@tauri-playground/ui"
-import { fmtDate, mediaUrl, ratioOf } from "../../lib/media.ts"
+import { fmtDate, heroWidth, mediaUrl, ratioOf } from "../../lib/media.ts"
+import { openExternalSafely } from "../../lib/host.ts"
 import { usePrefs } from "../../store/prefs.ts"
 
 /** 正文最大宽度(阅读舒适度档位)。 */
@@ -63,9 +64,32 @@ export function ReaderMain() {
   }
 
   const hero = mediaUrl(item)
-  /** ⚠️ 桌面打开外链必须走宿主门面(WebView 拦 window.open)。 */
-  const openExternal = () => {
-    if (item.url) void globalThis.appHost.openExternal(item.url)
+  /** ⚠️ 桌面打开外链必须走宿主门面(WebView 拦 window.open);失败要有反馈。 */
+  const openExternal = () => openExternalSafely(item.url)
+  /**
+   * 正文链接委托:命中 <a> 就拦下来交宿主打开,不让 WebView 自己导航。
+   * 锚点(#开头)留在原地滚动,不交给系统浏览器。
+   */
+  const onBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const a = (e.target as HTMLElement).closest("a")
+    if (!a) return
+    e.preventDefault()
+    const href = a.getAttribute("href")
+    if (!href || href.startsWith("#")) return
+    openExternalSafely(href)
+  }
+  /** 复制链接:clipboard 可能不存在或被拒,失败不能报成功。 */
+  const copyLink = async () => {
+    if (!item.url) {
+      useDesktop.getState().toast("warn", "这条内容没有链接")
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(item.url)
+      useDesktop.getState().toast("ok", "链接已复制")
+    } catch (e) {
+      useDesktop.getState().toast("error", "复制失败", e instanceof Error ? e.message : String(e))
+    }
   }
 
   return (
@@ -90,15 +114,8 @@ export function ReaderMain() {
         >
           <Icon name="star" size={15} />
         </button>
-        <button
-          className="icon-btn sm"
-          aria-label="复制链接"
-          onClick={() => {
-            if (item.url) void navigator.clipboard?.writeText(item.url)
-            useDesktop.getState().toast("ok", "链接已复制")
-          }}
-        >
-          <Icon name="external" size={15} />
+        <button className="icon-btn sm" aria-label="复制链接" title="复制链接" onClick={() => void copyLink()}>
+          <Icon name="bookmark" size={15} />
         </button>
         <button
           className="icon-btn sm"
@@ -155,7 +172,10 @@ export function ReaderMain() {
             </div>
           ) : null}
 
-          {hero ? (
+          {/* ⚠️ hero 门槛:低清缩略图(如 320px 宽)拉满整栏会模糊占半屏,正文要滚动
+              才看得到。只在原图够大(≥640px 宽)时当满栏头图,否则不渲染 —— 列表行
+              已有缩略图,信息不丢。 */}
+          {hero && heroWidth(item) >= 640 ? (
             <figure className="article-hero" style={{ aspectRatio: ratioOf(item) }}>
               <MediaImage src={hero} ratio={ratioOf(item)} fill />
             </figure>
@@ -163,7 +183,9 @@ export function ReaderMain() {
 
           {article ? (
             html ? (
-              <div className="article-body" dangerouslySetInnerHTML={{ __html: cleanHtml }} />
+              // ⚠️ 正文里的 <a> 必须拦截:不拦的话 WebView 会**整页导航走**(应用没配
+              // Tauri on_navigation),界面被外部网页顶掉,只能重启应用才回来。
+              <div className="article-body" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: cleanHtml }} />
             ) : (
               <div className="article-body" style={{ whiteSpace: "pre-wrap" }}>
                 {article.content || item.summary || "（该条目没有正文，请打开原文查看）"}

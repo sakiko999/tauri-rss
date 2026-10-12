@@ -12,32 +12,73 @@
  * 会把裸 `window.open` 拦掉,表现为「点了没反应」。
  */
 import { useCallback, useMemo } from "react"
+import { useNavigate } from "react-router"
 import type { MediaItem } from "@tauri-playground/core"
 import { unlockAudioPlayback } from "@tauri-playground/player"
-import { useDesktop } from "../../store/index.ts"
-import { usePlayNavigate } from "../../router.tsx"
+import { nodeTypeOf, useDesktop } from "../../store/index.ts"
+import { usePlayNavigate, viewPath } from "../../router.tsx"
+import { openExternalSafely } from "../../lib/host.ts"
 import type { CardActions } from "../../components/cards.tsx"
 
 export function usePlayerNav(): CardActions {
   const navigateToPlay = usePlayNavigate()
+  const navigate = useNavigate()
   const openSocialDetail = useDesktop((s) => s.openSocialDetail)
+  const selectArticle = useDesktop((s) => s.selectArticle)
+  const markRead = useDesktop((s) => s.markRead)
   const addToQueue = useDesktop((s) => s.addToQueue)
   const toast = useDesktop((s) => s.toast)
 
+  /**
+   * 打开文章:标已读 + 选中 + 若**当前节点不是阅读视图**(如在「全部」混合网格、
+   * 视频 tab、分组聚合里),跳到文章 tab 用三栏读——否则选中态会指向一个当前视图根本
+   * 不渲染正文的条目,点一下像什么都没发生。(参考实现 `new_desktop/js/app.js`
+   * 的 openArticle 同此逻辑。)
+   *
+   * ⚠️ 跳转后**把「选中」排到 loader 之后**:`/v` 的 loader 会调 `select()` 清掉
+   * `selectedArticleId`,而 loader 是同步的(在微任务里跑完),故用 setTimeout(0)
+   * 走在它后面。zustand 的 useSyncExternalStore 是同步提交,不受 /v 的低优先级
+   * transition 影响,选中一定能落上。
+   */
+  const openArticle = useCallback(
+    (item: MediaItem) => {
+      if (item.isUnread) markRead(item)
+      if (nodeTypeOf(useDesktop.getState().selectedNodeId) !== "reader") {
+        navigate(viewPath("tab:article"))
+        setTimeout(() => selectArticle(item.id), 0)
+        return
+      }
+      selectArticle(item.id)
+    },
+    [navigate, markRead, selectArticle],
+  )
+
   const onPlay = useCallback(
     (item: MediaItem) => {
+      // ⚠️ 收口防护:social / article 都没有可播流,解析必然失败。任何「播放」入口
+      // (卡片、命令面板、未来新增的)碰到它们都改走各自的主操作,而不是送进破碎的
+      // 播放页。
+      if (item.kind === "social") {
+        openSocialDetail(item)
+        return
+      }
+      if (item.kind === "article") {
+        openArticle(item)
+        return
+      }
       unlockAudioPlayback()
       navigateToPlay(item.id)
     },
-    [navigateToPlay],
+    [navigateToPlay, openSocialDetail, openArticle],
   )
 
   const onOpen = useCallback(
     (item: MediaItem) => {
       if (item.kind === "social") openSocialDetail(item)
-      else if (item.url) void globalThis.appHost.openExternal(item.url)
+      else if (item.kind === "article") openArticle(item)
+      else openExternalSafely(item.url)
     },
-    [openSocialDetail],
+    [openSocialDetail, openArticle],
   )
 
   const onQueue = useCallback(

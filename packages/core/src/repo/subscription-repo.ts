@@ -29,16 +29,39 @@ export function createSubscriptionRepository(
   storage: StorageBackend,
   now: () => number,
 ): SubscriptionRepository {
+  /**
+   * 读-改-写串行化:订阅树是单个 KV blob,任意两个并发变更(快速连点编辑 /
+   * add 撞上 toggle / 删除分组时批量迁移成员)都会各自读到同一份旧快照,后写者
+   * 覆盖前者 —— 表现为「改了没保存」。
+   */
+  let serial: Promise<unknown> = Promise.resolve()
+  function run<T>(fn: () => Promise<T>): Promise<T> {
+    const next = serial.then(fn, fn)
+    serial = next.then(
+      () => undefined,
+      () => undefined,
+    )
+    return next
+  }
+
   async function load(): Promise<PersistedState> {
     const raw = await storage.get(STORAGE_KEY)
     if (!raw) return { subscriptions: [], groups: [] }
     try {
       const parsed = JSON.parse(raw) as PersistedState
       return {
-        subscriptions: parsed.subscriptions ?? [],
-        groups: parsed.groups ?? [],
+        subscriptions: Array.isArray(parsed?.subscriptions) ? parsed.subscriptions : [],
+        groups: Array.isArray(parsed?.groups) ? parsed.groups : [],
       }
     } catch {
+      // ⚠️ 解析失败不能静默返回空树:下一次 add/update 就会把空树写回去,用户的订阅
+      // 与分组永久消失。先留证再让调用方按「无订阅」继续。
+      try {
+        await storage.set(`${STORAGE_KEY}:corrupt`, raw)
+        await storage.delete(STORAGE_KEY)
+      } catch {
+        /* 留存失败也继续,不能在加载路径上抛。 */
+      }
       return { subscriptions: [], groups: [] }
     }
   }
@@ -62,48 +85,62 @@ export function createSubscriptionRepository(
 
     async add(subscription) {
       if (!subscription.channelKey) throw new Error("subscription requires channelKey")
-      const state = await load()
-      state.subscriptions.push(subscription)
-      await save(state)
+      return run(async () => {
+        const state = await load()
+        state.subscriptions.push(subscription)
+        await save(state)
+      })
     },
 
     async update(id, patch) {
-      const state = await load()
-      const idx = state.subscriptions.findIndex((s) => s.id === id)
-      if (idx === -1) return undefined
-      const prev = state.subscriptions[idx]!
-      const next: Subscription = { ...prev, ...patch, updatedAt: now() }
-      state.subscriptions[idx] = next
-      await save(state)
-      return next
+      return run(async () => {
+        const state = await load()
+        const idx = state.subscriptions.findIndex((s) => s.id === id)
+        if (idx === -1) return undefined
+        const prev = state.subscriptions[idx]!
+        // ⚠️ 不许把 channelKey 改空:空了之后 refresh 抛 NoChannelError,订阅静默失效。
+        const next: Subscription = { ...prev, ...patch, id, updatedAt: now() }
+        if (!next.channelKey) next.channelKey = prev.channelKey
+        state.subscriptions[idx] = next
+        await save(state)
+        return next
+      })
     },
 
     async remove(id) {
-      const state = await load()
-      state.subscriptions = state.subscriptions.filter((s) => s.id !== id)
-      await save(state)
+      return run(async () => {
+        const state = await load()
+        state.subscriptions = state.subscriptions.filter((s) => s.id !== id)
+        await save(state)
+      })
     },
 
     async addGroup(group) {
-      const state = await load()
-      state.groups.push(group)
-      await save(state)
+      return run(async () => {
+        const state = await load()
+        state.groups.push(group)
+        await save(state)
+      })
     },
 
     async updateGroup(id, patch) {
-      const state = await load()
-      const idx = state.groups.findIndex((g) => g.id === id)
-      if (idx === -1) return undefined
-      const next: SubscriptionGroup = { ...state.groups[idx]!, ...patch, id }
-      state.groups[idx] = next
-      await save(state)
-      return next
+      return run(async () => {
+        const state = await load()
+        const idx = state.groups.findIndex((g) => g.id === id)
+        if (idx === -1) return undefined
+        const next: SubscriptionGroup = { ...state.groups[idx]!, ...patch, id }
+        state.groups[idx] = next
+        await save(state)
+        return next
+      })
     },
 
     async removeGroup(id) {
-      const state = await load()
-      state.groups = state.groups.filter((g) => g.id !== id)
-      await save(state)
+      return run(async () => {
+        const state = await load()
+        state.groups = state.groups.filter((g) => g.id !== id)
+        await save(state)
+      })
     },
   }
 }

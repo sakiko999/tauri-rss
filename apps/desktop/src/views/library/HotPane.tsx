@@ -26,7 +26,7 @@ export function HotPane() {
           <h2 className="pane-title">热搜榜</h2>
           <div className="pane-meta">
             <span className="num">{words.length} 条</span>
-            <span>· 点词看该词下的微博</span>
+            <span>点词看该词下的微博</span>
           </div>
         </div>
       </header>
@@ -57,7 +57,8 @@ export function HotPane() {
                   <span className="hot-word od-truncate">{w.title}</span>
                   {heat ? <span className="hot-heat num">{heat}</span> : null}
                 </span>
-                <Icon name="external" size={13} />
+                {/* 点击是「在右栏看该词下的微博」,不是跳外链 —— 用 chevronRight 表意。 */}
+                <Icon name="chevronRight" size={13} />
               </button>
             )
           })}

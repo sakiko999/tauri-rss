@@ -95,7 +95,10 @@ export function VideoShell({
         "group flex items-center justify-center overflow-hidden bg-black outline-none",
         // 统一自撑 16:9:relative w-full + padding-top 撑开(video 未初始化也必然有
         // 高度),父容器无需定比例。全屏时 h-full w-full 撑满。
-        isFullscreen ? "h-full w-full relative" : "relative w-full rounded",
+        // ⚠️ 圆角必须与 PlayerControls 的底部圆角**同一档**:曾一个 `rounded`(4px)、
+        // 一个 `rounded-b-lg`(8px),控件条比视频框更圆,底部两角明显错位。
+        // 取 xl(12px,=--r-lg)与卡片圆角一致。
+        isFullscreen ? "h-full w-full relative" : "relative w-full rounded-xl",
         className,
       ].join(" ")}
       style={isFullscreen ? undefined : { paddingTop: "56.25%" }}

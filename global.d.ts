@@ -94,6 +94,12 @@ declare global {
      * ⚠️ 会掉微博/小红书等靠 Edge profile 的登录态。
      */
     resetProfile?(): Promise<string>
+    /**
+     * 中止在途调用并断开连接。上层整轮刷新超时时调用,让被挂住的 await 立刻返回
+     * 错误而不是继续持锁(见 tauri/browser-backend.ts 的 abortPending 注释)。
+     * 可选:非 Tauri 后端不提供(它们底层走 fetch,自带超时)。
+     */
+    abortPending?(reason: string): void
   }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */

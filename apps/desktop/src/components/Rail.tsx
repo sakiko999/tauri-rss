@@ -11,8 +11,10 @@ import { usePrefs } from "../store/prefs.ts"
 import { PAGES, SMART, TABS, KIND_META, DEFAULT_VIEW, isTabNode } from "../store/nodes.ts"
 import { healthOf, kindCounts, type Health } from "../store/selectors.ts"
 import { Icon } from "./Icon.tsx"
-import { useViewNavigate } from "../router.tsx"
+import { Menu, MenuItem, MenuSeparator } from "./Modal.tsx"
+import { useSettingsNavigate, useViewNavigate } from "../router.tsx"
 import { AddSubscriptionDialog } from "../views/manage/AddSubscriptionDialog.tsx"
+import { EditSubscriptionDialog } from "../views/manage/EditSubscriptionDialog.tsx"
 import { useState } from "react"
 
 const HEALTH_ICON: Partial<Record<Health, string>> = { error: "alert", stale: "warning" }
@@ -28,6 +30,7 @@ export function Rail() {
   const toggleGroup = useDesktop((s) => s.toggleGroup)
   const refreshAll = useDesktop((s) => s.refreshAll)
   const go = useViewNavigate()
+  const goSettings = useSettingsNavigate()
   const collapsed = usePrefs((s) => s.railCollapsed)
   const [addOpen, setAddOpen] = useState(false)
 
@@ -123,7 +126,7 @@ export function Rail() {
         <section className="rail-section">
           <RailTitle>
             订阅
-            <button className="icon-btn sm" aria-label="管理分组" title="管理分组" onClick={() => go("page:settings")}>
+            <button className="icon-btn sm" aria-label="管理分组" title="管理分组" onClick={() => goSettings("subscriptions")}>
               <Icon name="settings" size={13} />
             </button>
           </RailTitle>
@@ -160,20 +163,33 @@ export function Rail() {
                   </button>
                 </div>
                 {open ? (
-                  <div className="group-children">
-                    {members.map((s) => (
-                      <SubRow key={s.id} sub={s} active={nodeId === s.id} unread={unreadOf[s.id] ?? 0} health={healthOf(s, refreshErrors, busy)} onOpen={() => go(s.id)} />
-                    ))}
+                  <div className="group-children" role="group" aria-label={g.title}>
+                    {members.length === 0 ? (
+                      <p className="group-empty">空分组。在「设置 → 订阅与分组」里把订阅移进来</p>
+                    ) : (
+                      members.map((s) => (
+                        <SubRow key={s.id} sub={s} active={nodeId === s.id} unread={unreadOf[s.id] ?? 0} health={healthOf(s, refreshErrors, busy)} onOpen={() => go(s.id)} />
+                      ))
+                    )}
                   </div>
                 ) : null}
               </div>
             )
           })}
+          {/* ⚠️ 未分组订阅必须有自己的标题:平铺在分组之后且无标题时,用户会以为
+              它们属于上面那个分组(层级断裂)。 */}
           {(grouped.get("") ?? []).length > 0 ? (
-            <div className="group-children" style={{ paddingLeft: 0 }}>
-              {(grouped.get("") ?? []).map((s) => (
-                <SubRow key={s.id} sub={s} active={nodeId === s.id} unread={unreadOf[s.id] ?? 0} health={healthOf(s, refreshErrors, busy)} onOpen={() => go(s.id)} />
-              ))}
+            <div className="group-block">
+              <div className="group-head-plain">
+                <Icon name="inbox" size={13} />
+                <span className="nav-label">未分组</span>
+                <span className="nav-count num">{(grouped.get("") ?? []).length}</span>
+              </div>
+              <div className="group-children">
+                {(grouped.get("") ?? []).map((s) => (
+                  <SubRow key={s.id} sub={s} active={nodeId === s.id} unread={unreadOf[s.id] ?? 0} health={healthOf(s, refreshErrors, busy)} onOpen={() => go(s.id)} />
+                ))}
+              </div>
             </div>
           ) : null}
           {subscriptions.length === 0 ? (
@@ -220,32 +236,76 @@ function SubRow({
   onOpen: () => void
 }) {
   const dl = useDesktop((s) => s.dl)
+  const refresh = useDesktop((s) => s.refresh)
+  const removeSubscription = useDesktop((s) => s.removeSubscription)
+  const toggleSubEnabled = useDesktop((s) => s.toggleSubEnabled)
+  const toast = useDesktop((s) => s.toast)
+  const [editing, setEditing] = useState(false)
   const kind = dl?.channelKind(sub.channelKey)
   const warnIcon = HEALTH_ICON[health]
+
+  /** 行尾槽位:告警 > 停用 > 刷新中 > 未读;都空时,悬停/聚焦显示管理菜单。 */
+  const slot = warnIcon ? (
+    <span className="nav-warn" title={health === "error" ? "抓取失败" : "数据陈旧"}>
+      <Icon name={warnIcon} size={13} />
+    </span>
+  ) : health === "disabled" ? (
+    <span className="nav-count t-dim">停用</span>
+  ) : health === "busy" ? (
+    <span className="status-dot" data-state="busy" />
+  ) : unread > 0 ? (
+    <span className="nav-count num" data-unread="true">
+      {unread}
+    </span>
+  ) : null
+
   return (
-    <button
-      className="nav-row sub-row"
-      data-kind={kind}
-      aria-current={active ? "page" : undefined}
-      onClick={onOpen}
-      title={sub.title}
-    >
-      <span className="sub-dot" />
-      <span className="nav-label">{sub.title}</span>
-      {warnIcon ? (
-        <span className="nav-warn" title={health === "error" ? "抓取失败" : "数据陈旧"}>
-          <Icon name={warnIcon} size={13} />
-        </span>
-      ) : health === "disabled" ? (
-        <span className="nav-count t-dim">停用</span>
-      ) : health === "busy" ? (
-        <span className="status-dot" data-state="busy" />
-      ) : unread > 0 ? (
-        <span className="nav-count num" data-unread="true">
-          {unread}
-        </span>
-      ) : null}
-    </button>
+    <div className="sub-row-wrap" data-active={String(active)}>
+      <button
+        className="nav-row sub-row"
+        data-kind={kind}
+        aria-current={active ? "page" : undefined}
+        onClick={onOpen}
+        title={sub.title}
+      >
+        <span className="sub-dot" />
+        <span className="nav-label">{sub.title}</span>
+        {slot ? <span className="sub-slot">{slot}</span> : null}
+      </button>
+      {/* 侧栏高频管理入口:之前在侧栏看到想改的订阅只能记住名字再跳设置页。 */}
+      <div className="sub-more" onClick={(e) => e.stopPropagation()}>
+        <Menu
+          trigger={
+            <button className="icon-btn sm" aria-label={`${sub.title} 的管理菜单`} title="更多操作">
+              <Icon name="more" size={13} />
+            </button>
+          }
+        >
+          <MenuItem icon="refresh" onSelect={() => void refresh(sub.id)}>
+            立即刷新
+          </MenuItem>
+          <MenuItem icon="edit" onSelect={() => setEditing(true)}>
+            编辑…
+          </MenuItem>
+          <MenuItem icon={sub.enabled ? "eyeOff" : "eye"} onSelect={() => void toggleSubEnabled(sub.id)}>
+            {sub.enabled ? "停用" : "启用"}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            danger
+            icon="trash"
+            onSelect={() => {
+              if (window.confirm(`退订「${sub.title}」?内容缓存也会一并删除。`)) {
+                void removeSubscription(sub.id).then(() => toast("ok", `已退订 ${sub.title}`))
+              }
+            }}
+          >
+            退订
+          </MenuItem>
+        </Menu>
+      </div>
+      <EditSubscriptionDialog sub={editing ? sub : null} onClose={() => setEditing(false)} />
+    </div>
   )
 }
 

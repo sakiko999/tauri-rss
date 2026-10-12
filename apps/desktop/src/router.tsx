@@ -30,6 +30,12 @@ export function useViewNavigate(): (nodeId: string, word?: string) => void {
   return (nodeId, word) => navigate(viewPath(nodeId, word))
 }
 
+/** 打开设置页并定位到某个 tab(侧栏/命令面板的「管理分组」用它,否则会落在「外观」)。 */
+export function useSettingsNavigate(): (tab: string) => void {
+  const navigate = useNavigate()
+  return (tab) => navigate(`${viewPath("page:settings")}?tab=${encodeURIComponent(tab)}`)
+}
+
 /** 导航到播放页。 */
 export function usePlayNavigate(): (itemId: string, from?: string | null) => void {
   const navigate = useNavigate()

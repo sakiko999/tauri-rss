@@ -79,6 +79,41 @@ function totalFromRaw(raw: Record<string, unknown> | undefined): number | undefi
 
 // ── shared base reconstruction ───────────────────────────────────────────────
 
+/**
+ * 摘要去 HTML。
+ *
+ * ⚠️ RSS 的 `description` 通常是**整段 HTML**(很多源直接塞 `<p>Article URL: <a href=…>`),
+ * 而 `summary` 的用途是列表/卡片的**一行纯文本摘要**。不剥的话列表里会直接显示
+ * `<p>Article URL: <a href="https://…` 这种原始标签(实测 Hacker News / BBC / GitHub
+ * 三个源的每一行都是这样)。正文走 `content`(保留 HTML,渲染前 DOMPurify),不受影响。
+ */
+function stripHtml(input: string | undefined): string | undefined {
+  if (!input) return input
+  // 没有标签就直接返回(省一次 replace,也避免把 `a < b` 这种纯文本误伤)。
+  if (!/<[a-z!/]/i.test(input)) return decodeEntities(input)
+  const noScripts = input
+    // 先整体丢弃 script/style(其内容不是文本,留着会变成乱码摘要)。
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+    // 块级标签换成空格,避免 `</p><p>` 把两段粘成一个词。
+    .replace(/<\/?(p|div|br|li|tr|h[1-6]|blockquote)\b[^>]*>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+  return decodeEntities(noScripts).replace(/\s+/g, " ").trim()
+}
+
+/** 常见实体解码(不引依赖:超出这几类的留给前端原样显示,不做半吊子解析)。 */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;|&rsquo;|&lsquo;/g, "'")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
+    .replace(/&hellip;/g, "…")
+    .replace(/&amp;/g, "&")
+}
+
 function baseFields(it: ParsedItem, ctx: DeserializeContext) {
   const raw = it.raw ?? {}
   const author = toAuthor({
@@ -89,7 +124,7 @@ function baseFields(it: ParsedItem, ctx: DeserializeContext) {
     subscriptionId: ctx.subscriptionId,
     title: it.title ?? "(untitled)",
     url: it.link,
-    summary: it.description,
+    summary: stripHtml(it.description),
     thumbnail: rsshubThumbnail(raw),
     author,
     publishedAt: it.pubDate ? tryEpoch(it.pubDate) : undefined,

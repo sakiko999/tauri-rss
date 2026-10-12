@@ -26,6 +26,18 @@ export function Toaster() {
             <span className="toast-title">{t.title}</span>
             {t.text ? <span className="toast-text">{t.text}</span> : null}
           </div>
+          {/* 可撤销操作的入口(如「一键归组」→[撤销])。 */}
+          {t.action ? (
+            <button
+              className="toast-action"
+              onClick={() => {
+                dismiss(t.id)
+                t.action!.run()
+              }}
+            >
+              {t.action.label}
+            </button>
+          ) : null}
           <button className="icon-btn sm" aria-label="关闭提示" onClick={() => dismiss(t.id)}>
             <Icon name="close" size={13} />
           </button>

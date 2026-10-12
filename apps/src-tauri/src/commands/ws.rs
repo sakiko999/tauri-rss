@@ -105,6 +105,10 @@ pub async fn ws_connect(
     on_event: Channel<WsEvent>,
     state: State<'_, Arc<WsManager>>,
 ) -> Result<WsConnectResult, String> {
+    // 0. 私网/链路本地目标拒绝(与 http_get 同一策略;loopback 放行——CDP 端点就在那)。
+    if crate::commands::is_blocked_host(&req.url) {
+        return Err("refused: target address is not routable (private/link-local)".into());
+    }
     // 1. 从 URL 构造完整 WS 请求(IntoClientRequest for &str 自动生成 Sec-WebSocket-Key/
     //    Host/Connection/Upgrade/Version),再插入自定义 header。
     //    ⚠️ 不能手动 Request::builder() 构造 Request<()> 再传 connect_async——Request<()>

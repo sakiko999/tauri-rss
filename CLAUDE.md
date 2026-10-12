@@ -41,8 +41,8 @@ packages/
   log/         ★ 域注册语义化日志（零依赖叶子包）。createLogDomain(name,{color,ansi,events})
                → 每模块自己的域 + 模板事件；开关 log="0" 全局关 / log:<域>="0" 按域关
   ui/          ⚠️ **只剩原子件在用**：desktop 仅引 MediaImage（防盗链隧道）与 fmtCount。
-               renderers/ 下的 UnifiedCard / MediaItemView / 各 *Renderer **已无消费者**
-               （2026-10-11 desktop 重写后改用自己的 components/cards.tsx）——待清理
+               UnifiedCard / MediaItemView / 各 *Renderer **已删**（2026-10-12），
+               只留 renderers/atoms/{MediaImage,format,Skeleton,icons}.tsx
 ```
 
 依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`，`ui` 是原子件；
@@ -92,9 +92,20 @@ bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite �
 bun run rss align                       # crawler/rsshub 同构断言
 
 # 自检脚本（仓库无测试基建，用最小断言）
-bun packages/core/src/example/media-store.check.ts   # 查询分支（分组聚合等）
-bun packages/core/src/example/data-layer.check.ts    # 停用订阅不抓取 / reading 回填
-bun packages/host/src/example/host-check.ts          # 门面字段（openExternal/imageProxy）
+bun packages/core/src/example/media-store.check.ts      # 查询分支（分组聚合等）
+bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
+bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
+bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
+
+# UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 已由 dev 配置开启）
+bun scripts/ui-probe.ts goto tab:all        # 导航 + 巡检（逐字竖排 / 溢出 / 遮挡 / 破图）
+bun scripts/ui-probe.ts audit               # 只巡检当前页
+bun scripts/ui-probe.ts eval "<js>"         # 在页面里求值（量真实 DOM / 计算样式）
+bun scripts/ui-probe.ts click "<selector>"  # 可信鼠标点击（悬停→按下→抬起）
+bun scripts/ui-console.ts                   # 遍历各视图，捕获 React 告警 / 未捕获异常
+bun scripts/ui-design-audit.ts              # 量化设计审计：对比度(WCAG) / 点击区 / 字号 / 间距节奏
+bun scripts/ui-shot.ts tmp/shots            # 给各模块截图存档（用于视觉复核）
+bun scripts/ui-resize.ts 1500 950           # 改窗口尺寸（验证响应式断点）
 
 # 浏览器模拟（先起干净 Edge，见 edge-cdp skill；脚本自连 CDP，零额外依赖）
 bun packages/crawler/src/example/browser-sim.ts weibo:user   # 或 xhs:user（低频防风控）
@@ -193,6 +204,12 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   媒体未加载，易被 policy 判断失败而降级静音
 - ⚠️ desktop 若自定义 `additionalBrowserArgs`（Windows）会**覆盖** wry 默认 args，
   必须显式带上 `--autoplay-policy=no-user-gesture-required`，否则带声播放回归静音
+- ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版
+  开无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用
+  `scripts/tauri.ts` 叠的 `tauri.conf.dev.json`（`bun run tauri` 自动带上）
+- ⚠️ **舞台圆角必须同档**：`VideoShell` 视频框 / `PlayerControls` 控件条 / `PlayableMedia`
+  的 MediaState 空态三者都取 `rounded-xl`（12px = `--r-lg`，与卡片一致）。曾一个是
+  `rounded`(4px)、一个是 `rounded-b-lg`(8px)，控件条比画面更圆，底部两角错位
 
 ## 弹幕（细节见 `docs/danmaku-research.md`）
 
@@ -216,6 +233,15 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 
 ## 其他约定
 
+- **可播判定 = kind 门控**：只有 `video`/`audio`/`live` 有可播流，`article`/`social`
+  不是。卡片的整卡点击与播放按钮都走 `cards.tsx` 的 `isPlayableKind`——article 显示
+  0 个播放按钮、点击进「打开文章」（`tab:article` 三栏读），social 进详情弹窗。
+  ⚠️ 曾漏掉 article：点一下掉进「该条目不指向可解析的视频链接」的破碎播放页。
+  ⚠️ 新增「播放」入口（卡片/命令面板）一律经 `usePlayerNav` 收口
+- **侧栏窄栏隐藏列表必须两份对齐**：`styles.css` 里 `.rail.rail-collapsed`（手动折叠）
+  与 `@media (max-width:1080px)`（窄窗）各有一份 `display:none` 清单，**逐项必须
+  一致**（`nav-label`/`nav-count`/`nav-warn`/`rail-empty`/`group-empty`/…）。曾漏掉
+  `group-empty` → 空分组提示文案在 64px 栏里被压成逐字竖排
 - **图片防盗链**：`MediaImage` 内联 `useProxiedImage`（blob 隧道）——命中 sinaimg 等
   防盗链图床的 src 经 `appHost.http` 带站内 Referer 拉取 → Blob URL。
   规则表 host 层 `mediaReferrerFor` 是唯一权威，ui 不写死域名
@@ -224,11 +250,33 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **social 瀑布流**用 **masonic** 虚拟化（CSS columns 追加会重排已渲染卡片）。
   ⚠️ 内层滚动容器（masonic 默认绑 window）需用 `usePositioner + useMasonry` 手动喂
   `scrollTop/height`；append 保持 positioner，refresh 重建 layoutVersion
+- ⚠️ **不用原生 `<select>`**：下拉面板由 WebView/系统渲染，深色主题下弹的是**亮色
+  系统菜单**且 CSS 管不到。统一用 `components/Modal.tsx` 的 `Select`（radix，自带浮层）。
+  同理 `Switch`/`Menu`/`Modal` 都在那个模块。原生 `<input>`/`<textarea>` 保留（可主题化）。
+- ⚠️ **加了 radix 新依赖必须重启 dev server**：Vite 的依赖预打包只在启动时做，热重载
+  不会补新包 → `Xxx is not defined` 白色崩溃页。清 `node_modules/.vite` 后重启。
+- **字体**：IBM Plex 自托管（`apps/desktop/public/fonts`，~136KB，离线可用）。
+  Sans=UI/标题，**Serif=正文**，Mono=数字/通道号。中文回落到系统栈（字体包太大不随包）。
+- **视觉基调**：暖石墨中性（色相 72/75）+ 琥珀 accent；深/浅两套同色相，改一处要改两处。
+  对比度用 `scripts/ui-design-audit.ts` 复测（目标 0 处低于 WCAG AA）。
+- ⚠️ **UI 自动化的 CDP target 必须按 URL 过滤**：DevTools 自己也是 `type: "page"`，
+  取第一个会连到 DevTools 而不是应用页面（曾因此截了一堆 DevTools 的图当"应用截图"）。
+- ⚠️ **正文里的外链必须拦截**：`.article-body` 的委托 click 命中 `<a>` 要走
+  `openExternalSafely`；不拦的话 WebView 会整页导航走（应用没配 Tauri `on_navigation`），
+  界面被外部网页顶掉、只能重启才回来
+- ⚠️ **卡片主操作按 kind 分流**：`MediaCard` 里 `social` 走「开详情弹窗」、其余走「播放」——
+  social 无可播流，误当视频播会进「不指向可解析的视频链接」的破碎播放页。
+  混合 feed（全部/分组/智能订阅）里的 social 走的是 `MediaCard`（只有**整屏都是 social**
+  才走 `SocialCard` 瀑布流），所以这条分流必须在 `MediaCard` 里，不能只靠 `SocialCard`。
+  `usePlayerNav.onPlay` 另有一道收口兜底。
 - **列表虚拟化**：网格 = VirtuosoGrid，文章列表 = Virtuoso。⚠️ 尺寸走
   `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
   List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱
 - **首启种子订阅**在 `apps/desktop/src/subscriptions.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS）。
   ⚠️ **只在空库写入** —— 之后再启动不覆盖，否则用户 CRUD 的订阅会被启动时删掉
+- **一键按类型归组**（`store/index.ts` 的 `autoGroupByKind`）先把未分组订阅按
+  `channelKind` 分桶，**只为实际有成员的 kind 建组** —— 否则会留下 0 成员空分组
+  （用户看着像归类失败）；带撤销（分组本身留着）
 - 内置 RSS 直链清单 `packages/crawler/src/channels/rss/builtin.ts`；可用性结论见
   `docs/domestic-feed-availability.md`。新源先 curl 验证再并入（注意新浪科技带
   `xml-stylesheet`，会误判 HTML，实为真 RSS）
@@ -256,7 +304,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 
 ## 下一步
 
-- **ui 包 renderer 清理**：UnifiedCard / MediaItemView / 各 *Renderer 已无消费者，待删
+- **ui 包 renderer 清理**：✅ 已完成（2026-10-12 删除全部无消费者 renderer）
 - **mobile 接入** appHost + core（当前仍是模板）
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
   `docs/desktop-crawler-service.md`

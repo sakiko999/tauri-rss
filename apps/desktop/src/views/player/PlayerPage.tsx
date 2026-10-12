@@ -12,11 +12,12 @@ import { useEffect, useMemo } from "react"
 import { PlayableMedia } from "@tauri-playground/player"
 import type { MediaItem } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
-import { usePlayParams, useViewNavigate } from "../../router.tsx"
+import { usePlayNavigate, usePlayParams, useViewNavigate } from "../../router.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock, SideCard } from "../../components/StateBlock.tsx"
 import { MediaImage } from "@tauri-playground/ui"
 import { fmtAgo, fmtTime, mediaUrl, onlineOf, platformOf, PLATFORM_LABEL } from "../../lib/media.ts"
+import { openExternalSafely } from "../../lib/host.ts"
 
 export function PlayerPage() {
   const { itemId, from } = usePlayParams()
@@ -31,6 +32,9 @@ export function PlayerPage() {
   const toggleDanmaku = useDesktop((s) => s.toggleDanmaku)
   const settings = useDesktop((s) => s.settings)
   const go = useViewNavigate()
+  // ⚠️ 播放页内跳向另一条内容必须走 /play/:itemId。用 go("play:"+id) 会生成
+  // `/v/play%3Aid`,App 的 isPlay 判的是 params.itemId → 落到 MediaMain 网格。
+  const playTo = usePlayNavigate()
 
   const item = useMemo(() => allItems.find((i) => i.id === itemId) ?? null, [allItems, itemId])
   const queueItems = useMemo(
@@ -140,15 +144,20 @@ export function PlayerPage() {
                   <span className="tag tag-live">● 直播中</span>
                 ) : (
                   <span className="tag">
+                    {/* 无时长就显示「视频」/「音频」,不写语义含糊的「点播」。 */}
                     {(item as { durationSec?: number }).durationSec
                       ? fmtTime((item as { durationSec?: number }).durationSec)
-                      : "点播"}
+                      : item.kind === "audio"
+                        ? "音频"
+                        : "视频"}
                   </span>
                 )}
                 {platform ? <span>{PLATFORM_LABEL[platform] ?? platform}</span> : null}
                 {item.author?.name ? <span>{item.author.name}</span> : null}
-                {online ? <span className="num">{online} 人在看</span> : null}
-                <span>{fmtAgo(item.publishedAt)}</span>
+                {/* 0 也要显示:直播「无人观看」是有用的状态,不该被 truthy 判断吞掉。 */}
+                {online !== undefined ? <span className="num">{online} 人在看</span> : null}
+                {/* 时间靠右 —— 与列表/卡片同一套编排(元信息不再用 `·` 串成一句)。 */}
+                <span className="player-time">{fmtAgo(item.publishedAt)}</span>
               </div>
               <div className="player-actions">
                 <button className="btn btn-secondary" aria-pressed={danmakuOn} onClick={toggleDanmaku}>
@@ -158,12 +167,12 @@ export function PlayerPage() {
                   <Icon name="queue" size={14} /> 加入队列
                 </button>
                 {nextInQueue ? (
-                  <button className="btn btn-quiet" onClick={() => go(`play:${nextInQueue.id}`)}>
+                  <button className="btn btn-quiet" onClick={() => playTo(nextInQueue.id, from)}>
                     <Icon name="skipForward" size={14} /> 下一条：{nextInQueue.title.slice(0, 16)}
                   </button>
                 ) : null}
                 {item.url ? (
-                  <button className="btn btn-quiet" onClick={() => void globalThis.appHost.openExternal(item.url!)}>
+                  <button className="btn btn-quiet" onClick={() => openExternalSafely(item.url)}>
                     <Icon name="external" size={14} /> 打开原文
                   </button>
                 ) : null}
@@ -182,7 +191,7 @@ export function PlayerPage() {
           </div>
 
           <aside className="stack">
-            <SideCard title={`播放队列 · ${queueItems.length}`} icon="queue">
+            <SideCard title={`播放队列 ${queueItems.length}`} icon="queue">
               {queueItems.length === 0 ? (
                 <p className="rail-empty">队列为空。在卡片上点 + 加入,或从列表播放。</p>
               ) : (
@@ -192,7 +201,7 @@ export function PlayerPage() {
                       key={it.id}
                       className="queue-row"
                       aria-current={it.id === item.id ? "true" : undefined}
-                      onClick={() => go(`play:${it.id}`)}
+                      onClick={() => playTo(it.id, from)}
                     >
                       <span className="queue-rank num">{i + 1}</span>
                       <span className="queue-thumb">
@@ -223,7 +232,7 @@ export function PlayerPage() {
                 <p className="rail-empty">该订阅下暂无其它条目。</p>
               ) : (
                 related.map((it) => (
-                  <button key={it.id} className="queue-row" onClick={() => go(`play:${it.id}`)}>
+                  <button key={it.id} className="queue-row" onClick={() => playTo(it.id, from)}>
                     <span className="queue-thumb">
                       <MediaImage src={mediaUrl(it)} ratio={16 / 9} fill />
                     </span>

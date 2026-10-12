@@ -26,7 +26,7 @@ import {
   type SubscriptionGroup,
 } from "@tauri-playground/core"
 import { SEED_GROUPS, SEED_SUBSCRIPTIONS } from "../subscriptions.ts"
-import { nodeKindOf, nodeMeta, subscriptionIdsOfGroup, type NodeMeta } from "./nodes.ts"
+import { nodeKindOf, nodeMeta, subscriptionIdsOfGroup, type NodeMeta, type NodeType } from "./nodes.ts"
 import {
   PAGE_SIZE,
   queryView,
@@ -40,6 +40,16 @@ import { usePrefs } from "./prefs.ts"
 export interface SocialDetail {
   item: MediaItem
   full?: MediaItem | null
+  /** 详情补全失败的原因(为空 = 还在补全或无需补全)。 */
+  error?: string
+}
+
+/** 热搜词流:词 + 内容 + 加载/失败态(失败不能与「加载中」同态,否则永久停在转圈)。 */
+export interface HotWordState {
+  word: string
+  items: MediaItem[]
+  loading: boolean
+  error?: string
 }
 
 export interface Toast {
@@ -47,6 +57,8 @@ export interface Toast {
   tone: "ok" | "warn" | "error" | "info"
   title: string
   text?: string
+  /** 可撤销操作(如「一键归组」)—— 有这组字段时吐司里出现一个动作按钮。 */
+  action?: { label: string; run: () => void }
 }
 
 interface DesktopState {
@@ -62,7 +74,9 @@ interface DesktopState {
   selectedNodeId: string | null
   selectedArticleId: string | null
   socialDetail: SocialDetail | null
-  hotWord: { word: string; items: MediaItem[] } | null
+  hotWord: HotWordState | null
+  /** DataLayer 初始化失败(库损坏/宿主未注入)→ 整页错误,不让应用白屏。 */
+  initError: string | null
 
   /** 展开的分组(纯内存)。 */
   openGroups: Record<string, boolean>
@@ -134,11 +148,24 @@ interface DesktopState {
   clearQueue(): void
   toggleDanmaku(): void
 
-  toast(tone: Toast["tone"], title: string, text?: string): void
+  toast(tone: Toast["tone"], title: string, text?: string, action?: Toast["action"]): void
   dismissToast(id: number): void
+  /** 把未分组订阅按内容类型一键归入「视频 / 直播 / 社交 / 音频 / 文章」分组。返回移动条数。 */
+  autoGroupByKind(): Promise<number>
 }
 
 const now = () => Date.now()
+
+/** 订阅参数是否等价(键序无关;空值/缺省视为同义)。 */
+function sameInfo(a: Record<string, string>, b: Record<string, string>): boolean {
+  const norm = (o: Record<string, string>) =>
+    Object.entries(o ?? {})
+      .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+      .map(([k, v]) => `${k}=${String(v).trim()}`)
+      .sort()
+      .join("&")
+  return norm(a) === norm(b)
+}
 
 /**
  * refreshAll 里单条订阅的硬超时。
@@ -151,9 +178,18 @@ const now = () => Date.now()
 const REFRESH_TIMEOUT_MS = 45_000
 
 /** 给单个 promise 套超时;超时以 reject 形式抛出,交给调用方按条记错。 */
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(p: Promise<T>, ms: number, label: string, onTimeout?: () => void): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`刷新超时(${Math.round(ms / 1000)}s):${label}`)), ms)
+    const timer = setTimeout(() => {
+      // 只 reject 外层 promise 是不够的:被挂住的底层 invoke 仍持有浏览器锁。
+      // 通知调用方做实际的中止(见 refreshAll 的 onTimeout)。
+      try {
+        onTimeout?.()
+      } catch {
+        /* 中止失败不吞掉本次超时 */
+      }
+      reject(new Error(`刷新超时(${Math.round(ms / 1000)}s):${label}`))
+    }, ms)
     p.then(
       (v) => {
         clearTimeout(timer)
@@ -235,6 +271,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     selectedArticleId: null,
     socialDetail: null,
     hotWord: null,
+    initError: null,
 
     openGroups: {},
     filter: {},
@@ -260,43 +297,53 @@ export const useDesktop = create<DesktopState>((set, get) => {
       if (get().dl) return
       if (initPromise) return initPromise
       initPromise = (async () => {
-        const dl = createDataLayer()
-        const [subs, groups, settings] = await Promise.all([
-          dl.subscriptions.list(),
-          dl.subscriptions.listGroups(),
-          dl.settings.get(),
-        ])
-        // **只在首次运行(空库)写种子**:之后再启动不覆盖——用户 CRUD 后的订阅是权威。
-        if (subs.length === 0 && groups.length === 0) {
-          const t = now()
-          for (const g of SEED_GROUPS) await dl.subscriptions.addGroup({ ...g })
-          for (const s of SEED_SUBSCRIPTIONS) {
-            await dl.subscriptions.add({ ...s, createdAt: t, updatedAt: t })
+        try {
+          const dl = createDataLayer()
+          const [subs, groups, settings] = await Promise.all([
+            dl.subscriptions.list(),
+            dl.subscriptions.listGroups(),
+            dl.settings.get(),
+          ])
+          // **只在首次运行(空库)写种子**:之后再启动不覆盖——用户 CRUD 后的订阅是权威。
+          if (subs.length === 0 && groups.length === 0) {
+            const t = now()
+            for (const g of SEED_GROUPS) await dl.subscriptions.addGroup({ ...g })
+            for (const s of SEED_SUBSCRIPTIONS) {
+              await dl.subscriptions.add({ ...s, createdAt: t, updatedAt: t })
+            }
           }
+          set({
+            dl,
+            initError: null,
+            subscriptions: await dl.subscriptions.list(),
+            groups: await dl.subscriptions.listGroups(),
+            settings,
+            openGroups: Object.fromEntries((await dl.subscriptions.listGroups()).map((g) => [g.id, true])),
+          })
+          // 把「图片隧道开关」同步到宿主门面(ui 的 MediaImage 直读,不经 React 树传参)。
+          applyRuntimeSettings(settings)
+          // 全量变更回调:条目/阅读态变化后重算视图。
+          dl.store.subscribe(() => refreshView())
+          refreshView()
+          // 刷新后恢复的选中节点(router /v/:id)在 dl 就绪前 select 会跳过 canLoadMore——补查。
+          const nodeId = get().selectedNodeId
+          if (isRealSub(nodeId)) queryCanLoadMore(nodeId)
+          // init 自动刷新走 TTL 缓存(命中零网络,启动秒开)。
+          await get().refreshAll(false)
+        } catch (e) {
+          // 初始化失败(宿主未注入 / 库损坏):置错误态由 App 渲染错误页,不让整页白屏。
+          // 允许重试:清掉 initPromise 让下次 init() 重新走一遍。
+          initPromise = null
+          set({ initError: e instanceof Error ? e.message : String(e) })
         }
-        set({
-          dl,
-          subscriptions: await dl.subscriptions.list(),
-          groups: await dl.subscriptions.listGroups(),
-          settings,
-          openGroups: Object.fromEntries((await dl.subscriptions.listGroups()).map((g) => [g.id, true])),
-        })
-        // 把「图片隧道开关」同步到宿主门面(ui 的 MediaImage 直读,不经 React 树传参)。
-        applyRuntimeSettings(settings)
-        // 全量变更回调:条目/阅读态变化后重算视图。
-        dl.store.subscribe(() => refreshView())
-        refreshView()
-        // 刷新后恢复的选中节点(router /v/:id)在 dl 就绪前 select 会跳过 canLoadMore——补查。
-        const nodeId = get().selectedNodeId
-        if (isRealSub(nodeId)) queryCanLoadMore(nodeId)
-        // init 自动刷新走 TTL 缓存(命中零网络,启动秒开)。
-        await get().refreshAll(false)
       })()
       return initPromise
     },
 
     select(nodeId) {
-      set({ selectedNodeId: nodeId, selectedArticleId: null, hotWord: null })
+      // ⚠️ 切换节点要清搜索词:否则上一个源的搜索会静默继续过滤新源,用户看到空列表
+      // 却以为新源没内容(搜索框里的词可能已经被滚出视线)。
+      set({ selectedNodeId: nodeId, selectedArticleId: null, hotWord: null, query: "" })
       const dl = get().dl
       if (!dl) return
       refreshView()
@@ -311,14 +358,18 @@ export const useDesktop = create<DesktopState>((set, get) => {
         get().toast("warn", "没有微博热搜订阅", "先在「发现」或「添加订阅」里订阅 weibo:hot。")
         return
       }
-      set({ hotWord: { word, items: [] } })
+      set({ hotWord: { word, items: [], loading: true } })
       try {
         const items = await dl.resolveHotWord(hotSub.id, word)
-        set({ hotWord: { word, items } })
+        // 竞态防护:用户可能已点了别的词,过期响应不覆盖当前词。
+        if (get().hotWord?.word !== word) return
+        set({ hotWord: { word, items, loading: false } })
       } catch (e) {
-        // 失败保留空列表,顶栏仍显示词,方便重试。
-        set({ hotWord: { word, items: [] } })
-        get().toast("error", `热搜「${word}」加载失败`, e instanceof Error ? e.message : String(e))
+        if (get().hotWord?.word !== word) return
+        // 失败要区别于「加载中」:否则右栏永久停在「正在取…」且没有重试入口。
+        const msg = e instanceof Error ? e.message : String(e)
+        set({ hotWord: { word, items: [], loading: false, error: msg } })
+        get().toast("error", `热搜「${word}」加载失败`, msg)
       }
     },
 
@@ -360,7 +411,11 @@ export const useDesktop = create<DesktopState>((set, get) => {
         .then((full) =>
           set((s) => (s.socialDetail?.item.id === item.id ? { socialDetail: { ...s.socialDetail, full } } : s)),
         )
-        .catch(() => {})
+        .catch((e) => {
+          // 补全失败必须落进 error 态:否则弹窗永久停在骨架屏 +「正在向源站补全」。
+          const msg = e instanceof Error ? e.message : String(e)
+          set((s) => (s.socialDetail?.item.id === item.id ? { socialDetail: { ...s.socialDetail, error: msg } } : s))
+        })
     },
 
     closeSocialDetail() {
@@ -398,7 +453,8 @@ export const useDesktop = create<DesktopState>((set, get) => {
       if (result.error) {
         get().toast("error", `刷新失败：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
       } else {
-        get().toast("ok", `已更新 ${title}`, `${result.itemCount} 条。TTL 内的订阅直接复用缓存,未发起网络请求。`)
+        // 手动刷新是 force 的,必然走网络 —— 旧文案「未发起网络请求」与实际行为不符。
+        get().toast("ok", `已更新 ${title}`, `${result.itemCount} 条。已强制重新抓取,绕过内容缓存。`)
       }
       refreshView()
     },
@@ -410,6 +466,9 @@ export const useDesktop = create<DesktopState>((set, get) => {
         get().toast("warn", "离线模式", "已跳过网络抓取;显示的是本地缓存内容。")
         return
       }
+      // 重入防护:刷新按钮在 loading 期间未禁用(顶栏 chip / rail 刷新键),连点会并发
+      // 发起多轮全量抓取 —— 反爬源被打 + 界面状态互相覆盖。
+      if (get().loading) return
       const subs = await dl.subscriptions.list()
       set({ loading: true, busy: Object.fromEntries(subs.map((s) => [s.id, true])) })
       const errors: Record<string, string> = {}
@@ -420,7 +479,14 @@ export const useDesktop = create<DesktopState>((set, get) => {
         //   - 任一 promise 永不 settle(如 browser 通道 invoke 无超时)同样卡死整轮。
         // 逐条超时把「无限等待」变成「这一条报错」,finally 保证 loading 一定落回。
         const results = await Promise.allSettled(
-          subs.map((s) => withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id)),
+          subs.map((s) =>
+            withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id, () => {
+              // 超时 = 大概率卡在 CDP 浏览器通道(它没有自己的超时)。中止在途调用,
+              // 让持锁的 await 立刻返回错误,withBrowserLock 得以释放 —— 否则后续
+              // 所有浏览器操作排队到天荒地老,下一轮刷新也起不来。
+              globalThis.appHost.browser?.abortPending?.(`刷新超时:${s.id}`)
+            }),
+          ),
         )
         results.forEach((r, i) => {
           const id = subs[i]!.id
@@ -486,10 +552,10 @@ export const useDesktop = create<DesktopState>((set, get) => {
     markAllRead(ids) {
       const dl = get().dl
       if (!dl) return
-      for (const id of ids) {
-        dl.store.patch(id, { isUnread: false })
-        void dl.reading.markRead(id, true)
-      }
+      for (const id of ids) dl.store.patch(id, { isUnread: false })
+      // ⚠️ 必须一次性批量落库:逐条 `void markRead` 会并发读-改-写同一张 reading blob,
+      // 后写者用旧快照覆盖前者 —— N 条只落 1 条,且整张表的既有记录被抹掉。
+      void dl.reading.markManyRead(ids, true)
     },
 
     toggleStar(item) {
@@ -517,6 +583,19 @@ export const useDesktop = create<DesktopState>((set, get) => {
     async addSubscription(channelKey, title, info, meta) {
       const dl = get().dl
       if (!dl) return null
+      // ⚠️ 重复订阅拦截:同 channelKey + 同 info 再加一次,会得到两条内容完全相同的
+      // 订阅 —— 未读数与条目数直接翻倍(而且两条都各自抓一遍网络)。
+      // 只在**新建**时拦(并入已有订阅走的是 updateSubscription,不经过这里)。
+      const dup = get().subscriptions.find(
+        (s) => s.channelKey === channelKey && sameInfo(s.info, info),
+      )
+      if (dup) {
+        get().toast("info", `已经订阅过了：${dup.title}`, "同参数重复添加会产生两份一样的内容。", {
+          label: "打开",
+          run: () => get().select(dup.id),
+        })
+        return dup.id
+      }
       const id = await dl.addSubscription(channelKey, title, info, meta)
       set({ subscriptions: await dl.subscriptions.list() })
       refreshView()
@@ -555,7 +634,9 @@ export const useDesktop = create<DesktopState>((set, get) => {
     async addGroup(title) {
       const dl = get().dl
       if (!dl) return null
-      const id = `g-${now().toString(36)}`
+      // ⚠️ 必须带随机后缀:纯时间戳在同一毫秒内连点「新建分组」会撞 id,store 里出现
+      // 两个同 id 分组(React key 冲突 + 持久化覆盖)。
+      const id = `g-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
       await dl.subscriptions.addGroup({ id, title })
       set((s) => ({ groups: [...s.groups, { id, title }], openGroups: { ...s.openGroups, [id]: true } }))
       return id
@@ -594,11 +675,92 @@ export const useDesktop = create<DesktopState>((set, get) => {
       applyRuntimeSettings(next)
     },
 
+    async autoGroupByKind() {
+      const dl = get().dl
+      if (!dl) return 0
+      const subs = get().subscriptions
+      const orphans = subs.filter((s) => !s.groupId)
+      if (!orphans.length) {
+        get().toast("info", "没有未分组的订阅")
+        return 0
+      }
+      // kind → 组名(按用户的条目实际类型,不是渠道写死的)。
+      const KIND_GROUP: Record<string, string> = {
+        video: "视频",
+        live: "直播",
+        social: "社交",
+        audio: "播客",
+        article: "文章",
+      }
+      // 1. 确保目标分组存在(按名字复用已有的,不重复建)。
+      const groups = get().groups.slice()
+      const groupIdOf = (name: string): string | null => {
+        const hit = groups.find((g) => g.title === name)
+        return hit ? hit.id : null
+      }
+      const ensureGroup = async (name: string): Promise<string> => {
+        const existing = groupIdOf(name)
+        if (existing) return existing
+        const id = await get().addGroup(name)
+        if (!id) throw new Error("创建分组失败")
+        groups.push({ id, title: name })
+        return id
+      }
+      // 2. 记住原分组,便于撤销。
+      const before = orphans.map((s) => ({ id: s.id, groupId: s.groupId ?? null }))
+      // ⚠️ 先按 kind 分桶,只为**实际有成员**的 kind 建组 —— 否则会留下 0 成员的
+      // 空分组(如「文章」组建出来了却没人),用户看着像归类失败。
+      const buckets = new Map<string, typeof orphans>()
+      for (const s of orphans) {
+        const kind = dl.channelKind(s.channelKey)
+        if (!kind) continue
+        const name = KIND_GROUP[kind] ?? "其它"
+        const list = buckets.get(name)
+        if (list) list.push(s)
+        else buckets.set(name, [s])
+      }
+      let moved = 0
+      try {
+        for (const [name, members] of buckets) {
+          const gid = await ensureGroup(name)
+          for (const s of members) {
+            await dl.subscriptions.update(s.id, { groupId: gid })
+            moved++
+          }
+        }
+      } catch (e) {
+        get().toast("error", "自动归组失败", e instanceof Error ? e.message : String(e))
+      }
+      set({ subscriptions: await dl.subscriptions.list(), groups: await dl.subscriptions.listGroups() })
+      refreshView()
+      if (!moved) return 0
+      get().toast("ok", `已归类 ${moved} 条未分组订阅`, "按内容类型分组,可在设置里调整。", {
+        label: "撤销",
+        run: () => {
+          void (async () => {
+            // 撤销:全部移回未分组。分组本身留着(可能是用户本来就有的)。
+            for (const b of before) await dl.subscriptions.update(b.id, { groupId: b.groupId })
+            set({ subscriptions: await dl.subscriptions.list() })
+            refreshView()
+            get().toast("ok", "已撤销归组")
+          })()
+        },
+      })
+      return moved
+    },
+
     setPaletteOpen(open) {
       set({ paletteOpen: open })
     },
 
     addToQueue(id) {
+      // ⚠️ 社交条目没有可播流,进了队列后点它/「下一条」都会跳到解析失败的播放页。
+      // 收口在入队处,比在每个队列行上加判断更彻底(详情弹窗也会调这里)。
+      const item = get().allItems.find((i) => i.id === id)
+      if (item?.kind === "social") {
+        get().toast("warn", "社交内容不支持播放队列", "点开卡片可以看详情。")
+        return
+      }
       set((s) => (s.queue.includes(id) ? s : { queue: [...s.queue, id] }))
     },
 
@@ -610,10 +772,11 @@ export const useDesktop = create<DesktopState>((set, get) => {
       set((s) => ({ danmakuVisible: !s.danmakuVisible }))
     },
 
-    toast(tone, title, text) {
+    toast(tone, title, text, action) {
       const id = ++toastSeq
-      set((s) => ({ toasts: [...s.toasts, { id, tone, title, text }] }))
-      setTimeout(() => get().dismissToast(id), 4200)
+      set((s) => ({ toasts: [...s.toasts, { id, tone, title, text, ...(action ? { action } : {}) }] }))
+      // 带动作的吐司给更长的阅读/点击时间(4.2s 来不及看清「撤销」就被收走)。
+      setTimeout(() => get().dismissToast(id), action ? 8000 : 4200)
     },
 
     dismissToast(id) {
@@ -628,6 +791,15 @@ export function useNodeMeta(nodeId: string | null): NodeMeta {
   const groups = useDesktop((s) => s.groups)
   const dl = useDesktop((s) => s.dl)
   return nodeMeta(nodeId, subscriptions, groups, (k) => dl?.channelKind(k))
+}
+
+/**
+ * 非 hook 版节点类型(在**动作回调**里用,如「打开文章」——回调不是渲染期,
+ * 不能用 useNodeMeta)。语义与 useNodeMeta 一致。
+ */
+export function nodeTypeOf(nodeId: string | null): NodeType {
+  const s = useDesktop.getState()
+  return nodeMeta(nodeId, s.subscriptions, s.groups, (k) => s.dl?.channelKind(k)).type
 }
 
 /** 当前节点的分组成员订阅 id(分组聚合查询用)。 */

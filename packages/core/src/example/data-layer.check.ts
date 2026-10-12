@@ -58,8 +58,55 @@ if (inStore) {
   assert.equal(inStore.isStarred, true)
 }
 
+// ── 3. 抓取解析出 0 条 ≠ 成功:不能把已有内容清空 ──
+// 真实场景:源临时故障 / 反爬返回空壳页 → fetch 成功但解析出 0 条。旧实现会
+// store.replace(空) 并把空 XML 写进缓存,内容在内存和磁盘上一起消失。
+{
+  const { registerChannel } = await import("@tauri-playground/crawler")
+  const { serializeFeed } = await import("@tauri-playground/xml")
+  let mode: "items" | "empty" = "items"
+  registerChannel({
+    key: "chk:fake",
+    name: "空壳源",
+    kind: "article",
+    getSource: () => ({
+      fetch: async () =>
+        mode === "empty"
+          ? serializeFeed([], { channelTitle: "空壳源" })
+          : serializeFeed(
+              [
+                {
+                  id: "fake-1",
+                  sourceId: "chk:fake",
+                  kind: "article",
+                  title: "真内容",
+                  url: "https://example.com/a",
+                  fetchedAt: Date.now(),
+                },
+              ],
+              { channelTitle: "空壳源" },
+            ),
+    }),
+  })
+  await seed({ id: "chk-empty", channelKey: "chk:fake", title: "空抓取测试", enabled: true, info: {} })
+
+  const first = await dl.refresh("chk-empty", { force: true })
+  assert.equal(first.itemCount, 1, "首抓应拿到 1 条")
+  assert.equal(dl.store.query({ subscriptionId: "chk-empty" }).length, 1, "条目应进 store")
+
+  mode = "empty"
+  const second = await dl.refresh("chk-empty", { force: true })
+  assert.ok(second.error, "解析出 0 条应如实报错,不能当成功")
+  assert.equal(
+    dl.store.query({ subscriptionId: "chk-empty" }).length,
+    1,
+    "空抓取覆盖掉了已有内容(数据丢失)",
+  )
+  await dl.subscriptions.remove("chk-empty")
+}
+
 // 清理,避免污染同机的 CLI 库(用的是各自 storage key,这里仍清一遍)。
 await dl.subscriptions.remove("chk-off")
 await dl.subscriptions.remove("chk-on")
 
-console.log("✔ DataLayer 自检通过(停用订阅不抓取 / reading 星标字段与回填路径)")
+console.log("✔ DataLayer 自检通过(停用订阅不抓取 / reading 回填 / 空抓取不丢内容)")

@@ -62,7 +62,7 @@ export function DiscoverPage() {
         <div className="page-wrap">
           <h1 className="page-title">发现</h1>
           <p className="page-lead">
-            平台能力从**已注册渠道**推导:能看到的按钮就有对应实现。分区浏览与搜索直接取真实数据,
+            平台能力从已注册渠道推导:能看到的按钮就有对应实现。分区浏览与搜索直接取真实数据,
             不需要先建订阅;找到想看的内容再一键订阅。
           </p>
 
@@ -290,6 +290,7 @@ function PlatformBrowser({
 function BoardList({ boards }: { boards: ChannelInfo[] }) {
   const subscriptions = useDesktop((s) => s.subscriptions)
   const addSubscription = useDesktop((s) => s.addSubscription)
+  const toast = useDesktop((s) => s.toast)
   const [busy, setBusy] = useState<string | null>(null)
 
   if (boards.length === 0) {
@@ -321,6 +322,9 @@ function BoardList({ boards }: { boards: ChannelInfo[] }) {
                   setBusy(b.key)
                   try {
                     await addSubscription(b.key, b.name, b.defaultInfo ?? {})
+                  } catch (e) {
+                    // 一键订阅失败要可见(旧代码无 catch → 只有 unhandled rejection)。
+                    toast("error", `订阅「${b.name}」失败`, e instanceof Error ? e.message : String(e))
                   } finally {
                     setBusy(null)
                   }
