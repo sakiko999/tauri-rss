@@ -277,6 +277,61 @@ fn spawn_edge(exe: &Path, args: &[String], hide: bool) -> std::io::Result<(HANDL
     Ok((pi.hProcess, pi.dwProcessId))
 }
 
+/// Edge profile 目录(release:持久化登录态)。
+fn profile_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("edge-profile"))
+}
+
+/// 递归删目录(存在才删)。用于清理脏 profile。
+fn rm_dir(path: &Path) -> std::io::Result<()> {
+    if path.exists() {
+        std::fs::remove_dir_all(path)
+    } else {
+        Ok(())
+    }
+}
+
+/// 清空浏览器 profile(先杀我们的 Edge,再删目录)。下次 browser_ensure 会自建全新目录。
+///
+/// desktop「存储与诊断」/ CLI `rss browser-reset` 均调用此命令(CLI 经它转发到同一个
+/// Rust 实现,不重复写删除逻辑)。
+///
+/// ⚠️ 只杀**占用 CDP 端口的那棵进程树**(= 我们的 Edge),不动用户日常 Edge:
+/// 日常实例用另一个 profile,不会锁住我们的目录;按镜像名全杀会把用户正在浏览的
+/// 窗口一起关掉,对「清理浏览器数据」这个动作来说过界了。
+/// 副作用:微博/小红书等靠 Edge profile 登录态的平台会**掉登录态**(需重新登录);
+/// 应用自身数据(SQLite / localStorage)不受影响。
+#[tauri::command]
+pub fn browser_reset_profile(app: AppHandle) -> Result<String, String> {
+    let dir = profile_dir(&app)?;
+    let pids = tcp_listen_pids(CDP_PORT).len();
+    kill_edge_tree_on_port(CDP_PORT);
+    // 杀进程后 Chromium 子进程释放文件句柄有延迟,重试几次再放弃。
+    let mut last_err = None;
+    for _ in 0..10 {
+        match rm_dir(&dir) {
+            Ok(()) => {
+                let msg = format!("已清理浏览器 profile(结束 {pids} 个实例):{}", dir.display());
+                eprintln!("[browser] reset-profile ok: {msg}");
+                return Ok(msg);
+            }
+            Err(e) => {
+                last_err = Some(e);
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+        }
+    }
+    Err(format!(
+        "删除 profile 失败({}):{}。可能有 Edge 仍占用该目录,请手动关闭后重试。",
+        dir.display(),
+        last_err.map(|e| e.to_string()).unwrap_or_default()
+    ))
+}
+
 /// 确保浏览器就绪,返回 CDP 端口。
 ///
 /// 幂等:端口上已有 CDP 服务(之前 spawn 的 Edge 存活)则直接复用。
@@ -295,18 +350,17 @@ pub fn browser_ensure(app: AppHandle) -> Result<u16, String> {
     let path = edge_path().ok_or("未找到系统 Edge,浏览器模拟不可用".to_string())?;
 
     // user-data-dir 持久化登录态(首次扫码登录后后续复用;独立 profile 不接管用户 Edge)。
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("edge-profile");
+    // ⚠️ profile 会被 Edge 越养越脏(累积扩展 + 微软账户层 cookie,见 edge-cdp「坑 2」),
+    // 需要时用 browser_reset_profile(桌面「存储与诊断」/ CLI `rss browser-reset`)重置,
+    // **不**在每次启动时自动清——那会连带清掉扫码登录态。
+    let data_dir = profile_dir(&app)?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
 
     // debug 构建(dev)不隐藏窗口,便于开发观察 Edge 行为;release 构建隐藏(生产无感)。
     let hide = !cfg!(debug_assertions);
     let (handle, pid) = spawn_edge(&path, &edge_args(port, &data_dir, hide), hide)
         .map_err(|e| format!("spawn Edge 失败: {e}"))?;
-    eprintln!("[browser] spawn Edge pid={pid} (hide={hide})");
+    eprintln!("[browser] spawn Edge pid={pid} (hide={hide}, profile={})", data_dir.display());
 
     // 保存进程句柄供 browser_close 终止。
     let manager = app.state::<BrowserManager>();

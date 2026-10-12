@@ -14,6 +14,7 @@ import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"
 import { CardMini } from "../../components/cards.tsx"
+import { itemKey } from "../../lib/media.ts"
 import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
 
@@ -269,7 +270,7 @@ function PlatformBrowser({
         ) : (
           <div className="result-grid">
             {items.map((it) => (
-              <CardMini key={it.id} item={it} actions={actions} />
+              <CardMini key={itemKey(it)} item={it} actions={actions} />
             ))}
           </div>
         )

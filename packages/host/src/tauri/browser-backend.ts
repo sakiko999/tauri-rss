@@ -35,6 +35,12 @@ function fromBase64(b64: string): string {
   return new TextDecoder().decode(bytes)
 }
 
+/**
+ * 单条 CDP 命令的硬超时。远大于页面内任何有意义的操作(导航 ~20s、轮询 15s),
+ * 只在「回复永久丢失」时才触发——见 send() 里的注释。
+ */
+const CDP_CMD_TIMEOUT_MS = 30_000
+
 export class TauriBrowserBackend implements BrowserBackend {
   private connId: string | null = null
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
@@ -73,9 +79,23 @@ export class TauriBrowserBackend implements BrowserBackend {
     const msg = JSON.stringify({ id, method, params })
     const payload = toBase64(msg)
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      // ⚠️ 单条命令超时是必须的:页面在命令未回话时被导航/替换,该 id 的回复会
+      // **永久丢失**,promise 就此永不 settle。后果不是「这一条卡住」而是全线卡死:
+      // waitUntil 的 deadline 只在两次 evaluate 之间检查,单次 evaluate 挂住就轮不到
+      // 超时判断(它的 timeoutMs 形同虚设)→ withBrowserLock 永不释放 → 整轮
+      // refreshAll 不结束(顶栏「更新中」永久转圈)。超时把「无限等待」降级成
+      // 「这条命令报错」,waitUntil 得以走到自己的 deadline。
+      const timer = setTimeout(() => {
+        if (this.pending.delete(id)) reject(new Error(`CDP 命令超时(${method}):页面可能已导航,回复丢失`))
+      }, CDP_CMD_TIMEOUT_MS)
+      const settle = <T>(fn: (v: T) => void) => (v: T) => {
+        clearTimeout(timer)
+        fn(v)
+      }
+      this.pending.set(id, { resolve: settle(resolve), reject: settle(reject) })
       void invoke("ws_send", { connectionId: this.connId, payload, text: true }).catch((e) => {
-        this.pending.delete(id)
+        if (!this.pending.delete(id)) return
+        clearTimeout(timer)
         reject(e instanceof Error ? e : new Error(String(e)))
       })
     })
@@ -131,5 +151,12 @@ export class TauriBrowserBackend implements BrowserBackend {
       this.connId = null
     }
     await invoke("browser_close").catch(() => {})
+  }
+
+  /** 清空 profile(Rust 侧 browser_reset_profile:杀我们的 Edge 树 + 删目录)。 */
+  async resetProfile(): Promise<string> {
+    // 连接已随进程销毁失效,清掉本地引用,下次 evaluate 会重新 ensureConn。
+    this.connId = null
+    return await invoke<string>("browser_reset_profile")
   }
 }

@@ -71,7 +71,7 @@
     return mount({
       variant: 'center',
       html:
-        '<div class="modal' + (opts.size === 'wide' ? ' modal-wide' : '') + '" role="dialog" aria-modal="true" aria-label="' + U.esc(opts.title) + '">' +
+        '<div class="modal' + (opts.size === 'wide' ? ' modal-wide' : '') + (opts.flush ? ' modal-flush' : '') + '" role="dialog" aria-modal="true" aria-label="' + U.esc(opts.title) + '">' +
           '<div class="modal-head">' +
             '<div class="modal-head-text">' +
               '<span class="modal-title">' + U.esc(opts.title) + '</span>' +
@@ -225,12 +225,22 @@
     return typeof v === 'string' ? v : (v.file || v.src || null);
   }
 
-  /* 源图真实宽高（到位即有），用于详情/播放页按原比例渲染，不作裁切 */
+  /* 图片真实宽高：优先查构建期实测的 assetSizes，其次文章自带的 image.{w,h}。
+     注意 social.images[0].ratio 存的是高/宽，方向与 CSS aspect-ratio（宽/高）相反，
+     直接当比例用会把竖图压成横图——必须换算。 */
+  function imgSize(src, item) {
+    var a = (typeof OD_CONTENT !== 'undefined' && OD_CONTENT.assetSizes) || {};
+    var s = src ? a[src] : null;
+    if (s && s.w && s.h) return { w: s.w, h: s.h };
+    if (item && item.image && item.image.w && item.image.h) return { w: item.image.w, h: item.image.h };
+    return null;
+  }
+
+  /* 宽/高，用于按原比例渲染（不裁切） */
   function ratioOf(item) {
     if (item.coverRatio) return item.coverRatio;
-    if (item.images && item.images[0] && item.images[0].ratio) return item.images[0].ratio;
-    if (item.image && item.image.w && item.image.h) return item.image.w / item.image.h;
-    return 1.778;
+    var s = imgSize(mediaUrl(item), item);
+    return s ? s.w / s.h : 1.778;
   }
 
   /* 卡片图统一到同一条 16:9 带：网格与横排轨道才不会因源比例不一而高低错落。
@@ -348,9 +358,11 @@
     var img = item.images && item.images[0];
     var media = '';
     if (img) {
+      // 竖图在瀑布流里过高会把一列拉得很长，给比例设一个下限；同时按实测宽高预留位
+      var r = Math.max(ratioOf(item), 0.66);
       media = '<span class="social-media">' +
         '<img src="' + U.esc(img.src) + '" alt="' + U.esc(U.clip(item.title || item.desc, 40)) + '" ' +
-          'loading="lazy" decoding="async" style="aspect-ratio:' + img.ratio.toFixed(4) + '">' +
+          'loading="lazy" decoding="async" style="aspect-ratio:' + r.toFixed(4) + '">' +
         (item.video ? '<span class="social-video-badge">' + icon.solid('play', { size: 11 }) + '视频</span>' : '') +
       '</span>';
     }
@@ -425,7 +437,8 @@
   OD.ui = {
     modal: modal, confirm: confirm, menu: menu, mount: mount, closeTop: closeTop,
     stateBlock: stateBlock, skeletonRows: skeletonRows, skeletonCards: skeletonCards,
-    platformMark: platformMark, cover: cover, mediaUrl: mediaUrl, ratioOf: ratioOf, readStar: readStar,
+    platformMark: platformMark, cover: cover, mediaUrl: mediaUrl, ratioOf: ratioOf,
+    imgSize: imgSize, readStar: readStar,
     mediaCard: mediaCard, cardMini: cardMini, socialCard: socialCard,
     listRow: listRow, hotRow: hotRow, settingRow: settingRow, icon: icon
   };

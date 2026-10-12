@@ -42,6 +42,21 @@ const xhsLog = createLogDomain("xhs", {
 /** URL 统一截断显示(防超长 query 刷屏;xhs 登录导航事件用)。 */
 const fmtUrl = (url: string): string => url.slice(0, 100)
 
+/** [weibo] 扫码登录生命周期(导航/出码/成功/超时),与 xhs 同形。 */
+const weiboLog = createLogDomain("weibo", {
+  color: "#e6162d", // 微博红
+  ansi: 196,
+  events: {
+    loginNavigate: { level: "info", text: (ctx: { url: string }) => `扫码登录导航 ${fmtUrl(ctx.url)}` },
+    qrReady: { level: "info", text: "二维码已捕获(可扫码)" },
+    loginOk: {
+      level: "info",
+      text: (ctx: { user_id?: string }) => `登录成功${ctx.user_id ? ` · uid=${ctx.user_id}` : ""}`,
+    },
+    loginTimeout: { level: "warn", text: "扫码登录超时或二维码已失效" },
+  },
+})
+
 /**
  * [danmaku] 弹幕通用 WS 连接层(createWsStream)——异常生命周期模板事件。
  * (2026-08-28 log 清退:wsConnect/wsOpen/wsItems/wsClosedByUser 已删——连接生命周期
@@ -93,6 +108,7 @@ export const log = {
   douyu: douyuLog,
   huya: huyaLog,
   xhs: xhsLog,
+  weibo: weiboLog,
   danmaku: danmakuLog,
   crawler: crawlerLog,
 }

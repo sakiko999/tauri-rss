@@ -9,6 +9,7 @@
  */
 import { useMemo } from "react"
 import { VirtuosoGrid } from "react-virtuoso"
+import { itemKey } from "../../lib/media.ts"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { healthOf } from "../../store/selectors.ts"
@@ -97,7 +98,7 @@ export function MediaMain() {
           </div>
           <div className="rail-track">
             {liveItems.slice(0, 12).map((it) => (
-              <MediaCard key={it.id} item={it} actions={actions} />
+              <MediaCard key={itemKey(it)} item={it} actions={actions} />
             ))}
           </div>
         </div>
@@ -113,7 +114,7 @@ export function MediaMain() {
             Header: () => <GridHead title="其余内容" sub={`${restItems.length} 条`} />,
             Footer: LoadMoreFooter,
           }}
-          computeItemKey={(_, it) => it.id}
+          computeItemKey={(_, it) => itemKey(it)}
           itemContent={(_, it) => <MediaCard item={it} actions={actions} />}
         />
       </div>
@@ -129,7 +130,7 @@ export function MediaMain() {
         listClassName="media-grid"
         itemClassName="media-card-item"
         components={{ Header: () => pageHead, Footer: LoadMoreFooter }}
-        computeItemKey={(_, it) => it.id}
+        computeItemKey={(_, it) => itemKey(it)}
         itemContent={(_, it) => <MediaCard item={it} actions={actions} />}
       />
     </div>

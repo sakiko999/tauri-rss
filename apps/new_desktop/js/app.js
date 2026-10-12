@@ -610,8 +610,139 @@
   function wireSubscriptionModal(panel, close) {
     U.bind(panel, {
       pickChannel: function (node) { pickChannelInto(panel, node.dataset.key); },
-      submitSub: function () { submitSubscription(panel, close); }
+      submitSub: function () { submitSubscription(panel, close); },
+
+      /* 添加方式切换：搜索添加 / 按渠道配置 */
+      addMode: function (node) {
+        var mode = node.dataset.id;
+        panel.querySelectorAll('[data-act="addMode"]').forEach(function (b) {
+          b.setAttribute('aria-pressed', String(b.dataset.id === mode));
+        });
+        var manual = panel.querySelector('#manual-pane');
+        var search = panel.querySelector('#search-pane');
+        if (manual) manual.hidden = mode !== 'manual';
+        if (search) search.hidden = mode !== 'search';
+        setHint(panel, mode === 'manual'
+          ? (((S().channels.channels.filter(function (c) { return c.key === panel.dataset.channelKey; })[0] || {}).defaultInfo)
+              ? '该渠道带默认参数，可直接订阅。' : '请填写必填参数后再订阅。')
+          : '先搜索并选中一个目标，再添加到订阅。');
+        setSubmitEnabled(panel, mode === 'search' ? !!selectedCandidate(panel) : true);
+      },
+
+      /* 搜索添加：切换渠道 */
+      searchChannelPick: function (node) {
+        var key = node.dataset.key;
+        var c = S().channels.channels.filter(function (x) { return x.key === key; })[0];
+        if (!c) return;
+        panel.dataset.searchKey = key;
+        panel.querySelectorAll('[data-act="searchChannelPick"]').forEach(function (b) {
+          b.setAttribute('data-active', String(b.dataset.key === key));
+        });
+        var cp = panel.querySelector('#cand-pane');
+        if (cp) cp.innerHTML = V().manage.candidatePane(c);
+        setHint(panel, '先搜索并选中一个目标，再添加到订阅。');
+        setSubmitEnabled(panel, false);
+      },
+
+      /* 候选要落到哪里：新建一条，或并入已存在的某条订阅 */
+      pickTarget: function (node) {
+        panel.querySelectorAll('[data-act="pickTarget"]').forEach(function (b) {
+          b.setAttribute('aria-checked', String(b === node));
+        });
+        var holder = panel.querySelector('[data-sub-target]');
+        if (holder) holder.value = node.dataset.target;
+        syncSelectionHint(panel);
+      },
+
+      /* 选中一个候选 */
+      pickCandidate: function (node) {
+        var list = node.closest('[data-cand-list]');
+        // 再次点击已选项 = 取消选择
+        var deselect = node.getAttribute('aria-selected') === 'true';
+        if (list) list.querySelectorAll('[data-act="pickCandidate"]').forEach(function (b) {
+          b.setAttribute('aria-selected', 'false');
+        });
+        if (deselect) {
+          setHint(panel, '先搜索并选中一个目标，再添加到订阅。');
+          setSubmitEnabled(panel, false);
+          return;
+        }
+        var holder = panel.querySelector('[data-cand-value]');
+        node.setAttribute('aria-selected', 'true');
+        if (holder) holder.value = node.dataset.value;
+        syncSelectionHint(panel);
+        setSubmitEnabled(panel, true);
+      }
     });
+
+    /* 关键词只做前端筛选，候选本身全部来自真实数据。
+       监听挂在面板上做委托 —— 切渠道时 #cand-pane 整块 innerHTML 重建，
+       挂在输入框本体上的监听会随节点一起丢掉。 */
+    panel.addEventListener('input', function (e) {
+      var input = e.target.closest('[data-cand-filter]');
+      if (!input || !panel.contains(input)) return;
+      var q = input.value.trim().toLowerCase();
+      var list = panel.querySelector('[data-cand-list]');
+      if (!list) return;
+      var shown = 0;
+      list.querySelectorAll('[data-act="pickCandidate"]').forEach(function (b) {
+        // data-hay 由候选行带出，含标题、参数值、副标题与元信息标签，一并参与筛选
+        var hay = (b.dataset.hay || (b.dataset.label + ' ' + b.dataset.value)).toLowerCase();
+        var hit = !q || hay.indexOf(q) >= 0;
+        b.hidden = !hit;
+        if (hit) shown++;
+      });
+      var lbl = panel.querySelector('#lbl-cand .num');
+      if (lbl) lbl.textContent = shown;
+      var empty = list.parentNode.querySelector('.cand-empty');
+      if (!shown && !empty) {
+        empty = U.el('<p class="t-small t-dim cand-empty">没有匹配的候选，可清空关键词，或改用「按渠道配置」手填。</p>');
+        list.parentNode.appendChild(empty);
+      } else if (shown && empty) empty.remove();
+    });
+  }
+
+  /* 选中候选后，提示要落到「新建」还是某条已有订阅 */
+  function syncSelectionHint(panel) {
+    var cand = panel.querySelector('[data-act="pickCandidate"][aria-selected="true"]');
+    if (!cand) return;
+    var target = panel.querySelector('[data-sub-target]');
+    var c = searchChannel(panel);
+    var label = cand.dataset.label;
+    if (!target || target.value === 'new') {
+      setHint(panel, cand.dataset.dup === 'true'
+        ? '「' + label + '」在该渠道下已存在，新建会得到两条相同订阅。'
+        : '已选中「' + label + '」，将新建一条订阅。');
+      return;
+    }
+    var sub = S().subscriptions.filter(function (s) { return s.id === target.value; })[0];
+    if (!sub) return;
+    var param = ((c || {}).infoTpl || [])[0];
+    var multi = OD.store.multiParamOf(c);
+    var held = param ? OD.store.valueList(sub, param.name).indexOf(String(cand.dataset.value)) >= 0 : false;
+    if (held) setHint(panel, '「' + label + '」已经在「' + sub.title + '」里了，不需要重复并入。');
+    else if (multi) setHint(panel, '把「' + label + '」并入「' + sub.title + '」，原有的 ' +
+      OD.store.valueList(sub, param.name).length + ' 项保留。');
+    else setHint(panel, '会用「' + label + '」覆盖「' + sub.title + '」现在的参数值。');
+  }
+
+  /* 搜索面板当前选中的渠道 */
+  function searchChannel(panel) {
+    var key = panel.dataset.searchKey;
+    return key ? S().channels.channels.filter(function (c) { return c.key === key; })[0] || null : null;
+  }
+
+  function selectedCandidate(panel) {
+    var holder = panel.querySelector('[data-cand-value]');
+    return holder && holder.value ? holder.value : '';
+  }
+  function setSubmitEnabled(panel, on) {
+    var btn = panel.querySelector('[data-act="submitSub"]');
+    if (btn) btn.disabled = !on;
+  }
+  function setHint(panel, text) {
+    var hint = panel.querySelector('#sub-hint');
+    if (hint) hint.textContent = text;
   }
 
   function pickChannelInto(panel, key) {
@@ -630,6 +761,59 @@
     var key = panel.dataset.channelKey;
     var c = key ? S().channels.channels.filter(function (x) { return x.key === key; })[0] : null;
     if (!c) { OD.toast('warn', '请先选择渠道', ''); return; }
+
+    /* 搜索添加模式：必须先选中一个候选，未选不给提交 */
+    var inSearch = panel.querySelector('#search-pane') && !panel.querySelector('#search-pane').hidden;
+    if (inSearch) {
+      var pick = selectedCandidate(panel);
+      if (!pick) { OD.toast('warn', '请先选中一个目标', '在上方候选列表里点选一项，或切到「按渠道配置」手填。'); return; }
+      var sc = searchChannel(panel) || c;
+      var field = (sc.infoTpl || [])[0];
+      var cand = panel.querySelector('[data-act="pickCandidate"][aria-selected="true"]');
+      var tsel = panel.querySelector('[data-sub-target]');
+      var targetId = tsel ? tsel.value : 'new';
+
+      /* 并入已有订阅 */
+      if (targetId && targetId !== 'new') {
+        var sub = S().subscriptions.filter(function (s) { return s.id === targetId; })[0];
+        if (!sub) { OD.toast('error', '目标订阅已不存在', '可能刚刚被删除，请改选「新建订阅」。'); return; }
+        var held = OD.store.valueList(sub, field.name).indexOf(String(pick)) >= 0;
+        if (held) { OD.toast('info', '已经在该订阅里了', '「' + sub.title + '」中已有这个目标，无需重复添加。'); return; }
+        var next = OD.store.multiParamOf(sc)
+          ? OD.store.valueList(sub, field.name).concat([pick])
+          : [pick];
+        var patch = { info: Object.assign({}, sub.info) };
+        patch.info[field.name] = next.join(',');
+        A().updateSubscription(sub.id, patch);
+        close();
+        OD.toast('ok', '已并入「' + sub.title + '」', next.length + ' 项目标，刷新后生效。');
+        A().navigate('sub:' + sub.id);
+        return;
+      }
+
+      /* 新建订阅 */
+      var info = {};
+      info[field.name] = pick;
+      var gsel = panel.querySelector('[data-param="__group"]');
+      var ttl = panel.querySelector('[data-param="__ttl"]');
+      var sid = 's-' + sc.key.replace(/[^a-z0-9]/gi, '-') + '-' + Math.abs(hash(sc.key + pick));
+      A().addSubscription({
+        id: sid,
+        group: (gsel && gsel.value) || null,
+        title: (cand && cand.dataset.label) || sc.title,
+        channel: sc.key,
+        kind: sc.kind,
+        icon: sc.platform,
+        anon: !sc.requiresLogin,
+        note: sc.note || null,
+        info: info,
+        refreshIntervalSec: (ttl && ttl.value) ? Number(ttl.value) * 60 : null
+      });
+      close();
+      OD.toast('ok', '已添加订阅', (cand && cand.dataset.label) || sc.title);
+      A().navigate('sub:' + sid);
+      return;
+    }
 
     var params = {};
     var missing = 0;
@@ -737,6 +921,7 @@
       title: item.title || '动态详情',
       desc: item.source + ' · ' + U.timeAgo(item.publishedAt),
       size: 'wide',
+      flush: true,
       body: '<div id="social-detail">' + socialDetailBody(item, !needsResolve) + '</div>',
       footer:
         '<button class="btn btn-secondary btn-sm" data-act="star" data-id="' + item.id + '">' +
@@ -761,10 +946,13 @@
   }
 
   function socialDetailBody(item, ready) {
-    var first = (item.images || [])[0];
-    var media = first
+    var imgs = item.images || [];
+    // 竖图放进固定高度的图片栏会留出大片空白；容器按源图真实比例占位、限高居中，
+    // 且与右侧信息栏顶部对齐（旧写法拉伸成整列高，正文被推到图片下方）
+    var media = imgs.length
       ? '<div class="social-detail-media">' +
-          '<img src="' + U.esc(first.src) + '" alt="' + U.esc(U.clip(item.title, 40)) + '" decoding="async">' +
+          (imgs.length > 1 ? '<span class="social-detail-count num">1 / ' + imgs.length + '</span>' : '') +
+          '<img src="' + U.esc(imgs[0].src) + '" alt="' + U.esc(U.clip(item.title, 40)) + '" decoding="async">' +
           (item.video
             ? '<span class="social-detail-play"><span class="stage-bigplay stage-bigplay-sm">' + icon.solid('play', { size: 22 }) + '</span></span>'
             : '') +
@@ -794,11 +982,8 @@
             detailStat('点赞', item.likes) + detailStat('评论', item.comments) + detailStat('来源', item.source) +
           '</div>' +
           (item.token
-            ? '<div class="banner">' + icon('info', { size: 16 }) +
-                '<div class="banner-body">' +
-                  '<span class="banner-title">详情已补全</span>' +
-                  '<span>列表页只返回封面与标题，点击后按列表项的 xsec_token 拉取详情；匿名可读全文与多图。</span>' +
-                '</div></div>'
+            ? '<p class="social-detail-note">' + icon('info', { size: 13 }) +
+                '<span>列表页只带封面与标题，详情按 xsec_token 补全；匿名可读全文与多图。</span></p>'
             : '') +
         '</div>'
       : '<div class="social-detail-info">' +
@@ -806,9 +991,8 @@
           '<span class="skeleton sk-line" style="width:92%"></span>' +
           '<span class="skeleton sk-line" style="width:78%"></span>' +
           '<span class="skeleton sk-line" style="width:64%"></span>' +
-          '<div class="banner">' + icon('checkCircle', { size: 16 }) +
-            '<div class="banner-body"><span>正在向源站补全详情（列表页只带封面与标题）。</span></div>' +
-          '</div>' +
+          '<span class="social-detail-note">' + icon('checkCircle', { size: 13 }) +
+            '<span>正在向源站补全详情…</span></span>' +
         '</div>';
 
     return '<div class="social-detail">' + media + info + '</div>';

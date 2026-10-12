@@ -29,18 +29,49 @@ export function httpsify(url: string | undefined): string | undefined {
   return url
 }
 
-/** 条目主图 src(可能为空)。 */
-export function mediaUrl(item: MediaItem): string | undefined {
+/** 条目主图 src(可能为空)。index 指定社交图集里的第几张。 */
+export function mediaUrl(item: MediaItem, index = 0): string | undefined {
   const it = item as {
     thumbnail?: string
     poster?: string
     images?: Array<{ url?: string }>
   }
-  return httpsify(it.thumbnail || it.poster || it.images?.[0]?.url)
+  return httpsify(it.images?.[index]?.url || it.thumbnail || it.poster)
 }
 
-/** 条目主图宽高比(默认 16:9)。 */
-export function ratioOf(item: MediaItem): number {
+/**
+ * 瀑布流封面比例下限(宽/高)。超长竖图(长截图/拼图)按真实比例铺会把一列拉得
+ * 极长,限到 0.66(≈2:3)。详情弹窗用 object-fit:contain 不受此限,完整显示原图。
+ */
+export const MIN_COVER_RATIO = 0.66
+
+/** 社交图宽高比(宽/高);宽高未知退化 4:5,竖图抬到 MIN_COVER_RATIO。 */
+export function socialRatio(img?: { width?: number; height?: number }): number {
+  const r = img?.width && img?.height ? img.width / img.height : 4 / 5
+  return Math.max(r, MIN_COVER_RATIO)
+}
+
+/**
+ * 列表 key —— **必须**带 subscriptionId。
+ *
+ * `MediaItem.id` 只在**订阅内**唯一(直播房号 / RSS guid),而 tab:all / tab:live /
+ * 智能节点 / 分组 这些聚合视图会把多个订阅的条目混在一个列表里。同一个房间同时被
+ * 「手填房间订阅」和「平台热门榜」命中时(实测 bilibili:7734200 同时出现在
+ * `bili:live`(roomIds=6 解析成该房)与 `bili:live:hot`),纯 id 就撞 key ——
+ * React 会报「two children with the same key」并导致条目重复/丢渲染。
+ *
+ * ⚠️ masonic 会**用同一回调按数组下标兜底**(`defaultGetItemKey(_, i) => i`):
+ * 渲染路径传 item,但测量/滑窗路径会直接把**下标**当 key。所以第二参必填下标 ——
+ * 否则真 item 的 key 变成 `"undefined:undefined"`(同一串给所有 cell)。
+ * 同时挡掉非对象入参(异常时 `items[index]` 为 undefined)。
+ */
+export function itemKey(item: MediaItem | undefined | null, index = 0): string {
+  // 非 item(测量阶段的下标入参 / 越界 undefined)→ 用下标,保证唯一且稳定。
+  if (!item || typeof item !== "object" || !("id" in item)) return `#${index}`
+  return `${item.subscriptionId}:${item.id}`
+}
+
+/** 条目主图宽高比(默认 16:9)。 */export function ratioOf(item: MediaItem): number {
   const it = item as {
     aspectRatio?: number
     width?: number

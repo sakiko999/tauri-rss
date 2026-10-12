@@ -121,9 +121,16 @@ export function Rail() {
         </section>
 
         <section className="rail-section">
-          <RailTitle>订阅</RailTitle>
+          <RailTitle>
+            订阅
+            <button className="icon-btn sm" aria-label="管理分组" title="管理分组" onClick={() => go("page:settings")}>
+              <Icon name="settings" size={13} />
+            </button>
+          </RailTitle>
           {groups.map((g) => {
             const members = grouped.get(g.id) ?? []
+            // 分组徽标:有未读显未读(聚合成员未读),否则显订阅数(new_desktop library.js:88 同款)。
+            const unread = members.reduce((n, s) => n + (unreadOf[s.id] ?? 0), 0)
             const open = openGroups[g.id] ?? true
             const gid = `group:${g.id}`
             return (
@@ -147,7 +154,9 @@ export function Rail() {
                   >
                     <Icon name="folder" size={14} />
                     <span className="nav-label">{g.title}</span>
-                    <span className="nav-count num">{members.length}</span>
+                    <span className="nav-count num" data-unread={unread ? "true" : undefined}>
+                      {unread || members.length}
+                    </span>
                   </button>
                 </div>
                 {open ? (

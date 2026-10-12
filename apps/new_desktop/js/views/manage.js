@@ -315,17 +315,138 @@
 
     return {
       title: '添加订阅',
-      desc: '选择渠道后按参数模板填写；带默认参数的渠道可一键订阅',
+      desc: '搜索并选择目标后订阅，或直接按渠道参数手工配置',
       size: 'wide',
-      body: channelPicker(cat, picked) + '<div id="channel-form">' + channelForm(picked) + '</div>',
+      body:
+        '<div class="add-mode">' +
+          '<span class="segmented" role="tablist" aria-label="添加方式">' +
+            '<button role="tab" data-act="addMode" data-id="search" aria-pressed="true">' + icon('search', { size: 14 }) + '搜索添加</button>' +
+            '<button role="tab" data-act="addMode" data-id="manual" aria-pressed="false">' + icon('filter', { size: 14 }) + '按渠道配置</button>' +
+          '</span>' +
+        '</div>' +
+        '<div id="manual-pane" hidden>' + channelPicker(cat, picked) + '<div id="channel-form">' + channelForm(picked) + '</div></div>' +
+        '<div id="search-pane">' + searchPane(cat) + '</div>',
+      onMount: function (panel) {
+        /* 手工面板用 data-channel-key，搜索面板用 data-search-key，互不串位 */
+        panel.dataset.channelKey = picked.key;
+        panel.dataset.searchKey = pickableChannels(cat)[0].key;
+      },
       footer:
-        '<span class="t-micro t-dim" id="sub-hint">' +
-          (picked.defaultInfo ? '该渠道带默认参数，可直接订阅。' : '请填写必填参数后再订阅。') +
-        '</span>' +
+        '<span class="t-micro t-dim" id="sub-hint">先搜索并选中一个目标，再添加到订阅。</span>' +
         '<div class="spacer"></div>' +
         '<button class="btn btn-secondary" data-act="close">取消</button>' +
-        '<button class="btn btn-primary" data-act="submitSub">' + icon('plus', { size: 14 }) + '添加订阅</button>'
+        '<button class="btn btn-primary" data-act="submitSub" disabled>' + icon('plus', { size: 14 }) + '添加订阅</button>'
     };
+  }
+
+  /* 搜索添加：选渠道 → 筛关键词 → 选中一项 → 加入已有订阅或新建 */
+  function searchPane(cat) {
+    var picked = pickableChannels(cat)[0];
+    return '<div class="field">' +
+        '<span class="field-label" id="lbl-search-channel">搜索哪个渠道</span>' +
+        '<div class="chip-row chip-row-wrap" role="group" aria-labelledby="lbl-search-channel">' +
+          pickableChannels(cat).map(function (c) {
+            return '<button class="chip" data-act="searchChannelPick" data-key="' + U.esc(c.key) + '" data-active="' +
+              (picked.key === c.key) + '">' + ui().platformMark(c.platform, 14) + U.esc(c.title) + '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      /* 候选整体放一个容器里，切渠道时连同筛选框一起重建，监听改为面板级委托 */
+      '<div id="cand-pane">' + candidatePane(picked) + '</div>';
+  }
+
+  /* 可搜索的渠道：只有一个 infoTpl 字段、且能从库内真实数据派生候选 */
+  function pickableChannels(cat) {
+    return cat.channels.filter(function (c) {
+      return (c.infoTpl || []).length === 1 && !c.defaultInfo;
+    });
+  }
+
+  function searchQueryField(c) {
+    var f = (c.infoTpl || [])[0];
+    if (!f) return '';
+    return '<label class="field-label" for="add-search">按名称筛选</label>' +
+      '<div class="input-group">' + icon('search', { size: 16 }) +
+        '<input class="input" id="add-search" type="search" data-cand-filter placeholder="' +
+          U.esc(f.placeholder || '') + '" aria-describedby="add-search-help">' +
+      '</div>' +
+      '<span class="field-help" id="add-search-help">候选来自本机订阅库中该平台的真实条目；</span>';
+  }
+
+  /*
+     候选面板 = 筛选框 + 添加到 + 候选列表。切渠道时整块重建，
+     因此筛选框的监听必须挂在面板上（委托），不能挂在输入框本体。
+  */
+  function candidatePane(channel) {
+    var all = OD.store.candidatesFor(channel);
+    /* 库里没有该渠道可用的真实条目时降级为手填，不留空白、不编造数据 */
+    if (!all.length) {
+      var f = (channel.infoTpl || [])[0] || {};
+      return '<div class="field">' +
+          '<label class="field-label" for="fi-' + U.esc(f.name) + '">' + U.esc(f.label || '参数') +
+            (f.required ? '<span class="field-req" aria-hidden="true">*</span>' : '') + '</label>' +
+          '<input class="input" id="fi-' + U.esc(f.name) + '" data-param="' + U.esc(f.name) + '" placeholder="' +
+            U.esc(f.placeholder || '') + '">' +
+          '<span class="field-help">本机订阅库中没有可用于该渠道的条目，请按格式手填。</span>' +
+        '</div>';
+    }
+    var targets = OD.store.subsOfChannel(channel.key);
+    return '<div class="field">' + searchQueryField(channel) + '</div>' +
+      (targets.length ? targetPicker(channel, targets) : '') +
+      '<div class="field">' +
+        '<span class="field-label" id="lbl-cand">匹配 <span class="num">' + all.length + '</span> / ' + all.length + ' 项</span>' +
+        '<div class="cand-list" role="listbox" aria-labelledby="lbl-cand" data-cand-list>' +
+          all.map(function (c) { return candidateRow(channel, c); }).join('') +
+        '</div>' +
+      '</div>' +
+      '<input type="hidden" data-param="' + U.esc((channel.infoTpl || [])[0].name) + '" data-cand-value value="">';
+  }
+
+  /* 添加到：新建一条订阅，或并入该渠道下已有的某条订阅 */
+  function targetPicker(channel, targets) {
+    var multi = OD.store.multiParamOf(channel);
+    return '<div class="field">' +
+        '<span class="field-label" id="lbl-target">添加到</span>' +
+        '<div class="chip-row chip-row-wrap" role="radiogroup" aria-labelledby="lbl-target">' +
+          '<button class="chip" role="radio" aria-checked="true" data-act="pickTarget" data-target="new">' +
+            icon('plus', { size: 13 }) + '新建订阅</button>' +
+          targets.map(function (s) {
+            var n = OD.store.valueList(s, (channel.infoTpl || [])[0].name).length;
+            return '<button class="chip" role="radio" aria-checked="false" data-act="pickTarget" data-target="' +
+              U.esc(s.id) + '">' + U.esc(s.title) +
+              '<span class="cand-chip">' + n + (multi ? ' 项' : '') + '</span></button>';
+          }).join('') +
+        '</div>' +
+        (multi
+          ? '<span class="field-help">选中候选后会按逗号并入该订阅，原有序号保留。</span>'
+          : '<span class="field-help">该渠道的参数是单值，选中后会覆盖已有订阅里的原值。</span>') +
+      '</div>' +
+      '<input type="hidden" data-sub-target value="new">';
+  }
+
+  function candidateRow(channel, c) {
+    var dup = OD.store.subExists(channel.key, c.value);
+    // 缩略图：条目有真实封面就用它，没有则回落到平台标识（不编造图片）
+    var art = c.thumb
+      ? '<img class="cand-thumb" src="' + U.esc(c.thumb) + '" alt="" loading="lazy" decoding="async">'
+      : '<span class="cand-thumb cand-thumb-plain">' + ui().platformMark(channel.platform, 18) + '</span>';
+    return '<button class="cand" role="option" aria-selected="false" data-act="pickCandidate" data-value="' +
+        U.esc(c.value) + '" data-label="' + U.esc(c.label) + '"' +
+        ' data-hay="' + U.esc([c.label, c.value, c.sub].concat(c.meta || []).join(' ')) + '"' +
+        (dup ? ' data-dup="true"' : '') + '>' +
+      art +
+      '<span class="cand-main">' +
+        '<span class="cand-label od-truncate">' + U.esc(c.label) + '</span>' +
+        (c.sub ? '<span class="cand-sub od-truncate">' + U.esc(c.sub) + '</span>' : '') +
+        ((c.meta && c.meta.length)
+          ? '<span class="cand-meta">' + c.meta.map(function (m) {
+              return '<span class="cand-chip">' + U.esc(m) + '</span>';
+            }).join('') + '</span>'
+          : '') +
+      '</span>' +
+      (dup ? '<span class="tag tag-warn chip-tag">已订阅</span>' : '') +
+      '<span class="cand-check">' + icon('check', { size: 15 }) + '</span>' +
+    '</button>';
   }
 
   function channelPicker(cat, picked) {
@@ -590,6 +711,7 @@
     qrModal: qrModal,
     addSubscriptionModal: addSubscriptionModal,
     channelForm: channelForm,
+    candidatePane: candidatePane,
     editSubscriptionModal: editSubscriptionModal,
     groupsModal: groupsModal,
     danmakuSettingsModal: danmakuSettingsModal,

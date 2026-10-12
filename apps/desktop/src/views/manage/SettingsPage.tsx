@@ -227,32 +227,38 @@ function Subscriptions() {
     <>
       <SideCard title="分组" icon="folder">
         {groups.length === 0 ? <p className="rail-empty">还没有分组。建一个把订阅归类。</p> : null}
-        {groups.map((g) => (
-          <div className="setting-row" key={g.id}>
-            <span className="setting-text">
-              <input
-                className="input input-wide"
-                defaultValue={g.title}
-                aria-label="分组名"
-                onBlur={(e) => {
-                  const v = e.target.value.trim()
-                  if (v && v !== g.title) void renameGroup(g.id, v)
-                }}
-              />
-            </span>
-            <span className="setting-control">
-              <button
-                className="icon-btn"
-                aria-label="删除分组"
-                onClick={() => {
-                  if (confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`)) void removeGroup(g.id)
-                }}
-              >
-                <Icon name="trash" />
-              </button>
-            </span>
-          </div>
-        ))}
+        {groups.map((g) => {
+          const n = subscriptions.filter((s) => s.groupId === g.id).length
+          return (
+            <div className="setting-row" key={g.id}>
+              <span className="setting-text">
+                <input
+                  className="input input-wide"
+                  defaultValue={g.title}
+                  aria-label="分组名"
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v && v !== g.title) void renameGroup(g.id, v)
+                  }}
+                />
+              </span>
+              <span className="setting-control">
+                <span className="t-micro t-dim num" title="组内订阅数">
+                  {n} 个订阅
+                </span>
+                <button
+                  className="icon-btn"
+                  aria-label="删除分组"
+                  onClick={() => {
+                    if (confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`)) void removeGroup(g.id)
+                  }}
+                >
+                  <Icon name="trash" />
+                </button>
+              </span>
+            </div>
+          )
+        })}
         <div className="inline-row" style={{ padding: "var(--sp-3) 0" }}>
           <input
             className="input input-wide"
@@ -493,6 +499,27 @@ function Diagnostics() {
     }
   }
 
+  /** 清掉 CDP 用的 Edge profile(扩展/账户态越养越脏)。走后端命令,不自己删目录。 */
+  async function clearBrowserProfile() {
+    if (
+      !confirm(
+        "清理浏览器数据?\n\n" +
+          "会结束 CDP 用的 Edge 并删除它的 profile(扩展、缓存、登录态)。\n" +
+          "影响:微博/小红书等需要重新登录;下次抓取会重建全新 profile。\n" +
+          "不影响:订阅、已缓存内容、bilibili 凭证。",
+      )
+    )
+      return
+    try {
+      const browser = globalThis.appHost.browser
+      if (!browser?.resetProfile) throw new Error("当前环境不支持(仅桌面端可用)")
+      const r = await browser.resetProfile()
+      toast("ok", "浏览器数据已清理", r)
+    } catch (e) {
+      toast("error", "清理失败", String(e))
+    }
+  }
+
   const errs = Object.entries(refreshErrors)
 
   return (
@@ -524,8 +551,15 @@ function Diagnostics() {
             <Icon name="trash" size={14} /> 清空内容缓存
           </button>
         </div>
+        <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
+          <button className="btn btn-secondary" onClick={() => void clearBrowserProfile()}>
+            <Icon name="offline" size={14} /> 清理浏览器数据
+          </button>
+        </div>
         <p className="setting-help">
           清单与阅读状态存在 SQLite（appData/rss.db）；内容缓存是同一 KV 表里的 content:* 记录。
+          浏览器数据 = CDP 用的 Edge profile（扩展/账户态会越养越脏），清理后下次抓取重建全新实例，
+          微博/小红书需重新登录。
         </p>
       </SideCard>
 

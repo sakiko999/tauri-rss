@@ -11,6 +11,7 @@
  *   item      by-url 一站式(★)       play   解析直链 + --open
  *   dm        弹幕探针                align  crawler/rsshub 同构断言
  *   env       appHost 门面自检        refresh core DataLayer 编排冒烟
+ *   browser-reset 清掉 Edge CDP 的浏览器 profile(脏了才用)
  */
 import { cac } from "cac"
 import pc from "picocolors"
@@ -25,6 +26,7 @@ import { runEnv } from "./commands/env.ts"
 import { runRefresh } from "./commands/refresh.ts"
 import { runHot } from "./commands/hot.ts"
 import { runDetail } from "./commands/detail.ts"
+import { runBrowserReset } from "./commands/browser-reset.ts"
 
 // 先注入宿主(file storage / node http+js+ws / log shim)再进命令逻辑。
 setupHost()
@@ -104,6 +106,10 @@ cli
   .option("--json", "JSON 输出")
   .option("--latest", "用当前 explore 列表首条(推荐流随机,用户 URL 的 noteId 可能不在最新列表)")
   .action(guard((url: string | undefined, opts: { json?: boolean; latest?: boolean }) => runDetail(url ?? "", opts)))
+
+cli
+  .command("browser-reset", "清掉 Edge CDP 的浏览器 profile(扩展/账户态越养越脏时用;会掉微博/小红书登录态)")
+  .action(guard(() => runBrowserReset()))
 
 cli
   .command("env", "appHost 门面自检(http/js/storage/ws 注入状态)")

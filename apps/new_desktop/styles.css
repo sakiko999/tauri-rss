@@ -799,8 +799,12 @@ a:hover { text-decoration: underline; }
   font-size: var(--fs-micro); font-weight: 550;
 }
 
-/* 瀑布流 */
-.masonry { column-count: 3; column-gap: var(--grid-gap); padding: 0 var(--sp-6) var(--sp-12); }
+/* 瀑布流：列数由 applyMasonry 按容器宽度写入 --masonry-cols（旧写法只设 column-count，
+   变量设了也没人读，窄屏会一路保持 3 列，卡片被压扁） */
+.masonry {
+  column-count: var(--masonry-cols, 3); column-gap: var(--grid-gap);
+  padding: 0 var(--sp-6) var(--sp-12);
+}
 .masonry-item { break-inside: avoid; margin-bottom: var(--grid-gap); }
 .social-card {
   display: block; width: 100%; text-align: left; color: inherit;
@@ -999,6 +1003,54 @@ a:hover { text-decoration: underline; }
 .channel-form { display: grid; gap: var(--sp-5); border-top: 1px solid var(--border); padding-top: var(--sp-5); }
 .channel-summary { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 
+/* 添加订阅：搜索添加 / 按渠道配置 */
+.add-mode { display: flex; }
+.add-mode .segmented button { display: inline-flex; align-items: center; gap: var(--sp-2); }
+#manual-pane, #search-pane { display: grid; gap: var(--sp-5); }
+#manual-pane[hidden], #search-pane[hidden] { display: none; }
+
+/* 候选列表：不做内层滚动，交给弹窗内容区唯一一条滚动条，避免嵌套滚动 */
+.cand-list {
+  display: grid; gap: 2px;
+  border: 1px solid var(--border); border-radius: var(--r-md);
+  background: var(--surface-1); padding: var(--sp-1);
+}
+.cand {
+  display: flex; align-items: center; gap: var(--sp-3);
+  width: 100%; padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm); text-align: left; color: inherit;
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.cand:hover { background: var(--surface-2); }
+.cand[hidden] { display: none; }
+/* 缩略图取真实封面；无封面时用平台标识占位，两者同尺寸，行高不跳 */
+.cand-thumb {
+  flex: none; width: 40px; height: 40px; border-radius: var(--r-sm);
+  object-fit: cover; background: var(--surface-3); display: block;
+}
+.cand-thumb-plain { display: grid; place-items: center; color: var(--text-dim); }
+.cand-main { display: grid; gap: 3px; flex: 1; min-width: 0; }
+.cand-label { font-size: var(--fs-small); color: var(--text); }
+.cand-sub { font-size: var(--fs-micro); color: var(--text-dim); }
+.cand-meta { display: flex; gap: var(--sp-1); flex-wrap: wrap; }
+.cand-chip {
+  padding: 0 6px; border-radius: var(--r-xs);
+  background: var(--surface-3); color: var(--text-muted);
+  font-size: var(--fs-micro); line-height: 17px;
+}
+.cand-check { display: grid; place-items: center; flex: none; width: 18px; color: var(--accent); opacity: 0; }
+.cand[aria-selected="true"] { background: var(--accent-soft); }
+.cand[aria-selected="true"] .cand-check { opacity: 1; }
+.cand[aria-selected="true"] .cand-label { font-weight: 560; color: var(--accent); }
+.cand-empty { padding: var(--sp-3); }
+/* 「添加到」是单选组，沿用 chip 外观但用 aria-checked 表达选中 */
+.chip[role="radio"] { cursor: pointer; }
+.chip[role="radio"][aria-checked="true"] {
+  background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); font-weight: 560;
+}
+/* 计数徽标比 chip 行高更高，固定 28px 会把行撑破 */
+.chip[data-act="pickTarget"] { height: auto; min-height: 28px; padding-block: 3px; }
+
 .cat-grid { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
 .cat-tile {
   display: grid; gap: 2px; padding: var(--sp-3);
@@ -1168,22 +1220,65 @@ kbd {
 .qr-status { text-align: center; }
 .qr-success { display: grid; gap: var(--sp-4); justify-items: center; text-align: center; }
 
-/* 社交详情 */
+/* 社交详情：左图右信息。
+   高度不用 vh 估算，沿容器链传导：
+   .modal（86vh 上限）→ 内容轨 minmax(0,1fr)（确定高度）→ .modal-body → #social-detail
+   → .social-detail（高 100%、单行 minmax(0,1fr)）。
+   图片 max-height:100% 因此有确定基准，永远落在可用高度内；
+   之前用 calc(86vh - N) 是拿视口值减弹窗占位，两套坐标系相减，只要 N 估小一点
+   竖图就必然顶破上限——调 N 只能换一个临界点，下一张图照样踩中。 */
+.modal-flush > .modal-body { grid-template-rows: minmax(0, 1fr); overflow: hidden; } /* 滚动交给内层信息列，弹窗自身不滚 */
+#social-detail { height: 100%; min-height: 0; }
 .social-detail {
-  display: grid; gap: var(--sp-5); padding: var(--sp-5);
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); align-items: start;
+  display: grid; gap: var(--sp-6); padding: var(--sp-6);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch; height: 100%; min-height: 0;
 }
-.social-detail-media { position: relative; border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); }
-.social-detail-media img { width: 100%; height: auto; display: block; }
+/* 媒体框必须有「确定的 height」，图片的百分比尺寸才有基准；
+   只给 max-height 会让容器高度退化成 auto，图片按自然尺寸绘制、
+   再由 overflow:hidden 裁掉超出部分（就是「撑满 + 截断」的成因）。
+   图片用 object-fit: contain：完整显示原图、按比例缩放、不裁切、不溢出。 */
+.social-detail-media {
+  position: relative;
+  height: 100%; min-height: 0;
+  border-radius: var(--r-lg); background: var(--surface-2);
+  overflow: hidden;
+}
+.social-detail-media img {
+  width: 100%; height: 100%; object-fit: contain; display: block;
+}
+.social-detail-count {
+  position: absolute; right: var(--sp-3); top: var(--sp-3); z-index: 1;
+  padding: 2px 8px; border-radius: var(--r-full);
+  background: oklch(0.12 0.01 264 / 66%); color: var(--on-media);
+  font-size: var(--fs-micro); font-weight: 560;
+}
 .social-detail-play {
   position: absolute; inset: 0; display: grid; place-items: center;
   background: oklch(0.10 0 0 / 28%);
 }
-.social-detail-info { display: grid; gap: var(--sp-3); align-content: start; }
+/* 信息列自己滚：超长正文在列内滚动，不撑开 modal-body、不顶破弹窗上限 */
+.social-detail-info {
+  display: grid; gap: var(--sp-3); align-content: start;
+  height: 100%; min-height: 0; overflow-y: auto;
+  scrollbar-width: thin; padding-right: var(--sp-1);
+}
 .social-detail-head { display: flex; align-items: center; gap: var(--sp-3); }
-.social-detail-text { font-size: var(--fs-small); line-height: 1.7; white-space: pre-wrap; }
+.social-detail-text {
+  font-size: var(--fs-body); line-height: 1.75; color: var(--text);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .social-detail-stats { display: flex; gap: var(--sp-6); padding-top: var(--sp-3); border-top: 1px solid var(--border); }
-.social-detail-skeleton { aspect-ratio: 4 / 5; border-radius: var(--r-lg); }
+/* 源站补全说明：降级为脚注，不再占用与正文同等权重的整块横幅 */
+.social-detail-note {
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+  padding-top: var(--sp-3); border-top: 1px solid var(--border);
+  font-size: var(--fs-micro); line-height: 1.6; color: var(--text-dim);
+}
+.social-detail-note svg { flex: none; margin-top: 1px; }
+/* 骨架占位与加载后的媒体框同尺寸，补全时高度不跳 */
+.social-detail-skeleton { height: 100%; border-radius: var(--r-lg); }
 .avatar-round { border-radius: var(--r-full); object-fit: cover; flex: none; }
 
 /* 首启动引导 */

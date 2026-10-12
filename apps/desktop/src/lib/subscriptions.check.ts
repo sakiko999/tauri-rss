@@ -1,0 +1,56 @@
+/**
+ * subscriptions.check —— 最小断言(仓库无测试基建,照 core/example/*.check.ts 惯例)。
+ * 覆盖 valueList 的分支:列表型参数按逗号切、单值参数**不切**。
+ *   bun apps/desktop/src/lib/subscriptions.check.ts
+ */
+import { candidatesFromSearch, multiParamOf, SEARCH_CHANNEL, searchChannelOf, valueList, subsHolding } from "./subscriptions.ts"
+import type { ChannelInfo, LiveItem, Subscription } from "@tauri-playground/core"
+
+function assert(cond: unknown, msg: string) {
+  if (!cond) throw new Error(`FAIL: ${msg}`)
+  console.log(`ok  ${msg}`)
+}
+
+const sub = (info: Record<string, string>): Subscription =>
+  ({ id: "s1", channelKey: "bili:live", title: "t", enabled: true, info, createdAt: 0, updatedAt: 0 }) as Subscription
+
+// 列表型参数:按逗号切分
+assert(
+  JSON.stringify(valueList(sub({ roomIds: "6, 21452505 ," }), "roomIds")) === JSON.stringify(["6", "21452505"]),
+  "roomIds 按逗号切分并 trim / 去空",
+)
+
+// ⚠️ 单值参数本身可能含逗号(「英雄联盟,王者」)—— 切了会误判成两个已订阅目标
+assert(
+  JSON.stringify(valueList(sub({ keyword: "英雄联盟,王者" }), "keyword")) === JSON.stringify(["英雄联盟,王者"]),
+  "keyword 单值不按逗号切分",
+)
+
+assert(valueList(sub({ roomIds: "" }), "roomIds").length === 0, "空值 → 空列表")
+assert(valueList(sub({}), undefined).length === 0, "参数名缺失 → 空列表")
+
+// multiParamOf:只有列表型参数能并入
+const ch = (key: string, field: string): ChannelInfo =>
+  ({ key, name: key, kind: "live", loginable: false, sourceInfoTpl: [{ key: field, label: field }] }) as ChannelInfo
+assert(multiParamOf(ch("bili:live", "roomIds")) === true, "roomIds 渠道支持并入")
+assert(multiParamOf(ch("bili:search", "keyword")) === false, "keyword 渠道不支持并入")
+
+// subsHolding:多值订阅里任一项命中即算已存在
+const subs = [sub({ roomIds: "6,21452505" }), { ...sub({ roomIds: "9" }), id: "s2" } as Subscription]
+assert(subsHolding(subs, "bili:live", "roomIds", "21452505").length === 1, "并入命中第二条房间号")
+assert(subsHolding(subs, "bili:live", "roomIds", "999").length === 0, "未收录的房号不命中")
+
+// 搜索渠道映射:每个登记平台都有对应 search channel;未登记平台返回 undefined(UI 降级手填)
+assert(searchChannelOf("douyu") === "live:douyu:search", "douyu → 斗鱼搜索渠道")
+assert(searchChannelOf("douyin") === undefined, "未登记平台(抖音 search 只认游戏名)→ undefined")
+assert(Object.values(SEARCH_CHANNEL).every((k) => typeof k === "string"), "映射值为渠道 key 字符串")
+
+// candidatesFromSearch:从接口条目派生候选(roomId 去重、无 roomId 丢弃)
+const live = (roomId: string, title: string): LiveItem =>
+  ({ id: `douyu:${roomId}`, subscriptionId: "p", kind: "live", title, roomId, url: `https://www.douyu.com/${roomId}`, fetchedAt: 0, isUnread: true, isStarred: false }) as unknown as LiveItem
+const cands = candidatesFromSearch([live("288016", "A"), live("288016", "A-dup"), live("999", "B")])
+assert(cands.length === 2, "roomId 去重(重复房号只留一条)")
+assert(cands[0]!.value === "288016", "候选值 = roomId")
+assert(candidatesFromSearch([]).length === 0, "空结果 → 空候选")
+
+console.log("\nall checks passed")

@@ -37,13 +37,14 @@ export const SEED_GROUPS: SubscriptionGroup[] = [
 export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-article",
-    channelKey: "rsshub:feed",
+    // ⚠️ 用**内置 rss:hn**,不用 `rsshub:feed` + `/hackernews`:
+    // 公网 rsshub.app 常年 403(实测本网络下所有路由全 403),而内置直链零外部依赖。
+    // 「不依赖公共服务」应当用默认可用的源演示;RSSHub 外挂通道留给需要它的路由。
+    channelKey: "rss:hn",
     title: "Hacker News",
     enabled: true,
     groupId: null,
-    // RSSHub 外挂示例:指向配置的实例(settings.rsshubBaseUrl,默认公网 rsshub.app)
-    // 原生 HN 路由。信息抓取,非播放。这是 RSSHub 在「crawler 为主」下的唯一保留订阅。
-    info: { route: "/hackernews" },
+    info: {},
   },
   {
     id: "s-video-youtube",
@@ -91,7 +92,7 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     title: "斗鱼直播 · yyfyyf",
     enabled: true,
     groupId: "g-live",
-    info: { roomId: "9999" },
+    info: { roomIds: "9999" },
   },
   {
     id: "s-live-bili",
@@ -99,7 +100,7 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     title: "bilibili 直播",
     enabled: true,
     groupId: "g-live",
-    info: { roomId: "6" },
+    info: { roomIds: "6" },
   },
   {
     id: "s-live-huya",
@@ -107,7 +108,7 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     title: "虎牙直播 · 骚男",
     enabled: true,
     groupId: "g-live",
-    info: { roomId: "60066" },
+    info: { roomIds: "60066" },
   },
   {
     id: "s-live-douyin",
@@ -115,7 +116,7 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     title: "抖音直播 · 享受问号",
     enabled: true,
     groupId: "g-live",
-    info: { roomId: "217952067344" },
+    info: { roomIds: "217952067344" },
   },
   // 直播热门(开播房间发现源):无参订阅,列表即当前开播房间;
   // source 委托同平台 live 的 resolveLivePlay/getDanmaku,点卡片即可播放+弹幕。
@@ -125,7 +126,7 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     title: "bilibili 直播热门",
     enabled: true,
     groupId: "g-live",
-    info: {}, // 需 cookie 防 getListByArea -352(core DEFAULT_BILIBILI_COOKIE 自动注入)
+    info: {}, // 匿名可用:防 -352 靠爬到请求里的匿名 buvid3,与 cookie 无关
   },
   {
     id: "s-live-hot-douyu",

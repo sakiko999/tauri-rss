@@ -15,6 +15,7 @@ pub fn run() {
             commands::ws::ws_close,
             commands::browser::browser_ensure,
             commands::browser::browser_close,
+            commands::browser::browser_reset_profile,
         ]);
 
     #[cfg(mobile)]

@@ -275,6 +275,143 @@
     return state.items.filter(function (i) { return i.id === id; })[0] || null;
   }
 
+  /* ---------- 添加订阅：由库内真实数据派生候选项 ----------
+     候选值一律取自真实条目（直播房号来自条目的 url 末段、分区来自平台分区树），
+     不足时返回空数组由界面降级为手填，绝不编造 uid / 房号。 */
+  /* 以逗号分隔、可把候选并入已有订阅的参数（房间号列表） */
+  var MULTI_PARAMS = ['roomIds'];
+
+  /* 该渠道的首个参数是否支持并入已有订阅（只有列表型参数能「加进去」） */
+  function multiParamOf(channel) {
+    var f = ((channel || {}).infoTpl || [])[0];
+    return !!f && MULTI_PARAMS.indexOf(f.name) >= 0;
+  }
+
+  function hostOf(url) {
+    return String(url || '').replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  }
+  function roomOf(url) {
+    return String(url || '').split('/').pop();
+  }
+  /* 缩略图按 kind 取真实字段；没有就返回 null，由界面用平台图标兜底，不编造图片 */
+  function thumbOf(i) {
+    if (!i) return null;
+    if (i.cover) return i.cover;
+    if (i.images && i.images[0]) return i.images[0].src || null;
+    if (i.image) return typeof i.image === 'string' ? i.image : (i.image.file || null);
+    return null;
+  }
+  function fmtNum(n) {
+    n = Number(n) || 0;
+    if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
+    if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万';
+    return String(n);
+  }
+
+  function candidatesFor(channel) {
+    if (!channel) return [];
+    var tpl = channel.infoTpl || [];
+    var name = tpl.length ? tpl[0].name : null;
+    var items = state.items;
+    var seen = {}, out = [];
+    var add = function (value, label, sub, thumb, meta) {
+      if (!value || seen[value]) return;
+      seen[value] = 1;
+      out.push({
+        value: String(value), label: label, sub: sub || '',
+        thumb: thumb || null, meta: (meta || []).filter(Boolean)
+      });
+    };
+    var catOf = function (pid) {
+      var p = state.discovery.platforms.filter(function (x) { return x.id === pid; })[0];
+      return p ? p.categories : [];
+    };
+
+    if (channel.key === 'bili:ranking') {
+      catOf('bilibili').forEach(function (c) { add(c.id, c.name, '分区 ID ' + c.id); });
+
+    } else if (name === 'keyword') {
+      var pool = items.filter(function (i) { return i.kind === 'live' && i.platform === channel.platform; });
+      if (channel.key.indexOf('anchor') >= 0) {
+        pool.forEach(function (i) {
+          add(i.author, i.author, i.area, thumbOf(i), [fmtNum(i.online) + ' 在看']);
+        });
+      } else {
+        // 条目上的分区名通常只有「综合」，单靠它候选太少；
+        // 再并入平台真实分区树的名字，两者都是真人会搜的词。
+        var areaCount = {};
+        pool.forEach(function (i) { areaCount[i.area] = (areaCount[i.area] || 0) + 1; });
+        pool.forEach(function (i) {
+          add(i.area, i.area, '在播分区', null, [areaCount[i.area] + ' 个房间']);
+        });
+        catOf(channel.platform).forEach(function (c) { add(c.name, c.name, '分区名', null, []); });
+      }
+
+    } else if (name === 'roomIds') {
+      items.filter(function (i) { return i.kind === 'live' && i.platform === channel.platform; })
+        .forEach(function (i) {
+          add(roomOf(i.url), i.title, i.author + ' · 房号 ' + roomOf(i.url), thumbOf(i),
+            [i.area, fmtNum(i.online) + ' 在看']);
+        });
+
+    } else if (name === 'gameId' || name === 'areaId') {
+      catOf(channel.platform).forEach(function (c) { add(c.id, c.name, '分区 ID ' + c.id); });
+
+    } else if (name === 'url') {
+      var byHost = {};
+      items.filter(function (i) { return i.kind === 'article' || i.kind === 'audio'; })
+        .forEach(function (i) {
+          var h = hostOf(i.url);
+          if (!byHost[h]) byHost[h] = { n: 0, item: i };
+          byHost[h].n++;
+        });
+      Object.keys(byHost).forEach(function (h) {
+        var g = byHost[h];
+        add(h, g.item.source || g.item.author || h, h, thumbOf(g.item), [g.n + ' 条已收录']);
+      });
+
+    } else if (name === 'channelId') {
+      items.filter(function (i) { return i.platform === 'youtube'; })
+        .forEach(function (i) { add(i.author, i.author, i.title, thumbOf(i), [KIND_LABEL[i.kind] || i.kind]); });
+
+    } else if (name === 'route') {
+      state.channels.channels.filter(function (c) { return c.key.indexOf('rsshub:') === 0; })
+        .forEach(function (c) {
+          add(c.key.slice(7), c.title, c.key, null, [KIND_LABEL[c.kind] || c.kind]);
+        });
+    }
+    return out;
+  }
+
+  function subExists(channelKey, value) {
+    return subsHolding(channelKey, null, value).length > 0;
+  }
+
+  /* 某个渠道里已存在的订阅（搜索添加的「添加到」候选） */
+  function subsOfChannel(channelKey) {
+    return state.subscriptions.filter(function (s) { return s.channel === channelKey; });
+  }
+
+  /* 取出某条订阅某个参数的值列表。只有列表型参数按逗号切分 ——
+     关键词之类的单值参数本身就可能含逗号（「英雄联盟,王者」），切了会误判成已订阅。 */
+  function valueList(sub, param) {
+    if (!sub || !param || !sub.info) return [];
+    var raw = String(sub.info[param] || '').trim();
+    if (!raw) return [];
+    if (MULTI_PARAMS.indexOf(param) < 0) return [raw];
+    return raw.split(',').map(function (v) { return v.trim(); }).filter(Boolean);
+  }
+
+  /* 该渠道下哪些订阅已经含有这个值 —— 可能不止一条（重复订阅） */
+  function subsHolding(channelKey, param, value) {
+    var first = (state.channels.channels.filter(function (c) { return c.key === channelKey; })[0] || {}).infoTpl;
+    var key = param || (first && first.length ? first[0].name : null);
+    if (!key) return [];
+    return subsOfChannel(channelKey).filter(function (s) {
+      return valueList(s, key).indexOf(String(value)) >= 0;
+    });
+  }
+
   /* ---------- 动作 ---------- */
   var actions = {
     navigate: function (node) { set({ route: node }, { persist: false }); },
@@ -475,6 +612,13 @@
     nodeMeta: nodeMeta,
     currentSub: currentSub,
     subsById: subsById,
-    itemsById: itemsById
+    itemsById: itemsById,
+    candidatesFor: candidatesFor,
+    subExists: subExists,
+    subsHolding: subsHolding,
+    subsOfChannel: subsOfChannel,
+    valueList: valueList,
+    multiParamOf: multiParamOf
   };
 })();
+

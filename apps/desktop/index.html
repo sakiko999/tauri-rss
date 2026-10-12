@@ -4,6 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
+    <!-- 复用应用图标(public/favicon.ico),消掉 /favicon.ico 的 404。
+         ⚠️ 必须放 public/:写相对路径(如 ../../src-tauri/...)会随路由深度变,
+         且生产构建不拷贝 → 打包后必 404。 -->
+    <link rel="icon" href="/favicon.ico" />
     <title>RSS Reader — 订阅工作台</title>
     <script>
       /* 首帧前决定主题/密度/动效/字号，避免闪白。

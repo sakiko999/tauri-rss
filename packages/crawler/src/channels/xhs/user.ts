@@ -19,6 +19,13 @@
  * login/activate、user/me),**零 user_posted 笔记请求**。即浏览器内「不登录可看」
  * 实为**登录态 Edge profile**(应用自带)的持久化 cookie,匿名无此能力。
  *
+ * 结论(user 与 explore 的口径差异):
+ *   - **非完整数据(匿名)= 平台设计**:SSR 渲染卡片但抹空 noteId → 无稳定 id/URL →
+ *     全部条目被过滤。这与网络栈无关,换 browser 也拿不到完整数据(浏览器内同样抹空)。
+ *   - **完整数据 = 必须有登录态**。浏览器路径下这份登录态来自**持久的 Edge profile**;
+ *     因此清过 profile(设置→清理浏览器数据 / `rss browser-reset`)后必然为空,
+ *     要重新扫码登录才会恢复。
+ *
  * 双路径(均 SSR,无需签名):
  *   - 浏览器(Tauri appHost.browser,CDP 附加真实 Edge):导航 profile 页 → 页面内取
  *     `__INITIAL_STATE__.user.notes`(浏览器已解析 new Map 等表达式,天然干净)。
@@ -30,7 +37,7 @@ import type { ItemDetailSource, LoginResult, Loginable, Pageable, RssChannel, Rs
 import { apiFetch } from "../factory.ts"
 import { now } from "@tauri-playground/resolve"
 import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@tauri-playground/resolve"
-import { cdpNavigate, waitUntil, withBrowserLock } from "@tauri-playground/resolve"
+import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@tauri-playground/resolve"
 import { log } from "@tauri-playground/resolve"
 
 /** 短延时(滚动翻页等网络/加载)。 */
@@ -93,10 +100,44 @@ export class XhsUserChannel implements RssChannel, Loginable {
     const browser = globalThis.appHost?.browser
 
     if (browser) {
-      return this.fetchViaBrowser(browser, userId)
+      const viaBrowser = await this.fetchViaBrowser(browser, userId)
+      // ⚠️ 浏览器路径**空结果时回落**(两条路径匿名行为不同,实测):
+      //   - 浏览器导航 profile(未登录):被 **302 → /login?redirectPath=**,
+      //     页面里没有 `__INITIAL_STATE__.user.notes` → 0 条;
+      //   - 页面内 fetch profile HTML(未登录):200 + **253KB 完整 SSR / 31 条笔记**
+      //     (仅 noteId 被抹空,由 client 的虚拟 ID 兜底)。
+      // ⚠️ 回落**必须走页面内 fetch(Chrome 网络栈),不能用 appHost.http(reqwest)**:
+      //   xhs WAF 按 **TLS/客户端指纹**放行 —— 实测同一 URL、同一 headers,
+      //   Bun fetch / Chrome fetch = 31 条,reqwest / curl = 36KB「onebox 空壳页」
+      //   (0 条)。这是客户端栈差异,换 header 无效(同 explore.ts 记载的现象)。
+      // 登录态下浏览器导航拿完整数据(真 noteId/token) → 优先浏览器。
+      if (viaBrowser.length) return viaBrowser
+      return this.fetchViaInPageFetch(browser, userId)
     }
-    // HTTP 降级:带 cookie 请求 profile 页 HTML → 解析 SSR user.notes(RSSHub
-    // getUserWithCookie 同路径)。匿名时 SSR notes 空分组 → 自然空结果。
+    return this.fetchViaHttp(userId, cookie)
+  }
+
+  /**
+   * HTTP 回落的**浏览器内**版本:在 xhs origin 页面里 `fetch(profile)` —— 走 Chrome
+   * 网络栈(TLS 指纹放行)+ 自带 Edge profile 的 xhs cookie 上下文。reqwest 拿不到
+   * 的完整 SSR(见 fetchItems 注释),这里能拿到。
+   */
+  private async fetchViaInPageFetch(browser: BrowserBackend, userId: string): Promise<Item[]> {
+    return withBrowserLock(async () => {
+      // 先落到 xhs origin(同源才能发同源 fetch)。
+      await cdpNavigate(browser, `${XHS_BASE}/explore`, true)
+      // ⚠️ credentials: "omit" —— 匿名才拿到完整 SSR。实测同一 URL:
+      //   omit = 253KB / 31 cards;include(带 profile cookie)= 47KB / 0 cards。
+      // 该 Edge profile 的小红书登录态反而是「被限制」状态(带 cookie 触发空壳),
+      // 匿名反而放行 —— 与 CLI 匿名 31 条一致。
+      const res = await cdpFetch(browser, `${XHS_BASE}/user/profile/${userId}`, { credentials: "omit" })
+      if (res.status < 200 || res.status >= 300) return []
+      return this.notesToItems(extractSsrNotes(extractInitialState(res.bodyText)))
+    })
+  }
+
+  /** HTTP 路径:带 cookie 请求 profile 页 HTML → 解析 SSR user.notes(RSSHub getUserWithCookie 同路径)。 */
+  private async fetchViaHttp(userId: string, cookie: string): Promise<Item[]> {
     const html = await xhsClient.getHtml(`${XHS_BASE}/user/profile/${userId}`, { cookie: cookie || undefined })
     return this.notesToItems(extractSsrNotes(extractInitialState(html)))
   }

@@ -167,13 +167,24 @@ export function noteCardToSocial(
   xsecToken?: string,
 ): Social | null {
   // noteId 已从 noteCard 内移到外层(feeds[i].id / note.id)——小红书 SSR 结构变更(2026-08)。
-  const noteId = String(noteIdFromOuter ?? noteCard?.noteId ?? "").trim()
-  if (!noteId) return null
+  const realId = String(noteIdFromOuter ?? noteCard?.noteId ?? "").trim()
   const title = String(noteCard?.displayTitle ?? "").trim()
   const desc = noteCard?.desc ? String(noteCard.desc).trim() : ""
   const cover = noteCard?.cover ?? {}
   const user = noteCard?.user ?? {}
-  return noteToSocial(
+  const publishedAtMs = noteCard?.time ? Number(noteCard.time) * 1000 : undefined
+
+  // ⚠️ 匿名访问时平台**抹空 noteId**,同时塞一个**整个列表共用的假 xsecToken**
+  // (实测 31 条 distinct token = 1)。假 token 不能用:拿它去详情页会串号。
+  // 但标题/封面/作者/点赞/时间这些**可见字段全是真的** —— 所以这里用虚拟 ID 兜底,
+  // 让列表能正常渲染,而不是整批条目被丢弃(旧行为 `if (!noteId) return null`)。
+  // 虚拟 ID 必须是**稳定且互不相同**的,按「源 + 作者 + 发表时间 + 标题」定身份;
+  // 全空时退化用封面 URL。
+  const isAnonymous = !realId
+  const vId = `anon-${hash32(`${sourceId}|${user.userId ?? user.nickname ?? ""}|${publishedAtMs ?? ""}|${title}|${String(cover.urlDefault || cover.url || "")}`)}`
+  const noteId = realId || vId
+
+  const raw = noteToSocial(
     {
       noteId,
       title,
@@ -184,12 +195,28 @@ export function noteCardToSocial(
       likes: parseCount(noteCard?.interactInfo?.likedCount),
       authorName: user.nickname ? String(user.nickname) : undefined,
       authorAvatar: user.avatar ? String(user.avatar) : undefined,
-      publishedAtMs: noteCard?.time ? Number(noteCard.time) * 1000 : undefined,
+      publishedAtMs,
       xsecToken,
     },
     sourceId,
     t,
   )
+  if (!raw) return null
+  // 匿名条目:URL 与 token 都不可信 → 清掉。
+  //   - 清 url:否则会拼出 /explore/anon-xxx 这种**看起来能打开、实为 404** 的假链接。
+  //   - 清 xsecToken:假 token 是全列表共用的,详情弹窗拿它去补全只会拿到别的笔记。
+  // 结果:条目有 id/title/cover/author/likes 可正常展示,但没有「打开原文/详情补全」。
+  return isAnonymous ? { ...raw, url: undefined, xsecToken: undefined } : raw
+}
+
+/** 32 位字符串 hash(稳定虚拟 ID 用;非加密)。 */
+function hash32(s: string): string {
+  let h = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return (h >>> 0).toString(36)
 }
 
 // ── 详情页(单条 note 完整内容):noteDetailMap 解析 ────────────────────────────

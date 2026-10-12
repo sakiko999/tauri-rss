@@ -115,7 +115,12 @@ interface DesktopState {
   resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
 
-  addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string | null>
+  addSubscription(
+    channelKey: string,
+    title: string,
+    info: Record<string, string>,
+    meta?: { groupId?: string | null; refreshIntervalSec?: number },
+  ): Promise<string | null>
   updateSubscription(id: string, patch: Partial<Omit<Subscription, "id">>): Promise<void>
   removeSubscription(id: string): Promise<void>
   toggleSubEnabled(id: string): Promise<void>
@@ -134,6 +139,33 @@ interface DesktopState {
 }
 
 const now = () => Date.now()
+
+/**
+ * refreshAll 里单条订阅的硬超时。
+ *
+ * 大多数抓取路径已有自己的超时(Rust http_get 默认 20s;xhs 的 waitUntil 15s),
+ * 但 browser 通道的 `invoke`(browser_ensure / ws_connect / ws_send)**没有超时**
+ * —— 一次不回话就永久占住 withBrowserLock,后面所有浏览器操作排队到天荒地老,
+ * 整轮 refreshAll 也就永不完成。这里兜最后一层。
+ */
+const REFRESH_TIMEOUT_MS = 45_000
+
+/** 给单个 promise 套超时;超时以 reject 形式抛出,交给调用方按条记错。 */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`刷新超时(${Math.round(ms / 1000)}s):${label}`)), ms)
+    p.then(
+      (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(timer)
+        reject(e instanceof Error ? e : new Error(String(e)))
+      },
+    )
+  })
+}
 let initPromise: Promise<void> | null = null
 let toastSeq = 0
 
@@ -380,15 +412,36 @@ export const useDesktop = create<DesktopState>((set, get) => {
       }
       const subs = await dl.subscriptions.list()
       set({ loading: true, busy: Object.fromEntries(subs.map((s) => [s.id, true])) })
-      const results = await Promise.all(subs.map((s) => dl.refresh(s.id, { force })))
       const errors: Record<string, string> = {}
-      for (const r of results) if (r.error) errors[r.subscriptionId] = r.error
-      set({ loading: false, busy: {}, refreshErrors: errors })
+      try {
+        // ⚠️ 必须 allSettled + 逐条超时 + finally:
+        //   - 用 Promise.all 时,任一 reject 会让下面的 set({loading:false}) **永不执行**
+        //     → 顶栏「更新中」永久转圈(且 Promise.all 会丢结果,其余订阅的白抓);
+        //   - 任一 promise 永不 settle(如 browser 通道 invoke 无超时)同样卡死整轮。
+        // 逐条超时把「无限等待」变成「这一条报错」,finally 保证 loading 一定落回。
+        const results = await Promise.allSettled(
+          subs.map((s) => withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id)),
+        )
+        results.forEach((r, i) => {
+          const id = subs[i]!.id
+          if (r.status === "fulfilled") {
+            if (r.value.error) errors[id] = r.value.error
+          } else {
+            errors[id] = r.reason instanceof Error ? r.reason.message : String(r.reason)
+          }
+        })
+      } finally {
+        set({ loading: false, busy: {}, refreshErrors: errors })
+      }
       const failed = Object.keys(errors).length
       get().toast(
         failed ? "warn" : "ok",
         failed ? `刷新完成，${failed} 条失败` : "刷新完成",
-        failed ? "失败订阅保留了旧缓存,rail 上有告警标记。" : `${subs.length} 条订阅已更新。`,
+        failed
+          ? `失败的订阅:${Object.keys(errors)
+              .map((id) => subs.find((s) => s.id === id)?.title ?? id)
+              .join("、")}。已保留旧缓存,rail 上有告警标记。`
+          : `${subs.length} 条订阅已更新。`,
       )
       refreshView()
     },
@@ -461,10 +514,10 @@ export const useDesktop = create<DesktopState>((set, get) => {
       return dl.resolveLivePlay(subscriptionId, roomId)
     },
 
-    async addSubscription(channelKey, title, info) {
+    async addSubscription(channelKey, title, info, meta) {
       const dl = get().dl
       if (!dl) return null
-      const id = await dl.addSubscription(channelKey, title, info)
+      const id = await dl.addSubscription(channelKey, title, info, meta)
       set({ subscriptions: await dl.subscriptions.list() })
       refreshView()
       get().toast("ok", `已订阅 ${title}`, `渠道 ${channelKey}`)

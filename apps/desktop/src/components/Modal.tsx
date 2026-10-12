@@ -18,6 +18,7 @@ export function Modal({
   children,
   footer,
   size = "default",
+  flush = false,
   dismissable = true,
 }: {
   open: boolean
@@ -27,6 +28,8 @@ export function Modal({
   children: ReactNode
   footer?: ReactNode
   size?: "default" | "wide"
+  /** 内容自管内边距(如社交详情:滚动交给内层信息列,body 不滚不 pad)。 */
+  flush?: boolean
   dismissable?: boolean
 }) {
   return (
@@ -37,7 +40,7 @@ export function Modal({
             grid 居中,必须自己绝对居中。 */}
         <Dialog.Content
           aria-describedby={desc ? undefined : undefined}
-          className={`modal${size === "wide" ? " modal-wide" : ""}`}
+          className={`modal${size === "wide" ? " modal-wide" : ""}${flush ? " modal-flush" : ""}`}
           style={{
             position: "fixed",
             left: "50%",

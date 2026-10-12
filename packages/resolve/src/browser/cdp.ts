@@ -34,6 +34,12 @@ export interface CdpFetchInit {
   body?: string
   /** Referer(weibo m.weibo.cn API 要求;并入 headers)。 */
   referer?: string
+  /**
+   * fetch credentials(默认 `include` = 带浏览器 profile 的 cookie)。
+   * ⚠️ 小红书 profile 页要 **`omit`**:实测带 cookie 反而拿 47KB 空壳(0 cards),
+   * 匿名才给 253KB 完整 SSR(31 cards)——见 xhs/user.ts。其他平台别乱改。
+   */
+  credentials?: "omit" | "same-origin" | "include"
 }
 
 /** 导航过渡期 evaluate 报错(context destroyed)视为瞬态,重试。 */
@@ -64,12 +70,18 @@ export async function cdpFetch(
   init?: CdpFetchInit,
 ): Promise<{ status: number; bodyText: string }> {
   const headers = { ...(init?.headers ?? {}), ...(init?.referer ? { Referer: init.referer } : {}) }
-  const args = JSON.stringify({ url, method: init?.method ?? "GET", headers, body: init?.body })
+  const args = JSON.stringify({
+    url,
+    method: init?.method ?? "GET",
+    headers,
+    body: init?.body,
+    credentials: init?.credentials ?? "include",
+  })
   // 浏览器内 fetch:自带登录态 cookie + 环境指纹;手动 Cookie header 会被浏览器 forbid,
-  // 故不传 cookie(依赖 Edge profile 登录态,扫码一次持久化)。
+  // 故不传 cookie(凭据由 credentials 控制,默认 include = profile 登录态,扫码一次持久化)。
   const expression = `(async () => {
     const a = ${args};
-    const res = await fetch(a.url, { method: a.method, headers: a.headers, body: a.body || undefined });
+    const res = await fetch(a.url, { method: a.method, headers: a.headers, body: a.body || undefined, credentials: a.credentials });
     return { status: res.status, bodyText: await res.text() };
   })()`
   return evalWithNavRetry<{ status: number; bodyText: string }>(browser, expression, {

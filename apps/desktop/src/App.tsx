@@ -32,11 +32,19 @@ import { useGlobalShortcuts } from "./lib/shortcuts.ts"
 
 export default function App() {
   const params = useParams()
-  // ⚠️ `/play/:itemId` 路由下**没有 nodeId**——直接读 params.nodeId 会拿到 undefined,
-  // useNodeMeta 就退回默认 tab:all(media),播放页永远渲染不出来。播放页是独立视图,
-  // 不该由节点元信息决定,这里显式分流。
+  // ⚠️ `/play/:itemId` 路由下**没有 nodeId**——播放页是独立视图,不该由节点元信息决定,
+  // 这里显式分流(params 只用来判播放页)。
   const isPlay = !!params.itemId
-  const nodeId = isPlay ? null : (params.nodeId ?? null)
+  // ⚠️ 布局节点必须**从 store 读**,不能用 `params.nodeId`:
+  //   /v 导航走 react-router v7 的 startTransition(低优先级),`params.nodeId` 要等过渡
+  //   提交才更新;而 store 的 `view` 经 zustand useSyncExternalStore **同步**提交
+  //   (HotPane/MediaMain 直订 store,useSyncExternalStore 不能被 time-slice 推迟)。
+  //   两者差一帧 → 中间帧「旧布局渲染新数据」:从热搜切到其它视图时,词栏里被塞进
+  //   60 条微博当词条(HotPane 直接渲染 view.list),中栏 scrollTop 从 120 跳到 895
+  //   → 视觉抖动。改读 store 的 selectedNodeId(router loader 已同步 select())后,
+  //   布局与数据在同一次提交里切换,中间帧消失。
+  const storeNodeId = useDesktop((s) => s.selectedNodeId)
+  const nodeId = isPlay ? null : storeNodeId
   const init = useDesktop((s) => s.init)
   const selectedArticleId = useDesktop((s) => s.selectedArticleId)
   const meta = useNodeMeta(nodeId)

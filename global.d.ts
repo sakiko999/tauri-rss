@@ -88,6 +88,12 @@ declare global {
     getCookies(url?: string): Promise<Record<string, string>>
     /** 关闭浏览器进程(应用退出)。 */
     close(): Promise<void>
+    /**
+     * 清空浏览器 profile(扩展/账户态越养越脏时重置)。实现里会先结束我们的 Edge
+     * 再删目录,下次 browser_ensure 自建全新实例。可选:非 Tauri 后端不提供。
+     * ⚠️ 会掉微博/小红书等靠 Edge profile 的登录态。
+     */
+    resetProfile?(): Promise<string>
   }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */

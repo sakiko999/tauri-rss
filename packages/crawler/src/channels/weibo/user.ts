@@ -14,16 +14,31 @@
  */
 import type { Item } from "@tauri-playground/xml"
 import type { SerializeOptions } from "@tauri-playground/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
-import { WB_BASE, mblogCardsToItems, weiboClient } from "@tauri-playground/resolve"
+import { WB_BASE, apiHeaders, mblogCardsToItems, weiboClient, weiboScanLogin } from "@tauri-playground/resolve"
 import { cdpJson, cdpNavigate, withBrowserLock } from "@tauri-playground/resolve"
 
-export class WeiboUserChannel implements RssChannel {
+export class WeiboUserChannel implements RssChannel, Loginable {
   readonly key = "weibo:user"
   readonly name = "微博用户主页"
   readonly kind = "social" as const
   readonly sourceInfoTpl = [{ key: "uid", label: "用户 uid", required: true }]
+
+  /**
+   * 扫码登录(channel 级能力)。微博**用户主页/词流都要求登录态**(匿名只给首页 11 条,
+   * 翻页 `ok:-100`),而热搜列表匿名可用。走浏览器路径:passport 页自带二维码 → 轮询
+   * `SUB` cookie。同平台多 channel(weibo:user/hot)共享 Edge profile 登录态。
+   */
+  scanLogin(
+    emitQr: (qr: string | null) => void,
+    opts?: { timeoutMs?: number },
+  ): Promise<LoginResult> {
+    const browser = globalThis.appHost?.browser
+    if (!browser) throw new Error("微博扫码登录需 Tauri 桌面环境(未注入 appHost.browser)")
+    return weiboScanLogin(browser, emitQr, opts)
+  }
+
   getSource(info: SourceInfo): RssSource & Pageable {
     return {
       fetch: apiFetch(
@@ -63,7 +78,11 @@ export class WeiboUserChannel implements RssChannel {
       return withBrowserLock(async () => {
         // ① 先导航到 m.weibo.cn:页面 fetch 同源 API 无 CORS;②自动带 profile 登录态。
         await cdpNavigate(browser, `${WB_BASE}/`)
-        const s2 = await this.getIndex(uid, sinceId, (url) => cdpJson(browser, url, { referer }))
+        // ⚠️ 必须带 apiHeaders(X-Requested-With / MWeibo-Pwa):翻页请求(带 page/since_id)
+        // 缺这两个头会被微博拦成网络层失败(实测 TypeError: Failed to fetch / 302 风控),
+        // 表现为「加载更多永远只有第一页」。HTTP 路径经 weiboClient 本就带(见 resolve
+        // weibo/client.ts),浏览器路径曾漏传。
+        const s2 = await this.getIndex(uid, sinceId, (url) => cdpJson(browser, url, { referer, headers: apiHeaders }))
         return this.extractItems(s2, cookie)
       })
     }

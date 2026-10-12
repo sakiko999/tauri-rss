@@ -21,6 +21,7 @@ import type { MediaItem } from "@tauri-playground/core"
 import { LoadMoreFooter } from "./LoadMoreFooter.tsx"
 import { useDesktop } from "../store/index.ts"
 import { isSmartFeed, isTabNode } from "../store/nodes.ts"
+import { itemKey, socialRatio } from "../lib/media.ts"
 
 /** CSS columns 列数(按容器宽度断点,与网格断点一致)。 */
 function colsForWidth(w: number): number {
@@ -31,22 +32,17 @@ function colsForWidth(w: number): number {
 }
 
 /**
- * 单 item 高度估算:图片比例 + 数量 + 列宽 + 文本行数粗算。
- * 贴近 SocialRenderer 实际结构:卡片 p-3(24) + 文本行×行高(23,text-sm leading-relaxed
- * 实际 ~22.75,line-clamp-6 截断) + gap(10×2) + 图(占满列宽,比例撑高,多图纵向 + 8 gap)
- * + 底栏(30) + 余量(6)。**无图时不占图高**(纯文本卡不被高估)。图宽高未知退化 4:3。
- * 文本行保险 +1:宁多估(留白)勿少估(内容溢出重叠)。
+ * 单 item 高度估算:封面比例 + 列宽 + 文本行数粗算。
+ * 贴近 SocialCard 实际结构:卡片 p-3(24) + 底栏(30) + gap(图↔文本 10)+ 余量(6)。
+ * ⚠️ 只算**封面**——SocialCard 只渲染封面(多图在详情弹窗看);按全部图累加会普遍
+ * 高估 → 测量修正频繁触发 → 同列后续 cell 位置抖动。比例走 socialRatio(含竖图下限)。
+ * 无图不占图高(纯文本卡不被高估)。
  * ⚠️ 此估算只作**首帧占位**——渲染后「测量修正」读真实 offsetHeight 覆盖,偏差被吸收,
  * 但估算越准,测量修正的重排幅度越小,视觉越稳。
  */
 function estimateItemHeight(it: MediaItem, colW: number): number {
-  const imgs = (it as { images?: Array<{ width?: number; height?: number }> }).images ?? []
-  // 多图:每张按各自比例累加(图间 gap 8)——单用第一张会低估后续高图。
-  let imgH = 0
-  for (const img of imgs) {
-    if (img?.width && img?.height) imgH += (colW * img.height) / img.width
-    else imgH += colW * 0.75
-  }
+  const cover = ((it as { images?: Array<{ width?: number; height?: number }> }).images ?? [])[0]
+  const imgH = cover ? colW / socialRatio(cover) : 0
   const content = (it as { content?: string }).content ?? ""
   // 文本渲染宽粗算:中文/全角/emoji(码点>0xFFFF,微博正文常见)≈ 14px(14px 字号)、
   // 英文/数字/空格 ≈ 7.7px;line-clamp-6 截断。
@@ -58,12 +54,8 @@ function estimateItemHeight(it: MediaItem, colW: number): number {
     0,
   )
   const lines = content ? Math.min(6, Math.max(1, Math.ceil(textW / colW))) : 0
-  // 卡片结构:p-3(24) + 底栏(30) + gap(flex gap-2.5=10,文本↔图↔底栏之间;按实际结构
-  // 计:图+文本=2 gap、仅其一=1 gap、无=0)+ 余量(6 防裁切)。结构不精确会普遍偏大 → 修正多。
-  const hasImg = imgs.length > 0
-  const hasText = lines > 0
-  const gap = hasImg && hasText ? 20 : hasImg || hasText ? 10 : 0
-  return imgH + Math.max(0, imgs.length - 1) * 8 + lines * 23 + 24 + 30 + gap + 6
+  const gap = cover && lines > 0 ? 10 : 0
+  return imgH + lines * 23 + 24 + 30 + gap + 6
 }
 
 /** 水平 padding(滚动容器 px-4 = 两侧各 1rem)——positioner 宽度按内容宽算,否则列溢出。 */
@@ -83,8 +75,6 @@ export function MasonryGrid({
   const scrollRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [scrollTop, setScrollTop] = useState(0)
-  // 布局版本:refresh(items 替换)时 +1 重建 positioner;append 不动 → 追加稳定。
-  const [layoutVersion, setLayoutVersion] = useState(0)
 
   // 翻页状态(自订阅 store;onRender 预加载用,替代「滚动到底 Footer IO」——按列空间触发)。
   const selectedNodeId = useDesktop((s) => s.selectedNodeId)
@@ -113,14 +103,27 @@ export function MasonryGrid({
   }, [])
 
   // 追加 vs 替换:append = 新 items 前段引用与旧相同 → 不动 positioner(追加稳定);
-  // 替换(refresh/切源) → layoutVersion++ → usePositioner deps 变 → 重建 positioner。
+  // 替换(refresh/切源) → epoch++ → usePositioner deps 变 → 重建 positioner。
+  //
+  // ⚠️ epoch 必须在 **render 阶段同步算出**(用 ref),不能是 state、也不能放 effect ——
+  // 这是导致「Invalid value used as weak map key」的关键,踩过两次:
+  //   - useEffect / useLayoutEffect 都在**本轮 render 之后**才跑,而崩溃就发生在本轮
+  //     render 里:positioner 还带着**旧列表长度**的索引,items 已缩到新长度 →
+  //     masonic 的 range() 回调 `items[index]` 得到 undefined → 被当 WeakMap 键传进
+  //     trieMemoize 的 createRenderElement → 抛错,整棵 MasonryGrid 被 error boundary 接走。
+  //   - render 阶段 `setState`(React「派生 state」模式)也**救不了**:它只是排队重渲染,
+  //     当前这次 render 仍会继续跑到 useMasonry → 一样崩。
+  // 只有「本次 render 读到的 epoch 就已推进」才成立:usePositioner 当场把 deps 判为变化,
+  // 同步产出一个**全新(空)positioner**,旧索引根本没机会进入 range()。
+  const epochRef = useRef(0)
   const prevItemsRef = useRef(items)
-  useEffect(() => {
+  if (items !== prevItemsRef.current) {
     const prev = prevItemsRef.current
-    const appended = prev.length <= items.length && prev.every((it, i) => items[i] === it)
-    if (!appended) setLayoutVersion((v) => v + 1)
     prevItemsRef.current = items
-  }, [items])
+    const appended = prev.length <= items.length && prev.every((it, i) => items[i] === it)
+    if (!appended) epochRef.current += 1
+  }
+  const layoutVersion = epochRef.current
 
   // positioner 决定列数/列宽 + 每 cell 位置。deps=[width, layoutVersion]:
   //  resize 跨断点/refresh 时重建(重排不可避免);items append 不触发。
@@ -208,7 +211,9 @@ export function MasonryGrid({
   const grid = useMasonry({
     positioner,
     items,
-    itemKey: (it) => it.id,
+    // ⚠️ 用 itemKey(subscriptionId:id),不是 it.id —— 聚合视图里 id 会跨订阅重复。
+    // masonic 的测量路径会按下标调用(见 itemKey 注释),签名对得上。
+    itemKey,
     itemHeightEstimate: estHeight,
     overscanBy: 2,
     height: size.height,

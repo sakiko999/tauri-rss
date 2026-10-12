@@ -18,7 +18,8 @@
         "height": 900,
         "minWidth": 1024,
         "minHeight": 680,
-        "scrollBarStyle": "fluentOverlay"
+        "scrollBarStyle": "fluentOverlay",
+        "additionalBrowserArgs": "--remote-debugging-port=9222 --autoplay-policy=no-user-gesture-required --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --enable-features=msEdgeFluentOverlayScrollbar"
       }
     ],
     "security": {

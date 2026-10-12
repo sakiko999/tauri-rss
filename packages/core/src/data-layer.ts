@@ -46,7 +46,12 @@ export interface DataLayer {
   /** 订阅的 channel kind(UI 按 kind 分发用;channelKey 来自 Subscription)。 */
   channelKind(channelKey: string): MediaKind | undefined
   /** 创建订阅(channelKey + info)并刷新,返回新订阅 id。 */
-  addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string>
+  addSubscription(
+    channelKey: string,
+    title: string,
+    info: Record<string, string>,
+    meta?: { groupId?: string | null; refreshIntervalSec?: number },
+  ): Promise<string>
   /** 预览一次渠道(不建订阅、不落 store、不写缓存):发现页的分区浏览/搜索据此取真实数据。
    *  info 里没给 cookie/baseUrl 时按 channelKey 前缀补 core 层默认值。 */
   previewChannel(channelKey: string, info: Record<string, string>): Promise<{ items: MediaItem[]; total?: number }>
@@ -448,11 +453,26 @@ export function createDataLayer(): DataLayer {
     return getChannel(channelKey)?.kind
   }
 
-  /** 创建订阅并刷新(拼 id + add + refresh 的编排收敛进 core)。 */
-  async function addSubscription(channelKey: string, title: string, info: Record<string, string>): Promise<string> {
+  /** 创建订阅并刷新(拼 id + add + refresh 的编排收敛进 core)。meta 可选带分组与独立 TTL。 */
+  async function addSubscription(
+    channelKey: string,
+    title: string,
+    info: Record<string, string>,
+    meta?: { groupId?: string | null; refreshIntervalSec?: number },
+  ): Promise<string> {
     const id = `s-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
     const t = now()
-    await repo.add({ id, channelKey, title, enabled: true, info, createdAt: t, updatedAt: t })
+    await repo.add({
+      id,
+      channelKey,
+      title,
+      enabled: true,
+      info,
+      createdAt: t,
+      updatedAt: t,
+      ...(meta?.groupId ? { groupId: meta.groupId } : {}),
+      ...(meta?.refreshIntervalSec ? { refreshIntervalSec: meta.refreshIntervalSec } : {}),
+    })
     await refresh(id)
     return id
   }

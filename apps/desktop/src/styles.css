@@ -1009,6 +1009,10 @@ a:hover {
   background: var(--danger-soft);
   color: var(--danger);
 }
+.chip-tag {
+  height: 16px;
+  padding-inline: 5px;
+}
 
 .dot-sep {
   display: inline-block;
@@ -1186,6 +1190,11 @@ a:hover {
   display: flex;
   gap: var(--sp-2);
   align-items: center;
+}
+.number-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
 }
 
 /* 开关 */
@@ -2404,6 +2413,12 @@ a:hover {
   display: grid;
   gap: var(--sp-4);
 }
+.eyebrow {
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
 .channel-group {
   display: grid;
   gap: var(--sp-2);
@@ -2419,6 +2434,111 @@ a:hover {
   align-items: center;
   gap: var(--sp-3);
   flex-wrap: wrap;
+}
+
+/* 添加订阅:搜索添加 / 按渠道配置 */
+.add-mode {
+  display: flex;
+}
+/* 候选列表:不做内层滚动,交给弹窗内容区唯一一条滚动条,避免嵌套滚动 */
+.cand-list {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  padding: var(--sp-1);
+}
+.cand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  text-align: left;
+  color: inherit;
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.cand:hover {
+  background: var(--surface-2);
+}
+/* 缩略图取真实封面;无封面时用平台标识占位,两者同尺寸,行高不跳 */
+.cand-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.cand-thumb-plain {
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+}
+.cand-main {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.cand-label {
+  font-size: var(--fs-small);
+  color: var(--text);
+}
+.cand-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.cand-meta {
+  display: flex;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+.cand-chip {
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: var(--fs-micro);
+  line-height: 17px;
+}
+.cand-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  color: var(--accent);
+  opacity: 0;
+}
+.cand[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.cand[aria-selected="true"] .cand-check {
+  opacity: 1;
+}
+.cand[aria-selected="true"] .cand-label {
+  font-weight: 560;
+  color: var(--accent);
+}
+/* 「添加到」是单选组,沿用 chip 外观但用 aria-checked 表达选中。
+   ⚠️ 不能复用 [aria-pressed]/[data-active] 的选中样式:搜索渠道 chip 用 aria-pressed,
+     两者会同时命中同一个按钮。 */
+.chip[role="radio"] {
+  cursor: pointer;
+}
+.chip[role="radio"][aria-checked="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 560;
+}
+/* 计数徽标比 chip 行高更高,固定 28px 会把行撑破 */
+.chip[role="radio"] {
+  height: auto;
+  min-height: 28px;
+  padding-block: 3px;
 }
 
 .cat-grid {
@@ -2807,29 +2927,127 @@ kbd {
   text-align: center;
 }
 
-/* 社交详情 */
+/* 社交详情:左图右信息,图窗定高、图在里面完整缩放(contain)。
+   高度不用 vh 估算,沿容器链传导:.modal(86vh 上限)→ 内容轨 minmax(0,1fr)
+   (确定高度)→ .modal-body → #social-detail → .social-detail(高 100%、
+   单行 minmax(0,1fr))。故媒体框有**确定的 height**。
+   ⚠️ 曾经的问题:媒体框只给 max-height 无确定高度 → 图按自然尺寸画完再被
+   overflow:hidden 裁掉(「撑满 + 截断」);或信息列被长图挤到图片下方。
+   用 calc(86vh - N) 估算更是拿视口值减弹窗占位,两套坐标系相减,竖图必顶破上限。 */
+.modal-flush > .modal-body {
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  padding: 0;
+} /* 滚动交给内层信息列,弹窗自身不滚;内边距由 .social-detail 自带 */
+#social-detail {
+  height: 100%;
+  min-height: 0;
+}
 .social-detail {
   display: grid;
-  gap: var(--sp-5);
-  padding: var(--sp-5);
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  align-items: start;
+  gap: var(--sp-6);
+  padding: var(--sp-6);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
 }
+/* 媒体框必须有「确定的 height」,图片的百分比尺寸才有基准;
+   只给 max-height 会让容器高度退化成 auto,图片按自然尺寸绘制、
+   再由 overflow:hidden 裁掉超出部分(就是「撑满 + 截断」的成因)。
+   图片用 object-fit: contain:完整显示原图、按比例缩放、不裁切、不溢出。 */
 .social-detail-media {
   position: relative;
+  height: 100%;
+  min-height: 0;
   border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--surface-2);
 }
 .social-detail-media img {
   width: 100%;
-  height: auto;
+  height: 100%;
+  object-fit: contain;
   display: block;
 }
+/* 整块(MediaImage contain 分支高度由内容定,这里把它撑满图窗) */
+.social-detail-media > div {
+  height: 100%;
+}
+.social-detail-count {
+  position: absolute;
+  right: var(--sp-3);
+  top: var(--sp-3);
+  z-index: 1;
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: oklch(0.12 0.01 264 / 66%);
+  color: var(--on-media);
+  font-size: var(--fs-micro);
+  font-weight: 560;
+}
+/* 多图翻页:左右两个圆形按钮,压在图片中部竖排居中的位置 */
+.social-detail-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  translate: 0 -50%;
+  border-radius: var(--r-full);
+  background: oklch(0.12 0.01 264 / 55%);
+  color: var(--on-media);
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.social-detail-nav:hover {
+  background: oklch(0.12 0.01 264 / 78%);
+}
+.social-detail-nav[data-dir="prev"] {
+  left: var(--sp-3);
+}
+.social-detail-nav[data-dir="next"] {
+  right: var(--sp-3);
+}
+/* 多图缩略图条:跨整行铺在图窗下方(网格里显式占第二行,否则会被塞进信息列) */
+.social-detail-thumbs {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  padding-bottom: var(--sp-1);
+  scrollbar-width: thin;
+}
+.social-detail-thumb {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  opacity: 0.6;
+  transition: opacity var(--dur-fast) var(--ease-in), border-color var(--dur-fast) var(--ease-in);
+}
+.social-detail-thumb:hover {
+  opacity: 1;
+}
+.social-detail-thumb[aria-selected="true"] {
+  opacity: 1;
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+/* 信息列自己滚:超长正文在列内滚动,不撑开 modal-body、不顶破弹窗上限 */
 .social-detail-info {
   display: grid;
   gap: var(--sp-3);
   align-content: start;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding-right: var(--sp-1);
 }
 .social-detail-head {
   display: flex;
@@ -2837,15 +3055,32 @@ kbd {
   gap: var(--sp-3);
 }
 .social-detail-text {
-  font-size: var(--fs-small);
-  line-height: 1.7;
+  font-size: var(--fs-body);
+  line-height: 1.75;
+  color: var(--text);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .social-detail-stats {
   display: flex;
   gap: var(--sp-6);
   padding-top: var(--sp-3);
   border-top: 1px solid var(--border);
+}
+/* 源站补全说明:降级为脚注,不再占用与正文同等权重的整块横幅 */
+.social-detail-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-micro);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.social-detail-note svg {
+  flex: none;
+  margin-top: 1px;
 }
 
 /* 首启动引导 */

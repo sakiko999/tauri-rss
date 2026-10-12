@@ -87,6 +87,7 @@ export function CommandPalette() {
       { id: "cmd:settings", group: "命令", title: "打开设置", icon: "settings", run: () => go("page:settings") },
       { id: "cmd:account", group: "命令", title: "打开账号与凭证", icon: "lock", run: () => go("page:account") },
       { id: "cmd:discover", group: "命令", title: "打开发现", icon: "compass", run: () => go("page:discover") },
+      { id: "cmd:groups", group: "命令", title: "管理分组", icon: "folder", run: () => go("page:settings") },
       { id: "cmd:offline", group: "命令", title: "切换离线模式", icon: "offline", run: () => useDesktop.getState().setOffline(!useDesktop.getState().offline) },
       { id: "cmd:theme", group: "命令", title: "切换明暗主题", icon: "sun", run: () => useDesktop.getState().toast("info", "主题", "在顶栏右侧或「设置 → 外观」切换") },
       {
