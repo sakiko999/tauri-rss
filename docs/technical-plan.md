@@ -157,11 +157,15 @@ export interface AppSettings {
   已有卡片不动 + 只渲染视口内)。
 - 按 kind 分发:`MediaMain` 中 social → MasonryGrid,其余 → VirtuosoGrid
 
-**3. 短视频**（`ShortVideoFeed`）
-- Swiper vertical + Virtual + Cube/Flip，只渲染可视 ±1
-- `PlayerRegistry`（Context）管理播放器互斥：slide 切换 `stopAll()` 再 `play(active)`
-- 起播策略：静音起播 → 交互后取消静音（兼容双端自动播放策略）
-- 非激活 slide 显示 poster 占位，不挂 hls 实例
+**3. 短视频**（✅ 已实现 2026-10-13，`apps/desktop/src/views/library/ShortVideoView.tsx`）
+- ⚠️ **未用 Swiper**（原方案）：竖向整页滑动用原生 **CSS scroll-snap**（`snap-y mandatory`
+  + 每屏 `snap-start`）——零依赖、手感由浏览器保证、滚轮/触控/键盘全支持。Cube/Flip 3D
+  转场是加分项，本模式只要「一屏一条」，原生足够。
+- 只渲染可视 ±1：`IntersectionObserver`（阈值 0.6）追踪当前屏，只有「当前 + 前后各一」
+  挂载 `PlayableMedia`，其余渲染 poster 占位 —— 避免一次起播 N 个视频/弹幕连接。
+- 非当前 = 卸载（IO 把离开视口的移出挂载集）；回来重新懒解析（有 KV/内存缓存）。
+  ⚠️ 这是粗粒度方案；要「保留实例只暂停」需给 PlayableMedia 加命令式 pause API（当前无）。
+- 起播策略沿用 `PlayableMedia`（静音降级 / 等 canplay 带声），键盘 ↑↓/jk 切换。
 
 ## 数据流边界
 

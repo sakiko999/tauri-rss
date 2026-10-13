@@ -14,7 +14,8 @@ apps/
   src-tauri/   唯一 Rust crate（tauri-app），双端共享 commands/plugins
   desktop/     React 19 + Vite + Tailwind 4，产物 → dist/desktop
                形态 = 订阅工作台：rail 侧栏（内容类型/智能订阅/分组树）+ 五视图
-               reader 三栏 / media 网格 / hot 热搜两栏 / page 整页 / player。
+               reader 三栏 / media 网格 / hot 热搜两栏 / page 整页 / player /
+               shortvideo 短视频全屏流（节点 `short:<kind>`，Rail「模式」入口）。
                状态 src/store/（nodes 节点语法 · selectors 派生查询 · prefs 表现型偏好 ·
                index 动作编排），视图 src/views/，卡片 src/components/cards.tsx。
                位置权威 = URL（/v/:nodeId、/play/:itemId）
@@ -357,8 +358,9 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   后续可补：移动端订阅管理（现归桌面）、扫码登录（`Loginable`，`docs/mobile-cdp-feasibility.md`）
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
   `docs/desktop-crawler-service.md`
-- **三模式 UI**：三分栏 ✅ / 瀑布流 / 短视频。⚠️ live 源是 1:1、其他源是 1:N 的错位，
-  倾向分组聚合，设计见 `docs/technical-plan.md`
+- **三模式 UI**：✅ 三分栏 / 瀑布流 / 短视频均已完成。短视频 = `views/library/ShortVideoView.tsx`
+  （`short:<kind>` 节点 + Rail「模式」区；原生 scroll-snap，不引 Swiper）。⚠️ live 源 1:1 与其他源
+  1:N 的错位仍待「分组聚合」，设计见 `docs/technical-plan.md`
 - **续播与阅读进度**：✅ **均已完成**（`setPosition` / `setScrollRatio` 都有消费者了）。
   `MediaItem.positionSec` / `scrollRatio` 由 core `applyReadingState` 从 reading 回填
   （与 isStarred 同款）；playback 侧 `PlayableMedia` 的 `startAtSec` 起播跳转 + `onProgress`
