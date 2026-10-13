@@ -44,6 +44,9 @@ export function DiscoverPage() {
   const dl = useDesktop((s) => s.dl)
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
   const [platform, setPlatform] = useState("bili")
+  // 子视图提升到此处:能力矩阵的「浏览分区/搜索」按钮要能一并切视图
+  // (否则点「搜索」只换平台、视图停在「分区」,bili 无分区渠道 → 显示分区警告)。
+  const [view, setView] = useState<Cap>("category")
 
   // 能力矩阵:某平台的某能力是否可用 = 注册表里存在对应渠道。
   const caps = useMemo(() => {
@@ -110,12 +113,24 @@ export function DiscoverPage() {
                     </div>
                     <div className="chip-row">
                       {c.category ? (
-                        <button className="chip chip-sm" onClick={() => setPlatform(p.id)}>
+                        <button
+                          className="chip chip-sm"
+                          onClick={() => {
+                            setPlatform(p.id)
+                            setView("category")
+                          }}
+                        >
                           浏览分区
                         </button>
                       ) : null}
                       {c.search || c.anchor ? (
-                        <button className="chip chip-sm" onClick={() => setPlatform(p.id)}>
+                        <button
+                          className="chip chip-sm"
+                          onClick={() => {
+                            setPlatform(p.id)
+                            setView("search")
+                          }}
+                        >
                           搜索
                         </button>
                       ) : null}
@@ -126,7 +141,13 @@ export function DiscoverPage() {
             </div>
           </section>
 
-          <PlatformBrowser platform={platform} caps={caps[platform]} onPickPlatform={setPlatform} />
+          <PlatformBrowser
+            platform={platform}
+            caps={caps[platform]}
+            view={view}
+            onView={setView}
+            onPickPlatform={setPlatform}
+          />
 
           <section className="section">
             <div className="section-head">
@@ -164,15 +185,18 @@ export function DiscoverPage() {
 function PlatformBrowser({
   platform,
   caps,
+  view,
+  onView,
   onPickPlatform,
 }: {
   platform: string
   caps: Record<Cap, ChannelInfo | undefined>
+  view: Cap
+  onView: (v: Cap) => void
   onPickPlatform: (id: string) => void
 }) {
   const dl = useDesktop((s) => s.dl)
   const actions = usePlayerNav()
-  const [view, setView] = useState<"category" | "search" | "anchor">("category")
   const [categoryValue, setCategoryValue] = useState("")
   const [q, setQ] = useState("")
   const [busy, setBusy] = useState(false)
@@ -254,7 +278,7 @@ function PlatformBrowser({
         <button
           aria-pressed={view === "category"}
           onClick={() => {
-            setView("category")
+            onView("category")
             setItems(null) // 换视图清旧结果,否则「分区」的数据留在「搜索」视图里、标注对不上
           }}
           disabled={!caps.category}
@@ -264,7 +288,7 @@ function PlatformBrowser({
         <button
           aria-pressed={view === "search"}
           onClick={() => {
-            setView("search")
+            onView("search")
             setItems(null)
           }}
           disabled={!caps.search}
@@ -274,7 +298,7 @@ function PlatformBrowser({
         <button
           aria-pressed={view === "anchor"}
           onClick={() => {
-            setView("anchor")
+            onView("anchor")
             setItems(null)
           }}
           disabled={!caps.anchor}
