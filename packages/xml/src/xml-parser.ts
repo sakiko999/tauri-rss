@@ -9,6 +9,11 @@ import { XMLParser } from "fast-xml-parser"
 const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
+  // ⚠️ 关闭文本自动转数值:否则「数字形字符串」在边界被转成 number ——
+  // `roomId:"007"`→7、`guid:"0123"`→123(丢前导零 + 丢类型),`"1e3"`→1000。
+  // RSS 文本一律按字符串读,数值字段由 core 的 num()/Number() 显式转换(全部走它),
+  // 故关闭后读端无需改动。属性(`@_x`)本就不受此选项影响,恒为字符串。
+  parseTagValue: false,
 })
 
 export interface ParsedFeed {
