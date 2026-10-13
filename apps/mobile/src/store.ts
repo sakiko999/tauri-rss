@@ -62,8 +62,15 @@ export const useMobile = create<MobileState>((set, get) => ({
 
   openItem(item) {
     set({ open: item })
-    // 标记已读(阅读态由 core reading 管)。
-    get().dl?.reading.markRead(item.id).catch(() => {})
+    const dl = get().dl
+    if (!dl) return
+    // ⚠️ 两件事都要做(同 desktop markRead):patch 内存(store.subscribe → 重算列表,
+    // 未读项当场从列表消失)+ 落 reading 持久层(下次启动/刷新由 applyReadingState 回填)。
+    // 只落库不 patch 的话,打开后条目仍显示未读,直到下次 refresh。
+    if (item.isUnread) {
+      dl.store.patch(item.id, { isUnread: false })
+      void dl.reading.markRead(item.id, true).catch(() => {})
+    }
   },
   closeItem() {
     set({ open: null })
