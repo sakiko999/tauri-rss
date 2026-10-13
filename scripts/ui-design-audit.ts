@@ -63,16 +63,37 @@ const AUDIT = `(() => {
   const opaque = (css) => { const c = color(css); return c.a >= 0.5 ? c : null };
   const lum = ({r,g,b}) => { const f=(v)=>{v/=255; return v<=0.03928? v/12.92 : Math.pow((v+0.055)/1.055,2.4)}; return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b) };
   const ratio = (a,b) => { const l1=lum(a), l2=lum(b); return (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05) };
-  /** 沿祖先链取第一个不透明背景;半透明层做简单叠加。 */
+  /** 沿祖先链合成背景:自底向上找第一个实底,再把途中的半透明层**逐层叠加**上去。
+   *  ⚠️ 曾只取「第一个不透明背景」,把半透明层直接丢弃 —— 于是白色文字的暗色半透明
+   *  徽标(.card-duration 底 78% 深色 + 白字)被按浅色页底算成 cr=1.08 的假违规
+   *  (真实合成后 11.2:1)。反之深字+深半透明底会被误判为合格(假阴性)。 */
   const bgOf = (el) => {
-    let n = el, acc = null;
+    const layers = [];
+    let n = el;
     while (n) {
       const c = color(getComputedStyle(n).backgroundColor);
-      if (c.a > 0.95) return c;
-      if (c.a > 0.05) acc = acc ?? c;   // 记下最近一层半透明底,继续往上找实底
+      if (c.a > 0.95) {
+        layers.push(c); // 实底(最底层)
+        break;
+      }
+      if (c.a > 0.05) layers.push(c); // 半透明层,待叠加
       n = n.parentElement;
     }
-    return acc ?? { r:18,g:18,b:20,a:1 };
+    if (!layers.length) return { r: 18, g: 18, b: 20, a: 1 };
+    // 自底向上合成。⚠️ color() 把颜色对黑底预乘过(rgb 已是 src*α),故「over」公式
+    // 用预乘源:result = src_premul + dst*(1-α)(不要再乘 α,否则暗一倍)。
+    let acc = layers[layers.length - 1];
+    if (acc.a <= 0.95) acc = { r: 18, g: 18, b: 20, a: 1 }; // 全链无实底 → 兜深色底
+    for (let i = layers.length - 2; i >= 0; i--) {
+      const c = layers[i];
+      acc = {
+        r: Math.round(c.r + acc.r * (1 - c.a)),
+        g: Math.round(c.g + acc.g * (1 - c.a)),
+        b: Math.round(c.b + acc.b * (1 - c.a)),
+        a: 1,
+      };
+    }
+    return acc;
   };
 
   const contrastIssues = [], smallTargets = [], tinyText = [], fontSizes = {}, gaps = {};
