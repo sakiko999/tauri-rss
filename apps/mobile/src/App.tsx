@@ -9,6 +9,7 @@ import { PlayableMedia } from "@tauri-playground/player"
 import { MediaImage } from "@tauri-playground/ui"
 import type { MediaItem } from "@tauri-playground/core"
 import { useMobile, isPlayable } from "./store.ts"
+import { displayBody } from "./html.ts"
 
 export function App() {
   const dl = useMobile((s) => s.dl)
@@ -194,7 +195,11 @@ function Detail({ item }: { item: MediaItem }) {
       <h1 className="detail-title">{item.title}</h1>
       {item.author?.name ? <p className="detail-by">{item.author.name}</p> : null}
       {item.kind === "article" ? (
-        <div className="article-body">{body || item.summary || "（没有正文，点下方「打开原文」）"}</div>
+        // ⚠️ 正文可能是 HTML(feed 带全文)—— 按纯文本渲染会露出 <p>/<a> 标签。
+        // displayBody 判 HTML 则剥标签(mobile 无 sanitizer,富文本让位安全)。
+        <div className="article-body">
+          {displayBody(body) || item.summary || "（没有正文，点下方「打开原文」）"}
+        </div>
       ) : null}
       {resolving ? <p className="hint">正在补全原文正文…</p> : null}
     </div>
