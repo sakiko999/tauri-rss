@@ -7,6 +7,7 @@
  */
 import { Database } from "bun:sqlite"
 import { KV_TABLE, MIGRATIONS } from "@tauri-playground/core"
+import { mkdirSync } from "node:fs"
 import { join } from "node:path"
 
 /** 数据目录(apps/cli/.data/,gitignore)。本文件在 src/store/,上两级即包根。 */
@@ -18,6 +19,9 @@ export function sqliteFilePath(): string {
 }
 
 export function sqliteStorage(): StorageBackend {
+  // ⚠️ bun:sqlite 不会自建父目录 —— 新克隆/CI 上 .data/ 不存在时 `new Database`
+  // 直接抛 "unable to open database file"(且堆栈里看不出该建目录)。先建。
+  mkdirSync(DATA_DIR, { recursive: true })
   const db = new Database(sqliteFilePath(), { create: true })
   for (const m of MIGRATIONS) db.exec(m.sql)
 
