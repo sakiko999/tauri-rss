@@ -55,6 +55,15 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - [ ] **[low] `resolve/platform/youtube/client.ts:270`** — `pickProgressiveVideo` 注释描述
       与 R.maxBy 相等语义相反（仅注释错误，无功能影响）。
 
+- [ ] **[medium] `player/hooks/useStreamSelection.ts:59`** — 默认选流按格式族
+      `find(isProgressiveVideo) ?? find(isHlsStream) ?? …` 而非取 `streams[0]`；若某源
+      产出「更低清晰度的 progressive 排在更高档 hls 之后」（或首档只有 flv），会静默选低画质。
+      ⚠️ 实测现有 crawler 不触发（huya 每档先 push HLS 再 push flv，无混排倒序），
+      改动会变选流策略、有回归风险 → 待真出现混排源再改。
+- [ ] **[low] `player/hooks/useMediaStream.ts:101`** — 档位锁定 `hls.currentLevel = max`
+      在每次 MANIFEST_PARSED 重跑，直播 LL-HLS 持续重载、levels 增长时重锁到新末档。
+      点播只触发一次；直播未见问题 → 待验。
+
 ## 在本会话修（供对照）
 
 通用 RSS 文章正文按需补全（新功能）+ 持久缓存；社交弹窗控件条/HTML 渲染；`looksLikeHtml`
