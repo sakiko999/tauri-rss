@@ -255,3 +255,24 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - [x] **[低] `settings-repo.ts` reset 绕过 run()** — 与并发 set() 竞态。改走串行链。
 - **存疑（未改）**:`removedSubs` 墓碑无界增长(量级极小);`resolveKind` 的 enclosure→audio
   覆盖 ctx.kind(对播客可能有意);`loadMore` 空页+非空游标 → hasMore 恒 true(赖源行为)。
+
+## crawler 渠道层审计（2026-10-13 第十三轮）
+
+- **复核后全部剔除（误报,已实测证伪）**:
+  - **[高] douyin「包裹形 `{room:{...}}` 字段全丢」** — 审计称 `mapPartitionRooms`/`hot.ts`
+    读 `item` 拿不到字段。**实测证伪**:dump `partition/detail/room/v2`(partition_type=1)
+    原始响应,`data.data[0]` 顶层键含 `room,tag_name,uniq_id,web_rid,...`,确实**有** `.room`
+    包裹层;而代码读的正是 `item.web_rid`(顶层)+ `item.room.title/owner/cover` —— 字段映射
+    **完全正确**。`live:douyin:hot` 实测返回真实房间(title=血雾之里…、author=德子叔叔、
+    online=18866)。审计**误读代码**。
+  - **[中] 推荐位广告混进热门** — 实测 `is_recommend` 对全部 15 条非直播推荐位为真(该字段
+    是「可被推荐」属性,非「是广告」);且 `type` 字段恒 `null`(无 douyu `type===1` 那种可过滤
+    标记),所有条均带 `room`+`web_rid`。无从过滤,亦非缺陷。
+- **低 / 前瞻（未改,当前不触发）**:
+  - `bili/hot.ts` 等 `online: Number(item.online ?? 0)` 字段缺失时写 0 而非省略 → 显示「0 人在看」。
+    实测这些接口均带 online,仅缺字段时退化(低频);产品口径:0 是合法值。
+  - 四平台直播「全 null 抛错」护栏判 `ok.length`,字段改名后可能产出空壳 `Live`(前瞻,当前字段正确)。
+  - `youtube:live` 取不到 meta 时 liveStatus 退化「live」(有意取舍,注释已述)。
+  - `rss/podcast.ts` id 兜底 `hash-${title}`(与 core deserialize 已修的同源;播客几乎都带 guid)。
+- **未发现**:翻页游标语义(实测页间 0 重叠)、kind 标注一致性、tpl: 契约(serialize-contract 全绿)、
+  失败处理、URL/正则/id 生成 —— 均正确。
