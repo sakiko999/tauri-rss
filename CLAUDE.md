@@ -46,10 +46,14 @@ packages/
 ```
 
 依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`，`ui` 是原子件；
-`log`/`host` 是零依赖叶子。读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
+`log` 是零依赖叶子；`host` **依赖 core**（sqlite backend 复用其 `db/schema.ts` 的
+KV_TABLE/MIGRATIONS——包管理层面 host↔core 成环，core 把 host 放 devDep）。
+读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
 
-⚠️ **crawler→core 的唯一通道是 XML（`serializeFeed`→自解析）**：core 用自解析 XML 建 MediaItem，
-不经 crawler 类型。故 **channel 设的每个字段若要到达 UI，serialize 必须写、deserialize 必须读**
+⚠️ **crawler→core 的唯一通道是 XML（`serializeFeed`→自解析）**：core 用自解析 XML 建 MediaItem
+（item 数据不经 crawler 类型；但 core 仍 import crawler 的渠道类型 `SourceInfoField` 与运行时
+`registerAllChannels`/`isXxxSource`/`httpText`）。故 **channel 设的每个字段若要到达 UI，
+serialize 必须写、deserialize 必须读**
 ——两边漏一个就静默丢。曾只写 `tpl:kind`，导致 Live 的 `liveStatus`/`online`/`platform`、
 Video 的 `channel`、Audio 的 `artist`/`album`、Social 的 `likes` **全丢**（实测 174 条 live 全
 `liveStatus="unknown"`、`online` 恒 undefined、「X 人在看」全平台不显示、YouTube 直播 platform
@@ -187,9 +191,13 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   MPD（共享 `utils/mpd.ts`）。360p 不混进返回数组（默认选流会落 360p），DASH 装配失败才 fallback
 
 **小红书**（细节见 `docs/xhs-signature-research.md`）
-- 主分支**全 SSR**：`xhs:explore` 匿名稳定可用；**`xhs:user` 必须登录态**（匿名 SSR
-  渲染卡片但 noteId 被抹空 → 0 条）；**笔记详情页匿名可用**，但**必须带列表项的
+- 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
   xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）
+- ⚠️ **`xhs:user` 匿名也能出条目**（2026-10-12 起）：匿名 SSR 渲染卡片但平台**抹空 noteId**，
+  仅**浏览器导航**路径被 302→/login（真·0 条）；HTTP / 页面内 fetch 路径匿名拿到卡片，
+  `noteCardToSocial`（`resolve/client.ts`）用**虚拟 ID 兜底**（`anon-<hash>`，查实为
+  commit ff86e5a 引入），清掉 url + 假 xsecToken（全列表共用、拿它补全会串号）后正常 emit。
+  「必须登录」只对浏览器导航路径成立
 - ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——
   `extractInitialState` 用**平衡大括号截纯 JSON** + 空容器归一
 - ⚠️ **不要手拼 user_posted fetch**（页面内 `_webmsxyw` 只返回部分头 → 300011 风控）。
