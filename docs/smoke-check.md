@@ -44,6 +44,8 @@ bun scripts/ui-play-check.ts
 ```bash
 bun run rss fetch bili:popular --json        # bili 视频列表
 bun run rss fetch xhs:explore --json         # 小红书匿名流
+bun run rss fetch douyin:trend --json        # 抖音热点榜（匿名，含热度/榜位）
+bun run rss sug 王者                          # 抖音搜索联想词（匿名）
 bun run rss play "https://live.douyin.com/<在线房间>"   # douyin 直播多档位
 bun run rss dm   "https://live.douyin.com/<在线房间>" -s 6  # douyin 弹幕（需在线房间）
 bun run rss item <url>                        # by-url 路由 + 全档位
@@ -63,3 +65,6 @@ bun run rss item <url>                        # by-url 路由 + 全档位
 
 - 2026-10-13 全会话复验：bili / douyu / huya / douyin / youtube / xhs / 播客 / RSS 全绿；
   播放矩阵 4/4；6 包 0 类型错误；9 `.check` 全通过；设计审计 0 真实对比度违规。
+- 2026-10-13 审计轮复验：host/cli/xml/desktop+player 四轮审计 → 修 16 条真缺陷；
+  8 包 0 类型错误；12 `.check` 全通过；播放矩阵 4/4；控制台 0 告警。抖音联想/热点榜 + `resume`
+  智能订阅 + 发现页 5 处修复一并落地。
