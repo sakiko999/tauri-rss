@@ -8,7 +8,7 @@
  *   - 分区浏览/搜索:core `previewChannel(channelKey, info)` 取一次真实数据(不建订阅);
  *   - 一键订阅:`dl.addSubscription`。
  */
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
@@ -168,11 +168,13 @@ function PlatformBrowser({
   const [subscribeKey, setSubscribeKey] = useState<string | undefined>()
   const [subscribeInfo, setSubscribeInfo] = useState<Record<string, string>>({})
   const [dialogOpen, setDialogOpen] = useState(false)
-
+  /** 请求世代:切换平台/新搜索会自增,旧请求响应回来时若世代不符则丢弃。 */
+  const genRef = useRef(0)
   const ch = view === "category" ? caps.category : caps.search ?? caps.anchor
 
   async function run() {
     if (!dl || !ch) return
+    const gen = ++genRef.current
     setBusy(true)
     setError("")
     const info: Record<string, string> = {}
@@ -181,12 +183,14 @@ function PlatformBrowser({
     if (fields[0]) info[fields[0].key] = view === "category" ? categoryValue : q
     try {
       const r = await dl.previewChannel(ch.key, info)
+      if (gen !== genRef.current) return // 已被更新的请求取代,丢弃(否则面板显示上一个平台的数据)
       setItems(r.items)
     } catch (e) {
+      if (gen !== genRef.current) return
       setError(e instanceof Error ? e.message : String(e))
       setItems(null)
     } finally {
-      setBusy(false)
+      if (gen === genRef.current) setBusy(false)
     }
   }
 
