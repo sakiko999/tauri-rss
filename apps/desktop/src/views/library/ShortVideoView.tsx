@@ -74,6 +74,7 @@ function Slide({ item, index, active, onClose }: { item: MediaItem; index: numbe
 export function ShortVideoView() {
   const nodeId = useDesktop((s) => s.selectedNodeId)
   const view = useDesktop((s) => s.view)
+  const growPage = useDesktop((s) => s.growPage)
   const go = useViewNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
   const [activeIdx, setActiveIdx] = useState(0)
@@ -85,7 +86,12 @@ export function ShortVideoView() {
     go(k && k !== "all" ? `tab:${k}` : "tab:all")
   }
 
+  // ⚠️ view.list 是分页窗口(≤ PAGE_SIZE 60)。该视图不挂 LoadMoreFooter/不做触底翻页
+  // → 第 61 条起滑不到。滑到接近末尾时自动 growPage 放窗口(与其他视图的触底预载等价)。
   const items = useMemo(() => view.list, [view.list])
+  useEffect(() => {
+    if (view.hasMore && items.length > 0 && activeIdx >= items.length - 3) growPage(nodeId ?? "")
+  }, [activeIdx, items.length, view.hasMore, nodeId, growPage])
 
   // IntersectionObserver 跟踪「哪一屏在视口中央」→ activeIdx。
   useEffect(() => {

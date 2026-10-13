@@ -11,7 +11,7 @@
  * 输入框内不拦截(j/k 等)。
  */
 import { useEffect, useRef } from "react"
-import { nodeTypeOf, useDesktop } from "../store/index.ts"
+import { useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
 import { useViewNavigate } from "../router.tsx"
 
@@ -54,8 +54,12 @@ export function useGlobalShortcuts(): void {
         // 事件冒泡到这里时 defaultPrevented=true → 不再劫持。否则在播放页按 k 会在切播放/
         // 暂停的同时把 selectedArticleId 静默挪到相邻文章(返回列表选中项已跳走)。
         if (e.defaultPrevented) return
-        // ⚠️ 播放页整页都是播放器:j 未被容器接管,但也不该在此切换文章(不可见)。直接跳过。
-        if (nodeTypeOf(useDesktop.getState().selectedNodeId) === "player") return
+        // ⚠️ 播放页整页都是播放器:j 未被播放器容器接管(容器只处理 k/空格/方向键/m/f/Home/End/数字),
+        // 但也不该在此切换文章(不可见)。**不能靠 selectedNodeId 判**:/play/:itemId 的 loader
+        // 故意不改它(见 router.tsx:73),selectedNodeId 恒为**上一个**节点(如 tab:all)→
+        // `nodeTypeOf(...)==="player"` 永假(死守卫)。曾因此:播放页按 j 静默把上一个 feed 的
+        // 一篇无关文章标为已读并落库(实测 unread 16→15)。改按 URL 判当前是否在播放页。
+        if (location.pathname.startsWith("/play/")) return
         const s = useDesktop.getState()
         const list = s.view.list.filter((i) => i.kind === "article")
         if (!list.length) return
