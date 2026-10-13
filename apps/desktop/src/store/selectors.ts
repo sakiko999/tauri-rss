@@ -82,6 +82,20 @@ export interface ViewResult {
   hasMore: boolean
 }
 
+/**
+ * 条目正文的可搜索文本(小写)。按对象身份缓存(WeakMap):同一 item 只剥离一次,
+ * 避免每次按键对整库重复剥标签。article/social 有 content;其余用 summary 兜底。
+ */
+const bodyCache = new WeakMap<object, string>()
+export function bodyText(i: MediaItem): string {
+  const hit = bodyCache.get(i)
+  if (hit !== undefined) return hit
+  const content = (i as { content?: string }).content ?? ""
+  const text = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().toLowerCase()
+  bodyCache.set(i, text)
+  return text
+}
+
 /** 完整视图查询:base → filter → 搜索 → sort → 窗口分页。 */
 export function queryView(s: StoreSlice, node: string | null, now: number): ViewResult {
   const n = node ?? "tab:all"
@@ -100,7 +114,10 @@ export function queryView(s: StoreSlice, node: string | null, now: number): View
       (i) =>
         i.title.toLowerCase().includes(q) ||
         (i.author?.name ?? "").toLowerCase().includes(q) ||
-        (i.summary ?? "").toLowerCase().includes(q),
+        (i.summary ?? "").toLowerCase().includes(q) ||
+        // 正文搜索(即「全文搜索」的本义)。正文 HTML 只留文本(去标签)后再匹配;
+        // 剥离结果按对象缓存,避免每次按键对整库重复剥离。
+        bodyText(i).includes(q),
     )
   }
   list = sortItems(list, s.sort[n] ?? "new")
