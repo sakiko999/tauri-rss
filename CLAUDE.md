@@ -48,6 +48,13 @@ packages/
 依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`，`ui` 是原子件；
 `log`/`host` 是零依赖叶子。读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
 
+⚠️ **crawler→core 的唯一通道是 XML（`serializeFeed`→自解析）**：core 用自解析 XML 建 MediaItem，
+不经 crawler 类型。故 **channel 设的每个字段若要到达 UI，serialize 必须写、deserialize 必须读**
+——两边漏一个就静默丢。曾只写 `tpl:kind`，导致 Live 的 `liveStatus`/`online`/`platform`、
+Video 的 `channel`、Audio 的 `artist`/`album`、Social 的 `likes` **全丢**（实测 174 条 live 全
+`liveStatus="unknown"`、`online` 恒 undefined、「X 人在看」全平台不显示、YouTube 直播 platform
+被 URL 兜底误判为 bilibili）。回归守卫：`serialize-roundtrip.check.ts`。
+
 ## 宿主注入：全局 appHost 门面
 
 宿主能力经全局 `globalThis.appHost` 注入，门面在 `packages/host/src/runtime.ts`
@@ -96,6 +103,7 @@ bun packages/core/src/example/media-store.check.ts      # 查询分支（分组�
 bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
+bun packages/core/src/example/serialize-roundtrip.check.ts  # crawler→core 序列化边界（tpl 字段不丢）
 bun packages/xml/src/example/opml.check.ts              # OPML 编解码往返（分组层级）
 bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射（导出过滤 / 导入去重）
 

@@ -34,6 +34,7 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { httpJson, httpText, now } from "../../host.ts"
 import { UA_ENTER } from "./abogus.ts"
 import { douyinClient } from "./client.ts"
+import { douyinOnline } from "./audience.ts"
 
 const LIVE = "https://live.douyin.com"
 
@@ -117,7 +118,6 @@ function mapPartitionRooms(list: Array<Record<string, any>>, sourceId: string): 
     const room = (item.room ?? {}) as Record<string, any>
     const webRid = String(item.web_rid ?? "")
     const owner = (room.owner ?? {}) as Record<string, any>
-    const viewStats = (room.room_view_stats ?? {}) as Record<string, any>
     const coverList = Array.isArray(room.cover?.url_list) ? (room.cover.url_list as unknown[]) : []
     return {
       id: `douyin:${webRid}`,
@@ -131,7 +131,7 @@ function mapPartitionRooms(list: Array<Record<string, any>>, sourceId: string): 
       platform: "douyin",
       roomId: webRid,
       liveStatus: "live",
-      online: Number(viewStats.display_value ?? 0),
+      online: douyinOnline(room),
     }
   })
 }

@@ -20,6 +20,7 @@ import { toInt } from "@tauri-playground/resolve"
 import { parseRoomIds } from "@tauri-playground/resolve"
 import { strOr } from "@tauri-playground/resolve"
 import { fetchRoom } from "@tauri-playground/resolve"
+import { douyinOnline } from "@tauri-playground/resolve"
 
 const LIVE = "https://live.douyin.com"
 
@@ -75,7 +76,7 @@ export class DouyinLiveChannel implements RssChannel {
       platform: "douyin",
       roomId: String(roomId),
       liveStatus: isLive ? "live" : "offline",
-      online: toInt(room?.room_view_stats?.display_value),
+      online: douyinOnline(room),
       introduction: strOr(room.intro),
       // stream_url 藏 play 数据,供下游 getPlayQualities/Urls(本地解析)。
       raw: streamUrl,

@@ -79,13 +79,52 @@ function itemToTree(item: Item): Record<string, unknown> {
   const streamEnc = streamEnclosure(item)
   if (streamEnc && !tree.enclosure) tree.enclosure = { "@_url": streamEnc.url, "@_type": streamEnc.type ?? "application/octet-stream" }
 
-  // 最小 tpl: kind(deserialize kind 判别核心)。
+  // tpl: kind(deserialize kind 判别核心)+ 各 kind 的扩展字段。
   setTpl(tree, "kind", item.kind)
 
-  // 小红书详情页开关(xhs 列表项 xsec_token;匿名 GET /explore/<id> 需带)。
-  // 仅 sort 序列化到 XML,deserialize 读回 SocialItem.xsecToken 供详情弹窗。
-  const xsec = (item as { xsecToken?: string }).xsecToken
-  if (xsec) setTpl(tree, "xsecToken", xsec)
+  // ── 公共字段(deserialize baseFields 读)──
+  // ⚠️ 这些是 crawler→core 的**唯一通道**:core 用「自解析 XML 建 MediaItem」,
+  // 不经 crawler 类型。此前只写 tpl:kind,导致 Live 的 liveStatus/online/platform、
+  // Audio 的 artist/album、Video 的 channel 等**全在边界丢掉**(实测 174 条 live
+  // 全 liveStatus="unknown"、online 恒 undefined、YouTube 直播 platform 被 URL 兜底
+  // 误判为 bilibili)。凡是 crawl;channel 设了、deserialize 又读的字段,必须在此透传。
+  setTplN(tree, "mimeType", item.mimeType)
+  setTplN(tree, "poster", item.poster)
+  setTplN(tree, "width", item.width)
+  setTplN(tree, "height", item.height)
+  setTplN(tree, "aspectRatio", item.aspectRatio)
+  setTplN(tree, "durationSec", item.durationSec)
+  setTplN(tree, "bitrate", item.bitrate)
+  setTplN(tree, "streamingFormat", item.streamingFormat)
+  if (item.isLiveNow !== undefined) setTpl(tree, "isLiveNow", item.isLiveNow ? "1" : "0")
+  setTplN(tree, "lang", item.lang)
+
+  if (item.kind === "live") {
+    setTpl(tree, "platform", item.platform)
+    setTpl(tree, "roomId", item.roomId)
+    setTpl(tree, "liveStatus", item.liveStatus)
+    setTplN(tree, "online", item.online)
+    if (item.isRecord !== undefined) setTpl(tree, "isRecord", item.isRecord ? "1" : "0")
+    setTplN(tree, "introduction", item.introduction)
+    setTplN(tree, "notice", item.notice)
+    setTplN(tree, "showTime", item.showTime)
+  } else if (item.kind === "video") {
+    // video 时长走 tpl:duration(与 audio 同字段名,deserialize 的 parseVideo 读它)。
+    setTplN(tree, "duration", item.duration)
+    setTplN(tree, "channelName", item.channel?.name)
+    setTplN(tree, "channelAvatar", item.channel?.avatar)
+  } else if (item.kind === "audio") {
+    setTplN(tree, "duration", item.duration)
+    setTplN(tree, "artist", item.artist)
+    setTplN(tree, "album", item.album)
+  } else if (item.kind === "social") {
+    setTplN(tree, "likes", item.likes)
+    setTplN(tree, "reposts", item.reposts)
+    setTplN(tree, "replies", item.replies)
+    if (item.isLiked !== undefined) setTpl(tree, "isLiked", item.isLiked ? "1" : "0")
+    // 小红书详情页开关(匿名 GET /explore/<id> 需带 xsec_token)。
+    setTplN(tree, "xsecToken", item.xsecToken)
+  }
 
   return tree
 }
@@ -140,6 +179,12 @@ function streamEnclosure(item: Item): { url: string; type?: string } | undefined
 
 function setTpl(tree: Record<string, unknown>, tag: string, value: string): void {
   tree[`tpl:${tag}`] = value
+}
+
+/** 仅当值非空(undefined/null/空串)时写入 tpl 字段,避免产出 `tpl:x=""` 噪声。 */
+function setTplN(tree: Record<string, unknown>, tag: string, value: string | number | undefined | null): void {
+  if (value === undefined || value === null || value === "") return
+  tree[`tpl:${tag}`] = String(value)
 }
 
 /** epoch ms → RFC 822(RSS pubDate 格式)。 */

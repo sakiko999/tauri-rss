@@ -117,8 +117,12 @@
 - **bili 账号服务**（参照 `bilibili_account_service.dart:191`）——未做。用于登录后
   拉昵称/uid 展示（`/x/member/web/account`）。
 - **微博无扫码登录**——`DEFAULT_WEIBO_COOKIE` 为空，冷 cookie 几分钟即失效（自述于 `weibo/user.ts:9-13`）。
-- **抖音观众数单指标**——我们只用 `room_view_stats.display_value`，可能把**累计值当并发**显示；
-  参照 `douyin_audience.dart` 把 online/total 分离成两个指标。
+- ✅ **抖音观众数（2026-10-13 复核 + 修复）**——原记录「可能把累计值当并发」**实测有误**：
+  `room_view_stats.display_value` 实测**等于** `room.user_count`（8 房间全等：85=85、2150=2150），
+  即它显示的**就是并发**；累计观众在 `room.stats.total_user_str`（如 `7万+`）。仍改为显式取
+  并发真字段 `room.user_count`（优先），`display_value` 仅兜底——见
+  `resolve/platform/douyin/audience.ts` 的 `douyinOnline()`。参照侧更进一步完全排除
+  display_value/total_user，我们保留兜底以防字段缺失。
 
 ## P5 —— 参照项目已失效、不必抄
 

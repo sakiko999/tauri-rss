@@ -13,6 +13,7 @@ import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts
 import { apiFetch, apiFetchMore } from "../factory.ts"
 import { now } from "@tauri-playground/resolve"
 import { douyinClient } from "@tauri-playground/resolve"
+import { douyinOnline } from "@tauri-playground/resolve"
 
 const LIVE = "https://live.douyin.com"
 const COUNT = 15
@@ -69,7 +70,6 @@ export class DouyinLiveHotChannel implements RssChannel {
       const room = (item.room ?? {}) as Record<string, any>
       const webRid = String(item.web_rid ?? "")
       const owner = (room.owner ?? {}) as Record<string, any>
-      const viewStats = (room.room_view_stats ?? {}) as Record<string, any>
       const coverList = Array.isArray(room.cover?.url_list) ? (room.cover.url_list as unknown[]) : []
       return {
         id: `douyin:${webRid}`,
@@ -83,7 +83,7 @@ export class DouyinLiveHotChannel implements RssChannel {
         platform: "douyin",
         roomId: webRid,
         liveStatus: "live",
-        online: Number(viewStats.display_value ?? 0),
+        online: douyinOnline(room),
       }
     })
   }
