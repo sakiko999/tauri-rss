@@ -8,7 +8,7 @@
  * 带 `defaultInfo` 的渠道可一键订阅。提交走 store.addSubscription(内部
  * dl.addSubscription = add + refresh)。
  */
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
 import { Modal, Select } from "../../components/Modal.tsx"
@@ -85,6 +85,9 @@ export function AddSubscriptionDialog({
   const [error, setError] = useState("")
   /** 必填未填的参数 key(现场校验,提交前拦截)。 */
   const [missing, setMissing] = useState<string[]>([])
+  /** 搜索请求世代:切平台/新搜索自增,旧响应回来时若世代不符则丢弃(否则上个平台的
+   *  候选会覆盖当前面板 —— 与 DiscoverPage 的 genRef 同款)。 */
+  const searchGenRef = useRef(0)
 
   // rss: 预制直链(rss:hn 等 36 条)在 desktop 隐藏 —— 它们是种子清单,列出来太噪。
   // ⚠️ 但 `rss:url`(通用直链)**必须放行**:它是「已知 URL 的任意 RSS」的唯一入口
@@ -128,6 +131,7 @@ export function AddSubscriptionDialog({
 
   useEffect(() => {
     if (!open) return
+    ++searchGenRef.current // 重开面板作废上一次会话的在途搜索
     setError("")
     setMissing([])
     setBusy(false)
@@ -155,6 +159,7 @@ export function AddSubscriptionDialog({
   /** 搜索模式:调平台 search 渠道拿候选(不建订阅,走 previewChannel)。 */
   async function runSearch() {
     if (!dl || !searchChKey || !keyword.trim()) return
+    const gen = ++searchGenRef.current
     setSearching(true)
     setError("")
     setCandidateValue("")
@@ -162,12 +167,14 @@ export function AddSubscriptionDialog({
     try {
       const field = searchCh?.sourceInfoTpl?.[0]?.key ?? "keyword"
       const r = await dl.previewChannel(searchChKey, { [field]: keyword.trim() })
+      if (gen !== searchGenRef.current) return // 已被切平台/新搜索取代,丢弃
       setSearchItems(r.items)
     } catch (e) {
+      if (gen !== searchGenRef.current) return
       setError(e instanceof Error ? e.message : String(e))
       setSearchItems([])
     } finally {
-      setSearching(false)
+      if (gen === searchGenRef.current) setSearching(false)
     }
   }
 
@@ -184,6 +191,7 @@ export function AddSubscriptionDialog({
 
   /** 切换搜索平台(清空上一平台的候选与选中)。 */
   function pickPlatform(p: string) {
+    ++searchGenRef.current // 作废在途搜索,否则旧平台候选覆盖新面板
     setPlatform(p)
     setSearchItems(null)
     setCandidateValue("")
