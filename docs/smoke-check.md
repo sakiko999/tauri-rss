@@ -69,3 +69,8 @@ bun run rss item <url>                        # by-url 路由 + 全档位
 - 2026-10-13 审计轮复验：host/cli/xml/desktop+player 四轮审计 → 修 16 条真缺陷；
   8 包 0 类型错误；12 `.check` 全通过；播放矩阵 4/4；控制台 0 告警。抖音联想/热点榜 + `resume`
   智能订阅 + 发现页 5 处修复一并落地。
+- 2026-10-13 审计轮二：resolve + crawler 两层审计 → 修 8 条真缺陷（bili 弹幕截断帧死循环 /
+  斗鱼帧粘包只解首包 / youtube 解 n 抠错 videoId / bili buvid 缓存毒化 / 四平台直播全失败当成功 /
+  huya 搜主播 online 假 0 / bili:square id 含下标 / douyin 重复 enter）+ 2 条复核纠正为误报。
+  新增 2 守卫（danmaku-proto / douyu-frame）→ 14 `.check` 全通过；8 包 0 类型错误；播放矩阵 4/4；
+  八路搜索矩阵全绿；控制台 0 告警。
