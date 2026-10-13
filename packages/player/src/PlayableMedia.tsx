@@ -132,8 +132,10 @@ export function PlayableMedia({
 
   // 最终播放用的流:初始流或懒解析结果。弹幕随解析结果附带(resolve 前 undefined)。
   const playStreams = resolved?.streams ?? streams ?? []
-  // ⚠️ 不只看长度:全空 url 的流等于无形(上游 dash 拼装失败会给 `{url:""}`)→ 当作无可播。
-  const hasPlayable = playStreams.some((s) => !!s.url)
+  // ⚠️ 可播 = 有 url(原生/HLS/FLV)**或**有 dashManifest(bili DASH 流 url 恒为空串,
+  // 靠 dashManifest 生成 MPD blob 喂 dash.js —— 空 url 对 DASH 是**正常**的)。
+  // 只判 !!url 会把 bili 视频全判成无可播(卡在「正在解析」)。
+  const hasPlayable = playStreams.some((s) => !!s.url || !!s.dashManifest)
   // 弹幕总开关关闭时不把流交给弹幕层(不建连接,而非建了再隐藏)。
   const danmaku = showDanmaku ? resolved?.danmaku : undefined
 
@@ -388,9 +390,9 @@ export function PlayableMedia({
     )
   }
 
-  // ⚠️ 无 url 的流(如 bili dash 拼装失败给的空 url):兜底 video 也会是永不加载的黑框,
-  // 且原生 video 无 src 不触发 onError,用户毫无诊断。显式给空态。
-  if (!stream.url) {
+  // ⚠️ 既无 url 又无 dashManifest 才真是无流(dash 流 url 为空但靠 dashManifest 播)。
+  // 不判的话兜底 video 会是永不加载的黑框,且原生 video 无 src 不触发 onError。
+  if (!stream.url && !stream.dashManifest) {
     return <MediaState title="暂时没有可播流" detail="平台未返回可解析的直链(可能是拼装失败或需要登录)。" />
   }
 
