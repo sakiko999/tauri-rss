@@ -44,12 +44,13 @@ export function decodeEntities(s: string): string {
   })
 }
 
-/** 块级结束标签 → 换行，其余标签剥掉，再解实体。 */
+/** 块级结束标签 → 空行(段落边界),<br> → 单换行，其余标签剥掉，再解实体。
+ *  ⚠️ 块尾用 "\n\n"(不是 "\n"):否则兜底路径 normalize 只压不扩,段落被压成单换行。 */
 function tagToText(html: string): string {
   return decodeEntities(
     html
       .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(p|div|li|h[1-6]|blockquote|tr|section|article|main)\s*>/gi, "\n")
+      .replace(/<\/(p|div|li|h[1-6]|blockquote|tr|section|article|main)\s*>/gi, "\n\n")
       .replace(/<[^>]*>/g, ""),
   )
 }

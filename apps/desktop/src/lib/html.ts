@@ -12,3 +12,12 @@ const KNOWN_TAG =
 export function looksLikeHtml(s: string): boolean {
   return KNOWN_TAG.test(s)
 }
+
+/**
+ * 可见文本长度(粗剥标签 + 去空白)——判「feed 是否已带全文」用。
+ * ⚠️ 不能按原始 HTML 长度:图片密集的短摘要(<a><img></a>)标签一堆、可见字寥寥,
+ * 按 HTML 长度会虚高,把「只有摘要」误判成「已带全文」而跳过补全。
+ */
+export function visibleLength(s: string): number {
+  return s.replace(/<[^>]*>/g, "").replace(/\s+/g, "").length
+}

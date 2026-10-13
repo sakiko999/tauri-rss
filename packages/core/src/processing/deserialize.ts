@@ -118,6 +118,9 @@ function baseFields(it: ParsedItem, ctx: DeserializeContext) {
   const raw = it.raw ?? {}
   const author = toAuthor({
     name: it.author?.trim() || str(raw["dc:creator"]) || undefined,
+    // 头像/句柄走 tpl:(标准 RSS 无的位置)——serialize 已透传,不读则边界丢掉。
+    avatar: str(raw["tpl:authorAvatar"]),
+    handle: str(raw["tpl:authorHandle"]),
   })
   return {
     id: it.guid ?? `hash-${it.title ?? ""}`,

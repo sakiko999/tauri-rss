@@ -96,5 +96,18 @@ ok(trickyXml.includes("&amp;") && trickyXml.includes("&lt;tag&gt;"), "title 的 
 const trickyBack = deserializeFeed(trickyXml, ctx)[0] as any
 ok(trickyBack.title === "A & B <tag>", `title 往返保真(得 ${JSON.stringify(trickyBack.title)})`)
 
+// 6. article:fetchedAt 无标准 RSS 字段(走 tpl:)必须透传,否则恒退化成 ctx.now
+const art: Item = {
+  id: "a1", sourceId: "rss:x", kind: "article", title: "文章",
+  url: "https://x/y", fetchedAt: 1699999999123, content: "<p>正文</p>", contentFormat: "html",
+  author: { name: "作者", avatar: "http://x/av.jpg", handle: "@handle" },
+}
+const artBack = deserializeFeed(serializeFeed([art]), ctx)[0] as any
+console.log("Article 往返:")
+ok(artBack.fetchedAt === 1699999999123, `fetchedAt 透传(得 ${artBack.fetchedAt})`)
+ok(artBack.contentFormat === "html", `contentFormat(得 ${artBack.contentFormat})`)
+ok(artBack.author?.avatar === "http://x/av.jpg", `author.avatar(得 ${artBack.author?.avatar})`)
+ok(artBack.author?.handle === "@handle", `author.handle(得 ${artBack.author?.handle})`)
+
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
 process.exit(fails === 0 ? 0 : 1)

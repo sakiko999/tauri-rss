@@ -65,9 +65,12 @@ function itemToTree(item: Item): Record<string, unknown> {
   tree.guid = { "@_isPermaLink": "false", "#text": item.id }
   if (item.publishedAt !== undefined) tree.pubDate = toRfc822(item.publishedAt)
 
-  // 标准 author(deserialize 从 author/dc:creator 读)。
+  // 标准 author(deserialize 从 author/dc:creator 读)+ 头像/句柄走 tpl:(避免边界丢,
+  // 否则 MediaAuthor.avatar 恒 undefined,UI 头像退化成首字母)。
   const authorName = item.author?.name
   if (authorName) tree.author = authorName
+  if (item.author?.avatar) setTpl(tree, "authorAvatar", item.author.avatar)
+  if (item.author?.handle) setTpl(tree, "authorHandle", item.author.handle)
 
   // thumbnail → media:thumbnail。poster 兜底 thumbnail 缺失时。
   const thumb = item.thumbnail ?? item.poster
@@ -93,6 +96,9 @@ function itemToTree(item: Item): Record<string, unknown> {
   // 全 liveStatus="unknown"、online 恒 undefined、YouTube 直播 platform 被 URL 兜底
   // 误判为 bilibili)。凡是 crawl;channel 设了、deserialize 又读的字段,必须在此透传。
   setTplN(tree, "mimeType", item.mimeType)
+  // ⚠️ fetchedAt 无标准 RSS 字段,core 却读 tpl:fetchedAt(deserialize.ts) —— 不写则
+  // 恒退化成 ctx.now(丢失真实抓取时刻)。must 透传。
+  setTplN(tree, "fetchedAt", (item as { fetchedAt?: number }).fetchedAt)
   setTplN(tree, "poster", item.poster)
   setTplN(tree, "width", item.width)
   setTplN(tree, "height", item.height)

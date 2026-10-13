@@ -13,7 +13,7 @@ import { Icon } from "../../components/Icon.tsx"
 import { MediaImage } from "@tauri-playground/ui"
 import { fmtDate, heroWidth, mediaUrl, ratioOf } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
-import { looksLikeHtml } from "../../lib/html.ts"
+import { looksLikeHtml, visibleLength } from "../../lib/html.ts"
 import { usePrefs } from "../../store/prefs.ts"
 
 /** 正文最大宽度(阅读舒适度档位)。 */
@@ -63,25 +63,6 @@ export function ReaderMain() {
     return () => el.removeEventListener("scroll", onScroll)
   }, [item?.id])
 
-  // 切条目:恢复该条的阅读进度(有则跳,无则回顶)。等正文渲染出滚动高度再跳
-  // (rAF 一帧足够;期间 progress-bar 的 onScroll 会用未跳的 0 覆盖?——不会,
-  //  恢复跳转触发的 scroll 事件写回的是同一比例,节流后无副作用)。
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    pendingRestoreRef.current = true // 切条目:先屏蔽写回
-    const ratio = item?.scrollRatio ?? 0
-    const restore = () => {
-      const max = el.scrollHeight - el.clientHeight
-      el.scrollTo({ top: ratio > 0.02 && max > 0 ? ratio * max : 0 })
-    }
-    const raf = requestAnimationFrame(() => {
-      restore()
-      pendingRestoreRef.current = false // 恢复完成,允许写回
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [item?.id])
-
   /**
    * 按需补全正文:通用 RSS 只带摘要(feed 没给全文),点开时抓原文页提正文。
    * 补回的 full 不走 store.patch(避免每次渲染都更新),按 itemId 对位展示 + 会话缓存。
@@ -89,6 +70,8 @@ export function ReaderMain() {
    */
   const itemId = item?.id
   const curContent = item?.kind === "article" ? item.content ?? "" : ""
+  /** 可见文本长度(<400 触补全;用可见长度而非原始 HTML——图片密集摘要会虚高)。 */
+  const curVisible = visibleLength(curContent)
   const [full, setFull] = useState<{ id: string; content: string } | null>(null)
   /** 渲染期读缓存:命中则直接用(无闪屏);未命中交给 effect 抓。 */
   const cached = itemId ? bodyCache.get(itemId) : undefined
@@ -98,7 +81,7 @@ export function ReaderMain() {
   const [resolving, setResolving] = useState(false)
   useEffect(() => {
     if (!itemId || item?.kind !== "article") return
-    if (curContent.length >= 400) return // feed 已带全文,不折腾
+    if (curVisible >= 400) return // feed 已带全文,不折腾
     if (bodyCache.has(itemId)) return // 会话缓存命中,不重复抓
     const dl = useDesktop.getState().dl
     if (!dl) return
@@ -123,7 +106,7 @@ export function ReaderMain() {
       live = false
       setResolving(false)
     }
-  }, [itemId, curContent])
+  }, [itemId, curContent, curVisible])
 
   const article = item?.kind === "article" ? item : null
   /** 展示用正文:补全结果优先(同 itemId),其次会话缓存,最后 feed 自带。
@@ -131,13 +114,33 @@ export function ReaderMain() {
    *  展示的那段文本**,而不是 item.contentFormat —— 后者是 store 里的原始摘要格式,
    *  对补全的纯文本恒错(曾据此写 `contentFormat==="text"` 但当保护从未生效)。 */
   const shownContent = full && full.id === itemId ? full.content : cached ?? curContent
-  const html = article?.contentFormat === "html" || (article?.contentFormat !== "text" && looksLikeHtml(shownContent))
   /** 本条目是否已拿到补全正文(对位 itemId,不是「任意条目补全过」)。 */
   const hasFull = (full?.id === itemId) || !!cached
+  // ⚠️ 补全正文恒为**纯文本**(raw.ts 强制 contentFormat="text"),hasFull 时直接按纯文本
+  // 渲染,不再猜格式——否则补全文本里的裸 `<`(数学/代码/`<https://…>`)会被 looksLikeHtml
+  // 命中而走 innerHTML,把内容当标签吞掉且丢段落换行。仅未补全时才依据 store 的
+  // contentFormat / 标签探测决定。
+  const html = !hasFull && (article?.contentFormat === "html" || looksLikeHtml(shownContent))
   const cleanHtml = useMemo(
     () => (article && html ? DOMPurify.sanitize(shownContent) : ""),
     [article, html, shownContent],
   )
+
+  // 切条目 / 补全正文到达后:按当前 scrollHeight 恢复阅读进度(有则跳,无则回顶)。
+  // ⚠️ deps 含 hasFull:补全是异步的,到达后 scrollHeight 变长,须按最终高度**再定位一次**,
+  // 否则落在按旧(摘要)高度算出的像素处(读了比保存进度更靠前的位置)。
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    pendingRestoreRef.current = true // 恢复前先屏蔽写回
+    const ratio = item?.scrollRatio ?? 0
+    const raf = requestAnimationFrame(() => {
+      const max = el.scrollHeight - el.clientHeight
+      el.scrollTo({ top: ratio > 0.02 && max > 0 ? ratio * max : 0 })
+      pendingRestoreRef.current = false // 恢复完成,允许写回
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [item?.id, hasFull])
 
   if (!item) {
     return (

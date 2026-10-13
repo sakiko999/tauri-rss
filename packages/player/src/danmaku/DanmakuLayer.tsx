@@ -93,6 +93,9 @@ export function DanmakuLayer({
   const vodPoolRef = useRef<DanmakuItem[]>([])
   const spawnedRef = useRef<Set<string>>(new Set())
   const lastTRef = useRef(0)
+  /** 首批 VOD 弹幕的最早 timeMs(冷启动网络慢时,这批晚于 currentTime 到达;
+   *  窗口下界据此回拨,补发已过去的开头弹幕)。null = 还没收到首批。 */
+  const firstBatchRef = useRef<number | null>(null)
   const lastNowRef = useRef(0)
   const pausedRef = useRef(paused)
   pausedRef.current = paused
@@ -109,7 +112,13 @@ export function DanmakuLayer({
       const vod: DanmakuItem[] = []
       const liveNow: DanmakuItem[] = []
       for (const d of batch) (d.timeMs !== undefined ? vod : liveNow).push(d)
-      if (vod.length) vodPoolRef.current.push(...vod)
+      if (vod.length) {
+        if (firstBatchRef.current === null) {
+          const minT = Math.min(...vod.map((d) => d.timeMs ?? Infinity))
+          if (Number.isFinite(minT)) firstBatchRef.current = minT
+        }
+        vodPoolRef.current.push(...vod)
+      }
       if (liveNow.length) pendingRef.current.push(...liveNow)
     })
     return () => {
@@ -132,7 +141,10 @@ export function DanmakuLayer({
       return
     }
     if (t <= lastTRef.current) return
-    const start = lastTRef.current
+    // ⚠️ 冷启动:首批弹幕晚于 currentTime 到达(视频直链先起播、弹幕网络在途)时,
+    // 开头这批的 timeMs ≤ lastT(已被 lastT 单调推进越过)→ 严格 `>start` 会永久滤掉,
+    // 表现为开头一段弹幕整体缺失。尚未发射任何条目时把下界回拨到首批最早 timeMs 之前。
+    const start = spawnedRef.current.size === 0 && firstBatchRef.current !== null ? Math.min(lastTRef.current, firstBatchRef.current - 1) : lastTRef.current
     lastTRef.current = t
     const fresh: DanmakuItem[] = []
     for (const d of vodPoolRef.current) {
