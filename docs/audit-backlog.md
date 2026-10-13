@@ -163,3 +163,22 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - [x] **[低] `douyin/live.ts:85`** — `raw:streamUrl` 死字段(raw 不经 XML,下游重新 fetchRoom)。
 - [ ] **[低] `weibo/user.ts:55`** — 首次翻页重拉首页拿 mids(多 2 次往返)。正确性无损、
       注释已解释必要性;要省需跨调用缓存 lastMid(状态脆),暂缓。
+
+## core 仓储 + 处理层审计（2026-10-13 第九轮）
+
+- [x] **[高] `apps/desktop/src/store/index.ts:589` `markRead`** — 语义反转:算 `next = !item.isUnread`
+      (内存的**未读**标志)却把 `next` 当「已读」传给 `reading.markRead(id, read)`(持久层 read
+      语义是「已读」)→ 标已读存 read=false → applyReadingState 不回填 → **刷新后回到未读**;
+      反向也无法标未读。CDP 实测复现。修:`markRead(item.id, !next)`。toggleStar 用 setStarred
+      (同义值)无此问题。
+- [x] **[低] `repo/subscription-repo.ts:122` `addGroup`** — 裸 push 不去重(同文件 `add` 有守卫)
+      → 同 id 分组留两条 → updateGroup/removeGroup 只命中首个 → 改名/删除留孤儿。补原地覆盖 + 守卫。
+- **判定非缺陷 / 暂缓（复核）**:
+  - **[中/暂缓] `media-store.patch` 按裸 id 跨订阅匹配** — 与 backlog 已记「reading 按裸 id」同源
+    (该审计补充了内存侧 `store.patch` 也裸 id)。修需 API 加 subscriptionId 维度 + 持久化迁移,
+    无用户报告 → 维持暂缓。
+  - **[低] `media-store.append` 丢弃重复 id(不合并更新)** — 看似丢字段新鲜度,但合并会**回退
+    用户态**:markRead 异步落库,并发 loadMore 的 applyReadingState 可能读到旧 map,合并会把
+    刚标记的已读覆盖回未读。当前「丢弃重复」更安全,保留。
+  - **[低] `*:corrupt` 留证无消费** — 是**单** key(覆盖非堆积,审计「逐份堆积」有误),设计有意
+    (留证供人工恢复),保留。
