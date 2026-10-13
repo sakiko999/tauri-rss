@@ -11,7 +11,7 @@
  * 输入框内不拦截(j/k 等)。
  */
 import { useEffect, useRef } from "react"
-import { useDesktop } from "../store/index.ts"
+import { nodeTypeOf, useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
 import { useViewNavigate } from "../router.tsx"
 
@@ -50,6 +50,12 @@ export function useGlobalShortcuts(): void {
       }
       // 阅读视图 j/k、↑/↓ 切换文章。
       if (!mod && !inField && (e.key === "j" || e.key === "k" || e.key === "ArrowDown" || e.key === "ArrowUp")) {
+        // ⚠️ 播放器容器对同款按键(空格/k/↑↓/←→/m/f…)已 preventDefault(不 stopPropagation),
+        // 事件冒泡到这里时 defaultPrevented=true → 不再劫持。否则在播放页按 k 会在切播放/
+        // 暂停的同时把 selectedArticleId 静默挪到相邻文章(返回列表选中项已跳走)。
+        if (e.defaultPrevented) return
+        // ⚠️ 播放页整页都是播放器:j 未被容器接管,但也不该在此切换文章(不可见)。直接跳过。
+        if (nodeTypeOf(useDesktop.getState().selectedNodeId) === "player") return
         const s = useDesktop.getState()
         const list = s.view.list.filter((i) => i.kind === "article")
         if (!list.length) return
