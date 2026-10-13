@@ -30,6 +30,7 @@ export function nodeWsBackend(): WsBackend {
       const ws = new WebSocket(opts.url, { headers: opts.headers })
       const connectionId = `node-ws-${nextId++}`
       const conn = new NodeWsConnection(ws, connectionId)
+      let closed = false
       ws.on("open", () => opts.onOpen?.(conn))
       ws.on("message", (data) => {
         // ws 包默认 binaryType 是 nodebuffer,message 回调 data 是 Buffer。
@@ -38,8 +39,19 @@ export function nodeWsBackend(): WsBackend {
         const buf = data as Buffer
         opts.onMessage(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength), conn)
       })
-      ws.on("close", (code, reason) => opts.onClose?.(code, reason.toString()))
-      ws.on("error", (e) => opts.onClose?.(1006, e.message))
+      ws.on("close", (code, reason) => {
+        // ⚠️ 终态只投递一次:`ws` 对建连失败会**依次**发 error + close(实测 errs=1
+        // closes=1)→ 不去重则 createWsStream.handleClose 跑两遍 → 起两条重连定时器,
+        // 一条无人 clearTimeout(连接泄漏)+ 重复帧。与 TauriWsBackend 的 closed 同款。
+        if (closed) return
+        closed = true
+        opts.onClose?.(code, reason.toString())
+      })
+      ws.on("error", (e) => {
+        if (closed) return
+        closed = true
+        opts.onClose?.(1006, e.message)
+      })
       return conn
     },
   }
