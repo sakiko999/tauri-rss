@@ -41,7 +41,10 @@ export function Modal({
         {/* ⚠️ Radix 的 Content 与 Overlay 是**兄弟**节点,不是子节点——不能靠 .scrim 的
             grid 居中,必须自己绝对居中。 */}
         <Dialog.Content
-          aria-describedby={desc ? undefined : undefined}
+          // ⚠️ 不手写 aria-describedby:Radix 在存在 Dialog.Description 时**自动**接线
+          // (实测 value=radix-_r_x_);无 Description 时才需 `""` 抑制 a11y 警告。
+          // 原来写 `desc ? undefined : undefined` 是恒 undefined 的死表达式(两头一样)。
+          aria-describedby={desc ? undefined : ""}
           className={`modal${size === "wide" ? " modal-wide" : ""}${flush ? " modal-flush" : ""}`}
           style={{
             position: "fixed",
