@@ -25,13 +25,15 @@ export class BiliSquareChannel implements RssChannel {
     )
     const list = data?.data?.trending?.list ?? []
     const t = now()
-    return list.map((raw, i) => {
+    return list.map((raw) => {
       const keyword = String(raw.keyword ?? "")
       const link =
         String(raw.link ?? raw.goto ?? "") ||
         `https://search.bilibili.com/all?${new URLSearchParams({ keyword })}&from_source=webtop_search`
       return {
-        id: `bili-rank-${i}-${keyword}`,
+        // ⚠️ id 只用**词**(不加下标):榜单刷新后词位次会移动,下标入 id 会让同一词
+        // 因位次变化被当成新条目反复进库(与 weibo:hot / douyin:trend 同款约定)。
+        id: `bili-rank-${keyword}`,
         sourceId: "bili:square",
         kind: "article",
         title: keyword,
