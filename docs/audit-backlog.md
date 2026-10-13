@@ -291,3 +291,20 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
   行/tab 的 a11y(li onClick 无 role/tabIndex)、触控目标偏小;初始化失败无重试按钮。
 - **未发现**:XSS(全字符串渲染,无 innerHTML)、refresh 串行/竞态、savePosition、
   首启无种子(合定位)、MediaImage 接入 —— 均正确。
+
+## desktop store / router 审计（2026-10-13 第十五轮）
+
+- [x] **[高] `lib/shortcuts.ts:58` 播放页守卫是死代码** — `/play/:itemId` 的 loader 故意不改
+  `selectedNodeId`(router.tsx:73),故 `nodeTypeOf(selectedNodeId)==="player"` 永假。播放页按
+  `j`(容器不接管 j)会把上一个 feed 的一篇无关文章标为已读并落库。改按 URL 判。CDP:/play
+  按 j×2 → unread 保持、selectedArticleId 为 null(tab:article 的 ↓ 仍正常)。
+- [x] **[中] `views/library/ShortVideoView.tsx` 60 条截断无出口** — 吃 view.list 的 PAGE_SIZE
+  切片,不挂 LoadMoreFooter、不调 growPage → 第 61 条起滑不到(实测 84 条只显 60)。加
+  activeIdx 近末尾自动 growPage。CDP:滑到末条 → 窗口 60→84。
+- [x] **[中] `store/index.ts` refreshAll 未清 loadMoreEnded** — refreshAll 抓新首页(core 侧
+  cursor 已重置)但不复位 loadMoreEnded → 曾翻到底的源刷新后仍显「已加载全部」、翻不动。
+  finally 里一并清。CDP:置 ended=true → refreshAll → 清空。
+- **存疑/未改（低危）**:`view.total` 口径(loaded vs 渠道 total)与表头脱钩(语义取舍);
+  `usePlayerNav` 的 `setTimeout(0)` 依赖「/v loader 同步跑完」的隐式时序契约。
+- **未发现（重点核查）**:baseFor/queryView 全分支自洽、动作 refreshView 无遗漏、
+  autoGroupByKind/importOpml 边界、prefs↔首帧脚本契约、路由编解码配对、节点切换副作用 —— 均正确。
