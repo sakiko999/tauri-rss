@@ -134,7 +134,10 @@ export async function searchHuyaAnchors(keyword: string, pageSize = 20): Promise
         platform: "huya",
         roomId,
         liveStatus: live ? "live" : "offline",
-        online: Number(item.game_total_count ?? 0),
+        // ⚠️ 主播桶(`response["1"].docs`)**没有** `game_total_count`(实测字段集只有
+        // `game_activityCount`,那是活动热度非观众数 —— 同房间它比房间桶的 total_count
+        // 大 3.8 倍)。原读 `game_total_count ?? 0` 恒得 0 → 在播房间显示「0 人在看」假数据。
+        // 宁可不报:省略 online,UI 显示「—」(与 douyu 搜主播同款取舍)。
       }
     })
     .filter((x): x is Live => x !== null)
