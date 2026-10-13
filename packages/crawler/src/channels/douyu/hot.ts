@@ -12,7 +12,7 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { httpJson, now } from "@tauri-playground/resolve"
+import { httpJson, now, parseCount } from "@tauri-playground/resolve"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
@@ -54,7 +54,8 @@ export class DouyuLiveHotChannel implements RssChannel {
           platform: "douyu",
           roomId: rid,
           liveStatus: "live",
-          online: Number(item.ol ?? 0),
+          // ⚠️ 不裸 Number:斗鱼 ol 可能是带单位串(「133.1万」)→ NaN(同平台搜索已用 parseCount)。
+          online: parseCount(item.ol),
         }
       })
   }

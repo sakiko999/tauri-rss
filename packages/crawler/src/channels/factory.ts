@@ -55,9 +55,15 @@ export function apiFetchMore(
   return async (cursor) => {
     const n = cursor ? Number(cursor) : opts.first
     const o = channelOptions()
-    const items = await fetchPage(n)
-    const xml = serializeFeed(items, o)
-    return { xml, ...(items.length ? { cursor: String(n + opts.step) } : {}) }
+    // 翻页失败也要留痕(与 apiFetch 对等):否则 loadMore 静默失败,UI 只表现为「没有更多」。
+    try {
+      const items = await fetchPage(n)
+      const xml = serializeFeed(items, o)
+      return { xml, ...(items.length ? { cursor: String(n + opts.step) } : {}) }
+    } catch (e) {
+      log.crawler.fetchError({ source: o.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
+      throw e
+    }
   }
 }
 

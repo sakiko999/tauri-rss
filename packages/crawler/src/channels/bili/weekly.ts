@@ -26,8 +26,10 @@ export class BiliWeeklyChannel implements RssChannel {
       { referer: "https://www.bilibili.com/h5/weekly-recommend" },
     )
     // app 版接口的 data 直接是 series 数组(不是 data.data 两层)。
+    // ⚠️ 取**期号最大**的一期而非 series[0]:接口顺序无契约,直接取首个可能在接口
+    // 改序/返回倒序时拿到旧一期(每周必看应是最新一期)。
     const series = status?.data ?? []
-    const head = series[0]
+    const head = [...series].sort((a, b) => (b.number ?? 0) - (a.number ?? 0))[0]
     if (!head) throw new Error("bilibili weekly: no series")
     const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `https://app.bilibili.com/x/v2/show/popular/selected?type=weekly_selected&number=${head.number}`,
