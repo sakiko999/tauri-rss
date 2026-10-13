@@ -533,7 +533,13 @@ export const useDesktop = create<DesktopState>((set, get) => {
           }
         })
       } finally {
-        set({ loading: false, busy: {}, refreshErrors: errors })
+        // ⚠️ 清 loadMoreEnded:refreshAll 抓的是**新首页**(core 侧 pageCursors 已重置),
+        // 该订阅又可以被翻页了。不清的话,曾翻到底(loadMoreEnded[id]=true)的源在 refreshAll
+        // 后仍显示「已加载全部」→ LoadMoreFooter 的 ended 恒 true、MasonryGrid 的自动翻页
+        // 恒 false,新内容翻不出来。与 refresh(id) 成功路径对称(该处已在 :466 清)。
+        const clearedEnded = { ...get().loadMoreEnded }
+        for (const s of subs) clearedEnded[s.id] = false
+        set({ loading: false, busy: {}, refreshErrors: errors, loadMoreEnded: clearedEnded })
       }
       const failed = Object.keys(errors).length
       get().toast(
