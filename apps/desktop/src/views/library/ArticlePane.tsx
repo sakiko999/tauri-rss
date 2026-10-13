@@ -9,6 +9,7 @@ import type { MediaItem } from "@tauri-playground/core"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { healthOf, queryView } from "../../store/selectors.ts"
+import { itemKey } from "../../lib/media.ts"
 import { ListRow } from "../../components/ListRow.tsx"
 import { LoadMoreFooter } from "../../components/LoadMoreFooter.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
@@ -131,7 +132,10 @@ export function ArticlePane() {
           className="scroll-area"
           style={{ flex: 1, minHeight: 0 }}
           data={items}
-          computeItemKey={(_, it) => it.id}
+          // ⚠️ 用 itemKey(subscriptionId:id),不是裸 it.id —— tab:article 是**聚合**视图
+          // (跨订阅混排),同一文章 URL 被多个源转载时裸 id 会撞 key(React 复用错行)。
+          // 与 MediaMain/MasonryGrid 同款(ShortVideoView 曾漏用,同类修复)。
+          computeItemKey={(_, it) => itemKey(it)}
           // 渠道分页 + 本地窗口翻页共用一个尾部(见 LoadMoreFooter)。
           components={{ Footer: LoadMoreFooter }}
           itemContent={(_, it) => (
@@ -162,7 +166,7 @@ function EmptyState({
 }) {
   const query = useDesktop((s) => s.query)
   const offline = useDesktop((s) => s.offline)
-  if (query) return <StateBlock icon="search" title="没有匹配的内容" text={`当前列表里没有包含「${query}」的条目。只搜索标题、作者与摘要。`} />
+  if (query) return <StateBlock icon="search" title="没有匹配的内容" text={`当前列表里没有包含「${query}」的条目。搜索覆盖标题、作者、摘要与正文。`} />
   if (offline) return <StateBlock icon="offline" title="离线模式" text="已跳过网络抓取。切回在线后再刷新。" />
   // ⚠️ 智能订阅的「空」优先于 hasSub:点「全部标为已读」后列表清空,说「还没有内容」
   // 是错的,应该告诉用户「全部读完」。
