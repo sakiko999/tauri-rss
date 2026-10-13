@@ -84,6 +84,17 @@ ok(socialBack.likes === 42, `likes(得 ${socialBack.likes})`)
 ok(socialBack.replies === 7, `replies(得 ${socialBack.replies})`)
 ok(socialBack.reposts === 3, `reposts(得 ${socialBack.reposts})`)
 
+// 4b. Social.images 允许 string | SocialImage —— 纯字符串 URL 也要到 core(曾静默丢)
+const socialImg: Item = {
+  id: "n2", sourceId: "xhs:explore", kind: "social", title: "带图", fetchedAt: 1, content: "正文",
+  images: ["https://i/a.jpg", { url: "https://i/b.jpg", width: 10, height: 20 }],
+} as Item
+const socialImgBack = deserializeFeed(serializeFeed([socialImg]), ctx)[0] as any
+console.log("Social.images 往返(含纯字符串):")
+ok(Array.isArray(socialImgBack.images) && socialImgBack.images.length === 2, `两张图都在(得 ${JSON.stringify(socialImgBack.images)}）`)
+ok(socialImgBack.images?.some((i: any) => (i?.url ?? i) === "https://i/a.jpg"), "字符串 URL 未丢")
+ok(socialImgBack.images?.some((i: any) => i?.url === "https://i/b.jpg"), "对象 URL 未丢")
+
 // 5. XML 良构:文本/属性里的 & < 必须转义(否则严格解析器拒收,且往返丢数据)
 const tricky: Item = {
   id: "amp", sourceId: "s", kind: "article", title: "A & B <tag>",
