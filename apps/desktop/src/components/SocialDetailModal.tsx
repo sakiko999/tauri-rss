@@ -18,6 +18,7 @@ import { Icon } from "./Icon.tsx"
 import { MediaImage, fmtCount } from "@tauri-playground/ui"
 import { fmtAgo, mediaUrl, socialRatio } from "../lib/media.ts"
 import { openExternalSafely } from "../lib/host.ts"
+import { looksLikeHtml } from "../lib/html.ts"
 
 export function SocialDetailModal() {
   const detail = useDesktop((s) => s.socialDetail)
@@ -52,8 +53,12 @@ export function SocialDetailModal() {
    * 消毒后按 HTML 渲染。⚠️ useMemo 必须在 early return **之前**(hook 顺序稳定)。
    */
   const rawContent = ((detail?.full ?? detail?.item) as { content?: string } | undefined)?.content ?? ""
+  // ⚠️ FORBID_TAGS:["img"] —— 正文 HTML 里的 <img>(weibo 的 panda 页脚/表情)走原生
+  // DOM,不过 MediaImage 的防盗链隧道 → sinaimg 403 破图,且无占位兜底。主图本就走
+  // images 列(MediaImage),正文里剔除 img 只损失 logo 噪声。per-call 配置不污染
+  // ReaderMain 的正文消毒(那里要保留 img)。
   const bodyHtml = useMemo(
-    () => (/<[a-z][\s\S]*>/i.test(rawContent) ? DOMPurify.sanitize(rawContent) : ""),
+    () => (looksLikeHtml(rawContent) ? DOMPurify.sanitize(rawContent, { FORBID_TAGS: ["img"] }) : ""),
     [rawContent],
   )
 
@@ -176,7 +181,12 @@ export function SocialDetailModal() {
                 <span className="skeleton sk-line" style={{ width: "64%" }} />
               </span>
             ) : bodyHtml ? (
-              <div className="social-detail-text" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
+              <div
+                className="social-detail-text"
+                style={{ whiteSpace: "pre-wrap" }}
+                onClick={onBodyClick}
+                dangerouslySetInnerHTML={{ __html: bodyHtml }}
+              />
             ) : text ? (
               <p className="social-detail-text">{text}</p>
             ) : (

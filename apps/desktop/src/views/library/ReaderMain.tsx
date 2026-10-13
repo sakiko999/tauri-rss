@@ -13,6 +13,7 @@ import { Icon } from "../../components/Icon.tsx"
 import { MediaImage } from "@tauri-playground/ui"
 import { fmtDate, heroWidth, mediaUrl, ratioOf } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
+import { looksLikeHtml } from "../../lib/html.ts"
 import { usePrefs } from "../../store/prefs.ts"
 
 /** 正文最大宽度(阅读舒适度档位)。 */
@@ -41,6 +42,10 @@ export function ReaderMain() {
   saveRatioRef.current = saveScrollRatio
   const itemRef = useRef(item)
   itemRef.current = item
+  /** 进度恢复完成前**屏蔽写回**:切条目时 DOM 里还残留上一条的 scrollTop,若此刻
+   *  onScroll 写回,会把上一条的位置当成新条目的进度存下(静默篡改续读位置)。
+   *  scroll effect 声明在 restore effect **之前**(先跑),故恢复前各回调均被屏蔽。 */
+  const pendingRestoreRef = useRef(true)
   useEffect(() => {
     const el = scrollRef.current
     const bar = barRef.current
@@ -49,9 +54,9 @@ export function ReaderMain() {
       const max = el.scrollHeight - el.clientHeight
       const ratio = max > 0 ? Math.min(1, el.scrollTop / max) : 0
       bar.style.width = `${ratio * 100}%`
-      // 只对 article 记进度(store 侧另有 5% 节流)。
+      // 只对 article 记进度(store 侧另有 5% 节流);恢复完成前不写回。
       const cur = itemRef.current
-      if (cur && cur.kind === "article") saveRatioRef.current(cur, ratio)
+      if (!pendingRestoreRef.current && cur && cur.kind === "article") saveRatioRef.current(cur, ratio)
     }
     onScroll()
     el.addEventListener("scroll", onScroll, { passive: true })
@@ -64,19 +69,23 @@ export function ReaderMain() {
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
+    pendingRestoreRef.current = true // 切条目:先屏蔽写回
     const ratio = item?.scrollRatio ?? 0
     const restore = () => {
       const max = el.scrollHeight - el.clientHeight
       el.scrollTo({ top: ratio > 0.02 && max > 0 ? ratio * max : 0 })
     }
-    const raf = requestAnimationFrame(restore)
+    const raf = requestAnimationFrame(() => {
+      restore()
+      pendingRestoreRef.current = false // 恢复完成,允许写回
+    })
     return () => cancelAnimationFrame(raf)
   }, [item?.id])
 
   /**
    * 按需补全正文:通用 RSS 只带摘要(feed 没给全文),点开时抓原文页提正文。
-   * 一次性副作用——补回的 full 不走 store.patch(避免每次渲染都更新),按 itemId 对位
-   * 展示即可;key 变了自然丢弃。⚠️ 声明在所有 hook 之后、early return 之前。
+   * 补回的 full 不走 store.patch(避免每次渲染都更新),按 itemId 对位展示 + 会话缓存。
+   * ⚠️ 所有 hook 在此块末尾、early return(下方 `if (!item)`)之前调用,顺序稳定。
    */
   const itemId = item?.id
   const curContent = item?.kind === "article" ? item.content ?? "" : ""
@@ -117,14 +126,14 @@ export function ReaderMain() {
   }, [itemId, curContent])
 
   const article = item?.kind === "article" ? item : null
-  /** 展示用正文:补全结果优先(同 itemId),其次会话缓存,最后 feed 自带。 */
+  /** 展示用正文:补全结果优先(同 itemId),其次会话缓存,最后 feed 自带。
+   *  ⚠️ 补全结果**不走 store.patch**(只在本地 full/cache),故判定格式必须依据**当前
+   *  展示的那段文本**,而不是 item.contentFormat —— 后者是 store 里的原始摘要格式,
+   *  对补全的纯文本恒错(曾据此写 `contentFormat==="text"` 但当保护从未生效)。 */
   const shownContent = full && full.id === itemId ? full.content : cached ?? curContent
-  // ⚠️ 补全的正文是纯文本(contentFormat="text"),但真实文章常含裸 `<`(数学/代码
-  // 「x < y」)→ 仅靠 `includes("<")` 会把它误判成 HTML,浏览器把 `< y` 当标签解析吞掉
-  // 正文。故 contentFormat="text" 一律按纯文本渲染,只有未标注格式的旧数据才看 `<` 猜。
-  const html =
-    article?.contentFormat === "html" ||
-    (article?.contentFormat !== "text" && /<[a-z!/]/i.test(shownContent))
+  const html = article?.contentFormat === "html" || (article?.contentFormat !== "text" && looksLikeHtml(shownContent))
+  /** 本条目是否已拿到补全正文(对位 itemId,不是「任意条目补全过」)。 */
+  const hasFull = (full?.id === itemId) || !!cached
   const cleanHtml = useMemo(
     () => (article && html ? DOMPurify.sanitize(shownContent) : ""),
     [article, html, shownContent],
@@ -271,7 +280,7 @@ export function ReaderMain() {
           )}
           {/* feed 只带摘要时按需补全原文正文:补全前给「正在补全」提示,避免用户以为
               摘要就是全文而直接去开原文。 */}
-          {article && resolving && !full ? (
+          {article && resolving && !hasFull ? (
             <p className="article-resolving t-micro t-dim">
               <Icon name="loader" size={13} className="animate-spin" /> 正在补全原文正文…
             </p>

@@ -11,9 +11,11 @@
  * 调用方回退原摘要(不空窗)。
  */
 
-/** 整块丢弃:非正文内容(脚本/样式/导航/页脚/表单/媒体/…)。 */
+/** 整块丢弃:非正文内容(脚本/样式/导航/页脚/表单/媒体/…)。
+ *  ⚠️ **不含 <figure>**:它常包裹正文图注(<figcaption>)或代码块(<pre>),整块删会吞正文;
+ *  只丢 <picture>(纯 <source>/<img>,文案取不到)。 */
 const DROP_BLOCKS =
-  /<(script|style|noscript|template|svg|iframe|head|nav|footer|aside|form|button|select|video|audio|canvas|figure|picture)\b[^>]*>[\s\S]*?<\/\1\s*>/gi
+  /<(script|style|noscript|template|svg|iframe|head|nav|footer|aside|form|button|select|video|audio|canvas|picture)\b[^>]*>[\s\S]*?<\/\1\s*>/gi
 
 const ENTITIES: Record<string, string> = {
   amp: "&",
@@ -59,6 +61,12 @@ function normalize(s: string): string {
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim()
+}
+
+/** 可见文本长度(去标签 + 解实体 + 归一空白)——判「feed 是否已带全文」用,
+ *  不能用原始 HTML 长度(图片密集的短摘要标签一大堆,会虚高)。 */
+export function visibleTextLength(html: string): number {
+  return normalize(tagToText(html.replace(DROP_BLOCKS, " "))).length
 }
 
 /** 从正则在 head 里取 meta 内容(name/property 任意顺序)。 */
@@ -115,9 +123,10 @@ export function extractArticle(html: string, pageUrl?: string, minChars = 120): 
     /<body\b[^>]*>([\s\S]*?)<\/body\s*>/i.exec(body)?.[1] ??
     body
 
-  // 优先 <p> 段落(去导航残留噪声);段落合计太短则整体去标签兜底。
-  const paras = [...scope.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p\s*>/gi)]
-    .map((m) => normalize(tagToText(m[1]!)))
+  // 优先 <p> 段落 + <figcaption> 图注(按文档顺序,否则图注会被 <p> 路径丢掉);
+  // 合计太短则整体去标签兜底(以 <div>/<section> 为主的站点)。
+  const paras = [...scope.matchAll(/<(p|figcaption)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi)]
+    .map((m) => normalize(tagToText(m[2]!)))
     .filter((t) => t.length > 0)
   let text = paras.join("\n\n")
   if (text.length < minChars) text = normalize(tagToText(scope))

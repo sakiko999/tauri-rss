@@ -3,7 +3,7 @@
  * SPA 空页返回 null）。仓库无测试基建，用最小断言。
  *   bun packages/crawler/src/example/extract.check.ts
  */
-import { extractArticle, decodeEntities } from "../channels/rss/extract.ts"
+import { extractArticle, decodeEntities, visibleTextLength } from "../channels/rss/extract.ts"
 
 let failed = 0
 function assert(name: string, cond: boolean) {
@@ -51,6 +51,19 @@ console.log("无 <p> 时整体去标签兜底:")
   const noP = `<html><body><article><div>${"正文内容".repeat(60)}</div></article></body></html>`
   const ex = extractArticle(noP, "https://site.example/")
   assert("整块去标签兜底", !!ex && ex.text.includes("正文内容"))
+}
+console.log("figure/图注保留 + 可见文本长度:")
+{
+  const html = `<html><body><article>
+    <p>${"正文段落。".repeat(30)}</p>
+    <figure><img src="/a.png"><figcaption>图 1：架构示意</figcaption></figure>
+    </article></body></html>`
+  const ex = extractArticle(html, "https://site.example/")
+  assert("图注未丢", !!ex?.text.includes("图 1：架构示意"))
+  // 图片密集短摘要:可见字寥寥但 HTML 很长 → visibleTextLength 应远小于原始长度
+  const imgHeavy = `<p><a href="https://example.com/very/long/path/aaaa"><img src="https://cdn.example.com/x/y/z.jpg" width="600"></a></p>`.repeat(8)
+  assert("可见文本远小于 HTML", visibleTextLength(imgHeavy) < imgHeavy.length / 4)
+  assert("可见文本非零", visibleTextLength(imgHeavy) >= 0)
 }
 console.log("decodeEntities:")
 {

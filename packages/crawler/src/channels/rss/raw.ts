@@ -12,11 +12,13 @@ import type { Item } from "@tauri-playground/xml"
 import type { Kind, RssChannel, RssSource, SourceInfo, ItemDetailSource } from "../../index.ts"
 import { httpText } from "@tauri-playground/resolve"
 import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
-import { extractArticle } from "./extract.ts"
+import { extractArticle, visibleTextLength } from "./extract.ts"
 
 const UA = DESKTOP_CHROME_UA
 
-/** 列表正文达到此长度即视作「feed 已带全文」,不再抓原文(避免把好 HTML 降级成纯文本)。 */
+/** 列表正文**可见文本**达到此长度即视作「feed 已带全文」,不再抓原文(避免把好 HTML
+ *  降级成纯文本)。⚠️ 按可见文本算,不按原始 HTML —— 图片密集的短摘要(<a><img></a>)
+ *  标签一堆、可见字寥寥,按 HTML 长度会虚高而误跳过补全。 */
 const FULLTEXT_HINT = 800
 
 export class RawRssChannel implements RssChannel {
@@ -58,7 +60,7 @@ export class RawRssChannel implements RssChannel {
    */
   private async resolveDetail(item: Item): Promise<Item | null> {
     if (item.kind !== "article") return item
-    if ((item.content ?? "").length >= FULLTEXT_HINT) return item
+    if (visibleTextLength(item.content ?? "") >= FULLTEXT_HINT) return item
     if (!item.url || !/^https?:/i.test(item.url)) return item
     let html: string
     try {
