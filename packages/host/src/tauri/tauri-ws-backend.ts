@@ -46,6 +46,12 @@ class TauriWsConnection implements WsConnection {
 export class TauriWsBackend implements WsBackend {
   async connect(opts: WsConnectOptions): Promise<WsConnection> {
     let conn!: TauriWsConnection
+    // 用道具对象持可变状态:闭包内的赋值不会被 TS 的控制流分析追踪,直接 `let` 会在
+    // 使用处被窄化回初始值(null → never)。对象属性读取不受此影响。
+    const st: { ready: boolean; earlyClose: { code: number; reason: string } | null } = {
+      ready: false,
+      earlyClose: null,
+    }
     const onEvent = new Channel<WsEventMsg>()
     onEvent.onmessage = (ev) => {
       switch (ev.event) {
@@ -54,17 +60,29 @@ export class TauriWsBackend implements WsBackend {
         // 认证帧/心跳发不出(douyin 弹幕实测:连接建立后服务器不发数据,静默挂着)。
         // 握手成功 = 连接就绪,由下方 invoke resolve 后主动触发 onOpen(conn 已赋值)。
         case "Binary":
-          opts.onMessage(base64ToBytes(ev.data as string), conn)
+          // ⚠️ 同样可能先于 resolve 到达:conn 未就绪时**丢弃**(没有连接可投递)。
+          if (st.ready) opts.onMessage(base64ToBytes(ev.data as string), conn)
           break
         case "Close": {
           const c = ev.data as { code?: number; reason?: string }
+          // ⚠️ 原实现直接 conn.readyState —— 事件先于 resolve 到达时 conn 未赋值 → 抛错。
+          if (!st.ready) {
+            st.earlyClose = { code: c.code ?? 1006, reason: c.reason ?? "" }
+            break
+          }
           conn.readyState = 3
           opts.onClose?.(c.code ?? 1006, c.reason ?? "")
           break
         }
-        case "Error":
-          opts.onClose?.(1006, (ev.data as { message?: string }).message ?? "")
+        case "Error": {
+          const msg = (ev.data as { message?: string }).message ?? ""
+          if (!st.ready) {
+            st.earlyClose = { code: 1006, reason: msg }
+            break
+          }
+          opts.onClose?.(1006, msg)
           break
+        }
       }
     }
     // 握手失败(Rust Err)→ invoke reject → createWsStream 的 connect try/catch → 重连。
@@ -73,6 +91,14 @@ export class TauriWsBackend implements WsBackend {
       onEvent,
     })
     conn = new TauriWsConnection(res.connectionId)
+    st.ready = true
+    // resolve 前已收到终态事件(极短连接/立即被拒):不触发 onOpen,直接用确定的
+    // 连接补发 onClose(否则上层一直等 onClose,连接态悬挂)。
+    if (st.earlyClose) {
+      conn.readyState = 3
+      opts.onClose?.(st.earlyClose.code, st.earlyClose.reason)
+      return conn
+    }
     // 主动触发 onOpen:此时 conn 已赋值,认证帧/心跳可靠发送。
     opts.onOpen?.(conn)
     return conn

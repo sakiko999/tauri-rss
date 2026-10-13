@@ -168,9 +168,10 @@ pub async fn ws_connect(
     tokio::spawn(async move {
         let mut shutdown_rx = shutdown_rx;
         loop {
-            tokio::select! {
+            let done = tokio::select! {
                 msg = stream.next() => {
-                    let dead = match msg {
+                    match msg {
+                        // 数据帧:通道还活着就继续;发送失败(前端已退订)→ dead,退出。
                         Some(Ok(Message::Binary(b))) => {
                             let b64 = base64::engine::general_purpose::STANDARD.encode(b);
                             on_event.send(WsEvent::Binary(b64)).is_err()
@@ -181,27 +182,34 @@ pub async fn ws_connect(
                         }
                         // Ping 自动回 Pong(tungstenite 库本会自动处理,这里显式忽略)。
                         Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => false,
+                        // ⚠️ 以下三个是**终态**,无论 on_event 是否发送成功都必须退出 ——
+                        // 否则 stream.next() 会永远返回 None,reader 无限循环刷 Close 事件
+                        // 且 manager.remove 永不执行(连接泄漏)。原实现只在 send 失败时 break,
+                        // 通道还活着(前端没退订)时 dead=false → 死循环。
                         Some(Ok(Message::Close(f))) => {
                             // tungstenite CloseCode → u16:CloseCode 有 Into<u16>。
                             let (code, reason) = f.map(|c| (c.code.into(), c.reason.into_owned()))
                                 .unwrap_or((1006, String::new()));
-                            on_event.send(WsEvent::Close { code, reason }).is_err()
+                            let _ = on_event.send(WsEvent::Close { code, reason });
+                            true
                         }
                         Some(Err(e)) => {
                             let _ = on_event.send(WsEvent::Error { message: e.to_string() });
-                            on_event.send(WsEvent::Close { code: 1006, reason: e.to_string() }).is_err()
+                            let _ = on_event.send(WsEvent::Close { code: 1006, reason: e.to_string() });
+                            true
                         }
                         None => {
-                            on_event.send(WsEvent::Close { code: 1006, reason: "closed".into() }).is_err()
+                            let _ = on_event.send(WsEvent::Close { code: 1006, reason: "closed".into() });
+                            true
                         }
-                    };
-                    if dead { break; }
+                    }
                 }
                 _ = shutdown_rx.recv() => {
                     let _ = on_event.send(WsEvent::Close { code: 1000, reason: "closed by client".into() });
-                    break;
+                    true
                 }
-            }
+            };
+            if done { break; }
         }
         // 任何退出路径都清理:drop stream(读半部)+ 从 map 移除(drop sink 写半部)。
         println!("[ws] reader ended: {conn_id}");
