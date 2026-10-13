@@ -48,6 +48,22 @@ export function attemptPlayWithMuteFallback(
             },
             { once: true },
           )
+          // ⚠️ 兜底重试 + 超时上报:AbortError 时媒体未推进(timeupdate 不触发)→ 上面
+          // 的一次性重试永不跑、画面停在暂停态。此前**也不调 onFail** → 静默卡住、无重试 UI。
+          // 给一次延迟重试;仍失败则上报(用户可见)。
+          window.setTimeout(() => {
+            if (!media.isConnected) return
+            const r = play()
+            if (r && typeof (r as Promise<void>).catch === "function") {
+              ;(r as Promise<void>).then(
+                () => log.playSettled(),
+                () => {
+                  log.playFailed({ err: e })
+                  opts.onFail?.(e)
+                },
+              )
+            }
+          }, 2500)
         }
         return
       }

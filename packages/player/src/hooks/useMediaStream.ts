@@ -65,6 +65,11 @@ export function useMediaStream({
     const video = videoRef.current
     if (!video) return
     const report = onErrorRef.current
+    // ⚠️ 切流/切档(stream 变化 → effect 重跑)**保留用户当前静音态**。`video` 元素跨
+    // effect 复用(useRef),cleaned 前 el.muted 反映用户偏好(点静音键 / 静音降级后)。
+    // 无条件写 muted=!autoPlay(=false,因 autoPlay 恒 true)会把切档/下一条视频的声音
+    // 强行打开。冷挂载:新元素 muted 默认 false → 与旧行为一致(带声起播)。
+    const prevMuted = video.muted
 
     const cleanup = () => {
       flvRef.current?.destroy()
@@ -147,7 +152,7 @@ export function useMediaStream({
       // autoplay policy),被拦降级静音重试。统一等 video 的 canplay(浏览器权威
       // 「可播」信号,库级 MANIFEST_PARSED 只是 manifest 就绪、不保证能播)——
       // canplay 到达时数据已在 buffer,play() 才稳定。`{once:true}` 天然幂等。
-      video.muted = !autoPlay
+      video.muted = autoPlay ? prevMuted : true
       const attemptPlay = () => {
         if (!video.isConnected) return
         attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
@@ -181,7 +186,7 @@ export function useMediaStream({
       flv.load()
       // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
       // (浏览器权威「可播」信号,METADATA_ARRIVED 只是 FLV 头就绪、不保证能播)。
-      video.muted = !autoPlay
+      video.muted = autoPlay ? prevMuted : true
       const attemptPlay = () => {
         if (!video.isConnected) return
         attemptPlayWithMuteFallback(video, () => flv.play(), { autoPlay, onFail: report })
@@ -227,7 +232,7 @@ export function useMediaStream({
       })
       player.attachView(video)
       player.attachSource(mpdUrl)
-      video.muted = !autoPlay
+      video.muted = autoPlay ? prevMuted : true
       // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
       // (浏览器权威「可播」信号;dash.js 的 CAN_PLAY 就是它的转发,直接等原生更可靠)。
       const attemptPlay = () => {

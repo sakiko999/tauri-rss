@@ -213,9 +213,14 @@ export function PlayableMedia({
     if (!el) return
     const attemptUnmuted = () => {
       if (!el.isConnected) return
-      el.muted = false
-      // 带声 play;被 policy 拦 → 静音重试(attemptPlay 内部)。AbortError 不降级。
-      attemptPlayWithMuteFallback(el, () => el.play(), { autoPlay, onFail: (e) => setPlayError(e) })
+      // ⚠️ 保留用户当前静音态(el.muted 跨 src 变化持续) —— 曾无条件 `el.muted=false`,
+      // 切档/换条目会把用户点过的静音强行打开。冷挂载时 el.muted 默认 false(=带声起播)。
+      // 起点若为静音(用户偏好或静音降级)→ 保持静音、不调 attemptPlay(避免无谓的带声尝试)。
+      if (!el.muted) {
+        attemptPlayWithMuteFallback(el, () => el.play(), { autoPlay, onFail: (e) => setPlayError(e) })
+      } else {
+        el.play().catch(() => {}) // 静音播放(恒允许),无需降级链
+      }
     }
     // 只等 canplay(媒体可播)再带声 play——**不要立即 play**:src 刚设媒体未
     // 加载,立即 play 易被判失败 → 降级静音(YouTube video 静音即因此)。

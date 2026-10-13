@@ -13,17 +13,19 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
 import { isFlvStream, isHlsStream } from "./useMediaStream.ts"
 
-/** 渐进式视频(mp4/webm/ogg)→ 原生 <video>。 */
+/** 渐进式视频(mp4/webm)→ 原生 <video>。
+ *  ⚠️ 不含 ogg:`.ogg` 在本仓库是**音频**(播客);ogg 同属两个判据会让视频分支抢先
+ *  命中音频流 → <video> 播不了 → 报错。ogg 归 isProgressiveAudio,两者互斥。 */
 export function isProgressiveVideo(stream: MediaStream): boolean {
   const f = stream.format?.toLowerCase()
-  if (f === "mp4" || f === "webm" || f === "ogg") return true
-  return /\.(mp4|webm|ogg)(\?|#|$)/i.test(stream.url)
+  if (f === "mp4" || f === "webm") return true
+  return /\.(mp4|webm)(\?|#|$)/i.test(stream.url)
 }
 
 /** 渐进式音频(mp3/aac/ogg)→ 原生 <audio>。 */
 export function isProgressiveAudio(stream: MediaStream): boolean {
   const f = stream.format?.toLowerCase()
-  if (f === "mp3" || f === "aac") return true
+  if (f === "mp3" || f === "aac" || f === "ogg") return true
   return /\.(mp3|aac|ogg)(\?|#|$)/i.test(stream.url)
 }
 

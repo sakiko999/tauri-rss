@@ -90,9 +90,10 @@ export function useVideoElement(
       const el = videoRef.current
       if (!el) return
       // duration 在直播流(hls/flv/dash)下是 Infinity / NaN;原生 mp4 是有限秒数。
+      // ⚠️ `Number.isFinite` 已把 Infinity/NaN 归 0 —— 故 `dur === Infinity` 恒假(死分支),
+      // 非流媒体的「无限时长=直播」本义应为 `dur <= 0`。
       const dur = Number.isFinite(el.duration) ? el.duration : 0
-      // 流媒体:duration 无效 → live;原生媒体:Infinity 时长(流媒体直播)也 live。
-      const live = isStreaming ? dur <= 0 : dur === Infinity
+      const live = dur <= 0
       const tr = el.buffered
       const buffered: BufferedRange[] = []
       let bufferedEnd = 0
