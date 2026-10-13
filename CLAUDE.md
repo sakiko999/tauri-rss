@@ -2,7 +2,8 @@
 
 Tauri 2 monorepo — RSS Reader，桌面 + 移动双端。
 
-桌面 = **订阅工作台**（抓取/播放/管理全功能）；移动 = 待接入的模板。
+桌面 = **订阅工作台**（抓取/播放/管理全功能）；移动 = **极简看内容**（未读列表 →
+播放/阅读，已接 appHost+core，不做工作台）。
 两端定位分离：desktop 数据供给走独立爬虫服务（承载重反爬平台），mobile 保持内置
 crawler 仅有限平台。决策见 `docs/desktop-crawler-service.md`。
 
@@ -17,7 +18,9 @@ apps/
                状态 src/store/（nodes 节点语法 · selectors 派生查询 · prefs 表现型偏好 ·
                index 动作编排），视图 src/views/，卡片 src/components/cards.tsx。
                位置权威 = URL（/v/:nodeId、/play/:itemId）
-  mobile/      React 19 + Vite，产物 → dist/mobile。⚠️ 仍是模板，勿当实现参考
+  mobile/      React 19 + Vite，产物 → dist/mobile。已接入 appHost + core：
+               极简「看内容」闭环（未读列表 → 点开播放/阅读），复用 core DataLayer +
+               player PlayableMedia + ui MediaImage + core resolveDetail。不做订阅工作台
   cli/         ★ 调试探针（Bun + cac 零构建）。channels/fetch/item/play/dm/hot/
                align/env/refresh 收编全部 example；宿主 = node 后端 + bun:sqlite
                （apps/cli/.data/rss.db）。详见 docs/cli-plan.md
@@ -345,7 +348,8 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 ## 下一步
 
 - **ui 包 renderer 清理**：✅ 已完成（2026-10-12 删除全部无消费者 renderer）
-- **mobile 接入** appHost + core（当前仍是模板）
+- **mobile 接入** ✅ 已完成（2026-10-13）：appHost + core DataLayer + 极简看内容闭环。
+  后续可补：移动端订阅管理（现归桌面）、扫码登录（`Loginable`，`docs/mobile-cdp-feasibility.md`）
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
   `docs/desktop-crawler-service.md`
 - **三模式 UI**：三分栏 ✅ / 瀑布流 / 短视频。⚠️ live 源是 1:1、其他源是 1:N 的错位，
