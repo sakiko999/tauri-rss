@@ -2,7 +2,8 @@
  * Mobile App —— 极简「看内容」闭环:未读列表 → 点开播放/阅读。
  *
  * 复用三件套:core(订阅/抓取/阅读态)· player `PlayableMedia`(懒解析+选流+弹幕)·
- * ui `MediaImage`(防盗链隧道)。不做订阅管理/发现/rail —— 那些归 desktop 工作台。
+ * ui `MediaImage`(防盗链隧道)。含基础订阅管理(RSS 直链增删);不做频道发现/rail/
+ * 播放器控件 —— 那些归 desktop 工作台。
  */
 import { useEffect, useState } from "react"
 import { PlayableMedia } from "@tauri-playground/player"

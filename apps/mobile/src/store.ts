@@ -1,8 +1,9 @@
 /**
  * Mobile store —— 复用 core DataLayer(订阅/抓取/阅读态),只做移动端需要的薄视图状态。
  *
- * 定位与 desktop 分离:mobile **不做**「订阅工作台」全形态(rail/五视图/发现/管理),
- * 只保留「看内容」最小闭环:未读列表 → 点开播放/阅读。订阅管理走 desktop。
+ * 定位与 desktop 分离:mobile 是**极简看内容**闭环 —— 未读列表 → 点开播放/阅读,
+ * 外加**基础订阅管理**(RSS 直链添加/移除,见 addFeed/removeSub + subs 页签)。
+ * 不做「订阅工作台」全形态(rail/五视图/频道发现/播放器控件) —— 那归 desktop。
  * 内置 crawler 形态(见 CLAUDE.md):移动端不接爬虫服务,仅用有限平台(SSR/HTTP)。
  */
 import { create } from "zustand"
