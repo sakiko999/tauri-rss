@@ -60,7 +60,9 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       改动会变选流策略、有回归风险 → 待真出现混排源再改。
 - [ ] **[low] `player/hooks/useMediaStream.ts:101`** — 档位锁定 `hls.currentLevel = max`
       在每次 MANIFEST_PARSED 重跑，直播 LL-HLS 持续重载、levels 增长时重锁到新末档。
-      点播只触发一次；直播未见问题 → 待验。
+      点播只触发一次；直播未见问题 → **判定非缺陷（2026-10-13 复核）**：重锁的语义就是
+      「锁最高档」，重跑到同一 max 是幂等 no-op；levels 增长时锁到新末档仍是「最高档」
+      期望行为。撤下待验。
 
 ## 在本会话修（供对照）
 
