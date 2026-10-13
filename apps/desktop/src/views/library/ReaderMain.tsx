@@ -74,6 +74,10 @@ export function ReaderMain() {
    * 展示即可;key 变了自然丢弃。⚠️ 声明在所有 hook 之后、early return 之前。
    */
   const [full, setFull] = useState<{ id: string; content: string } | null>(null)
+  /** 补全进行中(界面提示用)。⚠️ 用显式态而非 `!full`:补全返回与摘要等长的内容时
+   *  full 不会置位,若靠它判「正在补全」会**永久转圈**(无 ItemDetailSource 的源如
+   *  bili:square 恰好原样返回 → 永远 full===null)。 */
+  const [resolving, setResolving] = useState(false)
   const itemId = item?.id
   const curContent = item?.kind === "article" ? item.content ?? "" : ""
   useEffect(() => {
@@ -83,6 +87,7 @@ export function ReaderMain() {
     if (!dl) return
     const subId = item.subscriptionId
     let live = true
+    setResolving(true)
     void dl
       .resolveDetail(subId, itemId)
       .then((d) => {
@@ -90,8 +95,12 @@ export function ReaderMain() {
         if (live && text.length > curContent.length) setFull({ id: itemId, content: text })
       })
       .catch(() => {}) // 补全失败静默:原文页抓不到就照常显示摘要
+      .finally(() => {
+        if (live) setResolving(false)
+      })
     return () => {
       live = false
+      setResolving(false)
     }
   }, [itemId, curContent])
 
@@ -250,7 +259,7 @@ export function ReaderMain() {
           )}
           {/* feed 只带摘要时按需补全原文正文:补全前给「正在补全」提示,避免用户以为
               摘要就是全文而直接去开原文。 */}
-          {article && !full && curContent.length < 400 && article.url ? (
+          {article && resolving && !full ? (
             <p className="article-resolving t-micro t-dim">
               <Icon name="loader" size={13} className="animate-spin" /> 正在补全原文正文…
             </p>
