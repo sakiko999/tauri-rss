@@ -131,6 +131,19 @@ function Reading() {
   const setSetting = useDesktop((s) => s.setSetting)
   const offline = useDesktop((s) => s.offline)
   const setOffline = useDesktop((s) => s.setOffline)
+  // ⚠️ RSSHub 地址用本地草稿,blur/Enter 才落库 —— 直接受控绑 setSetting 会**每敲一键
+  // 写一次 SQLite**(整份 settings 读-改-写往返);对比 Add/EditSubscriptionDialog 的
+  // 草稿模式。其余控件是离散值(开关/滑杆),本就低频,保持直写。
+  const [rsshubDraft, setRsshubDraft] = useState(settings?.rsshubBaseUrl ?? "")
+  const [prevBase, setPrevBase] = useState(settings?.rsshubBaseUrl ?? "")
+  // settings 迟到位(null→值)或他处改动时同步草稿(打字期间 settings 值不变,不clobber)。
+  if (settings && settings.rsshubBaseUrl !== prevBase) {
+    setPrevBase(settings.rsshubBaseUrl)
+    setRsshubDraft(settings.rsshubBaseUrl)
+  }
+  const commitRsshub = () => {
+    if (settings && rsshubDraft !== settings.rsshubBaseUrl) void setSetting("rsshubBaseUrl", rsshubDraft)
+  }
   if (!settings) return null
   return (
     <>
@@ -164,9 +177,13 @@ function Reading() {
         <Row label="实例地址" help="rsshub:* 源的默认 baseUrl;订阅级 info.baseUrl 可覆盖。">
           <input
             className="input input-wide"
-            value={settings.rsshubBaseUrl}
+            value={rsshubDraft}
             aria-label="RSSHub 实例地址"
-            onChange={(e) => void setSetting("rsshubBaseUrl", e.target.value)}
+            onChange={(e) => setRsshubDraft(e.target.value)}
+            onBlur={commitRsshub}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+            }}
           />
         </Row>
       </SideCard>

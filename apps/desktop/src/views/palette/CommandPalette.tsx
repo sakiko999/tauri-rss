@@ -132,7 +132,9 @@ export function CommandPalette() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     if (!needle) return commands
-    return entries
+    // ⚠️ 搜索时必须**同时**搜命令 —— 曾只搜 entries(内容类型/订阅/条目),命令
+    // (刷新全部/打开设置/清空队列…)只在空输入时列出,打「刷新」一个字都搜不到。
+    return [...entries, ...commands]
       .filter((e) => e.title.toLowerCase().includes(needle) || (e.sub ?? "").toLowerCase().includes(needle))
       .slice(0, 40)
   }, [q, entries, commands])
