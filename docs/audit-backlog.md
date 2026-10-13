@@ -209,3 +209,29 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - **存疑（未确证）**:`ShortVideoView` 的 `savePosition` 对 `isLive` 未加守卫 —— 若某直播流返回
   有限 duration,会写 positionSec 把该直播塞进「继续」视图。`PlayableMedia` 有 `dur<=0` 早退,
   直播一般 duration=0/Infinity 不上报,未复现。
+
+## 第十一轮:resolve / host+Rust / player 三线深审（2026-10-13）
+
+- [x] **[P0] `resolve/platform/huya/danmaku-tars.ts` `skipToStructEnd` 无边界 → 截断帧同步
+      死循环**(解码跑在 WS 回调里,冻整个事件循环,连 setTimeout 都不转)。加「p<len + 不前进即
+      退」守卫。实测:截断帧修复前挂起(>12s),修复后返回 []。新守卫 `huya-tars.check.ts`。
+- [x] **[高] `resolve/platform/youtube/signature.ts` 解 n 参数两端皆失败** — `(${fn})` 把函数声明
+      变表达式→名字不绑定(ReferenceError);`arguments[0]` 依赖后端透传实参而 FunctionJsBackend
+      的 wrapper 不收 → 恒 undefined。改传 (fn 作 code, realName 作 fn, [n] 作显式实参)。
+      实测复现两端报错(ReferenceError / SyntaxError)→ 修复后 "n:N"。host-check 补 js 契约断言。
+- [x] **[中] `resolve/platform/bili/live-play.ts` `resolveBiliLiveProbe` 丢 quality/rate** —
+      档位菜单空 + 违反带 rate 契约。补 probe 实际档位。
+- [x] **[中] `resolve/platform/youtube/signature.ts` n 解密器无键缓存** — base.js 轮换后复用旧
+      解密函数 → 流限速/403。改按 base.js URL 键控(与 getPlayerCode 同键)。
+- [x] **[中] `apps/src-tauri/src/commands/mod.rs` http_get 重定向不复查** — Policy::limited 只数
+      次数 → 302 → 169.254.169.254 绕过 is_blocked_host。改自定义策略逐跳复查(loopback 按设计放行)。
+- [x] **[低] `host/node/node-backend.ts` json 空 body 抛错** — 与 Rust/browser 后端分叉;改空 body
+      回 null。
+- [x] **[中] player 切档重置静音偏好** — `muted=!autoPlay`(恒 false)在切流/切档把用户静音强行打开;
+      改保留元素当前 muted。
+- [x] **[低] player `isProgressiveVideo` 抢 `.ogg`** — ogg 音频进 <video>;ogg 归音频,互斥。
+- [x] **[低] player `useVideoElement` `live = dur===Infinity` 死分支** — 改 dur<=0。
+- [x] **[低] player `attemptPlay` AbortError 不调 onFail** — 媒体不推进则静默卡住;补延迟重试+上报。
+- **复核后判定为存疑（未改）**:douyin reflow `hls_pull_url` vs `hls_pull_url_map`(需真实响应验证);
+  douyin 清晰度兜底按位置 join(主路径正常,已记 backlog);bili `danmaku-live` 控制符切分;
+  DASH blob 跨格式切换泄漏(无混合格式源);http_get 每请求新建 reqwest::Client(纯吞吐)。
