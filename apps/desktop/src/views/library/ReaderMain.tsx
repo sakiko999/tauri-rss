@@ -18,6 +18,11 @@ import { usePrefs } from "../../store/prefs.ts"
 /** 正文最大宽度(阅读舒适度档位)。 */
 const MEASURE_LABEL: Record<string, string> = { narrow: "窄", comfortable: "适中", wide: "宽" }
 
+/** 会话级正文缓存:同一条目来回打开不重复抓原文页(内存,刷新即失效)。
+ *  ponytail: 简单 LRU-ish(超限弃最旧);要跨会话持久再落 KV。 */
+const bodyCache = new Map<string, string>()
+const BODY_CACHE_MAX = 64
+
 export function ReaderMain() {
   const selectedArticleId = useDesktop((s) => s.selectedArticleId)
   const allItems = useDesktop((s) => s.allItems)
@@ -73,16 +78,19 @@ export function ReaderMain() {
    * 一次性副作用——补回的 full 不走 store.patch(避免每次渲染都更新),按 itemId 对位
    * 展示即可;key 变了自然丢弃。⚠️ 声明在所有 hook 之后、early return 之前。
    */
+  const itemId = item?.id
+  const curContent = item?.kind === "article" ? item.content ?? "" : ""
   const [full, setFull] = useState<{ id: string; content: string } | null>(null)
+  /** 渲染期读缓存:命中则直接用(无闪屏);未命中交给 effect 抓。 */
+  const cached = itemId ? bodyCache.get(itemId) : undefined
   /** 补全进行中(界面提示用)。⚠️ 用显式态而非 `!full`:补全返回与摘要等长的内容时
    *  full 不会置位,若靠它判「正在补全」会**永久转圈**(无 ItemDetailSource 的源如
    *  bili:square 恰好原样返回 → 永远 full===null)。 */
   const [resolving, setResolving] = useState(false)
-  const itemId = item?.id
-  const curContent = item?.kind === "article" ? item.content ?? "" : ""
   useEffect(() => {
     if (!itemId || item?.kind !== "article") return
     if (curContent.length >= 400) return // feed 已带全文,不折腾
+    if (bodyCache.has(itemId)) return // 会话缓存命中,不重复抓
     const dl = useDesktop.getState().dl
     if (!dl) return
     const subId = item.subscriptionId
@@ -92,7 +100,11 @@ export function ReaderMain() {
       .resolveDetail(subId, itemId)
       .then((d) => {
         const text = d?.kind === "article" ? d.content ?? "" : ""
-        if (live && text.length > curContent.length) setFull({ id: itemId, content: text })
+        if (live && text.length > curContent.length) {
+          if (bodyCache.size >= BODY_CACHE_MAX) bodyCache.delete(bodyCache.keys().next().value as string)
+          bodyCache.set(itemId, text)
+          setFull({ id: itemId, content: text })
+        }
       })
       .catch(() => {}) // 补全失败静默:原文页抓不到就照常显示摘要
       .finally(() => {
@@ -105,8 +117,8 @@ export function ReaderMain() {
   }, [itemId, curContent])
 
   const article = item?.kind === "article" ? item : null
-  /** 展示用正文:补全结果优先(同一 itemId 时)。 */
-  const shownContent = full && full.id === itemId ? full.content : curContent
+  /** 展示用正文:补全结果优先(同 itemId),其次会话缓存,最后 feed 自带。 */
+  const shownContent = full && full.id === itemId ? full.content : cached ?? curContent
   // ⚠️ 补全的正文是纯文本(contentFormat="text"),但真实文章常含裸 `<`(数学/代码
   // 「x < y」)→ 仅靠 `includes("<")` 会把它误判成 HTML,浏览器把 `< y` 当标签解析吞掉
   // 正文。故 contentFormat="text" 一律按纯文本渲染,只有未标注格式的旧数据才看 `<` 猜。
