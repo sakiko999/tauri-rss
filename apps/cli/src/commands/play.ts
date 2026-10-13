@@ -25,10 +25,14 @@ export async function runPlay(url: string, opts: PlayOptions): Promise<void> {
   openExternal(target.url)
 }
 
-/** 系统默认应用打开 URL(win: cmd start / mac: open / linux: xdg-open)。 */
+/** 系统默认应用打开 URL(win / mac / linux)。
+ *  ⚠️ Windows **必须**用 rundll32 而非 `cmd /c start ""`——cmd 会在 query 的 `&` 处
+ *  截断分命令(签名直链 `?wsSecret=…&wsTime=…` 会被切成半条 URL,后半触发
+ *  `'wsTime' is not recognized`,而 stderr 被 ignore 用户看不到)。Bun 的引号转义
+ *  (`\"`)cmd 也不认。rundll32 不经 cmd 解析,URL 原样传递。 */
 function openExternal(u: string): void {
   const cmd =
-    process.platform === "win32" ? ["cmd", "/c", "start", "", u]
+    process.platform === "win32" ? ["rundll32", "url.dll,FileProtocolHandler", u]
     : process.platform === "darwin" ? ["open", u]
     : ["xdg-open", u]
   Bun.spawn(cmd, { stdin: "ignore", stdout: "ignore", stderr: "ignore" })
