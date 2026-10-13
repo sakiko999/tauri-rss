@@ -1,9 +1,23 @@
 # 审计发现积压（未修，待处理）
 
-> 来源：2026-10-13 全仓审计 workflow（8 维度 × 对抗验证）。已修的见各 commit；本文件登记**已确认但未修**的发现，避免成果流失。
-> 格式：`[严重度] 文件 — 问题 / 建议`。处理后删行或标 ✅。
+> 来源：2026-10-13 全仓审计 workflow（8 维度 + 流程追踪 × 对抗验证）。已修的见各 commit；
+> 本文件登记**已确认但未修**的发现，避免成果流失。格式：`[严重度] 文件 — 问题 / 建议`。
+
+## 已修（本轮，供对照）
+
+序列化边界丢字段 / RSS+OPML 转义 / Select 空值哨兵 / loadMore 分页窗口 / bili av 号 /
+bili:live 作者名 / bili 视频时长 / 退订竞态+墓碑泄漏 / 停用订阅游标残留 / loadMore 无视停用 /
+douyu 搜索人气丢单位 / douyu 搜主播假 0 / 全文搜索 / 阅读进度 / 续播 / 表格分隔线 /
+player 圆角方角 / 弹幕前跳洪水 / attemptPlay 未处理 rejection / 弹幕同毫秒去重 /
+ws reader 死循环+连接泄漏(rust) / ws 事件早于 resolve(host) / abortPending 全局误杀 /
+Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 
 ## 待修（已确认）
+
+- [ ] **[medium] `packages/resolve/src/browser/cdp.ts:23` `withBrowserLock` 无队列取消** ——
+      per-sub 超时 abortPending 后,排队等锁的浏览器操作不会被取消,之后仍会运行并重连
+      CDP。要真正取消需给锁加取消上下文(改动较大,且 abort 本身是「不再等待」语义),
+      故暂缓。影响:多浏览器订阅同时超时会有 CDP 关闭→重开的抖动(非正确性错误)。
 
 - [ ] **[medium] `packages/core/src/processing/deserialize.ts:166`** — `parseImages(raw["tpl:images"])`
       读的节点无生产者：serialize 把 social 图发成 `media:content`(medium=image)，但 deserialize
