@@ -70,6 +70,9 @@ export class RawRssChannel implements RssChannel {
     }
     const ex = extractArticle(html, item.url)
     if (!ex) return null
+    // ⚠️ 提取结果不比 feed 自带正文更完整(如正文抽到页脚/solidot 类)→ 原样返回,
+    // 不把较差的提取当「补全」(否则 UI 侧长度比较会把它当增长而显示更差的内容)。
+    if (visibleTextLength(ex.text) <= visibleTextLength(item.content ?? "")) return item
     return { ...item, content: ex.text, contentFormat: "text", thumbnail: item.thumbnail ?? ex.image }
   }
 }
