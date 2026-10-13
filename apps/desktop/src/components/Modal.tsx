@@ -162,8 +162,16 @@ export function Select({
   id?: string
   ariaLabel?: string
 }) {
+  // ⚠️ radix 的 Select.Item 不接受空串 value —— 会把「未分组 / 不归入分组」
+  // (value:"")映射成哨兵串 `__none` 再由 onValueChange 回传,调用方保存时拿到
+  // `"__none" || null` = `"__none"`(真值)→ 订阅指向一个不存在的分组 id。
+  // 故这里在组件边界做哨兵:内部用 `__none` 喂 radix,对外**始终还原成 ""**。
+  const NONE = "__none"
   return (
-    <SelectPrimitive.Root value={value || undefined} onValueChange={(v) => onChange(v)}>
+    <SelectPrimitive.Root
+      value={value || NONE}
+      onValueChange={(v) => onChange(v === NONE ? "" : v)}
+    >
       <SelectPrimitive.Trigger id={id} className="select" aria-label={ariaLabel}>
         <SelectPrimitive.Value placeholder={placeholder ?? "请选择"} />
         <SelectPrimitive.Icon className="select-caret">
@@ -174,7 +182,7 @@ export function Select({
         <SelectPrimitive.Content className="select-pop" position="popper" sideOffset={4}>
           <SelectPrimitive.Viewport>
             {options.map((o) => (
-              <SelectPrimitive.Item key={o.value || "__none"} className="select-item" value={o.value || "__none"}>
+              <SelectPrimitive.Item key={o.value || NONE} className="select-item" value={o.value || NONE}>
                 <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
                 <SelectPrimitive.ItemIndicator className="select-check">
                   <Icon name="check" size={13} />
