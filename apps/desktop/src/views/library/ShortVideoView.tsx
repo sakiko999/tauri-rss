@@ -5,8 +5,9 @@
  * - **不引 Swiper**：竖向整页滑动用原生 **CSS scroll-snap**（`snap-y snap-mandatory`
  *   + 每屏 `snap-start h-full`）—— 零依赖、滚动手感由浏览器保证、键盘/触控/滚轮全支持。
  *   Swiper 的 Cube/Flip 3D 转场是加分项，但本模式只需要「一屏一条」，原生足够。
- * - **只渲染可视 ±1**：`IntersectionObserver` 标记哪一条在屏，只有「当前 + 前后各一」
- *   挂载 `PlayableMedia`（未就绪的显示 poster 占位）—— 避免一次起播 N 个视频/弹幕连接。
+ * - **只挂当前条**：`IntersectionObserver` 标记哪一条在屏，**仅当前条**挂载
+ *   `PlayableMedia`（其余显示 poster 占位）—— ⚠️ 曾挂「当前 ±1」三条，但 `PlayableMedia`
+ *   挂载即带声自动播、无「预加载不播」开关 → 三条同时出声 + 三路弹幕 WS。改为只挂当前。
  * - **非当前自动暂停**：`PlayableMedia` 靠 key 重挂会重解析，代价大；这里只在「滑走」时
  *   卸载（IntersectionObserver 把离开视口的移出挂载集），回来时重新懒解析（有缓存）。
  *   ⚠️ 这是「重挂即暂停」的粗粒度方案；若日后要「保留实例只暂停」，得给 PlayableMedia
@@ -21,8 +22,8 @@ import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
 
-/** 单个 slide。inWindow=false 时只渲染 poster 占位（不挂播放器）。 */
-function Slide({ item, index, inWindow, onClose }: { item: MediaItem; index: number; inWindow: boolean; onClose: () => void }) {
+/** 单个 slide。active=false 时只渲染 poster 占位（不挂播放器）。 */
+function Slide({ item, index, active, onClose }: { item: MediaItem; index: number; active: boolean; onClose: () => void }) {
   const resolvePlay = useDesktop((s) => s.resolvePlay)
   const resolveLivePlay = useDesktop((s) => s.resolveLivePlay)
   const savePosition = useDesktop((s) => s.savePosition)
@@ -31,7 +32,7 @@ function Slide({ item, index, inWindow, onClose }: { item: MediaItem; index: num
 
   return (
     <section className="sv-slide snap-start" data-item={item.id} data-index={index}>
-      {playable && inWindow ? (
+      {playable && active ? (
         <PlayableMedia
           key={item.id}
           className="sv-media"
@@ -78,8 +79,6 @@ export function ShortVideoView() {
   const [activeIdx, setActiveIdx] = useState(0)
 
   const items = useMemo(() => view.list, [view.list])
-  // 可视 ±1 窗口：只挂载当前与前后各一条。
-  const inWindow = (i: number) => Math.abs(i - activeIdx) <= 1
 
   // IntersectionObserver 跟踪「哪一屏在视口中央」→ activeIdx。
   useEffect(() => {
@@ -136,7 +135,7 @@ export function ShortVideoView() {
     <div className="shortvideo" ref={containerRef}>
       {items.map((it, i) => (
         <div key={it.id} className="sv-slot">
-          <Slide item={it} index={i} inWindow={inWindow(i)} onClose={() => go(nodeId ?? "tab:all")} />
+          <Slide item={it} index={i} active={i === activeIdx} onClose={() => go(nodeId ?? "tab:all")} />
         </div>
       ))}
       <span className="sv-hint t-micro">
