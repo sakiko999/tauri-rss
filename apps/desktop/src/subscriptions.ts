@@ -152,17 +152,18 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     groupId: "g-live",
     info: {},
   },
-  // social:需登录 cookie(未登录 bili 动态接口返回 code:-101)。core 层
-  // DEFAULT_BILIBILI_COOKIE 经 sourceInfoFor 自动注入,桌面端开箱即用。
+  // ⚠️ **需登录 cookie**:`DEFAULT_BILIBILI_COOKIE` 默认**为空**(纯匿名),匿名请求
+  // bili 动态接口 412(曾注释误写「开箱即用」)。故 **enabled:false** —— 填入 cookie
+  // (packages/core/src/bilibili-cookie.ts)后在 rail 里启用即可;否则每次刷新必失败刷屏。
   {
     id: "s-social-bili-dyn",
     channelKey: "bili:dynamic",
     title: "bilibili 动态 · 半佛仙人",
-    enabled: true,
+    enabled: false,
     groupId: "g-social",
     info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)
   },
-  // 微博(完整登录 cookie 在 core 层 DEFAULT_WEIBO_COOKIE,sourceInfoFor 自动注入)
+  // 微博热搜:列表匿名可用(词流需登录),保留启用。
   {
     id: "s-hot-weibo",
     channelKey: "weibo:hot",
@@ -171,11 +172,12 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     groupId: "g-social",
     info: {}, // 热搜三栏:中栏词条列表,点词条右栏该词微博流
   },
+  // ⚠️ **需登录**:`DEFAULT_WEIBO_COOKIE` 默认空,匿名 user 容器 432。enabled:false 同上。
   {
     id: "s-user-weibo",
     channelKey: "weibo:user",
     title: "微博 · LPL",
-    enabled: true,
+    enabled: false,
     groupId: "g-social",
     info: { uid: "5756404150" },
   },
