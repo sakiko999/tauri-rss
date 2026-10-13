@@ -30,3 +30,8 @@ apps/new_desktop/assets/
 # 一次性探针（审计/复核 agent 常留）
 _probe*.mjs
 packages/*/_probe*.mjs
+
+# 审计 agent 一次性探针
+.probe*.ts
+**/atom-check*.ts
+**/_probe*.ts
