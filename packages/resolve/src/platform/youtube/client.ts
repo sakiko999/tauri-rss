@@ -308,8 +308,9 @@ export function pickProgressiveVideo(formats: PlayerFormat[]): PlayerFormat | nu
   )
 }
 
-/** 把 format 的 URL 解出来(签名解密 + n 参数解密)。返回可播 URL;失败返回 null。 */
-export async function resolveFormatUrl(format: PlayerFormat): Promise<string | null> {
+/** 把 format 的 URL 解出来(签名解密 + n 参数解密)。返回可播 URL;失败返回 null。
+ *  ⚠️ 传 videoId 供解 n 取 base.js(不能从直链正则抠——会抠到 CDN 主机名)。 */
+export async function resolveFormatUrl(format: PlayerFormat, videoId: string): Promise<string | null> {
   let url = format.url
   if (!url) {
     // 签名混淆:url 藏在 cipher / signatureCipher 里(仅 WEB client)。
@@ -326,7 +327,7 @@ export async function resolveFormatUrl(format: PlayerFormat): Promise<string | n
   // n 参数(节流混淆)——不解会限速/403。
   if (hasThrottlingParam(url)) {
     try {
-      url = await deobfuscateNParam(url)
+      url = await deobfuscateNParam(url, videoId)
     } catch {
       // n 参数解密失败 → 该流不可用,放弃。
       return null
@@ -380,11 +381,12 @@ async function youtubeDashStreams(
   adaptive: PlayerFormat[],
   duration: number,
   headers: Record<string, string>,
+  videoId: string,
 ): Promise<Stream[]> {
   // 1. 视频轨:filter(avc + Range) → 逐个解 URL(失败跳过)。
   const videos: Array<{ f: PlayerFormat; url: string }> = []
   for (const f of R.filter(isAvcVideo, adaptive)) {
-    const url = await resolveFormatUrl(f)
+    const url = await resolveFormatUrl(f, videoId)
     if (url) videos.push({ f, url })
   }
   if (!videos.length) return []
@@ -392,7 +394,7 @@ async function youtubeDashStreams(
   // 2. 音轨:filter(aac + Range) → 取最高码率一档(140/141 皆可,139 低码率被排掉)。
   const audios = R.filter(isAacAudio, adaptive)
   const audio = R.last<PlayerFormat>(R.sortBy((a) => Number(a.bitrate ?? 0), audios))
-  const audioUrl = audio ? await resolveFormatUrl(audio) : null
+  const audioUrl = audio ? await resolveFormatUrl(audio, videoId) : null
   const audioRep: MpdAudioRep | undefined =
     audio && audioUrl
       ? {
@@ -473,14 +475,14 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
   const headers = { referer: "https://www.youtube.com/", "user-agent": WEB_UA }
   const adaptive = res.streamingData?.adaptiveFormats ?? []
   const duration = Number(res.videoDetails?.lengthSeconds ?? 0)
-  const dash = await youtubeDashStreams(adaptive, duration, headers)
+  const dash = await youtubeDashStreams(adaptive, duration, headers, videoId)
   if (dash.length) return dash
 
   // DASH 装配失败(无 avc1 / 无 URL / 无 Range)→ 渐进式 mp4 一档。
   const formats = res.streamingData?.formats ?? []
   const best = pickProgressiveVideo(formats)
   if (best) {
-    const url = await resolveFormatUrl(best)
+    const url = await resolveFormatUrl(best, videoId)
     if (url) return [{ url, format: "mp4", headers }]
   }
 

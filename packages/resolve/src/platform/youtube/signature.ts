@@ -202,13 +202,14 @@ async function fetchPlayerJsUrl(videoId: string): Promise<string | null> {
 
 /**
  * 解密 URL 的 n 参数并替换回。失败抛错(上层放弃该流)。
- * 每次失败都尝试重新下载 base.js(URL 可能过期)。
+ * ⚠️ 必须传入真实 videoId:`base.js` 非视频专属,但要经 `watch?v=<id>` 页面取出——
+ * 从 googlevideo 直链正则抠 id 会抠到 **CDN 主机名**(如 `rr3---sn-...`),取到错误
+ * base.js(或空)→ 解 n 失败 → 该流被丢弃(ANDROID_VR 直播普遍带 n,影响面大)。
+ * 调用方 `resolveYoutubeStreams` 已知 videoId,层层传下来。
  */
-export async function deobfuscateNParam(url: string): Promise<string> {
+export async function deobfuscateNParam(url: string, videoId: string): Promise<string> {
   const n = extractNParam(url)
   if (n === null) return url
-  const videoId = url.match(/[/v|vi\/|v=]([\w-]{6,})/)?.[1] ?? ""
-  // 已解过(URL 里 n 值被替换成合法值,再解会错)——不做,信任调用方。
   const playerJsUrl = await fetchPlayerJsUrl(videoId)
   if (!playerJsUrl) throw new Error("YouTube base.js URL 获取失败")
   const deobf = await getNDeobfuscator(playerJsUrl)
