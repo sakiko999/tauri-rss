@@ -3,7 +3,8 @@
  *
  * nodeId 形态(全部由 selectedNodeId 承载,不引入新的路由段):
  *   tab:all|article|video|audio|live|social   内置内容类型
- *   today / unread / starred                  智能订阅(全局聚合)
+ *   today / unread / starred / resume         智能订阅(全局聚合)
+ *   short:<kind>                              短视频全屏流(第三模式)
  *   s-*                                       真实订阅(裸 id,不加前缀以避免重命名)
  *   group:<gid>                               分组聚合
  *   page:discover / page:settings / page:account  页面
