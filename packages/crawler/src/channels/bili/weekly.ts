@@ -43,6 +43,7 @@ export class BiliWeeklyChannel implements RssChannel {
         pubdate: 0,
         aid: raw.param,
         bvid: raw.bvid,
+        duration: raw.duration,
         forceBvid: head.number > 60,
       }),
     )

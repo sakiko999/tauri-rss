@@ -45,6 +45,7 @@ export class BiliRankingChannel implements RssChannel {
         pubdate: raw.ctime,
         aid: raw.aid,
         bvid: raw.bvid,
+        duration: raw.duration,
         owner: (raw.owner as { name?: string }) ?? undefined,
       }),
     )

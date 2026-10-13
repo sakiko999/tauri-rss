@@ -59,6 +59,7 @@ export class BiliPopularChannel implements RssChannel, Loginable {
         pubdate: raw.pubdate,
         aid: raw.aid,
         bvid: raw.bvid,
+        duration: raw.duration,
         owner: (raw.owner as { name?: string }) ?? undefined,
       }),
     )
