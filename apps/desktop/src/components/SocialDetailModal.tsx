@@ -10,7 +10,8 @@
  * overflow:hidden 裁掉 ≡ 撑满 + 截断)。竖图/横图都由 object-fit:contain 装进
  * 同一可用高度,不再按源比例撑高把正文挤到图片下方。
  */
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import DOMPurify from "dompurify"
 import { useDesktop } from "../store/index.ts"
 import { Modal } from "./Modal.tsx"
 import { Icon } from "./Icon.tsx"
@@ -45,8 +46,28 @@ export function SocialDetailModal() {
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [detail, multi, imgs.length])
+  /**
+   * 正文可能是原始 HTML(weibo 的 text 带 `<a href=…>`/`<br />`)——直接 `{text}` 会把
+   * 标签当字面量显示(用户看到 `<a href="...">@xxx</a> <br />` 一串源码)。经 DOMPurify
+   * 消毒后按 HTML 渲染。⚠️ useMemo 必须在 early return **之前**(hook 顺序稳定)。
+   */
+  const rawContent = ((detail?.full ?? detail?.item) as { content?: string } | undefined)?.content ?? ""
+  const bodyHtml = useMemo(
+    () => (/<[a-z][\s\S]*>/i.test(rawContent) ? DOMPurify.sanitize(rawContent) : ""),
+    [rawContent],
+  )
 
   if (!detail || !item) return null
+
+  /** 正文 <a> 一律拦下交宿主打开(同 ReaderMain:不拦的话 WebView 会整页导航走)。 */
+  const onBodyClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const a = (e.target as HTMLElement).closest("a")
+    if (!a) return
+    e.preventDefault()
+    const href = a.getAttribute("href")
+    if (!href || href.startsWith("#")) return
+    openExternalSafely(href)
+  }
 
   const text = (item as { content?: string }).content ?? item.summary ?? ""
   /** 媒体源兼容:SocialItem 走 images[0];article 类兜 thumbnail/poster。 */
@@ -105,27 +126,27 @@ export function SocialDetailModal() {
             {cover ? (
               <>
                 {imgs.length > 1 ? (
-                  <>
-                    <span className="social-detail-count num">
-                      {imgIndex + 1} / {imgs.length}
-                    </span>
+                  <div className="social-detail-controls">
                     <button
                       className="social-detail-nav"
                       data-dir="prev"
                       aria-label="上一张"
                       onClick={() => stepImg(-1)}
                     >
-                      <Icon name="back" size={16} />
+                      <Icon name="back" size={15} />
                     </button>
+                    <span className="social-detail-count num">
+                      {imgIndex + 1} / {imgs.length}
+                    </span>
                     <button
                       className="social-detail-nav"
                       data-dir="next"
                       aria-label="下一张"
                       onClick={() => stepImg(1)}
                     >
-                      <Icon name="chevronRight" size={16} />
+                      <Icon name="chevronRight" size={15} />
                     </button>
-                  </>
+                  </div>
                 ) : null}
                 {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
@@ -154,6 +175,8 @@ export function SocialDetailModal() {
                 <span className="skeleton sk-line" style={{ width: "78%" }} />
                 <span className="skeleton sk-line" style={{ width: "64%" }} />
               </span>
+            ) : bodyHtml ? (
+              <div className="social-detail-text" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
             ) : text ? (
               <p className="social-detail-text">{text}</p>
             ) : (

@@ -3271,41 +3271,41 @@ kbd {
 .social-detail-media > div {
   height: 100%;
 }
-.social-detail-count {
+/* 底部控件条:翻页箭头 + 计数,贴媒体框**底边**居中。
+   ⚠️ 曾把左右箭头压在图片垂直中部(top:50%)——竖图/长截图的正文正好落在中段,
+   两个圆钮浮在文字上(用户标注「切换图标位置不对」)。收进底部一条控制条,与计数
+   同处一行:读作「容器控件」而非内容,且不再遮挡图片中段。 */
+.social-detail-controls {
   position: absolute;
-  right: var(--sp-3);
-  top: var(--sp-3);
+  left: 50%;
+  bottom: var(--sp-3);
+  translate: -50% 0;
   z-index: 1;
-  padding: 2px 8px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 3px 5px;
   border-radius: var(--r-full);
-  background: oklch(0.12 0.01 264 / 66%);
+  background: oklch(0.12 0.01 264 / 62%);
+}
+.social-detail-count {
+  padding: 0 4px;
   color: var(--on-media);
   font-size: var(--fs-micro);
   font-weight: 560;
+  white-space: nowrap;
 }
-/* 多图翻页:左右两个圆形按钮,压在图片中部竖排居中的位置 */
 .social-detail-nav {
-  position: absolute;
-  top: 50%;
-  z-index: 1;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  translate: 0 -50%;
+  width: 28px;
+  height: 28px;
   border-radius: var(--r-full);
-  background: oklch(0.12 0.01 264 / 55%);
   color: var(--on-media);
   transition: background var(--dur-fast) var(--ease-in);
 }
 .social-detail-nav:hover {
-  background: oklch(0.12 0.01 264 / 78%);
-}
-.social-detail-nav[data-dir="prev"] {
-  left: var(--sp-3);
-}
-.social-detail-nav[data-dir="next"] {
-  right: var(--sp-3);
+  background: oklch(1 0 0 / 16%);
 }
 /* 多图缩略图条:跨整行铺在图窗下方(网格里显式占第二行,否则会被塞进信息列) */
 .social-detail-thumbs {
