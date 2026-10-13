@@ -59,14 +59,16 @@ export function DiscoverPage() {
   }, [channels])
 
   // 「可一键订阅」= 无需用户输入:有 defaultInfo,或参数表里没有 required 字段。
-  // 榜单意图本身 = 直播榜 + 视频榜;⚠️ 曾用 /hot|live/ 正则,`live:` 前缀让**所有**
-  // live 渠道都命中,把 live:huya:search / live:douyu:anchor 这类必填参渠道也列进来
-  // (一键订阅空 info 必失败)。改为「榜单类 kind」∧「无必填参数」双闸。
+  // ⚠️ 别再按 kind / key 正则缩范围:榜单语义就是「无参渠道」——曾经 /hot|live/ 正则
+  // 让 `live:` 前缀误命中(把必填参的 live:huya:search 列进来,一键订阅必失败);
+  // 后改为 kind 白名单,又漏掉 social/article 类无参榜单(douyin:trend / weibo:hot /
+  // xhs:explore / bili:square)。现只排除原生 RSS 直链(`rss:` —— 它们走「添加订阅」,
+  // 属发现页之外的入口,35 条会把榜单淹没)。
   const boards = useMemo(
     () =>
       channels.filter(
         (c) =>
-          (c.kind === "live" || (c.kind === "video" && /popular|weekly|ranking|square/.test(c.key))) &&
+          !c.key.startsWith("rss:") &&
           (!!c.defaultInfo || !(c.sourceInfoTpl ?? []).some((f) => f.required)),
       ),
     [channels],
