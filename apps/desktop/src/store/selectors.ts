@@ -50,6 +50,10 @@ export function baseFor(s: StoreSlice, node: string | null, now: number): MediaI
   if (n === "today") return s.allItems.filter((i) => isToday(i.publishedAt, now))
   if (n === "unread") return s.allItems.filter((i) => i.isUnread)
   if (n === "starred") return s.allItems.filter((i) => i.isStarred)
+  // 继续:有未读完进度的条目(视频/音频/直播用 positionSec,文章用 scrollRatio)。
+  // 进度由 core applyReadingState 从 reading 回填;近片尾/近结尾时 store 已清除。
+  if (n === "resume")
+    return s.allItems.filter((i) => (i.positionSec ?? 0) > 0 || (i.scrollRatio ?? 0) > 0)
   if (isGroupNode(n)) {
     const gid = groupIdOf(n)
     const ids = new Set(s.subscriptions.filter((sub) => sub.groupId === gid).map((sub) => sub.id))

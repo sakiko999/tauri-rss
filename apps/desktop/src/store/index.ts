@@ -28,7 +28,7 @@ import {
 import { SEED_GROUPS, SEED_SUBSCRIPTIONS } from "../subscriptions.ts"
 import { exportOpml, pendingImports } from "../lib/opml.ts"
 import { parseOpml } from "@tauri-playground/xml"
-import { nodeKindOf, nodeMeta, subscriptionIdsOfGroup, type NodeMeta, type NodeType } from "./nodes.ts"
+import { nodeKindOf, nodeMeta, isSmartFeed, subscriptionIdsOfGroup, type NodeMeta, type NodeType } from "./nodes.ts"
 import {
   PAGE_SIZE,
   queryView,
@@ -274,7 +274,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     if (!nodeId) return false
     if (nodeId.startsWith("tab:") || nodeId.startsWith("group:") || nodeId.startsWith("page:")) return false
     if (nodeId.startsWith("play:")) return false
-    if (nodeId === "today" || nodeId === "unread" || nodeId === "starred") return false
+    if (isSmartFeed(nodeId)) return false
     return !!get().subscriptions.find((s) => s.id === nodeId)
   }
 

@@ -16,7 +16,7 @@ import type { MediaItem, MediaKind, Subscription, SubscriptionGroup } from "@tau
 /** 内容 tab:all 显示全部,其余按 kind 过滤。 */
 export type ContentTab = "all" | MediaKind
 /** smart feed 特殊节点 id(非真实订阅,查询走全局聚合)。 */
-export type SmartFeedId = "today" | "unread" | "starred"
+export type SmartFeedId = "today" | "unread" | "starred" | "resume"
 /** 页面节点 id。 */
 export type PageId = "discover" | "settings" | "account"
 /** 视图意图:阅读三栏 / 网格 / 热搜(词条栏+词流) / 整页 / 播放页 / 短视频全屏流。 */
@@ -49,6 +49,7 @@ export const SMART: Array<{ id: SmartFeedId; label: string; icon: string }> = [
   { id: "today", label: "今日", icon: "clock" },
   { id: "unread", label: "未读", icon: "inbox" },
   { id: "starred", label: "已星标", icon: "star" },
+  { id: "resume", label: "继续", icon: "play" },
 ]
 
 /** 短视频模式入口(第三模式):按 kind 分。只列有短片体感的 video/live。 */
@@ -71,7 +72,7 @@ export function isTabNode(id: string | null): boolean {
 }
 
 export function isSmartFeed(id: string | null): id is SmartFeedId {
-  return id === "today" || id === "unread" || id === "starred"
+  return id === "today" || id === "unread" || id === "starred" || id === "resume"
 }
 
 export function isGroupNode(id: string | null): boolean {
