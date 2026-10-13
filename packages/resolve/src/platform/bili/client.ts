@@ -123,7 +123,13 @@ async function ensureBuvid(): Promise<void> {
       const b3 = strOr(parsed?.data?.b_3) ?? ""
       const b4 = strOr(parsed?.data?.b_4) ?? ""
       anonBuvid = b3 ? `buvid3=${b3};buvid4=${b4};` : ""
-    })()
+    })().catch((e) => {
+      // ⚠️ 失败**逐出缓存**(与 getNavData 同款防线):否则一次瞬时 spi 失败会把 rejected
+      // promise 永久缓存 → 本进程内所有走 buvid 的 bili channel(search/anchor/live:hot/
+      // user_video)此后全抛错,直到重启。
+      buvidPromise = null
+      throw e
+    })
   }
   await buvidPromise
 }
