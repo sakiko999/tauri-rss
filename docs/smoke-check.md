@@ -15,6 +15,7 @@
 | 文章正文提取 | `packages/crawler/src/example/extract.check.ts` |
 | 正文持久缓存 | `packages/core/src/example/body-cache.check.ts` |
 | 仓储并发/退订 | `packages/core/src/example/repo-concurrency.check.ts` |
+| 续播进度落库（节流/近片尾清除） | `packages/core/src/reading-position.check.ts` |
 | mobile 正文渲染 | `apps/mobile/src/html.check.ts` |
 | OPML | `apps/xml` + `apps/desktop` 的 `opml.check.ts` |
 | desktop UI 布局/隐藏 | `scripts/ui-probe.ts goto <node>` + `ui-console.ts` |
