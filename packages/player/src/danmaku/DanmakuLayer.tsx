@@ -91,7 +91,7 @@ export function DanmakuLayer({
   const lanesRef = useRef<Lanes>([])
   /** VOD 全量池(有 timeMs 的累积,按时间轴发射)。 */
   const vodPoolRef = useRef<DanmakuItem[]>([])
-  const spawnedRef = useRef<Set<number>>(new Set())
+  const spawnedRef = useRef<Set<string>>(new Set())
   const lastTRef = useRef(0)
   const lastNowRef = useRef(0)
   const pausedRef = useRef(paused)
@@ -137,8 +137,11 @@ export function DanmakuLayer({
     const fresh: DanmakuItem[] = []
     for (const d of vodPoolRef.current) {
       if (d.timeMs === undefined) continue
-      if (d.timeMs > start && d.timeMs <= t + PRE_MS && !spawnedRef.current.has(d.timeMs)) {
-        spawnedRef.current.add(d.timeMs)
+      // ⚠️ 去重键必须用 `timeMs + 文本`,不能只用 timeMs —— 同一毫秒的多条不同弹幕
+      // (热门视频极常见)会被当成重复,只发一条、其余永久丢弃。
+      const key = `${d.timeMs}|${d.text}`
+      if (d.timeMs > start && d.timeMs <= t + PRE_MS && !spawnedRef.current.has(key)) {
+        spawnedRef.current.add(key)
         fresh.push(d)
       }
     }
