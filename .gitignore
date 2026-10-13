@@ -26,3 +26,7 @@ apps/cli/.data/
 # new_desktop 演示图资源(211 张 / 13MB,构建期 dump 的缓存,不进版本库;
 # content.js 里的 assets/* 引用会 404,但该目录只作设计参考,不参与构建)
 apps/new_desktop/assets/
+
+# 一次性探针（审计/复核 agent 常留）
+_probe*.mjs
+packages/*/_probe*.mjs
