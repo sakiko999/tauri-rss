@@ -19,8 +19,9 @@ apps/
                index 动作编排），视图 src/views/，卡片 src/components/cards.tsx。
                位置权威 = URL（/v/:nodeId、/play/:itemId）
   mobile/      React 19 + Vite，产物 → dist/mobile。已接入 appHost + core：
-               极简「看内容」闭环（未读列表 → 点开播放/阅读），复用 core DataLayer +
-               player PlayableMedia + ui MediaImage + core resolveDetail。不做订阅工作台
+               极简「看内容」闭环（未读列表 → 点开播放/阅读）+ **订阅管理**（RSS 直链
+               添加 / 移除）；复用 core DataLayer + player PlayableMedia + ui MediaImage
+               + core resolveDetail。不做频道发现（那属桌面工作台）
   cli/         ★ 调试探针（Bun + cac 零构建）。channels/fetch/item/play/dm/hot/
                align/env/refresh 收编全部 example；宿主 = node 后端 + bun:sqlite
                （apps/cli/.data/rss.db）。详见 docs/cli-plan.md
