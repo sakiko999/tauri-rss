@@ -48,11 +48,21 @@ export class TauriWsBackend implements WsBackend {
     let conn!: TauriWsConnection
     // 用道具对象持可变状态:闭包内的赋值不会被 TS 的控制流分析追踪,直接 `let` 会在
     // 使用处被窄化回初始值(null → never)。对象属性读取不受此影响。
-    const st: { ready: boolean; earlyClose: { code: number; reason: string } | null } = {
+    const st: { ready: boolean; closed: boolean; earlyClose: { code: number; reason: string } | null } = {
       ready: false,
+      closed: false,
       earlyClose: null,
     }
     const onEvent = new Channel<WsEventMsg>()
+    // ⚠️ 终态只投递一次:Rust 在传输层错误时**同时**发 Error + Close → 若不去重,
+    // 消费方 onClose 双调 → 弹幕流 scheduleReconnect 跑两遍 → 起两条连接,一条无人
+    // close()(连接泄漏)+ 重复弹幕。
+    const fireClose = (code: number, reason: string) => {
+      if (st.closed) return
+      st.closed = true
+      conn.readyState = 3
+      opts.onClose?.(code, reason)
+    }
     onEvent.onmessage = (ev) => {
       switch (ev.event) {
         // "Open" 忽略——Rust ws_connect 先 send Open 再返回 connectionId,Channel 事件
@@ -70,8 +80,7 @@ export class TauriWsBackend implements WsBackend {
             st.earlyClose = { code: c.code ?? 1006, reason: c.reason ?? "" }
             break
           }
-          conn.readyState = 3
-          opts.onClose?.(c.code ?? 1006, c.reason ?? "")
+          fireClose(c.code ?? 1006, c.reason ?? "")
           break
         }
         case "Error": {
@@ -80,7 +89,7 @@ export class TauriWsBackend implements WsBackend {
             st.earlyClose = { code: 1006, reason: msg }
             break
           }
-          opts.onClose?.(1006, msg)
+          fireClose(1006, msg)
           break
         }
       }
@@ -95,8 +104,7 @@ export class TauriWsBackend implements WsBackend {
     // resolve 前已收到终态事件(极短连接/立即被拒):不触发 onOpen,直接用确定的
     // 连接补发 onClose(否则上层一直等 onClose,连接态悬挂)。
     if (st.earlyClose) {
-      conn.readyState = 3
-      opts.onClose?.(st.earlyClose.code, st.earlyClose.reason)
+      fireClose(st.earlyClose.code, st.earlyClose.reason)
       return conn
     }
     // 主动触发 onOpen:此时 conn 已赋值,认证帧/心跳可靠发送。

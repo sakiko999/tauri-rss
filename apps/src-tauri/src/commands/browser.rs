@@ -305,7 +305,9 @@ fn rm_dir(path: &Path) -> std::io::Result<()> {
 /// 窗口一起关掉,对「清理浏览器数据」这个动作来说过界了。
 /// 副作用:微博/小红书等靠 Edge profile 登录态的平台会**掉登录态**(需重新登录);
 /// 应用自身数据(SQLite / localStorage)不受影响。
-#[tauri::command]
+// ⚠️ `(async)` 让同步体跑**线程池**而非主线程:本命令含 10×200ms 重试忙等,主线程执行
+// 会冻窗口数秒(WebView 不重绘)。
+#[tauri::command(async)]
 pub fn browser_reset_profile(app: AppHandle) -> Result<String, String> {
     let dir = profile_dir(&app)?;
     let pids = tcp_listen_pids(CDP_PORT).len();
@@ -336,7 +338,9 @@ pub fn browser_reset_profile(app: AppHandle) -> Result<String, String> {
 ///
 /// 幂等:端口上已有 CDP 服务(之前 spawn 的 Edge 存活)则直接复用。
 /// 否则 spawn 系统 Edge(--remote-debugging-port + --user-data-dir 持久化登录态)。
-#[tauri::command]
+// ⚠️ `(async)`:本命令 spawn Edge 后含最多 30×100ms + 两次 300ms 的 CDP 就绪忙等
+// (约 3s+),主线程执行会冻窗口。见 browser_reset_profile 上方注释。
+#[tauri::command(async)]
 pub fn browser_ensure(app: AppHandle) -> Result<u16, String> {
     let port = CDP_PORT;
     if cdp_alive(port) {

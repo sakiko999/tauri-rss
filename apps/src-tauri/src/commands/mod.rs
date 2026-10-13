@@ -78,7 +78,13 @@ pub(crate) fn is_blocked_host(url: &str) -> bool {
     match host.parse::<std::net::IpAddr>() {
         Ok(ip) => match ip {
             std::net::IpAddr::V4(v4) => v4.is_private() || v4.is_link_local(),
-            std::net::IpAddr::V6(v6) => v6.is_unique_local() || (v6.segments()[0] & 0xffc0) == 0xfe80,
+            // ⚠️ IPv4-mapped IPv6(`::ffff:192.168.1.1`)会 parse 成 V6,但 OS 实际按 v4 连接。
+            // 不先还原的话 `segments()[0] == 0` 既非 fc00::/7 也非 fe80 → 绕过内网/元数据拦截
+            // (`::ffff:169.254.169.254` 拉云元数据)。先 to_ipv4_mapped 走 v4 判定。
+            std::net::IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+                Some(v4) => v4.is_private() || v4.is_link_local(),
+                None => v6.is_unique_local() || (v6.segments()[0] & 0xffc0) == 0xfe80,
+            },
         },
         // 非 IP 字面量(域名)放行:解析结果不在此校验,公网域名正常可达。
         Err(_) => false,

@@ -26,12 +26,19 @@ export class SqliteStorageBackend implements StorageBackend {
   /** 惰性建连 + 建表 + localStorage 一次性迁移(进程内只跑一次)。 */
   private ready(): Promise<Database> {
     this.dbPromise ??= Database.load(DB_PATH)
-    this.readyPromise ??= (async () => {
-      const db = await this.dbPromise!
-      for (const m of MIGRATIONS) await db.execute(m.sql)
-      await this.migrateFromLocalStorage(db)
-    })()
-    // ready 失败(插件未注册/权限缺失)抛清晰错误。
+    if (!this.readyPromise) {
+      // ⚠️ ready 失败(插件未注册/权限缺失/DB 一次性故障)必须**可重试**:`??=` 会把
+      // rejected promise 永久留存,之后每次 get/set 都立刻 reject → 进程内 storage 全废。
+      // 用 catch 清回 null 让下次调用重跑。
+      this.readyPromise = (async () => {
+        for (const m of MIGRATIONS) await (await this.dbPromise!).execute(m.sql)
+        await this.migrateFromLocalStorage(await this.dbPromise!)
+      })().catch((e) => {
+        this.readyPromise = null
+        this.dbPromise = null // 连接也可能坏了(load 成功但 execute 失败)→ 一并重建
+        throw e
+      })
+    }
     return this.readyPromise.then(() => this.dbPromise!)
   }
 
@@ -41,6 +48,8 @@ export class SqliteStorageBackend implements StorageBackend {
       if (local === null) continue
       const rows = await db.select<Array<{ n: number }>>(`SELECT COUNT(*) AS n FROM ${KV_TABLE} WHERE key = $1`, [key])
       if ((rows[0]?.n ?? 0) === 0) {
+        // ⚠️ 先写 SQLite **成功后**才删 local:曾无条件删除,若 INSERT 抛错则
+        // SQLite 无数据 + local 副本已删 → 双源皆失(且 ready 毒化不可恢复)。
         await db.execute(`INSERT INTO ${KV_TABLE} (key, value) VALUES ($1, $2)`, [key, local])
       }
       // sqlite 已有数据(local 是旧值)或刚搬完:移除 local key,杜绝双源漂移。
