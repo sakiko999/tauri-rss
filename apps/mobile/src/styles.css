@@ -1,116 +1,172 @@
-.logo.vite:hover {
-  filter: drop-shadow(0 0 2em #747bff);
-}
-
-.logo.typescript:hover {
-  filter: drop-shadow(0 0 2em #2d79c7);
-}
+/* Mobile 样式 —— 暖石墨中性 + 琥珀 accent(与桌面同色相;单列纵向)。
+   OKLCH 与 desktop 的 tokens 同源,但这里是移动端独立精简集,不引用桌面 styles.css。 */
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  color-scheme: light dark;
+  --bg: oklch(0.98 0.006 75);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.96 0.008 75);
+  --text: oklch(0.26 0.012 75);
+  --text-dim: oklch(0.55 0.01 75);
+  --border: oklch(0.9 0.008 75);
+  --accent: oklch(0.7 0.14 70);
+  --accent-ink: oklch(0.28 0.08 70);
+  --r: 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 16px;
-  line-height: 24px;
-  font-weight: 400;
-
-  color: #0f0f0f;
-  background-color: #f6f6f6;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
 }
-
-.container {
-  margin: 0;
-  padding-top: 10vh;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: 0.75s;
-}
-
-.logo.tauri:hover {
-  filter: drop-shadow(0 0 2em #24c8db);
-}
-
-.row {
-  display: flex;
-  justify-content: center;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-
-a:hover {
-  color: #535bf2;
-}
-
-h1 {
-  text-align: center;
-}
-
-input,
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
-  transition: border-color 0.25s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
-}
-
-button {
-  cursor: pointer;
-}
-
-button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
-}
-
-input,
-button {
-  outline: none;
-}
-
-#greet-input {
-  margin-right: 5px;
-}
-
 @media (prefers-color-scheme: dark) {
   :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
+    --bg: oklch(0.19 0.008 75);
+    --surface: oklch(0.23 0.01 75);
+    --surface-2: oklch(0.27 0.011 75);
+    --text: oklch(0.93 0.008 75);
+    --text-dim: oklch(0.68 0.01 75);
+    --border: oklch(0.32 0.012 75);
+    --accent: oklch(0.75 0.13 72);
+    --accent-ink: oklch(0.9 0.06 72);
   }
+}
 
-  a:hover {
-    color: #24c8db;
-  }
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+#root {
+  min-height: 100dvh;
+}
+.page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.state {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+.err {
+  color: oklch(0.6 0.18 25);
+  word-break: break-all;
+}
+.hint {
+  color: var(--text-dim);
+  font-size: 13px;
+}
 
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top) + 10px) 14px 10px;
+  background: color-mix(in oklab, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  font-weight: 650;
+}
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--r);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 14px;
+}
+.btn:active {
+  background: var(--surface-2);
+}
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.row:active {
+  background: var(--surface-2);
+}
+.row-thumb {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.row-thumb.ph {
+  background: var(--surface-2);
+}
+.row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.row-title {
+  font-size: 15px;
+  font-weight: 560;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.row-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.row-play {
+  flex: none;
+  color: var(--accent);
+  font-size: 14px;
+}
+.empty {
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.detail {
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.stage {
+  width: 100%;
+  background: #000;
+}
+.detail-title {
+  font-size: 20px;
+  line-height: 1.35;
+  margin: 14px 16px 4px;
+}
+.detail-by {
+  margin: 0 16px 12px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.article-body {
+  margin: 0 16px 24px;
+  font-size: 16px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }

@@ -1,10 +1,13 @@
 import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  plugins: [react()],
+
   // 构建产物输出到根目录 dist/mobile，避免散落在各 app 下
   build: {
     outDir: "../../dist/mobile",

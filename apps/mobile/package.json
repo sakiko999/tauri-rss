@@ -9,9 +9,23 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2"
+    "@tauri-apps/api": "^2",
+    "@tauri-playground/core": "*",
+    "@tauri-playground/crawler": "*",
+    "@tauri-playground/host": "*",
+    "@tauri-playground/log": "*",
+    "@tauri-playground/player": "*",
+    "@tauri-playground/resolve": "*",
+    "@tauri-playground/ui": "*",
+    "@tauri-playground/xml": "*",
+    "react": "^19",
+    "react-dom": "^19",
+    "zustand": "^5"
   },
   "devDependencies": {
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5",
     "vite": "^8.1.5",
     "typescript": "~7.0.2"
   }
