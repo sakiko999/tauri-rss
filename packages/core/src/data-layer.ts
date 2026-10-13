@@ -161,6 +161,7 @@ export function createDataLayer(): DataLayer {
       if (rec.read && it.isUnread) next.isUnread = false
       if (rec.starred && !it.isStarred) next.isStarred = true
       if (rec.positionSec && !it.positionSec) next.positionSec = rec.positionSec
+      if (rec.scrollRatio && !it.scrollRatio) next.scrollRatio = rec.scrollRatio
       return Object.keys(next).length ? ({ ...it, ...next } as MediaItem) : it
     })
   }

@@ -54,6 +54,11 @@ export interface MediaItemBase {
    * 播放页写、refresh 时由 core 从 reading 回填(见 data-layer `applyReadingState`)。
    */
   positionSec?: number
+  /**
+   * 文章阅读进度(0..1 滚动比例)。article 有义;与 positionSec 同款:
+   * 阅读器写、refresh 时由 core 从 reading 回填。
+   */
+  scrollRatio?: number
   /** 不透明源负载,保真 round-trip。 */
   raw?: unknown
 

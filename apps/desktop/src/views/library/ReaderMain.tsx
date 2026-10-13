@@ -22,6 +22,7 @@ export function ReaderMain() {
   const selectedArticleId = useDesktop((s) => s.selectedArticleId)
   const allItems = useDesktop((s) => s.allItems)
   const toggleStar = useDesktop((s) => s.toggleStar)
+  const saveScrollRatio = useDesktop((s) => s.saveScrollRatio)
   const item = useMemo(() => allItems.find((i) => i.id === selectedArticleId) ?? null, [allItems, selectedArticleId])
   const scrollRef = useRef<HTMLDivElement>(null)
   const barRef = useRef<HTMLSpanElement>(null)
@@ -29,23 +30,42 @@ export function ReaderMain() {
   const measure = usePrefs((s) => s.measure)
   const setPrefs = usePrefs((s) => s.set)
 
-  // 滚动进度条(直接改 DOM 宽度,不走 React 渲染)。
+  // 滚动进度条(直接改 DOM 宽度,不走 React 渲染)+ 阅读进度持久化。
+  // saveScrollRatio 用 ref 持最新,effect 只随条目重挂(不因回调变化重建监听)。
+  const saveRatioRef = useRef(saveScrollRatio)
+  saveRatioRef.current = saveScrollRatio
+  const itemRef = useRef(item)
+  itemRef.current = item
   useEffect(() => {
     const el = scrollRef.current
     const bar = barRef.current
     if (!el || !bar) return
     const onScroll = () => {
       const max = el.scrollHeight - el.clientHeight
-      bar.style.width = max > 0 ? `${Math.min(100, (el.scrollTop / max) * 100)}%` : "0%"
+      const ratio = max > 0 ? Math.min(1, el.scrollTop / max) : 0
+      bar.style.width = `${ratio * 100}%`
+      // 只对 article 记进度(store 侧另有 5% 节流)。
+      const cur = itemRef.current
+      if (cur && cur.kind === "article") saveRatioRef.current(cur, ratio)
     }
     onScroll()
     el.addEventListener("scroll", onScroll, { passive: true })
     return () => el.removeEventListener("scroll", onScroll)
   }, [item?.id])
 
-  // 切条目时回到顶部。
+  // 切条目:恢复该条的阅读进度(有则跳,无则回顶)。等正文渲染出滚动高度再跳
+  // (rAF 一帧足够;期间 progress-bar 的 onScroll 会用未跳的 0 覆盖?——不会,
+  //  恢复跳转触发的 scroll 事件写回的是同一比例,节流后无副作用)。
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: 0 })
+    const el = scrollRef.current
+    if (!el) return
+    const ratio = item?.scrollRatio ?? 0
+    const restore = () => {
+      const max = el.scrollHeight - el.clientHeight
+      el.scrollTo({ top: ratio > 0.02 && max > 0 ? ratio * max : 0 })
+    }
+    const raf = requestAnimationFrame(restore)
+    return () => cancelAnimationFrame(raf)
   }, [item?.id])
 
   const article = item?.kind === "article" ? item : null

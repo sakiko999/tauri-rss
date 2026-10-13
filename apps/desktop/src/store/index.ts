@@ -129,6 +129,8 @@ interface DesktopState {
   toggleStar(item: MediaItem): void
   /** 记录续播位置(秒)。播完(近片尾)则清除记录,避免重看时又跳到结尾。 */
   savePosition(item: MediaItem, sec: number, durationSec: number): void
+  /** 记录文章阅读进度(0..1 滚动比例)。读到结尾(≥0.95)清除记录。 */
+  saveScrollRatio(item: MediaItem, ratio: number): void
 
   resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
@@ -579,19 +581,40 @@ export const useDesktop = create<DesktopState>((set, get) => {
     savePosition(item, sec, durationSec) {
       const dl = get().dl
       if (!dl) return
+      // ⚠️ 必须读 store 里的**当前**值,不能用参数 item —— 调用方(播放页)持有的 item
+      // 可能是 patch 前的旧对象(高频回调下尤其),用旧值判断会让清除/节流失效。
+      const cur = get().allItems.find((i) => i.id === item.id) ?? item
       // 近片尾(最后 15s 或 98%)清除记录 —— 否则「看完」下次进来直接跳结尾。
       const atEnd = durationSec > 0 && (durationSec - sec < 15 || sec / durationSec > 0.98)
       if (atEnd) {
-        if ((item.positionSec ?? 0) > 0) {
+        if ((cur.positionSec ?? 0) > 0) {
           dl.store.patch(item.id, { positionSec: undefined })
           void dl.reading.setPosition(item.id, 0)
         }
         return
       }
       // 节流:不足 5s 的变化不落库(播放页 progress 每 4Hz 回调,直接写会打爆 SQLite)。
-      if (Math.abs(sec - (item.positionSec ?? 0)) < 5) return
+      if (Math.abs(sec - (cur.positionSec ?? 0)) < 5) return
       dl.store.patch(item.id, { positionSec: sec })
       void dl.reading.setPosition(item.id, sec)
+    },
+
+    saveScrollRatio(item, ratio) {
+      const dl = get().dl
+      if (!dl) return
+      const cur = get().allItems.find((i) => i.id === item.id) ?? item
+      // 读到结尾(≥0.95)清除记录 —— 否则重开又会跳到文章底部。
+      if (ratio >= 0.95) {
+        if ((cur.scrollRatio ?? 0) > 0) {
+          dl.store.patch(item.id, { scrollRatio: undefined })
+          void dl.reading.setScrollRatio(item.id, 0)
+        }
+        return
+      }
+      // 节流:变化不足 5%(0.05)不落库(滚动事件高频)。
+      if (Math.abs(ratio - (cur.scrollRatio ?? 0)) < 0.05) return
+      dl.store.patch(item.id, { scrollRatio: ratio })
+      void dl.reading.setScrollRatio(item.id, ratio)
     },
 
     async resolvePlay(subscriptionId, itemId) {

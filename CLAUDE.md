@@ -331,11 +331,12 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `docs/desktop-crawler-service.md`
 - **三模式 UI**：三分栏 ✅ / 瀑布流 / 短视频。⚠️ live 源是 1:1、其他源是 1:N 的错位，
   倾向分组聚合，设计见 `docs/technical-plan.md`
-- **续播与阅读进度**：✅ **续播已完成**（`setPosition` 有消费者了）。`MediaItem.positionSec`
-  由 core `applyReadingState` 从 reading 回填（与 isStarred 同款）；playback 侧
-  `PlayableMedia` 的 `startAtSec` 起播跳转（≤3s 不跳）+ `onProgress` 上报，store
-  `savePosition` 节流（<5s 不写）+ 近片尾清除；卡片 `.card-progress` 进度条。
-  ⏳ `setScrollRatio`（文章阅读进度）**仍无消费者**
+- **续播与阅读进度**：✅ **均已完成**（`setPosition` / `setScrollRatio` 都有消费者了）。
+  `MediaItem.positionSec` / `scrollRatio` 由 core `applyReadingState` 从 reading 回填
+  （与 isStarred 同款）；playback 侧 `PlayableMedia` 的 `startAtSec` 起播跳转 + `onProgress`
+  上报；阅读器 `ReaderMain` 恢复滚动位置 + 上报；store `savePosition`/`saveScrollRatio`
+  节流 + 近片尾/近结尾清除；卡片 `.card-progress` 进度条。
+  ⚠️ **store 侧节流/清除必须读 store 当前值**，不能读传入的 item（调用方持旧对象 → 失效）。
 - **OPML 导入导出**：✅ 已完成（设置→订阅与分组）。编解码在 `packages/xml/src/opml.ts`
   （唯一持有 fast-xml-parser 的包），订阅映射在 `apps/desktop/src/lib/opml.ts`。
   导入落 `rss:url` 通用直链（register.ts 新增）；导出只含带 URL 的 rss/rsshub 订阅。

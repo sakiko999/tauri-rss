@@ -23,7 +23,7 @@ const ok = (cond: unknown, label: string) => {
   }
 }
 
-const ctx = { subscriptionId: "s-chk", now: () => 1700000000000 }
+const ctx = { subscriptionId: "s-chk", now: 1700000000000 }
 
 // 1. Live:全字段往返
 const live: Item = {
