@@ -25,6 +25,7 @@ import { runAlign } from "./commands/align.ts"
 import { runEnv } from "./commands/env.ts"
 import { runRefresh } from "./commands/refresh.ts"
 import { runHot } from "./commands/hot.ts"
+import { runSug } from "./commands/sug.ts"
 import { runDetail } from "./commands/detail.ts"
 import { runBrowserReset } from "./commands/browser-reset.ts"
 
@@ -100,6 +101,11 @@ cli
   .option("--json", "JSON 输出")
   .option("-n <n>", "样本条数(默认 8)")
   .action(guard((word: string, opts: { json?: boolean; n?: number }) => runHot(word, opts)))
+
+cli
+  .command("sug <keyword>", "搜索联想词(抖音匿名,输入补全)")
+  .option("--json", "JSON 输出")
+  .action(guard((kw: string, opts: { json?: boolean }) => runSug(kw, opts)))
 
 cli
   .command("detail [url]", "social 单条详情补全(xhs noteDetail 匿名拉全文/多图/tag;--latest 用当前列表首条)")

@@ -10,6 +10,7 @@
  */
 import { useMemo, useRef, useState } from "react"
 import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
+import { fetchDouyinSuggestions } from "@tauri-playground/resolve"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"
@@ -165,6 +166,9 @@ function PlatformBrowser({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [items, setItems] = useState<MediaItem[] | null>(null)
+  /** 抖音搜索联想词(datalist 候选;匿名可用,其他平台为空)。 */
+  const [sug, setSug] = useState<string[]>([])
+  const sugTimer = useRef<number | undefined>(undefined)
   const [subscribeKey, setSubscribeKey] = useState<string | undefined>()
   const [subscribeInfo, setSubscribeInfo] = useState<Record<string, string>>({})
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -195,6 +199,21 @@ function PlatformBrowser({
   }
 
   const fields = ch?.sourceInfoTpl ?? []
+
+  /** 抖音联想词:防抖 250ms,空输入清空;失败静默(联想只是锦上添花)。 */
+  function loadSug(v: string) {
+    window.clearTimeout(sugTimer.current)
+    const kw = v.trim()
+    if (!kw) {
+      setSug([])
+      return
+    }
+    sugTimer.current = window.setTimeout(() => {
+      void fetchDouyinSuggestions(kw)
+        .then(setSug)
+        .catch(() => setSug([]))
+    }, 250)
+  }
 
   return (
     <section className="section">
@@ -243,11 +262,27 @@ function PlatformBrowser({
             value={view === "category" ? categoryValue : q}
             placeholder={fields[0]?.placeholder ?? fields[0]?.label ?? "参数"}
             aria-label={fields[0]?.label ?? "参数"}
-            onChange={(e) => (view === "category" ? setCategoryValue(e.target.value) : setQ(e.target.value))}
+            // 抖音搜索/搜主播输入联想词(datalist,原生零依赖;其他平台无此能力)。
+            list={platform === "douyin" && view === "search" && fields[0]?.key === "keyword" ? "dy-sug" : undefined}
+            onChange={(e) => {
+              const v = e.target.value
+              if (view === "category") setCategoryValue(v)
+              else {
+                setQ(v)
+                if (platform === "douyin") void loadSug(v)
+              }
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter") void run()
             }}
           />
+          {platform === "douyin" && view === "search" && sug.length > 0 ? (
+            <datalist id="dy-sug">
+              {sug.map((w) => (
+                <option key={w} value={w} />
+              ))}
+            </datalist>
+          ) : null}
           <button className="btn btn-primary" disabled={busy} onClick={() => void run()}>
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="search" size={14} />} 取数据
           </button>

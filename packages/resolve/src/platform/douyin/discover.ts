@@ -236,6 +236,62 @@ export async function searchDouyinRooms(keyword: string, _page = 1, pageSize = 2
   return out
 }
 
+// ── 热点榜 + 搜索联想(匿名可用;填补「抖音搜索增强」缺口)─────────────────────
+
+/** 抖音热点榜词条。 */
+export interface DouyinTrend {
+  word: string
+  /** 热度值(原始整数)。 */
+  hotValue?: number
+  /** 榜位(1 起)。 */
+  position?: number
+  /** 词封面图(可选)。 */
+  cover?: string
+}
+
+/**
+ * 抖音热点榜 —— `www.douyin.com/aweme/v1/web/hot/search/list`(**匿名 200**,实测
+ * 2026-10)。50 条热词带 hot_value/position/封面。⚠️ 与 `live:douyin:hot`(直播热门
+ * **房间**)不同:这是全站**热点词**。
+ */
+export async function fetchDouyinTrends(): Promise<DouyinTrend[]> {
+  const res = await httpJson<{ data?: { word_list?: Array<Record<string, any>> } }>(
+    "https://www.douyin.com/aweme/v1/web/hot/search/list/?device_platform=webapp&aid=6383&channel=channel_pc_web",
+    { "user-agent": UA_ENTER, referer: "https://www.douyin.com/" },
+  )
+  const list = res?.data?.word_list ?? []
+  return list
+    .map((w): DouyinTrend | null => {
+      const word = String(w.word ?? "").trim()
+      if (!word) return null
+      const coverList = Array.isArray(w.word_cover?.url_list) ? (w.word_cover.url_list as unknown[]) : []
+      return {
+        word,
+        hotValue: Number(w.hot_value ?? 0) || undefined,
+        position: Number(w.position ?? 0) || undefined,
+        cover: coverList[0] ? String(coverList[0]) : undefined,
+      }
+    })
+    .filter((v): v is DouyinTrend => v !== null)
+}
+
+/**
+ * 搜索联想词 —— `www.douyin.com/aweme/v1/web/search/sug`(**匿名 200**,实测 2026-10)。
+ * 输入前缀 → 补全候选(帮用户找到准确关键词)。
+ * ⚠️ 关联的**搜索本身**(`live/search` / `general/search/stream`)仍 2483 需登录 ——
+ * 但联想词匿名可用,可独立作为「输入补全」能力。
+ */
+export async function fetchDouyinSuggestions(keyword: string): Promise<string[]> {
+  const kw = keyword.trim()
+  if (!kw) return []
+  const res = await httpJson<{ sug_list?: Array<Record<string, any>> }>(
+    `https://www.douyin.com/aweme/v1/web/search/sug/?keyword=${encodeURIComponent(kw)}&device_platform=webapp&aid=6383&channel=channel_pc_web`,
+    { "user-agent": UA_ENTER, referer: "https://www.douyin.com/" },
+  )
+  const list = res?.sug_list ?? []
+  return list.map((s) => String(s.content ?? "").trim()).filter((s) => s !== "")
+}
+
 // ── 搜主播(本地过滤:热门流 + 分区流的 owner.nickname)────────────────────────
 
 /**

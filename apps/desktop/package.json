@@ -16,6 +16,7 @@
     "@tauri-playground/core": "workspace:*",
     "@tauri-playground/host": "workspace:*",
     "@tauri-playground/player": "workspace:*",
+    "@tauri-playground/resolve": "workspace:*",
     "@tauri-playground/ui": "workspace:*",
     "@tauri-playground/xml": "workspace:*",
     "dompurify": "^3.4.14",
