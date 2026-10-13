@@ -2,6 +2,7 @@ import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { injectTauriHost, injectBrowserHost } from "@tauri-playground/host"
 import { App } from "./App.tsx"
+import { useMobile } from "./store.ts"
 import "./styles.css"
 
 // 注入宿主能力到全局 appHost(core/crawler 从它读 http/js/storage/now)。
@@ -11,6 +12,9 @@ import "./styles.css"
 // `vite dev` 能开页调 UI(有 CORS 限制,平台抓取会失败,仅壳层/本地存储可用)。
 if ("__TAURI_INTERNALS__" in globalThis) injectTauriHost()
 else injectBrowserHost()
+
+// dev 调试锚点(同 desktop):CDP 连进来用 `__store.getState()` 读权威状态。
+if (import.meta.env.DEV) (globalThis as { __store?: unknown }).__store = useMobile
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
