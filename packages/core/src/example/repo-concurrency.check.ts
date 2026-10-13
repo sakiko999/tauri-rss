@@ -98,4 +98,15 @@ function laggyStorage() {
   assert.equal(next?.channelKey, "bili:popular", "channelKey 被改空 —— 该订阅会静默失效")
 }
 
+// ── subscriptions:addGroup 按 id 去重(重复 add 不留孤儿分组)────────────────
+{
+  const storage = laggyStorage()
+  const repo = createSubscriptionRepository(storage, () => 1)
+  await repo.addGroup({ id: "g1", title: "旧名" })
+  await repo.addGroup({ id: "g1", title: "新名" }) // 同 id 重复
+  const groups = await repo.listGroups()
+  assert.equal(groups.filter((g) => g.id === "g1").length, 1, "addGroup 未去重 —— 留下两条同 id 分组")
+  assert.equal(groups.find((g) => g.id === "g1")?.title, "新名", "addGroup 未原地覆盖(改名失效)")
+}
+
 console.log("✔ repo 并发自检通过(reading/subscriptions 读-改-写串行化)")

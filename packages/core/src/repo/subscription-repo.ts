@@ -122,7 +122,11 @@ export function createSubscriptionRepository(
     async addGroup(group) {
       return run(async () => {
         const state = await load()
-        state.groups.push(group)
+        // ⚠️ 按 id 去重(与 add 同款):重复 addGroup 同 id 会留两条,updateGroup/removeGroup
+        // 只命中首个 → 改名/删除后另一条残留,指向它的订阅落到孤儿分组。存在则原地覆盖。
+        const existing = state.groups.findIndex((g) => g.id === group.id)
+        if (existing !== -1) state.groups[existing] = group
+        else state.groups.push(group)
         await save(state)
       })
     },
