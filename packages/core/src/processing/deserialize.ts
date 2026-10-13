@@ -123,7 +123,10 @@ function baseFields(it: ParsedItem, ctx: DeserializeContext) {
     handle: str(raw["tpl:authorHandle"]),
   })
   return {
-    id: it.guid ?? `hash-${it.title ?? ""}`,
+    // ⚠️ guid 缺失兜底用 **link**(唯一,一篇文章一个 URL),不用 title —— 同标题条目
+    // (系列文/转载/纯 RSS)会撞 id:store.patch 遍历改**所有**同 id 条目、reading map 按 id
+    // 回填 → 标一条已读两条一起变、星标/续播互相覆盖。title 只作 link 也缺时的末位兜底。
+    id: it.guid ?? it.link ?? `hash-${it.title ?? ""}`,
     subscriptionId: ctx.subscriptionId,
     title: it.title ?? "(untitled)",
     url: it.link,

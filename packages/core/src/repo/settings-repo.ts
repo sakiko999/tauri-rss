@@ -57,8 +57,12 @@ export function createSettingsRepository(storage: StorageBackend): SettingsRepos
       })
     },
     async reset() {
-      await storage.set(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS))
-      return { ...DEFAULT_SETTINGS }
+      // ⚠️ 走 run() 串行链:裸 storage.set 会与并发的 set()(扫码落 cookie / 保存凭证)
+      // 交错 —— 后写者用旧快照覆盖 → reset 丢失或刚写入的 cookie 被默认值抹掉。
+      return run(async () => {
+        await storage.set(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS))
+        return { ...DEFAULT_SETTINGS }
+      })
     },
   }
 }

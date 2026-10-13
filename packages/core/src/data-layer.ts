@@ -266,6 +266,9 @@ export function createDataLayer(): DataLayer {
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       replaceIfLive(subscriptionId, await applyReadingState(items))
       pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
+      // ⚠️ 退订竞态:抓取途中用户退订 → remove 已删 content:<id>,若在途 refresh 在此照写
+      // 就留下**无消费者的孤儿缓存**(订阅已删,永不读取/清理)。与 replaceIfLive 同用墓碑拦。
+      if (removedSubs.has(subscriptionId)) return { subscriptionId, itemCount: 0, fetchedAt: now() }
       // 缓存写失败(磁盘满/IO)只记日志,不能触发下面的 catch —— 那会把刚写好的新内容
       // 用旧缓存 replace 回去,用户看到「刷新失败」却其实是抓取成功了。
       try {
@@ -389,21 +392,19 @@ export function createDataLayer(): DataLayer {
     if (!sub) return null
     const url = findItemUrl(itemId)
     if (!url) return null
+    // ⚠️ resolver 抛错(平台风控/无流/限区/需登录)**不在此吞成 null** —— 交给外层
+    // `resolvePlay` 的 catching 原样透出真实错误。null 只留给「无订阅/无 url」这两种
+    // 真正「不可解析」的情形(外层映射为「该条目不指向可解析的视频链接」)。曾把 resolver
+    // 错误也吞成 null → 风控失败被误报成「链接不对」,用户去重装/换源(查错方向)。
+    const info = await sourceInfoFor(sub)
+    const { streams } = await resolveVideoByUrl(url, info)
+    let danmaku
     try {
-      const info = await sourceInfoFor(sub)
-      const { streams } = await resolveVideoByUrl(url, info)
-      let danmaku
-      try {
-        danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
-      } catch {
-        // 无弹幕能力(如纯图文/音频)不阻塞播放。
-      }
-      return { streams, danmaku }
-    } catch (e) {
-      // resolver 抛错(url 不可路由/平台解析失败)——返回 null 让上层如实报错。
-      void e
-      return null
+      danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
+    } catch {
+      // 无弹幕能力(如纯图文/音频)不阻塞播放。
     }
+    return { streams, danmaku }
   }
 
   /** 直播播放:同上,但 kind=live 路由。 */
@@ -412,20 +413,15 @@ export function createDataLayer(): DataLayer {
     if (!sub) return null
     const url = findItemUrl(roomId)
     if (!url) return null
+    const info = await sourceInfoFor(sub)
+    const { streams } = await resolveLiveByUrl(url, info)
+    let danmaku
     try {
-      const info = await sourceInfoFor(sub)
-      const { streams } = await resolveLiveByUrl(url, info)
-      let danmaku
-      try {
-        danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
-      } catch {
-        // 无弹幕能力不阻塞播放。
-      }
-      return { streams, danmaku }
-    } catch (e) {
-      void e
-      return null
+      danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
+    } catch {
+      // 无弹幕能力不阻塞播放。
     }
+    return { streams, danmaku }
   }
 
   async function resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]> {
