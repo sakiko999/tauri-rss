@@ -42,13 +42,14 @@ export function Rail() {
   }, [allItems])
   const unreadTotal = allItems.filter((i) => i.isUnread).length
   const starredTotal = allItems.filter((i) => i.isStarred).length
+  const resumeTotal = allItems.filter((i) => (i.positionSec ?? 0) > 0 || (i.scrollRatio ?? 0) > 0).length
   const todayTotal = useMemo(() => {
     const d = new Date()
     d.setHours(0, 0, 0, 0)
     return allItems.filter((i) => (i.publishedAt ?? 0) >= d.getTime()).length
   }, [allItems])
 
-  const smartCount: Record<string, number> = { today: todayTotal, unread: unreadTotal, starred: starredTotal }
+  const smartCount: Record<string, number> = { today: todayTotal, unread: unreadTotal, starred: starredTotal, resume: resumeTotal }
   const grouped = useMemo(() => {
     const byGroup = new Map<string, Subscription[]>()
     for (const s of subscriptions) {
