@@ -184,12 +184,12 @@ function Detail({ item }: { item: MediaItem }) {
           ← 返回
         </button>
       </header>
-      {playable ? (
+      {playable && dl ? (
         <PlayableMedia
           className="stage"
-          resolve={() => (item.kind === "live" ? dl!.resolveLivePlay(item.subscriptionId, item.id) : dl!.resolvePlay(item.subscriptionId, item.id))}
+          resolve={() => (item.kind === "live" ? dl.resolveLivePlay(item.subscriptionId, item.id) : dl.resolvePlay(item.subscriptionId, item.id))}
           startAtSec={item.kind === "live" ? undefined : item.positionSec}
-          onProgress={(sec) => void dl?.reading.setPosition(item.id, sec)}
+          onProgress={(sec) => void dl.reading.setPosition(item.id, sec)}
         />
       ) : null}
       <h1 className="detail-title">{item.title}</h1>
