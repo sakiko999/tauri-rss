@@ -167,20 +167,22 @@ function fixupFunction(fn: string): string {
   return fn.replace(re, ";")
 }
 
-let cachedNDeobfuscator: ((n: string) => string) | null = null
+let cachedNDeobfuscator: { url: string; fn: (n: string) => string } | null = null
 
 /**
  * 从 base.js 里挖出 n 解密函数并缓存执行器。
  * playerJsUrl 可省:拿不到时抛错。
  */
 async function getNDeobfuscator(playerJsUrl: string): Promise<(n: string) => string> {
-  if (cachedNDeobfuscator) return cachedNDeobfuscator
+  // ⚠️ 按 base.js URL 缓存 —— 与 getPlayerCode 同键。曾用无键单例:会话中途 base.js
+  // 轮换(YT 常态)时会一直复用**旧**解密函数 → 对新 n 产出错值 → 流被限速/403,直到重启。
+  if (cachedNDeobfuscator?.url === playerJsUrl) return cachedNDeobfuscator.fn
   const code = await getPlayerCode(playerJsUrl)
   const found = extractFunctionName(code)
   if (!found) throw new Error("YouTube n 参数解密函数名未找到")
   const realName = resolveArrayFunctionName(code, found.name, found.arrayIndex)
   const fn = fixupFunction(extractFunction(code, realName))
-  cachedNDeobfuscator = (n: string) => {
+  const deobf = (n: string) => {
     // ⚠️ 把 opaque 解密的调用做实:传 `fn`(extractFunction 产出的是 `function <name>(...){}`
     // **声明**)作 code、`realName` 作 fn、`[n]` 作**显式实参**。
     // 旧写法 `(\`${fn}\`)\nreturn realName(arguments[0])` 两处皆坏:
@@ -192,7 +194,8 @@ async function getNDeobfuscator(playerJsUrl: string): Promise<(n: string) => str
     const result = globalThis.appHost.js.call(fn, realName, [n])
     return String(result ?? "")
   }
-  return cachedNDeobfuscator
+  cachedNDeobfuscator = { url: playerJsUrl, fn: deobf }
+  return deobf
 }
 
 /** 尝试从任意上下文拿 base.js URL(解析 watch 页 HTML)。 */
