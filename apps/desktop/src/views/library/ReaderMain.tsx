@@ -98,7 +98,12 @@ export function ReaderMain() {
   const article = item?.kind === "article" ? item : null
   /** 展示用正文:补全结果优先(同一 itemId 时)。 */
   const shownContent = full && full.id === itemId ? full.content : curContent
-  const html = article?.contentFormat === "html" || shownContent.includes("<")
+  // ⚠️ 补全的正文是纯文本(contentFormat="text"),但真实文章常含裸 `<`(数学/代码
+  // 「x < y」)→ 仅靠 `includes("<")` 会把它误判成 HTML,浏览器把 `< y` 当标签解析吞掉
+  // 正文。故 contentFormat="text" 一律按纯文本渲染,只有未标注格式的旧数据才看 `<` 猜。
+  const html =
+    article?.contentFormat === "html" ||
+    (article?.contentFormat !== "text" && /<[a-z!/]/i.test(shownContent))
   const cleanHtml = useMemo(
     () => (article && html ? DOMPurify.sanitize(shownContent) : ""),
     [article, html, shownContent],
