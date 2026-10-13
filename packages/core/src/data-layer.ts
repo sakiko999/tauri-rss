@@ -283,6 +283,9 @@ export function createDataLayer(): DataLayer {
             now: now(),
           })
           replaceIfLive(subscriptionId, await applyReadingState(items))
+          // ⚠️ 回退的是**首页**缓存,分页游标必须一并清:否则下次 loadMore 会从残留的
+          // 旧游标继续翻(首页已换成缓存、游标却指向更后面 → 中间若干页被静默跳过)。
+          pageCursors.delete(subscriptionId)
         } catch {
           /* 缓存也坏 → 保持空,error 已返回 */
         }
@@ -621,7 +624,14 @@ export function createDataLayer(): DataLayer {
         // 先立墓碑再删:在途 refresh 可能在 remove 的 await 期间完成并 store.replace,
         // 把已退订的内容又写回(rail 消失但条目仍在「全部」——退订不彻底)。
         removedSubs.add(id)
-        await repo.remove(id)
+        try {
+          await repo.remove(id)
+        } catch (e) {
+          // ⚠️ 删除失败(存储写失败)→ 订阅其实还在,必须**撤墓碑**,否则此后所有在途
+          // refresh 结果被当成「已退订」永久丢弃,一个活着的订阅静默不更新。
+          removedSubs.delete(id)
+          throw e
+        }
         store.clear(id)
         pageCursors.delete(id)
         pageTotals.delete(id)

@@ -50,6 +50,10 @@ export function ReaderMain() {
     const el = scrollRef.current
     const bar = barRef.current
     if (!el || !bar) return
+    // ⚠️ 本 effect 声明在 restore effect **之前**(先跑),setup 里会立即 onScroll()。
+    // 切条目那一刻 DOM 还是上一条的 scrollTop,而 itemRef 已指向新条目 → 不先置 true
+    // 就会把上一条的位置写进新条目。restore effect 完成后才放开。
+    pendingRestoreRef.current = true
     const onScroll = () => {
       const max = el.scrollHeight - el.clientHeight
       const ratio = max > 0 ? Math.min(1, el.scrollTop / max) : 0

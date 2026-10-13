@@ -440,33 +440,46 @@ export const useDesktop = create<DesktopState>((set, get) => {
         return
       }
       set((s) => ({ busy: { ...s.busy, [id]: true } }))
-      // 手动「刷新当前」→ 强制绕过 TTL(用户显式点刷 = 期望最新)。
-      const result = await dl.refresh(id, { force: true })
-      const total = dl.totalOf(id)
-      const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
-      set((s) => {
-        const busy = { ...s.busy }
-        delete busy[id]
-        return {
-          busy,
-          ...(total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}),
-          loadMoreEnded: result.error ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: false },
-          refreshErrors: result.error
-            ? { ...s.refreshErrors, [id]: result.error }
-            : (() => {
-                const next = { ...s.refreshErrors }
-                delete next[id]
-                return next
-              })(),
+      // ⚠️ try/finally:dl.refresh 抛错(存储损坏/宿主未注入)时若不清 busy,该订阅
+      // health 会**永久停在 busy**(转圈不消失),只能重启应用恢复。
+      try {
+        // 手动「刷新当前」→ 强制绕过 TTL(用户显式点刷 = 期望最新)。
+        const result = await dl.refresh(id, { force: true })
+        const total = dl.totalOf(id)
+        const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
+        set((s) => {
+          const busy = { ...s.busy }
+          delete busy[id]
+          return {
+            busy,
+            ...(total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}),
+            loadMoreEnded: result.error ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: false },
+            refreshErrors: result.error
+              ? { ...s.refreshErrors, [id]: result.error }
+              : (() => {
+                  const next = { ...s.refreshErrors }
+                  delete next[id]
+                  return next
+                })(),
+          }
+        })
+        if (result.error) {
+          get().toast("error", `刷新失败：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
+        } else {
+          // 手动刷新是 force 的,必然走网络 —— 旧文案「未发起网络请求」与实际行为不符。
+          get().toast("ok", `已更新 ${title}`, `${result.itemCount} 条。已强制重新抓取,绕过内容缓存。`)
         }
-      })
-      if (result.error) {
-        get().toast("error", `刷新失败：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
-      } else {
-        // 手动刷新是 force 的,必然走网络 —— 旧文案「未发起网络请求」与实际行为不符。
-        get().toast("ok", `已更新 ${title}`, `${result.itemCount} 条。已强制重新抓取,绕过内容缓存。`)
+      } catch (e) {
+        const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
+        get().toast("error", `刷新失败：${title}`, e instanceof Error ? e.message : String(e))
+      } finally {
+        set((s) => {
+          const busy = { ...s.busy }
+          delete busy[id]
+          return { busy }
+        })
+        refreshView()
       }
-      refreshView()
     },
 
     async refreshAll(force = true) {

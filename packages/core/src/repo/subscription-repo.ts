@@ -87,7 +87,11 @@ export function createSubscriptionRepository(
       if (!subscription.channelKey) throw new Error("subscription requires channelKey")
       return run(async () => {
         const state = await load()
-        state.subscriptions.push(subscription)
+        // ⚠️ 按 id 去重:重复 add 同 id 会留下两条,而 get/update 只命中首个、remove 删全部
+        // → 语义不一致(更新只改一条、删却删两条)。存在则原地覆盖。
+        const existing = state.subscriptions.findIndex((s) => s.id === subscription.id)
+        if (existing !== -1) state.subscriptions[existing] = subscription
+        else state.subscriptions.push(subscription)
         await save(state)
       })
     },

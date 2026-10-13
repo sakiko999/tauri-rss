@@ -53,6 +53,21 @@ ok((await repo.get("s2", "item-x"))?.content === "正文X", "deleteAll 不误伤
 await repo.set("s1", "item-c", { content: "正文C", contentFormat: "text", fetchedAt: 5 })
 ok((await repo.get("s1", "item-c"))?.content === "正文C", "清空后可重建索引")
 
+// 并发写同订阅:索引读-改-写必须串行(否则丢索引项 → 退订漏清)
+{
+  const st = memStorage()
+  const r = createBodyCacheRepo(st)
+  await Promise.all(
+    Array.from({ length: 20 }, (_, i) =>
+      r.set("sc", `item-${i}`, { content: `c${i}`, contentFormat: "text", fetchedAt: i }),
+    ),
+  )
+  await r.deleteAll("sc")
+  const left = await r.get("sc", "item-7")
+  ok(left === null, "并发写后 deleteAll 全清(索引未丢项)")
+  ok((await r.get("sc", "item-19")) === null, "并发写后 deleteAll 清末项")
+}
+
 // 损坏值容错
 const st = memStorage()
 const r2 = createBodyCacheRepo(st)
