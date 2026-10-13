@@ -97,6 +97,21 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - 跳过（低/风格）：`browser-reset.ts` profile 路径由 env+硬编码 identifier 重建,标准
       配置下与 Rust `app_data_dir()` 一致,仅 AppData 被组策略重定向时可能分叉。
 
+## desktop + player 审计（2026-10-13 第六轮）
+
+- [x] **[高] `views/library/ShortVideoView.tsx:34`** — 「可视 ±1」三条都挂 PlayableMedia,
+  挂载即带声自动播 → 三条同时出声 + 三路弹幕 WS。改为只挂当前条。CDP 实测:恒 1 媒体元素。
+- [x] **[中] `lib/shortcuts.ts:52`** — 全局 j/k/↑↓ 不判 `defaultPrevented` 也不判播放页 →
+  播放页按 k 会「暂停 + 静默挪 selectedArticleId」。加 defaultPrevented 守卫 + 播放页跳过。
+- [x] **[中] `views/discover/DiscoverPage.tsx:213`** — genRef 只在 run() 自增,切平台/切视图
+  不作废在途请求 → 旧响应覆盖新面板。改 useEffect([platform,view]) 作废 + 清 busy。
+- [x] **[低] `player/hooks/useStreamSelection.ts:53`** — `useEffect([streams])` 按引用重置
+  切档态;props 流路径每次渲染新建数组 → 切档立即失效。改内容签名依赖。
+- [ ] **[中/暂缓] reading 按裸 `item.id` 落库** — 跨订阅同 id 条目(如同一 bilibili 房间在
+  「手填订阅」与「热门榜」两处)共享已读/星标/续播。修需给 reading 键加 `subscriptionId`
+  维度 + 持久化格式迁移(旧数据 key 是裸 id),**改动面大且有迁移风险**。`itemKey`(lib/media.ts)
+  已用 `subId:itemId` 复合键做列表 key,说明作者知情。无失败证据 → 暂缓。
+
 ## xml 包审计（2026-10-13 第五轮）
 
 - [x] **[中] `xml-parser.ts:9`** — `XMLParser` 默认 `parseTagValue` 把数字形字符串转数值
