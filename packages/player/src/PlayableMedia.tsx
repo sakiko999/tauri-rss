@@ -283,9 +283,25 @@ export function PlayableMedia({
   }
 
   if (!hasPlayable) {
-    // 默认 autoResolve:挂载即解析。解析中占住 16:9 —— 旧实现是无样式 div 里的
-    // 48px 空白环,挤在舞台左上角,解析完成后画面撑开导致整页跳一下。
     if (!resolve) return null
+    // ⚠️ 设置里关掉「自动播放」时 autoResolve=false → 不自动解析,resolved 恒 null。
+    // 必须给一个**播放按钮**触发 handlePlay,否则用户永久卡在「正在解析…」且无出路
+    // (VideoShell 的大播放键要求 hasPlayable 为真,这里永远到不了)。
+    if (!autoResolve) {
+      return (
+        <MediaState
+          title="准备播放"
+          detail="已关闭自动播放。点下方按钮开始解析并播放。"
+          action={
+            <button type="button" className={MS_BTN} onClick={() => void handlePlay()}>
+              播放
+            </button>
+          }
+        />
+      )
+    }
+    // autoResolve:挂载即解析。解析中占住 16:9 —— 旧实现是无样式 div 里的 48px
+    // 空白环,挤在舞台左上角,解析完成后画面撑开导致整页跳一下。
     return <MediaState tone="loading" title="正在解析…" detail="正在向平台取直链。" />
   }
 

@@ -324,15 +324,28 @@ export function createDataLayer(): DataLayer {
    * 解析播放:统一走 crawler/resolver(按 item.url 路由到平台解析函数)。
    * crawler 与 rsshub 源的条目一样处理("统一生效")。不改 MediaItem,不持久化注记。
    */
+  /** 抓住 resolver 的错误(而非吞成 null),供上层原样透出。 */
+  async function catching<T>(p: Promise<T>): Promise<{ ok: T } | { err: Error }> {
+    try {
+      return { ok: await p }
+    } catch (e) {
+      return { err: e instanceof Error ? e : new Error(String(e)) }
+    }
+  }
+
   async function resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback> {
-    const routed = await resolvePlayByUrl(itemId, subscriptionId)
-    if (routed) return routed
+    // ⚠️ 不要把 null 当成「URL 不可解析」—— resolver 的真实错误(无流/风控/限区)必须
+    // 原样透出,否则把「解析/网络失败」误导成「链接不对」,用户查错方向。
+    const r = await catching(resolvePlayByUrl(itemId, subscriptionId))
+    if ("err" in r) throw r.err
+    if (r.ok) return r.ok
     throw new Error("该条目不指向可解析的视频链接")
   }
 
   async function resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback> {
-    const routed = await resolveLivePlayByUrl(roomId, subscriptionId)
-    if (routed) return routed
+    const r = await catching(resolveLivePlayByUrl(roomId, subscriptionId))
+    if ("err" in r) throw r.err
+    if (r.ok) return r.ok
     throw new Error("该条目不指向可解析的直播链接")
   }
 

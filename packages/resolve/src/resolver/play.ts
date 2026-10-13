@@ -42,6 +42,14 @@ export async function resolvePlayByUrl(url: string, info?: ResolveInfo): Promise
 /** 按 item.url 解析直播可播流(kind=live 路由)。 */
 export async function resolveLivePlayByUrl(url: string, info?: ResolveInfo): Promise<ResolveResult> {
   const route = resolveRoute(url)
+  // ⚠️ YouTube 直播与点播的 URL 同形(watch?v=<videoId> / youtu.be/<id>),路由表只能
+  // 判为 kind="video";而 `youtube:live` channel 产出的是 kind="live" 条目,播放走本函数
+  // → 若严格要 route.kind==="live" 则 youtube:live **100% 无法播放**(抛「不是直播链接」)。
+  // 故放行 youtube 的 video-route,复用视频解析(YouTube 直播流由 resolveYoutubeStreams
+  // 内部判为 HLS,同一入口)。
+  if (route && route.kind === "video" && route.platform === "youtube") {
+    return resolveVideoStreams("youtube", route.id, info).then((streams) => ({ id: route.id, streams }))
+  }
   if (!route || route.kind !== "live") {
     throw new Error(`resolver: 无法从 URL 解析直播流(需直播路由): ${url}`)
   }
