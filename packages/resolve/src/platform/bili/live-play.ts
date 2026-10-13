@@ -147,11 +147,16 @@ function codecToUrls(c: Record<string, any>): BiliLiveUrl[] {
 /**
  * probe 兜底解析:probe 无档位 / 逐档全失败时回退解析 probe 全量数据。
  * 仍无可播流 → 抛错(而非返回空数组,player 会误报「成功 0 条流」)。
+ * ⚠️ 补 quality/rate(probe 的实际档位):否则档位菜单空(useStreamSelection 依赖
+ * `rate!==undefined && quality`)、且违反「带 rate」契约。probe 只有一档,标注它即可。
  */
 function resolveBiliLiveProbe(data: Record<string, any>, roomId: string): Stream[] {
   const probeStreams = parseBiliLiveStreams(data)
   if (!probeStreams.length) throw new Error(`bili:live 未找到可播流(房间 ${roomId} 可能未开播)`)
-  return probeStreams
+  const appliedQn = extractBiliLiveAppliedQn(data)
+  if (!appliedQn) return probeStreams
+  const name = qnDescName(data, appliedQn)
+  return probeStreams.map((s) => ({ ...s, quality: name, rate: appliedQn }))
 }
 
 function parseBiliLiveStreams(data: Record<string, any>): Stream[] {

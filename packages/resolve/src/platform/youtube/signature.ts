@@ -180,10 +180,16 @@ async function getNDeobfuscator(playerJsUrl: string): Promise<(n: string) => str
   if (!found) throw new Error("YouTube n 参数解密函数名未找到")
   const realName = resolveArrayFunctionName(code, found.name, found.arrayIndex)
   const fn = fixupFunction(extractFunction(code, realName))
-  // 用 host.js 执行:`new Function(fn); return fn(args)` —— fn 定义了解密函数。
-  const runner = `(${fn})\nreturn ${realName}(arguments[0])`
   cachedNDeobfuscator = (n: string) => {
-    const result = globalThis.appHost.js.call(runner, "", [n])
+    // ⚠️ 把 opaque 解密的调用做实:传 `fn`(extractFunction 产出的是 `function <name>(...){}`
+    // **声明**)作 code、`realName` 作 fn、`[n]` 作**显式实参**。
+    // 旧写法 `(\`${fn}\`)\nreturn realName(arguments[0])` 两处皆坏:
+    //   (a) `(...)` 把函数声明变**函数表达式** → 名字不绑定 → `ReferenceError: <name> is not defined`;
+    //   (b) `arguments[0]` 依赖后端把实参透传给 wrapper,而 FunctionJsBackend 的 wrapper
+    //       不收实参(`new Function(code; return fn())()`)→ 恒 undefined。
+    // 两个 js 后端(node/tauri)任一都失败,只是报错不同(ReferenceError / SyntaxError),
+    // 被 client.ts 的 try/catch 静默吞掉 → 带 `n=` 节流参数的 YouTube 流全丢弃。
+    const result = globalThis.appHost.js.call(fn, realName, [n])
     return String(result ?? "")
   }
   return cachedNDeobfuscator

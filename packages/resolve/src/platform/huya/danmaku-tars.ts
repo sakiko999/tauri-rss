@@ -198,10 +198,16 @@ export class TarsReader {
     }
   }
   private skipToStructEnd(): void {
-    let h = this.head()
-    while (h.type !== T.STRUCT_END) {
+    // ⚠️ 越界/不前进双重守卫:缓冲耗尽后 `byte()` 返回 undefined(位运算当 0 → type=BYTE),
+    // STRUCT_END 永不再出现 → 无界时是**同步死循环**(解码跑在 WS 消息回调里,整个事件循环
+    // 冻住,连 setTimeout 都不转,只能强杀)。截断帧(帧边界截断 / 畸形包)会命中。
+    // 与 bili proto / douyu 的截断守卫同款;`p` 不前进(未知类型)也终止。
+    while (this.p < this.buf.length) {
+      const h = this.head()
+      if (h.type === T.STRUCT_END) return
+      const before = this.p
       this.skipField(h.type)
-      h = this.head()
+      if (this.p <= before) return
     }
   }
 
