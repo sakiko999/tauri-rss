@@ -214,7 +214,10 @@ function parseReflowStreams(streamUrl: Record<string, any>): Stream[] {
   const streams: Stream[] = []
 
   const flvPull = (streamUrl?.flv_pull_url ?? {}) as Record<string, string>
-  const hlsPull = (streamUrl?.hls_pull_url ?? {}) as Record<string, string>
+  // ⚠️ reflow 的 HLS 字段名是 `hls_pull_url_map`(参照 pure_live douyin_site.dart:699;
+  // 本文件 fallback 路径也用 `hls_pull_url_map`)。旧代码读 `hls_pull_url`(无 _map)→ 恒
+  // undefined → flv 缺失的房间 HLS 兜底静默丢。两键都试以防上游形态差异。
+  const hlsPull = ((streamUrl?.hls_pull_url_map ?? streamUrl?.hls_pull_url) ?? {}) as Record<string, string>
   // 按清晰度键名顺序返回(蓝光/高清优先);每档 flv 优先,hls 兜底。rate = 档位序号(高→低)。
   for (const [idx, q] of QUALITY_ORDER.entries()) {
     const flv = String(flvPull[q] ?? "")
