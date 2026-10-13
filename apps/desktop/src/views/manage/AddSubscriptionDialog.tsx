@@ -86,8 +86,12 @@ export function AddSubscriptionDialog({
   /** 必填未填的参数 key(现场校验,提交前拦截)。 */
   const [missing, setMissing] = useState<string[]>([])
 
-  // rss: 直链在 desktop 隐藏(URL 代理/原生路由已覆盖),与旧行为一致。
-  const builtins = channels.filter((c) => !c.key.startsWith("rsshub:") && !c.key.startsWith("rss:"))
+  // rss: 预制直链(rss:hn 等 36 条)在 desktop 隐藏 —— 它们是种子清单,列出来太噪。
+  // ⚠️ 但 `rss:url`(通用直链)**必须放行**:它是「已知 URL 的任意 RSS」的唯一入口
+  // (OPML 导入也落它)。原先把整个 `rss:` 前缀都滤掉,导致手动加外部 feed 无渠道可选。
+  const builtins = channels.filter(
+    (c) => !c.key.startsWith("rsshub:") && (!c.key.startsWith("rss:") || c.key === "rss:url"),
+  )
   const rsshub = channels.filter((c) => c.key.startsWith("rsshub:"))
   const channel = channels.find((c) => c.key === channelKey)
 
