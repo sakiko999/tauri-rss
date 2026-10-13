@@ -251,13 +251,34 @@ function PlatformBrowser({
       </div>
 
       <div className="segmented" style={{ marginBottom: "var(--sp-4)" }}>
-        <button aria-pressed={view === "category"} onClick={() => setView("category")} disabled={!caps.category}>
+        <button
+          aria-pressed={view === "category"}
+          onClick={() => {
+            setView("category")
+            setItems(null) // 换视图清旧结果,否则「分区」的数据留在「搜索」视图里、标注对不上
+          }}
+          disabled={!caps.category}
+        >
           分区
         </button>
-        <button aria-pressed={view === "search"} onClick={() => setView("search")} disabled={!caps.search}>
+        <button
+          aria-pressed={view === "search"}
+          onClick={() => {
+            setView("search")
+            setItems(null)
+          }}
+          disabled={!caps.search}
+        >
           搜索
         </button>
-        <button aria-pressed={view === "anchor"} onClick={() => setView("anchor")} disabled={!caps.anchor}>
+        <button
+          aria-pressed={view === "anchor"}
+          onClick={() => {
+            setView("anchor")
+            setItems(null)
+          }}
+          disabled={!caps.anchor}
+        >
           搜主播
         </button>
       </div>
