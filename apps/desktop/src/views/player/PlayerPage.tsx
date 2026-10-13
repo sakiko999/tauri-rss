@@ -50,7 +50,11 @@ export function PlayerPage() {
   // 播放页按键:Esc 返回;←/→ 交给播放器控件;空格由播放器处理。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") go(from ?? "tab:all")
+      if (e.key !== "Escape") return
+      // ⚠️ 浮层守卫:命令面板(⌘K 全局可开)等也监听 Esc。不守卫的话一次 Esc 会**同时**
+      // 关面板 + 退出播放页(两个导航副作用)。面板/已 preventDefault 的浮层先吃掉。
+      if (e.defaultPrevented || useDesktop.getState().paletteOpen) return
+      go(from ?? "tab:all")
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)

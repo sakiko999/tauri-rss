@@ -10,8 +10,8 @@
  * 本组件只读 store 渲染。侧栏在播放页也保留(与 new_desktop 一致)。
  */
 import { useEffect } from "react"
-import { useParams } from "react-router"
-import { useDesktop, useNodeMeta } from "./store/index.ts"
+import { useNavigate, useParams } from "react-router"
+import { setNavBridge, useDesktop, useNodeMeta } from "./store/index.ts"
 import type { NodeType } from "./store/nodes.ts"
 import { TitleBar } from "./components/TitleBar.tsx"
 import { Rail } from "./components/Rail.tsx"
@@ -32,6 +32,7 @@ import { useGlobalShortcuts } from "./lib/shortcuts.ts"
 
 export default function App() {
   const params = useParams()
+  const navigate = useNavigate()
   // ⚠️ `/play/:itemId` 路由下**没有 nodeId**——播放页是独立视图,不该由节点元信息决定,
   // 这里显式分流(params 只用来判播放页)。
   const isPlay = !!params.itemId
@@ -55,6 +56,13 @@ export default function App() {
   useEffect(() => {
     void init()
   }, [init])
+
+  // 把 router 的 navigate 注入 store(store 不能 import router)——删除当前节点后
+  // store 借它同步 URL(「URL 是位置权威」)。
+  useEffect(() => {
+    setNavBridge((path, opts) => void navigate(path, opts))
+    return () => setNavBridge(() => {})
+  }, [navigate])
 
   // 播放页:独立视图,不走节点分发。
   const viewType: NodeType = isPlay ? "player" : meta.type

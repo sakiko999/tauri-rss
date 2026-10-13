@@ -82,6 +82,11 @@ function getNavData(cookie?: string): Promise<Record<string, any>> {
       "user-agent": BILIBILI_UA,
       referer: DEFAULT_REFERER,
       ...(cookie ? { cookie } : {}),
+    }).catch((e) => {
+      // ⚠️ 失败**逐出缓存**:否则一次瞬时 nav 失败(断网/5xx/抖动)会把 rejected promise
+      // 永久缓存,该进程内所有 bili channel(wbi 签名全经此)此后全抛错,直到重启。
+      navCache.delete(key)
+      throw e
     })
     navCache.set(key, p)
   }
@@ -218,6 +223,9 @@ async function resolvePlayUrl(bvidOrAid: string, cid: string, cookie?: string): 
   // 1. fnval=16 拿 DASH(音视频分离,拼 MPD)。登录后 avc 有 1080P(非会员也)。
   const dashProbe = await getJson<{ data?: Record<string, any> }>(`${base}&qn=116&fnval=16`, { referer, cookie })
   const dashStreams = dashStreamsWithMpd(dashProbe?.data ?? {}, headers)
+  // ⚠️ DASH 成功即返回:绝大多数视频 DASH 可用,而下面 durl 分支会额外发 1+档位数 次
+  // 请求且带 deadline 签名不可复用(纯浪费,登录 1080P 尤甚)。契约本身就 DASH 优先。
+  if (dashStreams.length) return dashStreams
 
   // 2. durl 渐进式 mp4(音视频混合,最高 720P)。逐档重发。
   const durlStreams: Stream[] = []
@@ -246,9 +254,8 @@ async function resolvePlayUrl(bvidOrAid: string, cid: string, cookie?: string): 
     if (first?.url) durlStreams.push({ url: first.url, format: "mp4", headers })
   }
 
-  // 3. DASH 优先(1080P + 有声);DASH 构造失败回退 durl。两者均已按 rate 降序
-  //    (契约:最高清晰度排最前,player 默认选流取第一个)。
-  if (dashStreams.length) return dashStreams
+  // 3. DASH 已在上面命中即返回;走到这里说明 DASH 构造失败 → 回退 durl。
+  //    durl 已按 rate 降序(契约:最高清晰度排最前,player 默认选流取第一个)。
   if (durlStreams.length) return R.sortWith([R.descend((s: Stream) => s.rate ?? 0)], durlStreams)
   throw new Error(`bilibili playurl: no playable stream for ${bvidOrAid}`)
 }

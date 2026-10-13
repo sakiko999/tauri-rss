@@ -216,6 +216,15 @@ let initPromise: Promise<void> | null = null
 let toastSeq = 0
 
 /**
+ * 导航桥 —— store 不能 import router(会成环),但删除当前节点后必须同步 URL
+ * (「URL 是位置权威」)。App 挂载时注入 router.navigate;未注入则退化为只改 store。
+ */
+let navBridge: ((path: string, opts?: { replace?: boolean }) => void) | null = null
+export function setNavBridge(fn: (path: string, opts?: { replace?: boolean }) => void): void {
+  navBridge = fn
+}
+
+/**
  * 把「渲染管线要直读的设置」同步到宿主门面。
  *
  * 为什么走门面而不是 props:`MediaImage` 在 `packages/ui`,是任意深度的树节点,
@@ -687,7 +696,11 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
       await dl.subscriptions.remove(id)
       set({ subscriptions: await dl.subscriptions.list() })
-      if (get().selectedNodeId === id) set({ selectedNodeId: "tab:all" })
+      if (get().selectedNodeId === id) {
+        set({ selectedNodeId: "tab:all" })
+        // 同步 URL(否则地址栏停在已删 id,回退/重载会再 select 已删节点)。
+        navBridge?.(`/v/tab:all`, { replace: true })
+      }
       refreshView()
       get().toast("ok", `已退订 ${title}`)
     },
@@ -732,7 +745,10 @@ export const useDesktop = create<DesktopState>((set, get) => {
         subscriptions: await dl.subscriptions.list(),
         groups: await dl.subscriptions.listGroups(),
       })
-      if (get().selectedNodeId === `group:${id}`) set({ selectedNodeId: "tab:all" })
+      if (get().selectedNodeId === `group:${id}`) {
+        set({ selectedNodeId: "tab:all" })
+        navBridge?.(`/v/tab:all`, { replace: true })
+      }
       refreshView()
     },
 

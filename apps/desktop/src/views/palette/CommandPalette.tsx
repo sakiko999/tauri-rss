@@ -4,6 +4,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useDesktop } from "../../store/index.ts"
+import { queryView } from "../../store/selectors.ts"
 import { PAGES, SMART, TABS } from "../../store/nodes.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
@@ -114,8 +115,14 @@ export function CommandPalette() {
         icon: "check",
         run: () => {
           const s = useDesktop.getState()
-          s.markAllRead(s.view.list.map((i) => i.id))
-          s.toast("ok", "已全部标为已读", `${s.view.list.length} 条`)
+          // ⚠️ s.view.list 是**分页窗口**(≤ PAGE_SIZE 60) —— 直接用它「全部标读」会漏掉
+          // 窗口外的条目,与文案不符。用 queryView 放大 page 取全量(与 ArticlePane 同款),
+          // 并只对真正未读的计数。
+          const n = s.selectedNodeId ?? "tab:all"
+          const full = queryView({ ...s, page: { ...s.page, [n]: Number.MAX_SAFE_INTEGER } }, s.selectedNodeId, Date.now()).list
+          const ids = full.filter((i) => i.isUnread).map((i) => i.id)
+          s.markAllRead(ids)
+          s.toast("ok", "已全部标为已读", `${ids.length} 条`)
         },
       },
     ],
@@ -136,7 +143,13 @@ export function CommandPalette() {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") return setOpen(false)
+      // ⚠️ 输入法组合态守卫:中文输入法候选未上屏时的回车(isComposing / keyCode 229)
+      // 是「选词」不是「执行」,不守卫会误触发选中命令(如刷新全部/打开设置)。
+      if (e.isComposing || e.keyCode === 229) return
+      if (e.key === "Escape") {
+        e.preventDefault() // 让播放页等的 Esc 守卫(defaultPrevented)不再误触发
+        return setOpen(false)
+      }
       if (e.key === "ArrowDown") {
         e.preventDefault()
         setActive((i) => Math.min(filtered.length - 1, i + 1))
