@@ -129,7 +129,6 @@ export function ShortVideoView() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIdx, items.length, nodeId])
 
   if (items.length === 0) {
