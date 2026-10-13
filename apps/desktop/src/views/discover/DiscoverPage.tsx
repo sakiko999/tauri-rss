@@ -8,7 +8,7 @@
  *   - 分区浏览/搜索:core `previewChannel(channelKey, info)` 取一次真实数据(不建订阅);
  *   - 一键订阅:`dl.addSubscription`。
  */
-import { useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
 // ⚠️ desktop 直引 resolve 属**新增依赖边**(原图只有 desktop→core→crawler→resolve):
 // 输入联想需在**每键**即时取,走 channel/DataLayer 太重(序列化 + 缓存 + 状态)。
@@ -213,6 +213,16 @@ function PlatformBrowser({
   /** 请求世代:切换平台/新搜索会自增,旧请求响应回来时若世代不符则丢弃。 */
   const genRef = useRef(0)
   const ch = view === "category" ? caps.category : view === "anchor" ? caps.anchor : caps.search
+
+  // ⚠️ 切平台/切视图也要作废在途请求:只 setItems(null) 挡不住 —— 旧响应回来时
+  // gen 仍相等会覆盖成上一个平台的数据(c4aab55 只覆盖了「被新 run 取代」)。
+  // props 变化作废 + 清结果,覆盖所有切换路径(含父组件能力矩阵按钮)。
+  useEffect(() => {
+    ++genRef.current
+    setItems(null)
+    setError("")
+    setBusy(false) // 在途请求的 finally 因世代不符不再清 busy → 这里补，否则按钮卡禁用
+  }, [platform, view])
 
   async function run() {
     if (!dl || !ch) return
