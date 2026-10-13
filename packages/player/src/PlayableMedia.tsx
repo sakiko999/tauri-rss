@@ -169,6 +169,9 @@ export function PlayableMedia({
   useEffect(() => {
     if (!autoResolve) return
     if (startedRef.current || resolved) return
+    // ⚠️ props 已带可播流(如播客 stream 直链)时**免解析**:这类 item.url 是网页
+    // (hubermanlab.com/episode/…)不可 by-url 路由,resolve 必失败;流已在手直接用。
+    if (streams?.some((s) => s.url || s.dashManifest)) return
     startedRef.current = true
     void handlePlay()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -182,7 +185,9 @@ export function PlayableMedia({
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
   // autoPlay 语义:用户点过「播放」(resolved !== null)→ 自动带声起播;初始流未点击不自动播。
-  const autoPlay = resolved !== null
+  // ⚠️ props 已带可播流(播客直链,免 resolve)时 resolved 恒 null,但流已在手 → 也应自动播。
+  const hasPropStreams = !!streams?.some((s) => s.url || s.dashManifest)
+  const autoPlay = resolved !== null || hasPropStreams
 
   useMediaStream({
     stream: needsStreamPlayer ? stream : null,

@@ -10,7 +10,7 @@
  */
 import { useEffect, useMemo } from "react"
 import { PlayableMedia } from "@tauri-playground/player"
-import type { MediaItem } from "@tauri-playground/core"
+import type { MediaItem, MediaStream } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
 import { usePlayNavigate, usePlayParams, useViewNavigate } from "../../router.tsx"
 import { Icon } from "../../components/Icon.tsx"
@@ -131,6 +131,9 @@ export function PlayerPage() {
                 key={item.id}
                 // 统一传 item.id:core 的 findItemUrl 按 id 或 roomId 都能命中条目
                 // (直播条目两者不同——`bilibili:6` vs `6`),再取 item.url 去路由。
+                // ⚠️ refresh 已带直链时(feed enclosure,如播客)直接给 streams —— 这类
+                // item.url 是**网页**(不可 by-url 路由),靠 resolve 必失败。
+                streams={(item as { stream?: MediaStream }).stream ? [(item as { stream: MediaStream }).stream] : undefined}
                 resolve={() =>
                   isLive
                     ? resolveLivePlay(item.subscriptionId, item.id)

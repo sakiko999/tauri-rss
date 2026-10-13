@@ -56,6 +56,10 @@ export function AudioShell({
       attemptPlayWithMuteFallback(el, () => el.play(), { autoPlay, onFail: onErrorRef.current })
     }
     el.addEventListener("canplay", attemptUnmuted, { once: true })
+    // ⚠️ `preload="none"` 时**没有任何东西触发加载**:只挂 canplay 监听 → 浏览器不预载
+    // 也不 play → canplay 永不来(死锁,readyState 恒 0、永久 paused、不报错)。
+    // 显式 load() 启动加载,canplay 才会派发。autoPlay 属性在被 policy 拦时不解决此问题。
+    el.load()
     return () => el.removeEventListener("canplay", attemptUnmuted)
   }, [autoPlay, src])
 
