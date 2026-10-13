@@ -19,30 +19,25 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       CDP。要真正取消需给锁加取消上下文(改动较大,且 abort 本身是「不再等待」语义),
       故暂缓。影响:多浏览器订阅同时超时会有 CDP 关闭→重开的抖动(非正确性错误)。
 
-- [ ] **[medium] `packages/core/src/processing/deserialize.ts:166`** — `parseImages(raw["tpl:images"])`
-      读的节点无生产者：serialize 把 social 图发成 `media:content`(medium=image)，但 deserialize
-      先试 `tpl:images`（空）再 `parseImagesFromMedia` 兜底。现能工作（兜底生效），但死分支易误导。
-      建议：删 `tpl:images` 分支或让 serialize 也写它（二选一，别两边都不一致）。
-- [ ] **[medium] `packages/xml/src/serialize.ts:174`** — round-trip 丢 `Stream.headers`：
-      video/audio 的 `stream.headers`（带 referer 的直链）序列化时未写、deserialize 也未读。
-      当前不影响（流走 resolver by-url 懒解析，XML 不带 playUrls），但类型 Live 上有
-      `playHeaders` 字段是**死协议**——建议删掉该字段（连同 `playUrls`/`playUrlsExpiresAt`）。
-- [ ] **[low] `packages/core/src/processing/deserialize.ts:397`** — `rsshubArticleMedia` 对
-      enclosure 与 media:content 同一个 URL 会**重复追加**（同一图出现两次）。加去重。
+- [x] **[medium] `deserialize.ts` `tpl:images` 死分支** — 无生产者（serialize 发 `media:content`），
+      已删该分支，social 图统一走 `parseImagesFromMedia`。（2026-10-13）
+- [x] **[medium] `Live.playUrls`/`playHeaders`/`playUrlsExpiresAt`** — 已删（types.ts 留警告注释）。
+- [x] **[medium] `App.tsx` URL 编码** — 核实无 bug：React Router 解码 params，loader（router.tsx:58）
+      与 store 均用解码值，无字符串比较被编码串骗过。
 - [ ] **[medium] `apps/desktop/src/store/index.ts` markRead** — 标已读不写 `lastReadAt`
       区分？核对 reading 的语义（消费侧一致性）。
 - [ ] **[low] `packages/ui/src/index.ts:16`** — ui 包 re-export 了 16 个 player 符号/类型，
       全仓零消费（desktop 直引 `@tauri-playground/player`）。删这批 re-export。
-- [ ] **[low] `packages/ui/src/renderers/atoms/format.ts:7`** — `fmtDuration`/`fmtAudioDuration`
-      零消费者，删。
-- [ ] **[low] `packages/core/src/xml/deserialize.ts:1`** — `@deprecated` re-export shim
-      （`export * from "../processing/deserialize.ts"`）零 importer，删。
 - [ ] **[low] `apps/mobile/src/main.ts:6`** — mobile 模板的 greet 逻辑引用不存在的 DOM 节点
       与 Tauri command（index.html 无 #greet-input 等）。接 mobile 时一并重写。
-- [ ] **[low] `packages/xml/src/types.ts:141`** — `Live.playUrls`/`playHeaders`/`playUrlsExpiresAt`
-      三个字段全仓无读写路径（死协议）。删。
-- [ ] **[low] `packages/log/src/core.ts:170`** — `getLogDomain`/`resetLogDomains` 零消费，
-      确认后删或补消费者。
-- [ ] **[medium] `apps/desktop/src/App.tsx` URL** — `/v/page%3Adiscover` 编码形态：React Router
-      能解码，但与 `/v/page:settings` 混用（go 与 viewPath 编码不一致）。核对是否有导航
-      比较 `nodeId` 字符串的地方会被编码串骗过。
+- [ ] **[low] `packages/log/src/core.ts:170`** — `getLogDomain`/`resetLogDomains` 零消费
+      （仅 index.ts re-export）。公开 API 供调试用，低优先；确认后删或补消费者。
+- [ ] **[low] `rsshubArticleMedia` 重复追加** — enclosure 与 media:content 同 URL 会重复。
+      核对是否仍存在（rsshub 源已少用）。
+
+## 在本会话修（供对照）
+
+通用 RSS 文章正文按需补全（新功能）+ 持久缓存；社交弹窗控件条/HTML 渲染；`looksLikeHtml`
+共享探测；`tpl:fetchedAt`/`authorAvatar`/`authorHandle` 契约缺口；弹幕冷启动开头丢失；
+阅读进度恢复随补全重跑；切条目进度串写；extract `<figure>` 保留 / fallback 段落 / 误删守卫；
+`serialize-contract.check` + `body-cache.check` + `extract.check` 三个新守卫。

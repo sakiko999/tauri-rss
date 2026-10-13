@@ -166,7 +166,7 @@ function parseSocial(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     ...b,
     kind: "social",
     content: it.content ?? it.description ?? "",
-    images: parseImages(raw["tpl:images"]) ?? parseImagesFromMedia(raw),
+    images: parseImagesFromMedia(raw),
     likes: num(raw["tpl:likes"]),
     reposts: num(raw["tpl:reposts"]),
     replies: num(raw["tpl:replies"]),
@@ -227,25 +227,6 @@ function parseLive(it: ParsedItem, ctx: DeserializeContext): MediaItem {
 }
 
 // ── nested parsers(标准字段优先 + 最小 tpl 兜底)───────────────────────────
-
-function parseImages(node: unknown): SocialImage[] | undefined {
-  const o = obj(node)
-  const imgs = asList(o["tpl:image"])
-    .map((x) => {
-      if (typeof x === "string") return { url: x }
-      const o2 = typeof x === "object" ? (x as Record<string, unknown>) : {}
-      const url = str(attr(o2, "url"))
-      if (!url) return null
-      const w = num(attr(o2, "width"))
-      const h = num(attr(o2, "height"))
-      const img: SocialImage = { url }
-      if (w !== undefined) img.width = w
-      if (h !== undefined) img.height = h
-      return img
-    })
-    .filter((v): v is SocialImage => v !== null)
-  return imgs.length ? imgs : undefined
-}
 
 /** audio/video enclosure → MediaStream(直链)。 */
 function parseStreamFromEnclosure(raw: Record<string, unknown>): MediaStream | undefined {
