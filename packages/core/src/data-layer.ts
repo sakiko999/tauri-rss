@@ -204,6 +204,9 @@ export function createDataLayer(): DataLayer {
             now: now(),
           })
           if (total !== undefined) pageTotals.set(subscriptionId, total)
+          // ⚠️ 停用路径把 store 重置回缓存首页,必须**一并清分页游标** —— 否则残留的
+          // page-2 游标会让下次 loadMore 追加「第 3 页」,第 2 页内容被静默跳过。
+          pageCursors.delete(subscriptionId)
           replaceIfLive(subscriptionId, await applyReadingState(items))
         } catch {
           /* 缓存坏了 → 保持现状,不报错(停用不是错误) */
@@ -460,6 +463,8 @@ export function createDataLayer(): DataLayer {
       if (!sub) return { addedCount: 0, hasMore: false }
       const channel = getChannel(sub.channelKey)
       if (!channel) return { addedCount: 0, hasMore: false }
+      // 停用订阅 = 不抓取(与 refresh 同契约)。否则停用后仍能翻页打网络/反爬源。
+      if (!sub.enabled) return { addedCount: 0, hasMore: false }
       const info = await sourceInfoFor(sub)
       const source = channel.getSource(info)
       if (!isPageable(source)) return { addedCount: 0, hasMore: false }
@@ -516,6 +521,9 @@ export function createDataLayer(): DataLayer {
     meta?: { groupId?: string | null; refreshIntervalSec?: number },
   ): Promise<string> {
     const id = `s-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+    // ⚠️ 清退订墓碑:id 是 ms + 4 随机,极短时间退订再订阅有概率撞同一 id;若不清,
+    // replaceIfLive 会永久丢弃这条新订阅的每次刷新(stale 墓碑),重启才恢复。
+    removedSubs.delete(id)
     const t = now()
     await repo.add({
       id,
