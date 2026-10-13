@@ -10,8 +10,11 @@
  * ⚠️ **不可分页**:上游是「关键词→分区→列房」的合成结果,无页码语义
  * (page 参数被忽略),故不声明 Pageable。
  *
- * ⚠️ **只对游戏名级关键词有效**:命中源 `partition/search` 只按分区名匹配,
- * `原神` 有结果而 `舞蹈`/`美食` 返空(此类词需登录走 aweme 搜索路)。
+ * ✅ **命中断面(2026-10 增强)**:上游 `partition/search` 只认**游戏名级**分区
+ * (`原神` 命中,`舞蹈`/`音乐` 返空)——但顶层分区名**恰恰就是这些词**
+ * (聊天/音乐/游戏/二次元/舞蹈/文化/生活/运动)。故 resolve 侧改为
+ * **上游命中 ∪ 本地分区树 title 匹配**(见 `searchDouyinRooms`),无需登录、无需浏览器。
+ * 残留:分区树只到「大类」粒度,`美食`(属「生活」)这类三级词仍返空。
  */
 import type { Item } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"

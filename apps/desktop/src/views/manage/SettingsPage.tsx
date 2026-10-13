@@ -14,6 +14,7 @@ import { Icon } from "../../components/Icon.tsx"
 import { Menu, MenuItem, MenuSeparator, Switch } from "../../components/Modal.tsx"
 import { useViewNavigate } from "../../router.tsx"
 import { EditSubscriptionDialog } from "./EditSubscriptionDialog.tsx"
+import { exportOpmlFile, pickOpmlFile } from "../../lib/opml-file.ts"
 
 type Tab = "appearance" | "reading" | "playback" | "subscriptions" | "diagnostics"
 
@@ -218,14 +219,60 @@ function Subscriptions() {
   const renameGroup = useDesktop((s) => s.renameGroup)
   const removeGroup = useDesktop((s) => s.removeGroup)
   const autoGroupByKind = useDesktop((s) => s.autoGroupByKind)
+  const doExportOpml = useDesktop((s) => s.exportOpml)
+  const doImportOpml = useDesktop((s) => s.importOpml)
+  const toast = useDesktop((s) => s.toast)
   const orphanCount = subscriptions.filter((s) => !s.groupId).length
   const refresh = useDesktop((s) => s.refresh)
   const go = useViewNavigate()
   const [editing, setEditing] = useState<Subscription | null>(null)
   const [newGroup, setNewGroup] = useState("")
+  const [importing, setImporting] = useState(false)
+
+  const shareable = subscriptions.filter((s) => !s.channelKey.startsWith("rsshub:") && s.info?.url).length
+
+  async function onImportOpml() {
+    setImporting(true)
+    try {
+      const xml = await pickOpmlFile()
+      if (xml === null) return // 取消
+      const r = await doImportOpml(xml)
+      if (r.added === 0 && r.skipped === 0) {
+        toast("error", "导入失败", "文件里没找到可用的 RSS 订阅(outline 缺 xmlUrl)。")
+      } else {
+        toast("ok", `导入 ${r.added} 条订阅`, `跳过 ${r.skipped} 条${r.failed ? `,失败 ${r.failed} 条` : ""}。`)
+      }
+    } catch (e) {
+      toast("error", "导入失败", e instanceof Error ? e.message : String(e))
+    } finally {
+      setImporting(false)
+    }
+  }
 
   return (
     <>
+      <SideCard title="OPML 导入/导出" icon="rss">
+        <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
+          <button className="btn btn-secondary" onClick={() => void onImportOpml()} disabled={importing}>
+            <Icon name="download" size={14} /> {importing ? "导入中…" : "导入 OPML"}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              exportOpmlFile(doExportOpml())
+              toast("ok", "已导出 OPML", `共 ${shareable} 条带 URL 的订阅,含分组层级。`)
+            }}
+            disabled={shareable === 0}
+          >
+            <Icon name="folder" size={14} /> 导出 OPML
+          </button>
+        </div>
+        <p className="setting-help">
+          导入按 OPML 的分组层级建分组、逐条落成 RSS 直链(同 URL 已订阅则跳过)；
+          导出只含带 URL 的 RSS 订阅(直播/社交渠道无通用 feed URL，不在其中)。
+        </p>
+      </SideCard>
+
       <SideCard title="分组" icon="folder">
         {/* 一键归组:未分组订阅多起来后,逐条改分组太慢。按内容类型归入
             「视频/直播/社交/播客/文章」,带撤销。 */}

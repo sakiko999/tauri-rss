@@ -51,6 +51,10 @@ export function registerBuiltinChannels(): void {
   // ── 播客 RSS(解析 enclosure/itunes → AudioItem)──
   registerChannel(new RssPodcastChannel())
 
+  // 通用 RSS 直链(任意 URL,透传上游 XML)——OPML 导入的外部 feed 与手工订阅
+  // 「已知 URL 的 RSS」都用它。预置清单(key `rss:{id}`)是它的一批默认实例。
+  registerChannel(new RawRssChannel("rss:url", "RSS 直链", "article"))
+
   // ── bilibili(wbi 签名 API,零登录)──
   registerChannel(new BiliSquareChannel())
   registerChannel(new BiliPopularChannel())

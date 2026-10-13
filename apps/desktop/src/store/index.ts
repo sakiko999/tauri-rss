@@ -26,6 +26,8 @@ import {
   type SubscriptionGroup,
 } from "@tauri-playground/core"
 import { SEED_GROUPS, SEED_SUBSCRIPTIONS } from "../subscriptions.ts"
+import { exportOpml, pendingImports } from "../lib/opml.ts"
+import { parseOpml } from "@tauri-playground/xml"
 import { nodeKindOf, nodeMeta, subscriptionIdsOfGroup, type NodeMeta, type NodeType } from "./nodes.ts"
 import {
   PAGE_SIZE,
@@ -152,6 +154,10 @@ interface DesktopState {
   dismissToast(id: number): void
   /** 把未分组订阅按内容类型一键归入「视频 / 直播 / 社交 / 音频 / 文章」分组。返回移动条数。 */
   autoGroupByKind(): Promise<number>
+  /** 订阅清单 → OPML 2.0 字符串(只含带 url 的 rss/rsshub 订阅)。 */
+  exportOpml(): string
+  /** 导入 OPML:按 groupPath 建分组 + 逐条落 rss:url。返回 新建/跳过/失败 计数。 */
+  importOpml(xml: string): Promise<{ added: number; skipped: number; failed: number }>
 }
 
 const now = () => Date.now()
@@ -747,6 +753,52 @@ export const useDesktop = create<DesktopState>((set, get) => {
         },
       })
       return moved
+    },
+
+    exportOpml() {
+      return exportOpml(get().subscriptions, get().groups)
+    },
+
+    async importOpml(xml) {
+      const dl = get().dl
+      if (!dl) return { added: 0, skipped: 0, failed: 0 }
+      const { feeds, skipped } = pendingImports(parseOpml(xml), get().subscriptions)
+      // ⚠️ 走 dl 直连而非 store.addSubscription:后者每条都会 toast + refreshView,
+      // 批量导入几十条会刷屏。这里只落盘,末尾统一刷新 + 一条汇总 toast(由 UI 弹)。
+      // groupPath 逐级建/复用分组(标题即键,同名共享;分组本就单层,不设 parentId)。
+      const groups = get().groups.slice()
+      const groupIdOfPath = async (path: string[]): Promise<string | null> => {
+        let id: string | null = null
+        for (const title of path) {
+          const hit = groups.find((g) => g.title === title)
+          if (hit) {
+            id = hit.id
+            continue
+          }
+          const nid = `g-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+          await dl.subscriptions.addGroup({ id: nid, title })
+          groups.push({ id: nid, title })
+          id = nid
+        }
+        return id
+      }
+      let added = 0
+      let failed = 0
+      for (const f of feeds) {
+        try {
+          const gid = await groupIdOfPath(f.groupPath)
+          await dl.addSubscription("rss:url", f.title, { url: f.xmlUrl }, { groupId: gid })
+          added++
+        } catch {
+          failed++
+        }
+      }
+      set({
+        subscriptions: await dl.subscriptions.list(),
+        groups: await dl.subscriptions.listGroups(),
+      })
+      refreshView()
+      return { added, skipped, failed }
     },
 
     setPaletteOpen(open) {

@@ -17,6 +17,7 @@
     "@tauri-playground/host": "workspace:*",
     "@tauri-playground/player": "workspace:*",
     "@tauri-playground/ui": "workspace:*",
+    "@tauri-playground/xml": "workspace:*",
     "dompurify": "^3.4.14",
     "lucide-react": "^0.468.0",
     "masonic": "^4.1.0",

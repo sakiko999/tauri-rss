@@ -14,10 +14,21 @@
  *   3. `webcast/web/partition/search`(**匿名可用**)→ 关键词命中分区 → 再列各分区房间
  * 故本实现只走第三路。路 1/2 待有登录态时再补(可显著提升相关性)。
  *
+ * ⚠️ **匿名搜索无解,已用真实 Edge 验证(2026-10)**:在干净 Edge 里直接跑路 1/2
+ * 仍是 `2483`;`www.douyin.com/search?type=live` 页面自身也被 **verify-center 挑战**
+ * (`4031 已阻止此次访问`),DOM 只渲染「登录后即可搜索更多精彩视频」+ 扫码框。
+ * 即**登录硬门槛**,与浏览器指纹无关——browser 模拟对此无能为力(与小红书不同:
+ * xhs 是 TLS 指纹差异,browser 能解;抖音是账号门槛,browser 不能解)。
+ *
  * ⚠️ **第三路的固有局限(实测)**:`partition/search` 只按**分区名**匹配,且只认
- * **游戏名级**分区——`原神` 命中,而 `舞蹈`/`美食`/`聊天`(仅顶层大类/非游戏词)
- * 一律**命中 0 个分区 → 搜索返空**。故本 channel 对非游戏类关键词基本不可用;
- * 这是匿名方案的硬边界,补路 1/2(需登录)才能解。
+ * **游戏名级**分区——`原神` 命中,而 `舞蹈`/`音乐`/`聊天`(顶层大类)一律
+ * **命中 0 个分区 → 搜索返空**。
+ *
+ * ✅ **破法(2026-10)**:顶层分区名**恰恰就是这些词**——首页 `categoryData` 的 8 个顶层
+ * 分区 = 聊天/音乐/游戏/二次元/舞蹈/文化/生活/运动(实测 15 个分区列房全部匿名可用,
+ * 含 7 个游戏子分区)。故**本地匹配分区树**即可覆盖上游不认的大类:上游命中(精确,
+ * 如 `原神`)+ 本地 title 匹配(`舞蹈` → 105/type4)合并去重。**无需登录、无需浏览器**。
+ * 残留缺口:分区树只到「大类」粒度,`美食`(属「生活」)这类三级词仍无直接命中。
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { httpJson, httpText, now } from "../../host.ts"
@@ -172,15 +183,41 @@ async function searchDouyinPartitions(keyword: string): Promise<DouyinPartition[
   return list.map((x) => toPartition(x?.partition)).filter((p): p is DouyinPartition => p !== null)
 }
 
+/** 按 title 本地匹配分区树(顶层 + 子分区),双向包含即可——覆盖上游 `partition/search` 不认的大类词。 */
+function matchLocalPartitions(tree: DouyinCategory[], kw: string): DouyinPartition[] {
+  const out: DouyinPartition[] = []
+  for (const c of tree) {
+    for (const p of [c.partition, ...c.subs]) {
+      if (p.title && (p.title.includes(kw) || kw.includes(p.title))) out.push(p)
+    }
+  }
+  return out
+}
+
 /**
  * 搜索直播间。⚠️ 只走匿名的第三路(前两路 `2483 需登录`,见文件头)。
- * 取命中分区的前 3 个,各列一批房间后合并去重、截到 pageSize。
+ *
+ * 命中源 = 上游 `partition/search`(精确,如 `原神`)**∪** 本地分区树 title 匹配
+ * (覆盖上游不认的大类,如 `舞蹈`/`音乐`/`聊天`)。合并去重后取前 3 个分区各列一批房间,
+ * 合并去重、截到 pageSize。
+ *
+ * ⚠️ 本地树匹配失败(首页 SSR 变脸)时静默回落纯上游路径——退化为旧行为,不抛错。
  */
 export async function searchDouyinRooms(keyword: string, _page = 1, pageSize = 20): Promise<Item[]> {
   const kw = keyword.trim()
   if (!kw) return []
+
   const parts = await searchDouyinPartitions(kw)
+  try {
+    const tree = await fetchDouyinCategories()
+    for (const p of matchLocalPartitions(tree, kw)) {
+      if (!parts.some((q) => q.id === p.id)) parts.push(p)
+    }
+  } catch {
+    // 分区树不可用:退化为纯上游结果。
+  }
   if (parts.length === 0) return []
+
   const seen = new Set<string>()
   const out: Item[] = []
   for (const p of parts.slice(0, 3)) {

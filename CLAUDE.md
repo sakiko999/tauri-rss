@@ -96,6 +96,8 @@ bun packages/core/src/example/media-store.check.ts      # 查询分支（分组�
 bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
+bun packages/xml/src/example/opml.check.ts              # OPML 编解码往返（分组层级）
+bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射（导出过滤 / 导入去重）
 
 # UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 已由 dev 配置开启）
 bun scripts/ui-probe.ts goto tab:all        # 导航 + 巡检（逐字竖排 / 溢出 / 遮挡 / 破图）
@@ -160,8 +162,11 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - **douyin**（`channels/douyin/index.ts`）：enter API ABogus 签名 → `stream_url`。
   ⚠️ `liveStatus ==2` 才是直播中（`==4` 是 roomId 一次性，需换 webRid）
 - **发现层**（分区/搜索，`resolve/platform/*/discover.ts`）：douyin 三路搜索只
-  `partition/search` 匿名可用且只认游戏名级；虎牙搜索/搜主播不可分页；抖音搜主播未做。
-  缺口见 `docs/capability-gaps.md`
+  `partition/search` 匿名可用且只认游戏名级——但**顶层分区名恰是大类词**（舞蹈/音乐/聊天/
+  二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
+  ⚠️ **匿名搜抖音无解已用真实 Edge 复核**（路 1/2 仍 2483，搜索页被 verify-center 4031 拦）：
+  登录硬门槛，**browser 模拟解不了**（xhs 是 TLS 指纹差异能解，抖音是账号门槛不能）。
+  虎牙搜索/搜主播不可分页；抖音搜主播未做。缺口见 `docs/capability-gaps.md`
 
 **YouTube**（`docs/youtube-stream-extraction.md`）
 - 主力 client = **ANDROID_VR**：2026-08 起 ANDROID/IOS 标准 client 在部分 IP 触发
@@ -253,8 +258,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - ⚠️ **不用原生 `<select>`**：下拉面板由 WebView/系统渲染，深色主题下弹的是**亮色
   系统菜单**且 CSS 管不到。统一用 `components/Modal.tsx` 的 `Select`（radix，自带浮层）。
   同理 `Switch`/`Menu`/`Modal` 都在那个模块。原生 `<input>`/`<textarea>` 保留（可主题化）。
-- ⚠️ **加了 radix 新依赖必须重启 dev server**：Vite 的依赖预打包只在启动时做，热重载
-  不会补新包 → `Xxx is not defined` 白色崩溃页。清 `node_modules/.vite` 后重启。
+- ⚠️ **加了新依赖必须重启 dev server + `bun install`**：Vite 的依赖预打包只在启动时做，
+  热重载不会补新包 → `Xxx is not defined` / `Failed to resolve import` 白屏或 Vite
+  error overlay。workspace 包（如 `@tauri-playground/xml`）还须先在**消费方
+  package.json** 声明 `workspace:*`（desktop 曾在缺该声明时炸过：store 一 import 就白屏）。
+  改完清 `node_modules/.vite` 后 `bun install` 再重启。
 - **字体**：IBM Plex 自托管（`apps/desktop/public/fonts`，~136KB，离线可用）。
   Sans=UI/标题，**Serif=正文**，Mono=数字/通道号。中文回落到系统栈（字体包太大不随包）。
 - **视觉基调**：暖石墨中性（色相 72/75）+ 琥珀 accent；深/浅两套同色相，改一处要改两处。
@@ -311,5 +319,8 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **三模式 UI**：三分栏 ✅ / 瀑布流 / 短视频。⚠️ live 源是 1:1、其他源是 1:N 的错位，
   倾向分组聚合，设计见 `docs/technical-plan.md`
 - **续播与阅读进度**：core 的 `reading.setPosition` / `setScrollRatio` 无消费者
-- **OPML 导入导出**（未做）
+- **OPML 导入导出**：✅ 已完成（设置→订阅与分组）。编解码在 `packages/xml/src/opml.ts`
+  （唯一持有 fast-xml-parser 的包），订阅映射在 `apps/desktop/src/lib/opml.ts`。
+  导入落 `rss:url` 通用直链（register.ts 新增）；导出只含带 URL 的 rss/rsshub 订阅。
+  ⚠️ 搜索渠道（bili:search 等）无独立 feed URL，**不在导出内**（若要需按关键字重建）
 - **自动保活**（未做，仅 bili 可行）
