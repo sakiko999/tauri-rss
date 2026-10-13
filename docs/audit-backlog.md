@@ -47,10 +47,8 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       审计声称的 `|(;/` 未编码问题未实际触发。
 - [ ] **[low] `resolve/platform/bili/client.ts`** — `navCache` 无 TTL（wbi key 轮换/换号后
       可能复用旧 nav）；当前主要缺陷（reject 毒化）已修，TTL 待 wbi 频繁轮换时再补。
-- [ ] **[low] `resolve/platform/bili/discover.ts:51`** — `stripEm` 正则 `<.*?em.*?>` 过宽
-      （任何属性含 `em` 子串的标签被误删）；实际影响小，待精化。
-- [ ] **[low] `resolve/resolver/router.ts:35/50`** — YouTube/douyu 路由正则未锚定 host
-      （含 `youtube.com/watch?v=` 子串的任意 URL 会误路由）；极小概率，待收紧。
+- [x] **[low] `resolve/platform/bili/discover.ts:51`** — 已修：`stripEm` 收紧到 `/<\/?em\b[^>]*>/g`（属性可选），不再误删属性含 "em" 的标签。
+- [x] **[low] `resolve/resolver/router.ts`** — 已修（2026-10-13）：全 7 条路由加 `(?:^|[./])` host 边界；补 douyin 用例 + 伪造域名反例进 router.check。
 - [x] **[low] `resolve/platform/youtube/client.ts:270`** — **审计报告有误**：实测 `R.maxBy(h,a,b)`
       相等时返回**第二个参数**,故 `maxBy(height,f,best)` 相等取 best(保留首个)——注释正确,
       忠实原 `>` 语义。无功能问题。

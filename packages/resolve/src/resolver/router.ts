@@ -52,7 +52,7 @@ const ROUTES: ResolveRouteSpec[] = [
   { test: /(?:^|[./])douyu\.com\/(\d+)/, platform: "douyu", kind: "live", extractId: (u) => u.match(/douyu\.com\/(\d+)/)?.[1] ?? null },
   // 抖音直播(live.douyin.com/{rid})
   {
-    test: /live\.douyin\.com\/(\S+)/,
+    test: /(?:^|[./])live\.douyin\.com\/(\S+)/,
     platform: "douyin",
     kind: "live",
     extractId: (u) => {
