@@ -105,6 +105,34 @@ if (inStore) {
   await dl.subscriptions.remove("chk-empty")
 }
 
+// ── reading.lastReadAt 回填:「继续」智能订阅按它排序 ──
+// 走真实 refresh 路径(refresh 内部调 applyReadingState),断言 lastReadAt 从 reading 回填到
+// store 的 MediaItem —— 漏回填则「继续」只能按 publishedAt 排,丢「接着上次看」语义。
+{
+  const { registerChannel } = await import("@tauri-playground/crawler")
+  const { serializeFeed } = await import("@tauri-playground/xml")
+  registerChannel({
+    key: "chk-readat",
+    name: "回填源",
+    kind: "article",
+    getSource: () => ({
+      fetch: async () =>
+        serializeFeed(
+          [{ id: "ra-1", sourceId: "chk-readat", kind: "article", title: "回填", url: "https://example.com/r", fetchedAt: Date.now() }],
+          { channelTitle: "回填源" },
+        ),
+    }),
+  })
+  await seed({ id: "chk-readat", channelKey: "chk-readat", title: "回填测试", enabled: true, info: {} })
+  await dl.refresh("chk-readat", { force: true })
+  await dl.reading.markRead("ra-1", true) // 写 reading(含 lastReadAt)
+  await dl.refresh("chk-readat", { force: true }) // 再刷新 → applyReadingState 回填
+  const it = dl.store.query({ subscriptionId: "chk-readat" }).find((i) => i.id === "ra-1")
+  assert.ok(it?.lastReadAt, "lastReadAt 应从 reading 回填到 MediaItem(否则「继续」无法按最近观看排)")
+  assert.equal(it?.isUnread, false, "顺带:已读也应回填")
+  await dl.subscriptions.remove("chk-readat")
+}
+
 // 退订竞态:在途 refresh 完成后若订阅已退订,不再写回内容(否则 rail 消失但条目
 // 仍留在「全部」—— 退订不彻底)。用慢速 fake channel 制造 refresh 与 remove 竞态。
 {
@@ -142,4 +170,4 @@ if (inStore) {
 await dl.subscriptions.remove("chk-off")
 await dl.subscriptions.remove("chk-on")
 
-console.log("✔ DataLayer 自检通过(停用订阅不抓取 / reading 回填 / 空抓取不丢内容)")
+console.log("✔ DataLayer 自检通过(停用订阅不抓取 / reading 回填 / lastReadAt 回填 / 空抓取不丢内容)")
