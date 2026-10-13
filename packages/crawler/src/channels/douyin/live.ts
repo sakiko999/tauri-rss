@@ -81,8 +81,9 @@ export class DouyinLiveChannel implements RssChannel {
       liveStatus: isLive ? "live" : "offline",
       online: douyinOnline(room),
       introduction: strOr(room.intro),
-      // stream_url 藏 play 数据,供下游 getPlayQualities/Urls(本地解析)。
-      raw: streamUrl,
+      // ⚠️ 不带 raw:stream_url —— raw 不经 XML 边界(serialize 从不写),且下游
+      // resolveLivePlay 是**重新 fetchRoom 取新鲜签名直链**(直链有时效,不该复用)。
+      // 曾放 raw:streamUrl 并注释「供下游解析」是死的误导字段。
     }
   }
 
