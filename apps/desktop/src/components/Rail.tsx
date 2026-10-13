@@ -8,7 +8,7 @@ import { useMemo } from "react"
 import type { Subscription } from "@tauri-playground/core"
 import { useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
-import { PAGES, SMART, TABS, KIND_META, DEFAULT_VIEW, isTabNode } from "../store/nodes.ts"
+import { PAGES, SMART, SHORT_MODES, TABS, KIND_META, DEFAULT_VIEW, isTabNode } from "../store/nodes.ts"
 import { healthOf, kindCounts, type Health } from "../store/selectors.ts"
 import { Icon } from "./Icon.tsx"
 import { Menu, MenuItem, MenuSeparator } from "./Modal.tsx"
@@ -118,6 +118,26 @@ export function Rail() {
                     {n}
                   </span>
                 ) : null}
+              </button>
+            )
+          })}
+        </section>
+
+        {/* 模式入口:短视频全屏流（第三模式）。仅 video/live 有短片体感；音频不适合。 */}
+        <section className="rail-section">
+          <RailTitle>模式</RailTitle>
+          {SHORT_MODES.map((m) => {
+            const id = `short:${m.kind}`
+            return (
+              <button
+                key={id}
+                className="nav-row"
+                aria-current={nodeId === id ? "page" : undefined}
+                onClick={() => go(id)}
+                title={m.label}
+              >
+                <Icon name={m.icon} />
+                <span className="nav-label">{m.label}</span>
               </button>
             )
           })}

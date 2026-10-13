@@ -19,8 +19,8 @@ export type ContentTab = "all" | MediaKind
 export type SmartFeedId = "today" | "unread" | "starred"
 /** 页面节点 id。 */
 export type PageId = "discover" | "settings" | "account"
-/** 视图意图:阅读三栏 / 网格 / 热搜(词条栏+词流) / 整页 / 播放页。 */
-export type NodeType = "reader" | "media" | "hot" | "page" | "player"
+/** 视图意图:阅读三栏 / 网格 / 热搜(词条栏+词流) / 整页 / 播放页 / 短视频全屏流。 */
+export type NodeType = "reader" | "media" | "hot" | "page" | "player" | "shortvideo"
 
 export interface KindMeta {
   label: string
@@ -51,6 +51,12 @@ export const SMART: Array<{ id: SmartFeedId; label: string; icon: string }> = [
   { id: "starred", label: "已星标", icon: "star" },
 ]
 
+/** 短视频模式入口(第三模式):按 kind 分。只列有短片体感的 video/live。 */
+export const SHORT_MODES: Array<{ kind: ContentTab; label: string; icon: string }> = [
+  { kind: "video", label: "短视频", icon: "play" },
+  { kind: "live", label: "直播流", icon: "radio" },
+]
+
 /** 页面节点(rail-foot 三项)。 */
 export const PAGES: Array<{ id: string; label: string; icon: string }> = [
   { id: "page:discover", label: "发现", icon: "compass" },
@@ -78,6 +84,15 @@ export function isPageNode(id: string | null): boolean {
 
 export function isPlayNode(id: string | null): boolean {
   return !!id && id.startsWith("play:")
+}
+
+/**
+ * 短视频模式节点:`short:<kind>`(如 `short:video` / `short:all`)—— 可播条目的
+ * 上下滑全屏流(第三模式)。⚠️ 用 `short:` 前缀(比 `page:` 语义更贴:**带 kind 维度**,
+ * 且是「内容流」而非「管理页」)。
+ */
+export function isShortNode(id: string | null): boolean {
+  return !!id && id.startsWith("short:")
 }
 
 /** 分组节点 → 组 id。 */
@@ -131,6 +146,18 @@ export function nodeMeta(
   const base: NodeMeta = { node: n, sub: null, group: null, kind: null, title: "内容", icon: "layers", type: "media" }
 
   if (isPlayNode(n)) return { ...base, title: "播放", icon: "play", type: "player" }
+
+  if (isShortNode(n)) {
+    const k = n.slice(6) // short: 之后
+    const meta = k === "all" ? null : KIND_META[k as MediaKind]
+    return {
+      ...base,
+      kind: k === "all" ? null : (k as MediaKind),
+      title: meta ? `${meta.label} · 短视频` : "短视频",
+      icon: "play",
+      type: "shortvideo",
+    }
+  }
 
   if (isPageNode(n)) {
     const p = pageIdOf(n)

@@ -19,6 +19,7 @@ import { Toaster } from "./components/Toaster.tsx"
 import { ArticlePane } from "./views/library/ArticlePane.tsx"
 import { ReaderMain } from "./views/library/ReaderMain.tsx"
 import { MediaMain } from "./views/library/MediaMain.tsx"
+import { ShortVideoView } from "./views/library/ShortVideoView.tsx"
 import { HotPane } from "./views/library/HotPane.tsx"
 import { DiscoverPage } from "./views/discover/DiscoverPage.tsx"
 import { SettingsPage } from "./views/manage/SettingsPage.tsx"
@@ -107,6 +108,8 @@ export default function App() {
             <PlayerPage />
           ) : meta.type === "reader" ? (
             <ReaderMain />
+          ) : meta.type === "shortvideo" ? (
+            <ShortVideoView />
           ) : meta.type === "page" ? (
             meta.node === "page:discover" ? (
               <DiscoverPage />

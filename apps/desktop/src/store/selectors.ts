@@ -56,6 +56,12 @@ export function baseFor(s: StoreSlice, node: string | null, now: number): MediaI
     return s.allItems.filter((i) => ids.has(i.subscriptionId))
   }
   if (n.startsWith("play:")) return s.allItems // 播放页内容来自 store 自身查找
+  // 短视频:`short:<kind>` / `short:all` —— 只取**可播**条目(video/audio/live)。
+  if (n.startsWith("short:")) {
+    const k = n.slice(6)
+    const playable = s.allItems.filter((i) => i.kind === "video" || i.kind === "audio" || i.kind === "live")
+    return k === "all" ? playable : playable.filter((i) => i.kind === k)
+  }
   return s.allItems.filter((i) => i.subscriptionId === n)
 }
 
