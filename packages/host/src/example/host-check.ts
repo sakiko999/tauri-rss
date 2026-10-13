@@ -15,6 +15,17 @@ assert.equal(typeof globalThis.appHost.openExternal, "function", "openExternal �
 assert.equal(globalThis.appHost.imageProxy, undefined, "node 后端不设 imageProxy(默认开启由消费侧判定)")
 assert.equal(globalThis.appHost.dataSaver, undefined, "node 后端不设 dataSaver")
 
+// ── js 后端契约:`(fnDecl, name, args)` 必须能执行「声明式函数 + 显式实参」 ──
+// 曾误用 `(fnExpr)\nreturn name(arguments[0])` 形态 —— 括号把函数声明变表达式致名字不绑定
+// (ReferenceError),`arguments[0]` 又依赖 wrapper 收实参(FunctionJsBackend 的 wrapper 不收)。
+// 这里钉住后端支持「code=函数声明、fn=名字、args=显式实参」(YouTube 解 n 参数走此形态)。
+assert.equal(typeof globalThis.appHost.js.call, "function", "node 后端应有 js")
+assert.equal(
+  globalThis.appHost.js.call("function twice(a){return a*2}", "twice", [21]),
+  42,
+  "js.call 应支持函数声明 + 显式实参(YouTube n 解密依赖此形态)",
+)
+
 // ── browser 后端:同样应有 openExternal(继承兜底) ──
 injectBrowserHost()
 assert.equal(typeof globalThis.appHost.openExternal, "function", "browser 后端也应有 openExternal")

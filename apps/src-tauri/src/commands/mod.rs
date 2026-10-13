@@ -102,7 +102,18 @@ pub async fn http_get(req: HttpGetRequest) -> Result<HttpResponse, String> {
     }
     let timeout = req.timeout_ms.clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
     let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::limited(5))
+        // ⚠️ 重定向**逐跳复查**:`Policy::limited` 只数次数,不校验跳转目标 —— 公网 URL
+        // 302 → `http://169.254.169.254/`(云元数据)会绕过入口的 is_blocked_host 检查。
+        // 自定义策略对每个目标再跑一次同一判定(loopback 仍按设计放行,见 is_blocked_host)。
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 5 {
+                attempt.error("too many redirects")
+            } else if is_blocked_host(attempt.url().as_str()) {
+                attempt.error("refused: redirect target is not routable")
+            } else {
+                attempt.follow()
+            }
+        }))
         .timeout(std::time::Duration::from_millis(timeout))
         .build()
         .map_err(|e| e.to_string())?;

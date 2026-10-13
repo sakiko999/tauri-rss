@@ -24,7 +24,12 @@ export function nodeBackend(): HttpBackend {
         return { status: res.status, headers, body: buf }
       }
       const text = await res.text()
-      return { status: res.status, headers, body: req.responseType === "json" ? JSON.parse(text) : text }
+      // ⚠️ 空 body 不能 JSON.parse("")——会抛 SyntaxError。平台软限流常返 200 + 空 body
+      // (douyu/youtube 的 json 请求),此时应作「无数据」回 null,与 Rust 后端
+      // (仅非空才 parse)一致。resolve 的 httpJson 按 `== null` 判空,不会误当数据。
+      let body: unknown = text
+      if (req.responseType === "json") body = text.trim() === "" ? null : JSON.parse(text)
+      return { status: res.status, headers, body }
     },
   }
 }
