@@ -105,6 +105,39 @@ if (inStore) {
   await dl.subscriptions.remove("chk-empty")
 }
 
+// 退订竞态:在途 refresh 完成后若订阅已退订,不再写回内容(否则 rail 消失但条目
+// 仍留在「全部」—— 退订不彻底)。用慢速 fake channel 制造 refresh 与 remove 竞态。
+{
+  const { registerChannel } = await import("@tauri-playground/crawler")
+  const { serializeFeed } = await import("@tauri-playground/xml")
+  let release!: () => void
+  const gate = new Promise<void>((r) => (release = r))
+  registerChannel({
+    key: "chk:slow",
+    name: "慢源",
+    kind: "article",
+    getSource: () => ({
+      fetch: async () => {
+        await gate // 挂住,直到 remove 之后才放行
+        return serializeFeed(
+          [{ id: "slow-1", sourceId: "chk:slow", kind: "article", title: "迟到内容", url: "https://example.com/s", fetchedAt: Date.now() }],
+          { channelTitle: "慢源" },
+        )
+      },
+    }),
+  })
+  await seed({ id: "chk-race", channelKey: "chk:slow", title: "竞态测试", enabled: true, info: {} })
+  const pending = dl.refresh("chk-race", { force: true })
+  await dl.subscriptions.remove("chk-race") // 抓取途中退订
+  release()
+  await pending
+  assert.equal(
+    dl.store.query({ subscriptionId: "chk-race" }).length,
+    0,
+    "退订后,在途 refresh 不得把内容写回(防复活竞态)",
+  )
+}
+
 // 清理,避免污染同机的 CLI 库(用的是各自 storage key,这里仍清一遍)。
 await dl.subscriptions.remove("chk-off")
 await dl.subscriptions.remove("chk-on")

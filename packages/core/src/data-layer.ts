@@ -111,6 +111,14 @@ export function createDataLayer(): DataLayer {
   const pageCursors = new Map<string, string>()
   /** 渠道真实总数:订阅 → 平台总数(weibo cardlistInfo.total;refresh/loadMore 时更新)。 */
   const pageTotals = new Map<string, number>()
+  /** 已退订 id(墓碑):在途 refresh 完成后若订阅已退订,不再写回内容(防复活竞态)。 */
+  const removedSubs = new Set<string>()
+
+  /** 写回抓取结果前检查墓碑:订阅在抓取途中被退订 → 丢弃结果(不复活已退订内容)。 */
+  function replaceIfLive(id: string, items: MediaItem[]): void {
+    if (removedSubs.has(id)) return
+    store.replace(id, items)
+  }
 
   /** channelKey 前缀 → settings 里存的 cookie 字段(读 cookieFor / 写 scanLogin 共用一张表)。 */
   function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
@@ -196,7 +204,7 @@ export function createDataLayer(): DataLayer {
             now: now(),
           })
           if (total !== undefined) pageTotals.set(subscriptionId, total)
-          store.replace(subscriptionId, await applyReadingState(items))
+          replaceIfLive(subscriptionId, await applyReadingState(items))
         } catch {
           /* 缓存坏了 → 保持现状,不报错(停用不是错误) */
         }
@@ -227,7 +235,7 @@ export function createDataLayer(): DataLayer {
             })
             if (total !== undefined) pageTotals.set(subscriptionId, total)
             else pageTotals.delete(subscriptionId)
-            store.replace(subscriptionId, await applyReadingState(items))
+            replaceIfLive(subscriptionId, await applyReadingState(items))
             pageCursors.delete(subscriptionId)
             return { subscriptionId, itemCount: items.length, fetchedAt: cached.fetchedAt }
           }
@@ -245,7 +253,7 @@ export function createDataLayer(): DataLayer {
       }
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
-      store.replace(subscriptionId, await applyReadingState(items))
+      replaceIfLive(subscriptionId, await applyReadingState(items))
       pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
       // 缓存写失败(磁盘满/IO)只记日志,不能触发下面的 catch —— 那会把刚写好的新内容
       // 用旧缓存 replace 回去,用户看到「刷新失败」却其实是抓取成功了。
@@ -268,7 +276,7 @@ export function createDataLayer(): DataLayer {
             kind,
             now: now(),
           })
-          store.replace(subscriptionId, await applyReadingState(items))
+          replaceIfLive(subscriptionId, await applyReadingState(items))
         } catch {
           /* 缓存也坏 → 保持空,error 已返回 */
         }
@@ -458,6 +466,7 @@ export function createDataLayer(): DataLayer {
       const cursor = pageCursors.get(subscriptionId)
       const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
+      if (removedSubs.has(subscriptionId)) return { addedCount: 0, hasMore: false } // 已退订:丢弃
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       store.append(subscriptionId, await applyReadingState(items))
@@ -561,7 +570,14 @@ export function createDataLayer(): DataLayer {
     // ⚠️ 不清 store 的话,退订后条目仍留在内存里,继续出现在「全部/未读/已星标」视图。
     subscriptions: {
       ...repo,
+      async add(sub) {
+        removedSubs.delete(sub.id) // 复用同 id 重订阅:清墓碑,否则 refresh 不回填
+        return repo.add(sub)
+      },
       async remove(id) {
+        // 先立墓碑再删:在途 refresh 可能在 remove 的 await 期间完成并 store.replace,
+        // 把已退订的内容又写回(rail 消失但条目仍在「全部」——退订不彻底)。
+        removedSubs.add(id)
         await repo.remove(id)
         store.clear(id)
         pageCursors.delete(id)
