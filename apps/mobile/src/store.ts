@@ -85,10 +85,22 @@ export const useMobile = create<MobileState>((set, get) => ({
   async addFeed(url, title) {
     const dl = get().dl
     if (!dl) return
-    // 通用 RSS 直链(rss:url);标题留空则先用 URL,刷新后由 feed 自身标题补。
-    const id = await dl.addSubscription("rss:url", title?.trim() || url, { url }, {})
+    const u = url.trim()
+    if (!u) return
+    // ⚠️ 重复拦截(核心是防「同 feed 的相同 item.id 存两份」):同 URL 再加一次会产生
+    // 两条 rss:url 订阅 → React key 冲突、未读计数翻倍、store.patch 一次改两条。
+    // 移动端粘贴 URL 是高频误操作。**不抛错**(避免误显为失败)——直接当作已存在返回(normalize
+    // 首尾空白;desktop 另做 canonUrl,此处 URL 直链场景取精确匹配足够)。
+    const dup = (await dl.subscriptions.list()).find(
+      (s) => s.channelKey === "rss:url" && (s.info?.url ?? "").trim() === u,
+    )
+    if (dup) return
+    // ⚠️ addSubscription 内部**已 refresh 一次**(data-layer.ts:578;新订阅无缓存 → 走网络)。
+    // 不再额外 refresh:曾补一次 `force:true` 会用同一 id 再抓一遍(同订阅串行执行两次网络),
+    // 对反爬源是双倍请求。首次抓取失败会静默(返回 {error} 被 core 吞)—— 单条订阅的
+    // 失败状态由列表「无内容」体现;移动端「极简看内容」不做失败徽标(那属工作台)。
+    await dl.addSubscription("rss:url", title?.trim() || u, { url: u }, {})
     set({ subs: await dl.subscriptions.list() })
-    await dl.refresh(id, { force: true }).catch(() => {})
   },
   async removeSub(id) {
     const dl = get().dl
@@ -101,8 +113,10 @@ export const useMobile = create<MobileState>((set, get) => ({
     const dl = get().dl
     if (!dl) return
     const subs = await dl.subscriptions.list()
+    // ⚠️ force:true —— 用户显式点「刷新」= 期望最新;force:false 会在 TTL(默认 30min)
+    // 内命中缓存直接返回,**列表毫无变化**(与 desktop 手动刷新对齐)。
     for (const s of subs.filter((x) => x.enabled)) {
-      await dl.refresh(s.id, { force: false }).catch(() => {})
+      await dl.refresh(s.id, { force: true }).catch(() => {})
     }
     set({ subs })
   },

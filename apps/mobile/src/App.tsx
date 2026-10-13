@@ -39,7 +39,10 @@ export function App() {
   if (open) return <Detail item={open} />
   if (!dl) return <div className="page state">正在加载…</div>
 
-  const list = items.filter((i) => i.isUnread).length ? items.filter((i) => i.isUnread) : items
+  // 未读优先;全部已读时回退展示全部(而非空列表)—— 移动端「极简看内容」,
+  // 全读完就空屏会让用户以为源坏了。刻意不做中间态提示(那是工作台的事)。
+  const unread = items.filter((i) => i.isUnread)
+  const list = unread.length ? unread : items
   return (
     <div className="page">
       <header className="topbar">
@@ -123,9 +126,17 @@ function SubsPane() {
           <li key={s.id} className="row">
             <span className="row-main">
               <span className="row-title">{s.title}</span>
-              <span className="row-sub">{s.channelKey}</span>
+              {/* ⚠️ 副标题显示 feed 地址,不是 s.channelKey —— mobile 只加 rss:url,
+                  显示 channelKey 会让每行副标题都是字面量 "rss:url"(零信息量)。 */}
+              <span className="row-sub">{s.info?.url ?? s.channelKey}</span>
             </span>
-            <button className="btn btn-quiet" onClick={() => void removeSub(s.id)}>
+            <button
+              className="btn btn-quiet"
+              onClick={() => {
+                // 触屏误触率高 + 退订会连带清内容/正文/缓存(不可撤销)→ 二次确认。
+                if (window.confirm(`退订「${s.title}」?本地内容缓存也会一并删除。`)) void removeSub(s.id)
+              }}
+            >
               移除
             </button>
           </li>
@@ -200,8 +211,24 @@ function Detail({ item }: { item: MediaItem }) {
         // ⚠️ 正文可能是 HTML(feed 带全文)—— 按纯文本渲染会露出 <p>/<a> 标签。
         // displayBody 判 HTML 则剥标签(mobile 无 sanitizer,富文本让位安全)。
         <div className="article-body">
-          {displayBody(body) || item.summary || "（没有正文，点下方「打开原文」）"}
+          {displayBody(body) || item.summary || "（这条只带了标题，打开原文查看）"}
         </div>
+      ) : null}
+      {/* 打开原文:正文取不到时(SPA/反爬占位页)的兜底出口。⚠️ 走 appHost.openExternal
+          (Tauri opener)——WebView 会拦 window.open(桌面同理),点了没反应。 */}
+      {item.url ? (
+        <button
+          className="btn btn-secondary open-original"
+          onClick={() => {
+            try {
+              void Promise.resolve(globalThis.appHost.openExternal(item.url!)).catch(() => {})
+            } catch {
+              /* 宿主未注入:忽略(移动端无 toast,失败静默) */
+            }
+          }}
+        >
+          打开原文 ↗
+        </button>
       ) : null}
       {resolving ? <p className="hint">正在补全原文正文…</p> : null}
     </div>
