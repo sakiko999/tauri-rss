@@ -57,20 +57,34 @@ function sttParse(str: string): Record<string, string> {
   return obj
 }
 
-/** 解析一帧 server 数据(690 帧) → 弹幕。 */
-function parseDouyuFrame(data: Uint8Array): DanmakuItem[] {
-  if (data.length < 12) return []
-  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength)
-  const full = dv.getUint32(0, true)
-  if (dv.getUint16(8, true) !== 690) return [] // server→client
-  const bodyLen = full - 9
-  const body = TD.decode(data.subarray(12, Math.min(12 + bodyLen, data.length)))
-  const obj = sttParse(body)
-  if (obj["type"] !== "chatmsg") return []
-  // dms 缺失 = 屏蔽弹幕(主播/房管设置的禁言列表,dart 同款跳过)。
-  if (obj["dms"] == null) return []
-  const col = Number(obj["col"]) || 0
-  return [{ text: String(obj["txt"] ?? ""), user: String(obj["nn"] ?? ""), color: DOUYU_COLORS[col] }]
+/** 解析一帧 server 数据 → 弹幕。导出供守卫自检。
+ *  ⚠️ 一个 WebSocket 帧常**合并多个 STT 包**(弹幕密集/高峰时服务端粘包)——按
+ *  `fullMsgLength+4` 逐包遍历,绝不能只解首包(否则其后每包静默丢;参照 pure_live
+ *  `deserializeDouyuPackets` 同款)。 */
+export function parseDouyuFrame(data: Uint8Array): DanmakuItem[] {
+  const out: DanmakuItem[] = []
+  // 逐包:每包 = [4B 长度 fullMsgLength][2B 长度][2B 类型][1B 加密][1B 保留][body][1B \0]。
+  // ⚠️ 长度字段是「body+头」的 9+N,实际帧长 = fullMsgLength + 4(参照 pure_live
+  // `frameLength = fullMsgLength + 4`);下一包起点 = off + full + 4。
+  let off = 0
+  while (off + 12 <= data.length) {
+    const dv = new DataView(data.buffer, data.byteOffset + off, data.byteLength - off)
+    const full = dv.getUint32(0, true)
+    const frameLen = full + 4
+    if (full < 9 || off + frameLen > data.length) break // 截断/畸形 → 停,不当死循环
+    if (dv.getUint16(8, true) === 690) {
+      const bodyLen = full - 9
+      const body = TD.decode(data.subarray(off + 12, off + 12 + bodyLen))
+      const obj = sttParse(body)
+      // dms 缺失 = 屏蔽弹幕(禁言列表,dart 同款跳过);非 chatmsg 也跳过。
+      if (obj["type"] === "chatmsg" && obj["dms"] != null) {
+        const col = Number(obj["col"]) || 0
+        out.push({ text: String(obj["txt"] ?? ""), user: String(obj["nn"] ?? ""), color: DOUYU_COLORS[col] })
+      }
+    }
+    off += frameLen
+  }
+  return out
 }
 
 /** douyu 弹幕流:订阅即建连(进房+心跳),退订断开。 */
