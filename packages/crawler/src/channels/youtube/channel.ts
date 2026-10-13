@@ -9,7 +9,7 @@ import type { Item, Video } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpText, now } from "@tauri-playground/resolve"
+import { httpText, now, getYoutubeLiveMeta } from "@tauri-playground/resolve"
 import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
 import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
 
@@ -49,7 +49,9 @@ export class YoutubeChannel implements RssChannel {
     // 单视频/直播订阅(videoId 优先):产单个 Item,resolvePlay 直接播该 videoId。
     const videoId = info.videoId ?? ""
     if (videoId) {
-      return [videoItem(videoId, t)]
+      // 取真实标题/频道名(此前硬编码占位 "YouTube <id>");失败回退占位,不阻塞。
+      const meta = await getYoutubeLiveMeta(videoId).catch(() => null)
+      return [videoItem(videoId, t, meta)]
     }
     const channelId = info.channelId ?? this.defaultChannelId ?? ""
     if (!channelId) throw new Error("youtube: 需要 channelId 或 videoId")
@@ -93,18 +95,19 @@ function entryToVideo(entry: ParsedItem, t: number): Video {
   }
 }
 
-/** 单视频/直播订阅的 Item(无 RSS 元数据,标题用 videoId 占位,播放时 resolvePlay 拿直链)。 */
-function videoItem(videoId: string, t: number): Video {
+/** 单视频/直播订阅的 Item(RSS 无元数据 → 一次 player API 取真实标题/频道;失败用 videoId 占位)。 */
+function videoItem(videoId: string, t: number, meta: { title: string; author: string } | null): Video {
   return {
     id: videoId,
     sourceId: "youtube",
     kind: "video",
-    title: `YouTube ${videoId}`,
+    title: meta?.title || `YouTube ${videoId}`,
     url: `https://www.youtube.com/watch?v=${videoId}`,
     // 稳定缩略图约定:i.ytimg.com/vi/<videoId>/hqdefault.jpg —— 零请求,对视频/直播
     // 都有效(未开播也有占位封面)。hqdefault=480×360,足够列表缩略图用。
     thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
     poster: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+    author: meta?.author ? { name: meta.author } : undefined,
     fetchedAt: t,
   }
 }
