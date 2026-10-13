@@ -13,6 +13,7 @@
  */
 import type { Item, Live } from "@tauri-playground/xml"
 import { httpJson, now } from "../../host.ts"
+import { parseCount } from "../../utils/count.ts"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
@@ -105,7 +106,9 @@ export async function searchDouyuRooms(keyword: string, page = 1, pageSize = 20)
         platform: "douyu",
         roomId: rid,
         liveStatus: live ? "live" : "offline",
-        online: Number(String(item.hot ?? "0").replace(/[^\d.]/g, "")) || 0,
+        // ⚠️ hot 是带单位的展示串("133.1万"),必须按单位换算 —— 裸剥非数字得到 133,
+        // 丢 3 个数量级(133.1万=1331000)。
+        online: parseCount(item.hot),
       }
     })
     .filter((x): x is Live => x !== null)

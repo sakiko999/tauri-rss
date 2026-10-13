@@ -3,6 +3,7 @@
  * 各函数供 resolver/danmaku/channel 共用;channel 经 `@tauri-playground/resolve` 取。
  */
 export * from "./cookie.ts"
+export * from "./count.ts"
 export * from "./img-size.ts"
 export * from "./inline-json.ts"
 export * from "./md5.ts"

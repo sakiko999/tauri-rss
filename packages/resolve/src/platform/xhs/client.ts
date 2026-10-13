@@ -13,6 +13,7 @@ import type { Social, SocialImage } from "@tauri-playground/xml"
 import { httpJson, httpText } from "../../host.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"
+import { parseCount } from "../../utils/count.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 
 export const XHS_BASE = "https://www.xiaohongshu.com"
@@ -99,16 +100,7 @@ export function rawOf<T>(v: T | { _rawValue?: T } | undefined): T | undefined {
 }
 
 /** "10万+" → 100000;纯数字透传。 */
-function parseCount(s: unknown): number | undefined {
-  if (s === undefined || s === null) return undefined
-  const m = String(s).match(/^([\d.]+)\s*(万|w|k)?/i)
-  if (!m) return undefined
-  const n = parseFloat(m[1])
-  const unit = (m[2] ?? "").toLowerCase()
-  if (unit === "万" || unit === "w") return Math.round(n * 10000)
-  if (unit === "k") return Math.round(n * 1000)
-  return Number.isFinite(n) ? n : undefined
-}
+// (parseCount 已抽到 ../../utils/count.ts,与 douyu 等平台共用。)
 
 /** note 两种形态(SSR noteCard / API note)归一后的共享字段。 */
 interface NoteFields {
