@@ -42,8 +42,9 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       `msToken:""`，`signDouyinUrl` 又追加一个随机 msToken → query 出现两个 msToken
       （一个空、一个真）。若服务端取首个(空)，签名可能与指纹不一致。删该行即修复，但
       douyin 现状「全通」，改动编码有回归风险 → 待有失败证据再动。
-- [ ] **[med] `resolve/platform/douyin/danmaku.ts:176`** — WS URL 参数值只 `replace(/ /g,"%20")`，
-      `internal_ext`（含 `| ( ; /`）等未做完整 URL 编码。douyin 弹幕实测已通，改动有风险 → 待验。
+- [x] **[med] `resolve/platform/douyin/danmaku.ts:176`** — **实测无需改**：`bun run rss dm` 在在线
+      房间（live.douyin.com/3010151431）收到 16 条真实弹幕，服务端接受当前 `%20` 编码方式。
+      审计声称的 `|(;/` 未编码问题未实际触发。
 - [ ] **[low] `resolve/platform/bili/client.ts`** — `navCache` 无 TTL（wbi key 轮换/换号后
       可能复用旧 nav）；当前主要缺陷（reject 毒化）已修，TTL 待 wbi 频繁轮换时再补。
 - [ ] **[low] `resolve/platform/bili/discover.ts:51`** — `stripEm` 正则 `<.*?em.*?>` 过宽
