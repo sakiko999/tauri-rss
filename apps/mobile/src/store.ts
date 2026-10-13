@@ -7,7 +7,7 @@
  * 内置 crawler 形态(见 CLAUDE.md):移动端不接爬虫服务,仅用有限平台(SSR/HTTP)。
  */
 import { create } from "zustand"
-import { createDataLayer, type DataLayer, type MediaItem, type Subscription } from "@tauri-playground/core"
+import { createDataLayer, positionDecision, type DataLayer, type MediaItem, type Subscription } from "@tauri-playground/core"
 
 import "@tauri-playground/core/source/rsshub"
 
@@ -27,6 +27,8 @@ interface MobileState {
   addFeed: (url: string, title?: string) => Promise<void>
   removeSub: (id: string) => Promise<void>
   setTab: (tab: "feed" | "subs") => void
+  /** 记录续播位置(秒)。播完(近片尾)清除记录;不足 5s 的变化不落库(节流)。 */
+  savePosition: (item: MediaItem, sec: number, durationSec: number) => void
 }
 
 let initPromise: Promise<void> | null = null
@@ -103,6 +105,26 @@ export const useMobile = create<MobileState>((set, get) => ({
       await dl.refresh(s.id, { force: false }).catch(() => {})
     }
     set({ subs })
+  },
+
+  // ⚠️ onProgress 由播放器按 timeupdate(4Hz)回调 —— 不节流直接落库会打爆 SQLite
+  // (写放大同样触发持久层串行队列积压)。判据走 core 的 positionDecision(近片尾清除 /
+  // 5s 节流),与 desktop 同一份;读 store 当前值(调用方持有的 item 可能是旧对象)。
+  savePosition(item, sec, durationSec) {
+    const dl = get().dl
+    if (!dl) return
+    const cur = get().items.find((i) => i.id === item.id) ?? item
+    const d = positionDecision(cur.positionSec ?? 0, sec, durationSec)
+    if (d.kind === "clear") {
+      if ((cur.positionSec ?? 0) > 0) {
+        dl.store.patch(item.id, { positionSec: undefined })
+        void dl.reading.setPosition(item.id, 0).catch(() => {})
+      }
+      return
+    }
+    if (d.kind === "wait") return
+    dl.store.patch(item.id, { positionSec: d.next })
+    void dl.reading.setPosition(item.id, d.next).catch(() => {})
   },
 }))
 

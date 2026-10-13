@@ -118,6 +118,7 @@ bun run rss align                       # crawler/rsshub 同构断言
 bun packages/core/src/example/media-store.check.ts      # 查询分支（分组聚合等）
 bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
+bun packages/core/src/reading-position.check.ts         # 续播落库判据（近片尾清除 / 5s 节流）
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/resolve/src/example/router.check.ts        # by-url 路由表（host 边界 + 各平台命中）

@@ -57,6 +57,9 @@ export type { ResolvePlayback } from "./types/playback.ts"
 
 export { NoChannelError } from "./errors.ts"
 
+/** 续播位置落库决策(近片尾清除 / 5s 节流)——desktop/mobile 两个 store 共用。 */
+export { positionDecision, type PositionDecision } from "./reading-position.ts"
+
 /** SQLite schema(两端共用 DDL:desktop tauri-plugin-sql / CLI bun:sqlite)。 */
 export { KV_TABLE, KV_DDL, MIGRATIONS } from "./db/schema.ts"
 

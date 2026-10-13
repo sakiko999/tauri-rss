@@ -18,6 +18,7 @@
 import { create } from "zustand"
 import {
   createDataLayer,
+  positionDecision,
   type AppSettings,
   type DataLayer,
   type MediaItem,
@@ -618,19 +619,18 @@ export const useDesktop = create<DesktopState>((set, get) => {
       // ⚠️ 必须读 store 里的**当前**值,不能用参数 item —— 调用方(播放页)持有的 item
       // 可能是 patch 前的旧对象(高频回调下尤其),用旧值判断会让清除/节流失效。
       const cur = get().allItems.find((i) => i.id === item.id) ?? item
-      // 近片尾(最后 15s 或 98%)清除记录 —— 否则「看完」下次进来直接跳结尾。
-      const atEnd = durationSec > 0 && (durationSec - sec < 15 || sec / durationSec > 0.98)
-      if (atEnd) {
+      // 判据走 core 的 positionDecision(近片尾清除 / 5s 节流),与 mobile 同一份。
+      const d = positionDecision(cur.positionSec ?? 0, sec, durationSec)
+      if (d.kind === "clear") {
         if ((cur.positionSec ?? 0) > 0) {
           dl.store.patch(item.id, { positionSec: undefined })
           void dl.reading.setPosition(item.id, 0)
         }
         return
       }
-      // 节流:不足 5s 的变化不落库(播放页 progress 每 4Hz 回调,直接写会打爆 SQLite)。
-      if (Math.abs(sec - (cur.positionSec ?? 0)) < 5) return
-      dl.store.patch(item.id, { positionSec: sec })
-      void dl.reading.setPosition(item.id, sec)
+      if (d.kind === "wait") return
+      dl.store.patch(item.id, { positionSec: d.next })
+      void dl.reading.setPosition(item.id, d.next)
     },
 
     saveScrollRatio(item, ratio) {

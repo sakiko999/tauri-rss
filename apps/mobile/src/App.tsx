@@ -156,6 +156,7 @@ function FeedRow({ item }: { item: MediaItem }) {
 function Detail({ item }: { item: MediaItem }) {
   const closeItem = useMobile((s) => s.closeItem)
   const dl = useMobile((s) => s.dl)
+  const savePosition = useMobile((s) => s.savePosition)
   const [body, setBody] = useState(item.kind === "article" ? item.content ?? "" : "")
   const [resolving, setResolving] = useState(false)
 
@@ -190,7 +191,7 @@ function Detail({ item }: { item: MediaItem }) {
           className="stage"
           resolve={() => (item.kind === "live" ? dl.resolveLivePlay(item.subscriptionId, item.id) : dl.resolvePlay(item.subscriptionId, item.id))}
           startAtSec={item.kind === "live" ? undefined : item.positionSec}
-          onProgress={(sec) => void dl.reading.setPosition(item.id, sec)}
+          onProgress={(sec, dur) => savePosition(item, sec, dur)}
         />
       ) : null}
       <h1 className="detail-title">{item.title}</h1>
