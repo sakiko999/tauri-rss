@@ -34,6 +34,9 @@ type Cap = "category" | "search" | "anchor"
 
 const CAP_LABEL: Record<Cap, string> = { category: "分区浏览", search: "搜索房间", anchor: "搜主播" }
 
+/** PlatformBrowser 三个子视图(与 Cap 同键)的中文名。 */
+const VIEW_LABEL: Record<Cap, string> = { category: "分区", search: "搜索", anchor: "主播搜索" }
+
 export function DiscoverPage() {
   const dl = useDesktop((s) => s.dl)
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
@@ -160,7 +163,7 @@ function PlatformBrowser({
 }) {
   const dl = useDesktop((s) => s.dl)
   const actions = usePlayerNav()
-  const [view, setView] = useState<"category" | "search">("category")
+  const [view, setView] = useState<"category" | "search" | "anchor">("category")
   const [categoryValue, setCategoryValue] = useState("")
   const [q, setQ] = useState("")
   const [busy, setBusy] = useState(false)
@@ -174,7 +177,7 @@ function PlatformBrowser({
   const [dialogOpen, setDialogOpen] = useState(false)
   /** 请求世代:切换平台/新搜索会自增,旧请求响应回来时若世代不符则丢弃。 */
   const genRef = useRef(0)
-  const ch = view === "category" ? caps.category : caps.search ?? caps.anchor
+  const ch = view === "category" ? caps.category : view === "anchor" ? caps.anchor : caps.search
 
   async function run() {
     if (!dl || !ch) return
@@ -242,18 +245,17 @@ function PlatformBrowser({
         <button aria-pressed={view === "category"} onClick={() => setView("category")} disabled={!caps.category}>
           分区
         </button>
-        <button
-          aria-pressed={view === "search"}
-          onClick={() => setView("search")}
-          disabled={!caps.search && !caps.anchor}
-        >
+        <button aria-pressed={view === "search"} onClick={() => setView("search")} disabled={!caps.search}>
           搜索
+        </button>
+        <button aria-pressed={view === "anchor"} onClick={() => setView("anchor")} disabled={!caps.anchor}>
+          搜主播
         </button>
       </div>
 
       {!ch ? (
         <Banner tone="warn" icon="warning">
-          {platform} 当前没有「{view === "category" ? "分区浏览" : "搜索"}」渠道（能力矩阵里是灰的）。
+          {platform} 当前没有「{VIEW_LABEL[view]}」渠道（能力矩阵里是灰的）。
         </Banner>
       ) : (
         <div className="inline-row" style={{ marginBottom: "var(--sp-4)" }}>
@@ -263,7 +265,7 @@ function PlatformBrowser({
             placeholder={fields[0]?.placeholder ?? fields[0]?.label ?? "参数"}
             aria-label={fields[0]?.label ?? "参数"}
             // 抖音搜索/搜主播输入联想词(datalist,原生零依赖;其他平台无此能力)。
-            list={platform === "douyin" && view === "search" && fields[0]?.key === "keyword" ? "dy-sug" : undefined}
+            list={platform === "douyin" && view !== "category" && fields[0]?.key === "keyword" ? "dy-sug" : undefined}
             onChange={(e) => {
               const v = e.target.value
               if (view === "category") setCategoryValue(v)
@@ -276,7 +278,7 @@ function PlatformBrowser({
               if (e.key === "Enter") void run()
             }}
           />
-          {platform === "douyin" && view === "search" && sug.length > 0 ? (
+          {platform === "douyin" && view !== "category" && sug.length > 0 ? (
             <datalist id="dy-sug">
               {sug.map((w) => (
                 <option key={w} value={w} />
@@ -296,7 +298,7 @@ function PlatformBrowser({
               setDialogOpen(true)
             }}
           >
-            <Icon name="plus" size={14} /> 订阅该{view === "category" ? "分区" : "搜索"}
+            <Icon name="plus" size={14} /> 订阅该{VIEW_LABEL[view]}
           </button>
         </div>
       )}
