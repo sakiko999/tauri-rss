@@ -40,12 +40,24 @@ function ensureArray<T>(val: T | T[] | undefined): T[] {
 }
 
 function asLink(val: unknown): string {
-  if (typeof val === "string") return val
-  if (val !== null && typeof val === "object") {
-    const href = (val as Record<string, unknown>)["@_href"]
-    if (typeof href === "string") return href
+  const pick = (v: unknown): string => {
+    if (typeof v === "string") return v
+    if (v !== null && typeof v === "object") {
+      const o = v as Record<string, unknown>
+      if (typeof o["@_href"] === "string") return o["@_href"] as string
+      if (typeof o["#text"] === "string") return o["#text"] as string
+    }
+    return ""
   }
-  return ""
+  // ⚠️ Atom 允许一条 entry 多个 <link>(rel="alternate"/"self"/"enclosure"…),此时
+  // e.link 是**数组**。原实现把数组当对象取 @_href → 永远得到空串(Atom 条目丢链接)。
+  // 取 rel="alternate"(条目网页地址)优先,其次无 rel 的,最后才将就第一个有 href 的。
+  if (Array.isArray(val)) {
+    const objs = val.filter((v): v is Record<string, unknown> => !!v && typeof v === "object")
+    const alt = objs.find((o) => o["@_rel"] === "alternate") ?? objs.find((o) => o["@_rel"] === undefined)
+    return (alt ? pick(alt) : "") || val.map(pick).find((s) => s) || ""
+  }
+  return pick(val)
 }
 
 function asAuthor(val: unknown): string {
