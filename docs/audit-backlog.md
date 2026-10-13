@@ -183,3 +183,29 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
     刚标记的已读覆盖回未读。当前「丢弃重复」更安全,保留。
   - **[低] `*:corrupt` 留证无消费** — 是**单** key(覆盖非堆积,审计「逐份堆积」有误),设计有意
     (留证供人工恢复),保留。
+
+## desktop views + components + lib 审计（2026-10-13 第十轮）
+
+- [x] **[高] `views/library/ShortVideoView.tsx`「退出短视频」死键** — `go(nodeId)` 的 nodeId
+      即当前 `short:*` 节点 → 导航到当前位置 = no-op;且 Esc 未绑定,进短视频模式无独立退出口。
+      改 `exit()` 去同类 tab(`short:video`→`tab:video`,CDP 实测 →`/v/tab:live`)并绑 Esc。
+- [x] **[高] `lib/shortcuts.ts:75` j/k 不对称(k 死键)** — 旧 `idx + (found>=0 && down ? 1 : 0)`
+      up 时加 0 落回当前项 → 被 `next.id===selectedArticleId` 挡掉。改显式 `step=down?1:-1`;
+      已离场分支同改。CDP:选中第 4 条 ArrowUp → 第 3 条。
+- [x] **[中] `views/player/usePlayerNav.ts` `openArticle` 漏 markReadOnOpen 守卫** — 关掉设置后
+      从混合 feed 点文章仍强制标读落库。补 `settings?.markReadOnOpen ?? true`(同 ArticlePane)。
+      CDP:关设置点卡 → isUnread 保持 true。
+- [x] **[中] `lib/opml-file.ts` 文件框取消挂起** — `pickOpmlFile` 不监听 `cancel`,取消 → Promise
+      永挂 → 导入按钮永久「导入中…」。挂 `cancel` → resolve(null)(Chromium 取消只 fire cancel)。
+- [x] **[中] `views/library/HotPane.tsx` 吃 view.list** — 已套全局搜索词,同视图内打词即清空热搜榜
+      →「没有取到热搜」误导。改用 `baseFor` 取未过滤条目。CDP:setQuery 后仍 50 行。
+- [x] **[低] `views/palette/CommandPalette.tsx` 搜不到命令** — 非空输入只搜 entries;改同时搜
+      entries+commands。CDP:输入「刷新」→ 命中「刷新全部订阅」。
+- [x] **[低] `views/manage/SettingsPage.tsx` RSSHub 地址每键写库** — 改草稿,blur/Enter 落库。
+- **复核后剔除（误报）**:
+  - **[中] `EditSubscriptionDialog`「设 TTL=0 不清除」** — 审计只看了 `{...prev,...patch}` 的
+    内存 spread(`undefined` 确实覆盖键),漏了 `JSON.stringify` **丢弃 undefined 值** + repo 的
+    `get/list` **每次重读磁盘**。实测:update 后 `refreshIntervalSec` 键消失、值被清除。非缺陷。
+- **存疑（未确证）**:`ShortVideoView` 的 `savePosition` 对 `isLive` 未加守卫 —— 若某直播流返回
+  有限 duration,会写 positionSec 把该直播塞进「继续」视图。`PlayableMedia` 有 `dur<=0` 早退,
+  直播一般 duration=0/Infinity 不上报,未复现。
