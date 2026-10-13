@@ -96,3 +96,18 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       加 `mkdirSync(recursive)`,新克隆/CI 不再 fatal。
 - 跳过（低/风格）：`browser-reset.ts` profile 路径由 env+硬编码 identifier 重建,标准
       配置下与 Rust `app_data_dir()` 一致,仅 AppData 被组策略重定向时可能分叉。
+
+## xml 包审计（2026-10-13 第五轮）
+
+- [x] **[中] `xml-parser.ts:9`** — `XMLParser` 默认 `parseTagValue` 把数字形字符串转数值
+      (`roomId:"007"`→7、`guid:"0123"`→123,丢前导零+丢类型)。改为 `parseTagValue:false`
+      (读端全经 num()/Number()/asString() 显式转换,零改动;属性本就不受影响)。
+- [x] **[中] `serialize.ts:164`** — `Social.images` 类型允许 `string | SocialImage`,但
+      serialize 对 string 元素取 `.url` 得 undefined 跳过 → 纯字符串图 URL 静默丢。
+      加归一化 + 守卫补 images 往返用例。
+- [ ] **[低/潜在] 无生产者的 latent 丢字段** — `Item.raw`(不往返)、`Live.quality`(不往返)、
+      `article.media[]` 图片(只保首个为 thumbnail)。三者当前**无 channel 产出**,不触发;
+      若未来有 channel 依赖再补 serialize+deserialize 两侧。
+- [ ] **[低] `serialize-contract.check.ts` 盲区** — 只检测「deserialize 读、serialize 不写」,
+      检测不到「**两侧都漏**」的字段(如上面的 quality/raw/media[])。扩展需维护「应透传字段」
+      期望清单,成本不低;当前新增字段时会显式加守卫用例,暂够。
