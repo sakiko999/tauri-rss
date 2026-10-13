@@ -103,7 +103,10 @@ function itemToTree(item: Item): Record<string, unknown> {
   if (item.isLiveNow !== undefined) setTpl(tree, "isLiveNow", item.isLiveNow ? "1" : "0")
   setTplN(tree, "lang", item.lang)
 
-  if (item.kind === "live") {
+  if (item.kind === "article") {
+    // deserialize 读 tpl:contentFormat(无则按 content 有无推 html)。透传保真。
+    setTplN(tree, "contentFormat", item.contentFormat)
+  } else if (item.kind === "live") {
     setTpl(tree, "platform", item.platform)
     setTpl(tree, "roomId", item.roomId)
     setTpl(tree, "liveStatus", item.liveStatus)
