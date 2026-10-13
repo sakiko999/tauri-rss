@@ -50,23 +50,44 @@ export interface ImportResult {
   skipped: number
 }
 
-/** 过滤出未订阅过的 feed(按 info.url 归一比对;同 xmlUrl 视为重复)。 */
+/**
+ * feed URL 归一化(仅用于**去重比对**,不改写实际存储的值)。
+ *
+ * 只做**真正等价**的归一:小写 scheme/host(RFC 3986 规定不区分大小写)、去尾斜杠。
+ * ⚠️ **不**把 http↔https 当同源 —— 二者可能是不同 feed,误合并会漏订阅。
+ * 非法 URL 原样返回(退化为精确比对)。
+ */
+function canonUrl(raw: string): string {
+  let s = raw.trim()
+  try {
+    const u = new URL(s)
+    u.protocol = u.protocol.toLowerCase()
+    u.hostname = u.hostname.toLowerCase()
+    s = u.toString()
+  } catch {
+    // 非合法 URL:原样比对。
+  }
+  return s.replace(/\/+$/, "")
+}
+
+/** 过滤出未订阅过的 feed(canonUrl 归一去重;同 URL 不同写法视为重复)。 */
 export function pendingImports(doc: OpmlDoc, subscriptions: Subscription[]): ImportResult {
   const have = new Set<string>()
   for (const s of subscriptions) {
     const url = s.info?.url?.trim()
-    if (url) have.add(url)
+    if (url) have.add(canonUrl(url))
   }
   const feeds: OpmlFeed[] = []
   let skipped = 0
   const seen = new Set<string>()
   for (const f of doc.feeds) {
     const url = f.xmlUrl.trim()
-    if (!url || have.has(url) || seen.has(url)) {
+    const key = url ? canonUrl(url) : ""
+    if (!url || have.has(key) || seen.has(key)) {
       skipped++
       continue
     }
-    seen.add(url)
+    seen.add(key)
     feeds.push({ ...f, xmlUrl: url })
   }
   return { feeds, skipped }

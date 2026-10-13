@@ -785,28 +785,28 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const { feeds, skipped } = pendingImports(parseOpml(xml), get().subscriptions)
       // ⚠️ 走 dl 直连而非 store.addSubscription:后者每条都会 toast + refreshView,
       // 批量导入几十条会刷屏。这里只落盘,末尾统一刷新 + 一条汇总 toast(由 UI 弹)。
-      // groupPath 逐级建/复用分组(标题即键,同名共享;分组本就单层,不设 parentId)。
+      //
+      // ⚠️ 分组层级按**叶子**建、只建**有成员**的那一级 —— Rail 是扁平渲染(忽略 parentId),
+      // 若按 OPML 的 ['视频','科技'] 逐级建,会产生「视频」空壳组 + 订阅落在「科技」(祖父
+      // 级丢失,空组还挂在侧栏)。UI 本就单层,叶子组标题即分组名(与 exportOpml 从
+      // groupPath 重建层级对称时,往返只损失人为的多层嵌套)。
+      // 标题即键:同名分组复用(跨多个 OPML 子树合并到同一组)。
       const groups = get().groups.slice()
-      const groupIdOfPath = async (path: string[]): Promise<string | null> => {
-        let id: string | null = null
-        for (const title of path) {
-          const hit = groups.find((g) => g.title === title)
-          if (hit) {
-            id = hit.id
-            continue
-          }
-          const nid = `g-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-          await dl.subscriptions.addGroup({ id: nid, title })
-          groups.push({ id: nid, title })
-          id = nid
-        }
-        return id
+      const groupIdOfLeaf = async (path: string[]): Promise<string | null> => {
+        const leaf = path.filter(Boolean).at(-1)
+        if (!leaf) return null
+        const hit = groups.find((g) => g.title === leaf)
+        if (hit) return hit.id
+        const nid = `g-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+        await dl.subscriptions.addGroup({ id: nid, title: leaf })
+        groups.push({ id: nid, title: leaf })
+        return nid
       }
       let added = 0
       let failed = 0
       for (const f of feeds) {
         try {
-          const gid = await groupIdOfPath(f.groupPath)
+          const gid = await groupIdOfLeaf(f.groupPath)
           await dl.addSubscription("rss:url", f.title, { url: f.xmlUrl }, { groupId: gid })
           added++
         } catch {

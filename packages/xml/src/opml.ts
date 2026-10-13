@@ -26,7 +26,10 @@ const builder = new XMLBuilder({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   suppressEmptyNode: true,
-  processEntities: false,
+  // ⚠️ 必须 true(RSS 的 serialize 用 false 是为了保住 CDATA;OPML 无 CDATA,关掉会让
+  // feed URL 里的 `&`(如 `...?partnerId=x&id=1`)原样进属性 → 导出的 .opml **不是良构
+  // XML**,Feedly/Inoreader 等严格解析器直接拒收(我们的自检用容错解析器读回,测不出)。
+  processEntities: true,
   format: true,
 })
 

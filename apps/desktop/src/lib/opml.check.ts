@@ -43,5 +43,16 @@ const { feeds, skipped } = pendingImports(incoming, subs as any)
 ok(feeds.length === 1 && feeds[0].xmlUrl === "https://new.com/rss", "已订阅的被跳过,新源保留")
 ok(skipped === 1, `跳过计数 = 1(得 ${skipped})`)
 
+// 等价 URL 视为重复:尾斜杠 + host 大小写;http/https 不合并(可能是不同 feed)
+const equiv = parseOpml(`<?xml version="1.0"?>
+<opml version="2.0"><body>
+  <outline type="rss" text="A2" xmlUrl="https://A.com/rss/"/>
+  <outline type="rss" text="新源2" xmlUrl="https://new.com/rss/"/>
+  <outline type="rss" text="新源3" xmlUrl="https://new.com/rss"/>
+</body></opml>`)
+const e2 = pendingImports(equiv, subs as any)
+ok(e2.feeds.length === 1 && e2.feeds[0].xmlUrl === "https://new.com/rss/", "尾斜杠+大小写归一后判重(新源2 保留,新源3 视为同一条)")
+ok(e2.skipped === 2, `等价归一 + 批内去重:跳过 2(得 ${e2.skipped})`)
+
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
 process.exit(fails === 0 ? 0 : 1)

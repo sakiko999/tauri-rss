@@ -52,5 +52,17 @@ ok(ext.feeds.length === 2, `2 条 feed(得 ${ext.feeds.length})`)
 ok(JSON.stringify(ext.feeds[0].groupPath) === '["科技"]', "xmlUrl 空的父节点当分组名")
 ok(ext.feeds[1].title === "音乐", "text 优先于 title(OPML text = 显示名)")
 
+// 3. 转义:URL 里的 & 必须转义成 &amp;,否则导出的 .opml 非良构(严格解析器拒收)
+const ampDoc = serializeOpml({
+  title: "A & B <C>",
+  feeds: [{ title: 'Src & "Feed" <x>', xmlUrl: "https://ex.com/f?a=1&b=2", groupPath: [] }],
+})
+console.log("转义:")
+ok(ampDoc.includes("&amp;"), "URL/title 里的 & 转义为 &amp;")
+ok(!/xmlUrl="[^"]*[^&]&[^a]/.test(ampDoc), "xmlUrl 无裸 &")
+ok(ampDoc.includes("&lt;") && ampDoc.includes("&gt;"), "title 里的 < > 转义")
+// 自检解析器是容错的(裸 & 也能读),故直接断言序列化文本而非往返 —— 这正是漏网的原因。
+ok(parseOpml(ampDoc).feeds[0].xmlUrl === "https://ex.com/f?a=1&b=2", "转义后仍能解析回原值")
+
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
 process.exit(fails === 0 ? 0 : 1)
