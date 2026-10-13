@@ -173,6 +173,8 @@ export function createDataLayer(): DataLayer {
       if (rec.starred && !it.isStarred) next.isStarred = true
       if (rec.positionSec && !it.positionSec) next.positionSec = rec.positionSec
       if (rec.scrollRatio && !it.scrollRatio) next.scrollRatio = rec.scrollRatio
+      // lastReadAt 无条件回填(无「已设则跳过」语义:它就是最近一次时间,应随 reading 更新)。
+      if (rec.lastReadAt) next.lastReadAt = rec.lastReadAt
       return Object.keys(next).length ? ({ ...it, ...next } as MediaItem) : it
     })
   }

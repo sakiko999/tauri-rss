@@ -130,7 +130,12 @@ export function queryView(s: StoreSlice, node: string | null, now: number): View
         bodyText(i).includes(q),
     )
   }
-  list = sortItems(list, s.sort[n] ?? "new")
+  // 「继续」按最近观看时间排(lastReadAt,由 core 从 reading 回填),而非发布时间 ——
+  // 否则「接着上次看」的语义丢失。缺 lastReadAt 的(理论上不该有)兜底 publishedAt。
+  list =
+    n === "resume"
+      ? list.slice().sort((a, b) => (b.lastReadAt ?? b.publishedAt ?? 0) - (a.lastReadAt ?? a.publishedAt ?? 0))
+      : sortItems(list, s.sort[n] ?? "new")
   const total = list.length
   const cap = s.page[n] ?? PAGE_SIZE
   return { list: list.slice(0, cap), total, hasMore: total > cap }

@@ -59,6 +59,12 @@ export interface MediaItemBase {
    * 阅读器写、refresh 时由 core 从 reading 回填。
    */
   scrollRatio?: number
+  /**
+   * 最近一次产生阅读态的时间(已读/星标/续播/滚动任一,Unix epoch ms)。
+   * 由 core applyReadingState 从 reading.lastReadAt 回填。「继续」智能订阅按它排序
+   * (最近观看优先),否则只会按 publishedAt 排、失去「接着上次看」的语义。
+   */
+  lastReadAt?: number
   /** 不透明源负载,保真 round-trip。 */
   raw?: unknown
 
