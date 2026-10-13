@@ -55,6 +55,11 @@ export function MediaTimeRange({
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (state.live) return // 直播不 seek,进度条仅作缓冲指示
     e.preventDefault()
+    // ⚠️ 显式聚焦:容器(useContainerInteractions)把 role=slider 排除在聚焦外,而这里的
+    // preventDefault 又挡掉浏览器原生「点击聚焦 tabindex 元素」。不补的话鼠标点过进度条后
+    // 键盘事件仍走容器(←/→ 是容器 5s seek、无 Home/End/PageUp/Down),slider 自己的键盘
+    // 分支要 Tab 才够得到 —— 可访问性退化。聚焦后容器 isEditableTarget(slider) 会跳过,不双处理。
+    trackRef.current?.focus({ preventScroll: true })
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
     setDragging(true)
     seekFromEvent(e.clientX)
