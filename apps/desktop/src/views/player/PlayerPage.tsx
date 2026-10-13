@@ -139,7 +139,9 @@ export function PlayerPage() {
                     ? resolveLivePlay(item.subscriptionId, item.id)
                     : resolvePlay(item.subscriptionId, item.id)
                 }
-                autoResolve={settings?.autoplayVideo ?? true}
+                // ⚠️ 已下播的直播不自动解析:解析必得已验证失效的流(douyin flv 404 /
+                // huya 空),表现为黑屏 + 只有 console 报错。交给用户点「播放」手动重试。
+                autoResolve={isLive && item.liveStatus === "offline" ? false : (settings?.autoplayVideo ?? true)}
                 // 弹幕总开关关闭时不建弹幕连接(而非建了再藏)。
                 showDanmaku={danmakuOn}
                 // 续播:非直播才有位置语义(item.positionSec 由 core 从 reading 回填)。
@@ -153,7 +155,13 @@ export function PlayerPage() {
               <h1 className="player-title">{item.title}</h1>
               <div className="player-sub">
                 {isLive ? (
-                  <span className="tag tag-live">● 直播中</span>
+                  // ⚠️ 按 liveStatus 标注:曾对所有 live 无脑写「● 直播中」——已下播的
+                  // 房间也显示直播中(说谎)。offline/unknown 如实标。
+                  item.liveStatus === "live" ? (
+                    <span className="tag tag-live">● 直播中</span>
+                  ) : (
+                    <span className="tag">○ 已下播</span>
+                  )
                 ) : (
                   <span className="tag">
                     {/* 无时长就显示「视频」/「音频」,不写语义含糊的「点播」。 */}
