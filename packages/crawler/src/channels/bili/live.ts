@@ -32,6 +32,7 @@ async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | nu
       { referer: "https://live.bilibili.com/", buvid: true, cookie },
     )
     const ri = (res?.data?.["room_info"] ?? {}) as Record<string, unknown>
+    const ai = (res?.data?.["anchor_info"] ?? {}) as Record<string, any>
     const realRoomId = String(ri["room_id"] ?? roomId)
     return {
       id: `bilibili:${realRoomId}`,
@@ -40,7 +41,10 @@ async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | nu
       title: String(ri["title"] ?? ""),
       url: `https://live.bilibili.com/${realRoomId}`,
       thumbnail: String(ri["cover"] ?? ""),
-      author: { name: String(ri["uname"] ?? "") },
+      // ⚠️ 主播名在 `anchor_info.base_info.uname`,**不在** `room_info.uname`
+      // (实测 getInfoByRoom 的 room_info 只有 uid/online/area_name 等,无 uname)——
+      // 读 room_info.uname 会永远得到空作者名。
+      author: { name: String(ai["base_info"]?.uname ?? "") },
       fetchedAt: now(),
       platform: "bilibili",
       roomId: realRoomId,

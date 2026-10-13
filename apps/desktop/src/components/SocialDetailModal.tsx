@@ -21,8 +21,6 @@ import { openExternalSafely } from "../lib/host.ts"
 export function SocialDetailModal() {
   const detail = useDesktop((s) => s.socialDetail)
   const close = useDesktop((s) => s.closeSocialDetail)
-  const addToQueue = useDesktop((s) => s.addToQueue)
-  const toast = useDesktop((s) => s.toast)
   const item = detail?.full ?? detail?.item
   const imgs = (item as { images?: Array<{ url: string }> } | undefined)?.images ?? []
   const multi = imgs.length > 1
@@ -79,15 +77,8 @@ export function SocialDetailModal() {
       desc={item.author?.name ? `${item.author.name} — ${fmtAgo(item.publishedAt)}` : fmtAgo(item.publishedAt)}
       footer={
         <>
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              addToQueue(item.id)
-              toast("ok", "已加入播放队列", item.title)
-            }}
-          >
-            <Icon name="queue" size={14} /> 加入队列
-          </button>
+          {/* ⚠️ 社交条目没有可播流,`addToQueue` 会**拒绝**它(入队收口处有护栏)——
+              原按钮点了不生效却弹「已加入播放队列」(说谎)。这里不摆队列按钮。 */}
           {item.url ? (
             /* ⚠️ 走宿主门面(WebView 拦 window.open)。 */
             <button className="btn btn-quiet" onClick={() => openExternalSafely(item.url)}>
