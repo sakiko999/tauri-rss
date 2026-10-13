@@ -232,6 +232,9 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - [x] **[低] player `isProgressiveVideo` 抢 `.ogg`** — ogg 音频进 <video>;ogg 归音频,互斥。
 - [x] **[低] player `useVideoElement` `live = dur===Infinity` 死分支** — 改 dur<=0。
 - [x] **[低] player `attemptPlay` AbortError 不调 onFail** — 媒体不推进则静默卡住;补延迟重试+上报。
-- **复核后判定为存疑（未改）**:douyin reflow `hls_pull_url` vs `hls_pull_url_map`(需真实响应验证);
+- [x] **[低] `resolve/platform/douyin/stream.ts` reflow 读错 HLS 字段名** — 读 `hls_pull_url`,
+      实为 `hls_pull_url_map`(参照 pure_live douyin_site.dart:699 + 本文件 fallback 同用该名)
+      → 恒 undefined,flv 缺失房间 HLS 兜底静默丢。改 `hls_pull_url_map` 优先 + `hls_pull_url` 兜底。
+- **复核后判定为存疑（未改）**:
   douyin 清晰度兜底按位置 join(主路径正常,已记 backlog);bili `danmaku-live` 控制符切分;
   DASH blob 跨格式切换泄漏(无混合格式源);http_get 每请求新建 reqwest::Client(纯吞吐)。
