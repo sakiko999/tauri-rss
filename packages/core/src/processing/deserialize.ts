@@ -393,13 +393,21 @@ function rsshubThumbnail(raw: Record<string, unknown>): string | undefined {
 /** RSSHub article 附件:enclosure(非 audio)+ media:content 的非 image 媒体 → Article media[]。 */
 function rsshubArticleMedia(raw: Record<string, unknown>): MediaAttachment[] | undefined {
   const out: MediaAttachment[] = []
+  // ⚠️ 同一媒体常在 enclosure 与 media:content 各出现一次(同 URL)→ 不去重会出现
+  // 两份相同附件。按 URL 去重。
+  const seen = new Set<string>()
+  const push = (m: MediaAttachment) => {
+    if (seen.has(m.url)) return
+    seen.add(m.url)
+    out.push(m)
+  }
   const enc = enclosureVal(raw["enclosure"])
   if (enc) {
     const o = obj(enc as Record<string, unknown>)
     const url = str(attr(o, "url"))
     const type = str(attr(o, "type"))
     if (url && type && !type.startsWith("audio/")) {
-      out.push({
+      push({
         kind: type.startsWith("video/") ? "video" : type.startsWith("image/") ? "image" : "video",
         url,
         mimeType: type,
@@ -415,7 +423,7 @@ function rsshubArticleMedia(raw: Record<string, unknown>): MediaAttachment[] | u
       const type = String(attr(o, "type") ?? "")
       if (!url) continue
       if (medium === "video" || type.startsWith("video/")) {
-        out.push({ kind: "video", url, mimeType: type || undefined })
+        push({ kind: "video", url, mimeType: type || undefined })
       }
     }
   }

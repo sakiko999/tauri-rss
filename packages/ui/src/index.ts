@@ -6,35 +6,8 @@
  * MediaCard/CardThumb/Skeleton/UnreadDot/RelativeTime **已无消费者**
  * (desktop 改用自己的 components/cards.tsx),待清理。
  *
- * 播放器组件已拆到 @tauri-playground/player;下面的 re-export 只是给旧 import 兜底。
+ * 播放组件已拆到 @tauri-playground/player,**直接引 player**(此前的 re-export 兜底
+ * 全仓零消费者,已删)。
  */
 export { MediaImage } from "./renderers/atoms/MediaImage.tsx"
-export { fmtDuration, fmtAudioDuration, fmtCount } from "./renderers/atoms/format.ts"
-
-// ── 播放组件(video/audio/live 共用)─────────────────────────────
-// 新代码应直接引 @tauri-playground/player。
-export {
-  PlayableMedia,
-  unlockAudioPlayback,
-  useMediaStream,
-  isHlsStream,
-  isFlvStream,
-  isDashStream,
-  useStreamSelection,
-  isProgressiveVideo,
-  isProgressiveAudio,
-  isRtmp,
-  isStreamingStream,
-  useVideoElement,
-  bindFullscreen,
-  VideoShell,
-  AudioShell,
-  PlayerControls,
-} from "@tauri-playground/player"
-export type {
-  MediaStream,
-  VideoPlayState,
-  VideoOps,
-  FullscreenApi,
-  BufferedRange,
-} from "@tauri-playground/player"
+export { fmtCount } from "./renderers/atoms/format.ts"
