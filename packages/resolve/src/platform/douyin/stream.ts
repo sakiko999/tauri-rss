@@ -25,17 +25,21 @@ const UA = UA_ENTER
 
 /** douyin 流解析主入口:三级降级,返回可播流数组(契约:最高清晰度排最前)。 */
 export async function douyinResolveStreams(roomId: string): Promise<Stream[]> {
-  // 1. enter API(主路径)
+  // 1. enter API。⚠️ 实测(2026-10)该响应**不含 stream_url**(data.data[0] 只有房间元信息,
+  //    含 id_str 长号)——故此处恒 0 流,真正的流由 step 2 的 reflow 出。enter 的价值是
+  //    拿 id_str 长号;响应**必须复用给 step 2**,否则同房间短时两次 enter(签名还不同)
+  //    会提高反爬风控。
+  let enterRes: Record<string, any> | null = null
   try {
-    const room = await fetchRoom(roomId)
-    const streams = parseDouyinStreams((room.stream_url ?? {}) as Record<string, any>)
+    enterRes = await fetchRoom(roomId)
+    const streams = parseDouyinStreams((enterRes.stream_url ?? {}) as Record<string, any>)
     if (streams.length) return streams
   } catch (e) {
     log.douyin.warn("enter API 失败:", (e as Error)?.message)
   }
-  // 2. reflow/info(room 长号)
+  // 2. reflow/info(room 长号;复用 step 1 的 enter 响应,不再重抓)
   try {
-    const streams = await fetchReflowStreams(roomId)
+    const streams = await fetchReflowStreams(roomId, enterRes)
     if (streams.length) return streams
   } catch (e) {
     log.douyin.warn("reflow API 失败,降级 HTML:", (e as Error)?.message)
@@ -45,13 +49,14 @@ export async function douyinResolveStreams(roomId: string): Promise<Stream[]> {
 }
 
 /**
- * reflow/info 端点:先 enter 拿 room 长号(id_str),再 `webcast/room/reflow/info` 拿
+ * reflow/info 端点:先用 room 长号(id_str)请求 `webcast/room/reflow/info` 拿
  * stream_url。返回的 flv_pull_url.{FULL_HD1/HD1/SD1/SD2} 是带签名直链,
  * 键名即清晰度降序——按序取即最高画质优先。
+ * `enterRes`:step 1 的 enter 响应(已在手则复用;null 时自行抓一次兜底)。
  */
-async function fetchReflowStreams(roomId: string): Promise<Stream[]> {
+async function fetchReflowStreams(roomId: string, enterRes: Record<string, any> | null): Promise<Stream[]> {
   // 拿 room 长号(enter API 仍返回 id_str,只是不返回 stream_url)
-  const res = await fetchRoom(roomId)
+  const res = enterRes ?? (await fetchRoom(roomId))
   const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
   const longId = String(room.id_str ?? room.id ?? "")
   if (!longId) throw new Error("douyin reflow: 无 room 长号")
