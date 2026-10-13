@@ -34,7 +34,7 @@ export function OnboardingModal() {
       <ol className="steps-list">
         <li>
           <span>
-            <b>侧栏</b>是订阅树：内容类型 / 智能订阅（今日、未读、星标）/ 分组下的各个源。顶部的 + 添加新源。
+            <b>侧栏</b>是订阅树：内容类型 / 智能订阅（今日、未读、星标、继续）/ 分组下的各个源。顶部的 + 添加新源。
           </span>
         </li>
         <li>
