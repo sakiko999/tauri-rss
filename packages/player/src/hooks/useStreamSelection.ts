@@ -49,8 +49,12 @@ export function useStreamSelection(streams: MediaStream[]): {
   // 切档不重发请求——resolve 已返回全档位,从 streams 里按 rate 换流即可
   // (签名带 expiry,会话内够用;过期由 PlayableMedia 重新 resolve)。
   const [activeStream, setActiveStream] = useState<MediaStream | null>(null)
-  // streams 变化(重新 resolve / props 更新)时重置用户切档态。
-  useEffect(() => setActiveStream(null), [streams])
+  // streams **内容**变化时重置切档态。⚠️ 不能按引用(依赖数组 [streams]):props 流
+  // 路径的调用方每次渲染都新建 `[item.stream]`,引用恒变 → effect 每渲染都跑 →
+  // switchQuality 刚设的 activeStream 被立刻清空回退默认档(切档失效)。
+  // 用 url+dashManifest 拼的签名当依赖,内容不变则不重置。
+  const streamSig = streams.map((s) => `${s.url}|${s.dashManifest ?? ""}|${s.rate ?? ""}`).join("\n")
+  useEffect(() => setActiveStream(null), [streamSig])
 
   // 默认选流:渐进式优先(浏览器原生可播、无需额外引擎——最稳),
   // 其次 hls/flv(流媒体,依赖 hls.js/flv.js 引擎兜底)。
