@@ -8,10 +8,9 @@
  * - **只挂当前条**：`IntersectionObserver` 标记哪一条在屏，**仅当前条**挂载
  *   `PlayableMedia`（其余显示 poster 占位）—— ⚠️ 曾挂「当前 ±1」三条，但 `PlayableMedia`
  *   挂载即带声自动播、无「预加载不播」开关 → 三条同时出声 + 三路弹幕 WS。改为只挂当前。
- * - **非当前自动暂停**：`PlayableMedia` 靠 key 重挂会重解析，代价大；这里只在「滑走」时
- *   卸载（IntersectionObserver 把离开视口的移出挂载集），回来时重新懒解析（有缓存）。
- *   ⚠️ 这是「重挂即暂停」的粗粒度方案；若日后要「保留实例只暂停」，得给 PlayableMedia
- *   加命令式 pause API（当前没有，不做）。
+ * - **非当前自动暂停 = 卸载**：滑走后该条离屏 → `active` 变 false → 卸载 `PlayableMedia`
+ *   （重挂即停），回来重新懒解析（有缓存）。⚠️ `PlayableMedia` 靠 key 重挂会重解析、代价大，
+ *   但「保留实例只暂停」需给它加命令式 pause API（当前没有，不做）。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { PlayableMedia } from "@tauri-playground/player"
