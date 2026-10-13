@@ -1997,6 +1997,13 @@ div + .group-block {
   font-size: var(--article-fs);
   line-height: 1.8;
 }
+/* 按需补全正文时的行内提示(spinner 与文字对齐)。 */
+.article-resolving {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
 .article-body > * + * {
   margin-top: var(--sp-5);
 }
