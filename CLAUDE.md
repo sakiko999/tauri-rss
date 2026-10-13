@@ -54,6 +54,9 @@ packages/
 `log` 是零依赖叶子；`host` **依赖 core**（sqlite backend 复用其 `db/schema.ts` 的
 KV_TABLE/MIGRATIONS——包管理层面 host↔core 成环，core 把 host 放 devDep）。
 读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
+⚠️ **例外：desktop 直引 resolve**（发现页输入联想 `fetchDouyinSuggestions`）——每键
+即时取，走 channel/DataLayer 太重；该函数是纯函数（无 cookie/无状态）。新直引前先问
+「能否经 core 门面」。
 
 ⚠️ **crawler→core 的唯一通道是 XML（`serializeFeed`→自解析）**：core 用自解析 XML 建 MediaItem
 （item 数据不经 crawler 类型；但 core 仍 import crawler 的渠道类型 `SourceInfoField` 与运行时
@@ -105,6 +108,7 @@ bun run rss item <url>                  # by-url：路由 + streams 全档位 + 
 bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
 bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计
 bun run rss hot <词>                    # 热搜词下微博流（需登录 cookie）
+bun run rss sug <关键词>                # 抖音搜索联想词（匿名 appHost，输入补全）
 bun run rss detail [url|--latest]       # xhs 单条详情补全（匿名 noteDetail）
 bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）

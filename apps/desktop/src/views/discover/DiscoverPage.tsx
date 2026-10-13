@@ -10,6 +10,9 @@
  */
 import { useMemo, useRef, useState } from "react"
 import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
+// ⚠️ desktop 直引 resolve 属**新增依赖边**(原图只有 desktop→core→crawler→resolve):
+// 输入联想需在**每键**即时取,走 channel/DataLayer 太重(序列化 + 缓存 + 状态)。
+// resolve 的 fetchDouyinSuggestions 是纯函数(无 cookie/无状态),直调最轻。
 import { fetchDouyinSuggestions } from "@tauri-playground/resolve"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
