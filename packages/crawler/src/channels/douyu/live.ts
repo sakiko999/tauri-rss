@@ -46,7 +46,11 @@ export class DouyuLiveChannel implements RssChannel {
         }),
       ),
     )
-    return rooms.filter((r): r is Live => r !== null).map((live) => ({ ...live, fetchedAt: t }))
+    const ok = rooms.filter((r): r is Live => r !== null)
+    // ⚠️ 全部失败 ≠ 成功 0 条:离线房间仍返回 Live(liveStatus=offline),全 null 只能是
+    // 请求/风控失败。静默返回空会让 core 把内容 replace 成空 → 抛出由上层报错(失败要抛)。
+    if (!ok.length) throw new Error(`live:douyu 全部房间拉取失败(${roomIds.length} 个)`)
+    return ok.map((live) => ({ ...live, fetchedAt: t }))
   }
 
   /** 单房间 → Live item(房间失败抛错,由调用方 catch 隔离)。签名留待 resolveLivePlay 懒解析。 */

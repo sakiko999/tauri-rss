@@ -49,7 +49,10 @@ export class DouyinLiveChannel implements RssChannel {
         }),
       ),
     )
-    return rooms.filter((r): r is Live => r !== null).map((live) => ({ ...live, fetchedAt: t }))
+    const ok = rooms.filter((r): r is Live => r !== null)
+    // ⚠️ 全部失败 ≠ 成功 0 条(离线房间仍返回 Live)。静默返回空会让 core 清空内容 → 抛出。
+    if (!ok.length) throw new Error(`live:douyin 全部房间拉取失败(${roomIds.length} 个)`)
+    return ok.map((live) => ({ ...live, fetchedAt: t }))
   }
 
   /** 单房间 → Live item(enter API;房间失败抛错,由调用方 catch 隔离)。 */

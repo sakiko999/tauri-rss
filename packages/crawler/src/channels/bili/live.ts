@@ -88,7 +88,12 @@ export class BiliLiveChannel implements RssChannel {
     if (!roomIds.length) throw new Error("bili:live 需要 roomIds")
     const t = now()
     const rooms = await Promise.all(roomIds.map((roomId) => fetchBiliRoom(roomId, info.cookie as string | undefined)))
-    return rooms.filter((r): r is Live => r !== null).map((live) => ({ ...live, fetchedAt: t }))
+    const ok = rooms.filter((r): r is Live => r !== null)
+    // ⚠️ 全部房间失败 ≠ 成功 0 条:离线房间仍返回 Live(liveStatus=offline),故「全 null」
+    // 只可能是请求/风控失败。静默返回空会让 core 把订阅内容 replace 成空(首订无缓存时
+    // 空抓取护栏不生效),用户看到「订阅成功但没内容」。抛出交由上层报错(契约:失败要抛)。
+    if (!ok.length) throw new Error(`bili:live 全部房间拉取失败(${roomIds.length} 个)`)
+    return ok.map((live) => ({ ...live, fetchedAt: t }))
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
