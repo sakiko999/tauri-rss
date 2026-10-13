@@ -130,8 +130,6 @@ export function PlayableMedia({
   // 切档后仍要传 error 给 useMediaStream;error 展示由 error state 管。
   const [playError, setPlayError] = useState<unknown>(null)
   const [retryKey, setRetryKey] = useState(0)
-  const resolveRef = useRef(resolve)
-  resolveRef.current = resolve
 
   // 最终播放用的流:初始流或懒解析结果。弹幕随解析结果附带(resolve 前 undefined)。
   const playStreams = resolved?.streams ?? streams ?? []
@@ -219,13 +217,12 @@ export function PlayableMedia({
   }, [autoPlay, isNativeStream, stream?.url])
 
   // ── 续播:起播跳转 + 进度上报 ──────────────────────────────────────────────
-  // 跳转只在**换了流**后做一次(resumedRef 按 stream?.url 重置;StrictMode 双挂载
-  // 与控件重渲染都不会重复跳)。≤3s 视为「从头看」不跳 —— 否则片头几秒的进度会被
-  // 当成续播点,每次进来都卡在开头。
+  // 跳转只做**一次**(resumedRef;≤3s 视为「从头看」不跳 —— 否则片头几秒的进度会被
+  // 当成续播点,每次进来都卡在开头)。
+  // ⚠️ **不要**随 stream?.url 变化重置 resumedRef:切档会换 stream → useMediaStream 重建
+  // 媒体实例 → 若重置,就会跳回 startAtSec(用户切个清晰度被弹回旧进度)。换条目时
+  // PlayerPage 用 key={item.id} 重挂整个组件 → resumedRef 自然为 false,无需手动重置。
   const resumedRef = useRef(false)
-  useEffect(() => {
-    resumedRef.current = false
-  }, [stream?.url])
   useEffect(() => {
     const at = startAtSec ?? 0
     if (!stream || resumedRef.current || at <= 3) return

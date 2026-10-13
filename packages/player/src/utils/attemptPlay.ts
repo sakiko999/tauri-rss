@@ -27,21 +27,25 @@ export function attemptPlayWithMuteFallback(
 ): void {
   const p = play()
   if (!p || typeof p.catch !== "function") return
-  // ⚠️ 用 finally 打日志,不要 p.then(...)——then 的派生 promise 在 reject 时
-  // 无人处理,每次播放失败都报 Uncaught (in promise)。finally 保留原 rejection。
-  p.finally(() => log.playSettled())
-  p.catch((e: unknown) => {
-    const name = (e as { name?: string })?.name
-    // 媒体未就绪/中断(AbortError):非 policy 拦截,不静音——等 canplay/就绪事件再试。
-    if (name === "AbortError") return
-    if (opts.autoPlay && !media.muted && media.isConnected) {
-      log.playMutedFallback({ reason: name ?? "unknown" })
-      media.muted = true
-      const retry = play()
-      if (retry && typeof retry.catch === "function") retry.catch(() => {})
-      return
-    }
-    log.playFailed({ err: e })
-    opts.onFail?.(e)
-  })
+  // ⚠️ 单链 `then(成功, 失败)` —— 两个分支都处理,派生 promise 恒 resolve,不会留
+  // 无人处理的 rejection。曾用 `p.finally(...)` 打日志:`finally` 同样返回**派生
+  // promise 且在 p reject 时也 reject**,没人接 → 每次起播失败都报 Uncaught (in promise)。
+  p.then(
+    () => log.playSettled(),
+    (e: unknown) => {
+      log.playSettled()
+      const name = (e as { name?: string })?.name
+      // 媒体未就绪/中断(AbortError):非 policy 拦截,不静音——等 canplay/就绪事件再试。
+      if (name === "AbortError") return
+      if (opts.autoPlay && !media.muted && media.isConnected) {
+        log.playMutedFallback({ reason: name ?? "unknown" })
+        media.muted = true
+        const retry = play()
+        if (retry && typeof retry.catch === "function") retry.catch(() => {})
+        return
+      }
+      log.playFailed({ err: e })
+      opts.onFail?.(e)
+    },
+  )
 }

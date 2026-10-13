@@ -118,11 +118,16 @@ export function DanmakuLayer({
     }
   }, [danmaku])
 
-  // VOD 时间窗口发射(暂停不推进;seek 大幅回跳重置起点,已发射不重发)。
+  // VOD 时间窗口发射(暂停不推进;**任意大幅 seek**重置起点,已发射不重发)。
+  //
+  // ⚠️ **前跳也必须重置**(曾只判回跳 `t < last - SEEK_RESET_MS`):否则从 0 跳到 20s
+  // 会把 [last, 20s] 整段的 pool 弹幕一次性 spawn —— 续播(startAtSec 跳转)/用户拖
+  // 进度条都会命中,表现为「一跳一大波弹幕糊屏」。回跳重置会让未来窗口重新填充(已发
+  // 过的靠 spawnedRef 去重,不重发);前跳重置只跳过该段,不炸。
   useEffect(() => {
     if (pausedRef.current) return
     const t = currentTime * 1000
-    if (t < lastTRef.current - SEEK_RESET_MS) {
+    if (Math.abs(t - lastTRef.current) > SEEK_RESET_MS) {
       lastTRef.current = t
       return
     }

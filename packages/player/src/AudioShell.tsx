@@ -60,10 +60,8 @@ export function AudioShell({
   }, [autoPlay, src])
 
   // 续播:起播跳转(≤3s 不跳)+ 进度上报。与 PlayableMedia 视频分支同语义。
+  // ⚠️ 不随 src 变化重置 resumedRef(切档/换流会重跳回去;换条目由 key 重挂)。
   const resumedRef = useRef(false)
-  useEffect(() => {
-    resumedRef.current = false
-  }, [src])
   useEffect(() => {
     const at = startAtSec ?? 0
     if (resumedRef.current || at <= 3) return
