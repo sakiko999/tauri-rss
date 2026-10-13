@@ -130,6 +130,7 @@ bun scripts/ui-probe.ts click "<selector>"  # 可信鼠标点击（悬停→按�
 bun scripts/ui-console.ts                   # 遍历各视图，捕获 React 告警 / 未捕获异常
 bun scripts/ui-design-audit.ts              # 量化设计审计：对比度(WCAG) / 点击区 / 字号 / 间距节奏
 bun scripts/ui-shot.ts tmp/shots            # 给各模块截图存档（用于视觉复核）
+bun scripts/ui-play-check.ts               # ★ 播放矩阵巡检（video/live/audio/yt 真播，报起播）
 bun scripts/ui-resize.ts 1500 950           # 改窗口尺寸（验证响应式断点）
 
 # 浏览器模拟（先起干净 Edge，见 edge-cdp skill；脚本自连 CDP，零额外依赖）
