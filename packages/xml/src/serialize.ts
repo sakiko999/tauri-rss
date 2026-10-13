@@ -25,7 +25,11 @@ const builder = new XMLBuilder({
   attributeNamePrefix: "@_",
   suppressEmptyNode: true,
   cdataPropName: "__cdata",
-  processEntities: false,
+  // ⚠️ 必须 true:false 会让文本/属性里的 `&`/`<` **原样输出** → RSS 非良构 XML。
+  // 实测标题含 `A & B <tag>` 时,`<tag>` 被下游解析器当标签**吞掉**(数据丢失),
+  // feed URL 的 `&` 也让严格解析器拒收。fast-xml-parser 在 true 下仍**正确保留 CDATA**
+  // (CDATA 内的 `&` 合法地保持原样),故「false 为保住 CDATA」的原注释是误判。
+  processEntities: true,
 })
 
 export function serializeFeed(items: Item[], opts: SerializeOptions = {}): string {

@@ -84,5 +84,17 @@ ok(socialBack.likes === 42, `likes(得 ${socialBack.likes})`)
 ok(socialBack.replies === 7, `replies(得 ${socialBack.replies})`)
 ok(socialBack.reposts === 3, `reposts(得 ${socialBack.reposts})`)
 
+// 5. XML 良构:文本/属性里的 & < 必须转义(否则严格解析器拒收,且往返丢数据)
+const tricky: Item = {
+  id: "amp", sourceId: "s", kind: "article", title: "A & B <tag>",
+  url: "https://ex.com/?a=1&b=2", summary: "HTML <b>x</b> & more", fetchedAt: 1,
+}
+const trickyXml = serializeFeed([tricky])
+console.log("XML 转义:")
+ok(!/&(?!amp;|lt;|gt;|quot;|apos;|#)/.test(trickyXml.replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "")), "标签外无裸 &")
+ok(trickyXml.includes("&amp;") && trickyXml.includes("&lt;tag&gt;"), "title 的 & < 已转义")
+const trickyBack = deserializeFeed(trickyXml, ctx)[0] as any
+ok(trickyBack.title === "A & B <tag>", `title 往返保真(得 ${JSON.stringify(trickyBack.title)})`)
+
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
 process.exit(fails === 0 ? 0 : 1)
