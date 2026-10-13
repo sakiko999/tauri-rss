@@ -1,3 +1,10 @@
+@import "tailwindcss";
+/* ⚠️ 必须扫 ui/player 包源码:否则它们组件里的 tailwind 类(image 骨架、播放器
+   加载/错误态、视频框 aspect-video)在 mobile 构建里不生成 → 播放器样式全失效。
+   与 desktop styles.css 同款。 */
+@source "../../../packages/ui/src";
+@source "../../../packages/player/src";
+
 /* Mobile 样式 —— 暖石墨中性 + 琥珀 accent(与桌面同色相;单列纵向)。
    OKLCH 与 desktop 的 tokens 同源,但这里是移动端独立精简集,不引用桌面 styles.css。 */
 :root {
