@@ -491,10 +491,13 @@ export const useDesktop = create<DesktopState>((set, get) => {
         const results = await Promise.allSettled(
           subs.map((s) =>
             withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id, () => {
-              // 超时 = 大概率卡在 CDP 浏览器通道(它没有自己的超时)。中止在途调用,
-              // 让持锁的 await 立刻返回错误,withBrowserLock 得以释放 —— 否则后续
-              // 所有浏览器操作排队到天荒地老,下一轮刷新也起不来。
-              globalThis.appHost.browser?.abortPending?.(`刷新超时:${s.id}`)
+              // 超时中止在途调用,让持锁的 await 立刻返回错误,withBrowserLock 得以释放
+              // —— 否则后续所有浏览器操作排队到天荒地老,下一轮刷新也起不来。
+              // ⚠️ **只对浏览器路径的订阅中止**:abortPending 是**进程级全局**的,一个
+              // 非浏览器订阅(慢 HTTP 抓取)超时也会把别的订阅在途的浏览器操作一起杀掉。
+              if (/^(weibo|xhs):/.test(s.channelKey)) {
+                globalThis.appHost.browser?.abortPending?.(`刷新超时:${s.id}`)
+              }
             }),
           ),
         )
