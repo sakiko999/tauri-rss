@@ -45,9 +45,11 @@ export async function fetchBiliCategories(): Promise<BiliCategory[]> {
     .filter((c) => c.id !== "")
 }
 
-/** 剥离搜索标题里的 `<em class="keyword">` 高亮标签。 */
+/** 剥离搜索标题里的 `<em class="keyword">` 高亮标签。
+ *  ⚠️ 曾用 `<.*?em.*?>`——`.*?` 会把**属性含 "em" 的任意标签**(如 `<img class="item">`)
+ *  整段删掉。收紧到真正的 em 起止标签(属性可选)。 */
 function stripEm(raw: unknown): string {
-  return String(raw ?? "").replace(/<.*?em.*?>/g, "")
+  return String(raw ?? "").replace(/<\/?em\b[^>]*>/g, "")
 }
 
 /** 封面补尺寸后缀(搜索接口返回的 cover 无需 `https:` 前缀处理时会带 `//`)。 */

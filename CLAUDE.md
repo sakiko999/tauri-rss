@@ -115,6 +115,7 @@ bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / read
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
+bun packages/resolve/src/example/router.check.ts        # by-url 路由表（host 边界 + 各平台命中）
 bun packages/core/src/example/serialize-contract.check.ts # tpl: 契约完整性（serialize 写 vs deserialize 读）
 bun packages/core/src/example/body-cache.check.ts       # 文章正文持久缓存（索引/退订清除/容错）
 bun apps/mobile/src/html.check.ts                       # mobile 正文 HTML→纯文本（探测/分段/实体）

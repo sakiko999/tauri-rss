@@ -25,14 +25,12 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - [x] **[low] `apps/mobile/src/main.ts`** — 已删（mobile 接入时重写为 main.tsx，模板 greet 逻辑移除）。
 - [x] **[medium] `App.tsx` URL 编码** — 核实无 bug：React Router 解码 params，loader（router.tsx:58）
       与 store 均用解码值，无字符串比较被编码串骗过。
-- [ ] **[medium] `apps/desktop/src/store/index.ts` markRead** — 标已读不写 `lastReadAt`
-      区分？核对 reading 的语义（消费侧一致性）。
-- [ ] **[low] `packages/ui/src/index.ts:16`** — ui 包 re-export 了 16 个 player 符号/类型，
-      全仓零消费（desktop 直引 `@tauri-playground/player`）。删这批 re-export。
-- [ ] **[low] `packages/log/src/core.ts:170`** — `getLogDomain`/`resetLogDomains` 零消费
-      （仅 index.ts re-export）。公开 API 供调试用，低优先；确认后删或补消费者。
-- [ ] **[low] `rsshubArticleMedia` 重复追加** — enclosure 与 media:content 同 URL 会重复。
-      核对是否仍存在（rsshub 源已少用）。
+- [x] **[medium] `markRead` / `lastReadAt`** — 核实无缺口：reading-repo `patchMany` 每次 patch
+      都自动写入 `lastReadAt: t`（line 78），标已读即记录时间。
+- [x] **[low] `packages/ui/src/index.ts`** — 已清（现仅导出 `MediaImage` + `fmtCount`；player re-export 已删）。
+- [x] **[low] `log` `getLogDomain`/`resetLogDomains`** — **有意保留**（叶子包公开 API：读域 + 测试清空；
+      API 面小，删了限制包的可测试性）。
+- [x] **[low] `rsshubArticleMedia` 重复追加** — 已修（deserialize.ts 有 `seen` Set 按 URL 去重）。
 
 ## 待修（2026-10-13 第二轮审计，未修）
 
@@ -52,8 +50,9 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       （任何属性含 `em` 子串的标签被误删）；实际影响小，待精化。
 - [ ] **[low] `resolve/resolver/router.ts:35/50`** — YouTube/douyu 路由正则未锚定 host
       （含 `youtube.com/watch?v=` 子串的任意 URL 会误路由）；极小概率，待收紧。
-- [ ] **[low] `resolve/platform/youtube/client.ts:270`** — `pickProgressiveVideo` 注释描述
-      与 R.maxBy 相等语义相反（仅注释错误，无功能影响）。
+- [x] **[low] `resolve/platform/youtube/client.ts:270`** — **审计报告有误**：实测 `R.maxBy(h,a,b)`
+      相等时返回**第二个参数**,故 `maxBy(height,f,best)` 相等取 best(保留首个)——注释正确,
+      忠实原 `>` 语义。无功能问题。
 
 - [ ] **[medium] `player/hooks/useStreamSelection.ts:59`** — 默认选流按格式族
       `find(isProgressiveVideo) ?? find(isHlsStream) ?? …` 而非取 `streams[0]`；若某源

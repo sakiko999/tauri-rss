@@ -26,13 +26,15 @@ export interface ResolveRouteSpec {
 /** 路由表:顺序优先级(更具体的 domain 排前面)。按需扩充。 */
 const ROUTES: ResolveRouteSpec[] = [
   // B 站视频(BV 号 / av 号)
-  { test: /bilibili\.com\/video\/(BV\w+)/, platform: "bilibili", kind: "video", extractId: (u) => u.match(/\/video\/(BV\w+)/)?.[1] ?? null },
-  { test: /bilibili\.com\/video\/(av\d+)/i, platform: "bilibili", kind: "video", extractId: (u) => u.match(/\/(av\d+)/i)?.[1] ?? null },
+  { test: /(?:^|[./])bilibili\.com\/video\/(BV\w+)/, platform: "bilibili", kind: "video", extractId: (u) => u.match(/\/video\/(BV\w+)/)?.[1] ?? null },
+  { test: /(?:^|[./])bilibili\.com\/video\/(av\d+)/i, platform: "bilibili", kind: "video", extractId: (u) => u.match(/\/(av\d+)/i)?.[1] ?? null },
   // B 站直播(live.bilibili.com/{roomId})
-  { test: /live\.bilibili\.com\/(\d+)/, platform: "bilibili", kind: "live", extractId: (u) => u.match(/live\.bilibili\.com\/(\d+)/)?.[1] ?? null },
+  { test: /(?:^|[./])live\.bilibili\.com\/(\d+)/, platform: "bilibili", kind: "live", extractId: (u) => u.match(/live\.bilibili\.com\/(\d+)/)?.[1] ?? null },
   // YouTube(watch?v=/youtu.be;直播同 videoId)
+  // ⚠️ host 前加 `(?:^|[./])` 边界:否则 `notyoutube.com/watch?v=` 这类含子串的
+  // 伪造域名也会命中(未锚定)。
   {
-    test: /youtube\.com\/watch\?v=([^&]+)/,
+    test: /(?:^|[./])youtube\.com\/watch\?v=([^&]+)/,
     platform: "youtube",
     kind: "video",
     extractId: (u) => {
@@ -43,11 +45,11 @@ const ROUTES: ResolveRouteSpec[] = [
       }
     },
   },
-  { test: /youtu\.be\/([^?/]+)/, platform: "youtube", kind: "video", extractId: (u) => u.match(/youtu\.be\/([^?/]+)/)?.[1] ?? null },
+  { test: /(?:^|[./])youtu\.be\/([^?/]+)/, platform: "youtube", kind: "video", extractId: (u) => u.match(/youtu\.be\/([^?/]+)/)?.[1] ?? null },
   // 虎牙直播(huya.com/{roomId})
-  { test: /huya\.com\/(\d+)/, platform: "huya", kind: "live", extractId: (u) => u.match(/huya\.com\/(\d+)/)?.[1] ?? null },
+  { test: /(?:^|[./])huya\.com\/(\d+)/, platform: "huya", kind: "live", extractId: (u) => u.match(/huya\.com\/(\d+)/)?.[1] ?? null },
   // 斗鱼直播(douyu.com/{roomId})
-  { test: /douyu\.com\/(\d+)/, platform: "douyu", kind: "live", extractId: (u) => u.match(/douyu\.com\/(\d+)/)?.[1] ?? null },
+  { test: /(?:^|[./])douyu\.com\/(\d+)/, platform: "douyu", kind: "live", extractId: (u) => u.match(/douyu\.com\/(\d+)/)?.[1] ?? null },
   // 抖音直播(live.douyin.com/{rid})
   {
     test: /live\.douyin\.com\/(\S+)/,
