@@ -276,3 +276,18 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
   - `rss/podcast.ts` id 兜底 `hash-${title}`(与 core deserialize 已修的同源;播客几乎都带 guid)。
 - **未发现**:翻页游标语义(实测页间 0 重叠)、kind 标注一致性、tpl: 契约(serialize-contract 全绿)、
   失败处理、URL/正则/id 生成 —— 均正确。
+
+## mobile 接入审计（2026-10-13 第十四轮）
+
+- [x] **[高] `store.ts` addFeed 无重复拦截** — 同 URL 加两次 → 两条 rss:url 订阅,同 feed 的
+  相同 item.id 存两份(key 冲突/未读翻倍/patch 一次改两条)。加去重;并去掉冗余的显式 refresh。
+- [x] **[中] `store.ts` 手动刷新 force:false** — TTL 内命中缓存,列表无变化。改 force:true。
+- [x] **[高] `App.tsx` Detail 无「打开原文」出口** — 补全失败时死路,且文案承诺了不存在的按钮。
+  加按钮走 appHost.openExternal。
+- [x] **[中] `App.tsx` 订阅副标题显示 channelKey(恒 "rss:url")** — 改显示 feed 地址。
+- [x] **[中] `App.tsx` 退订无确认** — 触屏误触 + 不可撤销。加 window.confirm。
+- **存疑/未改（低危）**:补全阈值 mobile 400 vs crawler 800 错配(白抓一次,desktop 同款);
+  `looksLikeHtml` 误伤「讲 HTML 的纯文本」(desktop 用 hasFull 绕开,mobile 无该标志);
+  行/tab 的 a11y(li onClick 无 role/tabIndex)、触控目标偏小;初始化失败无重试按钮。
+- **未发现**:XSS(全字符串渲染,无 innerHTML)、refresh 串行/竞态、savePosition、
+  首启无种子(合定位)、MediaImage 接入 —— 均正确。
