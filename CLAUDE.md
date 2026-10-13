@@ -363,5 +363,9 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **OPML 导入导出**：✅ 已完成（设置→订阅与分组）。编解码在 `packages/xml/src/opml.ts`
   （唯一持有 fast-xml-parser 的包），订阅映射在 `apps/desktop/src/lib/opml.ts`。
   导入落 `rss:url` 通用直链（register.ts 新增）；导出只含带 URL 的 rss/rsshub 订阅。
+- **扫码登录 UI**：✅ 已完成（账号与凭证页）。`dl.scanLogin` 驱动 channel 级
+  `Loginable`（bili 纯 HTTP / xhs CPD / weibo）；`QrImage` 吃 data URL 与待编码文本两种载荷。
+- **自动保活**：未做（仅 bili 可行，见 `docs/platform-login-research.md`）。
+- **文章正文补全**：✅ 已完成（2026-10-13，含 KV 持久缓存）——见「平台现状与坑」通用 RSS 段。
   ⚠️ 搜索渠道（bili:search 等）无独立 feed URL，**不在导出内**（若要需按关键字重建）
 - **自动保活**（未做，仅 bili 可行）
