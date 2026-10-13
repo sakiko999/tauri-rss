@@ -126,3 +126,40 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - [ ] **[低] `serialize-contract.check.ts` 盲区** — 只检测「deserialize 读、serialize 不写」,
       检测不到「**两侧都漏**」的字段(如上面的 quality/raw/media[])。扩展需维护「应透传字段」
       期望清单,成本不低;当前新增字段时会显式加守卫用例,暂够。
+
+## resolve 平台解析层审计（2026-10-13 第七轮）
+
+- [x] **[高] `bili/danmaku-proto.ts:60`** — 内层 `while (p < end)` 无边界保护:截断帧声明
+      长度超缓冲 → p 到底后 varint 不前进 → 死循环冻结事件循环(实测 120s+ 挂住)。clamp end
+      + 未前进即 break;新守卫 danmaku-proto.check.ts。
+- [x] **[中] `douyu/danmaku.ts:61`** — 一帧多包只解首包,其后静默丢(斗鱼高峰粘包常见)。
+      按 fullMsgLength+4 逐包遍历;新守卫 douyu-frame.check.ts。⚠️ 帧长 = fullMsgLength+4。
+- [x] **[中] `youtube/signature.ts:210`** — 解 n 参数时从 googlevideo 直链正则抠 videoId 抠到
+      **CDN 主机名**(rr3---sn-...)→ 取错 base.js → 流丢弃。改由 resolveYoutubeStreams 层层传
+      真实 videoId(resolveFormatUrl → deobfuscateNParam)。
+- [x] **[中] `bili/client.ts:115` `ensureBuvid`** — buvidPromise 无逐出:一次瞬时失败永久毒化
+      → 4 个走 buvid 的 bili 渠道全废。补 `.catch(清缓存)`(对称于 getNavData 已修的坑)。
+- [x] **[中] `douyin/stream.ts:31`** — step1 enter 与 step2 reflow 各调一次 fetchRoom(签名还
+      不同)→ 反爬侧见同房间双 enter。实测 enter 响应**根本不含 stream_url**(纯拿 id_str 长号),
+      重复 100% 发生。step1 响应传给 step2 复用。resolve 1.53s→1.33s。
+- **判定非缺陷(复核纠正)**:
+  - bili `qnDescName` 读 `playurl.g_qn_desc` —— 审计标「存疑」,**实测该字段确在 playurl 层**
+    (8 条,10000→原画/400→蓝光/250→超清/150→高清),代码正确。
+  - youtube 直播 chat poller 共享闭包状态 —— 每次 resolve 新建 poller(danmaku 来自
+    resolved),`[danmaku]` effect 重订阅拿新实例,实际不可达。
+- [ ] **[低/潜在] `douyin/stream.ts:111`** — `stream_data` 键名级别变更时主路径返回空 → 降级链
+      (慢 2 RTT + 可能低画质)。无失败证据,待上游字段变更时再处理。
+
+## crawler 渠道层审计（2026-10-13 第八轮）
+
+- [x] **[高] `bili/client.ts` `ensureBuvid`** — 同上(该审计独立发现同一处)。
+- [x] **[中] 四平台直播「全部房间失败」当成功 0 条** — bili:live/live:douyu/live:huya/
+      live:douyin 全房间失败时静默返空(离线房间仍返 Live,全 null 必是失败)。改为抛出。
+- [x] **[中] `huya/discover.ts:137` 搜主播 online 恒 0** — 读了主播桶**不存在**的
+      game_total_count(桶里只有 game_activityCount=活动热度,非观众数)。改为省略 online
+      (UI 显「—」),与 douyu 搜主播同款。
+- [x] **[低] `bili/square.ts:34`** — id 含数组下标 → 词位次变动产生重复。改为只用词(与
+      weibo:hot/douyin:trend 同款)。
+- [x] **[低] `douyin/live.ts:85`** — `raw:streamUrl` 死字段(raw 不经 XML,下游重新 fetchRoom)。
+- [ ] **[低] `weibo/user.ts:55`** — 首次翻页重拉首页拿 mids(多 2 次往返)。正确性无损、
+      注释已解释必要性;要省需跨调用缓存 lastMid(状态脆),暂缓。
