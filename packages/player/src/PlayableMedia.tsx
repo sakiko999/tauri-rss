@@ -132,7 +132,8 @@ export function PlayableMedia({
 
   // 最终播放用的流:初始流或懒解析结果。弹幕随解析结果附带(resolve 前 undefined)。
   const playStreams = resolved?.streams ?? streams ?? []
-  const hasPlayable = playStreams.length > 0
+  // ⚠️ 不只看长度:全空 url 的流等于无形(上游 dash 拼装失败会给 `{url:""}`)→ 当作无可播。
+  const hasPlayable = playStreams.some((s) => !!s.url)
   // 弹幕总开关关闭时不把流交给弹幕层(不建连接,而非建了再隐藏)。
   const danmaku = showDanmaku ? resolved?.danmaku : undefined
 
@@ -387,6 +388,12 @@ export function PlayableMedia({
     )
   }
 
+  // ⚠️ 无 url 的流(如 bili dash 拼装失败给的空 url):兜底 video 也会是永不加载的黑框,
+  // 且原生 video 无 src 不触发 onError,用户毫无诊断。显式给空态。
+  if (!stream.url) {
+    return <MediaState title="暂时没有可播流" detail="平台未返回可解析的直链(可能是拼装失败或需要登录)。" />
+  }
+
   // 未知流类型:兜底原生 <video>(如 youtube 直链失败兜底的 format:"web")。
   // 统一自撑 16:9(与 VideoShell 对齐):容器 padding-top 撑高,video absolute 填满,
   // 未初始化的 video 不会以默认 300x150 尺寸悬浮。
@@ -394,6 +401,7 @@ export function PlayableMedia({
     <div className="relative w-full bg-black" style={{ paddingTop: "56.25%" }}>
       <video
         ref={videoRef}
+        src={stream.url}
         controls
         autoPlay={autoPlay}
         className="absolute inset-0 h-full w-full object-contain"

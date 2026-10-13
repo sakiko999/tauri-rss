@@ -35,8 +35,22 @@ export function attemptPlayWithMuteFallback(
     (e: unknown) => {
       log.playSettled()
       const name = (e as { name?: string })?.name
-      // 媒体未就绪/中断(AbortError):非 policy 拦截,不静音——等 canplay/就绪事件再试。
-      if (name === "AbortError") return
+      // 媒体未就绪/中断(AbortError):非 policy 拦截,不静音。⚠️ 调用方的 canplay 是
+      // `{once:true}` 且此刻已消费——不能只 return 等它(mp4 分支的 canplay 恰在 AbortError
+      // 前已派发),否则**没有第二次机会**,画面永久静止。挂一次性 timeupdate 兜底重试
+      // (timeupdate 只在媒体真推进时触发 → 就绪证据;media 已播放则该监听不触发,幂等)。
+      if (name === "AbortError") {
+        if (media.isConnected) {
+          media.addEventListener(
+            "timeupdate",
+            () => {
+              if (media.paused && media.isConnected) void play()
+            },
+            { once: true },
+          )
+        }
+        return
+      }
       if (opts.autoPlay && !media.muted && media.isConnected) {
         log.playMutedFallback({ reason: name ?? "unknown" })
         media.muted = true

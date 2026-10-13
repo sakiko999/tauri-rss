@@ -141,10 +141,15 @@ export function DanmakuLayer({
       return
     }
     if (t <= lastTRef.current) return
-    // ⚠️ 冷启动:首批弹幕晚于 currentTime 到达(视频直链先起播、弹幕网络在途)时,
-    // 开头这批的 timeMs ≤ lastT(已被 lastT 单调推进越过)→ 严格 `>start` 会永久滤掉,
-    // 表现为开头一段弹幕整体缺失。尚未发射任何条目时把下界回拨到首批最早 timeMs 之前。
-    const start = spawnedRef.current.size === 0 && firstBatchRef.current !== null ? Math.min(lastTRef.current, firstBatchRef.current - 1) : lastTRef.current
+    // ⚠️ 冷启动补发:首批弹幕晚于 currentTime 到达(视频直链先起播、弹幕网络在途)时,
+    // 开头这批的 timeMs ≤ lastT 会被严格 `>start` 永久滤掉 → 开头一段弹幕缺失。
+    // 触发条件必须**同时**满足:
+    //   - 尚未发射任何条目(spawnedRef.size===0);
+    //   - **确实从头起播**(lastT ≤ 1s)——否则续播/前跳(SEEK_RESET 把 lastT 设为 30s、
+    //     size 仍为 0)会把 999ms~30s 的历史弹幕一次糊屏(即 SEEK_RESET 要防的「一跳一大波」)。
+    const fb = firstBatchRef.current
+    const coldStart = spawnedRef.current.size === 0 && lastTRef.current <= 1000 && fb !== null
+    const start = coldStart && fb !== null ? Math.min(lastTRef.current, fb - 1) : lastTRef.current
     lastTRef.current = t
     const fresh: DanmakuItem[] = []
     for (const d of vodPoolRef.current) {
