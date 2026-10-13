@@ -74,8 +74,9 @@ export interface DataLayer {
   /** 懒解析某条 video item 的可播流(播放时调用;URL 带 deadline 签名,不缓存)。
    *  返回流 + 弹幕能力(source 具备 DanmakuPlayable 时附带,一次拿齐)。 */
   resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
-  /** 单条 social 详情(点赞器弹窗;bili/weibo 列表已完整直接给 item,xhs 需匿名拉详情补全)。 */
-  resolveSocialDetail(subscriptionId: string, itemId: string): Promise<MediaItem | null>
+  /** 单条详情补全(阅读视图看全文 / 社交弹窗看多图)。走 crawler ItemDetailSource,
+   *  无详情能力的源原样返回 item;抓失败也回退 item(不空窗)。 */
+  resolveDetail(subscriptionId: string, itemId: string): Promise<MediaItem | null>
   /** 懒解析某直播房间的可播流(播放时调用;playUrls 带 expiry 签名,不缓存)。 */
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
   /** 热搜词 → 该词下内容流(desktop 热搜三栏右栏;不持久,直接返回 MediaItem[])。 */
@@ -434,9 +435,10 @@ export function createDataLayer(): DataLayer {
     return deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
   }
 
-  /** 单条 social 详情:store 里找 item(带 xsecToken)→ source 探测 resolveDetail → 匿名补全。
-   *  bili/weibo 列表已完整(xhs 才缺),此处对 xhs 走 noteDetail。item 不在 store 则返回 item 本身。 */
-  async function resolveSocialDetail(subscriptionId: string, itemId: string): Promise<MediaItem | null> {
+  /** 单条详情:store 里找 item → source 探测 ItemDetailSource → 补全。
+   *  xhs 走 noteDetail(匿名,需列表项 xsec_token);通用 RSS 抓原文页提正文;
+   *  bili/weibo 列表已完整(无该能力)→ 原样返回。item 不在 store 则返回 null。 */
+  async function resolveDetail(subscriptionId: string, itemId: string): Promise<MediaItem | null> {
     const sub = await repo.get(subscriptionId)
     if (!sub) return null
     const item = store.all().find((it) => it.id === itemId)
@@ -446,11 +448,9 @@ export function createDataLayer(): DataLayer {
     const info = await sourceInfoFor(sub)
     const source = channel.getSource(info)
     if (!isItemDetailSource(source)) return item // 无详情能力(bili/weibo 列表已完整)→ 原样返回
-    // 详情源:crawler resolveDetail 读 item.url 提 noteId + item.xsecToken,传这两字段+id。
-    // item.xsecToken 仅 SocialItem 有(social 源必是 social kind),cast 取。
-    const detailItem = await source
-      .resolveDetail({ url: item.url, xsecToken: (item as { xsecToken?: string }).xsecToken, id: item.id } as never)
-      .catch(() => null)
+    // 传**完整 item**(不是仅 url/id):通用 RSS 的 resolveDetail 是增量补全(先 spread 原
+    // item 再填 content),只给三字段会序列化出残缺条目。xhs 只读 url/xsecToken,多传无损。
+    const detailItem = await source.resolveDetail(item as never).catch(() => null)
     if (!detailItem) return item // 详情失败回退原 item(不空窗)
     // crawler Item(含完整图文)→ XML → core MediaItem(复用 XML 契约,不新增序列化面)。
     const xml = serializeFeed([detailItem], { channelTitle: channel.name })
@@ -618,7 +618,7 @@ export function createDataLayer(): DataLayer {
     resolvePlay,
     resolveLivePlay,
     resolveHotWord,
-    resolveSocialDetail,
+    resolveDetail,
     canLoadMore,
     loadMore,
     totalOf: (id) => pageTotals.get(id),

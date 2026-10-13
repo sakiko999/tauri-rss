@@ -5,7 +5,7 @@
  * 保留换行的 div。
  * 滚动进度条按主区绝对定位(styles.css 里 .main-region position:relative)。
  */
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import DOMPurify from "dompurify"
 import { useDesktop } from "../../store/index.ts"
 import { StateBlock } from "../../components/StateBlock.tsx"
@@ -68,11 +68,40 @@ export function ReaderMain() {
     return () => cancelAnimationFrame(raf)
   }, [item?.id])
 
+  /**
+   * 按需补全正文:通用 RSS 只带摘要(feed 没给全文),点开时抓原文页提正文。
+   * 一次性副作用——补回的 full 不走 store.patch(避免每次渲染都更新),按 itemId 对位
+   * 展示即可;key 变了自然丢弃。⚠️ 声明在所有 hook 之后、early return 之前。
+   */
+  const [full, setFull] = useState<{ id: string; content: string } | null>(null)
+  const itemId = item?.id
+  const curContent = item?.kind === "article" ? item.content ?? "" : ""
+  useEffect(() => {
+    if (!itemId || item?.kind !== "article") return
+    if (curContent.length >= 400) return // feed 已带全文,不折腾
+    const dl = useDesktop.getState().dl
+    if (!dl) return
+    const subId = item.subscriptionId
+    let live = true
+    void dl
+      .resolveDetail(subId, itemId)
+      .then((d) => {
+        const text = d?.kind === "article" ? d.content ?? "" : ""
+        if (live && text.length > curContent.length) setFull({ id: itemId, content: text })
+      })
+      .catch(() => {}) // 补全失败静默:原文页抓不到就照常显示摘要
+    return () => {
+      live = false
+    }
+  }, [itemId, curContent])
+
   const article = item?.kind === "article" ? item : null
-  const html = article?.contentFormat === "html" || (article?.content ?? "").includes("<")
+  /** 展示用正文:补全结果优先(同一 itemId 时)。 */
+  const shownContent = full && full.id === itemId ? full.content : curContent
+  const html = article?.contentFormat === "html" || shownContent.includes("<")
   const cleanHtml = useMemo(
-    () => (article && html ? DOMPurify.sanitize(article.content ?? "") : ""),
-    [article, html],
+    () => (article && html ? DOMPurify.sanitize(shownContent) : ""),
+    [article, html, shownContent],
   )
 
   if (!item) {
@@ -208,12 +237,19 @@ export function ReaderMain() {
               <div className="article-body" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: cleanHtml }} />
             ) : (
               <div className="article-body" style={{ whiteSpace: "pre-wrap" }}>
-                {article.content || item.summary || "（该条目没有正文，请打开原文查看）"}
+                {shownContent || item.summary || "（该条目没有正文，请打开原文查看）"}
               </div>
             )
           ) : (
             <div className="article-body">{item.summary || "（该条目没有正文，请打开原文查看）"}</div>
           )}
+          {/* feed 只带摘要时按需补全原文正文:补全前给「正在补全」提示,避免用户以为
+              摘要就是全文而直接去开原文。 */}
+          {article && !full && curContent.length < 400 && article.url ? (
+            <p className="article-resolving t-micro t-dim">
+              <Icon name="loader" size={13} className="animate-spin" /> 正在补全原文正文…
+            </p>
+          ) : null}
 
           <div className="article-foot">
             <button className="btn btn-secondary" onClick={() => toggleStar(item)}>

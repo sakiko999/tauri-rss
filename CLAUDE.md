@@ -110,6 +110,7 @@ bun packages/core/src/example/media-store.check.ts      # 查询分支（分组�
 bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
+bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/core/src/example/serialize-roundtrip.check.ts  # crawler→core 序列化边界（tpl 字段不丢）
 bun packages/xml/src/example/opml.check.ts              # OPML 编解码往返（分组层级）
 bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射（导出过滤 / 导入去重）
@@ -309,6 +310,12 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - 内置 RSS 直链清单 `packages/crawler/src/channels/rss/builtin.ts`；可用性结论见
   `docs/domestic-feed-availability.md`。新源先 curl 验证再并入（注意新浪科技带
   `xml-stylesheet`，会误判 HTML，实为真 RSS）
+- ⚠️ **通用 RSS 文章按需补全正文**：feed 只带 description 摘要时，点开阅读视图会抓
+  `item.url` 原文页、提正文纯文本（`crawler/channels/rss/extract.ts`，零依赖正则启发式
+  —— 全仓无 HTML 解析器，HTMLRewriter/DOMParser 各只在一端）。阈值：feed 自带正文
+  ≥ `FULLTEXT_HINT`(800) 则**不抓**（不把好 HTML 降级纯文本）；`ReaderMain` 只对
+  <400 字的 article 触发。UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条
+  能力总线，已从 `resolveSocialDetail` 更名）。SPA / 反爬占位页提取失败 → 回退原摘要
 
 ## 调研文档索引
 

@@ -417,7 +417,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const dl = get().dl
       if (!dl || item.kind !== "social") return
       void dl
-        .resolveSocialDetail(item.subscriptionId, item.id)
+        .resolveDetail(item.subscriptionId, item.id)
         .then((full) =>
           set((s) => (s.socialDetail?.item.id === item.id ? { socialDetail: { ...s.socialDetail, full } } : s)),
         )

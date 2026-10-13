@@ -2,7 +2,7 @@
  * SocialDetailModal —— 社交条目详情弹窗(点瀑布流卡片打开)。
  *
  * bili/weibo 的列表数据已完整,xhs 缺详情 → store.openSocialDetail 会异步
- * 调 resolveSocialDetail 补全,这里在 full 未就绪时显示「正在补全」。
+ * 调 resolveDetail 补全,这里在 full 未就绪时显示「正在补全」。
  *
  * ⚠️ 布局契约(照 new_desktop):flush 弹窗**不滚不 pad**,高度沿容器链传导到
  * `.social-detail` → 图片区/信息列。媒体框必须有**确定的 height**,图片百分比
@@ -82,7 +82,7 @@ export function SocialDetailModal() {
   const replies = (item as { replies?: number }).replies
   const reposts = (item as { reposts?: number }).reposts
   /**
-   * 是否在补全中。⚠️ 不能用 `full === null` 判断——resolveSocialDetail 对**无详情能力**
+   * 是否在补全中。⚠️ 不能用 `full === null` 判断——resolveDetail 对**无详情能力**
    * 的源(bili/weibo,列表数据已完整)原样返回 item,`full` 永远停在 null,
    * 那样会把完整内容一直显示成「正在补全」。只有 xhs 靠 xsec_token 拉详情。
    */

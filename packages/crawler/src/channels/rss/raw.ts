@@ -8,11 +8,16 @@
  * kind 是构造时传入的宽 `Kind`(上游 feed 类型运行时才知道),只用于产出描述
  * (deserialize 兜底)。
  */
-import type { Kind, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { Item } from "@tauri-playground/xml"
+import type { Kind, RssChannel, RssSource, SourceInfo, ItemDetailSource } from "../../index.ts"
 import { httpText } from "@tauri-playground/resolve"
 import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
+import { extractArticle } from "./extract.ts"
 
 const UA = DESKTOP_CHROME_UA
+
+/** 列表正文达到此长度即视作「feed 已带全文」,不再抓原文(避免把好 HTML 降级成纯文本)。 */
+const FULLTEXT_HINT = 800
 
 export class RawRssChannel implements RssChannel {
   readonly key: string
@@ -33,14 +38,36 @@ export class RawRssChannel implements RssChannel {
     return this.defaultUrl ? { url: this.defaultUrl } : undefined
   }
 
-  /** 纯 fetch:透传上游 XML。 */
-  getSource(info: SourceInfo): RssSource {
-    return { fetch: () => this.fetchXml(info) }
+  /** 纯 fetch:透传上游 XML + 单条详情(抓原文页提正文;feed 已带全文则原样返回)。 */
+  getSource(info: SourceInfo): RssSource & ItemDetailSource {
+    return { fetch: () => this.fetchXml(info), resolveDetail: (item) => this.resolveDetail(item) }
   }
 
   private async fetchXml(info: SourceInfo): Promise<string> {
     const url = info.url ?? this.defaultUrl ?? ""
     if (!url) throw new Error(`raw rss channel "${this.key}": url is required`)
     return httpText(url, { "user-agent": UA })
+  }
+
+  /**
+   * 单条详情补全:**只对 article** 抓 url 原文页提取正文纯文本 + 头图。
+   * - feed 本身已带全文(content 长) → 原样返回(不把好 HTML 降级成纯文本);
+   * - 提取失败(SPA / 反爬占位页) → 返回 null,调用方回退原摘要(不空窗);
+   * - social/video/live **不碰**:social 源(weibo/bili)列表数据已完整,原文页提取纯文本
+   *   反而更差;video/live 的 url 是播放页不是文章。
+   */
+  private async resolveDetail(item: Item): Promise<Item | null> {
+    if (item.kind !== "article") return item
+    if ((item.content ?? "").length >= FULLTEXT_HINT) return item
+    if (!item.url || !/^https?:/i.test(item.url)) return item
+    let html: string
+    try {
+      html = await httpText(item.url, { "user-agent": UA })
+    } catch {
+      return null // 抓取失败(网络/反爬)→ 调用方回退原摘要
+    }
+    const ex = extractArticle(html, item.url)
+    if (!ex) return null
+    return { ...item, content: ex.text, contentFormat: "text", thumbnail: item.thumbnail ?? ex.image }
   }
 }
