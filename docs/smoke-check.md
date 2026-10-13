@@ -19,6 +19,7 @@
 | OPML | `apps/xml` + `apps/desktop` 的 `opml.check.ts` |
 | desktop UI 布局/隐藏 | `scripts/ui-probe.ts goto <node>` + `ui-console.ts` |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
+| 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 
 ## 二、类型检查（6 包，必须全 0）
 
