@@ -127,6 +127,8 @@ interface DesktopState {
   markRead(item: MediaItem): void
   markAllRead(ids: string[]): void
   toggleStar(item: MediaItem): void
+  /** 记录续播位置(秒)。播完(近片尾)则清除记录,避免重看时又跳到结尾。 */
+  savePosition(item: MediaItem, sec: number, durationSec: number): void
 
   resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
@@ -572,6 +574,24 @@ export const useDesktop = create<DesktopState>((set, get) => {
       // ⚠️ 必须落库:refresh 会整批重建条目(isStarred 默认 false),只 patch 内存
       // 的话刷新/重启后星标就丢了(core 侧 refresh 会用 reading 回填)。
       void dl.reading.setStarred(item.id, next)
+    },
+
+    savePosition(item, sec, durationSec) {
+      const dl = get().dl
+      if (!dl) return
+      // 近片尾(最后 15s 或 98%)清除记录 —— 否则「看完」下次进来直接跳结尾。
+      const atEnd = durationSec > 0 && (durationSec - sec < 15 || sec / durationSec > 0.98)
+      if (atEnd) {
+        if ((item.positionSec ?? 0) > 0) {
+          dl.store.patch(item.id, { positionSec: undefined })
+          void dl.reading.setPosition(item.id, 0)
+        }
+        return
+      }
+      // 节流:不足 5s 的变化不落库(播放页 progress 每 4Hz 回调,直接写会打爆 SQLite)。
+      if (Math.abs(sec - (item.positionSec ?? 0)) < 5) return
+      dl.store.patch(item.id, { positionSec: sec })
+      void dl.reading.setPosition(item.id, sec)
     },
 
     async resolvePlay(subscriptionId, itemId) {

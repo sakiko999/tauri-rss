@@ -2124,6 +2124,19 @@ div + .group-block {
   font-size: var(--fs-micro);
   font-weight: 560;
 }
+/* 续播进度条:贴卡片底缘的细条(整卡宽度),看过一半一眼可辨。 */
+.card-progress {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 3px;
+  background: oklch(0.12 0.01 264 / 55%);
+}
+.card-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
 .card-play {
   position: absolute;
   inset: 0;

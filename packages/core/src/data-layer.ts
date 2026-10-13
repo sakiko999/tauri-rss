@@ -144,11 +144,11 @@ export function createDataLayer(): DataLayer {
   }
 
   /**
-   * 把持久化的阅读态(已读/星标)回填到刚重建的条目上。
+   * 把持久化的阅读态(已读/星标/续播位置)回填到刚重建的条目上。
    *
-   * ⚠️ 必需的原因:deserialize 每次都按「新条目」处理(isUnread=true、isStarred=false),
-   * 而 refresh 是整批 replace。不回填的话每次刷新/重启,已读与星标都会被抹掉
-   * —— 星标只 patch 内存 store(reading 无 starred 字段)时尤其明显。
+   * ⚠️ 必需的原因:deserialize 每次都按「新条目」处理(isUnread=true、isStarred=false,
+   * 无 positionSec),而 refresh 是整批 replace。不回填的话每次刷新/重启,已读、星标、
+   * 续播位置都会被抹掉 —— 星标/续播只 patch 内存 store 时尤其明显。
    */
   async function applyReadingState(items: MediaItem[]): Promise<MediaItem[]> {
     if (!items.length) return items
@@ -160,6 +160,7 @@ export function createDataLayer(): DataLayer {
       const next: Partial<MediaItem> = {}
       if (rec.read && it.isUnread) next.isUnread = false
       if (rec.starred && !it.isStarred) next.isStarred = true
+      if (rec.positionSec && !it.positionSec) next.positionSec = rec.positionSec
       return Object.keys(next).length ? ({ ...it, ...next } as MediaItem) : it
     })
   }

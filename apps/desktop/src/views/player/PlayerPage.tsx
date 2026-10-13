@@ -28,6 +28,7 @@ export function PlayerPage() {
   const addToQueue = useDesktop((s) => s.addToQueue)
   const clearQueue = useDesktop((s) => s.clearQueue)
   const toggleStar = useDesktop((s) => s.toggleStar)
+  const savePosition = useDesktop((s) => s.savePosition)
   const danmakuVisible = useDesktop((s) => s.danmakuVisible)
   const toggleDanmaku = useDesktop((s) => s.toggleDanmaku)
   const settings = useDesktop((s) => s.settings)
@@ -119,8 +120,11 @@ export function PlayerPage() {
         <div className="player-layout">
           <div>
             <div className="stage">
-              {/* PlayableMedia/VideoShell 自带 relative + aspect-ratio 容器与控件层,
-                  这里不要再包一层,否则控件定位失参照。 */}
+              {/* PlayableMedia/VideoShell 自带 relative + aspect-ratio 容器与控件层。
+                  ⚠️ 圆角/裁切须在**本组件外部一层**给(player 包已改为方角,见 .stage):
+                  包一层 rounded-xl + overflow-hidden 当舞台框,而非在 PlayableMedia 上加
+                  className —— 它的根节点尺寸/定位由自身撑,外面包一层才不影响控件定位。 */}
+              <div className="overflow-hidden rounded-xl">
               <PlayableMedia
                 key={item.id}
                 // 统一传 item.id:core 的 findItemUrl 按 id 或 roomId 都能命中条目
@@ -133,8 +137,12 @@ export function PlayerPage() {
                 autoResolve={settings?.autoplayVideo ?? true}
                 // 弹幕总开关关闭时不建弹幕连接(而非建了再藏)。
                 showDanmaku={danmakuOn}
+                // 续播:非直播才有位置语义(item.positionSec 由 core 从 reading 回填)。
+                startAtSec={isLive ? undefined : item.positionSec}
+                onProgress={(sec, dur) => savePosition(item, sec, dur)}
                 onError={(err) => useDesktop.getState().toast("error", "播放失败", String(err))}
               />
+              </div>
             </div>
 
             <div className="player-meta">

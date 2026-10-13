@@ -107,6 +107,12 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
           <span className="card-duration num">{fmtTime(dur)}</span>
         ) : null}
         {live && online ? <span className="live-online num">{fmtCount(online)} 人在看</span> : null}
+        {/* 续播进度条(看过一半的条目一眼可辨)。仅非直播、有位置与时长时。 */}
+        {!isLiveNow && dur && item.positionSec ? (
+          <span className="card-progress" aria-hidden>
+            <span style={{ width: `${Math.min(100, (item.positionSec / dur) * 100)}%` }} />
+          </span>
+        ) : null}
         {/* .card-play 是 pointer-events:none(整卡可点),内层要自己接管点击,
             否则「播放」按钮形同虚设。article/social 没有可播流 → 不摆播放按钮。 */}
         {playable ? (

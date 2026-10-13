@@ -7,6 +7,10 @@
  *
  * 纯受控:全部状态来自 `VideoPlayState`,操作来自 `VideoOps`。
  * 挂载在 VideoShell 底部,随自动隐藏一起显隐。
+ *
+ * ⚠️ **本组件(及整个 player 包)不自带圆角** —— 方角,由外部消费者(desktop 的
+ * `.stage`)决定圆角与裁切。曾在此写死 `rounded-b-xl`,导致播放器内嵌到任何非圆角
+ * 容器时控件条比画面更圆、底部两角错位。容器圆角 = 播放器外观,不归播放器管。
  */
 import type { VideoOps, VideoPlayState, FullscreenApi } from "./hooks/useVideoElement.ts"
 import {
@@ -37,7 +41,7 @@ export function PlayerControls({
   onQuality: (rate: number) => void
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-b-xl bg-linear-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
+    <div className="flex flex-col gap-1 bg-linear-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
       {/* Seek(直播只显示缓冲状态,不可拖拽;带「回直播」按钮) */}
       <div className="flex items-center gap-2">
         <MediaLiveEdgeButton state={state} ops={ops} />

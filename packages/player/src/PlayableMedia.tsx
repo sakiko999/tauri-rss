@@ -53,10 +53,10 @@ function MediaState({
   detail?: string
   action?: React.ReactNode
 }) {
-  // 圆角与 VideoShell / PlayerControls 同档(rounded-xl):加载态与播放态切换时
-  // 舞台四角不变形。
+  // ⚠️ 不自带圆角(与 VideoShell/PlayerControls 同契约):方角,圆角由外部容器
+  // (.stage)统一决定,状态切换时四角才与播放态一致。
   return (
-    <div className="flex aspect-video w-full flex-col items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-[var(--surface-2)] p-6 text-center">
+    <div className="flex aspect-video w-full flex-col items-center justify-center gap-2.5 overflow-hidden bg-[var(--surface-2)] p-6 text-center">
       {tone === "loading" ? (
         <SpinnerIcon className="h-8 w-8 animate-spin text-[var(--text-dim)]" />
       ) : (
@@ -107,6 +107,8 @@ export function PlayableMedia({
   onError,
   autoResolve = true,
   showDanmaku = true,
+  startAtSec,
+  onProgress,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -118,6 +120,10 @@ export function PlayableMedia({
   autoResolve?: boolean
   /** 是否渲染弹幕层(设置总开关;false 时解析结果里的 danmaku 直接丢弃)。 */
   showDanmaku?: boolean
+  /** 起播跳转到的秒数(续播)。URL 无参数即可;越界由 seek 侧 clamp。 */
+  startAtSec?: number
+  /** 播放中进度回调(秒;节流由宿主侧决定)。宿主据此持久化续播位置。 */
+  onProgress?: (currentSec: number, durationSec: number) => void
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -211,6 +217,50 @@ export function PlayableMedia({
     el.addEventListener("canplay", attemptUnmuted, { once: true })
     return () => el.removeEventListener("canplay", attemptUnmuted)
   }, [autoPlay, isNativeStream, stream?.url])
+
+  // ── 续播:起播跳转 + 进度上报 ──────────────────────────────────────────────
+  // 跳转只在**换了流**后做一次(resumedRef 按 stream?.url 重置;StrictMode 双挂载
+  // 与控件重渲染都不会重复跳)。≤3s 视为「从头看」不跳 —— 否则片头几秒的进度会被
+  // 当成续播点,每次进来都卡在开头。
+  const resumedRef = useRef(false)
+  useEffect(() => {
+    resumedRef.current = false
+  }, [stream?.url])
+  useEffect(() => {
+    const at = startAtSec ?? 0
+    if (!stream || resumedRef.current || at <= 3) return
+    const el = videoRef.current
+    if (!el) return
+    const apply = () => {
+      if (resumedRef.current) return
+      resumedRef.current = true
+      try {
+        el.currentTime = at
+      } catch {
+        // 个别状态(未加载完)抛 InvalidStateError,忽略——不跳也能从头播。
+      }
+    }
+    // 元数据就绪才可 seek;已就绪(切档回来)直接跳。
+    if (el.readyState >= 1) apply()
+    else el.addEventListener("loadedmetadata", apply, { once: true })
+    return () => el.removeEventListener("loadedmetadata", apply)
+  }, [stream, startAtSec])
+
+  // 进度上报:timeupdate(4Hz)触发,宿主侧决定节流/落库。直播无义(duration 0)不报。
+  const onProgressRef = useRef(onProgress)
+  onProgressRef.current = onProgress
+  useEffect(() => {
+    if (!onProgress) return
+    const el = videoRef.current
+    if (!el) return
+    const handle = () => {
+      const dur = Number.isFinite(el.duration) ? el.duration : 0
+      if (dur <= 0) return
+      onProgressRef.current?.(el.currentTime, dur)
+    }
+    el.addEventListener("timeupdate", handle)
+    return () => el.removeEventListener("timeupdate", handle)
+  }, [stream?.url])
 
   // 解析失败展示。
   if (error) {
@@ -311,6 +361,8 @@ export function PlayableMedia({
       <AudioShell
         src={stream.url}
         autoPlay={autoPlay}
+        startAtSec={startAtSec}
+        onProgress={onProgress}
         onError={(e) => {
           setPlayError(e)
           onError?.(e)
@@ -327,8 +379,26 @@ export function PlayableMedia({
   // 统一自撑 16:9(与 VideoShell 对齐):容器 padding-top 撑高,video absolute 填满,
   // 未初始化的 video 不会以默认 300x150 尺寸悬浮。
   return (
-    <div className="relative w-full rounded-xl bg-black" style={{ paddingTop: "56.25%" }}>
-      <video ref={videoRef} controls autoPlay={autoPlay} className="absolute inset-0 h-full w-full object-contain" />
+    <div className="relative w-full bg-black" style={{ paddingTop: "56.25%" }}>
+      <video
+        ref={videoRef}
+        controls
+        autoPlay={autoPlay}
+        className="absolute inset-0 h-full w-full object-contain"
+        onLoadedMetadata={(e) => {
+          // 兜底分支(未知流类型)的原生 <video>:续播跳转在这里做(duration 已知)。
+          const el = e.currentTarget
+          const at = startAtSec ?? 0
+          if (at > 3 && !resumedRef.current) {
+            resumedRef.current = true
+            try {
+              el.currentTime = at
+            } catch {
+              /* ignore */
+            }
+          }
+        }}
+      />
     </div>
   )
 }

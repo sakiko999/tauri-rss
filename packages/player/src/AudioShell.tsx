@@ -19,6 +19,8 @@ export function AudioShell({
   activeQuality,
   onQuality,
   className,
+  startAtSec,
+  onProgress,
 }: {
   src: string
   autoPlay?: boolean
@@ -29,6 +31,10 @@ export function AudioShell({
   activeQuality?: number
   onQuality: (rate: number) => void
   className?: string
+  /** 起播跳转秒数(续播;播客长音频常用)。 */
+  startAtSec?: number
+  /** 播放进度回调(秒)。 */
+  onProgress?: (currentSec: number, durationSec: number) => void
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   // onError 用 ref 持最新(与 useMediaStream 的 onErrorRef 同模式):父组件每次渲染
@@ -52,6 +58,45 @@ export function AudioShell({
     el.addEventListener("canplay", attemptUnmuted, { once: true })
     return () => el.removeEventListener("canplay", attemptUnmuted)
   }, [autoPlay, src])
+
+  // 续播:起播跳转(≤3s 不跳)+ 进度上报。与 PlayableMedia 视频分支同语义。
+  const resumedRef = useRef(false)
+  useEffect(() => {
+    resumedRef.current = false
+  }, [src])
+  useEffect(() => {
+    const at = startAtSec ?? 0
+    if (resumedRef.current || at <= 3) return
+    const el = audioRef.current
+    if (!el) return
+    const apply = () => {
+      if (resumedRef.current) return
+      resumedRef.current = true
+      try {
+        el.currentTime = at
+      } catch {
+        /* 未就绪时忽略 */
+      }
+    }
+    if (el.readyState >= 1) apply()
+    else el.addEventListener("loadedmetadata", apply, { once: true })
+    return () => el.removeEventListener("loadedmetadata", apply)
+  }, [src, startAtSec])
+
+  const onProgressRef = useRef(onProgress)
+  onProgressRef.current = onProgress
+  useEffect(() => {
+    if (!onProgress) return
+    const el = audioRef.current
+    if (!el) return
+    const handle = () => {
+      const dur = Number.isFinite(el.duration) ? el.duration : 0
+      if (dur <= 0) return
+      onProgressRef.current?.(el.currentTime, dur)
+    }
+    el.addEventListener("timeupdate", handle)
+    return () => el.removeEventListener("timeupdate", handle)
+  }, [src])
 
   return (
     <div className="space-y-1">

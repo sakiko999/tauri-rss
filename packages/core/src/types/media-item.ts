@@ -49,6 +49,11 @@ export interface MediaItemBase {
   /** 用户状态。新条目默认 true,已读时清除。 */
   isUnread?: boolean
   isStarred?: boolean
+  /**
+   * 续播位置(秒)。仅 video/audio 有义;live 不记。与 isStarred 同款:
+   * 播放页写、refresh 时由 core 从 reading 回填(见 data-layer `applyReadingState`)。
+   */
+  positionSec?: number
   /** 不透明源负载,保真 round-trip。 */
   raw?: unknown
 

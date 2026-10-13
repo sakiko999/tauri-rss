@@ -212,9 +212,11 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版
   开无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用
   `scripts/tauri.ts` 叠的 `tauri.conf.dev.json`（`bun run tauri` 自动带上）
-- ⚠️ **舞台圆角必须同档**：`VideoShell` 视频框 / `PlayerControls` 控件条 / `PlayableMedia`
-  的 MediaState 空态三者都取 `rounded-xl`（12px = `--r-lg`，与卡片一致）。曾一个是
-  `rounded`(4px)、一个是 `rounded-b-lg`(8px)，控件条比画面更圆，底部两角错位
+- ⚠️ **player 包一律方角，圆角归外部**：`VideoShell`/`PlayerControls`/`PlayableMedia`
+  的 MediaState **都不自带 border-radius**（曾经三处各写死一档 `rounded-xl`/`rounded-b-lg`
+  /`rounded`，互相错位）。圆角与裁切由**消费方**决定——desktop 在 `PlayerPage` 里用
+  一层 `<div className="overflow-hidden rounded-xl">` 当舞台框（`overflow-hidden` 负责把
+  方角 video/控件裁到圆角里）。内嵌到任何容器都不该假定圆角档位
 
 ## 弹幕（细节见 `docs/danmaku-research.md`）
 
@@ -318,7 +320,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `docs/desktop-crawler-service.md`
 - **三模式 UI**：三分栏 ✅ / 瀑布流 / 短视频。⚠️ live 源是 1:1、其他源是 1:N 的错位，
   倾向分组聚合，设计见 `docs/technical-plan.md`
-- **续播与阅读进度**：core 的 `reading.setPosition` / `setScrollRatio` 无消费者
+- **续播与阅读进度**：✅ **续播已完成**（`setPosition` 有消费者了）。`MediaItem.positionSec`
+  由 core `applyReadingState` 从 reading 回填（与 isStarred 同款）；playback 侧
+  `PlayableMedia` 的 `startAtSec` 起播跳转（≤3s 不跳）+ `onProgress` 上报，store
+  `savePosition` 节流（<5s 不写）+ 近片尾清除；卡片 `.card-progress` 进度条。
+  ⏳ `setScrollRatio`（文章阅读进度）**仍无消费者**
 - **OPML 导入导出**：✅ 已完成（设置→订阅与分组）。编解码在 `packages/xml/src/opml.ts`
   （唯一持有 fast-xml-parser 的包），订阅映射在 `apps/desktop/src/lib/opml.ts`。
   导入落 `rss:url` 通用直链（register.ts 新增）；导出只含带 URL 的 rss/rsshub 订阅。
