@@ -44,20 +44,25 @@ export function decodeDanmakuSeg(buf: Uint8Array): DanmakuElem[] {
     else if (wire === 1) p += 8
     else if (wire === 2) p += varint()
     else if (wire === 5) p += 4
+    // 未知 wire(group 3/4/6/7):不前进 —— 交由调用处「未前进即 break」兜底,避免死循环。
   }
 
   // 外层 DmSegMobileReply:field1 = elems(repeated message),其余字段(state 等)跳过。
   while (p < buf.length) {
+    const before = p
     const tag = varint()
     const field = tag >>> 3
     const wire = tag & 7
     if (field === 1 && wire === 2) {
-      const end = p + varint()
+      // ⚠️ 长度可能超出缓冲(截断/畸形 seg):clamp 到 buf.length,否则内层 `p < end`
+      // 在 p 到底后永远成立 → 死循环冻结整个事件循环(截断帧实测 120s+ 未返回)。
+      const end = Math.min(p + varint(), buf.length)
       let progress = 0
       let mode = 1
       let color = 0xffffff
       let content = ""
       while (p < end) {
+        const ib = p
         const t2 = varint()
         const f2 = t2 >>> 3
         const w2 = t2 & 7
@@ -68,16 +73,20 @@ export function decodeDanmakuSeg(buf: Uint8Array): DanmakuElem[] {
           else if (f2 === 5) color = v
         } else if (w2 === 2) {
           const len = varint()
-          if (f2 === 7) content = TD.decode(buf.subarray(p, p + len))
+          if (f2 === 7) content = TD.decode(buf.subarray(p, Math.min(p + len, end)))
           p += len
         } else {
           p += w2 === 1 ? 8 : 4
         }
+        // 未前进(tag 耗尽 / 未知 wire / 负长度)→ 停,杜绝死循环。
+        if (p <= ib) break
       }
       if (content) out.push({ progress, mode, color, content })
     } else {
       skip(wire)
     }
+    // 外层同样兜底:tag 耗尽或未知 wire 未推进 p → 停。
+    if (p <= before) break
   }
   return out
 }
