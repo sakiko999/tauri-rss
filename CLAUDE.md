@@ -348,6 +348,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/core-auth-architecture.md` | core 认证架构 |
 | `docs/mpv-playback-research.md` | 外部播放器 mpv 接入（未做） |
 | `docs/mobile-cdp-feasibility.md` | 移动端 CDP 可行性（未做） |
+| `docs/smoke-check.md` | ★ 端到端巡检清单（改了什么 → 跑什么） |
 
 ## 下一步
 
