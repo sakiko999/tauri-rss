@@ -254,7 +254,10 @@ export function createDataLayer(): DataLayer {
       // ⚠️ 抓取「成功」但解析出 0 条(源临时故障 / 反爬返回空壳页)= 不能当成功处理:
       //   往下走会用空数组 replace(清空列表) 并把空 XML 写进缓存,内容在内存和磁盘上
       //   一起消失,直到源恢复。已有内容时保留原样并如实报错。
-      if (items.length === 0 && store.query({ subscriptionId }).length > 0) {
+      // ⚠️ 判据**同时看 store 与持久缓存**:只看 store 时,若启动 refreshAll 对该订阅
+      //   抛错/超时(未水化),store 为空但磁盘缓存仍在 —— 空抓取会清 store 并覆盖缓存,
+      //   旧内容双丢。缓存也在则一并保护。
+      if (items.length === 0 && ((await contentCache.get(subscriptionId).catch(() => null)) !== null || store.query({ subscriptionId }).length > 0)) {
         return { subscriptionId, itemCount: 0, error: "本次抓取解析出 0 条,已保留原有内容", fetchedAt: now() }
       }
       if (total !== undefined) pageTotals.set(subscriptionId, total)
