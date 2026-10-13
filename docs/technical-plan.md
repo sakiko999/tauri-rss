@@ -167,8 +167,9 @@ export interface AppSettings {
 - ⚠️ **未用 Swiper**（原方案）：竖向整页滑动用原生 **CSS scroll-snap**（`snap-y mandatory`
   + 每屏 `snap-start`）——零依赖、手感由浏览器保证、滚轮/触控/键盘全支持。Cube/Flip 3D
   转场是加分项，本模式只要「一屏一条」，原生足够。
-- 只渲染可视 ±1：`IntersectionObserver`（阈值 0.6）追踪当前屏，只有「当前 + 前后各一」
-  挂载 `PlayableMedia`，其余渲染 poster 占位 —— 避免一次起播 N 个视频/弹幕连接。
+- **只挂当前条**：`IntersectionObserver`（阈值 0.6）追踪当前屏，仅当前条挂载
+  `PlayableMedia`，其余渲染 poster 占位。⚠️ 曾是「当前 ±1」三条，但 `PlayableMedia`
+  挂载即带声自动播、无「预加载不播」开关 → 三条同时出声 + 三路弹幕 WS（2026-10-13 修）。
 - 非当前 = 卸载（IO 把离开视口的移出挂载集）；回来重新懒解析（有 KV/内存缓存）。
   ⚠️ 这是粗粒度方案；要「保留实例只暂停」需给 PlayableMedia 加命令式 pause API（当前无）。
 - 起播策略沿用 `PlayableMedia`（静音降级 / 等 canplay 带声），键盘 ↑↓/jk 切换。
