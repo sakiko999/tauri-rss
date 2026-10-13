@@ -370,8 +370,16 @@ function Subscriptions() {
             <tbody>
               {subscriptions.map((s) => (
                 <tr key={s.id}>
-                  <td className="od-truncate" style={{ maxWidth: 260 }}>
-                    <button className="btn btn-quiet btn-sm" onClick={() => go(s.id)} title="查看内容">
+                  {/* ⚠️ 截断放在**内层按钮**上,不要 `od-truncate` 到 `<td>` 本体:
+                      td 是 display:block + maxWidth 260,会小于列宽(40%)→ 行分隔线在
+                      该列断开,右半截成空白条。td 保持 table-cell 撑满列宽。 */}
+                  <td style={{ maxWidth: 0 }}>
+                    <button
+                      className="btn btn-quiet btn-sm od-truncate"
+                      style={{ maxWidth: "100%" }}
+                      onClick={() => go(s.id)}
+                      title={s.title}
+                    >
                       {s.title}
                     </button>
                   </td>
