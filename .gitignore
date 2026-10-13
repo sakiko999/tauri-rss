@@ -35,3 +35,5 @@ packages/*/_probe*.mjs
 .probe*.ts
 **/atom-check*.ts
 **/_probe*.ts
+
+tmp-audit-probe*.ts
