@@ -206,10 +206,14 @@ async function resolveCid(bvidOrAid: string, cookie?: string): Promise<string> {
  * URL 带 deadline 签名,须在播放时调用(懒解析),不缓存。
  */
 async function resolvePlayUrl(bvidOrAid: string, cid: string, cookie?: string): Promise<Stream[]> {
-  const id = bvidOrAid.startsWith("av") ? `av${bvidOrAid.slice(2)}` : bvidOrAid
   const referer = `https://www.bilibili.com/video/${bvidOrAid}`
   const headers = { referer, "user-agent": BILIBILI_UA }
-  const base = `${API_MAIN}/x/player/playurl?bvid=${encodeURIComponent(id)}&cid=${cid}&platform=pc`
+  // ⚠️ av 号必须用 `avid=` 参数,不能塞进 `bvid=`:playurl 对 `bvid=av123` 判非法 →
+  // 整个 av 视频解析失败(0 流)。BV 号走 bvid。
+  const idParam = bvidOrAid.startsWith("av")
+    ? `avid=${encodeURIComponent(bvidOrAid.slice(2))}`
+    : `bvid=${encodeURIComponent(bvidOrAid)}`
+  const base = `${API_MAIN}/x/player/playurl?${idParam}&cid=${cid}&platform=pc`
 
   // 1. fnval=16 拿 DASH(音视频分离,拼 MPD)。登录后 avc 有 1080P(非会员也)。
   const dashProbe = await getJson<{ data?: Record<string, any> }>(`${base}&qn=116&fnval=16`, { referer, cookie })

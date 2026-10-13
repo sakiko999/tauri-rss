@@ -223,11 +223,10 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版
   开无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用
   `scripts/tauri.ts` 叠的 `tauri.conf.dev.json`（`bun run tauri` 自动带上）
-- ⚠️ **player 包一律方角，圆角归外部**：`VideoShell`/`PlayerControls`/`PlayableMedia`
-  的 MediaState **都不自带 border-radius**（曾经三处各写死一档 `rounded-xl`/`rounded-b-lg`
-  /`rounded`，互相错位）。圆角与裁切由**消费方**决定——desktop 在 `PlayerPage` 里用
-  一层 `<div className="overflow-hidden rounded-xl">` 当舞台框（`overflow-hidden` 负责把
-  方角 video/控件裁到圆角里）。内嵌到任何容器都不该假定圆角档位
+- ⚠️ **player 包方角（产品决定，非待补样式）**：`VideoShell`/`PlayerControls`/`PlayableMedia`
+  **都不带 border-radius** —— 常见播放器都是满幅方角设计。曾经三处各写死一档
+  （`rounded-xl`/`rounded-b-lg`/`rounded`）互相错位，且给画面套圆角本就不符合播放器惯例。
+  播放器内嵌到任意容器都不该假定圆角档位
 
 ## 弹幕（细节见 `docs/danmaku-research.md`）
 

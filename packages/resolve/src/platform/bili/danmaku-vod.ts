@@ -33,9 +33,13 @@ async function fetchDanmakuSeg(cid: number, n: number): Promise<Uint8Array | nul
  * 4 个 video channel 的 `resolveDanmaku` 都调它(与 resolveBiliPlay 同范式)。
  */
 export async function resolveBiliDanmaku(itemId: string, cookie?: string): Promise<DanmakuItem[]> {
-  const id = itemId.startsWith("av") ? `av${itemId.slice(2)}` : itemId
+  // ⚠️ av 号必须用 `aid=`,不能塞进 `bvid=av123`(view 接口判非法 → 拿不到 cid →
+  // av 视频零弹幕)。BV 号走 bvid。
+  const idParam = itemId.startsWith("av")
+    ? `aid=${encodeURIComponent(itemId.slice(2))}`
+    : `bvid=${encodeURIComponent(itemId)}`
   const view = await biliClient.getJson<{ data?: { cid?: number; duration?: number } }>(
-    `${API}/x/web-interface/view?bvid=${encodeURIComponent(id)}`,
+    `${API}/x/web-interface/view?${idParam}`,
     { referer: `https://www.bilibili.com/video/${itemId}`, cookie },
   )
   const cid = view?.data?.cid

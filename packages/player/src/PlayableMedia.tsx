@@ -53,8 +53,7 @@ function MediaState({
   detail?: string
   action?: React.ReactNode
 }) {
-  // ⚠️ 不自带圆角(与 VideoShell/PlayerControls 同契约):方角,圆角由外部容器
-  // (.stage)统一决定,状态切换时四角才与播放态一致。
+  // ⚠️ 无圆角(与 VideoShell/PlayerControls 同契约):播放器满幅方角,是产品设计。
   return (
     <div className="flex aspect-video w-full flex-col items-center justify-center gap-2.5 overflow-hidden bg-[var(--surface-2)] p-6 text-center">
       {tone === "loading" ? (

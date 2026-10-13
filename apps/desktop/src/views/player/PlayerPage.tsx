@@ -121,10 +121,8 @@ export function PlayerPage() {
           <div>
             <div className="stage">
               {/* PlayableMedia/VideoShell 自带 relative + aspect-ratio 容器与控件层。
-                  ⚠️ 圆角/裁切须在**本组件外部一层**给(player 包已改为方角,见 .stage):
-                  包一层 rounded-xl + overflow-hidden 当舞台框,而非在 PlayableMedia 上加
-                  className —— 它的根节点尺寸/定位由自身撑,外面包一层才不影响控件定位。 */}
-              <div className="overflow-hidden rounded-xl">
+                  ⚠️ **播放器无圆角**(常见播放器都是满幅方角设计)——player 包方角,
+                  这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。 */}
               <PlayableMedia
                 key={item.id}
                 // 统一传 item.id:core 的 findItemUrl 按 id 或 roomId 都能命中条目
@@ -142,7 +140,6 @@ export function PlayerPage() {
                 onProgress={(sec, dur) => savePosition(item, sec, dur)}
                 onError={(err) => useDesktop.getState().toast("error", "播放失败", String(err))}
               />
-              </div>
             </div>
 
             <div className="player-meta">

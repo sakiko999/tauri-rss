@@ -95,9 +95,9 @@ export function VideoShell({
         "group flex items-center justify-center overflow-hidden bg-black outline-none",
         // 统一自撑 16:9:relative w-full + padding-top 撑开(video 未初始化也必然有
         // 高度),父容器无需定比例。全屏时 h-full w-full 撑满。
-        // ⚠️ **不自带圆角**:圆角与裁切归外部消费者(desktop 的 `.stage`)——
-        // 播放器内嵌到任意容器都不该假定圆角档位。曾在 VideoShell / PlayerControls /
-        // MediaState 各写死一档,三者错位;现全部方角,由外部一处决定。
+        // ⚠️ **无圆角**:常见播放器都是满幅方角设计,播放器不该自带圆角(曾在
+        // VideoShell / PlayerControls / MediaState 各写死一档、互相错位)。方角是
+        // 产品决定,不是待补的样式。
         isFullscreen ? "h-full w-full relative" : "relative w-full",
         className,
       ].join(" ")}
