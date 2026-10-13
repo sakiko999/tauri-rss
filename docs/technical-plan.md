@@ -64,6 +64,12 @@ if (canPlayNativeHls) {
 数据模型缺「直播聚合」维度,单房间 live channel 本质是「单房间查询器」,
 不是「内容源」。
 
+> ✅ **方案 B 已实现(2026-10-13 复核)**:`tab:live` 节点在 `selectors.baseFor` 里
+> 就是「全库 live 条目」的聚合(`s.allItems.filter(i => i.kind === "live")`)——语义等价于
+> 「同 kind 的 live 订阅动态合成混合 feed」,无需新增 core 编排。**单房间 live 订阅仍是
+> 叶子**,只是其条目也汇入 `tab:live` 聚合视图。`short:live` 短视频流同理驱动。
+> 若后续要「按平台分组」的二次聚合(如「bili 直播」「虎牙直播」)再回到本方案细化。
+
 **倾向方案(未定,待实现前决定)**:
 - **B. 分组聚合(core 层)**:渲染层把同 kind 的 live 订阅动态合成一个混合 feed
   (「直播」分组 = 所有 live 订阅合并),无新 channel,改动集中在 core 编排
