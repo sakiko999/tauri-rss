@@ -37,6 +37,7 @@ import {
   DouyinLiveHotChannel,
   DouyinCategoryChannel,
   DouyinSearchChannel,
+  DouyinAnchorChannel,
 } from "./channels/douyin/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
 import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
@@ -88,6 +89,7 @@ export function registerBuiltinChannels(): void {
   registerChannel(new DouyinLiveHotChannel())
   registerChannel(new DouyinCategoryChannel())
   registerChannel(new DouyinSearchChannel())
+  registerChannel(new DouyinAnchorChannel())
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──
   registerChannel(new WeiboUserChannel())

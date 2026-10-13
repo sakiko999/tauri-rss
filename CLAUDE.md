@@ -192,7 +192,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
   ⚠️ **匿名搜抖音无解已用真实 Edge 复核**（路 1/2 仍 2483，搜索页被 verify-center 4031 拦）：
   登录硬门槛，**browser 模拟解不了**（xhs 是 TLS 指纹差异能解，抖音是账号门槛不能）。
-  虎牙搜索/搜主播不可分页；抖音搜主播未做。缺口见 `docs/capability-gaps.md`
+  虎牙搜索/搜主播不可分页。✅ **抖音搜主播**（`live:douyin:anchor`）：无匿名主播搜索接口
+  （2483 登录门槛，browser 解不了），走**本地过滤**——抓「综合热门(partition=720,type=1) +
+  命中分区流」房间按 `owner.nickname` 匹配（只命中在播主播）。缺口见 `docs/capability-gaps.md`
 
 **YouTube**（`docs/youtube-stream-extraction.md`）
 - 主力 client = **ANDROID_VR**：2026-08 起 ANDROID/IOS 标准 client 在部分 IP 触发

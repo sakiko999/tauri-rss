@@ -41,7 +41,7 @@
 | bili | ✅ `bili:search` | ✅ `bili:anchor` |
 | 虎牙 | ✅ `live:huya:search` | ✅ `live:huya:anchor` |
 | 斗鱼 | ✅ `live:douyu:search` | ✅ `live:douyu:anchor` |
-| 抖音 | ✅ `live:douyin:search`（⚠️ 分区名级） | ❌ 未做 |
+| 抖音 | ✅ `live:douyin:search`（⚠️ 分区名级） | ✅ `live:douyin:anchor`（本地过滤，见下） |
 | 小红书 | — | — |
 
 > ✅ **四平台搜索（2026-09-23）**：全部**匿名可用**(实测)，无需 cookie。
@@ -60,7 +60,11 @@
 > ⚠️ **虎牙搜索不可分页**——接口 `start` 参数实测无效(`start=0` 返 20 条、
 > `start>=20` 一律返同一批 40 条)，故只取首页、不声明 `Pageable`。
 > ⚠️ 参照项目斗鱼搜索带设备 DID cookie，**实测匿名响应一致**，故不注入。
-> ⚠️ 抖音搜主播未做(`partition/search` 只出分区、无主播)。
+> ✅ **抖音搜主播已落地（2026-10-13，`live:douyin:anchor`）**：无匿名主播搜索接口
+> （`aweme/v1/web/live/search` 2483 需登录，browser 也解不了——账号门槛），故走**本地过滤**：
+> 抓「综合热门流(partition=720,type=1) + 命中关键词的分区流」的房间，按 `owner.nickname`
+> 双向包含匹配。实测 `水姐` → 命中「水姐（老公晚安）」，`王者` → 3+ 位主播。
+> 局限：只命中**当前在播**主播（离线不在任何列表），受扫描量限制（热门 + 前 3 分区 ≈ 90 房）。
 
 ## P2 —— 健壮性
 

@@ -235,3 +235,65 @@ export async function searchDouyinRooms(keyword: string, _page = 1, pageSize = 2
   }
   return out
 }
+
+// ── 搜主播(本地过滤:热门流 + 分区流的 owner.nickname)────────────────────────
+
+/**
+ * 搜索主播。⚠️ **没有匿名可用的主播搜索接口**(`aweme/v1/web/live/search` 2483 需登录,
+ * 与房间搜索同门槛)。这里走**本地过滤**:抓「热门流 + 命中分区流的房间」,按
+ * `owner.nickname` 与关键词匹配(双向包含,大小写不敏感),返回命中主播的**在播房间**。
+ *
+ * 局限(如实体现在文案):只能命中**当前在播**的主播(离线主播不在任何列表里),
+ * 且受限于扫描量(热门 + 前 3 分区)。但零登录、零新接口、匿名可用 ——
+ * 补上 `docs/capability-gaps.md` 记的「抖音搜主播未做」。
+ *
+ * @param anchorName 主播名(或其中片段)
+ * @param scan 扫描的房间数上限(热门 + 分区合计)
+ */
+export async function searchDouyinAnchors(anchorName: string, scan = 90): Promise<Item[]> {
+  const name = anchorName.trim().toLowerCase()
+  if (!name) return []
+
+  const seen = new Set<string>()
+  const pool: Live[] = []
+  const collect = (items: Item[]) => {
+    for (const it of items as Live[]) {
+      if (seen.has(it.roomId)) continue
+      seen.add(it.roomId)
+      pool.push(it)
+    }
+  }
+
+  // 1. 综合热门流(partition=720 **type=1**,与 crawler 热门同接口;匿名可用)。
+  try {
+    collect(await fetchDouyinPartitionRooms("720", "1", 0, Math.min(scan, 60), "live:douyin:anchor"))
+  } catch {
+    // 热门失败不阻塞:继续扫分区。
+  }
+
+  // 2. 命中关键词的分区(与房间搜索同款:上游精确 ∪ 本地树匹配)。
+  let parts: DouyinPartition[] = []
+  try {
+    parts = await searchDouyinPartitions(anchorName)
+    const tree = await fetchDouyinCategories()
+    for (const p of matchLocalPartitions(tree, anchorName)) {
+      if (!parts.some((q) => q.id === p.id)) parts.push(p)
+    }
+  } catch {
+    // 分区不可用:只扫热门。
+  }
+  for (const p of parts.slice(0, 3)) {
+    if (pool.length >= scan) break
+    try {
+      collect(await fetchDouyinPartitionRooms(p.id, String(p.type), 0, 30, "live:douyin:anchor"))
+    } catch {
+      // 单分区失败不影响其余。
+    }
+  }
+
+  // 3. 按 nickname 匹配(双向包含,大小写不敏感)。
+  return pool.filter((it) => {
+    const n = (it.author?.name ?? "").toLowerCase()
+    return n !== "" && (n.includes(name) || name.includes(n))
+  })
+}
