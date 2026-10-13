@@ -68,3 +68,16 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 共享探测；`tpl:fetchedAt`/`authorAvatar`/`authorHandle` 契约缺口；弹幕冷启动开头丢失；
 阅读进度恢复随补全重跑；切条目进度串写；extract `<figure>` 保留 / fallback 段落 / 误删守卫；
 `serialize-contract.check` + `body-cache.check` + `extract.check` 三个新守卫。
+
+## host 包审计（2026-10-13 第三轮，已修）
+
+- [x] **[高] `host/tauri/tauri-ws-backend.ts`** — Rust 传输层错误同时投 Error + Close →
+      onClose 双调 → 弹幕流起两条 WS 且泄漏一条。加 `closed` 终态去重。
+- [x] **[中] `apps/src-tauri/src/commands/mod.rs` `is_blocked_host`** — `::ffff:169.254.169.254`
+      判为 V6 且 segments[0]==0 → 绕过内网/云元数据拦截。先 `to_ipv4_mapped()` 走 v4 判定。
+- [x] **[中] `host/tauri/sqlite-storage-backend.ts`** — ready rejected 被 `??=` 永久留存 +
+      removeItem 无条件执行(先删后写)。catch 清回 null 可重试 + 写成功后才删 local。
+- [x] **[中] `apps/src-tauri/src/commands/browser.rs`** — ensure/reset 同步 `pub fn` 跑主线程
+      含 3s+ 忙等冻窗口。改 `#[tauri::command(async)]`。
+- 判定非缺陷（复核后撤回）：ws.rs `conns` Mutex 中毒不可达；`KV_DDL` 无 DROP 不 wipe；
+      json 解析守卫三后端一致（契约统一，非本后端独有）。
