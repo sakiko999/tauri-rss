@@ -137,11 +137,10 @@ export interface Live extends Base {
   introduction?: string
   notice?: string
   showTime?: string
-  /** 懒解析填充(`resolveLivePlay`),带 expiry 签名,过期须重解析。 */
-  playUrls?: string[]
-  playHeaders?: Record<string, string>
+  /** 当前档位名(展示用;可播流走 resolver by-url 懒解析,不在此)。
+   *  ⚠️ 曾有 `playUrls`/`playHeaders`/`playUrlsExpiresAt` 三个字段——全仓零读写
+   *  (直播间可播流统一由 `resolveLivePlay` 懒解析),已删,勿再引入。 */
   quality?: string
-  playUrlsExpiresAt?: number
 }
 
 export type Item = Article | Social | Video | Audio | Live

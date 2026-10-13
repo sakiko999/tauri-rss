@@ -147,7 +147,7 @@ export interface AudioItem extends MediaItemBase {
   stream?: MediaStream
 }
 
-/** 直播房间。refresh 时只有状态 + 元数据;playUrls 由懒解析填充。 */
+/** 直播房间。refresh 时只有状态 + 元数据;可播流走 resolveLivePlay 懒解析,不在此。 */
 export interface LiveItem extends MediaItemBase {
   kind: "live"
   platform: LivePlatformId
@@ -158,11 +158,8 @@ export interface LiveItem extends MediaItemBase {
   introduction?: string
   notice?: string
   showTime?: string
-  /** 懒解析填充(resolveLivePlay),带 expiry 签名,过期须重解析。 */
-  playUrls?: string[]
-  playHeaders?: Record<string, string>
+  /** 当前档位名(展示用)。⚠️ 曾有 playUrls/playHeaders/playUrlsExpiresAt,零读写已删。 */
   quality?: string
-  playUrlsExpiresAt?: number
 }
 
 export type MediaItem =
