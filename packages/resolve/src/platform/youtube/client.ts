@@ -231,6 +231,39 @@ export async function getIosPlayerResponse(videoId: string, visitorData: string)
   return res
 }
 
+/**
+ * 取直播/视频的真实元信息(title / 频道名 / 是否直播中 / 观看数)。
+ *
+ * 供 crawler 的 `youtube:live` channel 用:此前它硬编码占位 title `"YouTube <id>"`、
+ * 无 author、liveStatus 恒 "live"(声明态)。这里用一次 iOS player API 请求换成真实值。
+ * 失败返回 null(调用方回退占位,**不阻塞**订阅)。
+ */
+export async function getYoutubeLiveMeta(videoId: string): Promise<{
+  title: string
+  author: string
+  isLive: boolean
+  online?: number
+} | null> {
+  try {
+    const visitorData = await getVisitorData()
+    const res = await getIosPlayerResponse(videoId, visitorData)
+    const vd = res.videoDetails ?? {}
+    const title = String(vd.title ?? "").trim()
+    const author = String(vd.author ?? "").trim()
+    if (!title && !author) return null
+    // viewCount 是字符串;直播时是「当前观看」近似(YouTube 无官方并发字段)。
+    const vc = Number(String(vd.viewCount ?? "").replace(/[^\d]/g, ""))
+    return {
+      title,
+      author,
+      isLive: isLiveContent(res),
+      online: Number.isFinite(vc) && vc > 0 ? vc : undefined,
+    }
+  } catch {
+    return null
+  }
+}
+
 /** 判定是否直播(playabilityStatus.liveStreamability → 直播中;isLiveContent 兜底)。 */
 function isLiveContent(res: PlayerResponse): boolean {
   return Boolean(

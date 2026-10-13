@@ -14,7 +14,7 @@ import type { Item, Live } from "@tauri-playground/xml"
 import { type SerializeOptions } from "@tauri-playground/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
+import { now, getYoutubeLiveMeta } from "@tauri-playground/resolve"
 
 export class YoutubeLiveChannel implements RssChannel {
   readonly key = "youtube:live"
@@ -33,22 +33,25 @@ export class YoutubeLiveChannel implements RssChannel {
     const videoId = info.videoId ?? ""
     if (!videoId) throw new Error("youtube:live 需要 videoId")
     const t = now()
+    // 取真实元信息(title/频道名/是否直播中/观看数);失败回退占位(不阻塞订阅)。
+    const meta = await getYoutubeLiveMeta(videoId).catch(() => null)
     const live: Live = {
       id: videoId,
       sourceId: "youtube:live",
       kind: "live",
-      title: `YouTube ${videoId}`,
+      title: meta?.title || `YouTube ${videoId}`,
       url: `https://www.youtube.com/watch?v=${videoId}`,
       // 稳定缩略图约定:i.ytimg.com/vi/<videoId>/hqdefault.jpg —— 零请求,直播未开播
       // 也有占位封面(与视频 channel 的 videoItem 一致)。
       thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
       poster: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+      author: meta?.author ? { name: meta.author } : undefined,
       fetchedAt: t,
-      // 声明态:订阅直播频道即预期在播。精确在线状态需 player API(liveStreamability),
-      // 每次刷新判定有网络成本 + IP 风控风险,留未来增强。
+      // 真实在播态(取不到 meta 时退化为声明态 "live")。
       platform: "youtube",
       roomId: videoId,
-      liveStatus: "live",
+      liveStatus: meta ? (meta.isLive ? "live" : "offline") : "live",
+      online: meta?.online,
     }
     return [live]
   }
