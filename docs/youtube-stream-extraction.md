@@ -156,7 +156,7 @@ streamUrl = url + "&" + sp + "=" + deobfuscate(s)
 
 视频 adaptiveFormats 是**音视频分离**(video_only + audio),每个 format 带
 `initRange`/`indexRange`/`contentLength`(如 itag 137: init 0-741 / idx 742-893),
-与 B 站 DASH 完全同构 → 用 `buildMpd`(共享 `packages/crawler/src/utils/mpd.ts`,
+与 B 站 DASH 完全同构 → 用 `buildMpd`(共享 `packages/resolve/src/utils/mpd.ts`,
 从 bili 抽出)拼 SegmentBase MPD,存 `stream.dashManifest`,`format:"dash"` 由 dash.js
 双 SourceBuffer 合成播放(等价 B 站 MSE)。
 
@@ -272,17 +272,22 @@ ANDROID_VR 失效才考虑。**
 
 ```
 packages/crawler/src/channels/youtube/
-  index.ts        # youtube / youtube:live channel(fetch 元数据 + resolvePlay/resolveLivePlay)
-  client.ts       # InnerTubeClient: getVisitorData / 三 client player / resolveYoutubeStreams
+  index.ts        # re-export(channel.ts / live.ts)
+  channel.ts      # youtube channel(fetch 元数据;播放走 resolve 平台侧,无 resolvePlay 方法)
+  live.ts         # youtube:live channel(元数据)
+packages/resolve/src/platform/youtube/
+  client.ts       # InnerTubeClient: getVisitorData / 三 client player / resolveYoutubeStreams / getDanmaku
   itag.ts         # itag 映射表(H.264/AAC 子集)
-  signature.ts    # base.js 挖解密函数 + n 参数解密(host.js 执行)
-packages/crawler/src/utils/mpd.ts   # 共享 MPD 装配器(从 bili 抽出,bili/youtube 共用)
+  signature.ts    # n 参数(节流)解密(host.js 执行);⚠️ s 参数(signatureCipher)不实现,带签名的流整条丢弃(client.ts resolveFormatUrl),靠 ANDROID_VR 免签名规避
+  danmaku.ts      # live chat 轮询(createLiveChatPoller)
+packages/resolve/src/utils/mpd.ts   # 共享 MPD 装配器(从 bili 抽出,bili/youtube 共用)
 ```
 
 - `resolveYoutubeStreams`:直播 → HLS;视频 → DASH(adaptiveFormats 拼 MPD)→ 渐进式 360p
   → HLS(罕见 VOD)→ throw。
-- player 侧:useHls.ts `isDashStream` → dash.js + DashHostLoader(透传 stream.headers,
-  分片 Range 走 appHost.http 隧道无 CORS);hls.js `HlsHostLoader`(googlevideo 无 CORS)。
+- player 侧:`hooks/useMediaStream.ts` 的 `isDashStream` → dash.js + DashHostLoader(透传
+  stream.headers,分片 Range 走 appHost.http 隧道无 CORS);hls.js `HlsHostLoader`
+  (googlevideo 无 CORS)。(旧文件名 useHls.ts 已改名 useMediaStream.ts。)
 
 ## 八、参考链接
 

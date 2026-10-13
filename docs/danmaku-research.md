@@ -65,7 +65,7 @@ bvid → GET /x/web-interface/view?bvid= → data.cid(匿名,复用 client.resol
 - **直播回放**:换 `get_live_chat_replay` 端点 + `https://www.youtube.com/live_chat_replay?continuation=` 页面(yt-dlp `youtube_live_chat_replay` protocol 实现完整:逐段 `replayChatItemAction.actions` + `videoOffsetTimeMsec` 定位)。
 - **鉴权一致性**:轮询 body 保持同一 `INNERTUBE_CONTEXT`(visitorData 不变) + 后续轮询带 `context.clickTracking.clickTrackingParams`(来自上一响应),yt-dlp `generate_api_headers` 干这事。anonymous visitor 即可,极端风控再带 cookie。
 - **轮询频率**:以服务端 timeoutMs 为准;第三方库默认 1s,但太快易触发限流,保守用服务端建议。
-- **落地**:`crawler/src/channels/youtube/live-chat.ts` 的 `createLiveChatPoller(liveId)`(提取 ytcfg/ytInitialData → 递归 POST 轮询 → poll/unsubscribe)。⚠️ ytcfg 用**对象形式 marker `ytcfg.set({`**(页面顶部有单 key 调用 `ytcfg.set('KEY', value)` 会错位)。
+- **落地**:`packages/resolve/src/platform/youtube/danmaku.ts` 的 `createLiveChatPoller(liveId)`(提取 ytcfg/ytInitialData → 递归 POST 轮询 → poll/unsubscribe)。⚠️ ytcfg 用**对象形式 marker `ytcfg.set({`**(页面顶部有单 key 调用 `ytcfg.set('KEY', value)` 会错位)。
 - 断线续传 = 拿最后 continuation 重轮询;消息统一成 `DanmakuItem`(见 §五)进弹幕层即可。
 - 已知实现全走同一链路可对照:yt-dlp `youtube_live_chat.py`(live + replay 最全)、`chat-downloader`(xenova)、`@miukyo/ytlc`、`chatterino-yt-chat`、`youtube-chat-next`、`yt_live_chat`(Go)。
 
@@ -144,7 +144,7 @@ PushFrame{seqId=1, logId=2, service=3, method=4, headersList=5, payloadEncoding=
 
 ### 优先级排序(按架构契合度)
 
-1. **B站视频弹幕**——HTTP,零依赖,MVP 首选。`resolveCid` + `getJson`,ui `<DanmakuLayer>` 用 `currentTime*1000` 对 `progress` 做时间窗口过滤。protobuf 解码抄 kindred-web ~40 行手写 wire 解码,或引 protobufjs。
+1. **B站视频弹幕**——HTTP,零依赖,MVP 首选。`resolveCid` + `getJson`,player `<DanmakuLayer>`(在 `packages/player/src/danmaku/`,非 ui)用 `currentTime*1000` 对 `progress` 做时间窗口过滤。protobuf 解码抄 kindred-web ~40 行手写 wire 解码,或引 protobufjs。
 2. **YouTube 直播聊天**——HTTP POST 轮询 + JSON,匿名,走现有隧道,零 WS。提取 ytcfg/ytInitialData → 轮询 get_live_chat,按 timeoutMs 拉增量。**页面 JSON 提取用 `extractInlineJson`,不用正则。**
 3. **bilibili 直播弹幕**——WS,但协议最规整:16B 头 + JSON + brotli(有库),`getDanmuInfo` 复用 `signWeb`。唯一门槛是 WS。
 4. **douyu**——WS 无鉴权 + STT 纯文本解析,成本低;STT 解析 + 6 色表映射。
@@ -210,12 +210,16 @@ interface DanmakuItem {
 /** 统一弹幕流:订阅即开始,返回退订函数。全量(VOD,带 timeMs)/增量(live)由实现方定。 */
 type DanmakuStream = (onItems: (items: DanmakuItem[]) => void) => () => void
 
-/** 能力接口(source 上,`isDanmakuPlayable` = `"getDanmaku" in s` 探测)。
- *  id:视频 = itemId / 直播 = roomId。 */
-interface DanmakuPlayable { getDanmaku(id: string): DanmakuStream }
+/** 统一弹幕流:订阅即开始,返回退订函数。 */
+type DanmakuStream = (onItems: (items: DanmakuItem[]) => void) => () => void
 ```
 
-- **类型全放 crawler**(解析产物 + 消费接口同源):依赖方向 `xml ← crawler ← core ← player`,放 crawler 无环,player 直接 `import type`。
+⚠️ **类型与路由都在 `packages/resolve`(不在 crawler)**:`DanmakuItem`/`DanmakuStream` 定义在
+`resolve/src/danmaku/types.ts`;弹幕由 resolve 的 `getDanmakuByUrl(url)`(resolver/danmaku.ts)
+按 url 路由,core **直接调用**(`data-layer.ts`),**没有** `DanmakuPlayable`/`isDanmakuPlayable`
+能力探测接口(crawler 的 source 契约只有 `fetch()`,能力谓词只有 isHotWordSource/isItemDetailSource/
+isPageable/isLoginable)。早期设计的「source 上挂 getDanmaku + 谓词探测」已废弃。
+
 - **为什么单接口统一**:消费者只管「订阅弹幕」,**不关心返回多少条**。全量/增量只体现在 items 是否带 `timeMs`——有则播放器按时间轴窗口发射,无则实时追加。VOD/live 是媒体属性,不该做成两个接口。
 
 ## 六、player 弹幕接入方案
@@ -223,13 +227,14 @@ interface DanmakuPlayable { getDanmaku(id: string): DanmakuStream }
 ### 架构位置:三层职责
 
 ```
-crawler(数据)  →  core(编排)  →  player(渲染)
-getDanmaku(id)   resolvePlay/resolveLivePlay   DanmakuLayer
-DanmakuStream    返回 ResolvePlayback.danmaku   (内部订阅分流)
-                 (探测 isDanmakuPlayable 附带)
+crawler(数据/元数据)  →  core(编排)  →  player(渲染)
+                   getDanmakuByUrl(url)     DanmakuLayer(player/src/danmaku/)
+                   返回 ResolvePlayback.danmaku  (内部订阅分流)
 ```
 
-player 保持**平台无感**:只消费统一 `DanmakuStream`。弹幕探测收敛进 core(与播放流同一解析结果,`ResolvePlayback.danmaku` 附带),无弹幕 channel → `danmaku: undefined` → VideoShell 不渲染层(零开销);无独立 `openDanmaku` 门面。
+player 保持**平台无感**:只消费统一 `DanmakuStream`。弹幕解析收敛在 **resolve**(`getDanmakuByUrl`
+按 url 路由),core 随播放流解析一起把它附到 `ResolvePlayback.danmaku`;无弹幕平台 →
+`danmaku: undefined` → VideoShell 不渲染层(零开销);无独立 `openDanmaku` 门面。
 
 App 层(desktop 播放页)零弹幕逻辑,只传 resolve:
 ```ts
@@ -326,12 +331,12 @@ DanmakuLayer (canvas 2D)
 
 | 资产 | 路径 | 复用点 |
 |---|---|---|
-| `client.resolveCid` | `packages/crawler/src/channels/bili/client.ts` | bvid→cid(视频弹幕) |
+| `client.resolveCid` | `packages/resolve/src/platform/bili/client.ts` | bvid→cid(视频弹幕) |
 | `client.getJson` | 同上 | 拉 seg.so / getDanmuInfo(带 UA/referer/cookie) |
 | `client.signWeb`/`getMixinKey` | 同上 | getDanmuInfo 的 wbi 签名;弹幕接口收紧时备用 |
 | HTTP 隧道(POST 支持) | `packages/host/src/tauri/` | seg.so 无 CORS;**YouTube get_live_chat 轮询** |
-| **`extractInlineJson`** | `packages/crawler/src/utils/inline-json.ts` | 提取 ytcfg.set / ytInitialData(平衡括号,嵌套不截断) |
-| youtube channel(ANDROID_VR) | `packages/crawler/src/channels/youtube/` | 提供 liveId(直播弹幕 + live chat 共用) |
+| **`extractInlineJson`** | `packages/resolve/src/utils/inline-json.ts` | 提取 ytcfg.set / ytInitialData(平衡括号,嵌套不截断) |
+| youtube channel(ANDROID_VR) | `packages/resolve/src/platform/youtube/` | 提供 liveId(直播弹幕 + live chat 共用) |
 | `DEFAULT_BILIBILI_COOKIE` | `packages/core/src/bilibili-cookie.ts` | 带登录态更稳(视频/直播弹幕) |
 | 懒解析范式 | `resolveBiliPlay`(channels.ts) | 弹幕懒解析照抄(YouTube live chat 轮询起始) |
 | 播放器时间 | `useVideoElement.state.currentTime` | 弹幕时间窗口(currentTime 秒 × 1000) |

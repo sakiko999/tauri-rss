@@ -73,7 +73,7 @@ mixinKey = permute(imgKey + subKey, MIXIN_KEY_ENC_TAB).slice(0, 32)
 w_rid    = MD5(sortedParams & wts & mixinKey)
 ```
 
-已实现为 `packages/crawler/src/channels/bili/channels.ts` 的 `BiliSquareChannel`（`bili:square` channel，wbi 签名在 `client.ts`）：
+已实现为 `packages/crawler/src/channels/bili/square.ts` 的 `BiliSquareChannel`（`bili:square` channel，wbi 签名在 `packages/resolve/src/platform/bili/client.ts`）：
 - 端到端验证：真实抓取热搜 50 条（code:0），零 cookie
 - 复用 live 层同款 `MIXIN_KEY_ENC_TAB` 换位表（`bili/live.ts` 同源）
 - desktop 测试订阅已接入（`apps/desktop/src/subscriptions.ts` 的 `bili:popular`）

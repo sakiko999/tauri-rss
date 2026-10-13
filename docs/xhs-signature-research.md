@@ -9,7 +9,9 @@
 - `xhs:explore` 翻页（Pageable）：SSR `/explore` 的 feed **无游标**（实测
   nextCursor/cursor/ssrRenderExtra 全空），滚动加载只能走
   `POST /api/sns/web/v1/homefeed`（cursor_score 游标，需 x-s 签名 + 登录 cookie）。
-- 既有签名实现：`packages/xhshow/`（xhshow-js 的 MIT fork，mns0301 硬编码）。
+- 既有签名实现：`packages/xhshow/`（**已从主分支移除**——当前仓库无此包；主分支
+  `resolve/src/platform/xhs/client.ts` 的 `signApiHeaders` 已降级为直接抛错。相关签名分支
+  在本仓库不存在，移植计划见文件末）。
 - 目标：落地 explore 翻页；顺带 `xhs:user`（user_posted）也依赖同签名链路。
 
 ## 排障过程（2026-08-14）
@@ -76,7 +78,7 @@ x-s, x-s-common, x-t, x-b3-traceid, x-xray-traceid, x-mns, xy-direction
 
 1. **最小（落地 explore 翻页）**：新版 XYS_ 签名 —— config + crypto
    （build_payload_array/xor/encode_x3）+ common_sign + sharding + bit_ops +
-   encoder，约 **600-900 行 TS**。替换 `vendor/xhshow.js` 的 signXS 路径，
+   encoder，约 **600-900 行 TS**。替换 `vendor/xhshow.js` 的 signXS 路径（若该 vendor 文件仍存在），
    补 x-mns（常量 "unload"）与 xy-direction。**半天-1 天**。
 2. **完整（复活 xhs:user）**：+ XYW_（core/xyw_crypto，406 行，需 AES-128-CBC
    依赖）。user_posted 当前 XYS_ 必 406/461。

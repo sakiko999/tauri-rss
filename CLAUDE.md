@@ -202,8 +202,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `extractInitialState` 用**平衡大括号截纯 JSON** + 空容器归一
 - ⚠️ **不要手拼 user_posted fetch**（页面内 `_webmsxyw` 只返回部分头 → 300011 风控）。
   `xhs:user` 分页是**滚动驱动**（浏览器路径），已加窗口化 + 验证码检测
-- 签名库 xhshow 在 **feat/xhs-rustpython** 分支（主分支含则触发风控与维护成本）；
-  纯算法当前处于上游失效期，故维持全 SSR
+- 签名方案当前**不在主分支**（`signApiHeaders` 直接抛错降级）；曾经的 `packages/xhshow/`
+  fork 与 `feat/xhs-rustpython` 分支**在本仓库已不存在**（纯算法处于上游失效期，故维持全 SSR）。
+  若要重启签名移植，参照 `docs/xhs-signature-research.md` 的 Python xhshow 0.2.0
 
 **cookie / 登录**
 - `packages/core/src/bilibili-cookie.ts` 三个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。

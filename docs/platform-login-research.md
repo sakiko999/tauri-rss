@@ -151,7 +151,7 @@ POST https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket
 ## 6. 应用内落地架构建议
 
 ```
-crawler/src/platform/<平台>/login.ts   # 扫码登录纯函数: createQR() / poll() / assembleCookie()
+packages/resolve/src/platform/<平台>/login.ts   # 扫码登录纯函数: createQR() / poll() / assembleCookie()
                                         # (无状态,复用各自 client 的请求/签名能力)
 
 apps/desktop/src/...                   # 登录 Dialog: qrcode 库渲染二维码 → 轮询状态 →
