@@ -83,3 +83,16 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       含 3s+ 忙等冻窗口。改 `#[tauri::command(async)]`。
 - 判定非缺陷（复核后撤回）：ws.rs `conns` Mutex 中毒不可达；`KV_DDL` 无 DROP 不 wipe；
       json 解析守卫三后端一致（契约统一，非本后端独有）。
+
+## CLI + core data-layer 审计（2026-10-13 第四轮，已修）
+
+- [x] **[高] `apps/cli/src/commands/play.ts:31`** — `cmd /c start "" <url>` 在 query
+      的 `&` 处截断直链(签名流 403)。改 `rundll32 url.dll,FileProtocolHandler`(不经 cmd)。
+- [x] **[中] `host/node/node-ws.ts:41`** — error+close 双投递 → 重复重连+泄漏,与已修的
+      Tauri 后端同款。加 `closed` 去重。
+- [x] **[低] `core/data-layer.ts:257`** — 空抓取守卫只看内存 store,store 未水化(启动
+      刷新失败/超时)时缓存仍在却会清空+覆盖。改为 store 或缓存任一有内容即保护。
+- [x] **[低] `apps/cli/src/store/sqlite-storage.ts:21`** — 依赖 `.data/` 已存在。
+      加 `mkdirSync(recursive)`,新克隆/CI 不再 fatal。
+- 跳过（低/风格）：`browser-reset.ts` profile 路径由 env+硬编码 identifier 重建,标准
+      配置下与 Rust `app_data_dir()` 一致,仅 AppData 被组策略重定向时可能分叉。
