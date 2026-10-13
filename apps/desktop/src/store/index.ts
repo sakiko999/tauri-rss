@@ -531,12 +531,17 @@ export const useDesktop = create<DesktopState>((set, get) => {
       try {
         const r = await dl.loadMore(id)
         const total = dl.totalOf(id)
+        // ⚠️ 必须同时**放开本地窗口**(page[id] += 本页新增):渠道翻页把新条目 append
+        // 进 store,但 view.list 被 page[id](初始 PAGE_SIZE=60)切片 → 新追加的看不见,
+        // 用户点「加载更多」页面毫无变化(只是多抓了一次网络)。LoadingMoreFooter 在
+        // 渠道分页时不会走 localPaging(那是二选一),所以必须在这里同步放窗口。
         set((s) => ({
           loadingMore: false,
+          page: { ...s.page, [id]: (s.page[id] ?? PAGE_SIZE) + r.addedCount },
           ...(total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}),
           loadMoreEnded: r.hasMore ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: true },
         }))
-        refreshView() // store 订阅也会触发,但 loadMore 只有 hasMore 变化时需要
+        refreshView()
       } catch (e) {
         // 翻页失败(如小红书风控验证码)写入 refreshErrors → 顶栏活性点红。
         set((s) => ({
