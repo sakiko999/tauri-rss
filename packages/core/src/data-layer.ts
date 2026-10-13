@@ -25,6 +25,7 @@ import {
   type SubscriptionRepository,
 } from "./repo/subscription-repo.ts"
 import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
+import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createMediaStore } from "./store/media-store.ts"
@@ -105,6 +106,7 @@ export function createDataLayer(): DataLayer {
   const log = globalThis.appHost.log!
   const repo = createSubscriptionRepository(storage, now)
   const contentCache = createContentCacheRepo(storage)
+  const bodyCache = createBodyCacheRepo(storage)
   const reading = createReadingRepository(storage, now)
   const settings = createSettingsRepository(storage)
   const store = createMediaStore(now)
@@ -445,6 +447,14 @@ export function createDataLayer(): DataLayer {
     if (!item) return null
     const channel = getChannel(sub.channelKey)
     if (!channel) return item // channel 未知 → 返回原 item(至少给现有数据)
+    // 通用 RSS 文章正文是**静态**的,持久缓存可跨会话复用(重开不重抓)。⚠️ 只对
+    // **article** 开缓存:xhs social 的补全是多图/标签(不止 content),只缓存正文字符串
+    // 会在命中时丢掉图片详情,故 social 一律走实时抓取。
+    const cacheable = item.kind === "article"
+    if (cacheable) {
+      const hit = await bodyCache.get(subscriptionId, itemId).catch(() => null)
+      if (hit) return { ...item, content: hit.content, contentFormat: hit.contentFormat }
+    }
     const info = await sourceInfoFor(sub)
     const source = channel.getSource(info)
     if (!isItemDetailSource(source)) return item // 无详情能力(bili/weibo 列表已完整)→ 原样返回
@@ -455,7 +465,19 @@ export function createDataLayer(): DataLayer {
     // crawler Item(含完整图文)→ XML → core MediaItem(复用 XML 契约,不新增序列化面)。
     const xml = serializeFeed([detailItem], { channelTitle: channel.name })
     const [detail] = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
-    return detail ?? item
+    const resolved = detail ?? item
+    // 正文确有增长才落缓存(否则会把「无补全能力原样返回」也写进去)。
+    const before = item.kind === "article" ? item.content ?? "" : ""
+    if (cacheable && resolved.kind === "article" && (resolved.content ?? "").length > before.length) {
+      await bodyCache
+        .set(subscriptionId, itemId, {
+          content: resolved.content ?? "",
+          contentFormat: resolved.contentFormat ?? "text",
+          fetchedAt: now(),
+        })
+        .catch(() => {})
+    }
+    return resolved
   }
 
   /** 订阅是否支持分页加载更多(hot 发现流;UI 据此显隐「加载更多」)。 */
@@ -604,6 +626,7 @@ export function createDataLayer(): DataLayer {
         pageCursors.delete(id)
         pageTotals.delete(id)
         await contentCache.delete(id).catch(() => {})
+        await bodyCache.deleteAll(id).catch(() => {})
       },
     },
     reading,
