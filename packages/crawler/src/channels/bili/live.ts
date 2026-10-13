@@ -51,7 +51,11 @@ async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | nu
       liveStatus: Number(ri["live_status"]) === 1 ? "live" : "offline",
       online: Number(ri["online"] ?? 0),
       introduction: ri["description"] ? String(ri["description"]) : undefined,
-      showTime: ri["live_start_time"] ? String(ri["live_start_time"]) : undefined,
+      // ⚠️ live_start_time 是 **epoch 秒**(如 1728800000),不是展示串——直接 String()
+      // 会写出「1728800000」这种原始数字。转 ISO 供 UI 直接展示。
+      showTime: ri["live_start_time"]
+        ? new Date(Number(ri["live_start_time"]) * 1000).toISOString()
+        : undefined,
     }
   } catch (e) {
     log.biliLive.warn(`房间 ${roomId} 拉取失败:`, (e as Error)?.message)
