@@ -584,9 +584,13 @@ export const useDesktop = create<DesktopState>((set, get) => {
     markRead(item) {
       const dl = get().dl
       if (!dl) return
+      // ⚠️ 两个语义别混:内存 store 的 `isUnread`(取反得 next),持久层 `reading.read`
+      // 是「**已读**」——写入的应是取反后的 `!next`(= 标记前的 isUnread 语义:原来未读
+      // = 现在已读)。曾把 `next`(未读语义)直接传给 markRead → 持久层 read 恒反:
+      // 标已读存 read=false → applyReadingState 不回填 → 刷新后回到未读。
       const next = !item.isUnread
       dl.store.patch(item.id, { isUnread: next })
-      void dl.reading.markRead(item.id, next)
+      void dl.reading.markRead(item.id, !next)
     },
 
     markAllRead(ids) {
