@@ -198,16 +198,17 @@ export class TarsReader {
     }
   }
   private skipToStructEnd(): void {
-    // ⚠️ 越界/不前进双重守卫:缓冲耗尽后 `byte()` 返回 undefined(位运算当 0 → type=BYTE),
+    // ⚠️ 必须以缓冲长度为界:缓冲耗尽后 `byte()` 返回 undefined(位运算当 0 → type=BYTE),
     // STRUCT_END 永不再出现 → 无界时是**同步死循环**(解码跑在 WS 消息回调里,整个事件循环
     // 冻住,连 setTimeout 都不转,只能强杀)。截断帧(帧边界截断 / 畸形包)会命中。
-    // 与 bili proto / douyu 的截断守卫同款;`p` 不前进(未知类型)也终止。
+    // head() 每轮必前进 p(至少读 1 字节),故循环至多 buf.length 轮 —— 界本身即终止保证。
+    // ⚠️ **不要**再加「skipField 后 p 未前进即退」的判据:ZERO_TAG(type 12)是**零负载
+    // 字段**(只有头),skipField 对它合法地不前进 → 那种判据会在含零值字段的正常 struct
+    // 上提前退出,漏解析后面所有字段(实测:虎牙真实帧弹幕全丢)。
     while (this.p < this.buf.length) {
       const h = this.head()
       if (h.type === T.STRUCT_END) return
-      const before = this.p
       this.skipField(h.type)
-      if (this.p <= before) return
     }
   }
 

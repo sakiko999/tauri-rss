@@ -59,4 +59,32 @@ function frame(hyBytes: Uint8Array): Uint8Array {
   assert.ok(s === null || s instanceof TarsReader, "readStructAt 截断时须返回而非自旋")
 }
 
-console.log("✔ huya-tars 自检通过(正常帧可解 + 截断帧不死循环)")
+// ── ZERO_TAG(零负载字段,skipField 合法地不前进 p)不得触发提前退出 ─────────────
+// 含「零值字段」的正常 struct 后仍须解析出后续字段 —— 否则真实帧弹幕全丢。
+{
+  const zero = (tag: number): number => ((tag << 4) | 12) & 0xff // ZERO_TAG(仅头、零负载)
+  // sender struct:tag2=零值(ZERO_TAG,跳过时不前进 p)、tag3=用户名。
+  const senderBody = (() => {
+    const w = new TarsWriter()
+    w.writeString("ok", 3)
+    return w.bytes
+  })()
+  const textW = (() => {
+    const w = new TarsWriter()
+    w.writeString("hello-after-zero", 3)
+    return w.bytes
+  })()
+  // HYMessage:tag0 sender(内含 ZERO_TAG)、tag3 content。
+  const hyBytes = Uint8Array.from([begin(0), zero(2), ...senderBody, end(0), ...textW])
+  const push = new TarsWriter()
+  push.writeInt(1400, 1)
+  push.writeBytes(hyBytes, 2)
+  const outer = new TarsWriter()
+  outer.writeInt(7, 0)
+  outer.writeBytes(push.bytes, 1)
+  const items = decodeHuyaDanmakuFrame(outer.bytes)
+  assert.equal(items.length, 1, "含 ZERO_TAG 的正常帧应仍解析出弹幕(不被提前截断)")
+  assert.equal(items[0]!.text, "hello-after-zero")
+}
+
+console.log("✔ huya-tars 自检通过(正常帧可解 + 截断帧不死循环 + ZERO_TAG 不误伤)")
