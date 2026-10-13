@@ -90,6 +90,70 @@ body {
 .btn:active {
   background: var(--surface-2);
 }
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+}
+.btn-quiet {
+  background: transparent;
+  color: var(--text-dim);
+}
+.link {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  padding: 0 0 0 4px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tab {
+  flex: 1;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px;
+  border-radius: var(--r);
+}
+.tab.on {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.subs {
+  padding: 12px 14px;
+}
+.add-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 9px 12px;
+}
 
 .feed {
   list-style: none;

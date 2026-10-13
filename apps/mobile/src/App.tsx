@@ -13,10 +13,13 @@ import { useMobile, isPlayable } from "./store.ts"
 export function App() {
   const dl = useMobile((s) => s.dl)
   const items = useMobile((s) => s.items)
+  const subs = useMobile((s) => s.subs)
   const initError = useMobile((s) => s.initError)
   const open = useMobile((s) => s.open)
+  const tab = useMobile((s) => s.tab)
   const init = useMobile((s) => s.init)
   const refresh = useMobile((s) => s.refresh)
+  const setTab = useMobile((s) => s.setTab)
 
   useEffect(() => {
     void init()
@@ -43,11 +46,89 @@ export function App() {
           刷新
         </button>
       </header>
+      <nav className="tabs">
+        <button className={tab === "feed" ? "tab on" : "tab"} onClick={() => setTab("feed")}>
+          内容 {items.length ? `· ${items.filter((i) => i.isUnread).length || items.length}` : ""}
+        </button>
+        <button className={tab === "subs" ? "tab on" : "tab"} onClick={() => setTab("subs")}>
+          订阅 · {subs.length}
+        </button>
+      </nav>
+      {tab === "feed" ? (
+        <ul className="feed">
+          {list.map((it) => (
+            <FeedRow key={it.id} item={it} />
+          ))}
+          {list.length === 0 ? (
+            <li className="empty">
+              还没有内容。
+              <button className="link" onClick={() => setTab("subs")}>
+                添加订阅源 →
+              </button>
+            </li>
+          ) : null}
+        </ul>
+      ) : (
+        <SubsPane />
+      )}
+    </div>
+  )
+}
+
+/** 订阅管理:添加 RSS 直链 + 列出/移除订阅(移动端不做频道发现,那属桌面工作台)。 */
+function SubsPane() {
+  const subs = useMobile((s) => s.subs)
+  const addFeed = useMobile((s) => s.addFeed)
+  const removeSub = useMobile((s) => s.removeSub)
+  const [url, setUrl] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState("")
+
+  const submit = async () => {
+    const u = url.trim()
+    if (!u) return
+    setBusy(true)
+    setErr("")
+    try {
+      await addFeed(u)
+      setUrl("")
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="subs">
+      <div className="add-row">
+        <input
+          className="input"
+          type="url"
+          inputMode="url"
+          placeholder="粘贴 RSS / Atom 直链"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && void submit()}
+        />
+        <button className="btn btn-primary" disabled={busy || !url.trim()} onClick={() => void submit()}>
+          {busy ? "添加中…" : "添加"}
+        </button>
+      </div>
+      {err ? <p className="err">{err}</p> : null}
       <ul className="feed">
-        {list.map((it) => (
-          <FeedRow key={it.id} item={it} />
+        {subs.map((s) => (
+          <li key={s.id} className="row">
+            <span className="row-main">
+              <span className="row-title">{s.title}</span>
+              <span className="row-sub">{s.channelKey}</span>
+            </span>
+            <button className="btn btn-quiet" onClick={() => void removeSub(s.id)}>
+              移除
+            </button>
+          </li>
         ))}
-        {list.length === 0 ? <li className="empty">还没有内容。先在桌面端添加订阅。</li> : null}
+        {subs.length === 0 ? <li className="empty">还没有订阅。粘贴上面的 RSS 直链添加。</li> : null}
       </ul>
     </div>
   )
