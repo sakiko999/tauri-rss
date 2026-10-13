@@ -142,7 +142,10 @@ export async function searchDouyuAnchors(keyword: string, page = 1, pageSize = 2
         platform: "douyu",
         roomId: rid,
         liveStatus: live ? "live" : "offline",
-        online: Number(a.hot ?? 0) || 0,
+        // ⚠️ searchUser 的 anchorInfo **没有** hot/人气字段(实测字段集:
+        // nickName/rid/isLive/roomType/fansNum/followerCount… 无观众/人气值)。
+        // 原先读 a.hot 恒得 0 → 主播搜索卡片「0 人在看」是假数据。宁可不报:
+        // 返回 undefined,UI 显示「—」而非妄称 0 人。
       }
     })
     .filter((x): x is Live => x !== null)
