@@ -25,8 +25,9 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - [x] **[low] `apps/mobile/src/main.ts`** — 已删（mobile 接入时重写为 main.tsx，模板 greet 逻辑移除）。
 - [x] **[medium] `App.tsx` URL 编码** — 核实无 bug：React Router 解码 params，loader（router.tsx:58）
       与 store 均用解码值，无字符串比较被编码串骗过。
-- [x] **[medium] `markRead` / `lastReadAt`** — 核实无缺口：reading-repo `patchMany` 每次 patch
-      都自动写入 `lastReadAt: t`（line 78），标已读即记录时间。
+- [x] **[medium] `markRead` / `lastReadAt`** — ⚠️ **此条早先「核实无缺口」的结论有误**：只查了
+      `patchMany` 写 `lastReadAt`，漏看了 desktop `store.markRead` 把「未读」标志当「已读」写持久层
+      （语义反转 → 刷新后回到未读）。**2026-10-13 第九轮已修**（见该轮记录）。
 - [x] **[low] `packages/ui/src/index.ts`** — 已清（现仅导出 `MediaImage` + `fmtCount`；player re-export 已删）。
 - [x] **[low] `log` `getLogDomain`/`resetLogDomains`** — **有意保留**（叶子包公开 API：读域 + 测试清空；
       API 面小，删了限制包的可测试性）。
