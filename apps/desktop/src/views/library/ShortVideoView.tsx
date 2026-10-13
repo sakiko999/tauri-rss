@@ -19,6 +19,7 @@ import type { MediaItem } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
+import { itemKey } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 
 /** 单个 slide。active=false 时只渲染 poster 占位（不挂播放器）。 */
@@ -76,6 +77,13 @@ export function ShortVideoView() {
   const go = useViewNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
   const [activeIdx, setActiveIdx] = useState(0)
+  // 退出目标 = 同类内容 tab(short:video → tab:video)。⚠️ 旧实现 `go(nodeId)` 的
+  // nodeId 就是当前 `short:*` 节点 → 导航到当前位置 = 无操作,退出按钮是死键(且 Esc
+  // 也没绑定),进了短视频模式只能点侧栏才出得来。
+  const exit = () => {
+    const k = (nodeId ?? "short:all").slice(6) // `short:` 之后
+    go(k && k !== "all" ? `tab:${k}` : "tab:all")
+  }
 
   const items = useMemo(() => view.list, [view.list])
 
@@ -100,7 +108,7 @@ export function ShortVideoView() {
     return () => io.disconnect()
   }, [items.length])
 
-  // 键盘：↑/↓ 切上下条（滚动到对应屏）。
+  // 键盘：↑/↓ 切上下条（滚动到对应屏）；Esc 退出短视频。
   const scrollTo = (i: number) => {
     const clamped = Math.max(0, Math.min(items.length - 1, i))
     containerRef.current?.querySelectorAll<HTMLElement>(".sv-slide")[clamped]?.scrollIntoView({ behavior: "smooth" })
@@ -108,7 +116,10 @@ export function ShortVideoView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || useDesktop.getState().paletteOpen) return
-      if (e.key === "ArrowDown" || e.key === "j") {
+      if (e.key === "Escape") {
+        e.preventDefault()
+        exit()
+      } else if (e.key === "ArrowDown" || e.key === "j") {
         e.preventDefault()
         scrollTo(activeIdx + 1)
       } else if (e.key === "ArrowUp" || e.key === "k") {
@@ -118,7 +129,8 @@ export function ShortVideoView() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [activeIdx, items.length])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIdx, items.length, nodeId])
 
   if (items.length === 0) {
     return (
@@ -133,8 +145,8 @@ export function ShortVideoView() {
   return (
     <div className="shortvideo" ref={containerRef}>
       {items.map((it, i) => (
-        <div key={it.id} className="sv-slot">
-          <Slide item={it} index={i} active={i === activeIdx} onClose={() => go(nodeId ?? "tab:all")} />
+        <div key={itemKey(it, i)} className="sv-slot">
+          <Slide item={it} index={i} active={i === activeIdx} onClose={exit} />
         </div>
       ))}
       <span className="sv-hint t-micro">

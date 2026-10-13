@@ -42,7 +42,9 @@ export function usePlayerNav(): CardActions {
    */
   const openArticle = useCallback(
     (item: MediaItem) => {
-      if (item.isUnread) markRead(item)
+      // ⚠️ 与 ArticlePane/shortcuts 同款守卫:开「打开即标已读」才标 —— 旧实现无条件
+      // 标读,用户关掉该设置后从混合 feed(卡片 onOpen)点文章仍被强制标读(且落库)。
+      if (item.isUnread && (useDesktop.getState().settings?.markReadOnOpen ?? true)) markRead(item)
       if (nodeTypeOf(useDesktop.getState().selectedNodeId) !== "reader") {
         navigate(viewPath("tab:article"))
         setTimeout(() => selectArticle(item.id), 0)

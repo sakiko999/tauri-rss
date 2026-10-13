@@ -7,6 +7,7 @@
  */
 import { useMemo } from "react"
 import { useDesktop } from "../../store/index.ts"
+import { baseFor } from "../../store/selectors.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { useViewNavigate } from "../../router.tsx"
@@ -17,7 +18,13 @@ export function HotPane() {
   const hotWord = useDesktop((s) => s.hotWord)
   const go = useViewNavigate()
 
-  const words = useMemo(() => view.list.filter((i) => i.kind === "social"), [view.list])
+  // ⚠️ 用 baseFor 取该节点**未经过滤**的条目,不用 view.list —— 后者已套用全局
+  // 搜索词(顶栏搜索框跨视图留存)。曾直接吃 view.list:在同一热搜视图里打个搜索词
+  // (哪怕与热搜无关)就把左栏清空成「没有取到热搜」,误导排查方向。
+  const words = useMemo(() => {
+    const s = useDesktop.getState()
+    return baseFor(s, nodeId, Date.now()).filter((i) => i.kind === "social")
+  }, [nodeId, view])
 
   return (
     <section className="pane col-pane">

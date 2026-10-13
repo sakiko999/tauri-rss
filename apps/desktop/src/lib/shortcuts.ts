@@ -61,18 +61,22 @@ export function useGlobalShortcuts(): void {
         if (!list.length) return
         const down = e.key === "j" || e.key === "ArrowDown"
         const found = list.findIndex((i) => i.id === s.selectedArticleId)
-        // 选中项还在 → 以它为准并更新记忆;已离场(刚被标已读)→ 用记忆的索引
-        // 继续前进(down 时不 +1,因为那一格已经被后面的条目顶上来了)。
-        let idx: number
+        // 目标索引 = 当前索引 + 方向步长。⚠️ 上一条(k/↑)必须是 **-1** —— 旧实现用
+        // `+ (found>=0 && down ? 1 : 0)`(up 时加 0)会落回当前项,再被下面的
+        // `next.id === selectedArticleId` 挡掉 → 「上一条」键整个失效(只有选中项
+        // 已因标已读离场时才偶然可用)。j/k 与 ↑/↓ 对称。
+        const step = down ? 1 : -1
+        let target: number
         if (found >= 0) {
+          // 选中项还在列表里 → 以它为准,直接走一步;更新记忆。
           lastIndexRef.current = found
-          idx = found
+          target = found + step
         } else {
-          idx = Math.min(lastIndexRef.current, list.length - 1)
-          // 上一条已离场时,当前 index 已经是「下一条」;但要往回走(k)就得再退一格。
-          if (!down) idx = Math.max(0, idx - 1)
+          // 已离场(刚被标已读):那一格已被后面的条目顶上来了 —— down 取记忆索引即
+          // 「下一条」,up 再退一格才是真正的前一条。
+          target = down ? lastIndexRef.current : lastIndexRef.current - 1
         }
-        const next = list[Math.max(0, Math.min(list.length - 1, idx + (found >= 0 && down ? 1 : 0)))]
+        const next = list[Math.max(0, Math.min(list.length - 1, target))]
         if (!next || next.id === s.selectedArticleId) return
         e.preventDefault()
         lastIndexRef.current = list.indexOf(next)

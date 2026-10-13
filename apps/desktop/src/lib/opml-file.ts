@@ -24,7 +24,10 @@ export function pickOpmlFile(): Promise<string | null> {
       reader.onerror = () => reject(reader.error ?? new Error("读取文件失败"))
       reader.readAsText(file)
     }
-    // 取消不触发 onchange(无可靠事件),靠 input 被回收即可;不 reject。
+    // ⚠️ 取消必须 resolve(null):否则 Promise 永远 pending,调用方(onImportOpml 的
+    // finally)永不执行 → 「导入 OPML」按钮永久卡在「导入中…」。Chromium(WebView2)
+    // 取消文件框时**只** fire `cancel`、不 fire `change`(老浏览器无此事件,故只挂用)。
+    input.addEventListener("cancel", () => resolve(null))
     input.click()
   })
 }
