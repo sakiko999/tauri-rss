@@ -238,3 +238,20 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 - **复核后判定为存疑（未改）**:
   douyin 清晰度兜底按位置 join(主路径正常,已记 backlog);bili `danmaku-live` 控制符切分;
   DASH blob 跨格式切换泄漏(无混合格式源);http_get 每请求新建 reqwest::Client(纯吞吐)。
+- ⚠️ **本轮引入并当场修复的回归**:huya 守卫初版加的「skipField 后 p 未前进即退」误伤
+  **ZERO_TAG**(零负载字段,skipField 合法地不前进)→ 含零值字段的正常帧提前退出,弹幕全丢
+  (实测房间 116 从 10 条/12s → 0)。`while (p<len)` 本身即终止保证,去掉多余判据 + 补
+  ZERO_TAG 守卫用例。教训:截断守卫别用「不前进」当判据,零负载字段会假阳性。
+
+## core 编排与仓储审计（2026-10-13 第十二轮）
+
+- [x] **[中] `data-layer.ts` resolvePlayByUrl/resolveLivePlayByUrl 吞 resolver 错误** —
+  内层 catch 把风控/无流/限区/登录错误折成 null → 外层误报「该条目不指向可解析的视频链接」
+  (与文件头「真实错误必须原样透出」注释相悖)。去内层 catch,由外层 catching 原样透出。
+- [x] **[中] `deserialize.ts` id 兜底 `hash-${title}`** — 同标题条目撞 id → store.patch 改所有
+  同 id、reading map 串号。改优先 link 兜底。
+- [x] **[低] `data-layer.ts` 退订孤儿缓存** — 在途 refresh 的 contentCache.set 不在墓碑保护内
+  → 退订后留无消费者的 content:<id>。加 removedSubs 拦截。
+- [x] **[低] `settings-repo.ts` reset 绕过 run()** — 与并发 set() 竞态。改走串行链。
+- **存疑（未改）**:`removedSubs` 墓碑无界增长(量级极小);`resolveKind` 的 enclosure→audio
+  覆盖 ctx.kind(对播客可能有意);`loadMore` 空页+非空游标 → hasMore 恒 true(赖源行为)。
