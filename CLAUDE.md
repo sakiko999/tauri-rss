@@ -54,6 +54,9 @@ packages/
 Video 的 `channel`、Audio 的 `artist`/`album`、Social 的 `likes` **全丢**（实测 174 条 live 全
 `liveStatus="unknown"`、`online` 恒 undefined、「X 人在看」全平台不显示、YouTube 直播 platform
 被 URL 兜底误判为 bilibili）。回归守卫：`serialize-roundtrip.check.ts`。
+✅ **修复后实测**（2026-10-13）：观众数**全平台打通**——162 条 live 中 159 条有在线数
+（此前仅 15，全是抖音）——bili 59万 / 斗鱼 303万 / 虎牙 436万 / 抖音；YouTube 直播 platform 正确。
+**加新字段务必同时改 serialize + deserialize 两侧，跑 roundtrip.check。**
 
 ## 宿主注入：全局 appHost 门面
 
