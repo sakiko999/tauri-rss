@@ -502,20 +502,45 @@ a:hover {
 /**
  * App 里的启动骨架盖层(见 App.tsx 的 booting)。
  *
- * ⚠️ 只盖 `.app-body`(不含顶栏):真正的顶栏在底下已经画好了,这一层只负责
- * 把「库还没读到的空视图」盖住 —— 否则启动后 ~660ms 会闪一句「这里还没有内容」。
- * `inset: 0` 与 `.app-body` 的位置无关:它相对最近的定位祖先(.app-shell 的
- * 静态定位不构成包含块 → 视口)铺满;顶栏本就是 52px 定高、层要盖的是下面那块。
+ * ⚠️ 三个边界缺一不可,否则骨架淡出时会**跳变**(都是实测出来的):
+ *   1. `top: var(--header-h)` —— 真正的顶栏在底下已画好,这一层只盖它下面那块。
+ *   2. `left: var(--rail)` —— **不能盖住侧栏**。侧栏是真实内容(导航/订阅已经好了),
+ *      盖住它会有两个恶果:骨架淡出时侧栏从「看不见」到「看得见」是一次跳变;
+ *      而且静态骨架**本来就让开了侧栏**(它的 .bs-rail 只存在于 index.html 那份),
+ *      这一层若横跨整窗,两者在交接的那一两帧里几何不一致。
+ *      实测:写 `left: 0` 时 overlay 的 .bs-grid 落在 x=0 / 宽 1152,而静态骨架是
+ *      x=268 / 宽 884 —— 正是用户截图里「骨架没让开侧栏」那一张。
+ *   3. 内部先放一条 `.bs-sec > .bs-title` 再放 `.bs-grid` —— 与 `.bs-main` 的结构对齐
+ *      (标题条 + 卡片网格)。少了这条,卡片会整体上移 ~44px,交接时也是一次跳变。
+ *
+ * `--rail` / `--header-h` 定义在 `:root`(styles.css:198 与 `:200`),
+ * 窄窗断点下 `--rail` 变 64px(`:3700`),这里无需重复断点。
  */
 .boot-overlay {
   position: fixed;
   top: var(--header-h);
-  left: 0;
+  left: var(--rail);
   right: 0;
   bottom: 0;
   z-index: 40; /* 低于浮层(--z-modal=50),高于本体 */
   background: var(--bg);
+  display: flex;
+  flex-direction: column;
 }
+/* ⚠️ 侧栏行/按钮的焦点环必须**内收**绘制。
+   全局 `:focus-visible` 是 `outline: 2px; outline-offset: 2px`(画在元素**外面**),
+   而分组行里 caret 与标题之间的 gap 是 0、`.group-head` 下面紧挨着 `.group-children`
+   —— 实测环的右沿被相邻的 `.nav-row-inner` 盖住、下沿被下一行盖住(用户标注的
+   「红框会被遮住」)。`outline-offset: -2px` 把环画进元素自己的盒子里,谁也盖不到。
+   行内有 padding(sp-1/sp-3),内收后不会压到图标或文字。 */
+.rail .nav-row:focus-visible,
+.rail .nav-row-inner:focus-visible,
+.rail .nav-caret-btn:focus-visible,
+.rail .sub-row:focus-visible,
+.rail .group-head-plain:focus-visible {
+  outline-offset: -2px;
+}
+
 /* 行高必须确定,否则内容会把行撑高、内部滚动区失去约束 */
 .app-body {
   display: grid;

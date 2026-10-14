@@ -18,30 +18,39 @@ import { useMemo } from "react"
 /** 骨架条数 —— 与 MediaMain / ArticlePane 各自的骨架一致。 */
 const SKELETON_COUNT = 12
 
-/** 主区骨架。`mode` 与视图的内容形态对齐。 */
+/**
+ * 主区骨架。`mode` 与视图的内容形态对齐。
+ *
+ * ⚠️ 结构必须与 index.html 里 `.bs-main` 那份**一致**(先标题条、再网格),
+ * 否则两者交接时卡片会整体上下跳一段(实测差 ~44px)。两处的类名与顺序是一份契约。
+ */
 export function GridSkeleton({ mode = "grid" }: { mode?: "grid" | "list" }) {
   // ⚠️ 一律 keyed:Virtuoso 家族靠它做测量缓存,重复 key 会让它算错高度。
   const cards = useMemo(() => Array.from({ length: SKELETON_COUNT }, (_, i) => i), [])
-  if (mode === "list") {
-    return (
-      <div className="bs-list">
-        {cards.map((i) => (
-          <div key={i} className="bs-row">
-            <span className="bs-bar bs-thumb" />
-            <span className="bs-row-lines">
-              <span className="bs-bar" style={{ width: "92%" }} />
-              <span className="bs-bar" style={{ width: "64%", height: 12 }} />
-            </span>
-          </div>
-        ))}
-      </div>
-    )
-  }
   return (
-    <div className="bs-grid">
-      {cards.map((i) => (
-        <div key={i} className="bs-card" />
-      ))}
-    </div>
+    <>
+      <div className="bs-sec" style={{ paddingBottom: 8 }}>
+        <span className="bs-bar bs-title" />
+      </div>
+      {mode === "list" ? (
+        <div className="bs-list">
+          {cards.map((i) => (
+            <div key={i} className="bs-row">
+              <span className="bs-bar bs-thumb" />
+              <span className="bs-row-lines">
+                <span className="bs-bar" style={{ width: "92%" }} />
+                <span className="bs-bar" style={{ width: "64%", height: 12 }} />
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="bs-grid">
+          {cards.map((i) => (
+            <div key={i} className="bs-card" />
+          ))}
+        </div>
+      )}
+    </>
   )
 }

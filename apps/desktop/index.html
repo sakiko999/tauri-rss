@@ -50,11 +50,33 @@
       盖在 .boot-overlay 里),所以这份 CSS 不只是「静态骨架自己的」——改它两边都变。
     -->
     <style>
-      .boot-skeleton {
+      /* ⚠️ 调色板变量必须挂在 **:root** 上,不能挂在 `.boot-skeleton` 上 ——
+         App 侧的 `.boot-overlay`(App.tsx 的 booting)也复用这同一套 `.bs-*` 类名,
+         但它**不是** `.boot-skeleton` 的后代。变量若只挂在那上面,overlay 里的
+         `var(--bs-muted)` 全部取不到 → `linear-gradient(90deg, , , )` 整条声明失效
+         → 卡片透明,用户看到的是**一片空白的正文区**(实测复现)。 */
+      :root {
         --bs-surface: oklch(0.207 0.007 72);
         --bs-muted: oklch(0.245 0.008 72);
         --bs-line: oklch(0.285 0.009 72);
         --bs-bg: oklch(0.168 0.006 72);
+      }
+      /* ⚠️ 首帧脚本(上面那段内联 JS)在 CSS 之前就设好了 data-theme,所以正常路径
+         走下面两条即可;`html:not([data-theme])` 那条兜底「脚本被禁/尚未执行」。 */
+      [data-theme="light"] {
+        --bs-surface: oklch(1 0 0);
+        --bs-muted: oklch(0.965 0.005 75);
+        --bs-line: oklch(0.935 0.006 75);
+        --bs-bg: oklch(0.985 0.003 75);
+      }
+      html:not([data-theme]) {
+        --bs-surface: light-dark(oklch(1 0 0), oklch(0.207 0.007 72));
+        --bs-muted: light-dark(oklch(0.965 0.005 75), oklch(0.245 0.008 72));
+        --bs-line: light-dark(oklch(0.935 0.006 75), oklch(0.285 0.009 72));
+        --bs-bg: light-dark(oklch(0.985 0.003 75), oklch(0.168 0.006 72));
+      }
+
+      .boot-skeleton {
         /* ⚠️ 必须 fixed 覆盖,不能留在正常流里:#root 是它的兄弟节点,留在流里会把
            应用整体顶到首屏之下 —— 骨架淡出时露出来的就是一片空背景,而不是应用。 */
         position: fixed;
@@ -63,17 +85,6 @@
         display: flex;
         flex-direction: column;
         background: var(--bs-bg);
-      }
-      /* ⚠️ 首帧脚本(上面那段内联 JS)在 CSS 之前就设好了 data-theme,所以正常路径
-         走下面两条即可;`html:not([data-theme])` 两条兜底「脚本被禁/尚未执行」。 */
-      [data-theme="light"] .boot-skeleton {
-        --bs-surface: oklch(1 0 0);
-        --bs-muted: oklch(0.965 0.005 75);
-        --bs-line: oklch(0.935 0.006 75);
-        --bs-bg: oklch(0.985 0.003 75);
-      }
-      html:not([data-theme]) .boot-skeleton {
-        --bs-bg: light-dark(oklch(0.985 0.003 75), oklch(0.168 0.006 72));
       }
       .bs-bar,
       .bs-card {
