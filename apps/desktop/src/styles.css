@@ -785,10 +785,11 @@ a:hover {
 .rail.rail-collapsed .group-head[data-active="true"]::before {
   display: none;
 }
-/* 窄栏只剩图标,整行铺色会变成一整块色板 → 只保留图标自身的颜色差异。 */
-.rail.rail-collapsed .group-head[data-active="true"] {
-  background: transparent;
-}
+/* ⚠️ 这里**只**隐藏强调条,**不**清背景。
+   曾经写成 `background: transparent`,理由是「窄栏只剩图标,铺色像一整块色板」——
+   但那样会让**选中分组在悬停时也没有任何反馈**(它比 `.nav-row:hover` 更具体),
+   而其它选中行(内容类型 tab)在这一档是有底色的 → 不一致。保留底色才对得上。 */
+
 .rail.rail-collapsed .group-children {
   padding-left: 0;
   margin-left: 0;
@@ -912,9 +913,14 @@ a:hover {
   padding: 0;
   gap: 0;
 }
-.group-head:hover {
-  background: transparent;
-}
+/* ⚠️ 这里**不再**覆盖 `.group-head:hover`。
+   原实现写 `background: transparent`(注释说「整行 hover 只在 .nav-row-inner 上」),
+   但 `.nav-row-inner:hover` **只改文字色、不给背景** → 分组行悬停时**完全没有反馈**。
+   宽栏里还能靠 caret 按钮自己的 hover 背景兜底,折叠态 caret 被 display:none、
+   只剩一个图标,于是悬停毫无反应(用户反馈)。
+   去掉覆盖后走 `.nav-row:hover` 的通用规则,与其它导航行一致。
+   ⚠️ 不需要 `:has()` —— 悬停分组行时指针必然落在它的某个子元素上,
+   浏览器会把祖先也判为 `:hover`(实测 `matchesHover: true`)。 */
 .nav-caret-btn {
   display: grid;
   place-items: center;
@@ -3824,10 +3830,8 @@ kbd {
   .sub-more {
     display: none;
   }
-  /* 窄栏激活态:只留图标本身的颜色,不铺整行色板(与 .rail-collapsed 那组同步)。 */
-  .group-head[data-active="true"] {
-    background: transparent;
-  }
+  /* 窄栏激活态:只隐藏强调条,保留底色 —— 与 `.rail-collapsed` 那组同步
+     (见那里的注释:清掉背景会让选中分组连悬停都没反馈,且与其它选中行不一致)。 */
   .group-head[data-active="true"]::before {
     display: none;
   }
