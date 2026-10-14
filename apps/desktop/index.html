@@ -50,6 +50,22 @@
       盖在 .boot-overlay 里),所以这份 CSS 不只是「静态骨架自己的」——改它两边都变。
     -->
     <style>
+      /**
+       * ⚠️ 这一条**必须**有,而且是这份内联样式里最关键的一行。
+       *
+       * Tailwind 4 的 preflight 里有 `*, ::before, ::after { box-sizing: border-box }`,
+       * 但它要等 CSS bundle 到位才生效 —— 在那之前,骨架按浏览器默认的 **content-box** 算:
+       * `.bs-rail` 的 `width: 268px` 会**再加上** `.bs-sec` 的左右 padding(各 16px)
+       * 与右边框,实测第一帧是 **301px**,CSS 一到就变回 268px。
+       * 用户看到的就是「骨架侧栏从一个较大的宽度 → 跳成实际宽度 → 再到真实侧栏」。
+       * 这里先补同一条,让 bundle 前的那一帧与最终态完全一致。
+       */
+      *,
+      ::before,
+      ::after {
+        box-sizing: border-box;
+      }
+
       /* ⚠️ 调色板变量必须挂在 **:root** 上,不能挂在 `.boot-skeleton` 上 ——
          App 侧的 `.boot-overlay`(App.tsx 的 booting)也复用这同一套 `.bs-*` 类名,
          但它**不是** `.boot-skeleton` 的后代。变量若只挂在那上面,overlay 里的
@@ -268,7 +284,13 @@
           <div class="bs-sec" style="padding-bottom: 8px">
             <span class="bs-bar bs-title"></span>
           </div>
+          <!-- ⚠️ 卡片数必须与 components/BootSkeleton.tsx 的 SKELETON_COUNT 一致
+               (12)。曾写 8,与 App 侧骨架交接时卡片会从 8 张跳成 12 张,肉眼可见。 -->
           <div class="bs-grid">
+            <div class="bs-card"></div>
+            <div class="bs-card"></div>
+            <div class="bs-card"></div>
+            <div class="bs-card"></div>
             <div class="bs-card"></div>
             <div class="bs-card"></div>
             <div class="bs-card"></div>

@@ -111,6 +111,26 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
    (行内本来就有 padding,内收不会压到图标或文字)。
    实测 Tab 到 caret / 分组标题 / 方向键到成员行,三处环都完整闭合。
 
+## 又三处(「侧栏宽度还是会变」的问题追到底)
+
+用**注入 rAF 记录器**抓每一帧(而不是轮询采样,那样会漏掉中间帧),才看清真相:
+
+1. **`box-sizing` 在第一帧还是 content-box** —— Tailwind 4 的 preflight 里有
+   `*{box-sizing:border-box}`,但它要等 CSS bundle 到位才生效。之前骨架按浏览器默认的
+   content-box 算:`.bs-rail` 的 `width:268px` **再加上** `.bs-sec` 的左右 padding(各 16px)
+   → 第一帧 **301px**,CSS 一到变 268px。这正是「从一个较大的侧栏 → 实际宽度」。
+   修:骨架的内联 `<style>` 里先补同一条 `box-sizing`。
+2. **骨架卡片数不一致** —— 静态骨架 8 张、`GridSkeleton` 12 张 → 交接时卡片数量跳变。
+   统一成 12(两处各写了注释互相指向)。
+3. **`boot-overlay` 闪了一下(两次翻转)** —— `ready: true` 原本在 init 的**同步部分**落地,
+   而那一刻 `loading` 还是 false(首轮 `refreshAll` 的 `loading:true` 要等一个 await 才设)
+   → `showSkeleton` 判成 false → overlay **卸掉又装回来**。
+   逐帧量到相位是 static → overlay → static → overlay → static。
+   修:`ready` 挪到 init **最末尾**(首轮刷新跑完),全程只翻转一次。
+
+修完逐帧复验(1440 与 1000 两档):侧栏宽度全程**唯一**(268 / 64)、卡片数恒定 12、
+相位序列 `static → overlay → static(淡出) → real` 只一次交接。
+
 ## 验证(实测结果)
 
 - `./node_modules/.bin/tsc -p apps/desktop` → 0 错
@@ -129,6 +149,8 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
 - 骨架几何交接:1440 与 1000 两档,overlay 与静态骨架的 `.bs-grid` **逐一相等**
   (`[268,1172]` / `[64,936]`),卡片渐变长度 91(有效声明,不再是透明)
 - 焦点环:Tab 到 caret / 分组标题、方向键到成员行,三处环 3x 放大截图均完整闭合
+- **逐帧**(rAF 记录器,1440 与 1000 两档):侧栏宽度全程唯一、卡片数恒定 12、
+  相位只 `static → overlay → static(淡出) → real` 一次交接
 
 ## 明确不做
 

@@ -81,10 +81,14 @@ interface DesktopState {
   /** DataLayer 初始化失败(库损坏/宿主未注入)→ 整页错误,不让应用白屏。 */
   initError: string | null
   /**
-   * init 的**同步部分**已结束(subscriptions/groups/settings 就位)。
-   * ⚠️ 不等 refreshAll:那是网络动作,可能几秒。它只是给 index.html 的启动骨架
-   * 一个「真数据已到、可以摘掉骨架」的信号(见 main.tsx)。初始视图为空而不是
-   * 「正在加载…」,首屏不该先闪一句卡片化的加载态。
+   * 首屏可以交给真实视图了 —— 即 init **全部**结束(含首轮 `refreshAll`)。
+   *
+   * ⚠️ 不能只等「同步部分」结束就置 true。曾这么写,结果是 `ready=true` 而
+   * `loading` 还是 false(首轮 refreshAll 的 `loading: true` 要等一个 await 才落),
+   * 中间那一拍 `showSkeleton` 判成 false → 启动骨架**卸掉又装回来**。真机逐帧量到
+   * 相位是 static → overlay → static → overlay → static(两次翻转),
+   * 用户看到的就是「骨架闪一下、露出空视图、再盖回去」。
+   * 等首轮刷新跑完再置 true,全程只有**一次**翻转。
    */
   ready: boolean
 
@@ -343,9 +347,6 @@ export const useDesktop = create<DesktopState>((set, get) => {
           set({
             dl,
             initError: null,
-            // ready 与真数据**同一次 set**:摘掉启动骨架与首帧有内容必须是同一帧,
-            // 否则中间会留一屏空网格(main.tsx 订阅 ready 决定何时隐藏骨架)。
-            ready: true,
             subscriptions: await dl.subscriptions.list(),
             groups: await dl.subscriptions.listGroups(),
             settings,
@@ -361,6 +362,10 @@ export const useDesktop = create<DesktopState>((set, get) => {
           if (isRealSub(nodeId)) queryCanLoadMore(nodeId)
           // init 自动刷新走 TTL 缓存(命中零网络,启动秒开)。
           await get().refreshAll(false)
+          // ⚠️ ready 放在**最后**:此时首轮刷新已跑完(`loading` 已落回 false)、
+          // items 也已就位,`showSkeleton` 一步从 true 变 false —— 全程只翻转一次。
+          // 放前面会让骨架卸掉又装回来(见 ready 的注释)。
+          set({ ready: true })
         } catch (e) {
           // 初始化失败(宿主未注入 / 库损坏):置错误态由 App 渲染错误页,不让整页白屏。
           // 允许重试:清掉 initPromise 让下次 init() 重新走一遍。

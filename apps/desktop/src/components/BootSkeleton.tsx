@@ -15,7 +15,10 @@
  */
 import { useMemo } from "react"
 
-/** 骨架条数 —— 与 MediaMain / ArticlePane 各自的骨架一致。 */
+/**
+ * 骨架条数。⚠️ 与 `apps/desktop/index.html` 里静态骨架的 `.bs-card` 数量**必须相等** ——
+ * 两侧交接时条数一变就是一次跳变(曾 8 vs 12,肉眼可见)。
+ */
 const SKELETON_COUNT = 12
 
 /**
