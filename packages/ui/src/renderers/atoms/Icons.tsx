@@ -1,6 +1,6 @@
 /**
  * 渲染器内联 SVG 图标(随 ui 包自包含,不依赖图标库)。
- * 与 player/icons.tsx 同范式:viewBox="0 0 24 24" + currentColor,调用方设色。
+ * 与 player 的图标同范式:viewBox="0 0 24 24" + currentColor,调用方设色。
  */
 import type { SVGProps } from "react"
 

@@ -14,10 +14,11 @@ import { fetchDouyinSuggestions } from "@tauri-playground/resolve"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"
-import { CardMini } from "../../components/app/cards.tsx"
+import { CardMini } from "../../components/app/Cards.tsx"
 import { itemKey } from "../../lib/media.ts"
 import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
+import { useLatestOnly } from "../../lib/useLatestOnly.ts"
 import { PLATFORMS, VIEW_LABEL, type Cap } from "./platforms.ts"
 
 export function PlatformBrowser({
@@ -46,23 +47,23 @@ export function PlatformBrowser({
   const [subscribeKey, setSubscribeKey] = useState<string | undefined>()
   const [subscribeInfo, setSubscribeInfo] = useState<Record<string, string>>({})
   const [dialogOpen, setDialogOpen] = useState(false)
-  /** 请求世代:切换平台/新搜索会自增,旧请求响应回来时若世代不符则丢弃。 */
-  const genRef = useRef(0)
+  /** 请求世代守卫(见 lib/useLatestOnly.ts):切平台/切视图/新搜索都作废在途请求。 */
+  const latest = useLatestOnly()
   const ch = view === "category" ? caps.category : view === "anchor" ? caps.anchor : caps.search
 
   // ⚠️ 切平台/切视图也要作废在途请求:只 setItems(null) 挡不住 —— 旧响应回来时
-  // gen 仍相等会覆盖成上一个平台的数据(c4aab55 只覆盖了「被新 run 取代」)。
+  // 世代仍相等会覆盖成上一个平台的数据(c4aab55 只覆盖了「被新 run 取代」)。
   // props 变化作废 + 清结果,覆盖所有切换路径(含父组件能力矩阵按钮)。
   useEffect(() => {
-    ++genRef.current
+    latest.invalidate()
     setItems(null)
     setError("")
     setBusy(false) // 在途请求的 finally 因世代不符不再清 busy → 这里补，否则按钮卡禁用
-  }, [platform, view])
+  }, [platform, view, latest])
 
   async function run() {
     if (!dl || !ch) return
-    const gen = ++genRef.current
+    const gen = latest.start()
     setBusy(true)
     setError("")
     const info: Record<string, string> = {}
@@ -71,14 +72,14 @@ export function PlatformBrowser({
     if (fields[0]) info[fields[0].key] = view === "category" ? categoryValue : q
     try {
       const r = await dl.previewChannel(ch.key, info)
-      if (gen !== genRef.current) return // 已被更新的请求取代,丢弃(否则面板显示上一个平台的数据)
+      if (latest.stale(gen)) return // 已被更新的请求取代,丢弃(否则面板显示上一个平台的数据)
       setItems(r.items)
     } catch (e) {
-      if (gen !== genRef.current) return
+      if (latest.stale(gen)) return
       setError(e instanceof Error ? e.message : String(e))
       setItems(null)
     } finally {
-      if (gen === genRef.current) setBusy(false)
+      if (!latest.stale(gen)) setBusy(false)
     }
   }
 

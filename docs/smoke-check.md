@@ -107,3 +107,16 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     侧栏树方向键（焦点 group→member、defaultPrevented=true）全部实测通过；无 React 告警。
   - ⚠️ 手抄 store 动作签名会踩返回值：`addGroup` 返 `string|null`、`autoGroupByKind` 返 `number`
     —— 拆出的子组件一律用 `Store = ReturnType<typeof useDesktop.getState>` 派生，别手写。
+- 2026-10-14 **重命名 + 两个收敛点**：
+  - `cards.tsx → Cards.tsx`、`ui/atoms/icons.tsx → Icons.tsx`（全仓 tsx 统一 PascalCase，
+    仅 `main.tsx`/`router.tsx` 入口例外）。
+  - `store/index.ts` 新增 `syncSubscriptions()`（「重读订阅+分组 → 重绘」），收敛 8 处重复；
+    `lib/useLatestOnly.ts` 取代 2 处手写 `genRef`。
+  - ⚠️ **重构中引入并修掉的两个顺序 bug**（`syncSubscriptions` 内含 `refreshView`）：
+    `removeSubscription` / `removeGroup` 原本是 `set → 改 selectedNodeId → refreshView`，
+    改完若把 `syncSubscriptions` 放前面，就会**拿刚删的 id 重算视图**。实测路径：删掉
+    *当前选中* 的分组 → 断言 `selectedNodeId==='tab:all'` 且视图非空（实测 120 条）。
+  - ⚠️ `toggleSubEnabled` **故意不收敛**（启停不改内容集，多调 refreshView 是白重算）——
+    实测 `view.list` 60→60 不变。
+  - 回归：6 包 tsc 0 错；14 个 `.check` 全过；`ui-probe` issueCount 0；实机验证建组/改名/
+    删选中组/停用/切平台连点/弹窗切模式全通过，无 React 告警。

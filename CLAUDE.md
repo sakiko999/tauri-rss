@@ -24,9 +24,20 @@ apps/
                    Icon · Modal(Menu/Switch/Select) · StateBlock · NavRow · QrImage · BootSkeleton
                  `src/components/app/*.tsx`    = 业务件，读 useDesktop/usePrefs 或吃 domain 类型
                    Rail(+RailGroupTree) · TitleBar · Toaster · SocialDetailModal ·
-                   MasonryGrid · LoadMoreFooter · cards · ListRow
+                   MasonryGrid · LoadMoreFooter · Cards · ListRow
                判据就是「有没有 `useDesktop`/`usePrefs`/`@tauri-playground/core` 类型 / domain 常量」。
                往 components/ 加新组件前先问要在哪一层；业务件一律进 app/。
+               ⚠️ **文件命名统一 PascalCase**（2026-10-14 改，原 `cards.tsx`/`icons.tsx` 是小写遗留）：
+               组件文件即默认导出物，大写开头；"一族组件"从**导出名**看就够，不靠文件名首字母。
+               仅 `main.tsx` / `router.tsx` 这类**入口**保留小写（生态惯例）。
+               **store 内的两个收敛点**（2026-10-14）：
+                 `syncSubscriptions()`（index.ts）—— 订阅/分组变更后「重读 + 重绘」的唯一入口。
+                   8 处调用。⚠️ 内含 `refreshView()`，**必须先修 `selectedNodeId` 再调**
+                   （退订/删组时否则会拿已删 id 重算视图）；也**不要**用在 `toggleSubEnabled`
+                   （启停不改内容集，多调只是白重算）。
+                 `lib/useLatestOnly.ts` —— 请求世代守卫（切平台/新搜索时丢弃先发后回的旧响应）。
+                   2 处消费者（PlatformBrowser / AddSubscriptionDialog）。
+                   ⚠️ 走 `appHost` 隧道取数**没有可传递的 abort 信号**，只能丢弃结果、不能取消请求。
   mobile/      React 19 + Vite，产物 → dist/mobile。已接入 appHost + core：
                极简「看内容」闭环（未读列表 → 点开播放/阅读）+ **订阅管理**（RSS 直链
                添加 / 移除）；复用 core DataLayer + player PlayableMedia + ui MediaImage

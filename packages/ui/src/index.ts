@@ -3,7 +3,7 @@
  *
  * ⚠️ 现在只剩两个对外导出:MediaImage(防盗链图隧道)与 fmtCount。
  * renderers/ 下的 UnifiedCard / MediaItemView / 各 *Renderer 已删(desktop 改用自己的
- * components/cards.tsx)。atoms 里的 Skeleton / icons.tsx 仍在——被同包 MediaImage 内部
+ * components/app/Cards.tsx)。atoms 里的 Skeleton / Icons.tsx 仍在——被同包 MediaImage 内部
  * 使用(加载占位 + 破图图标),非对外 API。
  *
  * 播放组件已拆到 @tauri-playground/player,**直接引 player**(此前的 re-export 兜底

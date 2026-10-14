@@ -270,6 +270,24 @@ export const useDesktop = create<DesktopState>((set, get) => {
     })
   }
 
+  /**
+   * 订阅集变更后重读 + 重绘。
+   *
+   * ⚠️ **顺序不能倒**:`refreshView()` 从 `get().subscriptions` 取快照喂给
+   * `queryView`,所以必须先 `set` 再 `refreshView` —— 反了会用旧列表算视图区间。
+   *
+   * ⚠️ 两个都读:分组 CRUD 会改 `groups`,而「删除分组」还会顺带把成员的 groupId
+   * 置空(改 `subscriptions`),所以不能只读其中一个。
+   */
+  function syncSubscriptions(): Promise<void> {
+    const dl = get().dl
+    if (!dl) return Promise.resolve()
+    return Promise.all([dl.subscriptions.list(), dl.subscriptions.listGroups()]).then(([subs, groups]) => {
+      set({ subscriptions: subs, groups })
+      refreshView()
+    })
+  }
+
   /** 懒查分页能力并写 canLoadMore(仅真实订阅;已缓存短路)。 */
   function queryCanLoadMore(nodeId: string): void {
     const dl = get().dl
@@ -703,8 +721,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
         return dup.id
       }
       const id = await dl.addSubscription(channelKey, title, info, meta)
-      set({ subscriptions: await dl.subscriptions.list() })
-      refreshView()
+      await syncSubscriptions()
       get().toast("ok", `已订阅 ${title}`, `渠道 ${channelKey}`)
       return id
     },
@@ -713,8 +730,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const dl = get().dl
       if (!dl) return
       await dl.subscriptions.update(id, patch)
-      set({ subscriptions: await dl.subscriptions.list() })
-      refreshView()
+      await syncSubscriptions()
     },
 
     async removeSubscription(id) {
@@ -722,13 +738,14 @@ export const useDesktop = create<DesktopState>((set, get) => {
       if (!dl) return
       const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
       await dl.subscriptions.remove(id)
-      set({ subscriptions: await dl.subscriptions.list() })
       if (get().selectedNodeId === id) {
         set({ selectedNodeId: "tab:all" })
         // 同步 URL(否则地址栏停在已删 id,回退/重载会再 select 已删节点)。
         navBridge?.(`/v/tab:all`, { replace: true })
       }
-      refreshView()
+      // ⚠️ syncSubscriptions 必须**在这之后**:它内含 refreshView,而 refreshView 用
+      // `get().selectedNodeId` 算视图 —— 先跑的话会拿刚被删的 id 重算一次。
+      await syncSubscriptions()
       get().toast("ok", `已退订 ${title}`)
     },
 
@@ -738,6 +755,9 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const sub = get().subscriptions.find((s) => s.id === id)
       if (!sub) return
       await dl.subscriptions.update(id, { enabled: !sub.enabled })
+      // ⚠️ 这里**不**走 syncSubscriptions:启停只改 subscriptions 数组就够了。
+      // 停用态在侧栏是靠 `healthOf(sub, ...)` 读**传入的 sub** 判断的(不读视图快照),
+      // 而 `allItems` 也不因启停而变 —— 多调 refreshView 只是白重算一次 queryView。
       set({ subscriptions: await dl.subscriptions.list() })
     },
 
@@ -756,8 +776,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
       const dl = get().dl
       if (!dl) return
       await dl.subscriptions.updateGroup(id, { title })
-      set({ groups: await dl.subscriptions.listGroups() })
-      refreshView()
+      await syncSubscriptions()
     },
 
     async removeGroup(id) {
@@ -768,15 +787,13 @@ export const useDesktop = create<DesktopState>((set, get) => {
         await dl.subscriptions.update(s.id, { groupId: null })
       }
       await dl.subscriptions.removeGroup(id)
-      set({
-        subscriptions: await dl.subscriptions.list(),
-        groups: await dl.subscriptions.listGroups(),
-      })
       if (get().selectedNodeId === `group:${id}`) {
         set({ selectedNodeId: "tab:all" })
         navBridge?.(`/v/tab:all`, { replace: true })
       }
-      refreshView()
+      // ⚠️ 同 removeSubscription:syncSubscriptions 内含 refreshView,必须等
+      // selectedNodeId 修正后再跑,否则会拿刚删的 `group:<id>` 重算视图。
+      await syncSubscriptions()
     },
 
     async setSetting(key, value) {
@@ -844,8 +861,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
       } catch (e) {
         get().toast("error", "自动归组失败", e instanceof Error ? e.message : String(e))
       }
-      set({ subscriptions: await dl.subscriptions.list(), groups: await dl.subscriptions.listGroups() })
-      refreshView()
+      await syncSubscriptions()
       if (!moved) return 0
       get().toast("ok", `已归类 ${moved} 条未分组订阅`, "按内容类型分组,可在设置里调整。", {
         label: "撤销",
@@ -853,8 +869,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
           void (async () => {
             // 撤销:全部移回未分组。分组本身留着(可能是用户本来就有的)。
             for (const b of before) await dl.subscriptions.update(b.id, { groupId: b.groupId })
-            set({ subscriptions: await dl.subscriptions.list() })
-            refreshView()
+            await syncSubscriptions()
             get().toast("ok", "已撤销归组")
           })()
         },
@@ -900,11 +915,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
           failed++
         }
       }
-      set({
-        subscriptions: await dl.subscriptions.list(),
-        groups: await dl.subscriptions.listGroups(),
-      })
-      refreshView()
+      await syncSubscriptions()
       return { added, skipped, failed }
     },
 
