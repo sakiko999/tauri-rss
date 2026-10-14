@@ -130,6 +130,7 @@ bun apps/mobile/src/html.check.ts                       # mobile 正文 HTML→�
 bun packages/core/src/example/serialize-roundtrip.check.ts  # crawler→core 序列化边界（tpl 字段不丢）
 bun packages/xml/src/example/opml.check.ts              # OPML 编解码往返（分组层级）
 bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射（导出过滤 / 导入去重）
+bun apps/desktop/src/lib/rail-nav.check.ts              # 侧栏树方向键映射（→ 折叠态只展开 / ← 回父行 / 未分组不折叠）
 
 # UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 已由 dev 配置开启）
 bun scripts/ui-probe.ts goto tab:all        # 导航 + 巡检（逐字竖排 / 溢出 / 遮挡 / 破图）
@@ -359,6 +360,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/mpv-playback-research.md` | 外部播放器 mpv 接入（未做） |
 | `docs/mobile-cdp-feasibility.md` | 移动端 CDP 可行性（未做） |
 | `docs/smoke-check.md` | ★ 端到端巡检清单（改了什么 → 跑什么） |
+| `docs/rail-tree-accordion.md` | 侧栏分组树的 Accordion 改造（选型对比 + 方向键导航 + 三个踩坑） |
 
 ## 下一步
 

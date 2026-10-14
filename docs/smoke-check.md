@@ -19,6 +19,7 @@
 | mobile 正文渲染 | `apps/mobile/src/html.check.ts` |
 | OPML | `apps/xml` + `apps/desktop` 的 `opml.check.ts` |
 | desktop UI 布局/隐藏 | `scripts/ui-probe.ts goto <node>` + `ui-console.ts` |
+| 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/rail-tree-accordion.md` |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 
@@ -75,3 +76,10 @@ bun run rss item <url>                        # by-url 路由 + 全档位
   huya 搜主播 online 假 0 / bili:square id 含下标 / douyin 重复 enter）+ 2 条复核纠正为误报。
   新增 2 守卫（danmaku-proto / douyu-frame）→ 14 `.check` 全通过；8 包 0 类型错误；播放矩阵 4/4；
   八路搜索矩阵全绿；控制台 0 告警。
+- 2026-10-14 侧栏分组树改 Radix Accordion + 方向键导航（见 `docs/rail-tree-accordion.md`）：
+  tsc 0 错；`rail-nav.check.ts` 全过；CDP 验「焦点在树行按 ↑↓ 不切文章」+ 焦点移出树后仍能切文章
+  （反证）；折叠栏 64px 与窄窗 1024px 下方向键均可用；`ui-probe` 0 问题；无 React 告警；
+  `ui-design-audit` contrastIssues 0、smallTargets 6 → 1。
+- 2026-10-14 启动过渡期骨架屏（Vite 的 dev 脚本执行前有 ~1.1s 纯空白）：
+  `#boot-skeleton`(index.html 静态) + `.boot-overlay`(App 兜底) 同一判据 `showSkeleton()` 同收；
+  修掉「库读到前视图画『还没有订阅』假信息」与「静态骨架留在正常流把 #root 顶出首屏」两坑。
