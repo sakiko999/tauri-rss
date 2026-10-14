@@ -755,8 +755,13 @@ a:hover {
   padding-inline: 0;
   gap: 0;
 }
-.rail.rail-collapsed .nav-row[aria-current="page"]::before {
+.rail.rail-collapsed .nav-row[aria-current="page"]::before,
+.rail.rail-collapsed .group-head[data-active="true"]::before {
   display: none;
+}
+/* 窄栏只剩图标,整行铺色会变成一整块色板 → 只保留图标自身的颜色差异。 */
+.rail.rail-collapsed .group-head[data-active="true"] {
+  background: transparent;
 }
 .rail.rail-collapsed .group-children {
   padding-left: 0;
@@ -825,6 +830,13 @@ a:hover {
   min-width: 0;
   font-size: var(--fs-small);
   font-weight: 500;
+  /* ⚠️ 强制单行:订阅名可能很长(「YouTube · 3Blue1Brown」这种),之前没有截断 →
+     换行把行高从 32px 撑到两倍,侧栏节奏全乱。省略号落在尾部,行高恒定。
+     附带好处:窄栏把标签挤到几像素时,`nowrap` 让它退化成「…」而不是**逐字竖排**
+     (逐字竖排正是因为文字在窄框里还能换行;实测过的老问题)。 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .nav-count {
   flex: none;
@@ -875,8 +887,33 @@ a:hover {
 .nav-caret {
   transition: rotate var(--dur-base) var(--ease-in);
 }
-.nav-caret[data-open="true"] {
+/* ⚠️ 展开态由 Radix Accordion 的 Trigger 下发的 data-state 驱动(不再是手写的
+   data-open)。Trigger asChild 到 caret 按钮上,所以 data-state 落在按钮上。 */
+.nav-caret-btn[data-state="open"] .nav-caret {
   rotate: 90deg;
+}
+/* ⚠️ 分组行**也能是激活态**(当前视图 = `group:<id>`)。给**整行**上背景 + 强调条,
+   与普通导航行一致 —— 之前只有 `.nav-row[aria-current="page"]`,而分组行的
+   aria-current 挂在 inner 按钮上(见 Rail.tsx),那条规则根本匹配不到 → 选中分组
+   只有文字变亮,**看不出被选中**(用户反馈)。
+   data-active 与 `.sub-row-wrap[data-active]` 同一套约定。 */
+.group-head[data-active="true"] {
+  background: var(--surface-3);
+}
+.group-head[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  width: 3px;
+  height: 16px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+}
+/* 整行已高亮时,内层按钮不再叠加背景 —— 否则会在行里多出一块错位的色块。 */
+.group-head[data-active="true"] .nav-row-inner:hover {
+  background: transparent;
 }
 .nav-row-inner {
   display: flex;
@@ -909,10 +946,11 @@ a:hover {
   border-left: 1px solid var(--border);
   margin-left: var(--sp-3);
 }
-/* 分组区之间留一点呼吸,否则连续两组糊成一片 */
-.group-block + .group-block,
-.group-block + div,
-div + .group-block {
+/* 分组区之间留一点呼吸,否则连续的组糊成一片。
+   ⚠️ 这里**只**匹配「未分组」那一块(它是唯一带 .group-block 的,真分组行由
+   Accordion.Item 渲染、不吃这个类)。原来是 `.group-block + div` 这类**兄弟**选择器,
+   现在中间隔着 Accordion.Root,兄弟关系不复存在 —— 直接按类名给边距,不依赖 DOM 位置。 */
+.group-block {
   margin-top: var(--sp-2);
 }
 /* 「未分组」的伪分组标题(不可折叠、不可删)——只作分区标识。 */
@@ -3687,6 +3725,13 @@ kbd {
   }
   .sub-row {
     padding-left: 0;
+  }
+  /* 窄栏激活态:只留图标本身的颜色,不铺整行色板(与 .rail-collapsed 那组同步)。 */
+  .group-head[data-active="true"] {
+    background: transparent;
+  }
+  .group-head[data-active="true"]::before {
+    display: none;
   }
   .rail-empty {
     display: none;

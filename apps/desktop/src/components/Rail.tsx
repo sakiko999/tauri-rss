@@ -2,9 +2,13 @@
  * Rail —— 侧边导航。三段:内容类型 / 智能订阅 / 订阅分组树;底部三个页面入口。
  *
  * 订阅行的尾槽编码**健康状态**(错误 / 停用 / 刷新中 / 未读数),对应
- * new_desktop 的 subRow。分组行点击只展开不选中(与旧三栏一致)。
+ * new_desktop 的 subRow。分组行点击只跳转不选中;展开/折叠只走 caret(或键盘)。
+ *
+ * 分组树 = Radix Accordion(展开态一等公民:`aria-expanded` / `data-state` / 折叠时
+ * `hidden` + 卸载内容),外加一层**方向键导航**(见 lib/rail-nav.ts)。
  */
-import { useMemo } from "react"
+import { useCallback, useMemo, useRef, useState } from "react"
+import * as Accordion from "@radix-ui/react-accordion"
 import type { Subscription } from "@tauri-playground/core"
 import { useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
@@ -15,9 +19,12 @@ import { Menu, MenuItem, MenuSeparator } from "./Modal.tsx"
 import { useSettingsNavigate, useViewNavigate } from "../router.tsx"
 import { AddSubscriptionDialog } from "../views/manage/AddSubscriptionDialog.tsx"
 import { EditSubscriptionDialog } from "../views/manage/EditSubscriptionDialog.tsx"
-import { useState } from "react"
+import { navAction, type RowCtx } from "../lib/rail-nav.ts"
 
 const HEALTH_ICON: Partial<Record<Health, string>> = { error: "alert", stale: "warning" }
+
+/** 「未分组」不是真分组(不可折叠),用哨兵值给它一个稳定的行标识。 */
+const UNGROUPED = "\u0000ungrouped"
 
 export function Rail() {
   const nodeId = useDesktop((s) => s.selectedNodeId)
@@ -60,6 +67,110 @@ export function Rail() {
     }
     return byGroup
   }, [subscriptions])
+
+  // ── Accordion 受控 value ────────────────────────────────────────────
+  // ⚠️ 不把 openGroups 改成 string[]:它是 Record<string, boolean> 且「未记录 = 展开」,
+  // 数组表达不了这个缺省(["g1"] 区分不出 g2 是缺省展开还是被折叠)。所以只在**变化的
+  // 那一个**上翻转现成的 toggleGroup(幂等)—— store 一行不用改。
+  const groupIds = useMemo(() => groups.map((g) => g.id), [groups])
+  const openIds = useMemo(() => groupIds.filter((id) => openGroups[id] ?? true), [groupIds, openGroups])
+  const onGroupsChange = useCallback(
+    (next: string[]) => {
+      const changed = groupIds.find((id) => next.includes(id) !== (openGroups[id] ?? true))
+      if (changed) toggleGroup(changed)
+    },
+    [groupIds, openGroups, toggleGroup],
+  )
+
+  // ── 方向键导航 ──────────────────────────────────────────────────────
+  // ⚠️ 不做 roving tabindex:行按钮全部留在 Tab 序里,方向键只是**叠加的增强**。
+  // 这一节只有十几行,把按钮移出 Tab 序会让「走到行尾的更多菜单」变难,是退化。
+  //
+  // ⚠️ 挂点选 Accordion.Root 的 onKeyDown:radix 内部也用 composeEventHandlers(null,
+  // handleKeyDown) 挂了同款方向键(只在**它的 Trigger 之间**循环)。composeEventHandlers
+  // 先调外部 handler、再检查 defaultPrevented —— 我们消费了键就 preventDefault,radix
+  // 那套自然被跳过,不会两套同时动焦点。
+  const treeRef = useRef<HTMLDivElement>(null)
+  const onTreeKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return
+      // 已被更内层消费(如菜单)或已被本处理器处理过一次(冒泡上来) → 不重复。
+      if (e.defaultPrevented) return
+      const el = (e.target as HTMLElement).closest<HTMLElement>("[data-row]")
+      if (!el) return
+      const root = treeRef.current
+      if (!root) return
+      const rows = [...root.querySelectorAll<HTMLElement>("[data-row]")]
+      const idx = rows.indexOf(el)
+      if (idx < 0) return
+
+      const kind = el.dataset.rowKind
+      const row: RowCtx =
+        kind === "ungrouped"
+          ? { kind: "ungrouped", expanded: true, hasChildren: true }
+          : kind === "group"
+            ? { kind: "group", expanded: el.dataset.rowExpanded === "true", hasChildren: el.dataset.rowHasChildren === "true" }
+            : { kind: "member", expanded: false, hasChildren: false }
+
+      const action = navAction(e.key, row)
+      // ⚠️ 没消费就**不能** preventDefault —— 否则会吃掉全局快捷键(lib/shortcuts.ts:52
+      // 的裸 ↑↓/j/k 切文章靠 defaultPrevented 守卫让内层先处理)。
+      if (action.type === "none") return
+      e.preventDefault()
+
+      /** 焦点统一落**主按钮**(分组行 = 标题,成员行 = 订阅名):落 caret 会让随后的
+          Enter 变成「展开」而不是「跳转」。未分组行没有主按钮,退化成整行(tabIndex=-1)。 */
+      const focusRow = (r: HTMLElement | undefined) => {
+        if (!r) return
+        const btn = r.querySelector<HTMLElement>(".nav-row-inner, .sub-row")
+        const target = btn ?? r
+        target.focus()
+        target.scrollIntoView({ block: "nearest" })
+      }
+      const flip = () => {
+        const gid = el.dataset.rowGroup
+        if (gid) toggleGroup(gid)
+      }
+
+      switch (action.type) {
+        case "move":
+          focusRow(rows[idx + action.delta])
+          break
+        case "first":
+          focusRow(rows[0])
+          break
+        case "last":
+          focusRow(rows[rows.length - 1])
+          break
+        case "expand":
+          // ⚠️ 只展开、不动焦点:子行在同一次 setState 之后才挂上,立刻 focus 会查到
+          // 旧行序(表现为「→ 跳到了别处」)。再按一次 → 才进子项。
+          flip()
+          break
+        case "into":
+          // rows 是文档序,分组行的第一个子行就是它的下一项。
+          focusRow(rows[idx + 1])
+          break
+        case "collapse":
+          flip()
+          break
+        case "out": {
+          // 成员行 → 回它所属的那一行。⚠️ 两种结构要走两条路,别只按兄弟找:
+          //   · 真分组:成员在 `Accordion.Item > Header + Content(.group-children)` 里,
+          //     `.group-children` 的 previousElementSibling 是 **null**(它在 Content 里
+          //     是独子)→ 必须向上 `closest('[data-row]')` 才找得到 Item。
+          //   · 未分组:成员在 `.group-block > [.group-head-plain][data-row] + .group-children`
+          //     里,标题是**兄弟**而非祖先 → 走 previousElementSibling。
+          const owner =
+            el.parentElement?.closest<HTMLElement>("[data-row]") ??
+            (el.closest(".group-children")?.previousElementSibling as HTMLElement | null)
+          focusRow(owner ?? undefined)
+          break
+        }
+      }
+    },
+    [toggleGroup],
+  )
 
   return (
     <aside className={`rail${collapsed ? " rail-collapsed" : ""}`}>
@@ -151,57 +262,83 @@ export function Rail() {
               <Icon name="settings" size={13} />
             </button>
           </RailTitle>
-          {groups.map((g) => {
-            const members = grouped.get(g.id) ?? []
-            // 分组徽标:有未读显未读(聚合成员未读),否则显订阅数(new_desktop library.js:88 同款)。
-            const unread = members.reduce((n, s) => n + (unreadOf[s.id] ?? 0), 0)
-            const open = openGroups[g.id] ?? true
-            const gid = `group:${g.id}`
-            return (
-              <div key={g.id}>
-                <div className="nav-row group-head">
-                  <button
-                    className="nav-caret-btn"
-                    aria-label={open ? "折叠分组" : "展开分组"}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleGroup(g.id)
-                    }}
-                  >
-                    <Icon name="chevronRight" size={13} className="nav-caret" data-open={String(open)} />
-                  </button>
-                  <button
-                    className="nav-row-inner"
-                    aria-current={nodeId === gid ? "page" : undefined}
-                    onClick={() => go(gid)}
-                    title={g.title}
-                  >
-                    <Icon name="folder" size={14} />
-                    <span className="nav-label">{g.title}</span>
-                    <span className="nav-count num" data-unread={unread ? "true" : undefined}>
-                      {unread || members.length}
-                    </span>
-                  </button>
-                </div>
-                {open ? (
-                  <div className="group-children" role="group" aria-label={g.title}>
-                    {members.length === 0 ? (
-                      <p className="group-empty">空分组。在「设置 → 订阅与分组」里把订阅移进来</p>
-                    ) : (
-                      members.map((s) => (
-                        <SubRow key={s.id} sub={s} active={nodeId === s.id} unread={unreadOf[s.id] ?? 0} health={healthOf(s, refreshErrors, busy)} onOpen={() => go(s.id)} />
-                      ))
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            )
-          })}
+          {/* ⚠️ 方向键处理挂在 Accordion.Root 上(见 onTreeKeyDown):radix 内部也挂了
+              同款键,靠 preventDefault 让它的那套跳过。treeRef 用于取行序。 */}
+          <Accordion.Root ref={treeRef} type="multiple" value={openIds} onValueChange={onGroupsChange} onKeyDown={onTreeKeyDown}>
+            {groups.map((g) => {
+              const members = grouped.get(g.id) ?? []
+              // 分组徽标:有未读显未读(聚合成员未读),否则显订阅数(new_desktop library.js:88 同款)。
+              const unread = members.reduce((n, s) => n + (unreadOf[s.id] ?? 0), 0)
+              const open = openGroups[g.id] ?? true
+              const gid = `group:${g.id}`
+              return (
+                <Accordion.Item
+                  key={g.id}
+                  value={g.id}
+                  data-row={gid}
+                  data-row-kind="group"
+                  data-row-group={g.id}
+                  data-row-expanded={String(open)}
+                  data-row-has-children={String(members.length > 0)}
+                >
+                  {/* ⚠️ Header 默认渲染 <h3>(带标题语义与 margin)→ asChild 退化成我们
+                      自己的 div,保住 .group-head 的两段式布局与折叠态规则。 */}
+                  <Accordion.Header asChild>
+                    <div className="nav-row group-head" data-active={String(nodeId === gid)}>
+                      {/* ⚠️ Trigger 只套 caret 按钮,**绝不**铺到整行或标题:
+                          标题也是 <button>(按钮不能嵌套),而「点行只跳转、caret 才展开」
+                          靠的就是整行里只有 caret 一个能 toggle 的东西。
+                          caret 的旋转由 Trigger 自动下发的 data-state 驱动(styles.css)。 */}
+                      <Accordion.Trigger asChild>
+                        <button className="nav-caret-btn" aria-label="展开或折叠分组" data-row-btn="caret">
+                          <Icon name="chevronRight" size={13} className="nav-caret" />
+                        </button>
+                      </Accordion.Trigger>
+                      <button
+                        className="nav-row-inner"
+                        aria-current={nodeId === gid ? "page" : undefined}
+                        onClick={() => go(gid)}
+                        title={g.title}
+                      >
+                        <Icon name="folder" size={14} />
+                        <span className="nav-label">{g.title}</span>
+                        <span className="nav-count num" data-unread={unread ? "true" : undefined}>
+                          {unread || members.length}
+                        </span>
+                      </button>
+                    </div>
+                  </Accordion.Header>
+                  <Accordion.Content>
+                    {open ? (
+                      <div className="group-children" role="group" aria-label={g.title}>
+                        {members.length === 0 ? (
+                          <p className="group-empty">空分组。在「设置 → 订阅与分组」里把订阅移进来</p>
+                        ) : (
+                          members.map((s) => (
+                            <SubRow key={s.id} sub={s} active={nodeId === s.id} unread={unreadOf[s.id] ?? 0} health={healthOf(s, refreshErrors, busy)} onOpen={() => go(s.id)} />
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+                  </Accordion.Content>
+                </Accordion.Item>
+              )
+            })}
+          </Accordion.Root>
           {/* ⚠️ 未分组订阅必须有自己的标题:平铺在分组之后且无标题时,用户会以为
-              它们属于上面那个分组(层级断裂)。 */}
+              它们属于上面那个分组(层级断裂)。它不是 Accordion.Item(不可折叠),
+              只作分区标识 —— 方向键仍能停在它身上往下走。 */}
           {(grouped.get("") ?? []).length > 0 ? (
             <div className="group-block">
-              <div className="group-head-plain">
+              {/* ⚠️ tabIndex={-1}:这个伪分组标题本身不可点(只作分区标识),但方向键
+                  导航要能把焦点停在它身上、再往下走到成员。`-1` 让它能**被程序化聚焦**
+                  而不进 Tab 序 —— 它不该是一个 Tab 停留点。 */}
+              <div
+                className="group-head-plain"
+                data-row={UNGROUPED}
+                data-row-kind="ungrouped"
+                tabIndex={-1}
+              >
                 <Icon name="inbox" size={13} />
                 <span className="nav-label">未分组</span>
                 <span className="nav-count num">{(grouped.get("") ?? []).length}</span>
@@ -281,7 +418,12 @@ function SubRow({
   ) : null
 
   return (
-    <div className="sub-row-wrap" data-active={String(active)}>
+    <div
+      className="sub-row-wrap"
+      data-active={String(active)}
+      data-row={`s:${sub.id}`}
+      data-row-kind="member"
+    >
       <button
         className="nav-row sub-row"
         data-kind={kind}

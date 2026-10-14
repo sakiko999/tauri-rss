@@ -62,6 +62,19 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
    `.group-block + div / div + .group-block` 靠相邻兄弟给分组区留白,`Accordion.Root`
    插进中间后兄弟关系不复存在。改成按**类名**给边距,不依赖 DOM 位置。
 
+## 后续两项改进(用户反馈)
+
+1. **分组行也能是激活态** —— 原来只有 `.nav-row[aria-current="page"]`(背景 + 强调条),
+   而分组行的 `aria-current` 挂在 `.nav-row-inner` 上,那条规则**根本匹配不到**
+   → 选中分组只有文字变亮,看不出被选中。改成 `.group-head[data-active="true"]`
+   (与 `.sub-row-wrap[data-active]` 同一套约定)给**整行**上背景 + 自己的 `::before` 强调条。
+   窄栏(64px / ≤1080px)下退回透明 + 隐藏强调条 —— 只剩图标时整行铺色会变成一块色板。
+2. **名字强制单行** —— `.nav-label` 有 `flex: 1; min-width: 0` 但**没有截断**,长订阅名
+   (`YouTube · 3Blue1Brown` 这种)会换行把行高从 32px 撑到两倍。加
+   `white-space: nowrap; overflow: hidden; text-overflow: ellipsis`。
+   实测:塞一个 380px 宽的名字,`clientWidth 147` → 画出省略号、**行高恒 32px**。
+   附带好处:窄栏把标签挤到几像素时,`nowrap` 让它退化成「…」而不是**逐字竖排**。
+
 ## 验证(实测结果)
 
 - `./node_modules/.bin/tsc -p apps/desktop` → 0 错
@@ -73,6 +86,8 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
 - 折叠栏(64px)与窄窗(1024px)下方向键均可用
 - `ui-probe` `issueCount 0`;`ui-console` 无 React / hook 告警
 - `ui-design-audit`:`contrastIssues 0`、`smallTargets` **6 → 1**(比改前更好)
+- 分组激活态:整行 `bg` 实测 = `--surface-3`、强调条 3px、`.nav-row-inner` 字重 560;切走后全部复原
+- 长名字截断:塞 380px 名字 → 省略号 + 行高仍 32px;全侧栏 `.nav-label` 无一行换行
 
 ## 明确不做
 
