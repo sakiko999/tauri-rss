@@ -777,6 +777,18 @@ a:hover {
 .rail.rail-collapsed .sub-dot {
   padding-left: 0;
 }
+/* ⚠️ 折叠栏里**必须**隐藏滚动容器的滚动条。
+   实测:滚动条吃掉右侧 10px → 行只剩 38px(而 .rail-head/.rail-foot 没有滚动条、
+   内容是 48px)→ 图标中心落在 26.9px,比侧栏中心(32px)偏左 5px,上方那排工具图标
+   与下面所有导航图标**错开一条竖线**。隐藏后三处内容盒都是 48px,图标统一落在 32px。
+   顺带:64px 的图标栏里一根 10px 滚动条要吃掉 16% 宽度,平台惯例也是不显示
+   (VS Code / Discord 的图标栏同理)—— 滚轮照常能滚。 */
+.rail.rail-collapsed .rail-scroll {
+  scrollbar-width: none;
+}
+.rail.rail-collapsed .rail-scroll::-webkit-scrollbar {
+  display: none;
+}
 .rail.rail-collapsed .sub-dot {
   display: none;
 }

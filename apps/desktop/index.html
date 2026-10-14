@@ -139,8 +139,23 @@
         background: var(--bs-surface);
         border-right: 1px solid var(--bs-line);
       }
+      /* ⚠️ 两个收窄条件必须**同时**有,且宽度与断点都要跟 styles.css 同步:
+         - 用户手动折叠侧栏 → html[data-prefs~="rail-collapsed"](首帧脚本写入)
+         - 窗口窄(真实 CSS 是 `@media (max-width:1080px) { --rail: 64px }`)
+         缺任一条件,骨架都是 268px 而真实侧栏 64px → 骨架淡出时**侧栏宽度跳变**
+         (真机量到视口 1000px 时骨架 268 vs 真实 64,差 204px)。
+         这份 CSS 是静态内联的,看不到 styles.css 的断点,只能各写一遍。 */
       html[data-prefs~="rail-collapsed"] .bs-rail {
         width: 64px;
+      }
+      @media (max-width: 1080px) {
+        .bs-rail {
+          width: 64px;
+        }
+        html[data-prefs~="rail-collapsed"] .bs-label,
+        .bs-label {
+          visibility: hidden;
+        }
       }
       html[data-prefs~="rail-collapsed"] .bs-label {
         visibility: hidden;
