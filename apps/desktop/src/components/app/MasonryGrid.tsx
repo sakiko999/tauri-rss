@@ -19,9 +19,9 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } fro
 import { useMasonry, usePositioner } from "masonic"
 import type { MediaItem } from "@tauri-playground/core"
 import { LoadMoreFooter } from "./LoadMoreFooter.tsx"
-import { useDesktop } from "../store/index.ts"
-import { isSmartFeed, isTabNode } from "../store/nodes.ts"
-import { itemKey, socialRatio } from "../lib/media.ts"
+import { useDesktop } from "../../store/index.ts"
+import { isSmartFeed, isTabNode } from "../../store/nodes.ts"
+import { itemKey, socialRatio } from "../../lib/media.ts"
 
 /** CSS columns 列数(按容器宽度断点,与网格断点一致)。 */
 function colsForWidth(w: number): number {

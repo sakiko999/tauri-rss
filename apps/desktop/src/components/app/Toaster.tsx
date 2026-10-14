@@ -2,8 +2,8 @@
  * Toaster —— 提示条容器(portal 到 #toast-root,避免被 .app-shell 的 overflow 裁剪)。
  */
 import { createPortal } from "react-dom"
-import { useDesktop } from "../store/index.ts"
-import { Icon } from "./Icon.tsx"
+import { useDesktop } from "../../store/index.ts"
+import { Icon } from "../Icon.tsx"
 
 const ICON: Record<string, string> = {
   ok: "checkCircle",

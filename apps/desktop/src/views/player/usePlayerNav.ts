@@ -18,7 +18,7 @@ import { unlockAudioPlayback } from "@tauri-playground/player"
 import { nodeTypeOf, useDesktop } from "../../store/index.ts"
 import { usePlayNavigate, viewPath } from "../../router.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
-import type { CardActions } from "../../components/cards.tsx"
+import type { CardActions } from "../../components/app/cards.tsx"
 
 export function usePlayerNav(): CardActions {
   const navigateToPlay = usePlayNavigate()

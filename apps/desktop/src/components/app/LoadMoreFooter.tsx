@@ -7,9 +7,9 @@
  *      → `growPage()` 放开本地切片窗口,不发网络请求。
  */
 import { useEffect, useRef } from "react"
-import { Icon } from "./Icon.tsx"
-import { useDesktop } from "../store/index.ts"
-import { isSmartFeed, isTabNode } from "../store/nodes.ts"
+import { Icon } from "../Icon.tsx"
+import { useDesktop } from "../../store/index.ts"
+import { isSmartFeed, isTabNode } from "../../store/nodes.ts"
 
 export function LoadMoreFooter() {
   const selectedNodeId = useDesktop((s) => s.selectedNodeId)

@@ -5,8 +5,8 @@
  */
 import type { MediaItem } from "@tauri-playground/core"
 import { MediaImage } from "@tauri-playground/ui"
-import { Icon } from "./Icon.tsx"
-import { excerptOf, fmtAgo, mediaUrl, ratioOf } from "../lib/media.ts"
+import { Icon } from "../Icon.tsx"
+import { excerptOf, fmtAgo, mediaUrl, ratioOf } from "../../lib/media.ts"
 
 export function ListRow({
   item,

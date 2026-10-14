@@ -7,41 +7,26 @@
  * 渠道来自 core `dl.listChannels()`;参数表单由 `sourceInfoTpl` 动态渲染;
  * 带 `defaultInfo` 的渠道可一键订阅。提交走 store.addSubscription(内部
  * dl.addSubscription = add + refresh)。
+ *
+ * ⚠️ 两大块 JSX 已拆到同目录的 `AddPanels.tsx`(SearchPanel 搜索添加 / ChannelPanel
+ * 按渠道配置);这里只留**表单状态与提交编排**。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
+import type { MediaItem } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
 import { Modal, Select } from "../../components/Modal.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
-import { KIND_META } from "../../store/nodes.ts"
-import { MediaImage } from "@tauri-playground/ui"
 import {
   candidatesFromSearch,
   LIVE_SUB_CHANNEL,
-  platformOf,
   SEARCH_CHANNEL,
   searchChannelOf,
   subsOfChannel,
   valueList,
   type Candidate,
 } from "../../lib/subscriptions.ts"
-
-const PLATFORM_ICON: Record<string, string> = {
-  bili: "radio",
-  douyu: "radio",
-  huya: "radio",
-  douyin: "radio",
-  youtube: "play",
-  weibo: "message",
-  xhs: "image",
-  rsshub: "rss",
-}
-
-const GROUP_TITLE: Record<string, string> = {
-  builtin: "内置渠道",
-  rsshub: "RSSHub 外挂",
-}
+import { ChannelPanel, SearchPanel } from "./AddPanels.tsx"
 
 export function AddSubscriptionDialog({
   open,
@@ -77,7 +62,7 @@ export function AddSubscriptionDialog({
   const [candidateValue, setCandidateValue] = useState("")
   /** 候选落到哪里:'new' = 新建订阅,否则 = 并入该订阅 id。 */
   const [targetId, setTargetId] = useState("new")
-  const [filter, setFilter] = useState("")
+  const [filter] = useState("")
   const [title, setTitle] = useState("")
   const [groupId, setGroupId] = useState("")
   const [ttl, setTtl] = useState("")
@@ -139,7 +124,6 @@ export function AddSubscriptionDialog({
     setTtl("")
     setCandidateValue("")
     setTargetId("new")
-    setFilter("")
     // 带预置渠道(从「发现」页订阅分区/搜索词)→ 直接进手工模式,预填参数。
     setMode(presetKey ? "manual" : "search")
     setKeyword("")
@@ -186,7 +170,6 @@ export function AddSubscriptionDialog({
     setMissing([])
     setCandidateValue("")
     setTargetId("new")
-    setFilter("")
   }
 
   /** 切换搜索平台(清空上一平台的候选与选中)。 */
@@ -196,7 +179,6 @@ export function AddSubscriptionDialog({
     setSearchItems(null)
     setCandidateValue("")
     setTargetId("new")
-    setFilter("")
     setTitle("")
   }
 
@@ -278,16 +260,6 @@ export function AddSubscriptionDialog({
     }
   }
 
-  function channelChip(c: ChannelInfo) {
-    return (
-      <button key={c.key} className="chip" aria-pressed={channelKey === c.key} onClick={() => pick(c.key)}>
-        <Icon name={PLATFORM_ICON[platformOf(c.key)] ?? "layers"} size={14} />
-        {c.name}
-        {c.loginable ? <span className="tag tag-warn chip-tag">需登录</span> : null}
-      </button>
-    )
-  }
-
   /** 选中候选后的提示:落到「新建」还是某条已有订阅。 */
   const targetHint = (() => {
     if (!candidateValue || !landChannel) return ""
@@ -344,224 +316,42 @@ export function AddSubscriptionDialog({
         </span>
       </div>
 
-      {/* ── 搜索添加:选平台 → 输关键词调接口 → 点选一个房间 ────────────── */}
       {searchMode ? (
-        <div className="stack" style={{ gap: "var(--sp-5)" }}>
-          <div className="field">
-            <span className="field-label" id="lbl-search-channel">
-              搜索哪个平台
-            </span>
-            <div className="chip-row" role="group" aria-labelledby="lbl-search-channel">
-              {searchPlatforms.map((p) => (
-                <button
-                  key={p}
-                  className="chip"
-                  aria-pressed={platform === p}
-                  onClick={() => pickPlatform(p)}
-                >
-                  <Icon name={PLATFORM_ICON[p] ?? "layers"} size={14} />
-                  {channels.find((c) => c.key === SEARCH_CHANNEL[p])?.name.replace(/搜索$/, "") ?? p}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="field">
-            <label className="field-label" htmlFor="add-keyword">
-              {searchCh?.sourceInfoTpl?.[0]?.label ?? "搜索关键词"}
-            </label>
-            <div className="input-group">
-              <Icon name="search" size={16} />
-              <input
-                id="add-keyword"
-                className="input"
-                type="search"
-                value={keyword}
-                placeholder={searchCh?.sourceInfoTpl?.[0]?.placeholder ?? "如:英雄联盟"}
-                onChange={(e) => setKeyword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void runSearch()
-                }}
-              />
-            </div>
-            <div className="inline-row">
-              <button className="btn btn-secondary btn-sm" disabled={searching || !keyword.trim()} onClick={() => void runSearch()}>
-                {searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />} 搜索
-              </button>
-              <span className="field-help">候选来自平台实时搜索接口，与是否已订阅无关。</span>
-            </div>
-          </div>
-
-          {searchItems !== null && cands.length === 0 && !searching ? (
-            <p className="t-small t-dim">
-              {searchItems.length === 0 ? "接口没有返回结果，换个关键词试试。" : "返回的条目没有可用的房间号。"}
-            </p>
-          ) : null}
-
-          {/* 「添加到」:新建一条,或并入该平台下已有的直播订阅(roomIds 追加) */}
-          {cands.length > 0 && targets.length > 0 && subChKey ? (
-            <div className="field">
-              <span className="field-label" id="lbl-target">
-                添加到
-              </span>
-              <div className="chip-row" role="radiogroup" aria-labelledby="lbl-target">
-                <button
-                  className="chip"
-                  role="radio"
-                  aria-checked={targetId === "new"}
-                  onClick={() => setTargetId("new")}
-                >
-                  <Icon name="plus" size={13} /> 新建订阅
-                </button>
-                {targets.map((s) => (
-                  <button
-                    key={s.id}
-                    className="chip"
-                    role="radio"
-                    aria-checked={targetId === s.id}
-                    onClick={() => setTargetId(s.id)}
-                  >
-                    {s.title}
-                    <span className="cand-chip">{valueList(s, landParam).length} 房</span>
-                  </button>
-                ))}
-              </div>
-              <span className="field-help">选中房间后会并入该订阅的房间列表，原有房间保留。</span>
-            </div>
-          ) : null}
-
-          {cands.length > 0 ? (
-            <div className="field">
-              <span className="field-label" id="lbl-cand">
-                匹配 <span className="num">{shown.length}</span> / {cands.length} 项
-              </span>
-              {shown.length > 0 ? (
-                <div className="cand-list" role="listbox" aria-labelledby="lbl-cand">
-                  {shown.map((c) => (
-                    <button
-                      key={c.value}
-                      className="cand"
-                      role="option"
-                      aria-selected={candidateValue === c.value}
-                      onClick={() => pickCandidate(c)}
-                    >
-                      {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
-                      {c.thumb ? (
-                        <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
-                      ) : (
-                        <span className="cand-thumb cand-thumb-plain">
-                          <Icon name={PLATFORM_ICON[platform] ?? "layers"} size={18} />
-                        </span>
-                      )}
-                      <span className="cand-main">
-                        <span className="cand-label od-truncate">{c.label}</span>
-                        {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
-                        {c.meta.length > 0 ? (
-                          <span className="cand-meta">
-                            {c.meta.map((m) => (
-                              <span className="cand-chip" key={m}>
-                                {m}
-                              </span>
-                            ))}
-                          </span>
-                        ) : null}
-                      </span>
-                      {subscribed.has(c.value) ? <span className="tag tag-warn chip-tag">已订阅</span> : null}
-                      <span className="cand-check">
-                        <Icon name="check" size={15} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <p className="t-small t-dim">没有匹配的结果，换个关键词或清空筛选。</p>
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      {/* ── 按渠道配置:原「选渠道 + 参数表单」 ─────────────────────────── */}
-      {!searchMode ? (
-        <div className="stack" style={{ gap: "var(--sp-5)" }}>
-          <div className="field">
-            <span className="field-label" id="lbl-channel">
-              渠道
-            </span>
-            <div className="channel-groups" role="group" aria-labelledby="lbl-channel">
-              {[
-                { id: "builtin", channels: builtins },
-                { id: "rsshub", channels: rsshub },
-              ]
-                .filter((g) => g.channels.length > 0)
-                .map((g) => (
-                  <div className="channel-group" key={g.id}>
-                    <div className="eyebrow">{GROUP_TITLE[g.id]}</div>
-                    <div className="chip-row">{g.channels.map(channelChip)}</div>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          {channel ? (
-            <div className="channel-form">
-              <div className="channel-summary">
-                <span className="platform-mark platform-mark-sm">
-                  <Icon name={PLATFORM_ICON[platformOf(channel.key)] ?? "layers"} size={16} />
-                </span>
-                <span className="platform-title">
-                  <span className="t-h3">{channel.name}</span>
-                  <span className="t-micro t-dim mono od-truncate">{channel.key}</span>
-                </span>
-                <span className="tag">{KIND_META[channel.kind]?.label ?? channel.kind}</span>
-                {channel.loginable ? (
-                  <span className="tag tag-warn">需登录 cookie</span>
-                ) : (
-                  <span className="tag tag-ok">匿名可用</span>
-                )}
-              </div>
-
-              {channel.defaultInfo ? (
-                <Banner tone="ok" icon="checkCircle" title="自带默认参数">
-                  该渠道无需填写参数，添加后会立即抓取一次最新内容。
-                </Banner>
-              ) : null}
-              {channel.loginable ? (
-                <Banner tone="warn" icon="lock">
-                  该渠道需要登录，请先在「账号与凭证」里扫码或填 cookie。
-                </Banner>
-              ) : null}
-
-              {fields.length > 0 ? (
-                fields.map((f) => (
-                  <div className="field" key={f.key}>
-                    <label className="field-label" htmlFor={`add-${f.key}`}>
-                      {f.label}
-                      {f.required ? <span className="field-req">*</span> : <span className="t-micro t-dim">选填</span>}
-                    </label>
-                    <input
-                      id={`add-${f.key}`}
-                      className="input"
-                      value={values[f.key] ?? ""}
-                      placeholder={f.placeholder}
-                      aria-required={f.required || undefined}
-                      aria-invalid={missing.includes(f.key) || undefined}
-                      onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
-                    />
-                    {missing.includes(f.key) ? (
-                      <span className="field-error">
-                        <Icon name="alert" size={12} />「{f.label}」为必填项，请填写后再提交。
-                      </span>
-                    ) : null}
-                  </div>
-                ))
-              ) : (
-                <p className="t-small t-muted">该渠道不需要额外参数。</p>
-              )}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+        <SearchPanel
+          searchPlatforms={searchPlatforms}
+          channels={channels}
+          platform={platform}
+          onPickPlatform={pickPlatform}
+          keyword={keyword}
+          onKeyword={setKeyword}
+          searchCh={searchCh}
+          onSearch={() => void runSearch()}
+          searching={searching}
+          searchItems={searchItems}
+          cands={cands}
+          shown={shown}
+          candidateValue={candidateValue}
+          onPickCandidate={pickCandidate}
+          subscribed={subscribed}
+          targets={targets}
+          targetId={targetId}
+          onTargetId={setTargetId}
+          subChKey={subChKey}
+          landParam={landParam}
+        />
+      ) : (
+        <ChannelPanel
+          builtins={builtins}
+          rsshub={rsshub}
+          channelKey={channelKey}
+          onPick={pick}
+          channel={channel}
+          fields={fields}
+          values={values}
+          onValue={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
+          missing={missing}
+        />
+      )}
 
       {channel ? (
         <div className="stack" style={{ gap: "var(--sp-5)" }}>

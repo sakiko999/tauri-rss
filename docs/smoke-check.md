@@ -20,6 +20,7 @@
 | OPML | `apps/xml` + `apps/desktop` 的 `opml.check.ts` |
 | desktop UI 布局/隐藏 | `scripts/ui-probe.ts goto <node>` + `ui-console.ts` |
 | 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/rail-tree-accordion.md` |
+| 组件拆分(移动/新建文件) | `tsc -p apps/desktop` + `ui-probe.ts goto page:settings` / `page:discover` 各走一遍;⚠️ tsc 查不出**循环 import 与渲染断链**,必须实机点 tab / 开弹窗 |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
@@ -95,3 +96,14 @@ bun run rss item <url>                        # by-url 路由 + 全档位
   （滚动条吃 10px → 行 38px vs 48px）；「补 5px」类注释已更正为根因记录。
   回归：`tsc` 0 错；`ui-probe audit` issueCount 0；`ui-design-audit` contrastIssues 0；
   折叠栏图标中心 vs 侧栏中心 delta = -0.3px。
+- 2026-10-14 **组件分层 + 大文件拆分**（纯重构，零行为变更）：
+  - 分层：`components/` = 功能件（纯 props），`components/app/` = 业务件（读 store / 吃 domain 类型）；
+    移动 8 个文件 + 13 处 import 路径批量修正。
+  - 拆文件：Rail 461→125（+RailGroupTree 356 / NavRow 51）· AddSubscriptionDialog 591→392
+    （+AddPanels 262）· SettingsPage 555→52（5 个 tab 各一文件）· DiscoverPage 429→155
+    （+PlatformBrowser 218 / BoardList 69 / platforms 15）。
+  - 回归：`tsc` 0 错；`ui-probe` tab:all / page:settings / page:discover 各 issueCount 0；
+    设置 **17 个 tab 按钮**逐个点过、发现页 4 section、添加弹窗两模式、
+    侧栏树方向键（焦点 group→member、defaultPrevented=true）全部实测通过；无 React 告警。
+  - ⚠️ 手抄 store 动作签名会踩返回值：`addGroup` 返 `string|null`、`autoGroupByKind` 返 `number`
+    —— 拆出的子组件一律用 `Store = ReturnType<typeof useDesktop.getState>` 派生，别手写。

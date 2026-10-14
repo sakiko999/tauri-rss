@@ -6,8 +6,8 @@
  */
 import type { MediaItem } from "@tauri-playground/core"
 import { MediaImage, fmtCount } from "@tauri-playground/ui"
-import { Icon } from "./Icon.tsx"
-import { fmtAgo, fmtTime, httpsify, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../lib/media.ts"
+import { Icon } from "../Icon.tsx"
+import { fmtAgo, fmtTime, httpsify, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
 
 /** 播放器回调:交给宿主(MediaMain/PlayerPage)决定如何开播。 */
 export interface CardActions {

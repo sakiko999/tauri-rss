@@ -12,13 +12,13 @@
  */
 import { useEffect, useMemo, useState } from "react"
 import DOMPurify from "dompurify"
-import { useDesktop } from "../store/index.ts"
-import { Modal } from "./Modal.tsx"
-import { Icon } from "./Icon.tsx"
+import { useDesktop } from "../../store/index.ts"
+import { Modal } from "../Modal.tsx"
+import { Icon } from "../Icon.tsx"
 import { MediaImage, fmtCount } from "@tauri-playground/ui"
-import { fmtAgo, mediaUrl, socialRatio } from "../lib/media.ts"
-import { openExternalSafely } from "../lib/host.ts"
-import { looksLikeHtml } from "../lib/html.ts"
+import { fmtAgo, mediaUrl, socialRatio } from "../../lib/media.ts"
+import { openExternalSafely } from "../../lib/host.ts"
+import { looksLikeHtml } from "../../lib/html.ts"
 
 export function SocialDetailModal() {
   const detail = useDesktop((s) => s.socialDetail)

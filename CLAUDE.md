@@ -17,8 +17,16 @@ apps/
                reader 三栏 / media 网格 / hot 热搜两栏 / page 整页 / player /
                shortvideo 短视频全屏流（节点 `short:<kind>`，Rail「模式」入口）。
                状态 src/store/（nodes 节点语法 · selectors 派生查询 · prefs 表现型偏好 ·
-               index 动作编排），视图 src/views/，卡片 src/components/cards.tsx。
+               index 动作编排），视图 src/views/。
                位置权威 = URL（/v/:nodeId、/play/:itemId）
+               ⚠️ **组件按「功能件 / 业务件」分层**（2026-10-14 拆分）：
+                 `src/components/*.tsx`        = 功能件，**纯 props、不碰 store**
+                   Icon · Modal(Menu/Switch/Select) · StateBlock · NavRow · QrImage · BootSkeleton
+                 `src/components/app/*.tsx`    = 业务件，读 useDesktop/usePrefs 或吃 domain 类型
+                   Rail(+RailGroupTree) · TitleBar · Toaster · SocialDetailModal ·
+                   MasonryGrid · LoadMoreFooter · cards · ListRow
+               判据就是「有没有 `useDesktop`/`usePrefs`/`@tauri-playground/core` 类型 / domain 常量」。
+               往 components/ 加新组件前先问要在哪一层；业务件一律进 app/。
   mobile/      React 19 + Vite，产物 → dist/mobile。已接入 appHost + core：
                极简「看内容」闭环（未读列表 → 点开播放/阅读）+ **订阅管理**（RSS 直链
                添加 / 移除）；复用 core DataLayer + player PlayableMedia + ui MediaImage
