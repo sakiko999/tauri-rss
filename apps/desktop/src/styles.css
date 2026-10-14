@@ -325,24 +325,20 @@ body {
 }
 
 /* 滚动条:交给 tauri.conf 的 scrollBarStyle:"fluentOverlay"(native,不占内容区)。
- * ⚠️ fluentOverlay 是 WebView2 原生绘制,下面的规则对它无效——只为纯前端 dev 兜底。 */
+ * ⚠️ **不要给 .scroll-area 写 `::-webkit-scrollbar`** —— 实测(2026-10-14,WebView2 155)
+ * 只要这个伪元素匹配上,Chromium 就切成**自定义(经典)滚动条**,把 fluentOverlay
+ * 整个旁路:全新空白页对照 `gutter` = 0(overlay 生效),加一条
+ * `::-webkit-scrollbar{width:10px}` 立刻变 10px(经典、占宽)。实测本应用
+ * `.scroll-area` 的 gutter 一直是 9。
+ * 后果:主区右侧凭空少 9px、内容被挤窄;折叠态图标栏也必须额外 `scrollbar-width:none`
+ * 才不再偏移 5px —— 那两条「对齐补丁」都是在给这条规则擦屁股。
+ * 曾经这里有一版「纯前端 dev 兜底」的 10px 规则,注释还断言「对 WebView2 无效」—— 说反了。
+ * 纯前端 dev(CORS 调试)想看得见滚动条,用 `scrollbar-width: thin`(标准属性,
+ * 实测不触发自定义模式)即可。 */
 .scroll-area {
   overflow-y: auto;
   overscroll-behavior: contain;
   min-height: 0;
-}
-.scroll-area::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-.scroll-area::-webkit-scrollbar-track {
-  background: transparent;
-}
-.scroll-area::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--r-full);
-  border: 3px solid transparent;
-  background-clip: content-box;
 }
 
 h1,
@@ -805,11 +801,16 @@ a:hover {
   padding-left: 0;
 }
 /* ⚠️ 折叠栏里**必须**隐藏滚动容器的滚动条。
-   实测:滚动条吃掉右侧 10px → 行只剩 38px(而 .rail-head/.rail-foot 没有滚动条、
-   内容是 48px)→ 图标中心落在 26.9px,比侧栏中心(32px)偏左 5px,上方那排工具图标
-   与下面所有导航图标**错开一条竖线**。隐藏后三处内容盒都是 48px,图标统一落在 32px。
-   顺带:64px 的图标栏里一根 10px 滚动条要吃掉 16% 宽度,平台惯例也是不显示
-   (VS Code / Discord 的图标栏同理)—— 滚轮照常能滚。 */
+   64px 的图标栏里任何滚动条都吃宽度、平台惯例也是不显示(VS Code / Discord 同理)
+   —— 滚轮照常能滚。
+   ⚠️ 历史更正(2026-10-14):这条曾经是为了对冲**经典滚动条**吃掉 10px → 行只剩 38px
+   而 `.rail-head/.rail-foot` 是 48px → 图标中心偏左 5px、上下错开一条竖线。
+   但那个 10px 经典滚动条的**真正根因**是 `.scroll-area::-webkit-scrollbar{width:10px}`
+   (已删,见那处注释),它把 fluentOverlay 顶掉了。根因修掉后全库 minScrollbarWidth=0、
+   图标中心与侧栏中心实测只差 -0.3px,不再需要「补 5px」。
+   本条保留:overlay 滚动条在 64px 栏里会盖住图标,隐藏仍是想要的效果,
+   而且 `scrollbar-width:none` 是标准属性、**不会**触发 Chromium 的自定义滚动条模式
+   (空白页对照已验:它是 0)。 */
 .rail.rail-collapsed .rail-scroll {
   scrollbar-width: none;
 }
@@ -3802,9 +3803,9 @@ kbd {
   }
   .rail-scroll {
     padding-inline: var(--sp-2);
-    /* ⚠️ 与 `.rail.rail-collapsed .rail-scroll` 同步:64px 栏里必须收起滚动条,
-       否则它吃掉右侧 10px → 滚动区里的行是 38px、而 .rail-head/.rail-foot 是 48px
-       → 图标中心偏左 5px、上下两处图标**错开一条竖线**(实测窄窗下 delta 有 -5.1/-11.1)。 */
+    /* ⚠️ 与 `.rail.rail-collapsed .rail-scroll` 同步(仓库铁律:两份 64px 栏清单逐项一致):
+       64px 栏里收起滚动条,免得 overlay 条盖住图标。历史的「补 5px 偏移」成因已随
+       `.scroll-area::-webkit-scrollbar` 一并删除(见那处注释)。 */
     scrollbar-width: none;
   }
   .rail-scroll::-webkit-scrollbar {

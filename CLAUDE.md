@@ -257,6 +257,14 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   **都不带 border-radius** —— 常见播放器都是满幅方角设计。曾经三处各写死一档
   （`rounded-xl`/`rounded-b-lg`/`rounded`）互相错位，且给画面套圆角本就不符合播放器惯例。
   播放器内嵌到任意容器都不该假定圆角档位
+- ⚠️ **`scrollBarStyle:"fluentOverlay"` 会被 `::-webkit-scrollbar` 顶掉**（WebView2 155 实测）：
+  页面上只要**任何** `::-webkit-scrollbar` 规则命中某个滚动容器，Chromium 就给它切**自定义**
+  （经典、占布局）滚动条，fluentOverlay 整个失效。空白的 `overflow:auto` 盒对比：
+  无规则 `offsetWidth-clientWidth=0`（overlay）；加 `::-webkit-scrollbar{width:10px}` → `10`。
+  `scrollbar-width:thin/auto` 不触发（实测仍 0）。`.scroll-area` 曾有一条 `width:10px`「纯前端
+  兜底」，注释还断言「对 WebView2 无效」——**说反了**，实测两处主滚动区 gutter 恒 9px。
+  删掉后归 0（侧栏 258→267px）。折叠栏那两条「滚动条吃 10px → 图标偏左 5px」的对齐补丁
+  都是它的连锁副产品。**改滚动条样式前先量 gutter，别用 `::-webkit-scrollbar`。**
 
 ## 弹幕（细节见 `docs/danmaku-research.md`）
 

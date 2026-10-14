@@ -22,6 +22,7 @@
 | 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/rail-tree-accordion.md` |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
+| 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
 
 ## 二、类型检查（6 包，必须全 0）
 
@@ -83,3 +84,14 @@ bun run rss item <url>                        # by-url 路由 + 全档位
 - 2026-10-14 启动过渡期骨架屏（Vite 的 dev 脚本执行前有 ~1.1s 纯空白）：
   `#boot-skeleton`(index.html 静态) + `.boot-overlay`(App 兜底) 同一判据 `showSkeleton()` 同收；
   修掉「库读到前视图画『还没有订阅』假信息」与「静态骨架留在正常流把 #root 顶出首屏」两坑。
+- 2026-10-14 **`scrollBarStyle:"fluentOverlay"` 被 `.scroll-area::-webkit-scrollbar{width:10px}` 旁路**：
+  实测（WebView2 155）`.rail-scroll` / `.main-region > .scroll-area` 的 `offsetWidth-clientWidth` 恒为 **9**
+  —— 是**经典**滚动条、占布局。判定法：**空白页最小对比**（`overflow:auto` 的 300px 盒，
+  量 `offsetWidth-clientWidth`）：无任何滚动条 CSS → `0`（overlay 生效）；加一条
+  `::-webkit-scrollbar{width:10px}` → `10`（切经典）。`scrollbar-width:thin/auto` 则保持 `0`。
+  故**只要 `::-webkit-scrollbar` 匹配上就会切经典模式**，fluentOverlay 失效。
+  删掉那条规则后 gutter 归 0，`--rail` 268px 下侧栏 258→**267px**、主区宽 9px。
+  ⚠️ 折叠栏图标对齐（-5px）与 `.group-head` 的 -6.3/5.1px 偏移都是这条规则的连锁副产品
+  （滚动条吃 10px → 行 38px vs 48px）；「补 5px」类注释已更正为根因记录。
+  回归：`tsc` 0 错；`ui-probe audit` issueCount 0；`ui-design-audit` contrastIssues 0；
+  折叠栏图标中心 vs 侧栏中心 delta = -0.3px。
