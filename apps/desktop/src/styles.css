@@ -3074,6 +3074,68 @@ div + .group-block {
   border-top: 1px solid var(--border);
 }
 
+/* 下拉菜单(radix DropdownMenu + .menu 类名)。
+   ⚠️ 这里**不要**写 `position: relative` —— radix 的 popper 用 fixed 策略定位,它把
+   方向交给外层 wrapper:`transform: translate(x, y)`,而 .menu 自己的 inline style 也带
+   `position: relative`(来自 Modal.tsx 的 style 对象)。两者叠加后,我们这条 `fixed`
+   会把菜单强行钉在 wrapper 的**视口原点**(0,0,左上角),方向 wrapper 的定位形同虚设。
+   ⚠️ 宽度必须 `max-content`:popup 的高度/宽度约束都只落在 wrapper 上,菜单拿不到
+   anchor 宽度;而 `width: auto` 的绝对定位盒收缩到「最近块容器宽 − left」,菜单紧贴
+   左边缘时收缩成 0 宽(实测 60px),文字挤出圆角框外 —— 用户截图里那团叠字就是它。
+   `.menu-item` 是 flex 子项,`max-content` 取四项里最长的一项,够用。 */
+.menu {
+  position: fixed;
+  z-index: var(--z-modal);
+  width: max-content;
+  min-width: 200px;
+  padding: var(--sp-1);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-2);
+  /* 只动 opacity —— 位移交给 wrapper 的 transform,两条 translate 会叠加(菜单会从
+     锚点位置再整体偏上 8px)。 */
+  animation: fade var(--dur-fast) var(--ease-in);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  text-align: left;
+  color: inherit;
+  font-size: var(--fs-small);
+  white-space: nowrap;
+  outline: none;
+  cursor: pointer;
+}
+.menu-item[data-highlighted] {
+  background: var(--surface-hover);
+}
+.menu-item[data-disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.menu-item svg {
+  /* 不写 color —— 继承当前色,危险项(退订)的红字连图标一起红。 */
+  flex: none;
+}
+.menu-item .check {
+  flex: none;
+  color: var(--accent);
+}
+.menu-item .menu-hint {
+  flex: none;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.menu-sep {
+  height: 1px;
+  margin: var(--sp-1) 0;
+  background: var(--border);
+}
+
 .palette {
   width: min(620px, 100%);
   max-height: 70vh;
@@ -3390,8 +3452,12 @@ kbd {
   object-fit: contain;
   display: block;
 }
-/* 整块(MediaImage contain 分支高度由内容定,这里把它撑满图窗) */
-.social-detail-media > div {
+/* 整块(MediaImage contain 分支高度由内容定,这里把它撑满图窗)。
+   ⚠️ 必须排除指令条:它的容器同样是 `.social-detail-media` 的**直接子 div**,被
+   这里一起拉成 height:100% —— 105px 宽的圆角控件条于是变成一整块贴满图窗高度、
+   left:50% 居中(translate -50%)的深色圆角长条,把图整个盖住。真机量到控件条
+   高 408px、底边锚点被算成 top:-12px,正是用户截图里那个「圆角长条 + 图不见了」。 */
+.social-detail-media > div:not(.social-detail-controls) {
   height: 100%;
 }
 /* 底部控件条:翻页箭头 + 计数,贴媒体框**底边**居中。
@@ -3479,6 +3545,12 @@ kbd {
   color: var(--text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* HTML 正文(有 <br>/<a> 的那类):换行由 <br> 承载,**不能**再 pre-wrap ——
+   平台 HTML 里标签之间的源码换行会被当内容保留,段落被拆散、行距错乱。
+   纯文本分支没有 <br>,才需要 pre-wrap 保住原来的换行。 */
+.social-detail-text.social-detail-html {
+  white-space: normal;
 }
 .social-detail-stats {
   display: flex;

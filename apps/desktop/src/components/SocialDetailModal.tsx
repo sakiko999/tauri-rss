@@ -181,12 +181,11 @@ export function SocialDetailModal() {
                 <span className="skeleton sk-line" style={{ width: "64%" }} />
               </span>
             ) : bodyHtml ? (
-              <div
-                className="social-detail-text"
-                style={{ whiteSpace: "pre-wrap" }}
-                onClick={onBodyClick}
-                dangerouslySetInnerHTML={{ __html: bodyHtml }}
-              />
+              // ⚠️ HTML 正文走 social-detail-html 覆盖掉 white-space:pre-wrap ——
+              // 平台给的 HTML 里 <a>/<span> 周围本来就带源码换行,pre-wrap 会把这些
+              // 纯排版换行也当真换行渲染,段落被拆开、行距错乱(看着像文字重叠)。
+              // HTML 分支的换行交给 <br>,不靠 white-space。
+              <div className="social-detail-text social-detail-html" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
             ) : text ? (
               <p className="social-detail-text">{text}</p>
             ) : (

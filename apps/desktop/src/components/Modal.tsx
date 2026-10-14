@@ -85,12 +85,10 @@ export function Menu({
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align={align}
-          sideOffset={6}
-          className="menu"
-          style={{ position: "relative", zIndex: 60 }}
-        >
+        {/* ⚠️ 不写 `position: relative` —— radix 的 popper 用 fixed 策略,方向由外层
+            wrapper 的 transform 决定;这里再写一个 relative 会让下一条 `.menu` 的
+            `position: fixed` 钉死在视口原点(详见 styles.css 的 .menu 注释)。 */}
+        <DropdownMenu.Content align={align} sideOffset={6} className="menu">
           {children}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
