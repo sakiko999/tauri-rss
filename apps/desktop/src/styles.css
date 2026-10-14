@@ -313,6 +313,45 @@
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
   }
+
+  /* ⚠️ 以下全是**元素级 reset**,必须留在 `@layer base` 里。
+     曾把它们写在层外(unlayered),而**无层 CSS 优先级高于所有 @layer** —— 于是
+     `button{background:none;border:0;padding:0}` 把 packages 里所有 tailwind 按钮
+     类全废掉(bg-*/border-*/px-*/py-* 全不生效,渲染成无边框无内边距的裸按钮)。
+     app 内看不出来,是因为 desktop 用的是 styles.css 自己的 `.btn`/`.icon-btn`
+     (同为无层,自己就能赢);受害的是 packages/player、packages/ui 这类
+     只靠 utility 的代码。Tailwind 4 层序:theme < base < components < utilities。 */
+  h1,
+  h2,
+  h3,
+  h4,
+  p,
+  figure,
+  blockquote {
+    margin: 0;
+  }
+  ul,
+  ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  img {
+    max-width: 100%;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
 }
 
 /* 橡皮筋效果禁用(页面级)。
@@ -341,37 +380,6 @@ body {
   min-height: 0;
 }
 
-h1,
-h2,
-h3,
-h4,
-p,
-figure,
-blockquote {
-  margin: 0;
-}
-ul,
-ol {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-img {
-  max-width: 100%;
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-button {
-  background: none;
-  border: 0;
-  padding: 0;
-  cursor: pointer;
-}
 a {
   color: var(--accent);
   text-decoration: none;

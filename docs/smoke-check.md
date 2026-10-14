@@ -24,6 +24,7 @@
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
+| 改 `styles.css` 的 `@layer` / reset 结构 | CDP 量 tailwind 按钮的 `getComputedStyle(btn).padding`：**必须 `6px 12px`**（`0px` = reset 漏在层外，把 utility 压死了） |
 
 ## 二、类型检查（6 包，必须全 0）
 
@@ -120,3 +121,22 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     实测 `view.list` 60→60 不变。
   - 回归：6 包 tsc 0 错；14 个 `.check` 全过；`ui-probe` issueCount 0；实机验证建组/改名/
     删选中组/停用/切平台连点/弹窗切模式全通过，无 React 告警。
+- 2026-10-14 **播放舞台改黑底 + 揪出 `@layer base` 提前收尾的仓库级 bug**：
+  - `PlayableMedia.tsx`:`MediaState` 从主题变量(`bg-[var(--surface-2)]` + `text-[var(--text)]`)
+    改成写死黑底白字,并用 `bg-(--surface-2)`→`bg-black` 的 Tailwind 4 简写;顺手把两处
+    原生浅色块(`red-300`/`zinc-300` 边框)一并收进 `MediaState`(三处配色原本各不相同)。
+    理由:播放器末尾的未知流兜底分支本来就是 `bg-black`,舞台一贯是黑的。
+  - **根因 bug**:`styles.css` 的 `@layer base{}` 只覆盖 `*` + `body`,**被自己提前 `}` 收尾**;
+    后面的 `h1..figure`/`ul,ol`/`img`/`button,input,select,textarea`/`button` reset 全成了
+    **无层规则**,而**无层优先级高于所有 `@layer`** → `button{background:none;border:0;padding:0}`
+    把 packages 里 tailwind 按钮的 `bg-*`/`border-*`/`px-*`/`py-*` 全废掉。
+    旧 `MS_BTN` 的边框/内边距其实**从来没生效过**,一直被这条掩盖。
+  - 修法:把 8 组 reset 全部移进 `@layer base`。**运行时证明**(CDP 从活体 CSSOM 删掉那条
+    无层规则 → `padding` 立刻从 `0px` 变 `6px 12px`、`bg` 变 `white/10`、`border` 出现;
+    再插回 base 层,结果相同)—— 层序修复正确。
+  - ⚠️ 测这层东西**不能只信源码**:Vite 对该文件的 transform 缓存一度卡住,服务端持续发
+    旧 CSS(第二段 `@layer base` 恒 283 字节)。判据用**服务端 CSS 长度**或直接量 computed style,
+    别用源码 diff。tailwind 的注释会被剥掉,也不适合当探针。
+  - ⚠️ 另有环境坑:**重启 `bun run tauri` 会引发 WebView2 CDP 端口重绑**,正在跑的实例
+    连不上 9222(本次即因此中断);诊断脚本别依赖跨重启的 CDP 会话。
+  - 回归:6 包 tsc 0 错。

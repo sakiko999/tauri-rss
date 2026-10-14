@@ -332,6 +332,16 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   error overlay。workspace 包（如 `@tauri-playground/xml`）还须先在**消费方
   package.json** 声明 `workspace:*`（desktop 曾在缺该声明时炸过：store 一 import 就白屏）。
   改完清 `node_modules/.vite` 后 `bun install` 再重启。
+- ⚠️ **元素级 reset 必须写在 `@layer base` 里**：`styles.css` 的 `@layer base{}` 一旦被
+  自己提前 `}` 收尾，后面的 `button/h1/ul` reset 就成了**无层规则** —— 而**无层 CSS
+  优先级高于所有 `@layer`**（Tailwind 4 层序 `theme < base < components < utilities`）。
+  后果：`button{background:none;border:0;padding:0}` 把 packages 里所有 tailwind 按钮的
+  `bg-*`/`border-*`/`px-*`/`py-*` **全废掉**（渲染成无边框无内边距的裸按钮）。
+  app 内看不出来（desktop 用自己的 `.btn`/`.icon-btn`，同为无层、自己就能赢），
+  受害的是 `packages/player`、`packages/ui` 这类只靠 utility 的代码。
+  2026-10-14 修复：把 `h1..figure/ul,ol/img/button,input,select,textarea/button` 全部移进
+  base 层。**改 styles.css 的结构性规则后，务必用 CDP 量一次真实 computed style**
+  （`getComputedStyle(btn).padding` 应为 `6px 12px` 而非 `0px`）。
 - **字体**：IBM Plex 自托管（`apps/desktop/public/fonts`，~136KB，离线可用）。
   Sans=UI/标题，**Serif=正文**，Mono=数字/通道号。中文回落到系统栈（字体包太大不随包）。
 - **视觉基调**：暖石墨中性（色相 72/75）+ 琥珀 accent；深/浅两套同色相，改一处要改两处。

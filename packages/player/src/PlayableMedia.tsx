@@ -30,9 +30,14 @@ import { AudioShell } from "./AudioShell.tsx"
 import { VideoShell } from "./VideoShell.tsx"
 import { SpinnerIcon } from "./icons.tsx"
 
-/** 状态块内的次要按钮(与 desktop 的 .btn-secondary 同形,但 player 不能依赖 desktop)。 */
+/**
+ * 状态块内的次要按钮。
+ *
+ * ⚠️ 颜色是**写死的白系**,不是主题变量:它只出现在 bg-black 的播放舞台上
+ * (见 MediaState),浅色主题的 `--surface-1` 会是近白色按钮,在纯黑上突兀。
+ */
 const MS_BTN =
-  "rounded-md border border-[var(--border-strong)] bg-[var(--surface-1)] px-3 py-1.5 text-xs font-medium text-[var(--text)] transition-colors hover:bg-[var(--surface-hover)]"
+  "rounded-md border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90 transition-colors hover:bg-white/20"
 
 /**
  * 播放器内的加载 / 失败 / 空态统一样式块。
@@ -40,7 +45,12 @@ const MS_BTN =
  * 为什么不用 desktop 的 StateBlock:player 是独立包(desktop 依赖它,不能反向依赖)。
  * 这里给一份同形的最小实现 —— 关键是**自身撑出 16:9**,这样解析完成后画面接管,
  * 舞台高度不跳(旧实现是 48px 空白环,左上角,解析完整个区域突然撑开)。
- * 颜色走主题变量(surface / text 系列),与全站一致。
+ *
+ * ⚠️ **配色写死黑底白字,不走主题变量**(2026-10-14 用户反馈「浅色很怪」)：
+ * 这是**播放舞台**的占位。浅色主题下 `--surface-2` 是近白色,整块舞台突然白闪一下
+ * 才切到画面,和播放器本身的观感断裂;而且本文件末尾的未知流兜底分支本来就是
+ * `bg-black` —— 舞台一贯是黑的,加载态不该是唯一例外。
+ * 与 VideoShell/PlayerControls 的方角契约无关,这里说的是**配色**。
  */
 function MediaState({
   tone = "neutral",
@@ -55,19 +65,19 @@ function MediaState({
 }) {
   // ⚠️ 无圆角(与 VideoShell/PlayerControls 同契约):播放器满幅方角,是产品设计。
   return (
-    <div className="flex aspect-video w-full flex-col items-center justify-center gap-2.5 overflow-hidden bg-[var(--surface-2)] p-6 text-center">
+    <div className="flex aspect-video w-full flex-col items-center justify-center gap-2.5 overflow-hidden bg-black p-6 text-center">
       {tone === "loading" ? (
-        <SpinnerIcon className="h-8 w-8 animate-spin text-[var(--text-dim)]" />
+        <SpinnerIcon className="h-8 w-8 animate-spin text-white/70" />
       ) : (
         <span
-          className="grid h-9 w-9 place-items-center rounded-full bg-[var(--surface-3)] text-base font-semibold text-[var(--text-dim)]"
+          className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-base font-semibold text-white/70"
           aria-hidden
         >
           {tone === "error" ? "!" : "∅"}
         </span>
       )}
-      <p className="text-sm font-medium text-[var(--text)]">{title}</p>
-      {detail ? <p className="max-w-[46ch] text-xs leading-relaxed text-[var(--text-dim)]">{detail}</p> : null}
+      <p className="text-sm font-medium text-white">{title}</p>
+      {detail ? <p className="max-w-[46ch] text-xs leading-relaxed text-white/60">{detail}</p> : null}
       {action ? <div className="mt-1">{action}</div> : null}
     </div>
   )
@@ -332,32 +342,34 @@ export function PlayableMedia({
     )
   }
 
+  // ⚠️ 这两块也走 MediaState(黑底 + 写死配色):它们同样是**舞台占位**,原来的
+  // red-300/zinc-300 是浅底深字,在纯黑舞台上比加载态还突兀,且三处配色互不相同。
   if (playError) {
     return (
-      <div className="space-y-2 rounded border border-red-300 p-4 text-center text-sm text-red-600">
-        <p>播放失败:{playError instanceof Error ? playError.message : String(playError)}</p>
-        <button
-          type="button"
-          onClick={() => {
-            log.userRetry()
-            setPlayError(null)
-            setRetryKey((k) => k + 1)
-          }}
-          className="rounded border border-red-300 px-3 py-1 text-xs hover:bg-red-50"
-        >
-          重试
-        </button>
-      </div>
+      <MediaState
+        tone="error"
+        title="播放失败"
+        detail={playError instanceof Error ? playError.message : String(playError)}
+        action={
+          <button
+            type="button"
+            className={MS_BTN}
+            onClick={() => {
+              log.userRetry()
+              setPlayError(null)
+              setRetryKey((k) => k + 1)
+            }}
+          >
+            重试
+          </button>
+        }
+      />
     )
   }
 
   // 真 rtmp 播不了。
   if (isRtmp(stream)) {
-    return (
-      <div className="rounded border border-zinc-300 p-4 text-center text-sm text-zinc-500">
-        该流为 rtmp 协议,当前浏览器无法直接播放
-      </div>
-    )
+    return <MediaState title="无法直接播放" detail="该流为 rtmp 协议,当前浏览器无法直接播放。" />
   }
 
   // 渐进式视频 / HLS / FLV / DASH → VideoShell 外壳(自定义控件)。
