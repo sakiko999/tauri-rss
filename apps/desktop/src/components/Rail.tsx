@@ -13,6 +13,7 @@ import type { Subscription } from "@tauri-playground/core"
 import { useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
 import { PAGES, SMART, SHORT_MODES, TABS, KIND_META, DEFAULT_VIEW, isTabNode } from "../store/nodes.ts"
+
 import { healthOf, kindCounts, type Health } from "../store/selectors.ts"
 import { Icon } from "./Icon.tsx"
 import { Menu, MenuItem, MenuSeparator } from "./Modal.tsx"
@@ -432,6 +433,11 @@ function SubRow({
         title={sub.title}
       >
         <span className="sub-dot" />
+        {/* ⚠️ 折叠栏(64px)里行里只剩一个图标,而 `.sub-dot` 在折叠态被 display:none
+            → 成员行会变成**一排空白行**、只剩悬停才出来的「更多」按钮(用户实测:
+            点行正中就是弹菜单)。所以补一个 kind 图标:宽栏里 display:none(视觉不变),
+            折叠态才出现,让每个成员行都有可见图元。 */}
+        <Icon name={KIND_META[kind ?? "article"]?.icon ?? "rss"} size={15} className="sub-icon" />
         <span className="nav-label">{sub.title}</span>
         {slot ? <span className="sub-slot">{slot}</span> : null}
       </button>

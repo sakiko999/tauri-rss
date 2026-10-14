@@ -131,6 +131,30 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
 修完逐帧复验(1440 与 1000 两档):侧栏宽度全程**唯一**(268 / 64)、卡片数恒定 12、
 相位序列 `static → overlay → static(淡出) → real` 只一次交接。
 
+## 折叠栏(64px)的可用性(用户反馈「操作体验很奇怪」)
+
+实测发现折叠态里**成员行是空白行**:行内唯一的图元是 `.sub-dot`(6px 圆点),
+而它在折叠态被 `display:none` → 44 行里有一批没有任何可见内容;
+唯一看得见的反而是 `.sub-more` 那个「更多」方块 —— 实测它正好落在 47px 行的**正中**,
+点下去只弹菜单、**永远不导航**,完全错位。
+
+三处修:
+
+1. **补 kind 图标** —— `SubRow` 加一个 `<Icon className="sub-icon">`(图标取
+   `KIND_META[channelKind].icon`,与内容类型 tab 同源)。宽栏 `display:none`(视觉不变,
+   那儿由 `.sub-dot` 承担 kind 标识),折叠态才显示。44 行 → **0 空白行**。
+2. **隐藏「更多」入口** —— `.rail-collapsed` 与 `@media(max-width:1080px)` 两组
+   `display:none`(它的菜单在 64px 里放不下)。折叠态回归「纯导航」。
+3. **窄窗分支补齐两条** —— 与 `.rail-collapsed` 组**逐项同步**:
+   - 隐藏滚动条(否则图标偏左 5px,上下错开一条竖线)
+   - `gap: 0`(少了它,宽度为 0 的 `.sub-slot` 仍算一个 flex item,
+     12px gap 把图标挤得偏左 **6px**,实测 delta −6.3)
+   还补了 `.group-head-plain` 的居中和 `justify-content`。
+
+修完三态实测:手动折叠 / 窄窗(≤1080px) 都是 `blankRows=0`、图标 delta 唯一 `-0.3`
+(四舍五入误差);宽栏 `sub-icon:none` / `sub-dot:block` / `sub-more:grid`——视觉零变化。
+点成员行正中 → **导航**(不再弹菜单)。
+
 ## 验证(实测结果)
 
 - `./node_modules/.bin/tsc -p apps/desktop` → 0 错
@@ -151,6 +175,9 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
 - 焦点环:Tab 到 caret / 分组标题、方向键到成员行,三处环 3x 放大截图均完整闭合
 - **逐帧**(rAF 记录器,1440 与 1000 两档):侧栏宽度全程唯一、卡片数恒定 12、
   相位只 `static → overlay → static(淡出) → real` 一次交接
+- 折叠栏可用性:手动折叠 / 窄窗两态 `blankRows=0`、图标 delta 唯一 `-0.3`;
+  宽栏 `sub-icon:none` / `sub-dot:block` / `sub-more:grid`(视觉零变化);
+  点成员行正中 → 导航而非弹菜单
 
 ## 明确不做
 

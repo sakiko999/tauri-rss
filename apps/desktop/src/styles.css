@@ -775,7 +775,8 @@ a:hover {
 }
 .rail.rail-collapsed .nav-row,
 .rail.rail-collapsed .nav-row-inner,
-.rail.rail-collapsed .group-head {
+.rail.rail-collapsed .group-head,
+.rail.rail-collapsed .group-head-plain {
   justify-content: center;
   padding-inline: 0;
   gap: 0;
@@ -816,6 +817,12 @@ a:hover {
 }
 .rail.rail-collapsed .sub-dot {
   display: none;
+}
+/* 折叠态:圆的 kind 小点换成同义的**图标**,让每个成员行都有可见图元。
+   没有这一条,成员行在 64px 里是**一排空白行**(唯一看得见的是 .sub-more 的方块,
+   而它又正好落在行正中 —— 点下去只弹菜单、永远不导航)。 */
+.rail.rail-collapsed .sub-icon {
+  display: block;
 }
 .rail.rail-collapsed .rail-section {
   padding-top: var(--sp-1);
@@ -1036,6 +1043,14 @@ a:hover {
   opacity: 1;
   pointer-events: auto;
 }
+/* ⚠️ 折叠栏(64px)里**整个隐藏**「更多」入口。
+   它的菜单(立即刷新/编辑/停用/退订)在 64px 里根本放不下;更要命的是实测它是落在
+   这条 47px 行**正中**的那个 28px 方块 —— 行本身没有任何可见图元(见 .sub-icon),
+   唯一看得见的就是它,点下去只弹菜单、永远不导航,操作体验完全错位(用户反馈)。
+   折叠态一律不显示,行回归「纯导航」。 */
+.rail.rail-collapsed .sub-more {
+  display: none;
+}
 /* 露出「更多」时把行内槽位(未读数等)让出来,避免重叠。 */
 .sub-row-wrap:hover .sub-slot,
 .sub-row-wrap:focus-within .sub-slot {
@@ -1053,6 +1068,10 @@ a:hover {
    还重,层级倒挂(用户会以为那是分组名)。靠背景高亮 + 左侧强调条区分就够。 */
 .sub-row[aria-current="page"] {
   font-weight: 500;
+}
+/* 折叠态才出现的 kind 图标(宽栏里由 .sub-dot 承担 kind 标识,不用重复)。 */
+.sub-icon {
+  display: none;
 }
 .sub-dot {
   width: 6px;
@@ -3748,12 +3767,24 @@ kbd {
   }
   .nav-row,
   .nav-row-inner,
-  .group-head {
+  .group-head,
+  .group-head-plain {
     justify-content: center;
     padding-inline: 0;
+    /* ⚠️ `gap: 0` 这一条不能少(与 `.rail-collapsed` 那组对齐)。少了它,成员行里那个
+       宽度为 0 的 `.sub-slot`(它的内容 `.nav-count`/`.nav-warn` 都被隐藏)仍算一个
+       flex item,gap 12px 把它和图标一起居中 → 图标反而偏左 6px(实测 delta -6.3)。 */
+    gap: 0;
   }
   .rail-scroll {
     padding-inline: var(--sp-2);
+    /* ⚠️ 与 `.rail.rail-collapsed .rail-scroll` 同步:64px 栏里必须收起滚动条,
+       否则它吃掉右侧 10px → 滚动区里的行是 38px、而 .rail-head/.rail-foot 是 48px
+       → 图标中心偏左 5px、上下两处图标**错开一条竖线**(实测窄窗下 delta 有 -5.1/-11.1)。 */
+    scrollbar-width: none;
+  }
+  .rail-scroll::-webkit-scrollbar {
+    display: none;
   }
   .group-children {
     padding-left: 0;
@@ -3762,6 +3793,18 @@ kbd {
   }
   .sub-row {
     padding-left: 0;
+  }
+  /* ⚠️ 与 `.rail.rail-collapsed` 那一组**逐项同步**(同样的 64px 图标栏):
+     小圆点换成 kind 图标(否则成员行是空白行),并隐藏「更多」入口
+     (它在 47px 行里正落在正中,点下去永远只弹菜单)。 */
+  .sub-dot {
+    display: none;
+  }
+  .sub-icon {
+    display: block;
+  }
+  .sub-more {
+    display: none;
   }
   /* 窄栏激活态:只留图标本身的颜色,不铺整行色板(与 .rail-collapsed 那组同步)。 */
   .group-head[data-active="true"] {
