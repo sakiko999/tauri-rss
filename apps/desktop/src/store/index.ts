@@ -80,6 +80,13 @@ interface DesktopState {
   hotWord: HotWordState | null
   /** DataLayer 初始化失败(库损坏/宿主未注入)→ 整页错误,不让应用白屏。 */
   initError: string | null
+  /**
+   * init 的**同步部分**已结束(subscriptions/groups/settings 就位)。
+   * ⚠️ 不等 refreshAll:那是网络动作,可能几秒。它只是给 index.html 的启动骨架
+   * 一个「真数据已到、可以摘掉骨架」的信号(见 main.tsx)。初始视图为空而不是
+   * 「正在加载…」,首屏不该先闪一句卡片化的加载态。
+   */
+  ready: boolean
 
   /** 展开的分组(纯内存)。 */
   openGroups: Record<string, boolean>
@@ -292,6 +299,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     socialDetail: null,
     hotWord: null,
     initError: null,
+    ready: false,
 
     openGroups: {},
     filter: {},
@@ -335,6 +343,9 @@ export const useDesktop = create<DesktopState>((set, get) => {
           set({
             dl,
             initError: null,
+            // ready 与真数据**同一次 set**:摘掉启动骨架与首帧有内容必须是同一帧,
+            // 否则中间会留一屏空网格(main.tsx 订阅 ready 决定何时隐藏骨架)。
+            ready: true,
             subscriptions: await dl.subscriptions.list(),
             groups: await dl.subscriptions.listGroups(),
             settings,
@@ -354,7 +365,8 @@ export const useDesktop = create<DesktopState>((set, get) => {
           // 初始化失败(宿主未注入 / 库损坏):置错误态由 App 渲染错误页,不让整页白屏。
           // 允许重试:清掉 initPromise 让下次 init() 重新走一遍。
           initPromise = null
-          set({ initError: e instanceof Error ? e.message : String(e) })
+          // ready 也要给出去:失败页是真内容,再压在骨架下面用户就看不到错误了。
+          set({ initError: e instanceof Error ? e.message : String(e), ready: true })
         }
       })()
       return initPromise

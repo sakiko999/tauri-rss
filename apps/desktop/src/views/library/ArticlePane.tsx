@@ -13,6 +13,7 @@ import { itemKey } from "../../lib/media.ts"
 import { ListRow } from "../../components/ListRow.tsx"
 import { LoadMoreFooter } from "../../components/LoadMoreFooter.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
+import { GridSkeleton } from "../../components/BootSkeleton.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Menu, MenuItem, MenuSeparator } from "../../components/Modal.tsx"
 import { useViewNavigate } from "../../router.tsx"
@@ -124,7 +125,7 @@ export function ArticlePane() {
       ) : null}
 
       {loading && items.length === 0 && !query ? (
-        <StateBlock icon="loader" title="正在加载…" text="首次抓取或刷新进行中。" />
+        <GridSkeleton mode="list" />
       ) : items.length === 0 ? (
         <EmptyState nodeId={nodeId} hasSub={!!meta.sub} disabled={meta.sub ? !meta.sub.enabled : false} onGo={go} />
       ) : (

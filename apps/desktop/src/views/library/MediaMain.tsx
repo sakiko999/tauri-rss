@@ -14,6 +14,7 @@ import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { healthOf } from "../../store/selectors.ts"
 import { MediaCard, SocialCard } from "../../components/cards.tsx"
+import { GridSkeleton } from "../../components/BootSkeleton.tsx"
 import { MasonryGrid } from "../../components/MasonryGrid.tsx"
 import { LoadMoreFooter } from "../../components/LoadMoreFooter.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
@@ -105,12 +106,14 @@ export function MediaMain() {
   }
 
   if (items.length === 0) {
-    // 冷启动首轮刷新还没回来 → 别闪「这里还没有内容」。(有搜索词时优先报「没有匹配」)
-    if (loading && !query) {
+    // 冷启动首轮刷新还没回来 → 出骨架,别闪「这里还没有内容」。
+    // 有搜索词时优先报「没有匹配」。⚠️ 启动过渡期由 App 兜(见 App.tsx 的 booting)——
+    // 这里只需要管「库已读到、但这一轮刷新还没回来」。
+    if (!query && loading) {
       return (
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
           <GridHead title={viewTitleFor(meta, hotWord)} />
-          <StateBlock icon="loader" title="正在加载…" text="首次抓取或刷新进行中。" />
+          <GridSkeleton />
         </div>
       )
     }

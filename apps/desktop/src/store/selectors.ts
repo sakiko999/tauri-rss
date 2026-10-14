@@ -31,6 +31,29 @@ export interface StoreSlice {
 
 export const PAGE_SIZE = 60
 
+/**
+ * 启动过渡期:此刻**还不能**渲染真实视图 —— 唯一判据,App.tsx 与 main.tsx 共用
+ * (前者据此画骨架,后者据此决定何时摘掉 index.html 里那份静态骨架)。
+ *
+ * ⚠️ 为什么不能用「库为空」当判据:库读到之前 `subscriptions` 与 `allItems` **都是**
+ * 空数组,视图会画出「还没有订阅」「这里还没有内容」这类**假信息** —— 真机上量到
+ * 它在启动后 ~660ms 闪一下(那时 SQLite 还没读完)。所以第一段判据是 `!ready`
+ * (订阅/分组/设置已就位),而不是任何「空」的判断。
+ *
+ * 第二段:已就位但首轮抓取还在飞(首启空库时 refreshAll 要真去抓网络,实测 900ms+)
+ * —— 这时库**确实**是空的,但答案还没回来,继续盖骨架。`!loading` 之后交回视图:
+ * 那是真·空(源没内容 / 已停用 / 搜索无结果)。
+ */
+export function showSkeleton(s: {
+  ready: boolean
+  allItems: MediaItem[]
+  loading: boolean
+  subscriptions: Subscription[]
+}): boolean {
+  if (!s.ready) return true
+  return s.allItems.length === 0 && s.loading && s.subscriptions.length > 0
+}
+
 function isToday(ts: number | undefined, now: number): boolean {
   if (!ts) return false
   const a = new Date(ts)
@@ -68,6 +91,7 @@ export function baseFor(s: StoreSlice, node: string | null, now: number): MediaI
   }
   return s.allItems.filter((i) => i.subscriptionId === n)
 }
+
 
 /** 热度排序键:播放量 → 在线人数 → 点赞数(社交)。 */
 export function heatOf(i: MediaItem): number {

@@ -499,6 +499,23 @@ a:hover {
   height: 100vh;
   height: 100dvh;
 }
+/**
+ * App 里的启动骨架盖层(见 App.tsx 的 booting)。
+ *
+ * ⚠️ 只盖 `.app-body`(不含顶栏):真正的顶栏在底下已经画好了,这一层只负责
+ * 把「库还没读到的空视图」盖住 —— 否则启动后 ~660ms 会闪一句「这里还没有内容」。
+ * `inset: 0` 与 `.app-body` 的位置无关:它相对最近的定位祖先(.app-shell 的
+ * 静态定位不构成包含块 → 视口)铺满;顶栏本就是 52px 定高、层要盖的是下面那块。
+ */
+.boot-overlay {
+  position: fixed;
+  top: var(--header-h);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40; /* 低于浮层(--z-modal=50),高于本体 */
+  background: var(--bg);
+}
 /* 行高必须确定,否则内容会把行撑高、内部滚动区失去约束 */
 .app-body {
   display: grid;

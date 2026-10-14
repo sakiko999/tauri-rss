@@ -26,6 +26,8 @@ import { SettingsPage } from "./views/manage/SettingsPage.tsx"
 import { AccountPage } from "./views/manage/AccountPage.tsx"
 import { OnboardingModal } from "./views/manage/OnboardingModal.tsx"
 import { PlayerPage } from "./views/player/PlayerPage.tsx"
+import { GridSkeleton } from "./components/BootSkeleton.tsx"
+import { showSkeleton } from "./store/selectors.ts"
 import { CommandPalette } from "./views/palette/CommandPalette.tsx"
 import { SocialDetailModal } from "./components/SocialDetailModal.tsx"
 import { usePrefs } from "./store/prefs.ts"
@@ -50,6 +52,7 @@ export default function App() {
   const init = useDesktop((s) => s.init)
   const initError = useDesktop((s) => s.initError)
   const selectedArticleId = useDesktop((s) => s.selectedArticleId)
+  const booting = useDesktop(showSkeleton)
   const meta = useNodeMeta(nodeId)
   const railCollapsed = usePrefs((s) => s.railCollapsed)
   useGlobalShortcuts()
@@ -123,6 +126,16 @@ export default function App() {
           )}
         </main>
       </div>
+      {/* ⚠️ 启动过渡期在**这里**收口,不散到各视图:库读到之前 `subscriptions` 与
+          `allItems` 都是空的,任何视图都会画出「还没有订阅 / 这里还没有内容」这类
+          假信息(真机量到启动后 ~660ms 闪一下)。index.html 那份静态骨架正盖在同一
+          位置;main.tsx 按同一个判据摘它,所以这里补一层完全重合的 React 骨架就行。
+          铺上时首屏与启动骨架逐像素同构(同一套 .bs-* 类),换手不会被看出来。 */}
+      {booting ? (
+        <div className="boot-overlay">
+          <GridSkeleton mode={viewType === "reader" ? "list" : "grid"} />
+        </div>
+      ) : null}
       <CommandPalette />
       <SocialDetailModal />
       <OnboardingModal />
