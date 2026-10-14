@@ -155,6 +155,31 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
 (四舍五入误差);宽栏 `sub-icon:none` / `sub-dot:block` / `sub-more:grid`——视觉零变化。
 点成员行正中 → **导航**(不再弹菜单)。
 
+## 折叠态没有状态反馈(用户:「分组图标无法进入激活状态,快捷键也无效」)
+
+实测下来是**同一个根因的两面**:折叠态下只剩图标,而图标默认是 `--text-dim`(灰),
+且 `.nav-caret-btn`(展开箭头)在这一档被 `display:none`(与参考实现 `new_desktop` 一致)。
+
+- **「激活」**:`.nav-row[aria-current="page"] svg { color: var(--text) }` 这条对普通行有效,
+  但分组行的 `aria-current` 挂在 `.nav-row-inner` 上 → `.nav-row[aria-current]` **匹配不到**
+  → 实测选中分组的 `folderColor` 一直是 `oklch(0.52 …)`(灰)。
+- **「快捷键无效」**:方向键其实是有效的(实测 `ArrowRight` 把 `data-row-expanded`
+  从 false 翻成 true);但**展开后看不出任何变化** —— 箭头被隐藏、成员行也只是多出来,
+  64px 栏里几乎注意不到。所以用户读到的是「按键没反应」。
+
+修:折叠态下让图标同时承担两种状态表达 ——
+
+| 状态 | group-icon | 颜色 |
+| --- | --- | --- |
+| 折叠 + 未选中 | `folder` | `--text-dim` `0.52` |
+| 展开 + 未选中 | `folderOpen` | `--text-muted` `0.48` |
+| 选中 | 随展开态 | `--text` `0.22` |
+
+图标在 `folder` / `folderOpen` 之间切换(见 Rail.tsx):**这是折叠态唯一的展开指示**。
+宽栏里 caret 已经在转,图标再变会喧宾夺主,所以两者都只在 `:is(.rail-collapsed, @media ≤1080px)`
+里启用。实测三态颜色**互不相同**,折叠态与窄窗**逐项对齐**,宽栏 `caret: grid` 且图标保持
+`0.52`(视觉零变化)。
+
 ## 验证(实测结果)
 
 - `./node_modules/.bin/tsc -p apps/desktop` → 0 错
@@ -178,6 +203,8 @@ Accordion 的语义正好对上:纯展开/折叠,不假装管选中,`Trigger asC
 - 折叠栏可用性:手动折叠 / 窄窗两态 `blankRows=0`、图标 delta 唯一 `-0.3`;
   宽栏 `sub-icon:none` / `sub-dot:block` / `sub-more:grid`(视觉零变化);
   点成员行正中 → 导航而非弹菜单
+- 折叠态状态表达:三态图标色互异(`0.52` / `0.48` / `0.22`),折叠态与窄窗逐项对齐;
+  宽栏 `caret: grid` 且图标保持 `0.52`
 
 ## 明确不做
 

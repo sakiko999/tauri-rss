@@ -301,7 +301,11 @@ export function Rail() {
                         onClick={() => go(gid)}
                         title={g.title}
                       >
-                        <Icon name="folder" size={14} />
+                        {/* ⚠️ 图标随展开态切换,这是**折叠栏里唯一**能表达展开/折叠的视觉线索
+                            —— 折叠态下 `.nav-caret-btn` 被 display:none(与 new_desktop 的
+                            参考实现一致),只剩这个图标能说话。没有它,用户按 → 展开了也看不出
+                            任何变化,会误以为「快捷键无效」。 */}
+                        <Icon name={open ? "folderOpen" : "folder"} size={14} className="group-icon" />
                         <span className="nav-label">{g.title}</span>
                         <span className="nav-count num" data-unread={unread ? "true" : undefined}>
                           {unread || members.length}

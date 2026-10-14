@@ -1051,6 +1051,24 @@ a:hover {
 .rail.rail-collapsed .sub-more {
   display: none;
 }
+/* ⚠️ 折叠栏里**只剩图标**,而图标默认是 `--text-dim`(灰)—— 于是「当前选中」在折叠态
+   没有任何视觉反馈:整行铺色被上面那条规则清掉、强调条也隐藏了。
+   普通行有 `.nav-row[aria-current="page"] svg { color: var(--text) }` 兜底,但分组行的
+   aria-current 挂在 `.nav-row-inner` 上,`.nav-row[aria-current]` **匹配不到** →
+   分组图标永远保持灰的(实测 folderColor = oklch(0.52 0.012 72))。补一条提亮。 */
+.rail.rail-collapsed .group-head[data-active="true"] .nav-row-inner svg,
+.rail.rail-collapsed .group-head[data-active="true"] .nav-row-inner .nav-label {
+  color: var(--text);
+}
+/* 分组图标随展开态在 folder / folderOpen 之间切换(见 Rail.tsx)。折叠态下这是**唯一**
+   的展开指示:`.nav-caret-btn` 在这一档被 display:none,不给这条线索的话方向键 → 展开后
+   看不出任何变化,用户会以为「快捷键无效」。宽栏里 caret 已经在转,图标再变会喧宾夺主,
+   所以只在折叠态启用。 */
+/* ⚠️ 属性挂在 Accordion.Item 上(不是 .group-head),所以选择器不能用
+   `.group-head[data-row-expanded]` —— 那样永远匹配不到(实测图标色一直没变)。 */
+.rail.rail-collapsed [data-row-expanded="true"] .group-icon {
+  color: var(--text-muted);
+}
 /* 露出「更多」时把行内槽位(未读数等)让出来,避免重叠。 */
 .sub-row-wrap:hover .sub-slot,
 .sub-row-wrap:focus-within .sub-slot {
@@ -3812,6 +3830,15 @@ kbd {
   }
   .group-head[data-active="true"]::before {
     display: none;
+  }
+  /* 窄栏里只有图标能表达状态,与 .rail-collapsed 那组**逐条对齐**(仓库铁律:两份
+     隐藏/样式清单必须逐项一致,曾因漏项复发过两次)。 */
+  .group-head[data-active="true"] .nav-row-inner svg,
+  .group-head[data-active="true"] .nav-row-inner .nav-label {
+    color: var(--text);
+  }
+  [data-row-expanded="true"] .group-icon {
+    color: var(--text-muted);
   }
   .rail-empty {
     display: none;
