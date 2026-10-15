@@ -221,3 +221,16 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     下一张图就没形变了。包一层 `.social-detail-cover` 而非直接给 `<img>` 挂 name，
     是因为 `<img>` 在换图/代理图就绪时会重挂、name 跟着丢。
   - 回归：desktop tsc 0 错；vite build 通过。
+- 2026-10-15 **启动白闪 + 弹窗形变二次入场（两个都是动效改动的余波）**：
+  - **启动白闪**：`index.html` 的内联 CSS 只**定义**了 `--bs-bg`，却**没应用到画布** ——
+    实测 `html`/`body` 的 computed background 是 `rgba(0,0,0,0)`，画布回落到浏览器默认的
+    **白色**；而 `styles.css` 的 `body{background:var(--bg)}` 要等 Tailwind 编译产物加载后才
+    生效。深色主题下启动即白闪一下。⚠️ 闪的是**画布**不是骨架（骨架实测就是
+    `oklch(0.168 0.006 72)`，深色）。修法：在 `:root` 上补 `background: var(--bs-bg)` ——
+    `:root` 的背景会传播到画布，`fixed` 的骨架盖不住那一层。
+    验证判据：`getComputedStyle(document.documentElement).backgroundColor` **不是**
+    `rgba(0,0,0,0)`（实测由透明 → `oklch(0.168 0.006 72)`，与骨架底一致）。
+  - **弹窗形变后闪一下**：`vt.finished` 里把 `animation` 还原成 CSS 值，会把 `modal-in`
+    **重新挂回去并从头再播一遍**（过渡刚结束弹窗又缩一下）。改为保持 `none`。
+    同时补上 `.scrim` 的 `fade` —— 它在 VT **快照**里被截在 `opacity≈0`，过渡结束后真身
+    显示也是一帧闪烁。**VT 与 CSS 入场动画不能叠加**，过渡期间把两者都停掉。
