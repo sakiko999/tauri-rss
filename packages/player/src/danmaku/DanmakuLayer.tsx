@@ -218,9 +218,16 @@ export function DanmakuLayer({
       }
       activeRef.current = still
 
-      // 绘制(CSS 像素坐标系,DPR 已 scale)。
+      // ⚠️ **清屏必须在「位图坐标系」下做,且要覆盖到位图最后一行/列。**
+      // 旧写法 `setTransform(dpr,…)` + `clearRect(0,0,w,h)` 会**漏掉边缘**:
+      // 位图是 `round(w*dpr)`,dpr 非整数时比 `w*dpr` 大 —— 实测 dpr=1.875、w=516 时
+      // 位图 968 列而 `516*1.875 = 967.5`,最右那**半列永远清不掉**。白色弹幕从右缘
+      // 进入(`x = w`)画进该列后**永久残留** → 播放器右侧一条白竖边
+      // (用户描述「弹幕从右侧出现后就会保留右侧白边」)。
+      // 先复位变换、按 `canvas.width/height`(位图单位)清,再设回 dpr 缩放绘制。
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      ctx.clearRect(0, 0, w, h)
       ctx.font = `${FONT_SIZE}px ${FONT}`
       ctx.textBaseline = "middle"
       for (const a of still) {
