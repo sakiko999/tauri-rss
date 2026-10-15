@@ -102,6 +102,29 @@ export function rawOf<T>(v: T | { _rawValue?: T } | undefined): T | undefined {
 /** "10万+" → 100000;纯数字透传。 */
 // (parseCount 已抽到 ../../utils/count.ts,与 douyu 等平台共用。)
 
+/**
+ * 平台给的时间戳 → epoch **ms**,自动判别秒/毫秒。
+ *
+ * ⚠️ 别无条件 `* 1000`:小红书结构变更后 `time` 已从**秒**改成**毫秒**,旧假设会把
+ * 时间戳放大 1000 倍 → 落到公元 5 万年 → 排序**永久钉在最前**(实测:全部页前 12 条
+ * 全是 social,本该置顶的直播被挤到第 112 位开外)。这类错值还会连累 `fmtAgo`(「多久前」)
+ * 与 `isToday`(今日/未读口径),不只影响排序。
+ *
+ * ⚠️ 刻意**不用 `now` 做上限** —— 那会把「刚发布的 1 条未来时间/时钟偏差」误判成秒。
+ *
+ * ⚠️ **别写成三元**,这里踩过两次都是把分支写反:秒/毫秒的判据方向相反,很容易混。
+ * 中间量走具名常量,一眼能看出哪个数属于哪个单位。
+ */
+const SEC_MIN = 978307200 // 2001-01-01 的**秒**级戳
+const MS_MIN = SEC_MIN * 1000 // 同一时刻的**毫秒**级戳
+export function toEpochMs(t: unknown): number | undefined {
+  const n = Number(t)
+  if (!Number.isFinite(n) || n <= 0) return undefined
+  // 小于 2001 年的毫秒戳必然是无意义的(小红书 2013 年才成立)→ 一定是秒级。
+  if (n < MS_MIN) return n * 1000 // 秒 → 毫秒
+  return n // 已经是毫秒
+}
+
 /** note 两种形态(SSR noteCard / API note)归一后的共享字段。 */
 interface NoteFields {
   noteId: string
@@ -164,7 +187,12 @@ export function noteCardToSocial(
   const desc = noteCard?.desc ? String(noteCard.desc).trim() : ""
   const cover = noteCard?.cover ?? {}
   const user = noteCard?.user ?? {}
-  const publishedAtMs = noteCard?.time ? Number(noteCard.time) * 1000 : undefined
+  // ⚠️ `time` 的单位**不固定**,不能无条件 ×1000:小红书结构变更后返回的是**毫秒**,
+  // 旧的「秒」假设会把它放大 1000 倍 → 时间戳落到公元 5 万年,排序时**永久钉在最前**
+  // (实测:全部页窗口前 12 条全是 social,而本该置顶的直播被挤出首屏)。
+  // 判据用「秒级时间戳换算成 ms 后仍早于 2001 年」→ 说明给的本来就是 ms。
+  // 注意别用 `now` 做上限:那会把「发布了 1 条未来时间」误判成秒。
+  const publishedAtMs = toEpochMs(noteCard?.time)
 
   // ⚠️ 匿名访问时平台**抹空 noteId**,同时塞一个**整个列表共用的假 xsecToken**
   // (实测 31 条 distinct token = 1)。假 token 不能用:拿它去详情页会串号。
@@ -264,7 +292,7 @@ export function noteDetailToSocial(note: any, sourceId: string, t: number): Soci
     reposts: parseCount(interact.shareCount),
     replies: parseCount(interact.commentCount),
     author: user.nickname ? { name: String(user.nickname), avatar: user.avatar ? String(user.avatar) : undefined } : undefined,
-    publishedAt: note?.time ? Number(note.time) * 1000 : undefined,
+    publishedAt: toEpochMs(note?.time),
     fetchedAt: t,
     xsecToken: note?.xsecToken ?? undefined,
   }

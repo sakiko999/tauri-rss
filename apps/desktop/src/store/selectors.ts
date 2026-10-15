@@ -102,10 +102,20 @@ export function heatOf(i: MediaItem): number {
   return 0
 }
 
+/**
+ * 「新」排序用的时间键。
+ *
+ * ⚠️ **直播没有 `publishedAt`**,直接 `?? 0` 会把它当成 1970 全都沉底 —— 实测 210 条
+ * live **无一条**有时间戳,于是「全部」里第一条 live 落在第 **112** 位(PAGE_SIZE 才 60),
+ * 首屏窗口内 0 条 live → `MediaMain` 的 `hasMix` 恒假 → **「正在直播」横滑轨从来不渲染**。
+ * 直播间本就该按「在线/抓到的时间」参与排序,用 `fetchedAt` 兜底即符合直觉。
+ */
+const timeKey = (i: MediaItem): number => i.publishedAt ?? i.fetchedAt ?? 0
+
 export function sortItems(list: MediaItem[], mode: SortMode): MediaItem[] {
   const cp = list.slice()
   if (mode === "hot") cp.sort((a, b) => heatOf(b) - heatOf(a))
-  else cp.sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))
+  else cp.sort((a, b) => timeKey(b) - timeKey(a))
   return cp
 }
 

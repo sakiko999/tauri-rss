@@ -316,10 +316,21 @@ function asList(v: unknown): unknown[] {
   return Array.isArray(v) ? v : [v]
 }
 
-/** RFC 822 pubDate → epoch ms. */
+/**
+ * RFC 822 pubDate → epoch ms。
+ *
+ * ⚠️ **上限守卫是必须的,不是多余的防御**:上游给错单位(如把毫秒当秒再 ×1000)会产出
+ * 公元 5 万年级别的时间戳,`new Date` 照收不误。那种值在「按发布时间倒序」里**永久钉在
+ * 最前**,还会污染 `fmtAgo`(显示成「22 万年以前」这种)与 `isToday`(今日口径)。
+ * 实测踩过:`xhs` 的 `time` 从秒改成毫秒后被打到 1791961240000000,「全部」页前 12 条
+ * 全是 social。宁可判为 undefined(沉底)也不要放一个错的极端值进来。
+ * 上限取「现在 + 1 天」,容忍时区/时钟偏差,但拦得住任何量级错误。
+ */
 function tryEpoch(s: string): number | undefined {
   const ms = new Date(s).getTime()
-  return Number.isNaN(ms) ? undefined : ms
+  if (Number.isNaN(ms)) return undefined
+  if (ms > Date.now() + 86_400_000) return undefined
+  return ms
 }
 
 /** `StreamingFormat` 是封闭联合;未知值退化 undefined。 */
