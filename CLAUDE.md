@@ -153,6 +153,7 @@ bun packages/core/src/reading-position.check.ts         # 续播落库判据（�
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/resolve/src/example/router.check.ts        # by-url 路由表（host 边界 + 各平台命中）
+bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
 bun packages/resolve/src/example/danmaku-proto.check.ts # bili 弹幕 protobuf 解码（截断帧不死循环）
 bun packages/resolve/src/example/douyu-frame.check.ts   # 斗鱼弹幕帧（一帧多包全解）
 bun packages/core/src/example/serialize-contract.check.ts # tpl: 契约完整性（serialize 写 vs deserialize 读）
@@ -258,6 +259,19 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - 签名方案当前**不在主分支**（`signApiHeaders` 直接抛错降级）；曾经的 `packages/xhshow/`
   fork 与 `feat/xhs-rustpython` 分支**在本仓库已不存在**（纯算法处于上游失效期，故维持全 SSR）。
   若要重启签名移植，参照 `docs/xhs-signature-research.md` 的 Python xhshow 0.2.0
+
+**时间戳单位**
+- ⚠️ **平台的 `time` 字段单位会变**，别无条件 `* 1000`。xhs 从**秒**改成**毫秒**后，
+  旧代码把它放大 1000 倍 → 落到**公元 5 万年** → 按时间倒序时**永久钉在最前**
+  （实测「全部」页前 12 条全是 social，本该置顶的直播被挤到第 112 位）。判别统一走
+  `resolve/platform/xhs/client.ts` 的 `toEpochMs()`。⚠️ 秒/毫秒的判据方向相反，
+  **别写成三元**（那条件我写反过两次，`xhs-time.check.ts` 就是为它留的）。
+- ⚠️ **core 解析层有「未来时间」上限**（`tryEpoch`，现在 + 1 天）：上游给错单位会产出
+  极端错值，`new Date` 照收不误，会污染排序 / `fmtAgo`（「22 万年以前」）/ `isToday`。
+  宁可判 `undefined` 沉底。
+- ⚠️ **直播没有 `publishedAt`**（实测 210 条 live 无一条有）→ `?? 0` 会把它们全沉底。
+  `sortItems` 用 `publishedAt ?? fetchedAt` 兜底，否则直播永远进不了首屏窗口，
+  `MediaMain` 的 `hasMix` 恒假 → **「正在直播」横滑轨从来不渲染**。
 
 **cookie / 登录**
 - `packages/core/src/bilibili-cookie.ts` 三个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。

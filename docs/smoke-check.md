@@ -27,6 +27,7 @@
 | 组件拆分(移动/新建文件) | `tsc -p apps/desktop` + `ui-probe.ts goto page:settings` / `page:discover` 各走一遍;⚠️ tsc 查不出**循环 import 与渲染断链**,必须实机点 tab / 开弹窗 |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
+| **时间戳单位 / 排序** | `bun packages/resolve/src/example/xhs-time.check.ts`；⚠️ **必须重新抓取**才生效 —— 坏值已落库，看旧数据会误判成「没修好」。判据：social 的 `publishedAt` 年份应在合理区间（修前是 58754） |
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
 | 改 `styles.css` 的 `@layer` / reset 结构 | CDP 量 tailwind 按钮的 `getComputedStyle(btn).padding`：**必须 `6px 12px`**（`0px` = reset 漏在层外，把 utility 压死了） |
 
@@ -236,6 +237,20 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     **重新挂回去并从头再播一遍**（过渡刚结束弹窗又缩一下）。改为保持 `none`。
     同时补上 `.scrim` 的 `fade` —— 它在 VT **快照**里被截在 `opacity≈0`，过渡结束后真身
     显示也是一帧闪烁。**VT 与 CSS 入场动画不能叠加**，过渡期间把两者都停掉。
+- 2026-10-15 **时间戳单位错值 → 排序错位 + 直播从不进首屏**：
+  - 根因链：`xhs` 的 `time` 从**秒**改成**毫秒**，而 `client.ts` 仍无条件 `* 1000`
+    → 落到**公元 58754 年** → 按时间倒序**永久钉在最前**（实测「全部」页窗口前 12 条
+    全是 social）。连带 `fmtAgo` / `isToday` 口径也错。
+  - 第二处：**210 条 live 无一条有 `publishedAt`**，`?? 0` 全沉底 → 第一条 live 排到
+    第 **112** 位（PAGE_SIZE 才 60）→ 首屏窗口 0 条 live → `hasMix` 恒假
+    → **「正在直播」横滑轨从来不渲染**。改为 `publishedAt ?? fetchedAt` 兜底。
+  - 第三处（兜底）：`core` 的 `tryEpoch` 加**未来时间上限**（现在 + 1 天），挡住任何
+    量级错误的上游值；宁可判 `undefined` 沉底，也不要极端错值进排序。
+  - 实测（**必须重新抓取** —— 坏值已落库，看旧数据会误判成没修好）：
+    social 坏时间戳 0 条；第一条 live 112 → **44**；窗口前 60 由 21social/0live 变为
+    44social/**16live**；「正在直播」横轨**从不渲染 → 渲染**。
+  - ⚠️ `toEpochMs` 的秒/毫秒判据**写反过两次**，都是新加的自检
+    `xhs-time.check.ts` 抓出来的 —— 最后改成显式具名常量比较，不用三元。
 - 2026-10-15 **主区滚动死区 → 改为整体滚动（用户描述「无法上下滑动」）**：
   - 根因：主区里**不在滚动器内部**的元素（`.grid-head`、`.rail-block`）是死区 —— 鼠标停上去
     找不到可滚祖先，而 `body` 是 `overflow:hidden`，滚轮完全无反应。实测「全部」页里这两块
