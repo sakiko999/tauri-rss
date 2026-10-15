@@ -42,6 +42,7 @@ import {
 } from "./channels/douyin/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
 import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
+import { ApplePodcastChartChannel, ApplePodcastSearchChannel } from "./channels/apple/index.ts"
 
 /** 注册所有内置 channel。无守卫——由调用方(index.ts)保证幂等。 */
 export function registerBuiltinChannels(): void {
@@ -52,6 +53,11 @@ export function registerBuiltinChannels(): void {
 
   // ── 播客 RSS(解析 enclosure/itunes → AudioItem)──
   registerChannel(new RssPodcastChannel())
+  // Apple 播客目录(发现层):榜单 / 搜索。产出 kind:audio,url = 该节目的 RSS feed
+  // (接进 rss:podcast 的同一条路)。⚠️ Apple 目录是**元数据源**,榜单不含 feedUrl,
+  // 要两次请求(lookup);详见 resolve/platform/apple/catalog.ts 的文件头。
+  registerChannel(new ApplePodcastChartChannel())
+  registerChannel(new ApplePodcastSearchChannel())
 
   // 通用 RSS 直链(任意 URL,透传上游 XML)——OPML 导入的外部 feed 与手工订阅
   // 「已知 URL 的 RSS」都用它。预置清单(key `rss:{id}`)是它的一批默认实例。
