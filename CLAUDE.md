@@ -133,8 +133,9 @@ bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端
 bun run scripts/tauri.ts help       # 全部用法
 
 # CLI 调试探针（收编全部 example；详见 docs/cli-plan.md）
-bun run rss channels                    # 渠道注册表（--kind/--json）
+bun run rss channels                    # 渠道注册表（--kind/--json；播客 = --kind audio）
 bun run rss fetch bili:popular          # 单渠道抓取（--xml/--json）
+bun run rss fetch apple:podcast-chart   # Apple 播客热门榜（匿名；--kv genre=1318 换分类）
 bun run rss item <url>                  # by-url：路由 + streams 全档位 + 弹幕元信息
 bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
 bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计
@@ -272,6 +273,17 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - ⚠️ **直播没有 `publishedAt`**（实测 210 条 live 无一条有）→ `?? 0` 会把它们全沉底。
   `sortItems` 用 `publishedAt ?? fetchedAt` 兜底，否则直播永远进不了首屏窗口，
   `MediaMain` 的 `hasMix` 恒假 → **「正在直播」横滑轨从来不渲染**。
+
+**Apple 播客**（`resolve/platform/apple/catalog.ts` + `crawler/channels/apple/`）
+- 目录是**元数据源**：`apple:podcast-chart`（热门榜）/ `apple:podcast-search`（关键词）。
+  产出 `kind:audio`，`url` = 该节目的 **RSS feed** → 接进既有 `rss:podcast`，不另造解析器。
+  每集 enclosure **不在榜单里**，故榜单条目的 `stream` 留空（点开走原文；真要让榜单可播应做懒解析）
+- ⚠️ **榜单不含 `feedUrl`**（旧 iTunes RSS 只给 `im:id`）→ 必须再 Lookup 一次换 feedUrl。
+  Lookup 返回顺序**不保证**与请求一致，按榜单原序重排；**没 feedUrl 的条目直接丢**（只能显示不能订阅）
+- ⚠️ **搜索渠道刻意不声明 `defaultInfo`**：发现页「可一键订阅」判据 `!!defaultInfo || 无必填项`，
+  **空对象是 truthy** → 写 `= {}` 会让需要 `q` 的渠道被误列进去（同 `bili:search`）
+- 端点：旧 `itunes.apple.com/{cc}/rss/toppodcasts` / `search?media=podcast`（**直接给 feedUrl**）/
+  `lookup?id=` 全可用；新 `rss.applemarketingtools.com` **504**。均匿名，但要带 UA
 
 **cookie / 登录**
 - `packages/core/src/bilibili-cookie.ts` 三个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。

@@ -29,6 +29,7 @@
 | **响应式断点** | 逐宽度量真实几何（`Emulation.setDeviceMetricsOverride` + 读 `getBoundingClientRect`）。⚠️ **别只看断点数字**：两个断点撞在同一个宽度会产生**反向跳变**（播放页单栏 1080 与侧栏折叠 1080 撞车，窗口越窄播放器越小、到 1040 反而暴涨 912）。基线见下方结论记录 |
 | **类名冲突（跨区块复用）** | ⚠️ `styles/` 拆成多文件后，**同名类会跨文件叠加**（`.rail-head` 同时给侧栏和直播区写过，`column` + `wrap` 叠加把头部撑成 132px）。改样式前先 `grep` 类名在 `styles/` 下**出现了几次**；新组件用**模块前缀**（`live-*`），别借侧栏的命名空间 |
 
+| 新增/改动 channel | `bun run rss channels --kind <kind>` + `bun run rss fetch <key> --json`；⚠️ 发现页「可一键订阅」判据是 `!!defaultInfo \|\| 无必填项` —— **空对象是 truthy**，给需要参数的渠道写 `defaultInfo = {}` 会让它被误列进去 |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 | **时间戳单位 / 排序** | `bun packages/resolve/src/example/xhs-time.check.ts`；⚠️ **必须重新抓取**才生效 —— 坏值已落库，看旧数据会误判成「没修好」。判据：social 的 `publishedAt` 年份应在合理区间（修前是 58754） |
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
@@ -63,6 +64,9 @@ bun run rss sug 王者                          # 抖音搜索联想词（匿名
 bun run rss play "https://live.douyin.com/<在线房间>"   # douyin 直播多档位
 bun run rss dm   "https://live.douyin.com/<在线房间>" -s 6  # douyin 弹幕（需在线房间）
 bun run rss item <url>                        # by-url 路由 + 全档位
+bun run rss fetch apple:podcast-chart --json             # Apple 播客热门榜（匿名）
+bun run rss fetch apple:podcast-chart --kv genre=1318 --json
+bun run rss fetch apple:podcast-search --kv q=故事 --json
 ```
 ⚠️ **固定房间会下播**：种子里的 bili/douyu/huya/douyin 房间硬编码，下播时流/弹幕为空
 （`liveStatus:"offline"`）**非 bug**。取实时在线房间用 `live:douyin:hot` 等热门渠道。
@@ -307,3 +311,22 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     3. 判据用**头部矩形**而非只用 `scrollTop`：整体滚动要看 `.grid-head` 的 `top` 是否随滚动上移。
   - 实测（硬重载 + 3 次采样）：社交分组 `.grid-head.top` 52 → **-548**（scrollTop=600）；
     全部（含直播轨）同样 52 → -548。
+- 2026-10-15 **接入 Apple 播客目录（`apple:podcast-chart` / `apple:podcast-search`）**：
+  - Apple 目录是**元数据源**，产出 `kind:audio` 且 `url` = 该节目的 **RSS feed** ——
+    接进既有的 `rss:podcast` 那条路，不另造解析器。取数在
+    `resolve/platform/apple/catalog.ts`，两个 channel 在 `crawler/channels/apple/`。
+  - ⚠️ **榜单不含 `feedUrl`**（旧 iTunes RSS 只给 `im:id`），必须再 Lookup 一次换成 feedUrl；
+    这是 Apple 的接口约束。Lookup 返回顺序**不保证**与请求一致，故按榜单原序重排。
+    没有 feedUrl 的条目**直接丢弃**（留着只能显示不能订阅）。
+  - ⚠️ **搜索渠道刻意不声明 `defaultInfo`**：发现页「可一键订阅」判据是
+    `!!defaultInfo || 无必填项`，而**空对象是 truthy** —— 写 `= {}` 会让这个需要 `q` 的渠道
+    被误列进一键订阅（同 `bili:search`，它也不声明）。实测 `_probe-boards` 复刻判据：
+    chart → 可一键订阅 ✓ / search → 否 ✓。
+  - 端点实测（2026-10-15）：旧 `itunes.apple.com/{cc}/rss/toppodcasts` ✅ 200 ·
+    `search?media=podcast` ✅ 200（**直接给 feedUrl**，省一次往返）· `lookup?id=` ✅ 200 ·
+    新 `rss.applemarketingtools.com/api/v2/…` ❌ **504 超时**，故走旧接口。均无需 cookie，
+    但要带 UA（裸请求被拒）。
+  - 实测：榜单默认分类 19 条；分类 1318（科技）5 条；搜索「故事」5 条。
+    **feedUrl 确实可被 `rss:podcast` 订阅** —— 岩中花述 87 集 / 故事FM 995 集 /
+    硅谷101 265 集 / **喜马拉雅源 1057 集**（先前担心防盗链，实测直接给标准 RSS）。
+  - 回归：6 包 tsc 0 错；`rss channels --kind audio` 两渠道均列出。
