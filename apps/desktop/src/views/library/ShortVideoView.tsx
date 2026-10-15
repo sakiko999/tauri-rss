@@ -20,6 +20,7 @@ import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
 import { itemKey } from "../../lib/media.ts"
+import { scrollBehavior } from "../../lib/motion.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 
 /** 单个 slide。active=false 时只渲染 poster 占位（不挂播放器）。 */
@@ -117,7 +118,7 @@ export function ShortVideoView() {
   // 键盘：↑/↓ 切上下条（滚动到对应屏）；Esc 退出短视频。
   const scrollTo = (i: number) => {
     const clamped = Math.max(0, Math.min(items.length - 1, i))
-    containerRef.current?.querySelectorAll<HTMLElement>(".sv-slide")[clamped]?.scrollIntoView({ behavior: "smooth" })
+    containerRef.current?.querySelectorAll<HTMLElement>(".sv-slide")[clamped]?.scrollIntoView({ behavior: scrollBehavior() })
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

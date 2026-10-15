@@ -4,6 +4,7 @@ import { useDesktop } from "../../../store/index.ts"
 import { SideCard } from "../../../components/StateBlock.tsx"
 import { Switch } from "../../../components/Modal.tsx"
 import { Row } from "./Row.tsx"
+import { isImeComposing } from "../../../lib/ime.ts"
 
 export function Reading() {
   const settings = useDesktop((s) => s.settings)
@@ -61,7 +62,7 @@ export function Reading() {
             onChange={(e) => setRsshubDraft(e.target.value)}
             onBlur={commitRsshub}
             onKeyDown={(e) => {
-              if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+              if (e.key === "Enter" && !isImeComposing(e)) (e.target as HTMLInputElement).blur()
             }}
           />
         </Row>

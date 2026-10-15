@@ -11,6 +11,7 @@ import { useState } from "react"
 import type { Subscription } from "@tauri-playground/core"
 import { useDesktop } from "../../store/index.ts"
 import { Modal, Select, Switch } from "../../components/Modal.tsx"
+import { isImeComposing } from "../../lib/ime.ts"
 
 export function EditSubscriptionDialog({ sub, onClose }: { sub: Subscription | null; onClose: () => void }) {
   const groups = useDesktop((s) => s.groups)
@@ -85,7 +86,7 @@ export function EditSubscriptionDialog({ sub, onClose }: { sub: Subscription | n
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") void save()
+            if (e.key === "Enter" && !isImeComposing(e)) void save()
           }}
         />
       </div>

@@ -114,7 +114,9 @@ function SubsPane() {
           placeholder="粘贴 RSS / Atom 直链"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && void submit()}
+          onKeyDown={(e) =>
+            e.key === "Enter" && !e.nativeEvent.isComposing && e.nativeEvent.keyCode !== 229 && void submit()
+          }
         />
         <button className="btn btn-primary" disabled={busy || !url.trim()} onClick={() => void submit()}>
           {busy ? "添加中…" : "添加"}

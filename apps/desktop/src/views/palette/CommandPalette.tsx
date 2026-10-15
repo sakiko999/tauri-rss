@@ -10,6 +10,7 @@ import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
 import { usePrefs } from "../../store/prefs.ts"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
+import { isImeComposing } from "../../lib/ime.ts"
 
 interface Entry {
   id: string
@@ -147,7 +148,7 @@ export function CommandPalette() {
     const onKey = (e: KeyboardEvent) => {
       // ⚠️ 输入法组合态守卫:中文输入法候选未上屏时的回车(isComposing / keyCode 229)
       // 是「选词」不是「执行」,不守卫会误触发选中命令(如刷新全部/打开设置)。
-      if (e.isComposing || e.keyCode === 229) return
+      if (isImeComposing(e)) return
       if (e.key === "Escape") {
         e.preventDefault() // 让播放页等的 Esc 守卫(defaultPrevented)不再误触发
         return setOpen(false)

@@ -12,6 +12,7 @@ import { Banner } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { MediaImage } from "@tauri-playground/ui"
 import { platformOf, SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
+import { isImeComposing } from "../../lib/ime.ts"
 
 /** 渠道 → 平台图标名(与 Dialog 里那份是同一张表,提出来给两块面板共用)。 */
 export const PLATFORM_ICON: Record<string, string> = {
@@ -81,7 +82,7 @@ export function SearchPanel(f: SearchPanelProps) {
             placeholder={f.searchCh?.sourceInfoTpl?.[0]?.placeholder ?? "如:英雄联盟"}
             onChange={(e) => f.onKeyword(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") f.onSearch()
+              if (e.key === "Enter" && !isImeComposing(e)) f.onSearch()
             }}
           />
         </div>

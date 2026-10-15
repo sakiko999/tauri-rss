@@ -41,6 +41,12 @@ export interface WsStreamOptions {
   heartbeatMs?: number
   /** 断线重连最大延迟,ms(指数退避 1s→2s→4s…)。 */
   maxReconnectMs?: number
+  /**
+   * 连续重连次数上限,超过则**放弃**(默认 10)。连接成功会清零计数,所以长时间
+   * 在线后偶发断线仍有完整额度。房间下播/平台封禁时,没有这一层就是**永不停止**的
+   * 重连循环(后台一直打请求)。
+   */
+  maxAttempts?: number
   /** 连接关闭回调(排查握手失败/被拒)。 */
   onClose?: (code: number, reason: string) => void
 }
@@ -198,7 +204,16 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
 
     function scheduleReconnect(): void {
       if (stopped) return
-      const delay = Math.min(1000 * 2 ** attempts, opts.maxReconnectMs ?? 30000)
+      const maxAttempts = opts.maxAttempts ?? 10
+      if (attempts >= maxAttempts) {
+        // 熔断:不再排重连(退订/重进直播间会拿到全新的流)。
+        log.danmaku.wsReconnectGaveUp({ attempts })
+        return
+      }
+      const base = Math.min(1000 * 2 ** attempts, opts.maxReconnectMs ?? 30000)
+      // Full Jitter(±15%):多个直播间同时断线时错开重连时刻,避免同刻齐发
+      // (上游限流/封禁场景下,整齐的退避等于自己制造一次小流量尖峰)。
+      const delay = Math.round(base * (0.85 + Math.random() * 0.3))
       attempts += 1
       log.danmaku.wsReconnect({ attempt: attempts, delayMs: delay })
       reconnectTimer = setTimeout(connect, delay)

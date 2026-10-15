@@ -19,6 +19,7 @@ import { itemKey } from "../../lib/media.ts"
 import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
 import { useLatestOnly } from "../../lib/useLatestOnly.ts"
+import { isImeComposing } from "../../lib/ime.ts"
 import { PLATFORMS, VIEW_LABEL, type Cap } from "./platforms.ts"
 
 export function PlatformBrowser({
@@ -178,7 +179,7 @@ export function PlatformBrowser({
               }
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void run()
+              if (e.key === "Enter" && !isImeComposing(e)) void run()
             }}
           />
           {platform === "douyin" && view !== "category" && sug.length > 0 ? (

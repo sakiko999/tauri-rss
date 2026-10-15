@@ -150,6 +150,7 @@ bun packages/core/src/example/serialize-roundtrip.check.ts  # crawler→core 序
 bun packages/xml/src/example/opml.check.ts              # OPML 编解码往返（分组层级）
 bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射（导出过滤 / 导入去重）
 bun apps/desktop/src/lib/rail-nav.check.ts              # 侧栏树方向键映射（→ 折叠态只展开 / ← 回父行 / 未分组不折叠）
+bun apps/desktop/src/lib/ime.check.ts                   # IME 组合态守卫（nativeEvent 取值 + 229 兜底 + 原生/合成两路径）
 
 # UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 已由 dev 配置开启）
 bun scripts/ui-probe.ts goto tab:all        # 导航 + 巡检（逐字竖排 / 溢出 / 遮挡 / 破图）
@@ -307,6 +308,17 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 
 ## 其他约定
 
+- ⚠️ **「回车提交」的输入框必须过 `lib/ime.ts` 的 `isImeComposing(e)`**：中文输入法候选
+  未上屏时的回车是**选词**，不是提交。不拦的后果全是**静默错值** —— 会建出名叫 `fenzu` 的
+  分组、搜索拿半截拼音发请求、订阅标题存成半截。曾散落 6 处、两种手写写法（`e.isComposing ||
+  keyCode===229` / `e.nativeEvent.isComposing`），2026-10-15 收口。⚠️ **取值必须走
+  `nativeEvent`**：本仓 `@types/react` 只给原生事件声明了 `isComposing`，合成事件上直接
+  `e.isComposing` 编译不过（TS2339）。守卫只挡 keydown，不改输入法组合行为。
+- ⚠️ **JS 驱动的动画挡不住 `prefers-reduced-motion`**：`styles.css` 那条媒体查询只压
+  CSS 的 animation/transition，对 `scrollIntoView({behavior:"smooth"})`、脚本编排的入场
+  与形变**完全无效**。要在 JS 侧问偏好，用 `lib/motion.ts`（`prefersReducedMotion()` /
+  `scrollBehavior()`）。引动画库后这条会抬头 —— 入场/布局动画一旦跑在 JS 里，只靠媒体查询
+  就是「用户设了减动效、动画照跑」。用 Motion 时对应 `<MotionConfig reducedMotion="user">`。
 - **可播判定 = kind 门控**：只有 `video`/`audio`/`live` 有可播流，`article`/`social`
   不是。卡片的整卡点击与播放按钮都走 `cards.tsx` 的 `isPlayableKind`——article 显示
   0 个播放按钮、点击进「打开文章」（`tab:article` 三栏读），social 进详情弹窗。

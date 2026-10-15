@@ -18,6 +18,8 @@
 | 续播进度落库（节流/近片尾清除） | `packages/core/src/reading-position.check.ts` |
 | mobile 正文渲染 | `apps/mobile/src/html.check.ts` |
 | OPML | `apps/xml` + `apps/desktop` 的 `opml.check.ts` |
+| 新增/改动「回车提交」输入框 | `bun apps/desktop/src/lib/ime.check.ts`;⚠️ 守卫只挡 `keydown`,**不改中文输入法的组合行为**(实机验证仍需真 IME) |
+| 弹幕 WS 重连(退避/熔断) | `bun run rss dm <在线房间> -s 5`;断线后看日志应是「第 N 次, 约 Xms 后」而非固定 1000·2ⁿ,且 10 次后打「放弃」 |
 | desktop UI 布局/隐藏 | `scripts/ui-probe.ts goto <node>` + `ui-console.ts` |
 | 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/rail-tree-accordion.md` |
 | 组件拆分(移动/新建文件) | `tsc -p apps/desktop` + `ui-probe.ts goto page:settings` / `page:discover` 各走一遍;⚠️ tsc 查不出**循环 import 与渲染断链**,必须实机点 tab / 开弹窗 |
@@ -140,3 +142,24 @@ bun run rss item <url>                        # by-url 路由 + 全档位
   - ⚠️ 另有环境坑:**重启 `bun run tauri` 会引发 WebView2 CDP 端口重绑**,正在跑的实例
     连不上 9222(本次即因此中断);诊断脚本别依赖跨重启的 CDP 会话。
   - 回归:6 包 tsc 0 错。
+- 2026-10-15 **IME 守卫收口 + 弹幕重连加 jitter/熔断**(源自对 open-claude-ui 逆向库的调研):
+  - **IME 守卫**:本仓已有两种手写写法(`CommandPalette` 的 `e.isComposing || keyCode===229`、
+    `mobile/App.tsx` 的 `e.nativeEvent.isComposing`),但另有 **5 处裸 `key === "Enter"`** ——
+    `AddPanels:84`(搜索)/`PlatformBrowser:181`(发现页搜索)/`EditSubscriptionDialog:88`(标题)/
+    `settings/Subscriptions:193`(**新建分组名**)/`settings/Reading:64`(RSSHub 地址)。
+    中文输入法下回车是**选词**,不拦会建出名叫 `fenzu` 的分组、搜到一半拼音就发请求 —— 全是静默错值。
+    新增 `apps/desktop/src/lib/ime.ts` 收口 6 处(含 CommandPalette)。
+    ⚠️ **必须取 `nativeEvent.isComposing`**:本仓 `@types/react` 只给**原生**事件声明了该字段,
+    合成事件上 `e.isComposing` 直接编译不过(`TS2339`)—— `apps/mobile` 的写法正是因此。
+    `keyCode===229` 保留为兜底(上屏那一下 `isComposing` 可能已 false),mobile 那处一并补上。
+    自检 `apps/desktop/src/lib/ime.check.ts`(6 条:合成/原生两条路径 × 正常/229/普通)。
+  - **弹幕重连**:`resolve/danmaku/stream.ts` 原来只有 `min(1000·2ⁿ, max)`,**无限重试**。
+    加 ±15% Full Jitter(多直播间同时断线时错开重连,避免自造流量尖峰)+ `maxAttempts`(默认 10)
+    熔断,超限打 `wsReconnectGaveUp` 后放弃(连接成功清零计数,长期在线后仍有全额)。
+    ⚠️ 未做 `Retry-After` header 优先 —— WS 握手失败拿不到响应头,收益近乎零。
+  - ⚠️ 另有 JS 侧 reduced-motion 缺口:`styles.css` 的媒体查询只压 CSS 动画,
+    `ShortVideoView` 的 `scrollIntoView({behavior:"smooth"})` 不受影响 → 新增
+    `apps/desktop/src/lib/motion.ts`(`prefersReducedMotion()` / `scrollBehavior()`),已接上短视频切条。
+    **引动画库后这条会抬头**(JS 驱动的入场/形变全部绕过媒体查询),Motion 用
+    `<MotionConfig reducedMotion="user">` 兜底。
+  - 回归:desktop / resolve / mobile tsc 0 错;ime.check 全过。

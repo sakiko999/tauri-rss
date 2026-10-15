@@ -9,6 +9,7 @@ import { useViewNavigate } from "../../../router.tsx"
 import { EditSubscriptionDialog } from "../EditSubscriptionDialog.tsx"
 import { exportOpmlFile, pickOpmlFile } from "../../../lib/opml-file.ts"
 import type { Store } from "./store-types.ts"
+import { isImeComposing } from "../../../lib/ime.ts"
 
 export function Subscriptions() {
   const subscriptions = useDesktop((s) => s.subscriptions)
@@ -190,7 +191,7 @@ function SideCardGroups({
           aria-label="新分组名称"
           onChange={(e) => setNewGroup(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && newGroup.trim()) {
+            if (e.key === "Enter" && !isImeComposing(e) && newGroup.trim()) {
               void addGroup(newGroup.trim())
               setNewGroup("")
             }

@@ -76,6 +76,10 @@ const danmakuLog = createLogDomain("danmaku", {
       level: "warn",
       text: (ctx: { attempt: number; delayMs: number }) => `断线重连(第 ${ctx.attempt} 次, ${ctx.delayMs}ms 后)`,
     },
+    wsReconnectGaveUp: {
+      level: "warn",
+      text: (ctx: { attempts: number }) => `重连 ${ctx.attempts} 次仍失败,放弃(房间可能已下播)`,
+    },
     wsHandshakeError: {
       level: "warn",
       text: (ctx: { message: string }) => `握手失败: ${ctx.message}`,
