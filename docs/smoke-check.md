@@ -163,3 +163,24 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     **引动画库后这条会抬头**(JS 驱动的入场/形变全部绕过媒体查询),Motion 用
     `<MotionConfig reducedMotion="user">` 兜底。
   - 回归:desktop / resolve / mobile tsc 0 错;ime.check 全过。
+- 2026-10-15 **styles.css 3858 行拆分 + Tailwind 动效工具类注册**：
+  - 拆成 `src/styles/` 下 11 个区块文件（10-tokens ~ 90-responsive），原文件只留入口与
+    `@import` 顺序。用 bun 脚本按行切（⚠️ **不用 PowerShell `Set-Content`** —— 会按代码页
+    损坏中文），切完自校验「按序拼接逐字节等于原文」；产物 81.1KB 与拆分前**完全一致**。
+  - 新增**独立的非 inline `@theme` 块**注册 `--animate-*` / `--ease-*`。三条实测结论：
+    ① `--animate-*` 放进 `@theme inline` **不注册**（`@apply animate-rise` 报
+    `Cannot apply unknown utility class`）——`inline` 的语义是「值内联展开、不产变量」；
+    ② `@keyframes` 与 `--animate-*` 必须**同块**，否则 Tailwind 不关联输出；且该块
+    **不能带 `inline`**（带则 `CssSyntaxError: Missing opening (`）；
+    ③ **Tailwind 4 没有 `--duration-*` 命名空间**，`duration-*` 只吃裸数值或任意值。
+    ⚠️ 验证方式：`@apply <工具类>`（**不是** `animation: var(--animate-x)` —— 后者只是
+    引用变量，证明不了工具类生成）；且探针必须挂进**主 CSS 入口链**，从 `main.tsx` 直接
+    import 的独立 CSS 会报 `missing @reference`（不同编译上下文）。
+  - 顺带修掉一个**构建级潜伏 bug**：`@layer base` 的注释里写了类名通配（星号紧跟斜杠），
+    那串字符是注释结束符 → 提前终止注释块 → 后面文字成裸 CSS → Tailwind 抛
+    `Missing opening (`。该注释是 2026-10-14 那轮引入的，一直没暴露（**踩了两次**）。
+  - 新增动效：`.modal` 入场（`modal-in`，scale 0.96→1 + 淡入；`.scrim` 早有 fade，
+    弹窗本体原本瞬现）。⚠️ 用属性 `scale` 而非 `transform` —— `.modal` 居中靠
+    `Modal.tsx` 内联 `translate: -50% -50%`，写 `transform` 会连坐覆盖。
+  - 回归：vite build 通过、产物 81.2KB；关键类（keyframes rise/spin/shimmer、
+    .app-shell/.rail/.toast/.modal/.social-detail、prefers-reduced-motion）全在产物中。

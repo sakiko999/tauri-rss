@@ -18,6 +18,18 @@ apps/
                shortvideo 短视频全屏流（节点 `short:<kind>`，Rail「模式」入口）。
                状态 src/store/（nodes 节点语法 · selectors 派生查询 · prefs 表现型偏好 ·
                index 动作编排），视图 src/views/。
+               ⚠️ **样式拆成 src/styles/ 下的区块文件**（2026-10-15，原 styles.css 3858 行）：
+                 `styles.css` 只留**入口与 @import 顺序**（顺序即层叠顺序，别按字母重排）；
+                 `styles/10-tokens` 令牌+@theme · `15-base` 基础层/通用工具 ·
+                 `20-shell` 外壳/侧栏 · `30-controls` 控件 · `40-pane`/`45-main` ·
+                 `50-shortvideo`/`55-player` · `60-pages` · `70-overlays` 浮层 · `90-responsive`。
+                 加样式先判断属于哪个区块。⚠️ **注释里别写类名通配**（星号紧跟斜杠那种）
+                 —— 那串字符是注释结束符，会提前终止注释块、把后面文字变成裸 CSS。踩过两次。
+               Tailwind 动效工具类：`10-tokens` 有**独立的非 inline `@theme` 块**注册
+                 `--animate-*` / `--ease-*`（→ `animate-rise` / `ease-decel`）。
+                 ⚠️ 三条实测：① `--animate-*` 放进 `@theme inline` **不注册**；
+                 ② `keyframes` 与 `--animate-*` 必须**同块**且该块不能带 `inline`；
+                 ③ Tailwind 4 **没有 `--duration-*` 命名空间**，`duration-*` 只吃裸数值。
                位置权威 = URL（/v/:nodeId、/play/:itemId）
                ⚠️ **组件按「功能件 / 业务件」分层**（2026-10-14 拆分）：
                  `src/components/*.tsx`        = 功能件，**纯 props、不碰 store**
