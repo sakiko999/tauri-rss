@@ -184,3 +184,24 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     `Modal.tsx` 内联 `translate: -50% -50%`，写 `transform` 会连坐覆盖。
   - 回归：vite build 通过、产物 81.2KB；关键类（keyframes rise/spin/shimmer、
     .app-shell/.rail/.toast/.modal/.social-detail、prefers-reduced-motion）全在产物中。
+- 2026-10-15 **动效落地批次（侧栏折叠 / 吐司退场 / 弹窗入场）+ CDP 实测**：
+  - **CDP + 真实 Chromium 155 实测**（不是靠版本号推断 —— 当天已在 `@theme` 上凭记忆错两次）：
+    `startViewTransition` / `@starting-style` / `transition-behavior:allow-discrete` /
+    `interpolate-size` / `calc-size()` **全部 true**；`grid-template-columns` 补间**确认真跑**
+    （自建 DOM：268px → **166px**（中途取样）→ 64px）。
+    ⚠️ 探针要点：CDP target **必须按 type+URL 过滤**（DevTools 自己也是 `type:"page"`）；
+    desktop 纯浏览器起不来（要 `appHost`），所以布局类断言用**自建 DOM**，别去查 `.app-body`。
+  - **侧栏折叠**：`.app-body` 的 `grid-template-columns` 加 `transition`。**不需要**把 `--rail`
+    注册成 `@property` —— 两侧列模板的轨道数与轨道类型都不变，Chromium 直接插值。
+  - **吐司退场**：`dismissToast` 改为只打 `closing` 标记（原来直接 `filter` → 元素当场卸载，
+    没机会播动画），新增 `removeToast` 由 `Toaster` 在时长到点后调用。时长**读 CSS 令牌**
+    （`lib/motion.ts` 的 `motionDurationMs`）—— JS 里写死会让 `data-motion="off"` 档白等。
+    ⚠️ 用 `translate` 属性而非 `transform`（入场 `rise` 也用它，改同一属性不互相覆盖）。
+  - **弹窗入场**：`.modal` 加 `modal-in`（scale 0.96→1 + 淡入）。`.scrim` 早有 fade，
+    弹窗本体原本是**瞬现**。⚠️ 用属性 `scale` 而非 `transform` —— `.modal` 居中靠
+    `Modal.tsx` 内联 `translate: -50% -50%`，写 `transform` 会连坐覆盖居中。
+  - **未做（有意）**：社交详情「缩略图→全屏」morph。原生 `document.startViewTransition`
+    已实测可用、**不必引 motion**（省 ~35KB），但它有三处必须**目视**才能定：① 新状态里
+    卡片缩略图与弹窗大图若同名 → 浏览器**静默忽略**整个过渡（退化成淡入）；② React 异步更新
+    须在回调里 `flushSync`，否则截到旧 DOM；③ 与刚加的 `modal-in` 叠加的观感。
+  - 回归：6 包 tsc 0 错；vite build 通过。
