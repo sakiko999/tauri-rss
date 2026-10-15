@@ -1,0 +1,639 @@
+/* 外壳(标题栏 / 侧栏 / 导航行)
+   拆自 styles.css L528-1162(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   外壳
+   ========================================================================= */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+}
+/**
+ * App 里的启动骨架盖层(见 App.tsx 的 booting)。
+ *
+ * ⚠️ 三个边界缺一不可,否则骨架淡出时会**跳变**(都是实测出来的):
+ *   1. `top: var(--header-h)` —— 真正的顶栏在底下已画好,这一层只盖它下面那块。
+ *   2. `left: var(--rail)` —— **不能盖住侧栏**。侧栏是真实内容(导航/订阅已经好了),
+ *      盖住它会有两个恶果:骨架淡出时侧栏从「看不见」到「看得见」是一次跳变;
+ *      而且静态骨架**本来就让开了侧栏**(它的 .bs-rail 只存在于 index.html 那份),
+ *      这一层若横跨整窗,两者在交接的那一两帧里几何不一致。
+ *      实测:写 `left: 0` 时 overlay 的 .bs-grid 落在 x=0 / 宽 1152,而静态骨架是
+ *      x=268 / 宽 884 —— 正是用户截图里「骨架没让开侧栏」那一张。
+ *   3. 内部先放一条 `.bs-sec > .bs-title` 再放 `.bs-grid` —— 与 `.bs-main` 的结构对齐
+ *      (标题条 + 卡片网格)。少了这条,卡片会整体上移 ~44px,交接时也是一次跳变。
+ *
+ * `--rail` / `--header-h` 定义在 `:root`(styles.css:198 与 `:200`),
+ * 窄窗断点下 `--rail` 变 64px(`:3700`),这里无需重复断点。
+ */
+.boot-overlay {
+  position: fixed;
+  top: var(--header-h);
+  left: var(--rail);
+  right: 0;
+  bottom: 0;
+  z-index: 40; /* 低于浮层(--z-modal=50),高于本体 */
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+/* ⚠️ 侧栏行/按钮的焦点环必须**内收**绘制。
+   全局 `:focus-visible` 是 `outline: 2px; outline-offset: 2px`(画在元素**外面**),
+   而分组行里 caret 与标题之间的 gap 是 0、`.group-head` 下面紧挨着 `.group-children`
+   —— 实测环的右沿被相邻的 `.nav-row-inner` 盖住、下沿被下一行盖住(用户标注的
+   「红框会被遮住」)。`outline-offset: -2px` 把环画进元素自己的盒子里,谁也盖不到。
+   行内有 padding(sp-1/sp-3),内收后不会压到图标或文字。 */
+.rail .nav-row:focus-visible,
+.rail .nav-row-inner:focus-visible,
+.rail .nav-caret-btn:focus-visible,
+.rail .sub-row:focus-visible,
+.rail .group-head-plain:focus-visible {
+  outline-offset: -2px;
+}
+
+/* 行高必须确定,否则内容会把行撑高、内部滚动区失去约束 */
+.app-body {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+.app-body[data-view="reader"],
+.app-body[data-view="hot"] {
+  grid-template-columns: var(--rail) var(--col) minmax(0, 1fr);
+}
+.app-body[data-rail="collapsed"] {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+.app-body[data-rail="collapsed"][data-view="reader"],
+.app-body[data-rail="collapsed"][data-view="hot"] {
+  grid-template-columns: 64px var(--col) minmax(0, 1fr);
+}
+
+/* 标题栏:定死三列 grid——左侧品牌再长也只在自己列内截断,推不动中间的搜索框 */
+.titlebar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--header-h);
+  flex: none;
+  padding-inline: var(--sp-3);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+}
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  overflow: hidden;
+  padding-left: var(--sp-2);
+}
+.titlebar-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  background: var(--logo-plate);
+  color: var(--logo-ink);
+}
+.titlebar-name {
+  flex: none;
+  font-size: var(--fs-small);
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.titlebar-path {
+  font-size: var(--fs-small);
+  color: var(--text-dim);
+}
+.titlebar-center {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.titlebar-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.titlebar-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: clamp(200px, 26vw, 380px);
+  height: 30px;
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+}
+.titlebar-search:focus-within {
+  border-color: var(--accent);
+  background: var(--surface-1);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.titlebar-search svg {
+  flex: none;
+}
+.titlebar-search input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: 0;
+  outline: none;
+  font-size: var(--fs-small);
+  color: var(--text);
+}
+.titlebar-search input::placeholder {
+  color: var(--text-dim);
+}
+.titlebar-search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.update-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: none;
+  height: 30px;
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-full);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+  transition: background var(--dur-fast) var(--ease-in), color var(--dur-fast) var(--ease-in);
+}
+.update-chip svg {
+  color: var(--success);
+}
+.update-chip[data-state="busy"] svg {
+  color: var(--accent);
+  animation: spin 1.1s linear infinite;
+}
+.update-chip[data-state="stale"] svg {
+  color: var(--warning);
+}
+.update-chip[data-state="error"] svg {
+  color: var(--danger);
+}
+.update-chip:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.chrome-banner {
+  padding: var(--sp-2) var(--sp-3) 0;
+  flex: none;
+}
+
+/* 侧边导航 */
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-1);
+  border-right: 1px solid var(--border);
+}
+.rail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  flex: none;
+}
+.rail-actions {
+  display: flex;
+  gap: var(--sp-1);
+}
+.rail-scroll {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--sp-2) var(--sp-4);
+}
+.rail-section {
+  padding-top: var(--sp-3);
+}
+.rail-empty {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-micro);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.rail-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-1) var(--sp-2) var(--sp-2);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.rail-section-title button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-xs);
+  color: var(--text-dim);
+}
+.rail-section-title button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.rail-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  border-top: 1px solid var(--border);
+}
+
+/* 手动折叠侧栏:列宽由 data-rail 给定,这里只收内容 */
+.rail.rail-collapsed .nav-label,
+.rail.rail-collapsed .nav-caret-btn,
+.rail.rail-collapsed .rail-section-title,
+.rail.rail-collapsed .rail-empty,
+.rail.rail-collapsed .nav-count,
+.rail.rail-collapsed .nav-warn {
+  display: none;
+}
+.rail.rail-collapsed .rail-head {
+  align-items: center;
+  padding-inline: var(--sp-2);
+}
+.rail.rail-collapsed .rail-actions {
+  flex-direction: column;
+  align-items: center;
+}
+.rail.rail-collapsed .rail-scroll {
+  padding-inline: var(--sp-2);
+}
+.rail.rail-collapsed .nav-row,
+.rail.rail-collapsed .nav-row-inner,
+.rail.rail-collapsed .group-head,
+.rail.rail-collapsed .group-head-plain {
+  justify-content: center;
+  padding-inline: 0;
+  gap: 0;
+}
+.rail.rail-collapsed .nav-row[aria-current="page"]::before,
+.rail.rail-collapsed .group-head[data-active="true"]::before {
+  display: none;
+}
+/* ⚠️ 这里**只**隐藏强调条,**不**清背景。
+   曾经写成 `background: transparent`,理由是「窄栏只剩图标,铺色像一整块色板」——
+   但那样会让**选中分组在悬停时也没有任何反馈**(它比 `.nav-row:hover` 更具体),
+   而其它选中行(内容类型 tab)在这一档是有底色的 → 不一致。保留底色才对得上。 */
+
+.rail.rail-collapsed .group-children {
+  padding-left: 0;
+  margin-left: 0;
+  border-left: 0;
+}
+.rail.rail-collapsed .group-head-plain .nav-label,
+.rail.rail-collapsed .group-head-plain .nav-count,
+.rail.rail-collapsed .group-empty {
+  display: none;
+}
+.rail.rail-collapsed .sub-row,
+.rail.rail-collapsed .sub-dot {
+  padding-left: 0;
+}
+/* ⚠️ 折叠栏里**必须**隐藏滚动容器的滚动条。
+   64px 的图标栏里任何滚动条都吃宽度、平台惯例也是不显示(VS Code / Discord 同理)
+   —— 滚轮照常能滚。
+   ⚠️ 历史更正(2026-10-14):这条曾经是为了对冲**经典滚动条**吃掉 10px → 行只剩 38px
+   而 `.rail-head/.rail-foot` 是 48px → 图标中心偏左 5px、上下错开一条竖线。
+   但那个 10px 经典滚动条的**真正根因**是 `.scroll-area::-webkit-scrollbar{width:10px}`
+   (已删,见那处注释),它把 fluentOverlay 顶掉了。根因修掉后全库 minScrollbarWidth=0、
+   图标中心与侧栏中心实测只差 -0.3px,不再需要「补 5px」。
+   本条保留:overlay 滚动条在 64px 栏里会盖住图标,隐藏仍是想要的效果,
+   而且 `scrollbar-width:none` 是标准属性、**不会**触发 Chromium 的自定义滚动条模式
+   (空白页对照已验:它是 0)。 */
+.rail.rail-collapsed .rail-scroll {
+  scrollbar-width: none;
+}
+.rail.rail-collapsed .rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+.rail.rail-collapsed .sub-dot {
+  display: none;
+}
+/* 折叠态:圆的 kind 小点换成同义的**图标**,让每个成员行都有可见图元。
+   没有这一条,成员行在 64px 里是**一排空白行**(唯一看得见的是 .sub-more 的方块,
+   而它又正好落在行正中 —— 点下去只弹菜单、永远不导航)。 */
+.rail.rail-collapsed .sub-icon {
+  display: block;
+}
+.rail.rail-collapsed .rail-section {
+  padding-top: var(--sp-1);
+}
+
+/* 导航行 */
+.nav-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: 32px;
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--r-md);
+  color: var(--text-muted);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-in), color var(--dur-fast) var(--ease-in);
+}
+.nav-row:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.nav-row[aria-current="page"] {
+  background: var(--surface-3);
+  color: var(--text);
+  font-weight: 560;
+}
+.nav-row[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  width: 3px;
+  height: 16px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+}
+.nav-row svg {
+  flex: none;
+  color: var(--text-dim);
+}
+.nav-row[aria-current="page"] svg {
+  color: var(--text);
+}
+.nav-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-small);
+  font-weight: 500;
+  /* ⚠️ 强制单行:订阅名可能很长(「YouTube · 3Blue1Brown」这种),之前没有截断 →
+     换行把行高从 32px 撑到两倍,侧栏节奏全乱。省略号落在尾部,行高恒定。
+     附带好处:窄栏把标签挤到几像素时,`nowrap` 让它退化成「…」而不是**逐字竖排**
+     (逐字竖排正是因为文字在窄框里还能换行;实测过的老问题)。 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-count {
+  flex: none;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+/* 未读数为三位数时圆角胶囊会挤压标题;用固定最小宽度避免抖动 */
+.nav-count[data-unread="true"] {
+  color: var(--accent-ink);
+  background: var(--accent);
+  min-width: 20px;
+  text-align: center;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+}
+.nav-warn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--danger);
+}
+
+/* 分组行 = 展开箭头 + 可点击标题;整行 32px,与普通导航行同高 */
+.group-head {
+  padding: 0;
+  gap: 0;
+}
+/* ⚠️ 这里**不再**覆盖 `.group-head:hover`。
+   原实现写 `background: transparent`(注释说「整行 hover 只在 .nav-row-inner 上」),
+   但 `.nav-row-inner:hover` **只改文字色、不给背景** → 分组行悬停时**完全没有反馈**。
+   宽栏里还能靠 caret 按钮自己的 hover 背景兜底,折叠态 caret 被 display:none、
+   只剩一个图标,于是悬停毫无反应(用户反馈)。
+   去掉覆盖后走 `.nav-row:hover` 的通用规则,与其它导航行一致。
+   ⚠️ 不需要 `:has()` —— 悬停分组行时指针必然落在它的某个子元素上,
+   浏览器会把祖先也判为 `:hover`(实测 `matchesHover: true`)。 */
+.nav-caret-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 30px;
+  flex: none;
+  border-radius: var(--r-xs);
+  color: var(--text-dim);
+}
+.nav-caret-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.nav-caret {
+  transition: rotate var(--dur-base) var(--ease-in);
+}
+/* ⚠️ 展开态由 Radix Accordion 的 Trigger 下发的 data-state 驱动(不再是手写的
+   data-open)。Trigger asChild 到 caret 按钮上,所以 data-state 落在按钮上。 */
+.nav-caret-btn[data-state="open"] .nav-caret {
+  rotate: 90deg;
+}
+/* ⚠️ 分组行**也能是激活态**(当前视图 = `group:<id>`)。给**整行**上背景 + 强调条,
+   与普通导航行一致 —— 之前只有 `.nav-row[aria-current="page"]`,而分组行的
+   aria-current 挂在 inner 按钮上(见 Rail.tsx),那条规则根本匹配不到 → 选中分组
+   只有文字变亮,**看不出被选中**(用户反馈)。
+   data-active 与 `.sub-row-wrap[data-active]` 同一套约定。 */
+.group-head[data-active="true"] {
+  background: var(--surface-3);
+}
+.group-head[data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  width: 3px;
+  height: 16px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+}
+/* 整行已高亮时,内层按钮不再叠加背景 —— 否则会在行里多出一块错位的色块。 */
+.group-head[data-active="true"] .nav-row-inner:hover {
+  background: transparent;
+}
+.nav-row-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: var(--sp-1) var(--sp-3) var(--sp-1) var(--sp-1);
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-in), color var(--dur-fast) var(--ease-in);
+}
+.nav-row-inner:hover {
+  color: var(--text);
+}
+.nav-row-inner[aria-current="page"] {
+  color: var(--text);
+  font-weight: 560;
+}
+
+/* 订阅子项缩进:对齐分组标题的**图标列**,让「组 → 成员」从缩进就能读出层级。
+   缩进过深(旧 sp-6)在 268px 侧栏里既浪费宽度又和分组标题对不齐。 */
+.group-children {
+  display: grid;
+  grid-template-columns: 1fr;
+  padding-left: var(--sp-5);
+  /* 层级提示线:一眼看出这几行属于上面那个分组。 */
+  border-left: 1px solid var(--border);
+  margin-left: var(--sp-3);
+}
+/* 分组区之间留一点呼吸,否则连续的组糊成一片。
+   ⚠️ 这里**只**匹配「未分组」那一块(它是唯一带 .group-block 的,真分组行由
+   Accordion.Item 渲染、不吃这个类)。原来是 `.group-block + div` 这类**兄弟**选择器,
+   现在中间隔着 Accordion.Root,兄弟关系不复存在 —— 直接按类名给边距,不依赖 DOM 位置。 */
+.group-block {
+  margin-top: var(--sp-2);
+}
+/* 「未分组」的伪分组标题(不可折叠、不可删)——只作分区标识。 */
+.group-head-plain {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.group-head-plain svg {
+  flex: none;
+}
+.group-empty {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+/* 订阅行 = 可点主体 + 右侧管理菜单。菜单与行内编号共用一个槽位:两者同时出现时
+   挤在窄栏会换行,所以槽位显隐做互斥 —— 悬停/聚焦时优先露出「更多」。 */
+.sub-row-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.sub-row-wrap > .sub-row {
+  flex: 1;
+  min-width: 0;
+}
+.sub-more {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast) var(--ease-in);
+}
+.sub-row-wrap:hover .sub-more,
+.sub-row-wrap:focus-within .sub-more {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* ⚠️ 折叠栏(64px)里**整个隐藏**「更多」入口。
+   它的菜单(立即刷新/编辑/停用/退订)在 64px 里根本放不下;更要命的是实测它是落在
+   这条 47px 行**正中**的那个 28px 方块 —— 行本身没有任何可见图元(见 .sub-icon),
+   唯一看得见的就是它,点下去只弹菜单、永远不导航,操作体验完全错位(用户反馈)。
+   折叠态一律不显示,行回归「纯导航」。 */
+.rail.rail-collapsed .sub-more {
+  display: none;
+}
+/* ⚠️ 折叠栏里**只剩图标**,而图标默认是 `--text-dim`(灰)—— 于是「当前选中」在折叠态
+   没有任何视觉反馈:整行铺色被上面那条规则清掉、强调条也隐藏了。
+   普通行有 `.nav-row[aria-current="page"] svg { color: var(--text) }` 兜底,但分组行的
+   aria-current 挂在 `.nav-row-inner` 上,`.nav-row[aria-current]` **匹配不到** →
+   分组图标永远保持灰的(实测 folderColor = oklch(0.52 0.012 72))。补一条提亮。 */
+.rail.rail-collapsed .group-head[data-active="true"] .nav-row-inner svg,
+.rail.rail-collapsed .group-head[data-active="true"] .nav-row-inner .nav-label {
+  color: var(--text);
+}
+/* 分组图标随展开态在 folder / folderOpen 之间切换(见 Rail.tsx)。折叠态下这是**唯一**
+   的展开指示:`.nav-caret-btn` 在这一档被 display:none,不给这条线索的话方向键 → 展开后
+   看不出任何变化,用户会以为「快捷键无效」。宽栏里 caret 已经在转,图标再变会喧宾夺主,
+   所以只在折叠态启用。 */
+/* ⚠️ 属性挂在 Accordion.Item 上(不是 .group-head),所以选择器不能用
+   `.group-head[data-row-expanded]` —— 那样永远匹配不到(实测图标色一直没变)。 */
+.rail.rail-collapsed [data-row-expanded="true"] .group-icon {
+  color: var(--text-muted);
+}
+/* 露出「更多」时把行内槽位(未读数等)让出来,避免重叠。 */
+.sub-row-wrap:hover .sub-slot,
+.sub-row-wrap:focus-within .sub-slot {
+  opacity: 0;
+}
+.sub-slot {
+  display: flex;
+  align-items: center;
+  transition: opacity var(--dur-fast) var(--ease-in);
+}
+.sub-row {
+  padding-left: var(--sp-3);
+}
+/* ⚠️ 选中子项**不加粗**:分组只有一条成员时,加粗的白色子项在视觉上比分组标题
+   还重,层级倒挂(用户会以为那是分组名)。靠背景高亮 + 左侧强调条区分就够。 */
+.sub-row[aria-current="page"] {
+  font-weight: 500;
+}
+/* 折叠态才出现的 kind 图标(宽栏里由 .sub-dot 承担 kind 标识,不用重复)。 */
+.sub-icon {
+  display: none;
+}
+.sub-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--text-dim);
+  flex: none;
+}
+.sub-row[data-kind="video"] .sub-dot {
+  background: oklch(0.68 0.14 320);
+}
+.sub-row[data-kind="audio"] .sub-dot {
+  background: oklch(0.72 0.13 190);
+}
+.sub-row[data-kind="live"] .sub-dot {
+  background: var(--live);
+}
+.sub-row[data-kind="social"] .sub-dot {
+  background: oklch(0.7 0.15 300);
+}
+.sub-row[data-kind="article"] .sub-dot {
+  background: oklch(0.7 0.09 240);
+}
+

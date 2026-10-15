@@ -1,0 +1,422 @@
+/* 设计令牌 + @theme 桥接
+   拆自 styles.css L12-387(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   设计系统 —— 方向:冷调深灰媒体工作台。中性墨色承担层级,琥珀色仅作信号色。
+   移植自 apps/new_desktop/styles.css,并作为 shadcn 语义令牌的取值来源:
+   ui 包的 bg-card / border-border / text-muted-foreground 等自动跟随本主题。
+   ========================================================================= */
+
+/* ---------- 令牌:深色(默认) ---------- */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* 暖石墨底(色相 72 / 极低彩度)。旧值 hue 264 是泛蓝的近黑 —— 冷调高对比看久了
+     发紧,而且让琥珀色成为冷底上唯一的暖点、像一个孤立的信号灯。暖中性是「阅读
+     工具」的语言,也让 accent 归入同一色系而非跳出来。 */
+  --bg: oklch(0.168 0.006 72);
+  --surface-1: oklch(0.207 0.007 72);
+  --surface-2: oklch(0.245 0.008 72);
+  --surface-3: oklch(0.285 0.009 72);
+  --surface-hover: oklch(0.265 0.008 72);
+
+  /* 正文不用纯白:0.925 比 0.965 柔一档,长文不刺眼,对比仍 ≈12:1。
+     --text-dim 保持 ≥4.5:1(WCAG AA),用 scripts/ui-design-audit.ts 复测。 */
+  --text: oklch(0.925 0.004 80);
+  --text-muted: oklch(0.735 0.008 80);
+  --text-dim: oklch(0.69 0.008 80);
+
+  --border: oklch(1 0 0 / 9%);
+  --border-strong: oklch(1 0 0 / 16%);
+
+  --accent: oklch(0.745 0.15 62);
+  --accent-hover: oklch(0.79 0.15 62);
+  --accent-soft: oklch(0.745 0.15 62 / 15%);
+  --accent-ink: oklch(0.2 0.03 62);
+  --accent-line: oklch(0.745 0.15 62 / 42%);
+
+  --success: oklch(0.72 0.14 152);
+  --success-soft: oklch(0.72 0.14 152 / 16%);
+  --danger: oklch(0.67 0.19 27);
+  --danger-soft: oklch(0.67 0.19 27 / 16%);
+  --warning: oklch(0.8 0.13 88);
+  --warning-soft: oklch(0.8 0.13 88 / 16%);
+  --live: oklch(0.65 0.21 25);
+
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 40%);
+  --shadow-2: 0 8px 24px oklch(0 0 0 / 45%);
+  --scrim: oklch(0.14 0.008 72 / 74%);
+
+  --logo-plate: oklch(0.925 0.004 80);
+  --logo-ink: oklch(0.168 0.006 72);
+  --stage-bg: oklch(0.11 0.006 72);
+  --on-media: oklch(0.98 0 0);
+}
+
+/* ---------- 令牌:浅色(独立取色,非深色反转) ---------- */
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* 与深色同一色相(暖中性 72),两套主题才是一个身份而不是两套皮。 */
+  --bg: oklch(0.985 0.003 75);
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.965 0.005 75);
+  --surface-3: oklch(0.935 0.006 75);
+  --surface-hover: oklch(0.955 0.006 75);
+
+  --text: oklch(0.22 0.012 72);
+  --text-muted: oklch(0.48 0.012 72);
+  /* ⚠️ 0.6 在浅底上实测 3.96:1(< AA 4.5)。0.52 实测 ≈5.4:1。 */
+  --text-dim: oklch(0.52 0.012 72);
+
+  --border: oklch(0.22 0.012 72 / 11%);
+  --border-strong: oklch(0.22 0.012 72 / 20%);
+
+  --accent: oklch(0.55 0.15 52);
+  --accent-hover: oklch(0.49 0.15 52);
+  --accent-soft: oklch(0.55 0.15 52 / 12%);
+  --accent-ink: oklch(0.99 0 0);
+  --accent-line: oklch(0.55 0.15 52 / 45%);
+
+  --success: oklch(0.53 0.13 152);
+  --success-soft: oklch(0.53 0.13 152 / 12%);
+  --danger: oklch(0.53 0.19 27);
+  --danger-soft: oklch(0.53 0.19 27 / 12%);
+  --warning: oklch(0.62 0.13 82);
+  --warning-soft: oklch(0.62 0.13 82 / 18%);
+  --live: oklch(0.55 0.21 25);
+
+  --shadow-1: 0 1px 2px oklch(0.25 0.02 72 / 8%);
+  --shadow-2: 0 8px 24px oklch(0.25 0.02 72 / 12%);
+  --scrim: oklch(0.25 0.015 72 / 48%);
+
+  --logo-plate: oklch(0.22 0.012 72);
+  --logo-ink: oklch(0.985 0.003 75);
+  --stage-bg: oklch(0.22 0.01 72);
+  --on-media: oklch(0.99 0 0);
+}
+
+/* ---------- 字体 ----------
+ * IBM Plex 超家族,自托管(public/fonts,~136KB,离线可用 —— Tauri 不能依赖 CDN)。
+ *   Sans  → UI/标题/导航
+ *   Serif → **正文**(长文用衬线是「阅读舒适」最直接的一档;serif 行高给足)
+ *   Mono  → 数字、通道 key、代码
+ * 中文不随包(思源黑体 ~10MB):回落到系统中文栈,跟在拉丁字体之后。
+ */
+@font-face {
+  font-family: "Plex Sans";
+  src: url("/fonts/plex-sans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Sans";
+  src: url("/fonts/plex-sans-500.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Sans";
+  src: url("/fonts/plex-sans-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Serif";
+  src: url("/fonts/plex-serif-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Serif";
+  src: url("/fonts/plex-serif-600.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plex Mono";
+  src: url("/fonts/plex-mono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+/* ---------- 与主题无关的令牌 ---------- */
+:root {
+  --font-sans: "Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-serif: "Plex Serif", "Songti SC", "SimSun", Georgia, serif;
+  --font-mono: "Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --fs-display: 30px;
+  --lh-display: 1.25;
+  --fs-h1: 22px;
+  --lh-h1: 1.35;
+  --fs-h2: 18px;
+  --lh-h2: 1.4;
+  --fs-h3: 16px;
+  --lh-h3: 1.45;
+  --fs-body: 15px;
+  --lh-body: 1.65;
+  --fs-small: 13px;
+  --lh-small: 1.5;
+  --fs-micro: 11px;
+  --lh-micro: 1.35;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 999px;
+
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 260ms;
+  --ease-in: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out: cubic-bezier(0.4, 0, 1, 1);
+
+  --rail: 268px;
+  --col: 400px;
+  --header-h: 52px;
+  --article-fs: 17px;
+
+  --z-sticky: 10;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+
+  /* shadcn 语义令牌 → 本主题取值(ui 包 renderer 直接消费这些名字) */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface-1);
+  --card-foreground: var(--text);
+  --popover: var(--surface-2);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-ink);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--text-muted);
+  --accent-fg: var(--text);
+  --destructive: var(--danger);
+  --input: var(--border);
+  --ring: var(--accent);
+  --radius: var(--r-lg);
+}
+
+/* 密度/动效/行宽档位(由首帧脚本或 applyPrefs 写在 <html> 上) */
+[data-density="relaxed"] {
+  --card-pad: 20px;
+  --grid-gap: 24px;
+  --row-h: 84px;
+}
+[data-density="standard"] {
+  --card-pad: 16px;
+  --grid-gap: 20px;
+  --row-h: 72px;
+}
+[data-density="compact"] {
+  --card-pad: 12px;
+  --grid-gap: 12px;
+  --row-h: 56px;
+}
+[data-motion="off"] {
+  --dur-fast: 1ms;
+  --dur-base: 1ms;
+  --dur-slow: 1ms;
+}
+[data-motion="rich"] {
+  --dur-fast: 160ms;
+  --dur-base: 240ms;
+  --dur-slow: 340ms;
+}
+
+/* CSS 变量 → Tailwind 命名颜色桥接 */
+@theme inline {
+  /* 主题令牌(新) */
+  --color-bg: var(--bg);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-hover: var(--surface-hover);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+  --color-border-strong: var(--border-strong);
+  --color-accent-tone: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-live: var(--live);
+  --color-stage: var(--stage-bg);
+  --color-on-media: var(--on-media);
+
+  /* shadcn 语义名(ui 包用) */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+}
+
+/* ── 动效令牌(Tailwind 工具类注册)─────────────────────────────────────────
+   注册成 `--animate-*` / `--duration-*` / `--ease-*` 后,JSX 里可直接用
+   `animate-rise` / `duration-base` / `ease-decel`,不必回 CSS 加类名。
+
+   ⚠️ **必须是独立的非 `inline` `@theme` 块** —— 2026-10-15 实测:把这些放进上面的
+      `@theme inline` 里**工具类不会生成**(`@apply animate-rise` 报
+      `Cannot apply unknown utility class`)。`@theme inline` 的语义是「值内联展开、
+      不产变量」,动画命名空间在它下面不注册。颜色/圆角继续 inline(它们引用 var),
+      动画另起一块,两者互不影响。
+
+   ⚠️ `--dur-*` / `--ease-in/out` 是**私有变量**(被 29 处 transition 引用),改它们
+      要动全文;这里只做**单向引用**并给语义正确的别名 —— 注意 `--ease-in` 的值
+      (0.16,1,0.3,1)其实是**减速**曲线(名字是反的,历史遗留):
+        --ease-decel = 入场/出场用(先快后慢)   --ease-accel = 退场用(先慢后快)
+      不覆盖 Tailwind 内置的 `--ease-in` / `--ease-out`(会改掉同名工具类的含义)。
+
+   ⚠️ **没有 `--duration-*` 命名空间** —— 2026-10-15 实测 `@apply duration-base` 报
+      `Cannot apply unknown utility class`。Tailwind 4 的 `duration-*` 只吃裸数值
+      (`duration-300`)或任意值(`duration-[var(--dur-base)]`)。故时长**不注册**,
+      继续走 `var(--dur-*)`(动画 shorthand 里引用即可)。
+
+   ⚠️ 本块放在 `@theme inline` **之后**:同命名空间后者覆盖前者,顺序别调。 */
+@theme {
+  --ease-decel: var(--ease-in);
+  --ease-accel: var(--ease-out);
+  --animate-rise: rise var(--dur-base) var(--ease-in);
+  --animate-fade: fade var(--dur-fast) var(--ease-in);
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  --animate-pulse-soft: pulse 1.6s ease-in-out infinite;
+
+  /* keyframes 与 `--animate-*` **同块**定义,Tailwind 才会关联它们一起输出。
+     `spin` 不搬 —— 它与 Tailwind 内置的 `spin` 同名,搬进来会多出一个
+     `--animate-spin` 和 `animate-spin`(8 处 loader 在用)打架。留给内置的。 */
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.38;
+    }
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
+    to {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes shimmer {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--fs-body);
+    line-height: var(--lh-body);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  /* ⚠️ 以下全是**元素级 reset**,必须留在 `@layer base` 里。
+     曾把它们写在层外(unlayered),而**无层 CSS 优先级高于所有 @layer** —— 于是
+     `button{background:none;border:0;padding:0}` 把 packages 里所有 tailwind 按钮
+     类全废掉(bg- / border- / px- / py- 全不生效,渲染成无边框无内边距的裸按钮)。
+     ⚠️ 注释里**别写类名通配**(星号紧跟斜杠那种,如 `bg-*` 后面补个斜杠):
+     那串字符本身就是注释结束符,会**提前终止注释块**,后面的文字变成裸 CSS
+     → Tailwind 抛 `Missing opening (`。2026-10-15 因写这一类注释踩了两次。
+     app 内看不出来,是因为 desktop 用的是 styles.css 自己的 `.btn`/`.icon-btn`
+     (同为无层,自己就能赢);受害的是 packages/player、packages/ui 这类
+     只靠 utility 的代码。Tailwind 4 层序:theme < base < components < utilities。 */
+  h1,
+  h2,
+  h3,
+  h4,
+  p,
+  figure,
+  blockquote {
+    margin: 0;
+  }
+  ul,
+  ol {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  img {
+    max-width: 100%;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+  button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+  }
+}
+

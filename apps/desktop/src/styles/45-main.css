@@ -1,0 +1,27 @@
+/* 主区
+   拆自 styles.css L2067-2089(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   主区
+   ========================================================================= */
+/* flex 列:头部取自然高度,滚动区吃掉剩余高度。
+   position: relative 是必需的——阅读进度条按主区定位,否则会浮到标题栏上。 */
+.main-region {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+.main-region > * {
+  min-height: 0;
+}
+.main-region > .scroll-area,
+.main-region > .page,
+.main-region > .player-view,
+.main-region > .shortvideo {
+  flex: 1 1 auto;
+}
+

@@ -1,0 +1,196 @@
+/* 响应式与减动效
+   拆自 styles.css L3781-EOF(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   响应式:重排内容,不缩放整页
+   ========================================================================= */
+@media (max-width: 1500px) {
+  .media-grid {
+    grid-template-columns: repeat(auto-fill, minmax(232px, 1fr));
+  }
+}
+@media (max-width: 1320px) {
+  :root {
+    --col: 356px;
+  }
+}
+@media (max-width: 1180px) {
+  :root {
+    --col: 330px;
+  }
+  .article-scroll {
+    padding-inline: var(--sp-6);
+  }
+  .player-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+}
+/* 侧栏按自身宽度收窄,网格列模板无需改写,避免内容落进错误的网格行 */
+@media (max-width: 1080px) {
+  :root {
+    --rail: 64px;
+    --col: 316px;
+  }
+  /* ⚠️ 这里必须写真实类名 `.nav-label`。曾误写成 `.rail-label`(不存在)→ 选择器
+     空转:窄栏收到 64px 但标签没隐藏,`.nav-label`(flex:1)被压到 ~9px 宽 → 中文
+     逐字竖排。改类名时同步 `.rail-collapsed` 那组规则。
+     ⚠️ 两份隐藏列表必须**逐项对齐**:曾漏掉 `.group-empty`,同一根因复发 —— 长提示
+     文案在 64px 栏里逐字竖排。 */
+  .nav-label,
+  .rail-section-title,
+  .nav-caret-btn,
+  .nav-count,
+  .nav-warn,
+  .rail-empty,
+  .group-empty {
+    display: none;
+  }
+  .rail-head {
+    align-items: center;
+    padding-inline: var(--sp-2);
+  }
+  .rail-actions {
+    flex-direction: column;
+  }
+  .nav-row,
+  .nav-row-inner,
+  .group-head,
+  .group-head-plain {
+    justify-content: center;
+    padding-inline: 0;
+    /* ⚠️ `gap: 0` 这一条不能少(与 `.rail-collapsed` 那组对齐)。少了它,成员行里那个
+       宽度为 0 的 `.sub-slot`(它的内容 `.nav-count`/`.nav-warn` 都被隐藏)仍算一个
+       flex item,gap 12px 把它和图标一起居中 → 图标反而偏左 6px(实测 delta -6.3)。 */
+    gap: 0;
+  }
+  .rail-scroll {
+    padding-inline: var(--sp-2);
+    /* ⚠️ 与 `.rail.rail-collapsed .rail-scroll` 同步(仓库铁律:两份 64px 栏清单逐项一致):
+       64px 栏里收起滚动条,免得 overlay 条盖住图标。历史的「补 5px 偏移」成因已随
+       `.scroll-area::-webkit-scrollbar` 一并删除(见那处注释)。 */
+    scrollbar-width: none;
+  }
+  .rail-scroll::-webkit-scrollbar {
+    display: none;
+  }
+  .group-children {
+    padding-left: 0;
+    margin-left: 0;
+    border-left: 0;
+  }
+  .sub-row {
+    padding-left: 0;
+  }
+  /* ⚠️ 与 `.rail.rail-collapsed` 那一组**逐项同步**(同样的 64px 图标栏):
+     小圆点换成 kind 图标(否则成员行是空白行),并隐藏「更多」入口
+     (它在 47px 行里正落在正中,点下去永远只弹菜单)。 */
+  .sub-dot {
+    display: none;
+  }
+  .sub-icon {
+    display: block;
+  }
+  .sub-more {
+    display: none;
+  }
+  /* 窄栏激活态:只隐藏强调条,保留底色 —— 与 `.rail-collapsed` 那组同步
+     (见那里的注释:清掉背景会让选中分组连悬停都没反馈,且与其它选中行不一致)。 */
+  .group-head[data-active="true"]::before {
+    display: none;
+  }
+  /* 窄栏里只有图标能表达状态,与 .rail-collapsed 那组**逐条对齐**(仓库铁律:两份
+     隐藏/样式清单必须逐项一致,曾因漏项复发过两次)。 */
+  .group-head[data-active="true"] .nav-row-inner svg,
+  .group-head[data-active="true"] .nav-row-inner .nav-label {
+    color: var(--text);
+  }
+  [data-row-expanded="true"] .group-icon {
+    color: var(--text-muted);
+  }
+  .rail-empty {
+    display: none;
+  }
+  .player-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* 窄屏单栏导航:未选中只显示列表,选中后只显示正文,侧栏始终可用 */
+@media (max-width: 900px) {
+  .app-body[data-view="reader"],
+  .app-body[data-view="hot"] {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+  }
+  .app-body[data-view="reader"][data-sel="false"] .main-region {
+    display: none;
+  }
+  .app-body[data-view="reader"][data-sel="true"] .col-pane {
+    display: none;
+  }
+  .app-body[data-view="reader"][data-sel="true"] .narrow-only {
+    display: grid;
+  }
+  .article-scroll {
+    padding-inline: var(--sp-5);
+  }
+  .social-detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.narrow-only {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .article-title {
+    font-size: 26px;
+  }
+  .page-scroll,
+  .player-scroll {
+    padding-inline: var(--sp-5);
+  }
+  .media-grid {
+    padding-inline: var(--sp-5);
+  }
+  .titlebar-path {
+    display: none;
+  }
+  .titlebar-search {
+    width: 200px;
+  }
+}
+@media (max-width: 720px) {
+  .titlebar-name {
+    display: none;
+  }
+  .stat-strip {
+    gap: var(--sp-5);
+  }
+}
+
+/* 减少动态效果:一律降级 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+[data-motion="off"] .skeleton {
+  animation: none;
+}
+
+@media print {
+  .rail,
+  .titlebar,
+  .pane,
+  .toast-root {
+    display: none !important;
+  }
+  body {
+    overflow: visible;
+  }
+}

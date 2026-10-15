@@ -1,0 +1,127 @@
+/* 播放页
+   拆自 styles.css L2705-2827(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   播放页
+   ========================================================================= */
+.player-view {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+.player-scroll {
+  padding: var(--sp-6) var(--sp-8) var(--sp-16);
+}
+.player-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--sp-6);
+  align-items: start;
+}
+/* ⚠️ .stage 原本没有任何规则:视频高度 = 56.25% × 容器宽(由 VideoShell 的
+   padding-top 撑),在窄窗(1080 断点下播放页变单栏)真实宽度可达 940px → 视频
+   528px,加上标题/操作就超出视口,"除了画面什么都看不到",标题都要滚才看到。
+   按视口高度反推宽度上限,并把舞台居中 —— 首屏始终留得下标题与操作按钮。 */
+.stage {
+  max-width: calc((100dvh - 300px) / 0.5625);
+  margin-inline: auto;
+}
+/* 极矮窗口下(如横屏小窗)保证舞台仍有最小可视高度,不被压成一条 */
+@media (max-height: 520px) {
+  .stage {
+    max-width: none;
+  }
+}
+.player-meta {
+  display: grid;
+  gap: var(--sp-3);
+  padding-top: var(--sp-5);
+}
+.player-title {
+  font-size: var(--fs-h1);
+  line-height: 1.3;
+  font-weight: 640;
+  letter-spacing: -0.016em;
+}
+.player-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  font-size: var(--fs-small);
+  color: var(--text-dim);
+}
+.player-time {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+.player-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2);
+  border-radius: var(--r-md);
+  text-align: left;
+  color: inherit;
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.queue-row:hover {
+  background: var(--surface-2);
+}
+.queue-row[aria-current="true"] {
+  background: var(--accent-soft);
+}
+.queue-rank {
+  flex: none;
+  width: 18px;
+  text-align: center;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.queue-row[aria-current="true"] .queue-rank {
+  color: var(--accent);
+}
+.queue-flag {
+  flex: none;
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+.queue-thumb {
+  flex: none;
+  width: 56px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.queue-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.queue-body {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.queue-title {
+  font-size: var(--fs-small);
+  font-weight: 520;
+}
+.queue-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+

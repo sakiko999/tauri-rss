@@ -1,0 +1,348 @@
+/* 页面(发现 / 设置 / 账号)
+   拆自 styles.css L2828-3171(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   页面(发现 / 设置 / 账号)
+   ========================================================================= */
+.page {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+.page-scroll {
+  padding: var(--sp-6) var(--sp-8) var(--sp-16);
+}
+/* ⚠️ 这里**不要**写死 max-width:页面内容(平台卡/分区砖/结果网格)本来就该跟着
+ * 窗口铺开。需要可读性的长文本自己限宽(.page-lead 是 68ch),网格用 auto-fill
+ * 按可用宽度决定列数。先前写死 1080px 导致宽屏下右侧一大片死区。 */
+.page-wrap {
+  width: 100%;
+}
+.page-title {
+  font-size: var(--fs-display);
+  line-height: var(--lh-display);
+  font-weight: 650;
+  letter-spacing: -0.022em;
+}
+.page-lead {
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+  max-width: 68ch;
+  margin-top: var(--sp-2);
+  line-height: 1.7;
+}
+
+.section {
+  margin-top: var(--sp-8);
+}
+.section-first {
+  margin-top: var(--sp-6);
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+.section-title {
+  font-size: var(--fs-h2);
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+.section-desc {
+  font-size: var(--fs-small);
+  color: var(--text-dim);
+}
+
+.chip-row {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.platform-grid {
+  display: grid;
+  gap: var(--grid-gap);
+  grid-template-columns: repeat(auto-fill, minmax(276px, 1fr));
+}
+.platform-card {
+  display: grid;
+  gap: var(--sp-3);
+  align-content: start;
+  padding: var(--card-pad);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+}
+.platform-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.platform-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+.platform-mark-sm {
+  width: 28px;
+  height: 28px;
+}
+.platform-title {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.platform-name {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+}
+.cap-list {
+  display: grid;
+  gap: var(--sp-2);
+}
+.cap-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+.cap-row svg {
+  flex: none;
+}
+.cap-row[data-on="true"] svg {
+  color: var(--success);
+}
+.cap-row[data-on="false"] svg {
+  color: var(--text-dim);
+}
+.platform-notes {
+  display: grid;
+  gap: var(--sp-1);
+  font-size: var(--fs-micro);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+.platform-notes li {
+  display: flex;
+  gap: var(--sp-2);
+}
+.platform-notes li::before {
+  content: "—";
+  flex: none;
+}
+
+.channel-groups {
+  display: grid;
+  gap: var(--sp-4);
+}
+.eyebrow {
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.channel-group {
+  display: grid;
+  gap: var(--sp-2);
+}
+.channel-form {
+  display: grid;
+  gap: var(--sp-5);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-5);
+}
+.channel-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* 添加订阅:搜索添加 / 按渠道配置 */
+.add-mode {
+  display: flex;
+}
+/* 候选列表:不做内层滚动,交给弹窗内容区唯一一条滚动条,避免嵌套滚动 */
+.cand-list {
+  display: grid;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  padding: var(--sp-1);
+}
+.cand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  text-align: left;
+  color: inherit;
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.cand:hover {
+  background: var(--surface-2);
+}
+/* 缩略图取真实封面;无封面时用平台标识占位,两者同尺寸,行高不跳 */
+.cand-thumb {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.cand-thumb-plain {
+  display: grid;
+  place-items: center;
+  color: var(--text-dim);
+}
+.cand-main {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+.cand-label {
+  font-size: var(--fs-small);
+  color: var(--text);
+}
+.cand-sub {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.cand-meta {
+  display: flex;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+.cand-chip {
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: var(--fs-micro);
+  line-height: 17px;
+}
+.cand-check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  color: var(--accent);
+  opacity: 0;
+}
+.cand[aria-selected="true"] {
+  background: var(--accent-soft);
+}
+.cand[aria-selected="true"] .cand-check {
+  opacity: 1;
+}
+.cand[aria-selected="true"] .cand-label {
+  font-weight: 560;
+  color: var(--accent);
+}
+/* 「添加到」是单选组,沿用 chip 外观但用 aria-checked 表达选中。
+   ⚠️ 不能复用 [aria-pressed]/[data-active] 的选中样式:搜索渠道 chip 用 aria-pressed,
+     两者会同时命中同一个按钮。 */
+.chip[role="radio"] {
+  cursor: pointer;
+}
+.chip[role="radio"][aria-checked="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 560;
+}
+/* 计数徽标比 chip 行高更高,固定 28px 会把行撑破 */
+.chip[role="radio"] {
+  height: auto;
+  min-height: 28px;
+  padding-block: 3px;
+}
+
+.cat-grid {
+  display: grid;
+  gap: var(--sp-2);
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+}
+.cat-tile {
+  display: grid;
+  gap: 2px;
+  padding: var(--sp-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-1);
+  text-align: left;
+  color: inherit;
+  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+}
+.cat-tile:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.cat-tile[aria-pressed="true"] {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.cat-name {
+  font-size: var(--fs-small);
+  font-weight: 540;
+}
+.cat-id {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+
+.result-grid {
+  display: grid;
+  gap: var(--grid-gap);
+  grid-template-columns: repeat(auto-fill, minmax(224px, 1fr));
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-small);
+}
+.table th {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.table td {
+  padding: var(--sp-3) var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.table tr:last-child td {
+  border-bottom: 0;
+}
+.table .cell-actions {
+  display: flex;
+  gap: var(--sp-1);
+  justify-content: flex-end;
+}
+
+.stat-strip {
+  display: flex;
+  gap: var(--sp-8);
+}
+

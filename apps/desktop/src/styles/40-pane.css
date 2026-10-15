@@ -1,0 +1,196 @@
+/* 内容列表面板
+   拆自 styles.css L1875-2066(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   内容列表面板
+   ========================================================================= */
+.pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+.pane > .scroll-area {
+  flex: 1 1 auto;
+}
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--header-h);
+  flex: none;
+  padding-inline: var(--sp-4);
+  border-bottom: 1px solid var(--border);
+}
+.pane-head-main {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.pane-title {
+  font-size: var(--fs-h3);
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+.pane-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.pane-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: none;
+}
+
+.filterbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.rail-chips {
+  display: flex;
+  gap: var(--sp-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 1px;
+  flex: 1;
+}
+.rail-chips::-webkit-scrollbar {
+  display: none;
+}
+.rail-chips > * {
+  flex: none;
+}
+
+.list {
+  padding: 0 var(--sp-2) var(--sp-10);
+}
+/* 行高由内容决定,但标题与摘要各自预留固定行数,因此各行等高且不会裁切 */
+.list-row {
+  display: flex;
+  gap: var(--sp-3);
+  width: 100%;
+  align-items: flex-start;
+  /* 上紧下松:行距靠 gap 给,行内 padding 收窄 —— 摘要收到一行后行高约 76px,
+     一屏能多露出两三条。 */
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  text-align: left;
+  color: inherit;
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.list-row:hover {
+  background: var(--surface-1);
+}
+.list-row[aria-current="true"] {
+  background: var(--surface-2);
+}
+.list-body {
+  display: grid;
+  gap: var(--sp-1);
+  flex: 1;
+  min-width: 0;
+}
+.list-title {
+  font-size: var(--fs-body);
+  font-weight: 560;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+/* 已读态:压低到 --text-dim(曾经的 --text-muted 太接近正文,读过的和没读过的
+   看着差不多,「未读」这个信息就白给了)。 */
+.list-row[data-read="true"] .list-title {
+  color: var(--text-dim);
+  font-weight: 480;
+}
+.list-excerpt {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+.list-kind {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-dim);
+}
+/* 元信息不再是「作者 · 时间」的一串,而是标签在左、时间贴右的编排。 */
+.list-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-time {
+  margin-left: auto;
+  flex: none;
+  color: var(--text-dim);
+}
+.list-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+  /* 不换行:作者名超长时省略,时间靠右固定 —— 换行会让行高不齐、列表失去节奏。 */
+  min-width: 0;
+}
+.list-thumb {
+  flex: none;
+  width: 88px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--surface-2);
+}
+.list-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* 操作区常驻占位:行宽恒定,hover 只切换可见性,不挤压标题 */
+.list-actions {
+  display: flex;
+  gap: var(--sp-1);
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-in);
+}
+.list-row:hover .list-actions,
+.list-row:focus-within .list-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .list-actions {
+    opacity: 1;
+  }
+}
+.unread-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  flex: none;
+  margin-top: 8px;
+}
+.unread-dot[data-read="true"] {
+  background: transparent;
+}
+
+.load-more {
+  display: grid;
+  place-items: center;
+  padding: var(--sp-6) 0 var(--sp-12);
+}
+

@@ -1,0 +1,144 @@
+/* 基础层与通用工具(橡皮筋 / 滚动条 / 截断 / 排版)
+   拆自 styles.css L388-527(2026-10-15 结构整理,内容零改动)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* 橡皮筋效果禁用(页面级)。
+ * ⚠️ 不要作用到内部滚动容器:会把内部滚动容器的滚轮惯性一并破坏。 */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+/* 滚动条:交给 tauri.conf 的 scrollBarStyle:"fluentOverlay"(native,不占内容区)。
+ * ⚠️ **不要给 .scroll-area 写 `::-webkit-scrollbar`** —— 实测(2026-10-14,WebView2 155)
+ * 只要这个伪元素匹配上,Chromium 就切成**自定义(经典)滚动条**,把 fluentOverlay
+ * 整个旁路:全新空白页对照 `gutter` = 0(overlay 生效),加一条
+ * `::-webkit-scrollbar{width:10px}` 立刻变 10px(经典、占宽)。实测本应用
+ * `.scroll-area` 的 gutter 一直是 9。
+ * 后果:主区右侧凭空少 9px、内容被挤窄;折叠态图标栏也必须额外 `scrollbar-width:none`
+ * 才不再偏移 5px —— 那两条「对齐补丁」都是在给这条规则擦屁股。
+ * 曾经这里有一版「纯前端 dev 兜底」的 10px 规则,注释还断言「对 WebView2 无效」—— 说反了。
+ * 纯前端 dev(CORS 调试)想看得见滚动条,用 `scrollbar-width: thin`(标准属性,
+ * 实测不触发自定义模式)即可。 */
+.scroll-area {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+[hidden] {
+  display: none !important;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+::selection {
+  background: var(--accent-soft);
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--sp-3);
+  top: -60px;
+  z-index: 100;
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: var(--r-md);
+  transition: top var(--dur-base) var(--ease-in);
+}
+.skip-link:focus {
+  top: var(--sp-3);
+  text-decoration: none;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+.mono {
+  font-family: var(--font-mono);
+  word-break: normal;
+}
+.spacer {
+  flex: 1;
+}
+.clamp-1,
+.clamp-2,
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+.clamp-1 {
+  -webkit-line-clamp: 1;
+}
+.clamp-3 {
+  -webkit-line-clamp: 3;
+}
+/* 单行截断(数据文本;作者名 / 来源 / 路径等)。 */
+.od-truncate {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 覆盖 StateBlock 的 min-height:嵌套在卡片/侧栏里时不该撑满 60%。 */
+.state-block-tight {
+  min-height: 0;
+}
+
+/* ---------- 排版 ---------- */
+.t-h1 {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  font-weight: 640;
+  letter-spacing: -0.015em;
+}
+.t-h2 {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 620;
+  letter-spacing: -0.012em;
+}
+.t-h3 {
+  font-size: var(--fs-h3);
+  line-height: var(--lh-h3);
+  font-weight: 600;
+}
+.t-small {
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+}
+.t-micro {
+  font-size: var(--fs-micro);
+  line-height: var(--lh-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.t-muted {
+  color: var(--text-muted);
+}
+.t-dim {
+  color: var(--text-dim);
+}
+
