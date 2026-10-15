@@ -18,6 +18,7 @@ import { unlockAudioPlayback } from "@tauri-playground/player"
 import { nodeTypeOf, useDesktop } from "../../store/index.ts"
 import { usePlayNavigate, viewPath } from "../../router.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
+import { openSocialDetailWithTransition } from "../../lib/viewTransition.ts"
 import type { CardActions } from "../../components/app/Cards.tsx"
 
 export function usePlayerNav(): CardActions {
@@ -61,7 +62,8 @@ export function usePlayerNav(): CardActions {
       // (卡片、命令面板、未来新增的)碰到它们都改走各自的主操作,而不是送进破碎的
       // 播放页。
       if (item.kind === "social") {
-        openSocialDetail(item)
+        // 同样走形变入口(此处没有源图,helper 会退化为瞬时打开)。
+        openSocialDetailWithTransition(() => openSocialDetail(item))
         return
       }
       if (item.kind === "article") {
@@ -76,7 +78,7 @@ export function usePlayerNav(): CardActions {
 
   const onOpen = useCallback(
     (item: MediaItem) => {
-      if (item.kind === "social") openSocialDetail(item)
+      if (item.kind === "social") openSocialDetailWithTransition(() => openSocialDetail(item))
       else if (item.kind === "article") openArticle(item)
       else openExternalSafely(item.url)
     },

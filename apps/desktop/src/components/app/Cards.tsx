@@ -8,6 +8,7 @@ import type { MediaItem } from "@tauri-playground/core"
 import { MediaImage, fmtCount } from "@tauri-playground/ui"
 import { Icon } from "../Icon.tsx"
 import { fmtAgo, fmtTime, httpsify, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
+import { rememberSocialSource } from "../../lib/viewTransition.ts"
 
 /** 播放器回调:交给宿主(MediaMain/PlayerPage)决定如何开播。 */
 export interface CardActions {
@@ -86,7 +87,12 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
       role="button"
       tabIndex={0}
       aria-label={item.title}
-      onClick={primary}
+      onClick={(e) => {
+        // 社交卡片:记下源图,供「缩略图 → 全屏」形变用(见 lib/viewTransition.ts)。
+        // 只对 social 记 —— 其它 kind 的主操作是播放/打开原文,没有形变目标。
+        if (item.kind === "social") rememberSocialSource(e.currentTarget.querySelector("img"))
+        primary()
+      }}
       onKeyDown={(e) => {
         // 卡片内的「加入队列」按钮的 Enter/Space 会冒泡到这里 —— 不区分 target 会把
         // 加队列的键盘操作变成开播。
@@ -185,7 +191,15 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
   const replies = (item as { replies?: number }).replies
   const video = /视频|video/i.test(String((item as { raw?: { type?: string } }).raw?.type ?? ""))
   return (
-    <button className="social-card" onClick={() => actions.onOpen?.(item)} aria-label={item.title}>
+    <button
+      className="social-card"
+      onClick={(e) => {
+        // 缩略图形变的源(瀑布流卡片**不会**被卸载,弹窗是叠加层 —— 故必须显式记源)。
+        rememberSocialSource(e.currentTarget.querySelector("img"))
+        actions.onOpen?.(item)
+      }}
+      aria-label={item.title}
+    >
       {cover ? (
         <span className="social-media" style={{ aspectRatio: socialRatio(cover) }}>
           <MediaImage src={httpsify(cover.url)} ratio={socialRatio(cover)} loading="eager" />

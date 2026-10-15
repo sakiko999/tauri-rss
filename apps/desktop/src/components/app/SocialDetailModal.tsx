@@ -129,7 +129,7 @@ export function SocialDetailModal() {
               此时 contain 留一点缝是有意的(完整显示 > 填满裁剪)。 */}
           <div className="social-detail-media" style={{ "--detail-media-ratio": String(imgRatio) } as React.CSSProperties}>
             {cover ? (
-              <>
+              <span className="social-detail-cover">
                 {imgs.length > 1 ? (
                   <div className="social-detail-controls">
                     <button
@@ -156,7 +156,7 @@ export function SocialDetailModal() {
                 {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
                 <MediaImage src={cover} alt={item.title} loading="eager" contain />
-              </>
+              </span>
             ) : (
               <span className="cover-missing">
                 <Icon name="image" size={24} />
