@@ -4,9 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="dark light" />
-    <!-- 复用应用图标(public/favicon.ico),消掉 /favicon.ico 的 404。
-         ⚠️ 必须放 public/:写相对路径(如 ../../src-tauri/...)会随路由深度变,
-         且生产构建不拷贝 → 打包后必 404。 -->
+    <!-- ⚠️ 必须放 public/:写相对路径会随路由深度变,且生产构建不拷贝 → 打包后必 404。 -->
     <link rel="icon" href="/favicon.ico" />
     <title>RSS Reader — 订阅工作台</title>
     <script>
@@ -87,6 +85,7 @@
     </div>
     <div id="root"></div>
     <div id="overlay-root" class="overlay-root"></div>
+    <!-- role/aria-live:吐司是异步插入的,不给 live region 读屏用户完全感知不到。 -->
     <div id="toast-root" class="toast-root" role="status" aria-live="polite"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
