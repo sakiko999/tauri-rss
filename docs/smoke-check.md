@@ -26,6 +26,8 @@
 | 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/rail-tree-accordion.md` |
 | 组件拆分(移动/新建文件) | `tsc -p apps/desktop` + `ui-probe.ts goto page:settings` / `page:discover` 各走一遍;⚠️ tsc 查不出**循环 import 与渲染断链**,必须实机点 tab / 开弹窗 |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
+| **类名冲突（跨区块复用）** | ⚠️ `styles/` 拆成多文件后，**同名类会跨文件叠加**（`.rail-head` 同时给侧栏和直播区写过，`column` + `wrap` 叠加把头部撑成 132px）。改样式前先 `grep` 类名在 `styles/` 下**出现了几次**；新组件用**模块前缀**（`live-*`），别借侧栏的命名空间 |
+
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 | **时间戳单位 / 排序** | `bun packages/resolve/src/example/xhs-time.check.ts`；⚠️ **必须重新抓取**才生效 —— 坏值已落库，看旧数据会误判成「没修好」。判据：social 的 `publishedAt` 年份应在合理区间（修前是 58754） |
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
@@ -237,6 +239,17 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     **重新挂回去并从头再播一遍**（过渡刚结束弹窗又缩一下）。改为保持 `none`。
     同时补上 `.scrim` 的 `fade` —— 它在 VT **快照**里被截在 `opacity≈0`，过渡结束后真身
     显示也是一帧闪烁。**VT 与 CSS 入场动画不能叠加**，过渡期间把两者都停掉。
+- 2026-10-15 **类名冲突：直播区头部撑成 132px 空白**：
+  - 「正在直播」区复用了侧栏的 `.rail-head`，而侧栏那份是 `flex-direction: column`
+    （品牌 + 操作纵向堆叠）。两处定义叠加成 `column` + `wrap` → 子元素**纵向堆叠还横向
+    换列** → 标题/计数/按钮各占一行，头部从 28px 涨到 **132px**（那一块几乎全是空的）。
+  - ⚠️ **这个 bug 一直存在却从未暴露**：先前 `hasMix` 恒假（直播进不了首屏窗口）、
+    `.rail-block` **从不渲染** —— 是刚修好的排序把它翻出来的。**修好一个 bug 常会暴露
+    被它掩盖的另一个**，改完别只看目标指标，把相邻区域也扫一眼。
+  - 修法：改名 `live-block` / `live-block-head` / `live-track`，与本区已有的
+    `.live-pulse` / `.live-online` 一致，避开侧栏命名空间。
+  - 实测：`flexDirection` column→row，头部 132→38px，直播块 470→376px。
+  - ⚠️ 同一冲突在参考实现 `apps/new_desktop/styles.css`（776/777 行）里也存在，未改。
 - 2026-10-15 **时间戳单位错值 → 排序错位 + 直播从不进首屏**：
   - 根因链：`xhs` 的 `time` 从**秒**改成**毫秒**，而 `client.ts` 仍无条件 `* 1000`
     → 落到**公元 58754 年** → 按时间倒序**永久钉在最前**（实测「全部」页窗口前 12 条

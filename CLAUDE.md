@@ -411,6 +411,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   合成 `WheelEvent` 在 Chromium 里**不触发滚动**，会得出假结论。⚠️ 也别 navigate 后**立刻**测 ——
   启动骨架存活期（~900ms）与 masonic 的测量窗口期都会让容器「暂时不可滚」，**多采样几次**再下结论。
   判据要看**头部矩形是否随之移动**，不能只看 `scrollTop`。
+- ⚠️ **样式拆成多文件后，同名类会跨文件叠加**：`.rail-head` 曾同时给**侧栏**和
+  **直播区**定义（侧栏那份是 `flex-direction: column`），叠加成 `column` + `wrap`
+  → 子元素纵向堆叠还横向换列，头部从 28px 涨到 **132px**。**新组件用模块前缀**
+  （直播区用 `live-*`，与已有的 `.live-pulse` / `.live-online` 一致），别借侧栏命名空间。
+  改样式前先 `grep` 类名在 `styles/` 下出现了几次。
 - **列表虚拟化**：网格 = VirtuosoGrid，文章列表 = Virtuoso。⚠️ 尺寸走
   `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
   List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱
