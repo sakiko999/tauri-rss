@@ -60,15 +60,24 @@ export function openSocialDetailWithTransition(open: () => void): void {
     flushSync(open)
     // 目标的 name 由 CSS 的 `.social-detail-cover` 常驻声明,**不在这里挂** ——
     // 见该类的注释:挂在这里的话过渡结束时会把它清掉,下一张图就没形变了。
-    // 坑 3:过渡期间停掉弹窗自己的入场动画。
-    const modal = document.querySelector<HTMLElement>(".modal")
-    if (modal) modal.style.animation = "none"
+    // 坑 3:过渡期间停掉**入场动画**。
+    // ⚠️ `.scrim` 也有一条 `fade`(遮罩淡入)。它在 VT 的**快照**里会被截在 opacity≈0,
+    // 过渡一结束真身立刻显示 → 一帧闪烁。所以两处都要停。
+    for (const sel of [".modal", ".scrim"]) {
+      const el = document.querySelector<HTMLElement>(sel)
+      if (el) el.style.animation = "none"
+    }
   })
 
   void vt.finished.finally(() => {
     clearName(source)
-    // 弹窗若仍开着就还原入场动画(关掉了则元素已卸载,无所谓)。
-    const modal = document.querySelector<HTMLElement>(".modal")
-    if (modal) modal.style.animation = ""
+    // ⚠️ **不要**把 animation 还原成 CSS 值 —— 那会把 `modal-in` / `fade` **重新挂回去
+    // 并从头再播一遍**(过渡刚结束弹窗又缩一下 = 用户看到的闪烁)。显式写 none 保持
+    // 与过渡期间一致:弹窗这次是被形变「带出来」的,本就不该再播入场。
+    // 关闭后重开会重挂组件,动画自然恢复。
+    for (const sel of [".modal", ".scrim"]) {
+      const el = document.querySelector<HTMLElement>(sel)
+      if (el) el.style.animation = "none"
+    }
   })
 }

@@ -76,6 +76,13 @@
         --bs-muted: oklch(0.245 0.008 72);
         --bs-line: oklch(0.285 0.009 72);
         --bs-bg: oklch(0.168 0.006 72);
+        /* ⚠️ 必须把底色**应用到画布**:只定义 --bs-bg 而不用它,html/body 的背景就是
+           透明的(rgba(0,0,0,0)),画布回落到浏览器默认的**白色** —— 而 styles.css 的
+           `body{background:var(--bg)}` 要等 Tailwind 编译产物加载后才生效。于是深色主题下
+           启动时白闪一下(骨架本身是深色,闪的是**画布**,不是骨架)。实测确证:
+           html/body 的 computed background 曾是 rgba(0,0,0,0)。
+           写在 :root 上会传播到**画布**(html 的背景是整个视口),fixed 的骨架盖不住这一层。 */
+        background: var(--bs-bg);
       }
       /* ⚠️ 首帧脚本(上面那段内联 JS)在 CSS 之前就设好了 data-theme,所以正常路径
          走下面两条即可;`html:not([data-theme])` 那条兜底「脚本被禁/尚未执行」。 */
