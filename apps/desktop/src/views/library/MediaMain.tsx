@@ -151,8 +151,8 @@ export function MediaMain() {
     const mixHeader = (
       <>
         {pageHead}
-        <div className="rail-block">
-          <div className="rail-head">
+        <div className="live-block">
+          <div className="live-block-head">
             <span className="grid-title" style={{ fontSize: "var(--fs-h3)" }}>
               正在直播
             </span>
@@ -162,7 +162,7 @@ export function MediaMain() {
               <Icon name="radio" size={12} /> 只看直播
             </button>
           </div>
-          <div className="rail-track">
+          <div className="live-track">
             {liveItems.slice(0, 12).map((it) => (
               <MediaCard key={itemKey(it)} item={it} actions={actions} />
             ))}

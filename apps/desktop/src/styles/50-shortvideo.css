@@ -416,11 +416,17 @@
   min-height: 28px;
 }
 
-/* 直播横排 */
-.rail-block {
+/* 直播横排。
+   ⚠️ 类名**不能**叫 `.rail-block` / `.rail-head` / `.rail-track` —— 侧栏(`20-shell.css`)
+   用同一个命名空间,而 `.rail-head` 在侧栏里是 `flex-direction: column`("品牌 + 操作"
+   纵向堆叠)。两处复用同名 → 这份的 `flex-wrap: wrap` 与侧栏的 `column` 叠加,
+   子元素**纵向堆叠还横向换列** → 标题/计数/按钮各占一行,头部从 28px 涨到 **132px**
+   (2026-10-15 实测:那是一大块几乎全空的区域)。
+   改用 `live-*` 前缀,与本区已有的 `.live-pulse` / `.live-online` 一致。 */
+.live-block {
   padding: var(--sp-4) var(--sp-6) 0;
 }
-.rail-head {
+.live-block-head {
   display: flex;
   align-items: baseline;
   gap: var(--sp-3);
@@ -428,18 +434,18 @@
   flex-wrap: wrap;
 }
 /* 横向直播间轨道:末尾补足右侧内边距,卡片不被裁切 */
-.rail-track {
+.live-track {
   display: flex;
   gap: var(--grid-gap);
   overflow-x: auto;
   padding-bottom: var(--sp-4);
   scrollbar-width: thin;
 }
-.rail-track > * {
+.live-track > * {
   flex: none;
   width: 300px;
 }
-.rail-track > :last-child {
+.live-track > :last-child {
   margin-inline-end: var(--sp-6);
 }
 
