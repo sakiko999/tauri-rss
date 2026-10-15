@@ -1,0 +1,228 @@
+/* ============================================================================
+   启动骨架(index.html 的 #boot-skeleton 与 App 的 .boot-overlay 共用一套 .bs-*)
+
+   ⚠️ 这个文件**不要** import 进任何 TS/CSS —— 那样它会进打包产物,骨架就得等 Tailwind
+   编译产物加载完才生效,而骨架的全部意义就是**在那之前**画出来(Vite 的 module 脚本
+   真机实测要 ~1.1s 才执行)。index.html 里是 `<link href="/boot-skeleton.css">`,
+   浏览器解析即取,与 module 脚本并行,不进依赖图。
+
+   ⚠️ 调色板刻意**不接主题令牌**(--bg/--surface-1 等):那些令牌在 styles.css 加载前
+   还不存在,这里只能写字面量。改主题色要**同步改两处**。
+
+   ⚠️ 类名/结构与 `src/components/BootSkeleton.tsx` 是**一份契约**,改一处要改两处;
+   卡片数还要与那里的 SKELETON_COUNT 相等。
+   ⚠️ 宽度/断点/卡片网格要与 styles.css 的 .app-body / .media-grid 同步。
+
+   (2026-10-15 从 index.html 的 <style> 原样搬出,index.html 由 310 行降到 ~60。)
+   ========================================================================= */
+
+      /**
+       * ⚠️ 这一条**必须**有,而且是这份内联样式里最关键的一行。
+       *
+       * Tailwind 4 的 preflight 里有 `*, ::before, ::after { box-sizing: border-box }`,
+       * 但它要等 CSS bundle 到位才生效 —— 在那之前,骨架按浏览器默认的 **content-box** 算:
+       * `.bs-rail` 的 `width: 268px` 会**再加上** `.bs-sec` 的左右 padding(各 16px)
+       * 与右边框,实测第一帧是 **301px**,CSS 一到就变回 268px。
+       * 用户看到的就是「骨架侧栏从一个较大的宽度 → 跳成实际宽度 → 再到真实侧栏」。
+       * 这里先补同一条,让 bundle 前的那一帧与最终态完全一致。
+       */
+      *,
+      ::before,
+      ::after {
+        box-sizing: border-box;
+      }
+
+      /* ⚠️ 调色板变量必须挂在 **:root** 上,不能挂在 `.boot-skeleton` 上 ——
+         App 侧的 `.boot-overlay`(App.tsx 的 booting)也复用这同一套 `.bs-*` 类名,
+         但它**不是** `.boot-skeleton` 的后代。变量若只挂在那上面,overlay 里的
+         `var(--bs-muted)` 全部取不到 → `linear-gradient(90deg, , , )` 整条声明失效
+         → 卡片透明,用户看到的是**一片空白的正文区**(实测复现)。 */
+      :root {
+        --bs-surface: oklch(0.207 0.007 72);
+        --bs-muted: oklch(0.245 0.008 72);
+        --bs-line: oklch(0.285 0.009 72);
+        --bs-bg: oklch(0.168 0.006 72);
+        /* ⚠️ 必须把底色**应用到画布**:只定义 --bs-bg 而不用它,html/body 的背景就是
+           透明的(rgba(0,0,0,0)),画布回落到浏览器默认的**白色** —— 而 styles.css 的
+           `body{background:var(--bg)}` 要等 Tailwind 编译产物加载后才生效。于是深色主题下
+           启动时白闪一下(骨架本身是深色,闪的是**画布**,不是骨架)。实测确证:
+           html/body 的 computed background 曾是 rgba(0,0,0,0)。
+           写在 :root 上会传播到**画布**(html 的背景是整个视口),fixed 的骨架盖不住这一层。 */
+        background: var(--bs-bg);
+      }
+      /* ⚠️ 首帧脚本(上面那段内联 JS)在 CSS 之前就设好了 data-theme,所以正常路径
+         走下面两条即可;`html:not([data-theme])` 那条兜底「脚本被禁/尚未执行」。 */
+      [data-theme="light"] {
+        --bs-surface: oklch(1 0 0);
+        --bs-muted: oklch(0.965 0.005 75);
+        --bs-line: oklch(0.935 0.006 75);
+        --bs-bg: oklch(0.985 0.003 75);
+      }
+      html:not([data-theme]) {
+        --bs-surface: light-dark(oklch(1 0 0), oklch(0.207 0.007 72));
+        --bs-muted: light-dark(oklch(0.965 0.005 75), oklch(0.245 0.008 72));
+        --bs-line: light-dark(oklch(0.935 0.006 75), oklch(0.285 0.009 72));
+        --bs-bg: light-dark(oklch(0.985 0.003 75), oklch(0.168 0.006 72));
+      }
+
+      .boot-skeleton {
+        /* ⚠️ 必须 fixed 覆盖,不能留在正常流里:#root 是它的兄弟节点,留在流里会把
+           应用整体顶到首屏之下 —— 骨架淡出时露出来的就是一片空背景,而不是应用。 */
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        background: var(--bs-bg);
+      }
+      .bs-bar,
+      .bs-card {
+        background: linear-gradient(90deg, var(--bs-muted), var(--bs-line), var(--bs-muted));
+        background-size: 200% 100%;
+        animation: bs-shimmer 1.4s ease-in-out infinite;
+      }
+      @keyframes bs-shimmer {
+        from {
+          background-position: 150% 0;
+        }
+        to {
+          background-position: -50% 0;
+        }
+      }
+      html[data-motion="off"] .bs-bar,
+      html[data-motion="off"] .bs-card {
+        animation: none;
+      }
+
+      .bs-bar {
+        height: 16px;
+        border-radius: 6px;
+      }
+      .bs-topbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: 12px;
+        height: 52px;
+        flex: none;
+        padding-inline: 12px;
+        background: var(--bs-surface);
+        border-bottom: 1px solid var(--bs-line);
+      }
+      .bs-chip {
+        width: min(420px, 40vw);
+        height: 28px;
+        border-radius: 999px;
+      }
+      .bs-icons {
+        display: flex;
+        gap: 10px;
+      }
+      .bs-icons .bs-bar {
+        width: 20px;
+        height: 20px;
+        border-radius: 999px;
+      }
+      .bs-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+      }
+      .bs-sec {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+      }
+      .bs-rail {
+        width: 268px;
+        flex: none;
+        background: var(--bs-surface);
+        border-right: 1px solid var(--bs-line);
+      }
+      /* ⚠️ 两个收窄条件必须**同时**有,且宽度与断点都要跟 styles.css 同步:
+         - 用户手动折叠侧栏 → html[data-prefs~="rail-collapsed"](首帧脚本写入)
+         - 窗口窄(真实 CSS 是 `@media (max-width:1080px) { --rail: 64px }`)
+         缺任一条件,骨架都是 268px 而真实侧栏 64px → 骨架淡出时**侧栏宽度跳变**
+         (真机量到视口 1000px 时骨架 268 vs 真实 64,差 204px)。
+         这份 CSS 是静态内联的,看不到 styles.css 的断点,只能各写一遍。 */
+      html[data-prefs~="rail-collapsed"] .bs-rail {
+        width: 64px;
+      }
+      @media (max-width: 1080px) {
+        .bs-rail {
+          width: 64px;
+        }
+        html[data-prefs~="rail-collapsed"] .bs-label,
+        .bs-label {
+          visibility: hidden;
+        }
+      }
+      html[data-prefs~="rail-collapsed"] .bs-label {
+        visibility: hidden;
+      }
+      .bs-main {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .bs-title {
+        width: 180px;
+        height: 22px;
+      }
+      .bs-grid {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(auto-fill, minmax(252px, 1fr));
+        align-content: start;
+        padding: 0 24px 32px;
+      }
+      .bs-card {
+        aspect-ratio: 16 / 9;
+        border-radius: 12px;
+      }
+      /* 列表形态(文章节点用):行骨架,与 Virtuoso 的列表行同构。 */
+      .bs-list {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        gap: 12px;
+        align-content: start;
+        padding: 0 24px 32px;
+      }
+      .bs-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .bs-thumb {
+        width: 40px;
+        height: 40px;
+        flex: none;
+        border-radius: 8px;
+      }
+      .bs-row-lines {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: grid;
+        gap: 8px;
+      }
+      /* 淡出:React 首帧替换掉骨架时由 main.tsx 加 .boot-skeleton-out。
+         ⚠️ 只动 opacity,**不要**动 visibility —— 它跑到 0 之后才会在 240ms 时被
+         remove() 摘除;一旦中途被打断(热重载),元素还得能被看见。 */
+      .boot-skeleton-out {
+        animation: bs-out 160ms ease-in forwards;
+      }
+      @keyframes bs-out {
+        to {
+          opacity: 0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-skeleton-out {
+          animation: none;
+          opacity: 0;
+        }
+      }
