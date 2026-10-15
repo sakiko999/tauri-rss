@@ -205,3 +205,19 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     卡片缩略图与弹窗大图若同名 → 浏览器**静默忽略**整个过渡（退化成淡入）；② React 异步更新
     须在回调里 `flushSync`，否则截到旧 DOM；③ 与刚加的 `modal-in` 叠加的观感。
   - 回归：6 包 tsc 0 错；vite build 通过。
+- 2026-10-15 **社交详情共享元素形变（P3，原生 View Transition）**：
+  - `lib/viewTransition.ts` + `Cards.tsx`（点卡片记源）+ `SocialDetailModal.tsx`
+    （`.social-detail-cover` 包裹层）+ `70-overlays.css`。**不引 motion**。
+  - ⚠️ **CDP 探针实测的三条**（自建 DOM 复现同名交接，判据 = 伪元素动画是否出现）：
+    | 用例 | `::view-transition-*` | 结论 |
+    |---|---|---|
+    | 源摘名 + 目标有 name | group/new/old(cover) 齐全 | 真形变 |
+    | **源未摘名 + 目标同名** | **`[]` 空** | **整段被静默忽略、不报错** |
+    | 目标无 name | 只有 root 淡入 | 不是形变 |
+    第二行是**最容易踩且最难查**的：不摘源 name 的话功能**完全无效且零报错**。
+  - 另两条：必须 `flushSync`（React setState 异步，否则目标还没渲染）；
+    过渡期间停掉 `.modal` 的 `modal-in`（与 VT 形变叠加会抖）。
+  - ⚠️ 目标 name 由 CSS **常驻**声明，**别**在过渡里动态挂/清 —— 动态挂的话结束后清掉，
+    下一张图就没形变了。包一层 `.social-detail-cover` 而非直接给 `<img>` 挂 name，
+    是因为 `<img>` 在换图/代理图就绪时会重挂、name 跟着丢。
+  - 回归：desktop tsc 0 错；vite build 通过。

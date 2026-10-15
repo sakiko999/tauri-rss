@@ -329,8 +329,15 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - ⚠️ **JS 驱动的动画挡不住 `prefers-reduced-motion`**：`styles.css` 那条媒体查询只压
   CSS 的 animation/transition，对 `scrollIntoView({behavior:"smooth"})`、脚本编排的入场
   与形变**完全无效**。要在 JS 侧问偏好，用 `lib/motion.ts`（`prefersReducedMotion()` /
-  `scrollBehavior()`）。引动画库后这条会抬头 —— 入场/布局动画一旦跑在 JS 里，只靠媒体查询
-  就是「用户设了减动效、动画照跑」。用 Motion 时对应 `<MotionConfig reducedMotion="user">`。
+  `scrollBehavior()` / `motionDurationMs()`）。**等动画放完再卸载**时读
+  `motionDurationMs()` 而非写死 —— 动效有三档，写死会让 `data-motion="off"` 白等。
+- ⚠️ **共享元素形变走原生 View Transition，不引 motion**（2026-10-15 实测 Chromium 155
+  支持 `startViewTransition`）。入口 `lib/viewTransition.ts`。三个**静默失败**的坑：
+  1. **源元素在新状态里必须摘掉 `view-transition-name`** —— 与目标同名的话浏览器判定
+     重复、**忽略整个过渡且不报错**（探针实测：伪元素动画为空数组）。这是最难查的一条。
+  2. 回调里必须 `flushSync` —— React 的 setState 是异步的，不同步刷 DOM 则目标还没渲染。
+  3. 别与元素的入场动画叠加（如 `.modal` 的 `modal-in`），过渡期间把它停掉。
+  目标 name 用 **CSS 常驻声明**，别在过渡里动态挂/清（结束后清掉，下次就没形变了）。
 - **可播判定 = kind 门控**：只有 `video`/`audio`/`live` 有可播流，`article`/`social`
   不是。卡片的整卡点击与播放按钮都走 `cards.tsx` 的 `isPlayableKind`——article 显示
   0 个播放按钮、点击进「打开文章」（`tab:article` 三栏读），social 进详情弹窗。
