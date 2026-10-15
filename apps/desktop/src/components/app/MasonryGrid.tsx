@@ -67,9 +67,22 @@ const PRELOAD_MARGIN = 16
 export function MasonryGrid({
   items,
   renderItem,
+  header,
 }: {
   items: MediaItem[]
   renderItem: (item: MediaItem) => React.ReactElement
+  /**
+   * 放在**滚动容器内部、网格之上**的头部(如 `.grid-head`),随内容一起滚走。
+   *
+   * ⚠️ 头部**必须**在滚动容器内:放在外面的话它是**滚动死区** —— 鼠标停上去找不到可滚
+   * 祖先,而 `body` 是 `overflow:hidden`,滚轮完全无反应(用户描述为「无法上下滑动」),
+   * 而且头不会跟着滚走(用户要的是「上下作为整体滚动」)。
+   *
+   * ⚠️ 不加「按头部高度偏移 masonic 的 scrollTop」那套 —— 试过,副作用大于收益:
+   * `useEffect(…, [header])` 的 `header` 是每次渲染新建的 JSX,observer 会被反复重连;
+   * 而且 masonic 的 `overscanBy:2` 本就留了余量。保持最小改动。
+   */
+  header?: React.ReactNode
 }) {
   // 内层滚动容器 + 可视区尺寸 + 滚动位置(手动喂 masonic)。
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -242,6 +255,8 @@ export function MasonryGrid({
       className="h-full overflow-y-auto px-4"
       onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
     >
+      {/* 头部(随内容一起滚走)。⚠️ 必须在滚动容器内,否则是滚动死区(见 props 注释)。 */}
+      {header}
       {grid}
       {/* 订阅「加载更多」:主触发是上方 onRender(渲染窗口逼近末尾=列空白预载);Footer 保留
           「加载更多」按钮 + 滚动到底 IO 兜底 + 已加载全部终态。聚合视图内部渲染空 div。 */}
