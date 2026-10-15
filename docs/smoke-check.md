@@ -330,3 +330,30 @@ bun run rss fetch apple:podcast-search --kv q=故事 --json
     **feedUrl 确实可被 `rss:podcast` 订阅** —— 岩中花述 87 集 / 故事FM 995 集 /
     硅谷101 265 集 / **喜马拉雅源 1057 集**（先前担心防盗链，实测直接给标准 RSS）。
   - 回归：6 包 tsc 0 错；`rss channels --kind audio` 两渠道均列出。
+- 2026-10-15 **播客闭环补全（榜单条目点不动 + 没有订阅入口）**：
+  - 用户报「添加了热门榜似乎并不能点进去播放」——**两个都是真缺口**：
+    ① 榜单条目 `kind:"audio"` 但 `stream` 空（`url` 是节目的 RSS feed 而非一集音频），
+    `isPlayableKind("audio")` 恒真 → 摆了播放按钮 → 点进播放页必然「该条目不指向可解析的
+    视频链接」（resolver 只认平台域名，feed 域名路由不上）；
+    ② `AddSubscriptionDialog` 的 `rss:` 过滤器把 `rss:podcast` 也滤掉了，**无处可贴 feed**。
+  - 修法①：新增 `isFeedItem(item)`（`kind:"audio" && !stream`，`Cards.tsx`）——
+    这类条目的主操作改成 `onSubscribeFeed`（订成 `rss:podcast`），不出播放按钮、不给队列、
+    `usePlayerNav.onPlay` 里也改道（含命令面板）。
+    ⚠️ 判据用 `stream` 而非 `sourceId`：榜单条目抓取时来自 `apple:*`，落库后
+    `subscriptionId` 才指向订阅；而 `rss:podcast` 的条目**必有 enclosure**
+    （没 enclosure 的 item 在 `itemToAudio` 就被丢），故不会误伤真单集（已 curl 实测两类）。
+  - 修法②：过滤器放行 `rss:podcast`（`rss:url` 之外第二个例外）。
+  - 实测（CDP，硬重载后）：发现页榜单出现 Apple 卡 → 一键订阅得 19 条；
+    **网格里 feed 卡 `card-play:false`** → 点卡 → toast「已订阅 声动早咖啡 渠道 rss:podcast」
+    → 侧栏出现「声动早咖啡 1057」；手工入口「按渠道配置」现在列出**播客 RSS** →
+    贴 `feed.xyzfm.space/...` → 得 87 集；**同一条目的单集卡 `card-play:true`** →
+    点开真播（`currentTime 5.87s`，`paused:false`）。对照清晰：同一批播客，
+    feed 条目无播放按钮、单集有。
+  - 回归：6 包 tsc 0 错；`ui-probe goto` tab:all / tab:social / page:discover 均 issueCount 0。
+  - ⚠️ **顺带修掉 `ui-probe` 的一个假阳性**（它一直在掩盖真问题）：`offscreen-x` 检查没有
+    豁免「横向滚动容器里待滑入的卡」—— `.live-track`（`overflow-x:auto`）右侧的卡
+    `left > innerWidth` 是**设计如此**，却稳定刷出 18 条 `issueCount`。判据缺失与同文件
+    `click-covered` 的「滚动裁剪祖先」豁免不一致。补上 `inScrollX()` 后
+    **tab:all 18 → 0**（`git stash` 基线对比确认这 18 条与本次业务改动无关）。
+    ⚠️ 教训：巡检数字**变了不等于业务坏了**，先 `stash` 拿基线再归因；
+    而稳定复现的「已知良性」项要么豁免、要么记进本文件，否则真问题来了看不出来。

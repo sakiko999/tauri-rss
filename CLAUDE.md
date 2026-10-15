@@ -277,7 +277,12 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 **Apple 播客**（`resolve/platform/apple/catalog.ts` + `crawler/channels/apple/`）
 - 目录是**元数据源**：`apple:podcast-chart`（热门榜）/ `apple:podcast-search`（关键词）。
   产出 `kind:audio`，`url` = 该节目的 **RSS feed** → 接进既有 `rss:podcast`，不另造解析器。
-  每集 enclosure **不在榜单里**，故榜单条目的 `stream` 留空（点开走原文；真要让榜单可播应做懒解析）
+  每集 enclosure **不在榜单里**，故榜单条目的 `stream` 留空。⚠️ **留空 ≠ 可播**：
+  `isPlayableKind("audio")` 恒真，卡片会摆播放按钮，但 resolver 只认平台域名、feed 域名
+  路由不上 → 点必碎（「该条目不指向可解析的视频链接」）。现已加 `isFeedItem()`
+  （`kind:"audio" && !stream`，`Cards.tsx`）把这批条目的主操作改成**订阅**（`rss:podcast`）。
+  `rss:podcast` 的条目**必有 enclosure**（没 enclosure 的 item 在建 Audio 时就被丢），
+  故这个判据不会误伤真正的单集
 - ⚠️ **榜单不含 `feedUrl`**（旧 iTunes RSS 只给 `im:id`）→ 必须再 Lookup 一次换 feedUrl。
   Lookup 返回顺序**不保证**与请求一致，按榜单原序重排；**没 feedUrl 的条目直接丢**（只能显示不能订阅）
 - ⚠️ **搜索渠道刻意不声明 `defaultInfo`**：发现页「可一键订阅」判据 `!!defaultInfo || 无必填项`，
@@ -368,6 +373,9 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   不是。卡片的整卡点击与播放按钮都走 `cards.tsx` 的 `isPlayableKind`——article 显示
   0 个播放按钮、点击进「打开文章」（`tab:article` 三栏读），social 进详情弹窗。
   ⚠️ 曾漏掉 article：点一下掉进「该条目不指向可解析的视频链接」的破碎播放页。
+  ⚠️ **kind 门控不够**：`kind:"audio"` 也可能是**一个播客 feed**（Apple 榜单条目，
+  `stream` 空）——见上方 Apple 播客段。判据是 `isFeedItem(item)`，主操作走
+  `onSubscribeFeed`（订成 `rss:podcast`），不出播放按钮、不进队列、不进播放页。
   ⚠️ 新增「播放」入口（卡片/命令面板）一律经 `usePlayerNav` 收口
 - **侧栏窄栏隐藏列表必须两份对齐**：`styles.css` 里 `.rail.rail-collapsed`（手动折叠）
   与 `@media (max-width:1080px)`（窄窗）各有一份 `display:none` 清单，**逐项必须
@@ -446,6 +454,9 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - 内置 RSS 直链清单 `packages/crawler/src/channels/rss/builtin.ts`；可用性结论见
   `docs/domestic-feed-availability.md`。新源先 curl 验证再并入（注意新浪科技带
   `xml-stylesheet`，会误判 HTML，实为真 RSS）
+- ⚠️ **`AddSubscriptionDialog` 的 `rss:` 过滤器只放行两个**：`rss:url`（任意直链）
+  与 `rss:podcast`（播客，解 enclosure → 可播条目）。其余 `rss:*` 是 36 条种子清单，
+  列出来太噪。⚠️ 曾把整个 `rss:` 前缀滤掉 → **手工加外部 feed / 订阅播客都没有入口**
 - ⚠️ **通用 RSS 文章按需补全正文**：feed 只带 description 摘要时，点开阅读视图会抓
   `item.url` 原文页、提正文纯文本（`crawler/channels/rss/extract.ts`，零依赖正则启发式
   —— 全仓无 HTML 解析器，HTMLRewriter/DOMParser 各只在一端）。阈值：feed 自带正文

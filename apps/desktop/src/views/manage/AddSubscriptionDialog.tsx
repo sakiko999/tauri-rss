@@ -75,10 +75,14 @@ export function AddSubscriptionDialog({
   const latest = useLatestOnly()
 
   // rss: 预制直链(rss:hn 等 36 条)在 desktop 隐藏 —— 它们是种子清单,列出来太噪。
-  // ⚠️ 但 `rss:url`(通用直链)**必须放行**:它是「已知 URL 的任意 RSS」的唯一入口
-  // (OPML 导入也落它)。原先把整个 `rss:` 前缀都滤掉,导致手动加外部 feed 无渠道可选。
+  // ⚠️ 但两个**非预制**的通用渠道必须放行:
+  //   `rss:url`     = 任意 RSS 直链(OPML 导入也落它);
+  //   `rss:podcast` = 播客 RSS(解 enclosure → kind:audio,条目可播)。
+  // 原先把整个 `rss:` 前缀都滤掉,导致**手工加外部 feed / 订阅一个播客都没有入口**。
   const builtins = channels.filter(
-    (c) => !c.key.startsWith("rsshub:") && (!c.key.startsWith("rss:") || c.key === "rss:url"),
+    (c) =>
+      !c.key.startsWith("rsshub:") &&
+      (!c.key.startsWith("rss:") || c.key === "rss:url" || c.key === "rss:podcast"),
   )
   const rsshub = channels.filter((c) => c.key.startsWith("rsshub:"))
   const channel = channels.find((c) => c.key === channelKey)

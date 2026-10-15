@@ -61,6 +61,12 @@ const AUDIT_JS = `(() => {
   const issues = [];
   const W = innerWidth, H = innerHeight;
   const push = (o) => { if (issues.length < 40) issues.push(o) };
+  /** 祖先里有横向滚动容器(overflow-x 非 visible)→ 屏外是**设计如此**(横滑轨待滑入的卡)。 */
+  const inScrollX = (el) => {
+    let a = el.parentElement
+    while (a) { if (getComputedStyle(a).overflowX !== 'visible') return true; a = a.parentElement }
+    return false
+  };
   for (const el of document.querySelectorAll('body *')) {
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
@@ -77,7 +83,10 @@ const AUDIT_JS = `(() => {
     }
     if (el.scrollWidth > el.clientWidth + 8 && cs.overflowX === 'visible' && el.clientWidth > 0)
       push({ k: 'h-overflow', cls: String(el.className).slice(0,40), cw: el.clientWidth, sw: el.scrollWidth });
-    if (r.left > W + 2 || r.right < -2) push({ k: 'offscreen-x', cls: String(el.className).slice(0,40) });
+    // ⚠️ 横滑轨(如 .live-track)里待滑入的卡天然 left > W —— 不豁免会刷出十几条假阳性,
+    // 把真问题淹掉。同下面的 click-covered 一样,先看有没有滚动裁剪祖先。
+    if ((r.left > W + 2 || r.right < -2) && !inScrollX(el))
+      push({ k: 'offscreen-x', cls: String(el.className).slice(0,40) });
   }
   // 可点元素中心是否被**不相关**元素遮挡(排除滚动裁剪的祖先)
   let covered = 0;

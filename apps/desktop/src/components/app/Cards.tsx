@@ -4,7 +4,7 @@
  * 结构照 new_desktop 的 components.js(mediaCard/cardMini/socialCard),但图片走
  * ui 包的 MediaImage(自带防盗链隧道 + 骨架 + 失败占位),不再自己写 <img>。
  */
-import type { MediaItem } from "@tauri-playground/core"
+import type { AudioItem, MediaItem } from "@tauri-playground/core"
 import { MediaImage, fmtCount } from "@tauri-playground/ui"
 import { Icon } from "../Icon.tsx"
 import { fmtAgo, fmtTime, httpsify, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
@@ -15,6 +15,8 @@ export interface CardActions {
   onPlay: (item: MediaItem) => void
   onOpen?: (item: MediaItem) => void
   onQueue?: (item: MediaItem) => void
+  /** 条目是一条**播客 feed**(而非一集)时的主操作:把它订成 `rss:podcast`。 */
+  onSubscribeFeed?: (item: MediaItem) => void
 }
 
 function badged(item: MediaItem, actions: CardActions) {
@@ -36,6 +38,22 @@ function badged(item: MediaItem, actions: CardActions) {
  */
 export function isPlayableKind(kind: MediaItem["kind"]): boolean {
   return kind === "video" || kind === "audio" || kind === "live"
+}
+
+/**
+ * 这条 audio 是**一集音频**(有直链)还是**一个播客 feed**(待订阅)?
+ *
+ * Apple 播客榜单/搜索产出的条目就是后者:它 `kind:"audio"` 但 `stream` 为空 ——
+ * `url` 是该节目的 **RSS feed**。这类条目点「播放」必然掉进
+ * 「该条目不指向可解析的视频链接」(resolver 只认平台域名,feed 域名路由不上)。
+ *
+ * ⚠️ 判据用 `stream` 而非 `sourceId`:榜单条目是**抓取时**由 `apple:*` 产出的,
+ * 落库后 `subscriptionId` 才指向订阅;而 `rss:podcast` 的条目**必有 enclosure**
+ * (没 enclosure 的 item 在 `itemToAudio` 就被丢了),所以「audio 且无 stream」
+ * 不会误伤真正的单集。video/live 不受影响(它们的 stream 由懒解析给,不该靠它判)。
+ */
+export function isFeedItem(item: MediaItem): boolean {
+  return item.kind === "audio" && !(item as AudioItem).stream
 }
 
 /**
@@ -79,7 +97,10 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
   const platform = platformOf(item)
   const b = badged(item, actions)
   // article 同 social:没有可播流,整卡点击应是「打开原文」而不是播放。
-  const primary = playable ? () => actions.onPlay(item) : () => actions.onOpen?.(item)
+  // 播客 feed 条目(Apple 榜单)同理 —— 但它的主操作是「订阅」,见 isFeedItem。
+  const feed = isFeedItem(item)
+  const onFeed = actions.onSubscribeFeed
+  const primary = feed && onFeed ? () => onFeed(item) : playable ? () => actions.onPlay(item) : () => actions.onOpen?.(item)
 
   return (
     <article
@@ -120,8 +141,9 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
           </span>
         ) : null}
         {/* .card-play 是 pointer-events:none(整卡可点),内层要自己接管点击,
-            否则「播放」按钮形同虚设。article/social 没有可播流 → 不摆播放按钮。 */}
-        {playable ? (
+            否则「播放」按钮形同虚设。article/social 没有可播流 → 不摆播放按钮。
+            播客 feed 条目也没有流(点它 = 订阅),同样不摆。 */}
+        {playable && !feed ? (
           <span className="card-play">
             <span onClick={b.onSelect} role="presentation" style={{ pointerEvents: "auto" }}>
               <Icon name="play" size={18} />
@@ -146,8 +168,8 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
             <span className="od-truncate">{kindLabel(item.kind)}</span>
           )}
           <span className="spacer" />
-          {/* 队列是播放特性:不可播的 kind(article/social)加进去也播不出。 */}
-          {actions.onQueue && playable ? <QueueButton item={item} onQueue={actions.onQueue} /> : null}
+          {/* 队列是播放特性:不可播的 kind(article/social)与无流的 feed 条目加进去也播不出。 */}
+          {actions.onQueue && playable && !feed ? <QueueButton item={item} onQueue={actions.onQueue} /> : null}
         </span>
       </div>
     </article>
@@ -158,11 +180,17 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
 export function CardMini({ item, actions }: { item: MediaItem; actions: CardActions }) {
   const img = mediaUrl(item)
   const playable = isPlayableKind(item.kind)
+  // 播客 feed 条目(发现页「取数据」预览的一条节目):主操作 = 订阅,不是播放。
+  const feed = isFeedItem(item) && !!actions.onSubscribeFeed
   return (
-    <button className="card" onClick={() => (playable ? actions.onPlay(item) : actions.onOpen?.(item))} aria-label={item.title}>
+    <button
+      className="card"
+      onClick={() => (feed ? actions.onSubscribeFeed?.(item) : playable ? actions.onPlay(item) : actions.onOpen?.(item))}
+      aria-label={item.title}
+    >
       <div className="card-media" style={{ aspectRatio: "16 / 9" }}>
         <MediaImage src={img} ratio={16 / 9} fill />
-        {playable ? (
+        {playable && !feed ? (
           <span className="card-play">
             <span>
               <Icon name="play" size={16} />
