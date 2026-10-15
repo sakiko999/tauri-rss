@@ -7,7 +7,7 @@
  * 网格保留 VirtuosoGrid 虚拟化(比 new_desktop 的 page-cap 全量渲染更适合大库)。
  * 点击卡片 → 播放入口(手势内 unlockAudioPlayback,见 usePlayerNav)。
  */
-import { useMemo } from "react"
+import { useCallback, useMemo, useRef } from "react"
 import { VirtuosoGrid } from "react-virtuoso"
 import { itemKey } from "../../lib/media.ts"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
@@ -46,6 +46,8 @@ export function MediaMain() {
   const meta = useNodeMeta(nodeId)
   const actions = usePlayerNav()
   const go = useViewNavigate()
+  // ⚠️ 必须在**所有** early return 之前调用(hook 顺序)。
+  const wheelRef = useMainRegionWheel()
 
   // 热搜词流优先(三栏右栏语义)。
   const items = hotWord ? hotWord.items : view.list
@@ -128,7 +130,7 @@ export function MediaMain() {
 
   if (socialOnly) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div ref={wheelRef} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         {pageHead}
         {/* ⚠️ MasonryGrid 自带内层滚动容器(overflow-y-auto),外面不能再套
             scroll-area,否则出现双重滚动条。 */}
@@ -141,7 +143,7 @@ export function MediaMain() {
 
   if (hasMix) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div ref={wheelRef} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         {pageHead}
         <div className="rail-block">
           <div className="rail-head">
@@ -181,7 +183,7 @@ export function MediaMain() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+    <div ref={wheelRef} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
       <VirtuosoGrid
         className="scroll-area"
         style={{ flex: 1, minHeight: 0 }}
@@ -247,4 +249,50 @@ function MediaEmpty({
       }
     />
   )
+}
+
+/**
+ * 让**整块主区**都能滚 —— 鼠标停在哪都能滚,而不是只有网格那一块。
+ *
+ * ⚠️ 为什么需要这个:主区里凡是**不在滚动器内部**的元素(表头 `.grid-head`、直播横轨
+ * `.rail-block`)都是**滚动死区** —— 鼠标停上去找不到可滚祖先,而 `body` 是
+ * `overflow:hidden`(见 `15-base.css`),滚轮完全无反应。实测「全部」页里
+ * `.grid-head` + `.rail-block` 合计占掉 **59% 的视口**,用户的主观描述就是
+ * 「页面无法上下滑动」。
+ *
+ * 做法:在**捕获阶段**截获落在主区内的 wheel,手动转给主滚动器。捕获阶段能先于所有
+ * 子元素拿到事件,所以不受子元素拦截影响;同时 `preventDefault` 挡住 body 的白滚。
+ *
+ * ⚠️ 命中判定用**滚轮自身的滚动意图**:`deltaY < 0` 向上滚(只有已经不在顶部时才接,
+ * 否则交给祖先,保留「到顶继续滚 → 触发外层行为」的直觉);向下滚则只在**还没到底时**接。
+ * ⚠️ 必须排除弹窗/浮层:它们虽在 `#root` 内,但有自己的滚动语义,不该被转走。
+ *
+ * ⚠️ **用 callback ref,不用 `useRef` + `useEffect(…, [])`** —— 后者只在挂载时跑一次。
+ * 而各分支不是立刻渲染的:`items` 初值为空时走「空态」分支,数据到位后才渲染出带 ref 的
+ * wrapper —— **元素是同一个组件里新出现的 DOM 节点**,effect 的 `[]` 不会重跑,监听器
+ * 就仍挂在旧元素上(或压根没挂)。实测:社交分组表头滚不动,而「全部」可以(后者首屏
+ * 就命中该分支,元素没换过)。
+ */
+function useMainRegionWheel(): (el: HTMLDivElement | null) => void {
+  const cleanupRef = useRef<(() => void) | null>(null)
+  return useCallback((el: HTMLDivElement | null) => {
+    cleanupRef.current?.()
+    cleanupRef.current = null
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (e.defaultPrevented) return
+      // 浮层(模态/菜单/下拉)有自己的滚动语义。
+      if ((e.target as Element | null)?.closest?.("[role=dialog],[role=menu],[role=listbox],.menu,.select-pop,.scrim")) return
+      const scroller = el.querySelector<HTMLElement>(".scroll-area:not(.rail-scroll), .h-full.overflow-y-auto")
+      if (!scroller) return
+      const max = scroller.scrollHeight - scroller.clientHeight
+      if (max <= 0) return
+      const canGo = e.deltaY < 0 ? scroller.scrollTop > 0 : scroller.scrollTop < max
+      if (!canGo) return
+      scroller.scrollTop += e.deltaY
+      e.preventDefault()
+    }
+    el.addEventListener("wheel", onWheel, { capture: true, passive: false })
+    cleanupRef.current = () => el.removeEventListener("wheel", onWheel, { capture: true })
+  }, [])
 }
