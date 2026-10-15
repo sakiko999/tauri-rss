@@ -60,6 +60,13 @@
   grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
+  /* 侧栏折叠补间。**不需要**把 `--rail` 注册成 `@property` —— 首轨从 `var(--rail)`
+     的 268px 切到 64px 时**轨道数与轨道类型都不变**(两侧都是 `px` + `minmax(0,1fr)`,
+     reader 态两侧都是 3 轨),Chromium 107+ 直接对 `grid-template-columns` 插值。
+     ⚠️ 别改成 `transform`/`width` 方案:列宽是 grid 轨道,改宽度会让内容二次重排。
+     ⚠️ 栏内文字仍是 `display:none` 瞬时消失(不参与补间)—— 那是**两份隐藏清单**
+     (`[data-rail="collapsed"]` 与窄窗断点)在管,别为了「文字淡出」去动它们。 */
+  transition: grid-template-columns var(--dur-base) var(--ease-in);
 }
 .app-body[data-view="reader"],
 .app-body[data-view="hot"] {

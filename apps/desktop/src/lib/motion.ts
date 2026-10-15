@@ -15,3 +15,19 @@ export const prefersReducedMotion = (): boolean =>
 
 /** `scrollIntoView` 的 behavior:跟随系统偏好降级为瞬时跳转。 */
 export const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? "auto" : "smooth")
+
+/**
+ * 读 CSS 的 `--dur-*` 令牌(ms)。**需要「等退场动画放完再卸载」时用**。
+ *
+ * ⚠️ 不能在 JS 里写死时长:动效有 `data-motion="off|standard|rich"` 三档,写死会有两个
+ * 坏结果 —— `off` 档下等一个已经不存在的动画(白等),`rich` 档下动画没放完就被卸载(卡顿)。
+ * 读令牌则是三档自动对齐,且将来改令牌不用回来改这里。
+ */
+export function motionDurationMs(level: "fast" | "base" | "slow"): number {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(`--dur-${level}`).trim()
+  const n = Number.parseFloat(raw)
+  // 兜底值取 `--dur-*` 的标准档(:root 里的 120/180/260ms),仅当 CSS 还没加载时命中。
+  if (!Number.isFinite(n)) return { fast: 120, base: 180, slow: 260 }[level]
+  return raw.endsWith("ms") ? n : n * 1000
+}
+

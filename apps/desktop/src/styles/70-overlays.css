@@ -291,6 +291,17 @@ kbd {
   font-size: var(--fs-small);
   animation: rise var(--dur-slow) var(--ease-in);
   pointer-events: auto;
+  /* 退场:淡出 + 下沉。⚠️ 用 `translate` 属性而非 transform —— 入场动画 rise 也是
+     用 translate,两者改同一个属性,不会互相覆盖。退场时再叠一层 transition:
+     元素此刻已挂载,属性一变就开始补间。 */
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    translate var(--dur-base) var(--ease-out);
+}
+.toast[data-closing] {
+  opacity: 0;
+  translate: 0 8px;
+  pointer-events: none;
 }
 .toast[data-tone="ok"] {
   border-color: var(--success);

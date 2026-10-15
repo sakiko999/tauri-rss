@@ -62,6 +62,11 @@ export interface Toast {
   text?: string
   /** 可撤销操作(如「一键归组」)—— 有这组字段时吐司里出现一个动作按钮。 */
   action?: { label: string; run: () => void }
+  /**
+   * 退场中:已从「显示」逻辑移除,但**先不卸载** —— 留到退场动画放完再由渲染层
+   * 调 `removeToast`。**不能**直接过滤掉:元素一卸载就没机会播退场动画。
+   */
+  closing?: boolean
 }
 
 interface DesktopState {
@@ -167,7 +172,10 @@ interface DesktopState {
   toggleDanmaku(): void
 
   toast(tone: Toast["tone"], title: string, text?: string, action?: Toast["action"]): void
+  /** 开始退场(标记 `closing`,元素留下播动画)。 */
   dismissToast(id: number): void
+  /** 真正移除(退场动画结束后由渲染层调用)。 */
+  removeToast(id: number): void
   /** 把未分组订阅按内容类型一键归入「视频 / 直播 / 社交 / 音频 / 文章」分组。返回移动条数。 */
   autoGroupByKind(): Promise<number>
   /** 订阅清单 → OPML 2.0 字符串(只含带 url 的 rss/rsshub 订阅)。 */
@@ -950,6 +958,12 @@ export const useDesktop = create<DesktopState>((set, get) => {
     },
 
     dismissToast(id) {
+      // ⚠️ 只打标记**不删** —— 删了元素当场卸载,退场动画没机会播。真正移除在
+      // removeToast,由 Toaster 在动画结束后调。
+      set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, closing: true } : t)) }))
+    },
+
+    removeToast(id) {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
     },
   }
