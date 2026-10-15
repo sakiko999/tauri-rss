@@ -416,6 +416,13 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   → 子元素纵向堆叠还横向换列，头部从 28px 涨到 **132px**。**新组件用模块前缀**
   （直播区用 `live-*`，与已有的 `.live-pulse` / `.live-online` 一致），别借侧栏命名空间。
   改样式前先 `grep` 类名在 `styles/` 下出现了几次。
+- ⚠️ **canvas 清屏别用 CSS 尺寸**（`DanmakuLayer`）：位图是 `round(w * dpr)`，dpr **非整数**时
+  它比 `w * dpr` 大 —— 实测 dpr=1.875、w=516 时位图 968 列而 `516×1.875 = 967.5`，
+  `clearRect(0,0,w,h)`（经 `setTransform(dpr)` 缩放）**漏掉最右那半列**。白色弹幕从右缘
+  进入（`x = w`）画进去后永久残留 → 播放器右侧一条白竖边。正确写法：**复位变换 +
+  `clearRect(0,0,canvas.width,canvas.height)`**，再设回 dpr 缩放。
+  ⚠️ **只在非整数 dpr 下暴露**（Windows 150%/187.5% 缩放），dpr=1/1.25/1.5/2 都测不出 ——
+  复现这类问题**先问用户 `devicePixelRatio`**，别只在默认 dpr 下扫。
 - **列表虚拟化**：网格 = VirtuosoGrid，文章列表 = Virtuoso。⚠️ 尺寸走
   `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
   List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱
