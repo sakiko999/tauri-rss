@@ -236,19 +236,21 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     **重新挂回去并从头再播一遍**（过渡刚结束弹窗又缩一下）。改为保持 `none`。
     同时补上 `.scrim` 的 `fade` —— 它在 VT **快照**里被截在 `opacity≈0`，过渡结束后真身
     显示也是一帧闪烁。**VT 与 CSS 入场动画不能叠加**，过渡期间把两者都停掉。
-- 2026-10-15 **主区滚动死区（用户描述「无法上下滑动」）**：
+- 2026-10-15 **主区滚动死区 → 改为整体滚动（用户描述「无法上下滑动」）**：
   - 根因：主区里**不在滚动器内部**的元素（`.grid-head`、`.rail-block`）是死区 —— 鼠标停上去
     找不到可滚祖先，而 `body` 是 `overflow:hidden`，滚轮完全无反应。实测「全部」页里这两块
     合计占 **59% 的视口**（`.rail-block` 占 y114–584，视口才 797px）。
-  - 修法：主区 wrapper 上**捕获阶段**截获 wheel 转给主滚动器。保留现有布局（直播轨不跟着滚走）。
-  - ⚠️ 三个踩坑：
-    1. **选择器会抢走侧栏**：`.scroll-area, .h-full.overflow-y-auto` 按**文档顺序**返回首个匹配，
-       而侧栏 `.rail-scroll` 同样带 `.scroll-area` 且在 `#main-region` 内 → 侧栏不可滚 → 直接
-       return，永远轮不到 masonic 的滚动器。要 `:not(.rail-scroll)`。
-    2. **必须 callback ref**，不能 `useRef + useEffect(…, [])`：分支不是立刻渲染的（`items` 初值为空
-       走空态分支，数据到位后才渲染出 wrapper），元素是新节点而 effect 不重跑 → 监听器挂在旧元素上。
-       实测：社交分组表头滚不动、而「全部」可以（后者首屏即命中该分支）。
-    3. 排除浮层（`[role=dialog]`/菜单/下拉）—— 它们有自己的滚动语义。
-  - ⚠️ **测量方法（这轮的最大教训）**：合成 `WheelEvent` 在 Chromium 里**不触发滚动**，用它测
-    会得出「滚不动」的**假结论**；必须用 CDP 的 `Input.dispatchMouseEvent{type:"mouseWheel"}`。
-    另外**别在 `Page.navigate` 后立刻测** —— 启动骨架存活期间（约 900ms）主区本来就不滚。
+  - **第一版修法走错了方向**：在 wrapper 上捕获阶段截获 wheel 转给主滚动器 —— 那只是让内容滚、
+    **头依旧固定不动**，与用户要的「上下作为整体滚动」不符。
+  - **正解（布局）**：两处头部都移进各自的滚动器内部 —— hasMix 走 `VirtuosoGrid` 的 `Header`；
+    socialOnly 给 `MasonryGrid` 加 `header` prop，渲染在滚动容器内、网格之上。
+  - ⚠️ 试过「按头部高度偏移 masonic 的 `scrollTop`」，**撤掉了**：`useEffect(…, [header])` 的
+    `header` 是每次渲染新建的 JSX，`ResizeObserver` 被反复重连；且 `overscanBy:2` 本有余量。
+  - ⚠️ **测量方法（这轮最大的教训）**：
+    1. 合成 `WheelEvent` 在 Chromium 里**不触发滚动**，用它测会得出「滚不动」的**假结论**；
+       必须用 CDP `Input.dispatchMouseEvent{type:"mouseWheel"}`。
+    2. 别在 `Page.navigate` 后**立刻**测 —— 启动骨架存活期（约 900ms）主区本来就不滚；
+       masonic 也有自己的测量窗口期（第 1 次采样常为「无滚动器」）。**多采样几次**再说结论。
+    3. 判据用**头部矩形**而非只用 `scrollTop`：整体滚动要看 `.grid-head` 的 `top` 是否随滚动上移。
+  - 实测（硬重载 + 3 次采样）：社交分组 `.grid-head.top` 52 → **-548**（scrollTop=600）；
+    全部（含直播轨）同样 52 → -548。
