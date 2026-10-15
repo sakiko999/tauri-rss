@@ -322,6 +322,7 @@
   --animate-fade: fade var(--dur-fast) var(--ease-in);
   --animate-shimmer: shimmer 1.4s ease-in-out infinite;
   --animate-pulse-soft: pulse 1.6s ease-in-out infinite;
+  --animate-modal-in: modal-in var(--dur-base) var(--ease-in);
 
   /* keyframes 与 `--animate-*` **同块**定义,Tailwind 才会关联它们一起输出。
      `spin` 不搬 —— 它与 Tailwind 内置的 `spin` 同名,搬进来会多出一个
@@ -333,6 +334,18 @@
     }
     50% {
       opacity: 0.38;
+    }
+  }
+  /* 弹窗入场(scale + 淡入)。放这里而非各组件文件,是为了让 `animate-modal-in`
+     在 JSX 里可用;不想用工具类的组件直接 `animation: modal-in …` 也行。 */
+  @keyframes modal-in {
+    from {
+      opacity: 0;
+      scale: 0.96;
+    }
+    to {
+      opacity: 1;
+      scale: 1;
     }
   }
   @keyframes rise {

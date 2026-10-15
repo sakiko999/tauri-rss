@@ -42,6 +42,12 @@
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-2);
   overflow: hidden;
+  /* 入场:位移 + 淡入。遮罩(.scrim)已在淡,弹窗本体原本是**瞬间出现**。
+     ⚠️ `translate` 用属性而非 transform —— .modal 的居中靠 Modal.tsx 内联的
+     `translate: -50% -50%`,这里再写 transform 会覆盖掉它(弹窗飞出屏幕)。
+     属性形式的 `translate` 与内联的 translate 是**同一个属性**,故改用 scale 起手:
+     入场只做 scale(0.96→1)+ opacity,既有「弹出感」又不动居中。 */
+  animation: modal-in var(--dur-base) var(--ease-in);
 }
 .modal-wide {
   width: min(1080px, 100%);
