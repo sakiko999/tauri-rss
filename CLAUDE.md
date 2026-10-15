@@ -387,6 +387,16 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   混合 feed（全部/分组/智能订阅）里的 social 走的是 `MediaCard`（只有**整屏都是 social**
   才走 `SocialCard` 瀑布流），所以这条分流必须在 `MediaCard` 里，不能只靠 `SocialCard`。
   `usePlayerNav.onPlay` 另有一道收口兜底。
+- ⚠️ **主区里不在滚动器内部的元素是「滚动死区」**：`body` 是 `overflow:hidden`，鼠标停在
+  这些元素上找不到可滚祖先 → 滚轮完全无反应（用户会描述成「页面无法上下滑动」）。
+  `MediaMain` 的 `.grid-head` / `.rail-block` 曾占掉 **59% 的视口**。修法是主区 wrapper 上
+  **捕获阶段**截获 wheel 转给主滚动器（`useMainRegionWheel`）。⚠️ 两个坑：① 选择器写
+  `.scroll-area` 会抢到**侧栏**的（同样带这个类且在 `#main-region` 内），要 `:not(.rail-scroll)`；
+  ② **必须用 callback ref** —— 分支不是立刻渲染的（数据未到位时走空态分支），元素是新节点，
+  `useEffect(…, [])` 不会重跑。
+  ⚠️ **测滚动必须用真实滚轮**（CDP `Input.dispatchMouseEvent{type:"mouseWheel"}`）：
+  合成 `WheelEvent` 在 Chromium 里**不触发滚动**，会得出假结论；也别在 `navigate` 后立刻测
+  （启动骨架存活期约 900ms 主区本来就不滚）。
 - **列表虚拟化**：网格 = VirtuosoGrid，文章列表 = Virtuoso。⚠️ 尺寸走
   `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
   List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱

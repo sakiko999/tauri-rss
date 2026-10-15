@@ -21,6 +21,8 @@
 | 新增/改动「回车提交」输入框 | `bun apps/desktop/src/lib/ime.check.ts`;⚠️ 守卫只挡 `keydown`,**不改中文输入法的组合行为**(实机验证仍需真 IME) |
 | 弹幕 WS 重连(退避/熔断) | `bun run rss dm <在线房间> -s 5`;断线后看日志应是「第 N 次, 约 Xms 后」而非固定 1000·2ⁿ,且 10 次后打「放弃」 |
 | desktop UI 布局/隐藏 | `scripts/ui-probe.ts goto <node>` + `ui-console.ts` |
+| **主区滚动（死区）** | ⚠️ 必须用**真实滚轮**：`Input.dispatchMouseEvent{type:"mouseWheel"}`。**合成 `WheelEvent` 在 Chromium 里不触发滚动**，`scrollTop` 恒为 0，会得出假结论。逐点测「表头 `.grid-head`、直播轨 `.rail-block`、网格」三处，应**都** > 0 |
+
 | 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/rail-tree-accordion.md` |
 | 组件拆分(移动/新建文件) | `tsc -p apps/desktop` + `ui-probe.ts goto page:settings` / `page:discover` 各走一遍;⚠️ tsc 查不出**循环 import 与渲染断链**,必须实机点 tab / 开弹窗 |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
@@ -234,3 +236,19 @@ bun run rss item <url>                        # by-url 路由 + 全档位
     **重新挂回去并从头再播一遍**（过渡刚结束弹窗又缩一下）。改为保持 `none`。
     同时补上 `.scrim` 的 `fade` —— 它在 VT **快照**里被截在 `opacity≈0`，过渡结束后真身
     显示也是一帧闪烁。**VT 与 CSS 入场动画不能叠加**，过渡期间把两者都停掉。
+- 2026-10-15 **主区滚动死区（用户描述「无法上下滑动」）**：
+  - 根因：主区里**不在滚动器内部**的元素（`.grid-head`、`.rail-block`）是死区 —— 鼠标停上去
+    找不到可滚祖先，而 `body` 是 `overflow:hidden`，滚轮完全无反应。实测「全部」页里这两块
+    合计占 **59% 的视口**（`.rail-block` 占 y114–584，视口才 797px）。
+  - 修法：主区 wrapper 上**捕获阶段**截获 wheel 转给主滚动器。保留现有布局（直播轨不跟着滚走）。
+  - ⚠️ 三个踩坑：
+    1. **选择器会抢走侧栏**：`.scroll-area, .h-full.overflow-y-auto` 按**文档顺序**返回首个匹配，
+       而侧栏 `.rail-scroll` 同样带 `.scroll-area` 且在 `#main-region` 内 → 侧栏不可滚 → 直接
+       return，永远轮不到 masonic 的滚动器。要 `:not(.rail-scroll)`。
+    2. **必须 callback ref**，不能 `useRef + useEffect(…, [])`：分支不是立刻渲染的（`items` 初值为空
+       走空态分支，数据到位后才渲染出 wrapper），元素是新节点而 effect 不重跑 → 监听器挂在旧元素上。
+       实测：社交分组表头滚不动、而「全部」可以（后者首屏即命中该分支）。
+    3. 排除浮层（`[role=dialog]`/菜单/下拉）—— 它们有自己的滚动语义。
+  - ⚠️ **测量方法（这轮的最大教训）**：合成 `WheelEvent` 在 Chromium 里**不触发滚动**，用它测
+    会得出「滚不动」的**假结论**；必须用 CDP 的 `Input.dispatchMouseEvent{type:"mouseWheel"}`。
+    另外**别在 `Page.navigate` 后立刻测** —— 启动骨架存活期间（约 900ms）主区本来就不滚。
