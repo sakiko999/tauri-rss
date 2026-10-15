@@ -18,7 +18,9 @@
 import { create } from "zustand"
 import {
   createDataLayer,
+  findItem,
   positionDecision,
+  readingKey,
   type AppSettings,
   type DataLayer,
   type MediaItem,
@@ -38,6 +40,7 @@ import {
   type ViewResult,
 } from "./selectors.ts"
 import { usePrefs } from "./prefs.ts"
+import { itemKey } from "../lib/media.ts"
 
 /** social 详情弹窗载荷(点击卡片打开;xhs 异步补全 full)。 */
 export interface SocialDetail {
@@ -45,6 +48,36 @@ export interface SocialDetail {
   full?: MediaItem | null
   /** 详情补全失败的原因(为空 = 还在补全或无需补全)。 */
   error?: string
+}
+
+/**
+ * 播放队列的持久化(同步 localStorage,与 `prefs.ts` 同款)。
+ *
+ * ⚠️ 队列元素是 `itemKey` 复合键(`subId:itemId`),不是裸 item.id ——
+ * 同一个 id 会跨订阅出现(见 lib/media.ts 的 itemKey 注释)。
+ * 与 prefs 分开存:prefs 是表现型偏好,队列是功能性状态,混在一起改一处动两处。
+ */
+const QUEUE_KEY = "ui-queue"
+
+function loadQueue(): string[] {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY)
+    if (!raw) return []
+    const parsed: unknown = JSON.parse(raw)
+    // 只收字符串数组(坏值当空,不让它污染 state 形状)。
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((k): k is string => typeof k === "string")
+  } catch {
+    return []
+  }
+}
+
+function saveQueue(keys: string[]): void {
+  try {
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(keys))
+  } catch {
+    /* 持久化失败不影响当前会话(如隐私模式/配额满) */
+  }
 }
 
 /** 热搜词流:词 + 内容 + 加载/失败态(失败不能与「加载中」同态,否则永久停在转圈)。 */
@@ -117,7 +150,12 @@ interface DesktopState {
 
   /** 命令面板开合(顶栏按钮与 ⌘K 共用同一状态)。 */
   paletteOpen: boolean
-  /** 播放队列(item id)。 */
+  /**
+   * 播放队列。元素是 `itemKey` 复合键(`subId:itemId`,见 lib/media.ts)——
+   * ⚠️ **不能只存 item.id**:同一个 id 会跨订阅出现(bili:live 与 bili:live:hot),
+   * 只存 id 的话队列里两条不同订阅的条目会互相顶掉/串位。
+   * 落 localStorage(`ui-queue`),重开应用队列还在。
+   */
   queue: string[]
   /** 播放页取消的弹幕(设置项为总开关,此处是临时覆盖)。 */
   danmakuVisible: boolean
@@ -142,7 +180,11 @@ interface DesktopState {
   setOffline(v: boolean): void
 
   markRead(item: MediaItem): void
-  markAllRead(ids: string[]): void
+  /**
+   * 批量标已读。⚠️ 收**条目**而非 id —— reading 键要带 subscriptionId
+   * （见 core `readingKey`），只传 id 会丢掉订阅维度。
+   */
+  markAllRead(items: MediaItem[]): void
   toggleStar(item: MediaItem): void
   /** 记录续播位置(秒)。播完(近片尾)则清除记录,避免重看时又跳到结尾。 */
   savePosition(item: MediaItem, sec: number, durationSec: number): void
@@ -167,7 +209,10 @@ interface DesktopState {
   setSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<void>
 
   setPaletteOpen(open: boolean): void
-  addToQueue(id: string): void
+  /** 入队。⚠️ 收**条目**而非 id —— 队列按 `subId:itemId` 复合键存(跨订阅不串)。 */
+  addToQueue(item: MediaItem): void
+  /** 出队(播完一条自动下一条时用)。 */
+  removeFromQueue(item: MediaItem): void
   clearQueue(): void
   toggleDanmaku(): void
 
@@ -347,7 +392,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
     offline: false,
 
     paletteOpen: false,
-    queue: [],
+    queue: loadQueue(),
     danmakuVisible: true,
     toasts: [],
 
@@ -639,27 +684,29 @@ export const useDesktop = create<DesktopState>((set, get) => {
       // = 现在已读)。曾把 `next`(未读语义)直接传给 markRead → 持久层 read 恒反:
       // 标已读存 read=false → applyReadingState 不回填 → 刷新后回到未读。
       const next = !item.isUnread
-      dl.store.patch(item.id, { isUnread: next })
-      void dl.reading.markRead(item.id, !next)
+      dl.store.patch(item.subscriptionId, item.id, { isUnread: next })
+      void dl.reading.markRead(item.subscriptionId, item.id, !next)
     },
 
-    markAllRead(ids) {
+    markAllRead(items) {
       const dl = get().dl
       if (!dl) return
-      for (const id of ids) dl.store.patch(id, { isUnread: false })
+      // ⚠️ 收的是**条目**(不是 id 数组):reading 键要带 subscriptionId
+      // (见 core types/reading.ts 的 readingKey)——只传 id 就丢了订阅维度。
+      for (const it of items) dl.store.patch(it.subscriptionId, it.id, { isUnread: false })
       // ⚠️ 必须一次性批量落库:逐条 `void markRead` 会并发读-改-写同一张 reading blob,
       // 后写者用旧快照覆盖前者 —— N 条只落 1 条,且整张表的既有记录被抹掉。
-      void dl.reading.markManyRead(ids, true)
+      void dl.reading.markManyRead(items.map((it) => readingKey(it.subscriptionId, it.id)), true)
     },
 
     toggleStar(item) {
       const dl = get().dl
       if (!dl) return
       const next = !item.isStarred
-      dl.store.patch(item.id, { isStarred: next })
+      dl.store.patch(item.subscriptionId, item.id, { isStarred: next })
       // ⚠️ 必须落库:refresh 会整批重建条目(isStarred 默认 false),只 patch 内存
       // 的话刷新/重启后星标就丢了(core 侧 refresh 会用 reading 回填)。
-      void dl.reading.setStarred(item.id, next)
+      void dl.reading.setStarred(item.subscriptionId, item.id, next)
     },
 
     savePosition(item, sec, durationSec) {
@@ -667,37 +714,39 @@ export const useDesktop = create<DesktopState>((set, get) => {
       if (!dl) return
       // ⚠️ 必须读 store 里的**当前**值,不能用参数 item —— 调用方(播放页)持有的 item
       // 可能是 patch 前的旧对象(高频回调下尤其),用旧值判断会让清除/节流失效。
-      const cur = get().allItems.find((i) => i.id === item.id) ?? item
+      // ⚠️ 必须**同时匹配 subscriptionId**:同一个 id 会跨订阅出现(bili:live 与
+      // bili:live:hot),只比 id 会拿到**别的订阅**那条的位置,节流/清除全部判错。
+      const cur = findItem(get().allItems, item.subscriptionId, item.id) ?? item
       // 判据走 core 的 positionDecision(近片尾清除 / 5s 节流),与 mobile 同一份。
       const d = positionDecision(cur.positionSec ?? 0, sec, durationSec)
       if (d.kind === "clear") {
         if ((cur.positionSec ?? 0) > 0) {
-          dl.store.patch(item.id, { positionSec: undefined })
-          void dl.reading.setPosition(item.id, 0)
+          dl.store.patch(item.subscriptionId, item.id, { positionSec: undefined })
+          void dl.reading.setPosition(item.subscriptionId, item.id, 0)
         }
         return
       }
       if (d.kind === "wait") return
-      dl.store.patch(item.id, { positionSec: d.next })
-      void dl.reading.setPosition(item.id, d.next)
+      dl.store.patch(item.subscriptionId, item.id, { positionSec: d.next })
+      void dl.reading.setPosition(item.subscriptionId, item.id, d.next)
     },
 
     saveScrollRatio(item, ratio) {
       const dl = get().dl
       if (!dl) return
-      const cur = get().allItems.find((i) => i.id === item.id) ?? item
+      const cur = findItem(get().allItems, item.subscriptionId, item.id) ?? item
       // 读到结尾(≥0.95)清除记录 —— 否则重开又会跳到文章底部。
       if (ratio >= 0.95) {
         if ((cur.scrollRatio ?? 0) > 0) {
-          dl.store.patch(item.id, { scrollRatio: undefined })
-          void dl.reading.setScrollRatio(item.id, 0)
+          dl.store.patch(item.subscriptionId, item.id, { scrollRatio: undefined })
+          void dl.reading.setScrollRatio(item.subscriptionId, item.id, 0)
         }
         return
       }
       // 节流:变化不足 5%(0.05)不落库(滚动事件高频)。
       if (Math.abs(ratio - (cur.scrollRatio ?? 0)) < 0.05) return
-      dl.store.patch(item.id, { scrollRatio: ratio })
-      void dl.reading.setScrollRatio(item.id, ratio)
+      dl.store.patch(item.subscriptionId, item.id, { scrollRatio: ratio })
+      void dl.reading.setScrollRatio(item.subscriptionId, item.id, ratio)
     },
 
     async resolvePlay(subscriptionId, itemId) {
@@ -931,18 +980,34 @@ export const useDesktop = create<DesktopState>((set, get) => {
       set({ paletteOpen: open })
     },
 
-    addToQueue(id) {
+    addToQueue(item) {
       // ⚠️ 社交条目没有可播流,进了队列后点它/「下一条」都会跳到解析失败的播放页。
       // 收口在入队处,比在每个队列行上加判断更彻底(详情弹窗也会调这里)。
-      const item = get().allItems.find((i) => i.id === id)
-      if (item?.kind === "social") {
+      if (item.kind === "social") {
         get().toast("warn", "社交内容不支持播放队列", "点开卡片可以看详情。")
         return
       }
-      set((s) => (s.queue.includes(id) ? s : { queue: [...s.queue, id] }))
+      // 存 `subId:itemId` —— 只存 item.id 会让跨订阅同 id 的条目互相顶掉。
+      const key = itemKey(item)
+      set((s) => {
+        if (s.queue.includes(key)) return s
+        const next = [...s.queue, key]
+        saveQueue(next)
+        return { queue: next }
+      })
+    },
+
+    removeFromQueue(item) {
+      const key = itemKey(item)
+      set((s) => {
+        const next = s.queue.filter((k) => k !== key)
+        saveQueue(next)
+        return { queue: next }
+      })
     },
 
     clearQueue() {
+      saveQueue([])
       set({ queue: [] })
     },
 

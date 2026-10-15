@@ -7,7 +7,7 @@
  * 内置 crawler 形态(见 CLAUDE.md):移动端不接爬虫服务,仅用有限平台(SSR/HTTP)。
  */
 import { create } from "zustand"
-import { createDataLayer, positionDecision, type DataLayer, type MediaItem, type Subscription } from "@tauri-playground/core"
+import { createDataLayer, findItem, positionDecision, type DataLayer, type MediaItem, type Subscription } from "@tauri-playground/core"
 
 import "@tauri-playground/core/source/rsshub"
 
@@ -71,8 +71,8 @@ export const useMobile = create<MobileState>((set, get) => ({
     // 未读项当场从列表消失)+ 落 reading 持久层(下次启动/刷新由 applyReadingState 回填)。
     // 只落库不 patch 的话,打开后条目仍显示未读,直到下次 refresh。
     if (item.isUnread) {
-      dl.store.patch(item.id, { isUnread: false })
-      void dl.reading.markRead(item.id, true).catch(() => {})
+      dl.store.patch(item.subscriptionId, item.id, { isUnread: false })
+      void dl.reading.markRead(item.subscriptionId, item.id, true).catch(() => {})
     }
   },
   closeItem() {
@@ -127,18 +127,19 @@ export const useMobile = create<MobileState>((set, get) => ({
   savePosition(item, sec, durationSec) {
     const dl = get().dl
     if (!dl) return
-    const cur = get().items.find((i) => i.id === item.id) ?? item
+    // ⚠️ 必须同时匹配 subscriptionId —— 同一个 id 会跨订阅出现(见 core readingKey)。
+    const cur = findItem(get().items, item.subscriptionId, item.id) ?? item
     const d = positionDecision(cur.positionSec ?? 0, sec, durationSec)
     if (d.kind === "clear") {
       if ((cur.positionSec ?? 0) > 0) {
-        dl.store.patch(item.id, { positionSec: undefined })
-        void dl.reading.setPosition(item.id, 0).catch(() => {})
+        dl.store.patch(item.subscriptionId, item.id, { positionSec: undefined })
+        void dl.reading.setPosition(item.subscriptionId, item.id, 0).catch(() => {})
       }
       return
     }
     if (d.kind === "wait") return
-    dl.store.patch(item.id, { positionSec: d.next })
-    void dl.reading.setPosition(item.id, d.next).catch(() => {})
+    dl.store.patch(item.subscriptionId, item.id, { positionSec: d.next })
+    void dl.reading.setPosition(item.subscriptionId, item.id, d.next).catch(() => {})
   },
 }))
 

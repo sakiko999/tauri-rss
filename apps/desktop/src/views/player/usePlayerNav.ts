@@ -119,7 +119,7 @@ export function usePlayerNav(): CardActions {
 
   const onQueue = useCallback(
     (item: MediaItem) => {
-      addToQueue(item.id)
+      addToQueue(item)
       toast("ok", "已加入播放队列", item.title)
     },
     [addToQueue, toast],

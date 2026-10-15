@@ -44,13 +44,14 @@ export function ArticlePane() {
   const f = filter[nodeId ?? ""] ?? {}
   const mode = sort[nodeId ?? ""] ?? "new"
   // ⚠️ view.list 只是分页窗口(≤60),「全部标为已读」要覆盖**当前视图全量**。
-  // queryView 会按 page 切片,故临时把该节点的 page 放大到全量,再取未读 article id
+  // queryView 会按 page 切片,故临时把该节点的 page 放大到全量,再取未读 article
   // —— 否则 900 条只标掉一屏(按钮说「全部」)。仅本文文章栏,故只收 kind=article。
-  const unreadIds = useMemo(() => {
+  // ⚠️ 收**条目**而非 id:reading 键要带 subscriptionId(见 core `readingKey`)。
+  const unreadItems = useMemo(() => {
     const s = useDesktop.getState()
     const n = nodeId ?? "tab:all"
     const full = queryView({ ...s, page: { ...s.page, [n]: Number.MAX_SAFE_INTEGER } }, nodeId, Date.now()).list
-    return full.filter((i) => i.kind === "article" && i.isUnread).map((i) => i.id)
+    return full.filter((i) => i.kind === "article" && i.isUnread)
   }, [nodeId, items, filter[nodeId ?? ""], sort[nodeId ?? ""]])
   const health = meta.sub ? healthOf(meta.sub, refreshErrors, busy) : "ok"
 
@@ -81,8 +82,8 @@ export function ArticlePane() {
             className="icon-btn sm"
             title="全部标为已读"
             aria-label="全部标为已读"
-            disabled={!unreadIds.length}
-            onClick={() => markAllRead(unreadIds)}
+            disabled={!unreadItems.length}
+            onClick={() => markAllRead(unreadItems)}
           >
             <Icon name="check" size={14} />
           </button>

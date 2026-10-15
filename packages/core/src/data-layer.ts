@@ -19,6 +19,7 @@ import type { ResolvePlayback } from "./types/playback.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
+import { findRecord } from "./types/reading.ts"
 import type { AppSettings } from "./types/settings.ts"
 import {
   createSubscriptionRepository,
@@ -66,7 +67,8 @@ export interface DataLayer {
   readonly store: {
     all(): MediaItem[]
     query(query?: MediaQuery): MediaItem[]
-    patch(id: string, patch: Partial<MediaItem>): void
+    /** ⚠️ 必须带 subscriptionId —— 同一个 item.id 会跨订阅出现(见 media-store.patch)。 */
+    patch(subscriptionId: string, id: string, patch: Partial<MediaItem>): void
     subscribe(listener: () => void): () => void
   }
   /** 刷新一次订阅,把内容写入 store。opts.force=true 跳过 TTL 缓存强制抓取(手动刷新)。
@@ -166,7 +168,9 @@ export function createDataLayer(): DataLayer {
     const map = await reading.getAll().catch(() => null)
     if (!map) return items
     return items.map((it) => {
-      const rec = map[it.id]
+      // ⚠️ 必须走复合键（带 subscriptionId）——同一条目 id 跨订阅共享已读/星标/续播
+      // 是真实存在的（见 types/reading.ts 的 readingKey）。findRecord 含旧版裸 id 回退。
+      const rec = findRecord(map, it.subscriptionId, it.id)
       if (!rec) return it
       const next: Partial<MediaItem> = {}
       if (rec.read && it.isUnread) next.isUnread = false
@@ -645,7 +649,7 @@ export function createDataLayer(): DataLayer {
     store: {
       all: () => store.all(),
       query: (q) => store.query(q),
-      patch: (id, patch) => store.patch(id, patch),
+      patch: (subscriptionId, id, patch) => store.patch(subscriptionId, id, patch),
       subscribe: (l) => store.subscribe(l),
     },
     refresh,

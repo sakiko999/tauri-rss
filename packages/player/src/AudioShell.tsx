@@ -21,6 +21,7 @@ export function AudioShell({
   className,
   startAtSec,
   onProgress,
+  onEnded,
 }: {
   src: string
   autoPlay?: boolean
@@ -35,6 +36,11 @@ export function AudioShell({
   startAtSec?: number
   /** 播放进度回调(秒)。 */
   onProgress?: (currentSec: number, durationSec: number) => void
+  /**
+   * 播放结束。⚠️ 必须挂在**自己的 audioRef** 上 —— 播客(audio)走 AudioShell,
+   * 不经过 PlayableMedia 的 videoRef,只挂那边的话音频播完永远不会触发下一条。
+   */
+  onEnded?: () => void
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   // onError 用 ref 持最新(与 useMediaStream 的 onErrorRef 同模式):父组件每次渲染
@@ -98,6 +104,18 @@ export function AudioShell({
     }
     el.addEventListener("timeupdate", handle)
     return () => el.removeEventListener("timeupdate", handle)
+  }, [src])
+
+  // 播完上报(自动播下一条)。⚠️ 挂 audioRef,不是 PlayableMedia 的 videoRef。
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
+  useEffect(() => {
+    if (!onEnded) return
+    const el = audioRef.current
+    if (!el) return
+    const handle = () => onEndedRef.current?.()
+    el.addEventListener("ended", handle)
+    return () => el.removeEventListener("ended", handle)
   }, [src])
 
   return (

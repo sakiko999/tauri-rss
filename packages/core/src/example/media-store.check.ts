@@ -52,11 +52,25 @@ assert.deepEqual(store.query().map((i) => i.id), ["a1", "b1", "a2", "c1"])
 // patch 就地合并 + 触发订阅回调。
 let emits = 0
 store.subscribe(() => emits++)
-store.patch("a1", { isUnread: false })
+store.patch("s-a", "a1", { isUnread: false })
 assert.equal(store.query({ unreadOnly: true }).length, 1)
 assert.equal(emits, 1)
-store.patch("nope", { isUnread: false })
+store.patch("s-a", "nope", { isUnread: false })
 assert.equal(emits, 1, "不存在的 id 不该触发回调")
+
+// ⭐ patch 必须带 subscriptionId:同一个 id 跨订阅出现时只能改自己那条。
+// (实测 bilibili:7734200 同时在 bili:live 与 bili:live:hot。)
+store.replace("s-dup", [item("d1", "s-dup", { isUnread: true })])
+store.replace("s-other", [item("d1", "s-other", { isUnread: true })])
+store.patch("s-dup", "d1", { isUnread: false })
+assert.equal(
+  store.query({ subscriptionId: "s-other" })[0]?.isUnread,
+  true,
+  "打 s-dup 的 patch 把 s-other 的同 id 条目也改了 —— 订阅维度丢了",
+)
+// 订阅对不上 → 不该命中任何条目。
+store.patch("s-nope", "d1", { isUnread: false })
+assert.equal(store.query({ subscriptionId: "s-dup" })[0]?.isUnread, false, "应是上一步的效果,未被 s-nope 二次改动")
 
 // append 同订阅内按 id 去重。
 store.append("s-b", [item("b1", "s-b"), item("b2", "s-b", { publishedAt: NOW })])

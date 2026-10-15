@@ -41,30 +41,68 @@ function laggyStorage() {
   const reading = createReadingRepository(storage, () => 1)
 
   // 先写一条基线记录,再并发写 5 条 —— 基线必须活下来(旧实现会被整表覆盖掉)。
-  await reading.markRead("base", true)
-  await Promise.all(["a", "b", "c", "d", "e"].map((id) => reading.markRead(id, true)))
+  await reading.markRead("s1", "base", true)
+  await Promise.all(["a", "b", "c", "d", "e"].map((id) => reading.markRead("s1", id, true)))
 
   const all = await reading.getAll()
   assert.deepEqual(
     Object.keys(all).sort(), // 默认字典序即可,只比集合不比顺序
-    ["a", "b", "base", "c", "d", "e"],
+    ["s1\u0000a", "s1\u0000b", "s1\u0000base", "s1\u0000c", "s1\u0000d", "s1\u0000e"],
     `并发 markRead 丢了记录:${JSON.stringify(Object.keys(all))}`,
   )
-  assert.ok(all["base"]!.read, "已有记录被并发写抹掉")
+  assert.ok(all["s1\u0000base"]!.read, "已有记录被并发写抹掉")
+}
+
+// ── reading:同一 item.id 跨订阅必须互不干扰(复合键的意义)────────────────────
+{
+  const storage = laggyStorage()
+  const reading = createReadingRepository(storage, () => 1)
+  // 「手填订阅」与「热门榜」命中同一个房间 —— 实测 bilibili:7734200 就是这样。
+  await reading.markRead("s-hand", "bilibili:7734200", true)
+  await reading.setPosition("s-hot", "bilibili:7734200", 123)
+
+  const hand = await reading.get("s-hand", "bilibili:7734200")
+  const hot = await reading.get("s-hot", "bilibili:7734200")
+  assert.equal(hand?.read, true, "手填订阅的已读没落上")
+  // ⚠️ 判据是「**不是 true**」而非 undefined:setPosition 也会建记录,
+  // 而 patchMany 显式写 `read: prev?.read ?? false`,所以未读过是 false。
+  assert.notEqual(hot?.read, true, "热门榜那条被连带标成了已读 —— 说明键没带订阅维度")
+  assert.equal(hot?.positionSec, 123, "热门榜的续播位置没落上")
+  assert.equal(hand?.positionSec, undefined, "手填那条被写进了热门榜的续播位置 —— 两处串号")
+}
+
+// ── reading:旧版裸 id 键必须仍能读到(迁移期回退,不能让历史状态消失)──────────
+{
+  const storage = laggyStorage()
+  const reading = createReadingRepository(storage, () => 1)
+  // 模拟 2026-10-15 之前的存量数据:键是裸 id。
+  await storage.set("reading", JSON.stringify({ "old-item": { read: true, starred: true, lastReadAt: 1 } }))
+
+  const rec = await reading.get("s-any", "old-item")
+  assert.equal(rec?.read, true, "旧版裸 id 键读不到了 —— 历史已读会全部消失")
+  assert.equal(rec?.starred, true, "旧版星标读不到了")
+
+  // ⚠️ 回退命中后**不删旧键**:同一条旧记录可能被多个订阅共享,删了别的订阅就读不到。
+  await reading.markRead("s-other", "old-item", true)
+  const map = await reading.getAll()
+  assert.ok(map["old-item"], "旧键被删掉了 —— 多订阅共享的那份会丢")
+  assert.ok(map["s-other\u0000old-item"], "新键没写进去")
+  assert.equal((await reading.get("s-any", "old-item"))?.read, true, "另一个订阅读不到共享的旧记录")
 }
 
 // ── reading:批量标记一次落盘 ────────────────────────────────────────────────
 {
   const storage = laggyStorage()
   const reading = createReadingRepository(storage, () => 1)
-  await reading.markRead("keep-star", false)
-  await reading.setStarred("keep-star", true)
-  const ids = Array.from({ length: 50 }, (_, i) => `m${i}`)
-  await reading.markManyRead(ids, true)
+  await reading.markRead("s1", "keep-star", false)
+  await reading.setStarred("s1", "keep-star", true)
+  // markManyRead 收的是**已拼好的 key**(调用方按 readingKey 拼)。
+  const keys = Array.from({ length: 50 }, (_, i) => `s1\u0000m${i}`)
+  await reading.markManyRead(keys, true)
 
   const all = await reading.getAll()
   assert.equal(Object.keys(all).length, 51, `批量标记丢了记录(应有 51 条,实际 ${Object.keys(all).length})`)
-  assert.ok(all["keep-star"]!.starred, "批量标记抹掉了既有星标")
+  assert.ok(all["s1\u0000keep-star"]!.starred, "批量标记抹掉了既有星标")
 }
 
 // ── subscriptions:并发更新不能互相覆盖 ─────────────────────────────────────

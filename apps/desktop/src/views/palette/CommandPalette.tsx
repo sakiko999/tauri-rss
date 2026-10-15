@@ -121,9 +121,10 @@ export function CommandPalette() {
           // 并只对真正未读的计数。
           const n = s.selectedNodeId ?? "tab:all"
           const full = queryView({ ...s, page: { ...s.page, [n]: Number.MAX_SAFE_INTEGER } }, s.selectedNodeId, Date.now()).list
-          const ids = full.filter((i) => i.isUnread).map((i) => i.id)
-          s.markAllRead(ids)
-          s.toast("ok", "已全部标为已读", `${ids.length} 条`)
+          // 传**条目**(非 id):reading 键要带 subscriptionId(见 core `readingKey`)。
+          const unread = full.filter((i) => i.isUnread)
+          s.markAllRead(unread)
+          s.toast("ok", "已全部标为已读", `${unread.length} 条`)
         },
       },
     ],

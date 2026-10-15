@@ -18,22 +18,11 @@ import { DashHostLoader } from "../engines/dashHostLoader.ts"
 import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
 import { log } from "../log/index.ts"
 
-/** 是否为 m3u8/HLS 流。 */
-export function isHlsStream(stream: MediaStream): boolean {
-  return stream.format === "hls" || /\.m3u8(\?|#|$)/i.test(stream.url)
-}
-
-/** 是否为 http-flv 流(douyu 等;真 rtmp:// 协议 flv.js 也播不了)。 */
-export function isFlvStream(stream: MediaStream): boolean {
-  const f = stream.format?.toLowerCase()
-  const isHttpFlv = /^https?:\/\//i.test(stream.url) && /\.flv(\?|#|$)/i.test(stream.url)
-  return f === "flv" && isHttpFlv
-}
-
-/** 是否为 DASH 流(B 站视频音视频分离,带 dashManifest 拼的 MPD → dash.js 合成播放)。 */
-export function isDashStream(stream: MediaStream): boolean {
-  return stream.format === "dash"
-}
+// ⚠️ 判据已抽到 `streamKind.ts`(纯函数、不 import 引擎)——本模块 import 了
+// hls.js/flv.js/dashjs,加载即要 window,判据留在这里会让 node 侧自检跑不了。
+// 既 import(下面要用)又 re-export(保持既有 import 路径可用)。
+import { isDashStream, isFlvStream, isHlsStream } from "./streamKind.ts"
+export { isDashStream, isFlvStream, isHlsStream }
 
 export function useMediaStream({
   stream,

@@ -42,6 +42,8 @@ export interface AppSettings {
   defaultQuality: QualityMode
   /** 弹幕总开关(播放器按此决定是否建弹幕流)。 */
   danmakuEnabled: boolean
+  /** 一集播完自动播队列里的下一条。关闭则播完停住。 */
+  autoPlayNext: boolean
   /** 防盗链图片经宿主隧道转发(命中 mediaReferrerFor 的图床)。 */
   imageProxy: boolean
   /**
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   markReadOnOpen: true,
   defaultQuality: "highest",
   danmakuEnabled: true,
+  autoPlayNext: true,
   imageProxy: true,
   bilibiliCookie: DEFAULT_BILIBILI_COOKIE,
   weiboCookie: DEFAULT_WEIBO_COOKIE,

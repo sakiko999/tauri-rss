@@ -17,6 +17,13 @@ export function Playback() {
         <Row label="省流模式" help="不加载任何图片（封面/缩略图留占位），慢网络或按流量计费时用。">
           <Switch checked={settings.dataSaver} label="省流模式" onChange={(v) => void setSetting("dataSaver", v)} />
         </Row>
+        <Row label="播完自动下一条" help="播到片尾自动播播放队列里的下一条（播过的那条出队）。关闭则播完停住。">
+          <Switch
+            checked={settings.autoPlayNext}
+            label="播完自动下一条"
+            onChange={(v) => void setSetting("autoPlayNext", v)}
+          />
+        </Row>
         <Row label="画质" help="本播放器一律选最高清晰度并锁档 —— 隧道转发的带宽估算不可靠，自动降档会骤降且不回升。">
           <span className="tag">锁最高档</span>
         </Row>

@@ -16,7 +16,7 @@ import { usePlayNavigate, usePlayParams, useViewNavigate } from "../../router.ts
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock, SideCard } from "../../components/StateBlock.tsx"
 import { MediaImage } from "@tauri-playground/ui"
-import { fmtAgo, fmtTime, mediaUrl, onlineOf, platformOf, PLATFORM_LABEL } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, itemKey, mediaUrl, onlineOf, platformOf, PLATFORM_LABEL } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 
 export function PlayerPage() {
@@ -26,6 +26,7 @@ export function PlayerPage() {
   const resolvePlay = useDesktop((s) => s.resolvePlay)
   const resolveLivePlay = useDesktop((s) => s.resolveLivePlay)
   const addToQueue = useDesktop((s) => s.addToQueue)
+  const removeFromQueue = useDesktop((s) => s.removeFromQueue)
   const clearQueue = useDesktop((s) => s.clearQueue)
   const toggleStar = useDesktop((s) => s.toggleStar)
   const savePosition = useDesktop((s) => s.savePosition)
@@ -38,10 +39,12 @@ export function PlayerPage() {
   const playTo = usePlayNavigate()
 
   const item = useMemo(() => allItems.find((i) => i.id === itemId) ?? null, [allItems, itemId])
-  const queueItems = useMemo(
-    () => queue.map((id) => allItems.find((i) => i.id === id)).filter((x): x is MediaItem => !!x),
-    [queue, allItems],
-  )
+  // ⚠️ 队列存的是 `subId:itemId` 复合键(见 store 的 queue 注释),用 itemKey 反查 ——
+  // 只比 id 会命中**别的订阅**的同 id 条目。已不在库里的(退订/被刷新换掉)直接跳过。
+  const queueItems = useMemo(() => {
+    const byKey = new Map(allItems.map((i) => [itemKey(i), i]))
+    return queue.map((k) => byKey.get(k)).filter((x): x is MediaItem => !!x)
+  }, [queue, allItems])
   const related = useMemo(
     () => (item ? allItems.filter((i) => i.subscriptionId === item.subscriptionId && i.id !== item.id).slice(0, 6) : []),
     [allItems, item],
@@ -60,12 +63,14 @@ export function PlayerPage() {
     return () => window.removeEventListener("keydown", onKey)
   }, [go, from])
 
-  // 播放队列里的下一条。
+  // 播放队列里的下一条。按复合键定位(见上)。
   const nextInQueue = useMemo(() => {
     if (!item) return null
-    const idx = queue.findIndex((id) => id === item.id)
-    if (idx >= 0) return queue[idx + 1] ? allItems.find((i) => i.id === queue[idx + 1]) ?? null : null
-    return null
+    const idx = queue.indexOf(itemKey(item))
+    if (idx < 0) return null
+    const nextKey = queue[idx + 1]
+    if (!nextKey) return null
+    return allItems.find((i) => itemKey(i) === nextKey) ?? null
   }, [queue, item, allItems])
 
   if (!item) {
@@ -105,7 +110,7 @@ export function PlayerPage() {
         <button
           className="icon-btn sm"
           aria-label="加入队列"
-          onClick={() => addToQueue(item.id)}
+          onClick={() => addToQueue(item)}
           title="加入队列"
         >
           <Icon name="queue" size={15} />
@@ -147,6 +152,13 @@ export function PlayerPage() {
                 // 续播:非直播才有位置语义(item.positionSec 由 core 从 reading 回填)。
                 startAtSec={isLive ? undefined : item.positionSec}
                 onProgress={(sec, dur) => savePosition(item, sec, dur)}
+                // 播完自动下一条:仅当设置开着**且**队列里确实有下一条时。播过的当前条
+                // 同时出队(与「播放队列」的语义一致 —— 它是待播列表,不是播放历史)。
+                onEnded={() => {
+                  if (!(settings?.autoPlayNext ?? true)) return
+                  removeFromQueue(item)
+                  if (nextInQueue) playTo(nextInQueue.id, from)
+                }}
                 onError={(err) => useDesktop.getState().toast("error", "播放失败", String(err))}
               />
             </div>
@@ -183,7 +195,7 @@ export function PlayerPage() {
                 <button className="btn btn-secondary" aria-pressed={danmakuOn} onClick={toggleDanmaku}>
                   <Icon name="captions" size={14} /> 弹幕{danmakuOn ? "开" : "关"}
                 </button>
-                <button className="btn btn-quiet" onClick={() => addToQueue(item.id)}>
+                <button className="btn btn-quiet" onClick={() => addToQueue(item)}>
                   <Icon name="queue" size={14} /> 加入队列
                 </button>
                 {nextInQueue ? (

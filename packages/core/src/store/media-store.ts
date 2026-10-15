@@ -18,8 +18,14 @@ export interface MediaStore {
   replace(subscriptionId: string, items: MediaItem[]): void
   /** 追加到某订阅现有条目后(分页加载更多;同订阅内按 id 去重)。 */
   append(subscriptionId: string, items: MediaItem[]): void
-  /** 按 id patch 单条(如标已读、收藏)。 */
-  patch(id: string, patch: Partial<MediaItem>): void
+  /**
+   * patch 单条(如标已读、收藏)。
+   *
+   * ⚠️ **必须带 subscriptionId**:`item.id` 只在订阅内唯一,同一个 id 会跨订阅出现
+   * (实测 `bilibili:7734200` 同时在 `bili:live` 与 `bili:live:hot`)。只按 id 匹配会
+   * 把**两个订阅的条目一起改**(在热门榜标已读,手填订阅那条也变已读)。
+   */
+  patch(subscriptionId: string, id: string, patch: Partial<MediaItem>): void
   /** 订阅 store 变更;返回退订函数。 */
   subscribe(listener: MediaStoreListener): () => void
   /** 丢弃某订阅全部条目(如退订时)。 */
@@ -73,10 +79,10 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
       emit()
     },
 
-    patch(id, patch) {
+    patch(subscriptionId, id, patch) {
       let changed = false
       items = items.map((it) => {
-        if (it.id !== id) return it
+        if (it.id !== id || it.subscriptionId !== subscriptionId) return it
         changed = true
         return { ...it, ...patch } as MediaItem
       })

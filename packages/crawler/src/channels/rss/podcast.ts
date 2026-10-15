@@ -52,7 +52,10 @@ function itemToAudio(it: ParsedItem, t: number): Audio | undefined {
   const duration = itunesDuration ? parseDuration(itunesDuration) : undefined
 
   return {
-    id: it.guid ?? `hash-${it.title ?? ""}`,
+    // ⚠️ 与 core `deserialize.ts` 同款兜底链:`guid ?? link ?? hash-title`。
+    // 原来只到 `hash-${title}` —— 同标题的两集(常见于分季/重发)会撞 id,
+    // 撞了之后 `store.patch` 会同时改两条、reading map 也串号。link 每集唯一。
+    id: it.guid ?? it.link ?? `hash-${it.title ?? ""}`,
     sourceId: "rss:podcast",
     kind: "audio",
     title: it.title ?? "(untitled)",

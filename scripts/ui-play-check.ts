@@ -33,11 +33,16 @@ const send = (method: string, params: Record<string, unknown> = {}) =>
 const ev = async (x: string) => (await send("Runtime.evaluate", { expression: x, awaitPromise: true, returnByValue: true })).result?.value
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-// 各类各挑一条(url 倾向平台特征,便于定位)
+// 各类各挑一条(url 倾向平台特征,便于定位)。
+// ⚠️ audio 必须排除**播客 feed 条目**(Apple 目录的节目:kind=audio 但无 stream,
+// url 是节目的 RSS 网页)—— 它们点开是「订阅」不是播放,选进来必然报
+// 「无法从 URL 解析视频流」。判据同 desktop Cards.tsx 的 isFeedItem。
+// ⚠️ 注意模板串内部不能写含反引号的注释(会截断模板)。
 const targets = JSON.parse(
   await ev(`(() => {
     const s = globalThis.__store; const items = s.getState().allItems || [];
-    const pick = (k, re) => items.find(i => i.kind === k && (!re || re.test(i.url||'')))?.id;
+    const playable = (i) => !(i.kind === 'audio' && !i.stream);
+    const pick = (k, re) => items.find(i => i.kind === k && playable(i) && (!re || re.test(i.url||'')))?.id;
     return JSON.stringify({
       "video-bili": pick('video', /bilibili/),
       "video-youtube": pick('video', /youtube/),

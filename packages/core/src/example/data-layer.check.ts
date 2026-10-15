@@ -44,14 +44,15 @@ assert.ok(on.error, "未注册渠道的启用订阅应如实报错(反向证明 
 // ── 2. 已读 / 星标回填 ──
 // 直接写 reading,再走一次会命中缓存的 refresh 路径不可控;改用 core 暴露的
 // reading + store,断言 applyReadingState 的效果(它是 refresh 内部共用的回填)。
-await dl.reading.markRead("item-x", true)
-await dl.reading.setStarred("item-x", true)
-const rec = await dl.reading.get("item-x")
+await dl.reading.markRead("s-chk", "item-x", true)
+await dl.reading.setStarred("s-chk", "item-x", true)
+const rec = await dl.reading.get("s-chk", "item-x")
 assert.ok(rec?.read, "reading 应记录已读")
 assert.ok(rec?.starred, "reading 应记录星标(新增字段)")
 
-// store.patch 后 reading 与 store 一致(toggleStar/markRead 的写路径)。
-dl.store.patch("item-x", { isUnread: false, isStarred: true })
+// store.patch 的入参形状(必须带 subscriptionId,与 readingKey 同维度)。
+// 本用例没 refresh 过,store 里没有该条目 → patch 是 no-op,这里只验签名不抛。
+dl.store.patch("s-chk", "item-x", { isUnread: false, isStarred: true })
 const inStore = dl.store.all().find((i) => i.id === "item-x")
 if (inStore) {
   assert.equal(inStore.isUnread, false)
@@ -125,7 +126,7 @@ if (inStore) {
   })
   await seed({ id: "chk-readat", channelKey: "chk-readat", title: "回填测试", enabled: true, info: {} })
   await dl.refresh("chk-readat", { force: true })
-  await dl.reading.markRead("ra-1", true) // 写 reading(含 lastReadAt)
+  await dl.reading.markRead("chk-readat", "ra-1", true) // 写 reading(含 lastReadAt)
   await dl.refresh("chk-readat", { force: true }) // 再刷新 → applyReadingState 回填
   const it = dl.store.query({ subscriptionId: "chk-readat" }).find((i) => i.id === "ra-1")
   assert.ok(it?.lastReadAt, "lastReadAt 应从 reading 回填到 MediaItem(否则「继续」无法按最近观看排)")

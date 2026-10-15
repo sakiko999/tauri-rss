@@ -2,18 +2,24 @@
  * ReadingRepository — 阅读状态(read/续播/滚动)持久化,走全局 appHost.storage。
  */
 import type { ReadRecord, ReadingMap } from "../types/reading.ts"
+import { findRecord, readingKey } from "../types/reading.ts"
 
 const STORAGE_KEY = "reading"
 
+/**
+ * ⚠️ 每个方法都收 `subscriptionId` —— 见 `types/reading.ts` 的 `readingKey`。
+ * 同一个 item.id 出现在多个订阅里（bili:live 与 bili:live:hot）时，只按裸 id
+ * 落库会让两处共享已读/星标/续播。`subscriptionId` 传 undefined 时退化为旧行为。
+ */
 export interface ReadingRepository {
   getAll(): Promise<ReadingMap>
-  get(itemId: string): Promise<ReadRecord | undefined>
-  markRead(itemId: string, read?: boolean): Promise<void>
-  setStarred(itemId: string, starred: boolean): Promise<void>
-  setPosition(itemId: string, positionSec: number): Promise<void>
-  setScrollRatio(itemId: string, scrollRatio: number): Promise<void>
+  get(subscriptionId: string | undefined, itemId: string): Promise<ReadRecord | undefined>
+  markRead(subscriptionId: string | undefined, itemId: string, read?: boolean): Promise<void>
+  setStarred(subscriptionId: string | undefined, itemId: string, starred: boolean): Promise<void>
+  setPosition(subscriptionId: string | undefined, itemId: string, positionSec: number): Promise<void>
+  setScrollRatio(subscriptionId: string | undefined, itemId: string, scrollRatio: number): Promise<void>
   /** 批量标已读:一次读改写落盘。逐条 markRead 并发会互相覆盖(见 serial 注释)。 */
-  markManyRead(itemIds: string[], read?: boolean): Promise<void>
+  markManyRead(keys: string[], read?: boolean): Promise<void>
 }
 
 export function createReadingRepository(storage: StorageBackend, now: () => number): ReadingRepository {
@@ -61,17 +67,17 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
     await storage.set(STORAGE_KEY, JSON.stringify(map))
   }
 
-  async function patch(itemId: string, patch: Partial<ReadRecord>): Promise<void> {
-    return run(() => patchMany([itemId], patch))
+  async function patch(subscriptionId: string | undefined, itemId: string, patch: Partial<ReadRecord>): Promise<void> {
+    return run(() => patchMany([readingKey(subscriptionId, itemId)], patch))
   }
 
-  /** 读一次 map,改完所有 id,再写一次(必须整体在 run() 的临界区内)。 */
-  async function patchMany(itemIds: string[], patch: Partial<ReadRecord>): Promise<void> {
+  /** 读一次 map,改完所有 **key**,再写一次(必须整体在 run() 的临界区内)。 */
+  async function patchMany(keys: string[], patch: Partial<ReadRecord>): Promise<void> {
     const map = await load()
     const t = now()
-    for (const itemId of itemIds) {
-      const prev = map[itemId]
-      map[itemId] = {
+    for (const key of keys) {
+      const prev = map[key]
+      map[key] = {
         ...prev,
         read: prev?.read ?? false,
         ...patch,
@@ -85,24 +91,25 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
     async getAll() {
       return load()
     },
-    async get(itemId) {
-      return (await load())[itemId]
+    async get(subscriptionId, itemId) {
+      // 回退旧版裸 id 键(迁移期)——见 types/reading.ts 的 findRecord。
+      return findRecord(await load(), subscriptionId, itemId)
     },
-    async markRead(itemId, read = true) {
-      await patch(itemId, { read })
+    async markRead(subscriptionId, itemId, read = true) {
+      await patch(subscriptionId, itemId, { read })
     },
-    async setStarred(itemId, starred) {
-      await patch(itemId, { starred })
+    async setStarred(subscriptionId, itemId, starred) {
+      await patch(subscriptionId, itemId, { starred })
     },
-    async setPosition(itemId, positionSec) {
-      await patch(itemId, { positionSec })
+    async setPosition(subscriptionId, itemId, positionSec) {
+      await patch(subscriptionId, itemId, { positionSec })
     },
-    async setScrollRatio(itemId, scrollRatio) {
-      await patch(itemId, { scrollRatio })
+    async setScrollRatio(subscriptionId, itemId, scrollRatio) {
+      await patch(subscriptionId, itemId, { scrollRatio })
     },
-    async markManyRead(itemIds, read = true) {
-      if (!itemIds.length) return
-      await run(() => patchMany(itemIds, { read }))
+    async markManyRead(keys, read = true) {
+      if (!keys.length) return
+      await run(() => patchMany(keys, { read }))
     },
   }
 }

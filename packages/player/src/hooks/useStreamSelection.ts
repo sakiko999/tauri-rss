@@ -6,39 +6,35 @@
  *   - qualityOptions:多档位列表（rate + quality，去重同 rate），< 2 档不显示切换；
  *   - switchQuality:切档（已有全档位流，直接换，不重发 resolve）。
  *
- * 选流策略:渐进式优先(双端兼容),其次 hls/flv(流媒体)。切档态在 streams
- * 变化(重新 resolve / props 更新)时自动重置。
+ * 选流策略:**取 `streams[0]`**(crawler 契约保证最高清晰度排最前)。
+ * 切档态在 streams 变化(重新 resolve / props 更新)时自动重置。
  */
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { MediaStream } from "@tauri-playground/core"
-import { isFlvStream, isHlsStream } from "./useMediaStream.ts"
 
-/** 渐进式视频(mp4/webm)→ 原生 <video>。
- *  ⚠️ 不含 ogg:`.ogg` 在本仓库是**音频**(播客);ogg 同属两个判据会让视频分支抢先
- *  命中音频流 → <video> 播不了 → 报错。ogg 归 isProgressiveAudio,两者互斥。 */
-export function isProgressiveVideo(stream: MediaStream): boolean {
-  const f = stream.format?.toLowerCase()
-  if (f === "mp4" || f === "webm") return true
-  return /\.(mp4|webm)(\?|#|$)/i.test(stream.url)
-}
+// ⚠️ 判据统一放 `streamKind.ts`(纯函数、不 import 引擎),本模块与自检共用一份。
+// 曾经这里与 useMediaStream 各写一遍(实现已经开始漂移)。
+export {
+  isProgressiveAudio,
+  isProgressiveVideo,
+  isRtmp,
+  isStreamingStream,
+} from "./streamKind.ts"
+import { pickDefaultStream } from "./streamKind.ts"
 
-/** 渐进式音频(mp3/aac/ogg)→ 原生 <audio>。 */
-export function isProgressiveAudio(stream: MediaStream): boolean {
-  const f = stream.format?.toLowerCase()
-  if (f === "mp3" || f === "aac" || f === "ogg") return true
-  return /\.(mp3|aac|ogg)(\?|#|$)/i.test(stream.url)
-}
-
-/** 真 rtmp 协议(rtmp://),浏览器 / flv.js 都播不了。 */
-export function isRtmp(stream: MediaStream): boolean {
-  return /^rtmp:\/\//i.test(stream.url)
-}
-
-/** 流媒体驱动(hls/flv/dash)→ useMediaStream 接管,非原生 src。 */
-export function isStreamingStream(stream: MediaStream): boolean {
-  return isHlsStream(stream) || isFlvStream(stream) || stream.format === "dash"
-}
-
+/**
+ * 默认选流 —— **取 `streams[0]`**。
+ *
+ * crawler 契约:`getSource().fetch` / 各平台 play 返回的数组**最高清晰度排最前**
+ * (bili/youtube/douyin/huya 显式按 rate 降序;douyu 保留服务端 multirates 顺序
+ * —— 它的 rate 是档位 ID 不是清晰度)。player 因此**不做二次排序**,取首档即可。
+ *
+ * ⚠️ 曾经按**格式族**挑(`find(isProgressiveVideo) ?? find(hls) ?? find(flv) ?? [0]`),
+ * 以为「原生可播的最稳」。那会在首档不是渐进式、后面却有的时候**静默降画质**:
+ * 实测 bili 的 DASH 档后面若跟一条 360p mp4,`find(isProgressiveVideo)` 就会跳过
+ * 首档 1080p 的 dash 去取 360p;huya/douyu 出现混排时同理。
+ * 契约既然保证了顺序,就不该再用格式族二次挑拣。
+ */
 export function useStreamSelection(streams: MediaStream[]): {
   /** 当前应播放的流(默认选流或用户切档后的目标)。 */
   stream: MediaStream | undefined
@@ -58,18 +54,7 @@ export function useStreamSelection(streams: MediaStream[]): {
   const streamSig = streams.map((s) => `${s.url}|${s.dashManifest ?? ""}|${s.rate ?? ""}`).join("\n")
   useEffect(() => setActiveStream(null), [streamSig])
 
-  // 默认选流:渐进式优先(浏览器原生可播、无需额外引擎——最稳),
-  // 其次 hls/flv(流媒体,依赖 hls.js/flv.js 引擎兜底)。
-  // 取该格式族**第一个**——crawler 契约保证:返回数组内最高清晰度排最前
-  // (各 channel 产流处显式按 rate 降序)。player 不做二次排序,保持简单。
-  const defaultStream =
-    streams.find(isProgressiveVideo) ??
-    streams.find(isProgressiveAudio) ??
-    streams.find(isHlsStream) ??
-    streams.find(isFlvStream) ??
-    streams[0]
-
-  const stream = activeStream ?? defaultStream
+  const stream = activeStream ?? pickDefaultStream(streams)
 
   // 档位列表:去重同 rate 的 quality 名(服务端返回顺序即档位序)。单流无 quality → 不显示切换。
   // filter 出带 rate/quality 的流(type guard 直接收窄)→ 按 rate 去重 → 取 {rate, quality}。

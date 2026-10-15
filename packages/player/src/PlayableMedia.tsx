@@ -118,6 +118,7 @@ export function PlayableMedia({
   showDanmaku = true,
   startAtSec,
   onProgress,
+  onEnded,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -133,6 +134,12 @@ export function PlayableMedia({
   startAtSec?: number
   /** 播放中进度回调(秒;节流由宿主侧决定)。宿主据此持久化续播位置。 */
   onProgress?: (currentSec: number, durationSec: number) => void
+  /**
+   * 播放结束(播到片尾)。
+   * ⚠️ 直接听 video 元素的 `ended`,不走 VideoShell 的 state —— 未知流兜底分支的
+   * 裸 `<video>` 没有 VideoShell,只挂 state 会漏掉那条路径。直播不触发(无 duration)。
+   */
+  onEnded?: () => void
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -281,6 +288,19 @@ export function PlayableMedia({
     return () => el.removeEventListener("timeupdate", handle)
   }, [stream?.url])
 
+  // 播完上报(自动播下一条)。与 onProgress 同款:直接听元素事件,覆盖全部播放分支
+  // (含没有 VideoShell 的兜底裸 <video>)。ref 存回调,避免每次渲染重挂监听。
+  const onEndedRef = useRef(onEnded)
+  onEndedRef.current = onEnded
+  useEffect(() => {
+    if (!onEnded) return
+    const el = videoRef.current
+    if (!el) return
+    const handle = () => onEndedRef.current?.()
+    el.addEventListener("ended", handle)
+    return () => el.removeEventListener("ended", handle)
+  }, [stream?.url])
+
   // 解析失败展示。
   if (error) {
     const msg = error instanceof Error ? error.message : String(error)
@@ -400,6 +420,7 @@ export function PlayableMedia({
         autoPlay={autoPlay}
         startAtSec={startAtSec}
         onProgress={onProgress}
+        onEnded={onEnded}
         onError={(e) => {
           setPlayError(e)
           onError?.(e)
