@@ -222,6 +222,15 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   作用就是开 9222，release 模式的意义是复现真实发布形态，带上它自相矛盾。
   ⚠️ 别用 `taskkill /IM msedgewebview2.exe` 清「残留」：**WebView2 宿主被杀 = 应用窗口
   消失、进程跟着退出**。它不是孤儿，就是当前实例的窗口进程。
+  ⚠️ **隐藏 Edge 的判定必须看「可见性」，不能只看「藏到几个窗口」**（2026-10-16 修）：
+  `hide_windows_for_pids` 若对 PID 的**每个**顶层窗口都计数，那 Chromium 那堆本来就
+  `vis=False` 的辅助/IPC 窗口会让 `hidden>0` 在**主框架窗口创建之前**成立 —— 旧代码
+  `if cdp_alive && hidden>0 { return }` 于是提前返回，稍后自行 `ShowWindow(SW_SHOW)`
+  的主窗口漏藏（现象：release 下隐藏 Edge 仍**在任务栏出现图标**，主进程只被
+  `--window-position=-32000` 挪到屏幕外）。正解两条缺一不可：① 只对 `IsWindowVisible`
+  的窗口计数；② 等「**曾见过可见窗口** + 连续数轮 0 命中」的稳定态才返回（主框架比
+  CDP 就绪晚约 1s，不加 `seen` 门槛 0.3s 就误判藏净）。**只在 release 显现**（debug 走
+  可见分支不触发），改 `browser.rs` 的隐藏逻辑务必用 release 实例验证。
 - tsc 用根 `./node_modules/.bin/tsc -p <项目>`；**不要** `npx tsc`（会误装 tsc@2.0.3），
   **不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪声）。
 - ⚠️ **改源码一律用 Edit/Write，不要用 PowerShell `Set-Content -Encoding utf8` 整份重写**

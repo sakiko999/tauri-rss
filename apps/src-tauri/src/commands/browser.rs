@@ -24,7 +24,7 @@ use windows_sys::Win32::System::Threading::{
     STARTUPINFOW, TerminateProcess, WaitForSingleObject,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, ShowWindow, SW_HIDE,
+    EnumWindows, GetWindowThreadProcessId, IsWindowVisible, ShowWindow, SW_HIDE,
 };
 
 /// 进程句柄包装(HANDLE 是裸指针默认 !Send;进程句柄无线程亲和,可跨线程用)。
@@ -165,13 +165,22 @@ fn kill_edge_tree_on_port(port: u16) {
     }
 }
 
-/// 枚举期间累计:目标 PID 集合 + 已隐藏窗口数。
+/// 枚举期间累计:目标 PID 集合 + 本次藏掉的「原本可见」窗口数。
 struct HideCtx {
     pids: *const std::collections::HashSet<u32>,
     hidden: usize,
 }
 
-/// 隐藏目标 PID 集合的全部顶层窗口(Edge 主窗口 + 辅助窗口),返回隐藏数。
+/// 隐藏目标 PID 集合的全部**可见**顶层窗口(Edge 主框架 + 辅助窗口),返回本次藏掉的数目。
+///
+/// ⚠️ **只对原本可见(`IsWindowVisible`)的窗口计数** —— 这是本函数唯一的正确性来源。
+/// Chromium 顶层窗口里绝大多数是本来就 `vis=False` 的辅助/IPC 窗口,对它们
+/// `ShowWindow(SW_HIDE)` 是无操作;若一律计数,`hidden>0` 会在**主框架窗口创建之前**
+/// 就成立(那些隐形窗口先出现),调用方据此提前 return → 稍后创建并自行
+/// `ShowWindow(SW_SHOW)` 的**主窗口漏藏**,表现为「隐藏的 Edge 仍在任务栏出现图标」
+/// (2026-10-16 实测:命中时主框架 hwnd 尚未创建,主进程只被 `--window-position`
+/// 挪到屏幕外,但仍占任务栏)。
+///
 /// SW_HIDE 的窗口无任务栏图标——「含任务栏完全隐藏」。Chromium 首次显示主窗口
 /// **不遵守 STARTUPINFO 的 wShowWindow**(内部显式 ShowWindow(SW_SHOW)),故须主动隐藏。
 fn hide_windows_for_pids(pids: &std::collections::HashSet<u32>) -> usize {
@@ -180,7 +189,8 @@ fn hide_windows_for_pids(pids: &std::collections::HashSet<u32>) -> usize {
         let mut wnd_pid: u32 = 0;
         unsafe {
             GetWindowThreadProcessId(hwnd, &mut wnd_pid);
-            if (*ctx.pids).contains(&wnd_pid) {
+            // 只藏「属于我们 + 当前可见」的窗口,且只对后者计数。
+            if (*ctx.pids).contains(&wnd_pid) && IsWindowVisible(hwnd) != 0 {
                 ShowWindow(hwnd, SW_HIDE);
                 ctx.hidden += 1;
             }
@@ -372,22 +382,35 @@ pub fn browser_ensure(app: AppHandle) -> Result<u16, String> {
 
     if hide {
         // ⚠️ 持窗进程 ≠ spawn pid(Edge 动态 fork 子进程承载窗口),须每次重新收集整棵
-        // 进程树再隐藏——启动早期快照会漏掉稍后创建的持窗进程。CDP 端口 bind 早于
-        // 主窗口创建,须等「至少藏到一个窗口」再返回,否则 CDP 就绪即 return 会漏藏。
-        for _ in 0..30 {
+        // 进程树再隐藏——启动早期快照会漏掉稍后创建的持窗进程。
+        // ⚠️ **不能只看「藏到 ≥1 个」就返回**(旧代码的 bug):主框架窗口比首个可见窗口
+        // 晚创建,须等「**见过可见窗口之后** + 连续若干轮无人现身」的稳定态才认为藏净。
+        // 两个条件缺一不可:
+        //   ① `seen` —— 全程**至少藏到过一个可见窗口**,否则无从判断主窗口是否已创建;
+        //      只有隐形辅助窗口时 `hidden` 恒 0,不加这条 0.3s 内就会误判「藏净」返回,
+        //      再晚创建的主框架窗口照样漏(2026-10-16 复现:主框架比 CDP 晚 ~1s)。
+        //   ② `quiet >= STABLE` —— 连续几轮 0 命中,确认主窗口已创建且已被藏。
+        const STABLE: u32 = 3;
+        let mut quiet = 0u32;
+        let mut seen = false;
+        for _ in 0..50 {
             let pids = collect_process_descendants(pid);
             let hidden = hide_windows_for_pids(&pids);
-            if cdp_alive(port) && hidden > 0 {
-                eprintln!("[browser] CDP ready port={port}, hidden {hidden} windows");
+            if hidden > 0 {
+                seen = true;
+                quiet = 0;
+            } else if seen {
+                quiet += 1;
+            }
+            // CDP 就绪 + 曾见过可见窗口 + 已稳定藏净 → 成功。
+            if cdp_alive(port) && seen && quiet >= STABLE {
+                eprintln!("[browser] CDP ready port={port}, hidden stably ({STABLE} quiet rounds)");
                 return Ok(port);
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        // 兜底(3s 内 CDP 就绪但未确认藏到窗口):再补藏两次,覆盖极端时序。
-        eprintln!("[browser] window hide not confirmed in 3s, retry…");
-        let pids = collect_process_descendants(pid);
-        hide_windows_for_pids(&pids);
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        // 兜底(5s 内未达稳定态):再补藏,尽最大努力。
+        eprintln!("[browser] window hide not stable in 5s (seen={seen}), force retry…");
         let pids = collect_process_descendants(pid);
         let hidden = hide_windows_for_pids(&pids);
         eprintln!("[browser] final hide: {hidden} windows");
