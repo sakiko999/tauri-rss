@@ -88,6 +88,27 @@ export const LIVE_SUB_CHANNEL: Record<string, string> = {
   douyin: "live:douyin",
 }
 
+/** 平台 → 用户**搜索渠道**(搜 UP主/频道名 → 订阅目标候选;同 SEARCH_CHANNEL 的用户版)。 */
+export const USER_SEARCH_CHANNEL: Record<string, string> = {
+  bili: "bili:user",
+  youtube: "youtube:user",
+}
+
+/** 平台 → 用户**订阅渠道**(订阅其投稿;参数是单值 uid/channelId,非列表 → 无「并入」)。 */
+export const USER_SUB_CHANNEL: Record<string, string> = {
+  bili: "bili:user_video",
+  youtube: "youtube",
+}
+
+/**
+ * 用户订阅渠道的落地参数名。⚠️ 不从 sourceInfoTpl 首参取 —— `youtube` 渠道首参是
+ * videoId(订阅单视频),频道订阅是第二个参数 channelId。
+ */
+export const USER_SUB_PARAM: Record<string, string> = {
+  bili: "uid",
+  youtube: "channelId",
+}
+
 /** 某平台的搜索渠道 key(无则 undefined → UI 降级手填)。 */
 export function searchChannelOf(platform: string): string | undefined {
   return SEARCH_CHANNEL[platform]
@@ -113,6 +134,33 @@ export function candidatesFromSearch(items: MediaItem[]): Candidate[] {
       sub: `${i.author?.name ?? "未知"} · 房号 ${roomId}`,
       thumb: mediaUrl(i),
       meta: [online].filter(Boolean),
+    })
+  }
+  return out
+}
+
+/**
+ * 用户搜索渠道返回的条目 → 候选(搜 UP主/频道 → 订阅其投稿)。
+ * value 从 **url 解析**(raw 不穿 XML 边界,serialize 不写 —— 同 parseLive 的
+ * liveFromUrl 先例):`space.bilibili.com/<mid>` / `youtube.com/channel/<channelId>`。
+ * 次行信息(粉丝/订阅数)来自条目 summary(channel 侧已拼好)。
+ */
+export function candidatesFromUsers(items: MediaItem[]): Candidate[] {
+  const out: Candidate[] = []
+  const seen = new Set<string>()
+  for (const i of items) {
+    const url = String(i.url ?? "")
+    const m = /space\.bilibili\.com\/(\d+)/.exec(url) ?? /youtube\.com\/channel\/(UC[\w-]+)/.exec(url)
+    if (!m) continue
+    const value = m[1]!
+    if (seen.has(value)) continue
+    seen.add(value)
+    out.push({
+      value,
+      label: i.title,
+      sub: i.summary ?? "",
+      thumb: mediaUrl(i),
+      meta: [],
     })
   }
   return out

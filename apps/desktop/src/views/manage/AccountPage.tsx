@@ -15,9 +15,13 @@ import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
 import { QrImage } from "../../components/QrImage.tsx"
+import { platformOf } from "../../lib/subscriptions.ts"
 
 /** 平台前缀 → 展示名 + 对应的 settings cookie 字段。 */
-const PLATFORM_META: Record<string, { label: string; field: "bilibiliCookie" | "weiboCookie" | "xhsCookie"; note: string }> = {
+const PLATFORM_META: Record<
+  string,
+  { label: string; field: "bilibiliCookie" | "weiboCookie" | "xhsCookie" | "douyinCookie"; note: string }
+> = {
   bili: {
     label: "哔哩哔哩",
     field: "bilibiliCookie",
@@ -25,6 +29,7 @@ const PLATFORM_META: Record<string, { label: string; field: "bilibiliCookie" | "
   },
   weibo: { label: "微博", field: "weiboCookie", note: "关注人时间线与热搜词流需要登录。" },
   xhs: { label: "小红书", field: "xhsCookie", note: "用户主页需要登录；推荐流不登录也能看。" },
+  douyin: { label: "抖音", field: "douyinCookie", note: "解锁直播原画档位；搜索类能力始终需要账号。" },
 }
 
 export function AccountPage() {
@@ -34,12 +39,13 @@ export function AccountPage() {
   const toast = useDesktop((s) => s.toast)
   const [scanTarget, setScanTarget] = useState<ChannelInfo | null>(null)
 
-  // 每个平台取第一个可登录渠道(用于扫码)。
+  // 每个平台取第一个可登录渠道(用于扫码)。⚠️ 平台提取用 platformOf:抖音渠道前缀是
+  // live:douyin,裸 split(":") 会得 "live" 而永远匹配不到抖音卡。
   const loginable = useMemo(() => {
     const m: Record<string, ChannelInfo> = {}
     for (const c of dl?.listChannels() ?? []) {
       if (!c.loginable) continue
-      const p = c.key.split(":")[0]
+      const p = platformOf(c.key)
       if (!m[p]) m[p] = c
     }
     return m
@@ -81,7 +87,7 @@ export function AccountPage() {
               <li>哔哩哔哩：热门 / 排行榜 / 视频 720P 与直播弹幕；动态与高清档位要登录。</li>
               <li>微博：热搜列表；关注人时间线与热搜词流要登录。</li>
               <li>小红书：推荐流；用户主页要登录。</li>
-              <li>斗鱼 / 虎牙 / 抖音 / YouTube 直播：全部可用。</li>
+              <li>斗鱼 / 虎牙 / YouTube 直播：全部可用；抖音直播可看，登录后解锁原画。</li>
             </ul>
           </SideCard>
         </div>
@@ -235,7 +241,7 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
   }, [channel?.key, dl])
 
   if (!channel) return null
-  const label = PLATFORM_META[channel.key.split(":")[0]]?.label ?? channel.name
+  const label = PLATFORM_META[platformOf(channel.key)]?.label ?? channel.name
 
   return (
     <Modal
@@ -284,5 +290,6 @@ function cookieFieldOf(channelKey: string): string {
   if (channelKey.startsWith("bili:")) return "bilibiliCookie"
   if (channelKey.startsWith("weibo:")) return "weiboCookie"
   if (channelKey.startsWith("xhs:")) return "xhsCookie"
+  if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
   return ""
 }

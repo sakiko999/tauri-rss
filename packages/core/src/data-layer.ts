@@ -130,6 +130,8 @@ export function createDataLayer(): DataLayer {
     if (channelKey.startsWith("bili:")) return "bilibiliCookie"
     if (channelKey.startsWith("weibo:")) return "weiboCookie"
     if (channelKey.startsWith("xhs:")) return "xhsCookie"
+    // ⚠️ 抖音渠道前缀是 live:douyin*(不是 douyin:)——platformOf 同款规则。
+    if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
     return undefined
   }
 

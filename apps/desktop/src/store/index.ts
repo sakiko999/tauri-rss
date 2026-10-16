@@ -188,7 +188,8 @@ interface DesktopState {
   openFeedPreview(item: MediaItem): Promise<void>
   closeFeedPreview(): void
 
-  refresh(id: string): Promise<void>
+  /** `opts.silent` 时不弹「已更新」toast（供内部编排调用，调用方自己有提示）。 */
+  refresh(id: string, opts?: { silent?: boolean }): Promise<void>
   refreshAll(force?: boolean): Promise<void>
   loadMore(): Promise<void>
   setOffline(v: boolean): void
@@ -573,7 +574,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
       set({ feedPreview: null })
     },
 
-    async refresh(id) {
+    async refresh(id, opts) {
       const dl = get().dl
       if (!dl) return
       if (get().offline) {
@@ -606,7 +607,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
         })
         if (result.error) {
           get().toast("error", `刷新失败：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
-        } else {
+        } else if (!opts?.silent) {
           // 手动刷新是 force 的,必然走网络 —— 旧文案「未发起网络请求」与实际行为不符。
           get().toast("ok", `已更新 ${title}`, `${result.itemCount} 条。已强制重新抓取,绕过内容缓存。`)
         }
@@ -831,6 +832,13 @@ export const useDesktop = create<DesktopState>((set, get) => {
       if (!dl) return
       await dl.subscriptions.update(id, patch)
       await syncSubscriptions()
+      // ⚠️ `patch.info` 改了**内容集**（如并入直播间 = roomIds 追加）→ 必须重抓，
+      // 否则新房间的条目只在持久层、内存 allItems 里没有，`refreshView()` 从内存重算
+      // 什么也不会多出来 —— 用户看到「加了房间但列表没变，得手动刷新」（旧行为，提示
+      // 里那句「刷新后生效」即自白）。只改 title/groupId/ttl/enabled 时不碰 info，
+      // 内容集不变，不该触发网络（`patch.info` 存在才抓）。静默：调用方（并入弹窗）
+      // 自己已弹「已并入」提示，这里再弹一条「已更新」是重复。
+      if (patch.info) await get().refresh(id, { silent: true })
     },
 
     async removeSubscription(id) {

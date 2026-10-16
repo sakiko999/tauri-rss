@@ -1,7 +1,12 @@
 /**
  * App settings — user preferences, persisted via a `SettingsRepository`.
  */
-import { DEFAULT_BILIBILI_COOKIE, DEFAULT_WEIBO_COOKIE, DEFAULT_XHS_COOKIE } from "../bilibili-cookie.ts"
+import {
+  DEFAULT_BILIBILI_COOKIE,
+  DEFAULT_WEIBO_COOKIE,
+  DEFAULT_XHS_COOKIE,
+  DEFAULT_DOUYIN_COOKIE,
+} from "../bilibili-cookie.ts"
 
 export type ViewMode = "reader" | "masonry" | "shortvideo"
 export type ThemeMode = "light" | "dark" | "system"
@@ -56,6 +61,8 @@ export interface AppSettings {
   weiboCookie: string
   /** 小红书登录 cookie(浏览器复制完整串)。作 core 层默认:xhs:* 订阅自动带上。 */
   xhsCookie: string
+  /** 抖音登录 cookie(扫码或浏览器复制)。作 core 层默认:live:douyin* 订阅自动带上,解锁原画档位。 */
+  douyinCookie: string
   /**
    * RSSHub 实例地址(rsshub:* 源默认 baseUrl;订阅级 info.baseUrl 覆盖)。
    * 外挂模式:RSSHub 是可选外部 HTTP 服务(自部署或公网 rsshub.app),不内嵌。
@@ -80,5 +87,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   bilibiliCookie: DEFAULT_BILIBILI_COOKIE,
   weiboCookie: DEFAULT_WEIBO_COOKIE,
   xhsCookie: DEFAULT_XHS_COOKIE,
+  douyinCookie: DEFAULT_DOUYIN_COOKIE,
   rsshubBaseUrl: "https://rsshub.app",
 }

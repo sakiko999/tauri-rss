@@ -85,9 +85,9 @@ packages/
 `log` 是零依赖叶子；`host` **依赖 core**（sqlite backend 复用其 `db/schema.ts` 的
 KV_TABLE/MIGRATIONS——包管理层面 host↔core 成环，core 把 host 放 devDep）。
 读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装。
-⚠️ **例外：desktop 直引 resolve**（发现页输入联想 `fetchDouyinSuggestions`）——每键
-即时取，走 channel/DataLayer 太重；该函数是纯函数（无 cookie/无状态）。新直引前先问
-「能否经 core 门面」。
+（曾有例外「desktop 直引 resolve 的 `fetchDouyinSuggestions`」——2026-10-16 已删，
+发现页每键联想改为手动搜索；该函数仅剩 CLI `rss sug` 消费。新直引前先问
+「能否经 core 门面」。）
 
 ⚠️ **crawler→core 的唯一通道是 XML（`serializeFeed`→自解析）**：core 用自解析 XML 建 MediaItem
 （item 数据不经 crawler 类型；但 core 仍 import crawler 的渠道类型 `SourceInfoField` 与运行时
@@ -263,6 +263,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `current_qn=250`（超清），且多档请求会收敛到同一值。故读 `current_qn` 标注并按实际值去重
 - **按分区列房未做**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
   分区树走 `Area/getList`（匿名可用，已实现未挂 channel）
+- ✅ **搜UP主**（2026-10-16，`searchBiliUsers` / 渠道 `bili:user`）：
+  `search_type=bili_user` + **匿名 buvid3/4**（`biliClient.getJson(..., {buvid:true})`，
+  裸请求 412）。与 `bili:user_video`（uid 投稿订阅）配对，走「添加订阅 → UP主 / 频道」
 - **扫码登录**：纯 HTTP（`passport.bilibili.com` qrcode/generate + poll），不需
   `appHost.browser`。⚠️ 上游只给**二维码内容 URL**，编码在 UI 侧（`QrImage`）；
   `biliScanLogin` 必须复用已生成的码，否则它会自己再生成一个、轮询的 key 与你展示的不是同一个
@@ -275,6 +278,13 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   ⚠️ **低档位只产 HLS**（`ratio=` 切档）；`ratio=` 低档 flv.js 播几秒断
 - **douyin**（`channels/douyin/index.ts`）：enter API ABogus 签名 → `stream_url`。
   ⚠️ `liveStatus ==2` 才是直播中（`==4` 是 roomId 一次性，需换 webRid）
+- ✅ **抖音扫码登录**（2026-10-16，`resolve/platform/douyin/login.ts`）：纯 HTTP 走
+  `sso.douyin.com` 通行证（get_qrcode → check_qrconnect 轮询 → redirect_url 落
+  cookie），**实测被 JS 挑战页拦**（warmup 只给 `__ac_nonce`，无 JS 执行过不了
+  `__ac_signature` 挑战 → get_qrcode 返 HTML）→ 自动回退 **CDP 浏览器路径**
+  （douyin.com 点登录读弹窗 canvas 二维码，成功判据 = `sessionid` cookie）。两层
+  都封装在 `douyinScanLogin`，channel 只做薄委托。⚠️ 社区实现靠 curl_cffi TLS
+  指纹；宿主 reqwest 无伪装，纯 HTTP 层保留是为了协议变化时可能直连。
 - **发现层**（分区/搜索，`resolve/platform/*/discover.ts`）：douyin 三路搜索只
   `partition/search` 匿名可用且只认游戏名级——但**顶层分区名恰是大类词**（舞蹈/音乐/聊天/
   二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
@@ -290,6 +300,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   环境无关。端点走 gapis `youtubei.googleapis.com`
 - 渐进式只到 itag 18（360p）→ **视频 1080p 走 DASH**：adaptiveFormats 自拼 SegmentBase
   MPD（共享 `utils/mpd.ts`）。360p 不混进返回数组（默认选流会落 360p），DASH 装配失败才 fallback
+- ✅ **搜频道**（2026-10-16，`searchYouTubeChannels` / 渠道 `youtube:user`）：InnerTube
+  `search` + `params:"EgIQAg=="`（仅频道过滤）匿名可用（WEB client + visitorData），
+  解 `channelRenderer`。与 `youtube` 渠道（channelId 订阅）配对
 
 **小红书**（细节见 `docs/xhs-signature-research.md`）
 - 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
@@ -342,9 +355,11 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `lookup?id=` 全可用；新 `rss.applemarketingtools.com` **504**。均匿名，但要带 UA
 
 **cookie / 登录**
-- `packages/core/src/bilibili-cookie.ts` 三个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。
+- `packages/core/src/bilibili-cookie.ts` 四个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。
   匿名行为：bili 视频列表稳定、直播 250 超清封顶；weibo 热搜列表可用但 user/词流需登录；
-  xhs explore/详情可用、user 需登录
+  xhs explore/详情可用、user 需登录；douyin 直播可用、原画档位需登录
+- ⚠️ **抖音渠道前缀是 `live:douyin*`**：`cookieFieldFor` / AccountPage `cookieFieldOf`
+  的平台匹配都为它写了专门分支（裸 `split(":")[0]` 得 "live" 匹配不上）
 - 恢复登录：填真实 cookie → `git update-index --no-skip-worktree` 再改，**勿提交真实值**
   （文件有 skip-worktree 保护 + 空占位模板 `.example`）
 - 扫码登录是 **channel 级能力 `Loginable`**（平台级操作，不依赖 info 实例化）。
@@ -433,6 +448,13 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `stream` 空）——见上方 Apple 播客段。判据是 `isFeedItem(item)`，主操作走
   `onSubscribeFeed`（订成 `rss:podcast`），不出播放按钮、不进队列、不进播放页。
   ⚠️ 新增「播放」入口（卡片/命令面板）一律经 `usePlayerNav` 收口
+- **搜索添加有两类目标**（2026-10-16）：搜房间（`SEARCH_CHANNEL` → live 渠道，
+  roomIds 列表参数可「并入已有」）与搜用户（`USER_SEARCH_CHANNEL` →
+  `bili:user_video`/`youtube`，uid/channelId **单值参数无并入**，targets 恒空自动隐藏
+  「添加到」区块）。⚠️ 用户模式的落地参数名用**显式表 `USER_SUB_PARAM`**，不能取
+  `sourceInfoTpl[0]`——`youtube` 渠道首参是 videoId（订阅单视频），频道订阅是第二参
+  channelId。候选值从 **url 解析**（`candidatesFromUsers`：`space.bilibili.com/<mid>` /
+  `channel/<UC...>`）——raw 不穿 XML 边界，粉丝/订阅数走 summary 字段。
 - **侧栏窄栏隐藏列表必须两份对齐**：`styles.css` 里 `.rail.rail-collapsed`（手动折叠）
   与 `@media (max-width:1080px)`（窄窗）各有一份 `display:none` 清单，**逐项必须
   一致**（`nav-label`/`nav-count`/`nav-warn`/`rail-empty`/`group-empty`/…）。曾漏掉
@@ -561,6 +583,10 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 ## 下一步
 
 **未做的功能**（按可行性排序）：
+
+- **发现页重构**（2026-10-16 用户反馈）：现有 `PlatformBrowser`（分区/搜索/搜主播三视图 +
+  `CardMini` 网格）体验**远不如**「添加订阅」的 `SearchPanel`——候选行信息直观（label/sub/meta
+  一行看全）、操作顺（搜→选→订阅一步到位）。后续以 SearchPanel 形态重构发现页的搜索路径。
 
 - **自动保活**（仅 bili 可行）：扫码已拿 `refresh_token`，但无续期调度——登录态到期
   只能重扫。协议与量级见 `docs/platform-login-research.md`（`bili_ticket` 软因子 /

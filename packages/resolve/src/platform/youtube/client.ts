@@ -438,6 +438,75 @@ async function youtubeDashStreams(
   )
 }
 
+/** 搜频道的命中(channelId = `youtube` 渠道的订阅参数)。 */
+export interface YoutubeChannelHit {
+  channelId: string
+  title: string
+  thumb?: string
+  /** 订阅数文本(如 "12.3M subscribers")。 */
+  subsText?: string
+  videoCountText?: string
+}
+
+/** InnerTube 文本节点:simpleText 优先,runs 拼接兜底。 */
+function ytText(node: unknown): string | undefined {
+  const n = node as { simpleText?: unknown; runs?: Array<{ text?: unknown }> }
+  if (typeof n?.simpleText === "string") return n.simpleText
+  if (Array.isArray(n?.runs)) {
+    const joined = n.runs.map((r) => String(r?.text ?? "")).join("")
+    return joined || undefined
+  }
+  return undefined
+}
+
+/** 缩略图节点:取 width 最大的那张。 */
+function ytThumb(node: unknown): string | undefined {
+  const list = (node as { thumbnails?: Array<{ url?: unknown; width?: unknown }> })?.thumbnails
+  if (!Array.isArray(list) || !list.length) return undefined
+  let best = list[0]!
+  for (const t of list) if (Number(t.width ?? 0) > Number(best.width ?? 0)) best = t
+  return typeof best.url === "string" ? best.url : undefined
+}
+
+/**
+ * 搜频道(InnerTube search;`params:"EgIQAg=="` 是 protobuf 过滤器 = 只返回频道,
+ * 实测匿名 20 条)。与 player 同一套 client context(WEB + visitorData);
+ * channelRenderer 平铺在 sectionList 的两层 contents 里,逐层收集。
+ */
+export async function searchYouTubeChannels(keyword: string): Promise<YoutubeChannelHit[]> {
+  const visitorData = await getVisitorData()
+  const res = (await postJson(
+    `${YOUTUBEI_V1}/search?prettyPrint=false`,
+    {
+      context: {
+        client: { clientName: "WEB", clientVersion: WEB_CLIENT_VERSION, hl: "en", gl: "US", visitorData },
+      },
+      query: keyword,
+      params: "EgIQAg==",
+    },
+    { "user-agent": WEB_UA },
+  )) as Record<string, any>
+  const sections =
+    res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? []
+  const out: YoutubeChannelHit[] = []
+  for (const sec of sections) {
+    const items = sec?.itemSectionRenderer?.contents ?? []
+    for (const it of items) {
+      const r = it?.channelRenderer
+      const channelId = String(r?.channelId ?? "")
+      if (!channelId) continue
+      out.push({
+        channelId,
+        title: ytText(r?.title) ?? channelId,
+        thumb: ytThumb(r?.thumbnail),
+        subsText: ytText(r?.subscriberCountText),
+        videoCountText: ytText(r?.videoCountText),
+      })
+    }
+  }
+  return out
+}
+
 /** 组装最终 Stream[](带 referer/UA header,浏览器原生 <video> 能播 mp4)。 */
 export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> {
   const visitorData = await getVisitorData()

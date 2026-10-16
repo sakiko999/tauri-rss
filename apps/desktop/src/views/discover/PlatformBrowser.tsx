@@ -3,14 +3,9 @@
  *
  * 从 DiscoverPage 拆出。走 core `previewChannel(channelKey, info)` 取一次**真实数据**
  * (不建订阅);找到想看的再「订阅该分区/搜索词」→ 预设渠道丢给 AddSubscriptionDialog。
- *
- * ⚠️ desktop 直引 resolve 属**新增依赖边**(原图只有 desktop→core→crawler→resolve):
- * 输入联想需在**每键**即时取,走 channel/DataLayer 太重(序列化 + 缓存 + 状态)。
- * resolve 的 fetchDouyinSuggestions 是纯函数(无 cookie/无状态),直调最轻。
  */
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import type { ChannelInfo, MediaItem } from "@amoeba/core"
-import { fetchDouyinSuggestions } from "@amoeba/resolve"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"
@@ -42,9 +37,6 @@ export function PlatformBrowser({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
   const [items, setItems] = useState<MediaItem[] | null>(null)
-  /** 抖音搜索联想词(datalist 候选;匿名可用,其他平台为空)。 */
-  const [sug, setSug] = useState<string[]>([])
-  const sugTimer = useRef<number | undefined>(undefined)
   const [subscribeKey, setSubscribeKey] = useState<string | undefined>()
   const [subscribeInfo, setSubscribeInfo] = useState<Record<string, string>>({})
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -85,21 +77,6 @@ export function PlatformBrowser({
   }
 
   const fields = ch?.sourceInfoTpl ?? []
-
-  /** 抖音联想词:防抖 250ms,空输入清空;失败静默(联想只是锦上添花)。 */
-  function loadSug(v: string) {
-    window.clearTimeout(sugTimer.current)
-    const kw = v.trim()
-    if (!kw) {
-      setSug([])
-      return
-    }
-    sugTimer.current = window.setTimeout(() => {
-      void fetchDouyinSuggestions(kw)
-        .then(setSug)
-        .catch(() => setSug([]))
-    }, 250)
-  }
 
   return (
     <section className="section">
@@ -168,27 +145,15 @@ export function PlatformBrowser({
             value={view === "category" ? categoryValue : q}
             placeholder={fields[0]?.placeholder ?? fields[0]?.label ?? "参数"}
             aria-label={fields[0]?.label ?? "参数"}
-            // 抖音搜索/搜主播输入联想词(datalist,原生零依赖;其他平台无此能力)。
-            list={platform === "douyin" && view !== "category" && fields[0]?.key === "keyword" ? "dy-sug" : undefined}
             onChange={(e) => {
               const v = e.target.value
               if (view === "category") setCategoryValue(v)
-              else {
-                setQ(v)
-                if (platform === "douyin") void loadSug(v)
-              }
+              else setQ(v)
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !isImeComposing(e)) void run()
             }}
           />
-          {platform === "douyin" && view !== "category" && sug.length > 0 ? (
-            <datalist id="dy-sug">
-              {sug.map((w) => (
-                <option key={w} value={w} />
-              ))}
-            </datalist>
-          ) : null}
           <button className="btn btn-primary" disabled={busy} onClick={() => void run()}>
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="search" size={14} />} 取数据
           </button>

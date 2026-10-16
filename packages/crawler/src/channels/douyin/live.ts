@@ -12,7 +12,7 @@
  */
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { log } from "@amoeba/resolve"
@@ -21,14 +21,28 @@ import { parseRoomIds } from "@amoeba/resolve"
 import { strOr } from "@amoeba/resolve"
 import { fetchRoom } from "@amoeba/resolve"
 import { douyinOnline } from "@amoeba/resolve"
+import { douyinScanLogin } from "@amoeba/resolve"
 
 const LIVE = "https://live.douyin.com"
 
-export class DouyinLiveChannel implements RssChannel {
+export class DouyinLiveChannel implements RssChannel, Loginable {
   readonly key = "live:douyin"
   readonly name = "抖音直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true }]
+
+  /**
+   * 扫码登录(channel 级能力)。抖音匿名直播 250 超清封顶、搜索硬登录门槛;登录后
+   * 解锁原画档位。纯 HTTP(sso 通行证)优先,被 TLS 风控拦时在 resolve 侧回退
+   * CDP 浏览器路径(同 xhs 模式)。同平台多 channel 共享 settings.douyinCookie。
+   */
+  scanLogin(
+    emitQr: (qr: string | null) => void,
+    opts?: { timeoutMs?: number },
+  ): Promise<LoginResult> {
+    return douyinScanLogin(emitQr, opts)
+  }
+
   // 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→live.douyin.com)。
   // fetch 支持多房间(roomIds 逗号分隔)。
   getSource(info: SourceInfo): RssSource {

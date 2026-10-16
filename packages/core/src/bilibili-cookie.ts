@@ -15,8 +15,10 @@
  * 让改动可提交(勿提交真实值)。
  *
  * 留空 = 纯匿名。订阅级 info.cookie 优先于它;settings 持久化的
- * bilibiliCookie/weiboCookie/xhsCookie 也优先于它。
+ * bilibiliCookie/weiboCookie/xhsCookie/douyinCookie 也优先于它。
+ *   - douyin:直播匿名 250 超清封顶,登录解锁原画;搜索硬登录门槛(browser 解不了)。
  */
 export const DEFAULT_BILIBILI_COOKIE = ""
 export const DEFAULT_WEIBO_COOKIE = ""
 export const DEFAULT_XHS_COOKIE = ""
+export const DEFAULT_DOUYIN_COOKIE = ""

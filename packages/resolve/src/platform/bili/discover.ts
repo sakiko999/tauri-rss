@@ -130,3 +130,48 @@ export async function searchBiliAnchors(keyword: string, page = 1): Promise<Item
     })
     .filter((x): x is Live => x !== null)
 }
+
+/** 搜视频 UP主的命中(medium 号 = bili:user_video 的 uid 参数)。 */
+export interface BiliUserHit {
+  mid: string
+  uname: string
+  fans?: number
+  videos?: number
+  /** 头像(已补 https: 前缀;不加 @400w 后缀 —— 空间头像非封面,尺寸后缀不保证可用)。 */
+  upic?: string
+}
+
+/**
+ * 搜索视频 UP主(`search_type=bili_user`,匿名 + buvid)。
+ * 与 live_user(搜主播)同端点不同 type;result[] 每项是一个「人」而非直播间,
+ * 无 roomid,产出 BiliUserHit 供「搜索添加 → 订阅其投稿」用(落地 bili:user_video)。
+ */
+export async function searchBiliUsers(keyword: string, page = 1): Promise<BiliUserHit[]> {
+  const params = new URLSearchParams({ search_type: "bili_user", keyword, page: String(page) })
+  const res = await biliClient.getJson<{
+    data?: { result?: Array<Record<string, any>> }
+  }>(`${API_MAIN}/x/web-interface/search/type?${params.toString()}`, {
+    referer: "https://search.bilibili.com/",
+    buvid: true,
+  })
+  const list = res?.data?.result ?? []
+  return list
+    .map((item): BiliUserHit | null => {
+      const mid = String(item.mid ?? "")
+      if (!mid) return null
+      return {
+        mid,
+        uname: stripEm(item.uname),
+        fans: Number(item.fans ?? 0) || undefined,
+        videos: Number(item.videos ?? 0) || undefined,
+        upic: httpsPrefix(String(item.upic ?? "")),
+      }
+    })
+    .filter((x): x is BiliUserHit => x !== null)
+}
+
+/** `//i0.hdslb.com/...` → `https://...`(其余原样;空串返回 undefined)。 */
+function httpsPrefix(raw: string): string | undefined {
+  if (!raw) return undefined
+  return raw.startsWith("//") ? `https:${raw}` : raw
+}

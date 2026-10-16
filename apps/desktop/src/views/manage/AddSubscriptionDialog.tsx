@@ -19,10 +19,14 @@ import { Icon } from "../../components/Icon.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
 import {
   candidatesFromSearch,
+  candidatesFromUsers,
   LIVE_SUB_CHANNEL,
   SEARCH_CHANNEL,
   searchChannelOf,
   subsOfChannel,
+  USER_SEARCH_CHANNEL,
+  USER_SUB_CHANNEL,
+  USER_SUB_PARAM,
   valueList,
   type Candidate,
 } from "../../lib/subscriptions.ts"
@@ -51,6 +55,8 @@ export function AddSubscriptionDialog({
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
 
   const [mode, setMode] = useState<"search" | "manual">("search")
+  /** 搜索类型:搜直播间(现有) / 搜用户订阅其投稿(2026-10-16 新增)。 */
+  const [searchKind, setSearchKind] = useState<"room" | "user">("room")
   /** 手工模式选中的渠道(搜索模式的订阅渠道由平台推导,不走这个)。 */
   const [channelKey, setChannelKey] = useState("")
   const [values, setValues] = useState<Record<string, string>>({})
@@ -92,17 +98,30 @@ export function AddSubscriptionDialog({
     () => Object.keys(SEARCH_CHANNEL).filter((p) => channels.some((c) => c.key === SEARCH_CHANNEL[p])),
     [channels],
   )
+  /** 有「搜用户」渠道的平台(bili:user / youtube:user)。 */
+  const userSearchPlatforms = useMemo(
+    () => Object.keys(USER_SEARCH_CHANNEL).filter((p) => channels.some((c) => c.key === USER_SEARCH_CHANNEL[p])),
+    [channels],
+  )
   /** 当前是否处于搜索添加(有平台可搜,且用户没切到手工)。 */
-  const searchMode = mode === "search" && (searchPlatforms.length > 0 || !!presetKey)
+  const searchMode = mode === "search" && (searchPlatforms.length > 0 || userSearchPlatforms.length > 0 || !!presetKey)
 
-  /** 搜索模式的渠道:search 渠道(取候选用)+ 订阅渠道(落地用)。 */
-  const searchChKey = searchChannelOf(platform)
+  /** 搜索模式的渠道:search 渠道(取候选用)+ 订阅渠道(落地用)。按 searchKind 切换映射。 */
+  const searchChKey = searchKind === "user" ? USER_SEARCH_CHANNEL[platform] : searchChannelOf(platform)
   const searchCh = channels.find((c) => c.key === searchChKey)
-  const subChKey = LIVE_SUB_CHANNEL[platform] ?? ""
+  const subChKey = (searchKind === "user" ? USER_SUB_CHANNEL[platform] : LIVE_SUB_CHANNEL[platform]) ?? ""
   const subCh = channels.find((c) => c.key === subChKey)
 
-  /** 候选:搜索模式来自**接口返回**(candidatesFromSearch);手工模式为空。 */
-  const cands = useMemo(() => (searchMode ? candidatesFromSearch(searchItems ?? []) : []), [searchMode, searchItems])
+  /** 候选:搜索模式来自**接口返回**;按 searchKind 用房间/用户两套提取。 */
+  const cands = useMemo(
+    () =>
+      searchMode
+        ? searchKind === "user"
+          ? candidatesFromUsers(searchItems ?? [])
+          : candidatesFromSearch(searchItems ?? [])
+        : [],
+    [searchMode, searchKind, searchItems],
+  )
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase()
     return q ? cands.filter((c) => `${c.label} ${c.value} ${c.sub}`.toLowerCase().includes(q)) : cands
@@ -111,10 +130,16 @@ export function AddSubscriptionDialog({
   /** 落地订阅的渠道(搜索模式 = 平台对应的 live 订阅渠道;手工模式 = 选中的渠道)。 */
   const landKey = searchMode ? subChKey : channelKey
   const landChannel = searchMode ? subCh : channel
-  /** 落地渠道的参数名(搜索模式 = roomIds;手工模式 = 渠道首参)。 */
-  const landParam = landChannel?.sourceInfoTpl?.[0]?.key
-  /** 该落地渠道已有的订阅(搜索的「添加到」候选:新建,或并入其中一条)。 */
-  const targets = useMemo(() => subsOfChannel(subscriptions, landKey), [subscriptions, landKey])
+  /** 落地渠道的参数名。⚠️ 用户模式用显式表(USER_SUB_PARAM)——`youtube` 渠道首参是
+   *  videoId(订阅单视频),频道订阅是第二参 channelId,不能取首参。 */
+  const landParam =
+    searchMode && searchKind === "user" ? USER_SUB_PARAM[platform] : landChannel?.sourceInfoTpl?.[0]?.key
+  /** 该落地渠道已有的订阅(搜索的「添加到」候选:新建,或并入其中一条)。
+   *  用户搜索是单值参数(一人一订),无并入语义 → 恒空(targets.length===0 自动隐藏该区块)。 */
+  const targets = useMemo(
+    () => (searchMode && searchKind === "user" ? [] : subsOfChannel(subscriptions, landKey)),
+    [searchMode, searchKind, subscriptions, landKey],
+  )
   /** 已订阅过的候选值(重复添加会得到两条相同订阅,先标出来)。 */
   const subscribed = useMemo(() => new Set(targets.flatMap((s) => valueList(s, landParam))), [targets, landParam])
 
@@ -137,8 +162,9 @@ export function AddSubscriptionDialog({
     setChannelKey(key)
     setValues({ ...(ch?.defaultInfo ?? {}), ...(presetKey ? presetInfo : {}) })
     setTitle(ch?.name ?? "")
-    // 搜索模式默认选中第一个可搜平台。
-    const p = searchPlatforms[0] ?? ""
+    // 搜索模式默认选房间类型 + 第一个可搜平台(无房间渠道时退到搜用户)。
+    setSearchKind("room")
+    const p = searchPlatforms[0] ?? userSearchPlatforms[0] ?? ""
     setPlatform(p)
   }, [open, channels, searchPlatforms, presetKey, presetInfo])
 
@@ -186,6 +212,18 @@ export function AddSubscriptionDialog({
     setTitle("")
   }
 
+  /** 切换搜索类型(房间/用户):平台不在该类型可用清单时切到其第一个,清空候选。 */
+  function pickSearchKind(k: "room" | "user") {
+    latest.invalidate()
+    setSearchKind(k)
+    const list = k === "user" ? userSearchPlatforms : searchPlatforms
+    if (!list.includes(platform)) setPlatform(list[0] ?? "")
+    setSearchItems(null)
+    setCandidateValue("")
+    setTargetId("new")
+    setTitle("")
+  }
+
   /** 选中/取消选中一个候选(再点一次 = 取消)。 */
   function pickCandidate(c: Candidate) {
     if (candidateValue === c.value) {
@@ -205,7 +243,7 @@ export function AddSubscriptionDialog({
         return
       }
       if (!candidateValue) {
-        setError("请先搜索并选中一个房间。")
+        setError("请先搜索并选中一项。")
         return
       }
       setBusy(true)
@@ -221,13 +259,20 @@ export function AddSubscriptionDialog({
             return
           }
           await updateSubscription(sub.id, { info: { ...sub.info, [landParam]: [...held, candidateValue].join(",") } })
-          toast("ok", `已并入「${sub.title}」`, `${held.length + 1} 个房间，刷新后生效。`)
+          toast("ok", `已并入「${sub.title}」`, `现在共 ${held.length + 1} 个房间，内容已更新。`)
         } else {
           const info = { [landParam]: candidateValue }
-          const id = await addSubscription(subChKey, title.trim() || candidateValue, info, {
-            groupId: groupId || null,
-            refreshIntervalSec: Number(ttl) > 0 ? Number(ttl) * 60 : undefined,
-          })
+          // 用户模式标题默认用候选名(UP主名/频道名,比 uid 可读);房间模式沿用候选值(房号)。
+          const cand = cands.find((c) => c.value === candidateValue)
+          const id = await addSubscription(
+            subChKey,
+            title.trim() || (searchKind === "user" ? (cand?.label ?? "") : "") || candidateValue,
+            info,
+            {
+              groupId: groupId || null,
+              refreshIntervalSec: Number(ttl) > 0 ? Number(ttl) * 60 : undefined,
+            },
+          )
           if (!id) throw new Error("数据层未初始化")
         }
         onOpenChange(false)
@@ -323,6 +368,9 @@ export function AddSubscriptionDialog({
       {searchMode ? (
         <SearchPanel
           searchPlatforms={searchPlatforms}
+          userSearchPlatforms={userSearchPlatforms}
+          searchKind={searchKind}
+          onSearchKind={pickSearchKind}
           channels={channels}
           platform={platform}
           onPickPlatform={pickPlatform}

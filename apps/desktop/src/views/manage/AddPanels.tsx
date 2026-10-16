@@ -11,7 +11,7 @@ import { KIND_META } from "../../store/nodes.ts"
 import { Banner } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { MediaImage } from "@amoeba/ui"
-import { platformOf, SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
+import { platformOf, SEARCH_CHANNEL, USER_SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
 import { isImeComposing } from "../../lib/ime.ts"
 
 /** 渠道 → 平台图标名(与 Dialog 里那份是同一张表,提出来给两块面板共用)。 */
@@ -29,6 +29,10 @@ export const PLATFORM_ICON: Record<string, string> = {
 /** 「搜索添加」面板的入参(全部来自外层表单控制器)。 */
 export interface SearchPanelProps {
   searchPlatforms: string[]
+  /** 有「搜用户」渠道的平台(bili/youtube;空 = 无用户搜索,不渲染类型切换)。 */
+  userSearchPlatforms: string[]
+  searchKind: "room" | "user"
+  onSearchKind: (k: "room" | "user") => void
   channels: ChannelInfo[]
   platform: string
   onPickPlatform: (p: string) => void
@@ -50,21 +54,41 @@ export interface SearchPanelProps {
   landParam: string | undefined
 }
 
-/** 搜索添加:选平台 → 输关键词调接口 → 点选一个房间。 */
+/** 搜索添加:选类型(房间/用户) → 选平台 → 输关键词调接口 → 点选一个候选。 */
 export function SearchPanel(f: SearchPanelProps) {
+  const kindPlatforms = f.searchKind === "user" ? f.userSearchPlatforms : f.searchPlatforms
   return (
     <div className="stack" style={{ gap: "var(--sp-5)" }}>
+      {/* 类型切换:两种都有才渲染(只有一种时无须选择)。「搜用户」落地到该用户/频道的
+          投稿订阅(uid/channelId 单值参数,无「并入已有」)。 */}
+      {f.userSearchPlatforms.length > 0 && f.searchPlatforms.length > 0 ? (
+        <div className="field">
+          <span className="field-label">搜什么</span>
+          <div className="segmented" role="tablist" aria-label="搜索类型">
+            <button role="tab" aria-pressed={f.searchKind === "room"} onClick={() => f.onSearchKind("room")}>
+              <Icon name="radio" size={14} /> 直播间
+            </button>
+            <button role="tab" aria-pressed={f.searchKind === "user"} onClick={() => f.onSearchKind("user")}>
+              <Icon name="play" size={14} /> UP主 / 频道
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="field">
         <span className="field-label" id="lbl-search-channel">
           搜索哪个平台
         </span>
         <div className="chip-row" role="group" aria-labelledby="lbl-search-channel">
-          {f.searchPlatforms.map((p) => (
-            <button key={p} className="chip" aria-pressed={f.platform === p} onClick={() => f.onPickPlatform(p)}>
-              <Icon name={PLATFORM_ICON[p] ?? "layers"} size={14} />
-              {f.channels.find((c) => c.key === SEARCH_CHANNEL[p])?.name.replace(/搜索$/, "") ?? p}
-            </button>
-          ))}
+          {kindPlatforms.map((p) => {
+            const key = f.searchKind === "user" ? USER_SEARCH_CHANNEL[p] : SEARCH_CHANNEL[p]
+            return (
+              <button key={p} className="chip" aria-pressed={f.platform === p} onClick={() => f.onPickPlatform(p)}>
+                <Icon name={PLATFORM_ICON[p] ?? "layers"} size={14} />
+                {f.channels.find((c) => c.key === key)?.name.replace(/搜索$/, "") ?? p}
+              </button>
+            )
+          })}
         </div>
       </div>
 

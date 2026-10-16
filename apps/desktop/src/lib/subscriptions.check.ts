@@ -3,8 +3,17 @@
  * 覆盖 valueList 的分支:列表型参数按逗号切、单值参数**不切**。
  *   bun apps/desktop/src/lib/subscriptions.check.ts
  */
-import { candidatesFromSearch, multiParamOf, SEARCH_CHANNEL, searchChannelOf, valueList, subsHolding } from "./subscriptions.ts"
-import type { ChannelInfo, LiveItem, Subscription } from "@amoeba/core"
+import {
+  candidatesFromSearch,
+  candidatesFromUsers,
+  multiParamOf,
+  MULTI_PARAMS,
+  SEARCH_CHANNEL,
+  searchChannelOf,
+  valueList,
+  subsHolding,
+} from "./subscriptions.ts"
+import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/core"
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`)
@@ -52,5 +61,20 @@ const cands = candidatesFromSearch([live("288016", "A"), live("288016", "A-dup")
 assert(cands.length === 2, "roomId 去重(重复房号只留一条)")
 assert(cands[0]!.value === "288016", "候选值 = roomId")
 assert(candidatesFromSearch([]).length === 0, "空结果 → 空候选")
+
+// candidatesFromUsers:候选值从 url 提取(raw 不穿 XML 边界),无匹配 url 跳过
+const user = (url: string, title: string, summary = ""): MediaItem =>
+  ({ id: url, subscriptionId: "p", kind: "video", title, url, summary, fetchedAt: 0, isUnread: true, isStarred: false }) as unknown as MediaItem
+const ucands = candidatesFromUsers([
+  user("https://space.bilibili.com/37663924", "半佛仙人", "770万粉丝 · 575 个视频"),
+  user("https://space.bilibili.com/37663924", "半佛仙人-dup"),
+  user("https://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ", "MKBHD", "19.1M subscribers"),
+  user("https://www.bilibili.com/video/BV1xx411c7mD", "普通视频不是用户主页"),
+])
+assert(ucands.length === 2, "url 提取 mid/channelId 去重,非主页 url 跳过")
+assert(ucands[0]!.value === "37663924" && ucands[0]!.sub.includes("粉丝"), "bili 候选值 = mid,summary 作次行")
+assert(ucands[1]!.value === "UCBJycsmduvYEL83R_U4JriQ", "youtube 候选值 = channelId")
+// 用户订阅是单值参数(uid/channelId),无「并入已有」语义 → 不进 MULTI_PARAMS
+assert(!MULTI_PARAMS.includes("uid") && !MULTI_PARAMS.includes("channelId"), "uid/channelId 不在列表型参数表")
 
 console.log("\nall checks passed")

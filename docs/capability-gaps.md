@@ -14,8 +14,9 @@
   只命中**当前在播**主播（离线不在任何列表），受扫描量限制（热门 + 前 3 分区 ≈ 90 房）。
 - **虎牙搜索不可分页** —— 接口 `start` 参数实测无效（`start=0` 返 20 条、`start>=20` 一律
   返同一批 40 条），故只取首页、不声明 `Pageable`。
-- **微博无扫码登录** —— `DEFAULT_WEIBO_COOKIE` 为空，冷 cookie 几分钟即失效
-  （自述于 `weibo/user.ts:9-13`）。
+- **微博无纯 HTTP 扫码登录** —— `weiboScanLogin` 走 CDP 浏览器路径（passport 页自带
+  二维码）；`DEFAULT_WEIBO_COOKIE` 为空，冷 cookie 几分钟即失效（自述于
+  `weibo/user.ts:9-13`）。
 - **bili 账号服务**（参照 `bilibili_account_service.dart:191`）—— 未做：登录后拉昵称/uid
   展示（`/x/member/web/account`）。
 
