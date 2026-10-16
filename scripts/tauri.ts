@@ -49,6 +49,14 @@ const DEV_CFG = (p: Platform) => [
   ...MOBILE_CFG(p),
   ...(p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.dev.json`] : []),
 ];
+/**
+ * `--release` 时**不叠** `tauri.conf.dev.json` —— 那个文件存在的**唯一目的**就是开
+ * 9222 调试口，而 release 模式的意义是**复现真实发布形态**；带上它就自相矛盾，
+ * 也违背 CLAUDE.md 记的「9222 只在 dev」这条不变量。
+ * 移动端仍叠它自己的 config（`tauri.conf.mobile.json` 是**必需平台配置**，与调试无关）。
+ */
+const DEV_CFG_FOR = (p: Platform, release: boolean) =>
+  release ? MOBILE_CFG(p) : DEV_CFG(p);
 
 const HELP = `
 Amoeba 调试脚本
@@ -63,6 +71,10 @@ Amoeba 调试脚本
 **隐藏 Edge 窗口**（browser.rs 的 \`hide = !cfg!(debug_assertions)\` 是编译期判据）——
 普通 tauri dev 跑 debug profile，那条分支永远不走。--release 保留热重载但按
 release 编译，首次会全量编译数分钟。
+
+⚠️ --release **不叠 tauri.conf.dev.json**（即**不开 9222**）—— 那个文件唯一的作用
+就是开调试口，而 release 模式的意义是复现真实发布形态。要用 CDP 检查 release 窗口
+就用爬虫 Edge 自己的 9223，别指望应用的 9222。
 
 平台默认 desktop；移动端需先配置好 Android/iOS 工具链。
 `;
@@ -86,7 +98,7 @@ const viteBuild = (p: Platform): CmdSpec => ({ label: `前端构建 (${p})`, cmd
 const tauriDev = (p: Platform, release = false): CmdSpec => ({
   label: `Tauri dev (${p}${release ? " --release" : ""})`,
   cmd: "bunx",
-  args: ["tauri", "dev", ...DEV_CFG(p), ...(release ? ["--release"] : [])],
+  args: ["tauri", "dev", ...DEV_CFG_FOR(p, release), ...(release ? ["--release"] : [])],
   cwd: SRC_TAURI,
 });
 const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...MOBILE_CFG(p)], cwd: SRC_TAURI });

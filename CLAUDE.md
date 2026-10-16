@@ -203,6 +203,13 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `main.rs` 与 `tests/*.rs` 的 `*_lib` 引用、`.vscode/{tasks,launch}.json`、
   以及 `apps/cli/.../browser-reset.ts` 里那份**硬编码的 identifier 副本**
   （不同步会静默 no-op —— 去删一个不存在的目录）。
+  ⚠️ **改包名后必须清 `target/debug` 里旧名的陈旧产物**（2026-10-16 实测）：
+  Cargo 按「包名 + 哈希」存产物，**改名不改哈希** → 旧 `libtauri_app_lib-*.rmeta` /
+  `build/tauri-app-*` / `.fingerprint/tauri-app-*` 全部留存，**`cargo clean` 也删不掉**
+  （它只认当前包名的哈希）。后果：rust-analyzer / cargo 扫到旧 `.rmeta` 报
+  `cannot find module or crate tauri_app_lib`（明明源码里 0 命中）—— 看着像源码没改干净，
+  实为缓存。清法：`target/debug/{deps,.fingerprint,build}` 下按 `*tauri_app_lib*` /
+  `*tauri-app*` / `incremental/tauri_app_lib-*` 删（release 侧是新编译的，无需动）。
 - ⭐ **`bun run tauri:release`（= `tauri dev --release`）用来调「只在 release 下才走」的分支**。
   典型用例 = **隐藏 Edge 窗口**：`browser.rs` 的 `let hide = !cfg!(debug_assertions)` 是
   **编译期**判据 —— 普通 `tauri dev` 跑 debug profile，窗口永远可见，那条分支根本不会执行。
@@ -211,6 +218,10 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   用 `CARGO_PROFILE_RELEASE_DEBUG=true`（**环境变量，不是 Cargo.toml** —— 后者会让发布版
   安装包也白塞符号）在**首次构建时**决定符号；已构建过的话要 `cargo clean -p amoeba`
   或删 `target/release` 才会带符号重建。
+  ⚠️ `--release` 时**不叠 `tauri.conf.dev.json`**（`DEV_CFG_FOR`）—— 那个文件唯一的
+  作用就是开 9222，release 模式的意义是复现真实发布形态，带上它自相矛盾。
+  ⚠️ 别用 `taskkill /IM msedgewebview2.exe` 清「残留」：**WebView2 宿主被杀 = 应用窗口
+  消失、进程跟着退出**。它不是孤儿，就是当前实例的窗口进程。
 - tsc 用根 `./node_modules/.bin/tsc -p <项目>`；**不要** `npx tsc`（会误装 tsc@2.0.3），
   **不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪声）。
 - ⚠️ **改源码一律用 Edit/Write，不要用 PowerShell `Set-Content -Encoding utf8` 整份重写**
