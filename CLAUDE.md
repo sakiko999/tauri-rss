@@ -594,6 +594,18 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
   `docs/desktop-crawler-service.md`。
 - **bili 按分区列房**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
+- **YouTube 搜直播间**（2026-10-16 记）：搜索添加里 youtube 目前只有「搜频道」（`USER_SEARCH_CHANNEL`），
+  `SEARCH_CHANNEL` 无 youtube 条目 → 直播间搜索缺位。可行路径：InnerTube `search`
+  换直播过滤 `params`（对照 `searchYouTubeChannels` 的 `EgIQAg==`，直播过滤码需抓包/查
+  community 表）→ 新渠道 `youtube:live-search` + `SEARCH_CHANNEL.youtube` 落地
+  `youtube:live`（channelId 参数）。
+- **release 下 CDP Edge 禁图提性能**（2026-10-16 记）：隐藏窗口里的 Edge 仍会加载页面
+  全部资源；扫码/SSR 抓取只读 DOM 文本，图片纯浪费（内存 + 带宽）。可行路径：
+  启动参数 `--blink-settings=imagesEnabled=false`（browser_ensure 拼args）或
+  CDP `Network.setBlockedURLS`（attach 后一次性下发，`["*"]` 或按扩展名）。
+  ⚠️ 别禁到出二维码的那次导航——扫码 UI 读的就是页面图片/canvas（douyin 弹窗是
+  canvas 渲染不受禁图影响，xhs 是 `img.qrcode-img` 的 data URL 也不受网络禁图影响；
+  真正受影响的是 SSR 抓取路径里的 `<img>` 探测逻辑，改前先 grep img 依赖）。
 - **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行（`docs/mobile-cdp-feasibility.md`）。
 - **live 按平台二次聚合**：`tab:live` 已聚合**全部** live 条目（`selectors.baseFor`
   的 tab 分支 `filter(kind==="live")`，方案 B，2026-10-13 落地）。若要「哔哩哔哩直播 /
