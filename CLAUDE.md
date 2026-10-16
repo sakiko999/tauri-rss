@@ -231,6 +231,15 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   的窗口计数；② 等「**曾见过可见窗口** + 连续数轮 0 命中」的稳定态才返回（主框架比
   CDP 就绪晚约 1s，不加 `seen` 门槛 0.3s 就误判藏净）。**只在 release 显现**（debug 走
   可见分支不触发），改 `browser.rs` 的隐藏逻辑务必用 release 实例验证。
+  ⭐ **单验 release 行为不必重编**（2026-10-16 实测）：`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`
+  环境变量**追加**到 WebView2 的 Chromium 参数（不覆盖 tauri.conf 的），设成
+  `--remote-debugging-port=9222` 再启动 `target/release/amoeba.exe` 就有调试口——
+  比 `tauri dev --release`（重编 4min）快得多。⚠️ 直接跑 release 二进制会加载 `devUrl`
+  （`localhost:1420`），故**另起一个静态服务**喂 `dist/desktop`（`Bun.serve` 一行即可）
+  否则页面停在 `chrome-error://`、`invoke` 报 "Origin header is not a valid URL"。
+  之后 `ui-probe` eval `__TAURI__.core.invoke('browser_ensure')` 即可触发隐藏路径。
+  量隐藏结果用 `EnumWindows` + `GetWindowThreadProcessId` 筛出该 Edge PID 的顶层窗口、
+  `IsWindowVisible` 计数（应为 0；amoeba 自身作对照应为若干）。
 - tsc 用根 `./node_modules/.bin/tsc -p <项目>`；**不要** `npx tsc`（会误装 tsc@2.0.3），
   **不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪声）。
 - ⚠️ **改源码一律用 Edit/Write，不要用 PowerShell `Set-Content -Encoding utf8` 整份重写**
