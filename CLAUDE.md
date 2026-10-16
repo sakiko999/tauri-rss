@@ -11,7 +11,7 @@ crawler 仅有限平台。决策见 `docs/desktop-crawler-service.md`。
 
 ```
 apps/
-  src-tauri/   唯一 Rust crate（tauri-app），双端共享 commands/plugins
+  src-tauri/   唯一 Rust crate（amoeba），双端共享 commands/plugins
   desktop/     React 19 + Vite + Tailwind 4，产物 → dist/desktop
                形态 = 订阅工作台：rail 侧栏（内容类型/智能订阅/分组树）+ 五视图
                reader 三栏 / media 网格 / hot 热搜两栏 / page 整页 / player /
@@ -194,8 +194,10 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   确保 MSVC 的 `bin\Hostx64\x64` 在 PATH 最前（Native Tools 启动即前置）。
   Bash 工具调用间 env 不持久，每次 cargo 命令前内联 `export PATH`。
   **不要在 `.cargo/config.toml` 里写死 linker**（硬编码 MSVC 版本，VS 更新必坏）。
-- `cargo test/build` 前若 tauri-app.exe 仍在跑会锁二进制报 `拒绝访问 (os error 5)`，
-  先 `taskkill //F //IM tauri-app.exe`。增量编译偶报同错，无害，忽略。
+- `cargo test/build` 前若 amoeba.exe 仍在跑会锁二进制报 `拒绝访问 (os error 5)`，
+  先 `taskkill //F //IM amoeba.exe`。增量编译偶报同错，无害，忽略。
+  ⚠️ 进程名 = Cargo **package name**（2026-10-16 由 `tauri-app` 改名而来），
+  改名后这条命令要同步，否则杀不掉旧进程。
 - tsc 用根 `./node_modules/.bin/tsc -p <项目>`；**不要** `npx tsc`（会误装 tsc@2.0.3），
   **不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪声）。
 - ⚠️ **改源码一律用 Edit/Write，不要用 PowerShell `Set-Content -Encoding utf8` 整份重写**

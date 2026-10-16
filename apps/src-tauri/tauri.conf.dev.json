@@ -3,7 +3,7 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
+        "title": "Amoeba",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,

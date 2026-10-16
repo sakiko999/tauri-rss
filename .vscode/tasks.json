@@ -5,7 +5,7 @@
       "label": "kill-tauri",
       "type": "process",
       "command": "C:/Windows/System32/cmd.exe",
-      "args": ["/c", "taskkill /F /IM tauri-app.exe >nul 2>&1 & exit /b 0"],
+      "args": ["/c", "taskkill /F /IM amoeba.exe >nul 2>&1 & exit /b 0"],
       "problemMatcher": [],
       "presentation": {
         "reveal": "silent",
@@ -40,7 +40,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": "Running DevCommand",
-          "endsPattern": "Running.*tauri-app\\.exe"
+          "endsPattern": "Running.*amoeba\\.exe"
         }
       }
     }

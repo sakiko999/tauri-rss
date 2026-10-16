@@ -20,6 +20,14 @@ let _browser: BrowserBackend | undefined
 /** 打开外部链接(系统浏览器)。Tauri 注入 opener 插件;其余环境兜底 window.open。 */
 let _openExternal: ((url: string) => Promise<void>) | undefined
 
+/**
+ * `openExternal` 允许的协议 —— **安全边界,不是配置项**。
+ *
+ * 只放行 web 链接与邮件;其余(`file:` / `javascript:` / `data:` / 各系统自定义
+ * scheme)一律拒绝。见门面里 openExternal 的注释。
+ */
+const OPENABLE_SCHEMES = new Set(["http", "https", "mailto"])
+
 const consoleLogger: Logger = {
   log(level, msg, ctx) {
     const fn =
@@ -70,8 +78,17 @@ export function initAppHost(): void {
      * ⚠️ 桌面端**不能直接 `window.open`**:Tauri 的 WebView 会拦掉,表现为「点了
      * 打开原文没反应」。Tauri 注入 opener 插件(经 capability 授权);纯浏览器/CLI
      * 环境兜底 window.open(带 noopener)。
+     *
+     * ⚠️ **协议白名单(安全边界)** —— URL 常来自**远端内容**(feed 正文里的 `<a href>`、
+     * 社交详情),不能原样丢给系统 opener:`file://` 能打开本地文件、自定义 scheme 能
+     * 触发本机已注册的任意程序。白名单收在门面这**一处**,三个后端(Tauri/node/browser)
+     * 与全部调用方自动受益。—— 判据 fail-closed:不在名单里一律拒绝。
      */
     async openExternal(url: string): Promise<void> {
+      const scheme = url.match(/^([a-z][a-z0-9+.-]*):/i)?.[1]?.toLowerCase()
+      if (!scheme || !OPENABLE_SCHEMES.has(scheme)) {
+        throw new Error(`已拦截:只允许打开 http/https/mailto 链接(收到 ${scheme ?? "无协议"})`)
+      }
       await (_openExternal ?? (async (u: string) => void window.open(u, "_blank", "noopener")))(url)
     },
   }

@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app-mobile",
+  "productName": "Amoeba",
   "version": "0.1.0",
-  "identifier": "com.zhh.tauri-app.mobile",
+  "identifier": "app.amoeba.mobile",
   "build": {
     "beforeDevCommand": "",
     "devUrl": "http://localhost:1422",

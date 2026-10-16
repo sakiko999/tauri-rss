@@ -26,6 +26,23 @@ assert.equal(
   "js.call 应支持函数声明 + 显式实参(YouTube n 解密依赖此形态)",
 )
 
+// ── openExternal 协议白名单(安全边界) ──────────────────────────────────────
+// URL 常来自远端 feed 正文的 `<a href>`。白名单在门面这一处,三个后端共用。
+// ⚠️ 这些必须**同步抛出**(不是 await 才抛):兜底实现是 window.open,node 下会 ReferenceError,
+// 所以「抛错」本身不能证明是白名单拦的 —— 用**错误消息**判。
+for (const bad of ["file:///C:/Windows/System32/calc.exe", "javascript:alert(1)", "data:text/html,<h1>x", "ms-settings:", "not a url"]) {
+  await assert.rejects(
+    () => globalThis.appHost.openExternal(bad),
+    /已拦截/,
+    `危险协议未被拦截: ${bad}`,
+  )
+}
+// 放行的协议不该被白名单拒(此处只断言错误**不是**「已拦截」那一类)。
+for (const good of ["https://example.com/a", "http://example.com", "mailto:a@b.c"]) {
+  const err = await globalThis.appHost.openExternal(good).then(() => null, (e: Error) => e)
+  assert.ok(err === null || !/已拦截/.test(err.message), `合法协议被误拦: ${good}`)
+}
+
 // ── browser 后端:同样应有 openExternal(继承兜底) ──
 injectBrowserHost()
 assert.equal(typeof globalThis.appHost.openExternal, "function", "browser 后端也应有 openExternal")
@@ -36,4 +53,4 @@ globalThis.appHost.imageProxy = false
 globalThis.appHost.dataSaver = true
 assert.equal(globalThis.appHost.imageProxy, false, "imageProxy 可被 app 层覆盖")
 
-console.log("✔ 宿主门面自检通过(openExternal / imageProxy / dataSaver)")
+console.log("✔ 宿主门面自检通过(openExternal 协议白名单 / imageProxy / dataSaver / js 契约)")

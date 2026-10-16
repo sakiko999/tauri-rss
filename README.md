@@ -1,10 +1,10 @@
-# Tauri Playground — RSS Reader
+# Amoeba
 
 Tauri 2 monorepo 的本地订阅阅读器：把 **RSS / 视频 / 直播 / 社交** 聚到一个桌面工作台。
 抓取、播放解析、弹幕、内容缓存全部在本机完成，数据存本地 SQLite，不经中转服务器。
 
 - **桌面** = 订阅工作台（抓取 / 播放 / 管理全功能）
-- **移动** = 模板，尚未接入 `appHost` + `core`
+- **移动** = 极简「看内容」闭环（未读列表 → 播放/阅读 + RSS 直链订阅管理）
 
 ## 快速开始
 
@@ -41,9 +41,9 @@ bun run rss env --probe              # appHost 门面自检
 
 ```
 apps/
-  src-tauri/     唯一 Rust crate（tauri-app）—— http/ws 隧道、CDP 浏览器、SQLite、opener
+  src-tauri/     唯一 Rust crate（amoeba）—— http/ws 隧道、CDP 浏览器、SQLite、opener
   desktop/       React 19 + Vite + Tailwind 4，产物 → dist/desktop
-  mobile/        React 19 + Vite，产物 → dist/mobile。⚠️ 仍是模板
+  mobile/        React 19 + Vite，产物 → dist/mobile。已接入 appHost + core
   cli/           ★ 调试探针（Bun + cac，零构建）
 packages/
   xml/           RSS 2.0 + tpl: 编解码（fast-xml-parser v5）
@@ -99,3 +99,10 @@ bun packages/host/src/example/host-check.ts             # 宿主门面字段
 | `docs/cli-plan.md` | 调试探针设计 |
 
 `tmp/` 是 gitignore 的参考项目（RSSHub / MediaCrawler / dart_simple_live 等），**不要对它跑构建**。
+
+## 许可
+
+**私有项目，未授权任何使用**（保留所有权利）。⚠️ 仓库含少量派生自第三方项目的代码
+（抖音 ABogus 签名、斗鱼 CryptoJS bundle、IBM Plex 字体），其权利归各自权利人所有 ——
+详见 [`LICENSE`](LICENSE) 的第三方代码声明。
+

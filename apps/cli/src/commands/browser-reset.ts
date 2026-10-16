@@ -19,8 +19,10 @@ import { fail, ok, row } from "../ui/render.ts"
 
 /** 与 apps/src-tauri/src/commands/browser.rs 的 CDP_PORT 对齐。 */
 const CDP_PORT = 9223
-/** 与 tauri.conf.json 的 identifier + Rust `app_data_dir()/edge-profile` 对齐。 */
-const PROFILE_DIR = join(process.env.APPDATA ?? "", "com.zhh.tauri-app", "edge-profile")
+/** 与 tauri.conf.json 的 identifier + Rust `app_data_dir()/edge-profile` 对齐。
+ *  ⚠️ **改 identifier 必须同步这里** —— 不同步会去删一个不存在的目录(静默 no-op),
+ *  用户以为清了 profile、其实脏数据还在。(2026-10-16 `com.zhh.tauri-app` → `app.amoeba.desktop`) */
+const PROFILE_DIR = join(process.env.APPDATA ?? "", "app.amoeba.desktop", "edge-profile")
 
 /** 目录占用体积(MB);不存在返回 null。 */
 function dirSizeMB(dir: string): number | null {

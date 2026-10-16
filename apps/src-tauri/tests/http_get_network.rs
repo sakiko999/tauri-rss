@@ -5,7 +5,7 @@
 //! These hit real public services; the test is `#[ignore]` by default so a
 //! flaky network never breaks `cargo test`. Run with:
 //!   `cargo test --test http_get_network -- --ignored`
-use tauri_app_lib::commands::{http_get, HttpGetRequest};
+use amoeba_lib::commands::{http_get, HttpGetRequest};
 
 async fn fetch_feed(url: &str) -> (u16, usize) {
     let res = http_get(HttpGetRequest {

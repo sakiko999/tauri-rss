@@ -5,7 +5,12 @@ target/
 tmp/
 *.local
 
-bun.lock
+# ⚠️ lockfile **必须入库**（发布构建可复现）：bun.lock 与 Cargo.lock 都不忽略。
+
+# 环境变量/密钥。本项目管登录 cookie，一旦引入 .env 绝不能进库。
+.env
+.env.*
+!.env.example
 
 # Logs
 logs

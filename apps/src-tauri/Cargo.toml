@@ -1,12 +1,12 @@
 [package]
-name = "tauri-app"
+name = "amoeba"
 version = "0.1.0"
-description = "Tauri App — unified backend for desktop and mobile"
-authors = ["you"]
+description = "Amoeba — local-first feed workbench (RSS / video / live / social)"
+authors = ["zhh"]
 edition = "2021"
 
 [lib]
-name = "tauri_app_lib"
+name = "amoeba_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
