@@ -43,6 +43,44 @@
           "endsPattern": "Running.*amoeba\\.exe"
         }
       }
+    },
+    {
+      "label": "tauri-dev-release",
+      "type": "shell",
+      "command": "bun run scripts/tauri.ts tauri desktop --release",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          // ⚠️ release 默认**无 debug 符号** → 断点行号漂移。这里只对**本次调试**开符号，
+          // 而**不**在 Cargo.toml 写 `[profile.release] debug = true` —— 那会连发布版的
+          // 安装包一起塞进符号、白白变大。环境变量精确作用于这次构建。
+          "CARGO_PROFILE_RELEASE_DEBUG": "true"
+        }
+      },
+      "isBackground": true,
+      "dependsOn": ["kill-tauri"],
+      "dependsOrder": "sequence",
+      "problemMatcher": {
+        "owner": "rust",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^error\\[E\\d+\\]: (.*)$",
+            "message": 1
+          },
+          {
+            "regexp": "^\\s*-->\\s*([^:]+):(\\d+):(\\d+)",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Running DevCommand",
+          "endsPattern": "Running.*amoeba\\.exe"
+        }
+      }
     }
   ]
 }

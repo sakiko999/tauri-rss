@@ -51,12 +51,18 @@ const DEV_CFG = (p: Platform) => [
 ];
 
 const HELP = `
-RSS Reader 调试脚本
+Amoeba 调试脚本
 用法:
-  bun run dev [desktop|mobile]           只启动 Vite dev server（纯前端调试）
-  bun run build [desktop|mobile]         只构建前端产物
-  bun run tauri [desktop|mobile]         Vite dev + Tauri dev 并行（完整应用，热重载）
-  bun run tauri [desktop|mobile] build   前端构建 + Tauri release 构建
+  bun run dev [desktop|mobile]             只启动 Vite dev server（纯前端调试）
+  bun run build [desktop|mobile]           只构建前端产物
+  bun run tauri [desktop|mobile]           Vite dev + Tauri dev 并行（完整应用，热重载）
+  bun run tauri [desktop|mobile] --release 同上，但 **Rust 以 release 编译**（见下）
+  bun run tauri [desktop|mobile] build     前端构建 + Tauri release 构建
+
+⚠️ --release 的用途：调试「**只在 release 下才走**」的行为。目前唯一的例子是
+**隐藏 Edge 窗口**（browser.rs 的 \`hide = !cfg!(debug_assertions)\` 是编译期判据）——
+普通 tauri dev 跑 debug profile，那条分支永远不走。--release 保留热重载但按
+release 编译，首次会全量编译数分钟。
 
 平台默认 desktop；移动端需先配置好 Android/iOS 工具链。
 `;
@@ -66,39 +72,60 @@ RSS Reader 调试脚本
 /** 命令描述工厂（纯数据）。 */
 const viteDev = (p: Platform): CmdSpec => ({ label: `Vite dev (${p})`, cmd: "bun", args: ["run", "dev"], cwd: APP(p) });
 const viteBuild = (p: Platform): CmdSpec => ({ label: `前端构建 (${p})`, cmd: "bun", args: ["run", "build"], cwd: APP(p) });
-const tauriDev = (p: Platform): CmdSpec => ({ label: `Tauri dev (${p})`, cmd: "bunx", args: ["tauri", "dev", ...DEV_CFG(p)], cwd: SRC_TAURI });
+/**
+ * `--release` → `tauri dev --release`：**Rust 以 release 优化编译**，但仍保留 Vite dev
+ * server 与热重载。用来调试「只在 release 下才走」的行为。
+ *
+ * ⚠️ 关键用例 = **隐藏 Edge 窗口**：`browser.rs` 的 `let hide = !cfg!(debug_assertions)`
+ * 是**编译期**判据 —— debug profile 下窗口可见（好观察），release 下 SW_HIDE + 循环隐藏。
+ * 想验隐藏路径**必须**跑 release 编译，普通 `tauri dev` 永远看不到那条分支。
+ *
+ * ⚠️ 与 `tauri build` 的区别：这个**不产出安装包**、不跑 frontendDist（仍走 devUrl）。
+ * 首次跑要全量 release 编译（数分钟）；之后增量。
+ */
+const tauriDev = (p: Platform, release = false): CmdSpec => ({
+  label: `Tauri dev (${p}${release ? " --release" : ""})`,
+  cmd: "bunx",
+  args: ["tauri", "dev", ...DEV_CFG(p), ...(release ? ["--release"] : [])],
+  cwd: SRC_TAURI,
+});
 const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...MOBILE_CFG(p)], cwd: SRC_TAURI });
 /** RSSHub sidecar:desktop 订阅源,`bun run tauri` 时随 Vite+Tauri 一并带起(独立 Node 进程,自起 1200 端口)。 */
 
-/** 解析 argv → 命令意图。纯函数。 */
-function parseArgs(argv: string[]): { command?: string; platform?: string; flag?: string } {
-  return { command: argv[2], platform: argv[3], flag: argv[4] };
-}
-
-/** 是否请求帮助。纯函数。 */
-function wantsHelp(a: { command?: string; platform?: string }): boolean {
-  return (
-    a.command === "help" || a.command === "--help" || a.command === "-h" ||
-    a.platform === "--help" || a.platform === "-h"
-  );
+/**
+ * 解析 argv → 命令意图。纯函数。
+ *
+ * ⚠️ **flag 不按位置取**：`bun run tauri desktop --release` 里 argv[2]=desktop、
+ * argv[3]=--release；而 `bun run tauri --release` 里 argv[2]=`--release`。
+ * 按位置硬取会把 `--release` 当成平台名。故先摊平再按语义挑。
+ */
+function parseArgs(argv: string[]): { command?: string; platform?: Platform; release: boolean; help: boolean } {
+  const rest = argv.slice(2)
+  const help = rest.some((a) => a === "--help" || a === "-h" || a === "help")
+  const release = rest.includes("--release")
+  // ⚠️ `command` 要排除 `--help`/`help`，否则 `bun run tauri help` 会被当成未知命令。
+  const command = rest.find((a) => !a.startsWith("-") && a !== "help")
+  const platform = rest.find((a) => PLATFORMS.includes(a as Platform)) as Platform | undefined
+  return { command, platform, release, help }
 }
 
 /** 命令意图 → 执行计划。纯函数（只描述，不执行）。 */
-function planFor(command: string, platform: Platform, flag?: string): Execution[] {
+function planFor(command: string, platform: Platform, opts: { release: boolean } = { release: false }): Execution[] {
   switch (command) {
     case "dev":
       return [{ kind: "once", spec: viteDev(platform) }];
     case "build":
       return [{ kind: "once", spec: viteBuild(platform) }];
     case "tauri":
-      return flag === "build"
-        ? [
-            { kind: "once", spec: viteBuild(platform) },
-            { kind: "once", spec: tauriBuild(platform) },
-          ]
-        : [{ kind: "parallel", specs: [viteDev(platform), tauriDev(platform)] }];
+      // `--release` → Rust 以 release 编译（调「只在 release 走」的分支，如隐藏 Edge 窗口）。
+      return [{ kind: "parallel", specs: [viteDev(platform), tauriDev(platform, opts.release)] }];
+    case "build-release":
+      return [
+        { kind: "once", spec: viteBuild(platform) },
+        { kind: "once", spec: tauriBuild(platform) },
+      ];
     default:
-      throw new Error(`未知命令，可用: dev | build | tauri`);
+      throw new Error(`未知命令，可用: dev | build | tauri | build-release`);
   }
 }
 
@@ -170,17 +197,17 @@ async function execute(plan: Execution[]): Promise<void> {
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
-  if (wantsHelp(args)) {
+  if (args.help) {
     console.log(HELP);
     return;
   }
-  const platform = (args.platform ?? "desktop") as Platform;
+  const platform = args.platform ?? "desktop";
   if (!PLATFORMS.includes(platform)) {
-    console.error(`❌ 未知平台: "${args.platform}"，可用: ${PLATFORMS.join(", ")}`);
+    console.error(`❌ 未知平台: "${platform}"，可用: ${PLATFORMS.join(", ")}`);
     console.log(HELP);
     process.exit(1);
   }
-  const plan = planFor(args.command ?? "", platform, args.flag);
+  const plan = planFor(args.command ?? "", platform, { release: args.release });
   await execute(plan);
 }
 

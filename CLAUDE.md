@@ -130,6 +130,7 @@ Video 的 `channel`、Audio 的 `artist`/`album`、Social 的 `likes` **全丢**
 
 ```bash
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
+bun run tauri:release               # ⭐ Rust 以 **release 编译**但保留热重载（见下）
 bun run scripts/tauri.ts help       # 全部用法
 
 # CLI 调试探针（收编全部 example；详见 docs/cli-plan.md）
@@ -202,6 +203,14 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `main.rs` 与 `tests/*.rs` 的 `*_lib` 引用、`.vscode/{tasks,launch}.json`、
   以及 `apps/cli/.../browser-reset.ts` 里那份**硬编码的 identifier 副本**
   （不同步会静默 no-op —— 去删一个不存在的目录）。
+- ⭐ **`bun run tauri:release`（= `tauri dev --release`）用来调「只在 release 下才走」的分支**。
+  典型用例 = **隐藏 Edge 窗口**：`browser.rs` 的 `let hide = !cfg!(debug_assertions)` 是
+  **编译期**判据 —— 普通 `tauri dev` 跑 debug profile，窗口永远可见，那条分支根本不会执行。
+  它保留 Vite dev server 与 Rust 热重载，但**首次要全量 release 编译（实测 4min）**。
+  ⚠️ release 默认**无 debug 符号** → 断点行号漂移。VSCode 的 `tauri-dev-release` task
+  用 `CARGO_PROFILE_RELEASE_DEBUG=true`（**环境变量，不是 Cargo.toml** —— 后者会让发布版
+  安装包也白塞符号）在**首次构建时**决定符号；已构建过的话要 `cargo clean -p amoeba`
+  或删 `target/release` 才会带符号重建。
 - tsc 用根 `./node_modules/.bin/tsc -p <项目>`；**不要** `npx tsc`（会误装 tsc@2.0.3），
   **不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪声）。
 - ⚠️ **改源码一律用 Edit/Write，不要用 PowerShell `Set-Content -Encoding utf8` 整份重写**

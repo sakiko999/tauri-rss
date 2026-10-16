@@ -10,6 +10,20 @@
       "postDebugTask": "kill-tauri"
     },
     {
+      // ⚠️ **release 编译**（target/release/，非 debug）—— 用来调试「只在 release 下才走」的
+      // 分支，典型是 `browser.rs` 的隐藏 Edge 窗口（`hide = !cfg!(debug_assertions)` 是
+      // **编译期**判据，debug profile 下那条分支永远不走）。
+      // 保留 Vite dev server 与热重载；首次跑要全量 release 编译（数分钟）。
+      // ⚠️ release 下符号被优化，**断点会漂移**（行号对不上）—— 适合观察窗口隐藏/日志，
+      // 不适合逐步单步。要精确断点就把 `[profile.release] debug = true` 打开。
+      "name": "Tauri Dev (desktop, release)",
+      "type": "lldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/target/release/amoeba.exe",
+      "preLaunchTask": "tauri-dev-release",
+      "postDebugTask": "kill-tauri"
+    },
+    {
       "name": "Tauri Rust Unit Tests",
       "type": "lldb",
       "request": "launch",
