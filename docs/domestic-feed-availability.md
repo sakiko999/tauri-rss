@@ -29,7 +29,7 @@
 
 ## 二、立即可用的原生 feed（已 curl 实测 200 + 真 XML）
 
-可直接塞进 `apps/desktop/src/subscriptions.ts` 的 `TEST_SUBSCRIPTIONS`，无需任何抓取逻辑，走现有 RawRssChannel（`rss:{id}`）：
+可直接塞进 `apps/desktop/src/subscriptions.ts` 的 `SEED_SUBSCRIPTIONS`，无需任何抓取逻辑，走现有 RawRssChannel（`rss:{id}`）：
 
 | # | 平台 | feed URL | 类型 |
 |---|---|---|---|
@@ -105,17 +105,12 @@ w_rid    = MD5(sortedParams & wts & mixinKey)
 > ⚠️ 教训：YouTube channel_id 必须精确，误写会静默 404 或串到别的频道
 > （曾把 TED 的 ID 记成 GeeksforGeeks 的 ID，实测纠正）。
 
-## 六、当前测试订阅全貌
+## 六、订阅来源
 
-内置 RSS 直链全量清单在 `packages/crawler/src/channels/rss/builtin.ts`（36 条，含上表多数源）。
-desktop 测试订阅见 `apps/desktop/src/subscriptions.ts`（**19 条**，覆盖全部 kind 与平台）：
-
-- **article**：`rsshub:feed`（Hacker News，唯一保留的外挂示例）
-- **video**：`youtube` / `bili:popular` / `bili:weekly` / `bili:dynamic`
-- **audio**：`rss:podcast`
-- **live**：`live:douyu` / `live:huya` / `live:douyin` / `bili:live` / `youtube:live`
-  + 4× 热门（`bili:live:hot` / `live:douyu:hot` / `live:huya:hot` / `live:douyin:hot`）
-- **social**：`weibo:hot` / `weibo:user` / `xhs:explore` / `xhs:user`
+- 内置 RSS 直链全量清单：`packages/crawler/src/channels/rss/builtin.ts`（36 条，含上表多数源）。
+- 首启种子订阅：`apps/desktop/src/subscriptions.ts` 的 `SEED_SUBSCRIPTIONS` / `SEED_GROUPS`
+  （**只在空库写入**，覆盖全部 kind 与平台）。⚠️ 这份清单会随开发调整，**以文件为准**，不在文档里
+  再抄一份（曾抄过一版 19 条，很快失效）。
 
 > 平台能力（播放/弹幕）与发现层缺口（分区/搜索）见 `docs/capability-gaps.md`。
 
@@ -130,7 +125,7 @@ desktop 测试订阅见 `apps/desktop/src/subscriptions.ts`（**19 条**，覆�
 
 ## 八、用法
 
-- 直接可用的一批（第二节）可随时并入 `TEST_SUBSCRIPTIONS`（参照 `cnBeta`/`新浪` 已验证）。
+- 直接可用的一批（第二节）可随时并入 `SEED_SUBSCRIPTIONS`（参照 `cnBeta`/`新浪` 已验证）。
 - bilibili 复刻 → 参考 `tmp/RSSHub/lib/routes/bilibili/**` + 本项目 `packages/crawler/src/channels/bili/`
   已落地范式（零登录 nav 取密钥 → wbi 签名 → API）。
 - 新源可用性 → 鼓励跑 `bun run scripts/rsshub-catalog.ts` 重新生成 catalog，再用脚本探测。

@@ -98,7 +98,6 @@ bun packages/host/src/example/host-check.ts             # 宿主门面字段
 | `docs/danmaku-research.md` | 弹幕机制（VOD 分段 / 直播四平台 codec） |
 | `docs/youtube-stream-extraction.md` | YouTube 直链（ANDROID_VR / poToken / DASH） |
 | `docs/capability-gaps.md` | 各平台能力缺口 |
-| `docs/technical-plan.md` | 三模式 UI 与 live 源的产品错位 |
 | `docs/cli-plan.md` | 调试探针设计 |
 
 `tmp/` 是 gitignore 的参考项目（RSSHub / MediaCrawler / dart_simple_live 等），**不要对它跑构建**。

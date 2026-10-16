@@ -3,7 +3,6 @@
  *
  * 由消费方(desktop/mobile)的 styles.css `@import` 引入,并用 `@source`
  * 显式扫描 ui 包源码,让 ui 组件里写的 tailwind 类被消费方构建。
- * 参照 docs/technical-plan.md「Tailwind 4 CSS-first 接入」节。
  */
 @theme {
   /* 品牌色 */

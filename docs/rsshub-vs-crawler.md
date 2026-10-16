@@ -58,12 +58,10 @@
 - `rsshub:youtube:channel` — YouTube 频道
 - `rsshub:feed` — 任意路由兜底(`{route}` + 可选 `baseUrl`)
 
-## 当前测试订阅(subscriptions.ts)
+## 当前种子订阅(subscriptions.ts)
 
-- `s-article` Hacker News → `rsshub:feed` `{route:"/hackernews"}`(唯一保留的外挂示例)
-- 其余全部 crawler:`youtube`/`bili:popular`/`bili:weekly`/`youtube:live`/`rss:podcast`/
-  `live:douyu`/`bili:live`/`live:huya`/`live:douyin`/4×`live:*:hot`/`bili:dynamic`/
-  `weibo:*`/`xhs:*`
+见 `apps/desktop/src/subscriptions.ts` 的 `SEED_SUBSCRIPTIONS`（**以文件为准，不在文档里抄**）。
+外挂示例：`rsshub:feed` `{route:"/hackernews"}`。
 
 ## 历史决策教训
 

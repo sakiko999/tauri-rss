@@ -37,7 +37,8 @@ Folo 分组**极简:subscriptions 表一个 `category` 字符串列**:
 - store 维护 `categories: Record<view, Set<string>>` + 展开状态;路由 `folder-` 前缀。
 - 无多层嵌套,是「视图 × 单层分类」二维组织。
 
-**对照本项目**:core 分组目前「仅渲染/展开,不做增删」。Folo 的「category 字段 + 按域名自动分组」是可落地的轻量升级。
+**对照本项目**:core 分组现已支持建组/改名/删除（desktop 设置→订阅与分组）。Folo 的
+「category 字段 + 按域名自动分组」仍是可落地的轻量升级（未做）。
 
 ## 四、前端状态(重点:Transaction 事务模式)
 

@@ -54,18 +54,17 @@ repo 接口不变,只是 KV 实现换成 SQL 实现。
 
 ## 四、验证状态
 
-- ✅ CLI:bun:sqlite 全链(refresh 落库、幂等 update、env probe KV roundtrip、
-  `rss.db` 文件 + kv 表 + subscriptions 行实测)
-- ✅ Rust:`cargo check` 通过(插件注册 + sqlite feature 编译)
-- ✅ 前端:全仓 tsc 七项目通过(含 desktop 编译 host 源码的 plugin-sql 类型)
-- ⏳ desktop 运行时(Database.load + localStorage 搬迁)待下次 `bun run tauri` 实测
-  ——编译层已验证,首次启动看点:appData/rss.db 生成、旧 localStorage 数据出现在
-  sqlite 且 local key 被清
+- ✅ CLI：bun:sqlite 全链（refresh 落库、幂等 update、env probe KV roundtrip、
+  `rss.db` 文件 + kv 表 + subscriptions 行实测）
+- ✅ Rust：`cargo check` 通过（插件注册 + sqlite feature 编译）
+- ✅ 前端：全仓 tsc 七项目通过（含 desktop 编译 host 源码的 plugin-sql 类型）
+- ✅ desktop 运行时：appData/rss.db 已生效（CLAUDE.md 记）
 
 ## 五、遗留/后续
 
-- **WAL**:两端各自独立库文件(不共享),单进程顺序访问无并发诉求,暂不开
-  `journal_mode=WAL`;将来 CLI 与 desktop sidecar 指向同一库文件时再开
-  (cli-plan §六设想的「打开同一个文件」互通)
-- desktop 运行时验证(上节 ⏳)
-- P6 内容缓存接入时:新增 content 表走 MIGRATIONS,不在 KV 表里塞大 blob
+- **WAL**：两端各自独立库文件（不共享），单进程顺序访问无并发诉求，暂不开
+  `journal_mode=WAL`；将来 CLI 与 desktop sidecar 指向同一库文件时再开
+  （cli-plan §六设想的「打开同一个文件」互通）
+- ⚠️ **内容缓存实际走 KV 表**（原判断「新增 content 表、不在 KV 表塞大 blob」**未采用**）：
+  内容缓存就是同一 KV 表里 `content:<subId>` 的记录（`core/repo/content-cache-repo.ts`）。
+  单条 value 是一条 feed 的 XML，量级可接受；真要拆表时改 repo 实现即可，接口不变。

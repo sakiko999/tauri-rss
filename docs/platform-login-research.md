@@ -3,6 +3,8 @@
 > 2026-08 调研。目标：应用内扫码登录获取**完整认证信息** + **定期保活**，
 > 替代当前「浏览器手抄 cookie 串」的临时方案。参考 `tmp/dart_simple_live` 的 B 站
 > 登录模块；weibo/xhs 接口为网络调研（来源见文末）。
+> ⚠️ **落地状态（2026-10-16）**：三平台**扫码登录均已实现**（`resolve/platform/*/login.ts`，
+> 经 channel 级 `Loginable` 暴露）；**保活调度全未做**——本文 §5 是唯一的设计依据。
 
 ## 结论速览
 
@@ -10,10 +12,10 @@
 |---|---|---|---|---|
 | bili | ✅ 纯 HTTP，无签名 | 无 | SESSDATA / bili_jct / DedeUserID / **refresh_token**（响应体，dart 没拿） | ✅ bili_ticket 3 天自动续 + SESSDATA 用 refresh_token 续期 |
 | weibo | ✅ 纯 HTTP，JSONP 解析 | 无 | SUB / SUBP / SSOLoginState / SCF / ALF | ⚠️ SUB ~1 年，无刷新接口，到期重登 |
-| xhs | ✅ 需 x-s 签名（**已有 xhshow**） | x-s / x-t / x-s-common | web_session / a1 / gid / webId（**1 年有效**） | ⚠️ 1 年有效，无刷新接口，到期重登 |
+| xhs | ✅ **走 CDP 读页面 DOM**（非签名，见 §3 更正） | 无（浏览器路径绕开） | web_session / a1 / gid / webId（**1 年有效**） | ⚠️ 1 年有效，无刷新接口，到期重登 |
 
-三平台扫码登录全部可行；**只有 bili 支持真·自动续期**，weibo/xhs 是「长效 cookie +
-到期重登」模式（1 年/1 年，低频维护，可接受）。
+三平台扫码登录全部可行；**只有 bili 支持真·自动续期**（但**尚未实现**），weibo/xhs 是
+「长效 cookie + 到期重登」模式（1 年/1 年，低频维护，可接受）。
 
 ---
 
@@ -123,9 +125,11 @@ POST https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket
    → web_session / a1 / gid / webId / websectiga / sec_poison_id 等完整串
 ```
 
-**关键**：签名不是障碍——`packages/xhshow` 已有 `Client.signXS/signXSCommon`
-（`signApiHeaders` 已在 `platform/xhs/client.ts` 封装）。扫码流程只需复用现有签名
-门面，新增 login 端点。
+**关键**：⚠️ **此处原「签名不是障碍——`packages/xhshow` 已有签名」的结论已被推翻**
+（2026-10-16 更正）：`xhshow` 不在主分支，`signApiHeaders` 现直接抛错降级
+（`xhs/client.ts`）。**实际实现走的是 CDP 读页面 DOM**（`platform/xhs/login.ts`），
+不是复用签名门面。要恢复纯算法签名路径，参照 `docs/xhs-signature-research.md` 的
+Python xhshow 0.2.0。
 
 ### 保活
 

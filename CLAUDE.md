@@ -546,41 +546,38 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/xhs-signature-research.md` | 小红书签名史与社区现状复核 |
 | `docs/desktop-crawler-service.md` | desktop 爬虫服务化选型与切分边界 |
 | `docs/capability-gaps.md` | 各平台能力缺口（分区/搜索/主播） |
-| `docs/technical-plan.md` | 三模式 UI、live 源与产品形态的错位 |
 | `docs/cli-plan.md` | apps/cli 调试工具计划 |
 | `docs/sqlite-storage-research.md` | 存储三态与迁移 |
 | `docs/domestic-feed-availability.md` | 国内 feed 可用性实测 |
 | `docs/image-loading-referrer.md` | 防盗链图方案（含 Rust 自定义协议评估） |
 | `docs/rsshub-vs-crawler.md` | RSSHub 对照结论 |
 | `docs/folo-architecture-research.md` | Folo 架构调研（云端聚合，不能照搬） |
-| `docs/core-auth-architecture.md` | core 认证架构 |
 | `docs/mpv-playback-research.md` | 外部播放器 mpv 接入（未做） |
 | `docs/mobile-cdp-feasibility.md` | 移动端 CDP 可行性（未做） |
 | `docs/smoke-check.md` | ★ 端到端巡检清单（改了什么 → 跑什么） |
-| `docs/rail-tree-accordion.md` | 侧栏分组树的 Accordion 改造（选型对比 + 方向键导航 + 三个踩坑） |
+| `docs/rail-tree-accordion.md` | 侧栏树选型（为何用 Accordion 而非树组件 + 三个静默失败坑） |
+| `docs/audit-backlog.md` | 审计发现积压：故意不改的理由 + 误报证伪（已修不在此） |
 
 ## 下一步
 
-- **ui 包 renderer 清理**：✅ 已完成（2026-10-12 删除全部无消费者 renderer）
-- **mobile 接入** ✅ 已完成（2026-10-13）：appHost + core DataLayer + 极简看内容闭环。
-  后续可补：移动端订阅管理（现归桌面）、扫码登录（`Loginable`，`docs/mobile-cdp-feasibility.md`）
+**未做的功能**（按可行性排序）：
+
+- **自动保活**（仅 bili 可行）：扫码已拿 `refresh_token`，但无续期调度——登录态到期
+  只能重扫。协议与量级见 `docs/platform-login-research.md`（`bili_ticket` 软因子 /
+  `SESSDATA` 硬凭证）。
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
-  `docs/desktop-crawler-service.md`
-- **三模式 UI**：✅ 三分栏 / 瀑布流 / 短视频均已完成。短视频 = `views/library/ShortVideoView.tsx`
-  （`short:<kind>` 节点 + Rail「模式」区；原生 scroll-snap，不引 Swiper）。⚠️ live 源 1:1 与其他源
-  1:N 的错位仍待「分组聚合」，设计见 `docs/technical-plan.md`
-- **续播与阅读进度**：✅ **均已完成**（`setPosition` / `setScrollRatio` 都有消费者了）。
-  `MediaItem.positionSec` / `scrollRatio` 由 core `applyReadingState` 从 reading 回填
-  （与 isStarred 同款）；playback 侧 `PlayableMedia` 的 `startAtSec` 起播跳转 + `onProgress`
-  上报；阅读器 `ReaderMain` 恢复滚动位置 + 上报；store `savePosition`/`saveScrollRatio`
-  节流 + 近片尾/近结尾清除；卡片 `.card-progress` 进度条。
-  ⚠️ **store 侧节流/清除必须读 store 当前值**，不能读传入的 item（调用方持旧对象 → 失效）。
-- **OPML 导入导出**：✅ 已完成（设置→订阅与分组）。编解码在 `packages/xml/src/opml.ts`
-  （唯一持有 fast-xml-parser 的包），订阅映射在 `apps/desktop/src/lib/opml.ts`。
-  导入落 `rss:url` 通用直链（register.ts 新增）；导出只含带 URL 的 rss/rsshub 订阅。
-- **扫码登录 UI**：✅ 已完成（账号与凭证页）。`dl.scanLogin` 驱动 channel 级
-  `Loginable`（bili 纯 HTTP / xhs CPD / weibo）；`QrImage` 吃 data URL 与待编码文本两种载荷。
-- **自动保活**：未做（仅 bili 可行，见 `docs/platform-login-research.md`）。
-- **文章正文补全**：✅ 已完成（2026-10-13，含 KV 持久缓存）——见「平台现状与坑」通用 RSS 段。
-  ⚠️ 搜索渠道（bili:search 等）无独立 feed URL，**不在导出内**（若要需按关键字重建）
-- **自动保活**（未做，仅 bili 可行）
+  `docs/desktop-crawler-service.md`。
+- **bili 按分区列房**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
+- **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行（`docs/mobile-cdp-feasibility.md`）。
+- **live 按平台二次聚合**：`tab:live` 已聚合**全部** live 条目（`selectors.baseFor`
+  的 tab 分支 `filter(kind==="live")`，方案 B，2026-10-13 落地）。若要「哔哩哔哩直播 /
+  虎牙直播」这类**按平台**再分组，需在 core 编排层加二次聚合——问题定性与 A/B/C
+  方案对比见 git 历史的 `docs/technical-plan.md`（2026-10-16 删）。
+
+**已完成的**（细节在代码与 git log，不在此堆叠）：三分栏/瀑布流/短视频三模式、续播与
+阅读进度、OPML 导入导出、扫码登录 UI、文章正文补全（含 KV 持久缓存）、mobile 接入。
+
+**长期悬置**（收益不抵复杂度，暂不做）：
+- **CSP**：现 `csp: null`。要配最小 CSP 须放 `unsafe-eval`（抖音/斗鱼签名脚本靠 `eval`），
+  收益有限。
+- **live 分组聚合的 UI 侧**：见上「live 按平台二次聚合」。
