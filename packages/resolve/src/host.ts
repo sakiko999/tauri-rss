@@ -1,7 +1,7 @@
 /**
  * host — crawler 的宿主能力访问便捷层。
  *
- * 宿主实现 + 全局 appHost 门面在 @tauri-playground/host;crawler 直接访问
+ * 宿主实现 + 全局 appHost 门面在 @amoeba/host;crawler 直接访问
  * `globalThis.appHost.http`(门面 getter 校验未注入抛清晰错误)。本模块只保留
  * 便捷 GET 封装(httpText/httpJson)与时钟。
  *

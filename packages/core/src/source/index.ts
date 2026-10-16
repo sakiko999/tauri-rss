@@ -12,7 +12,7 @@
 import {
   listChannels as listCrawlerChannels,
   getChannel as getCrawlerChannel,
-} from "@tauri-playground/crawler"
+} from "@amoeba/crawler"
 import type { MediaKind } from "../types/media-item.ts"
 
 /** 订阅参数字段描述(供 UI 生成表单)。结构兼容 crawler 的 SourceInfoField。 */

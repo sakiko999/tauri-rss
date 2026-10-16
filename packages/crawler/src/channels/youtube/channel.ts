@@ -5,13 +5,13 @@
  * (thumbnail + description)和 yt:videoId。本 channel 解析它,规范化
  * videoId → watch URL,产 Video Item。
  */
-import type { Item, Video } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Video } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpText, now, getYoutubeLiveMeta } from "@tauri-playground/resolve"
-import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
-import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
+import { httpText, now, getYoutubeLiveMeta } from "@amoeba/resolve"
+import { parseFeed, type ParsedItem } from "@amoeba/xml"
+import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
 
 const UA = DESKTOP_CHROME_UA
 

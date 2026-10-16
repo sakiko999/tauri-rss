@@ -1,5 +1,5 @@
 /**
- * @tauri-playground/xml — RSS 2.0 + `tpl:` 扩展的编解码层。
+ * @amoeba/xml — RSS 2.0 + `tpl:` 扩展的编解码层。
  *
  * crawler/core 共用:
  *   - types:      Item 协议(判别联合,贴近 XML 形态)

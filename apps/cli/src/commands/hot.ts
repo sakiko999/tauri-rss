@@ -9,7 +9,7 @@
  * 依赖:dl.resolveHotWord(subscriptionId, word) 返回 MediaItem[](social,不写 store)。
  */
 import pc from "picocolors"
-import { createDataLayer } from "@tauri-playground/core"
+import { createDataLayer } from "@amoeba/core"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface HotOptions {

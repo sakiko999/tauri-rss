@@ -5,10 +5,10 @@
  * playurl 直链由下游懒解析)。`resolveBiliPlay` 已迁 platform/bili/video-play.ts
  * (能力抽离:resolver/各 channel 从 resolver 或 platform/bili 引用)。
  */
-import type { Video } from "@tauri-playground/xml"
+import type { Video } from "@amoeba/xml"
 
 // 兼容 re-export:现有 4 video channel 仍引 resolveBiliPlay(M4 收窄后改 resolveBiliVideoPlay)。
-export { resolveBiliVideoPlay as resolveBiliPlay } from "@tauri-playground/resolve"
+export { resolveBiliVideoPlay as resolveBiliPlay } from "@amoeba/resolve"
 
 export const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400

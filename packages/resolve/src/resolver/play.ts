@@ -7,7 +7,7 @@
  *
  * info 透传 cookie(登录态档位):core 层经 sourceInfoFor/routedSourceInfo 注入。
  */
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import type { SourceInfo } from "../index.ts"
 import { resolveRoute, type ResolvePlatform } from "./router.ts"
 import { resolveBiliLivePlay, resolveBiliVideoPlay } from "../platform/bili"

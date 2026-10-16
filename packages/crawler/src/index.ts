@@ -16,13 +16,13 @@
  * `getChannel/listChannels/registerAllChannels` 都会先确保已注册。
  */
 import { registerBuiltinChannels } from "./register.ts"
-import type { Kind, Item } from "@tauri-playground/xml"
+import type { Kind, Item } from "@amoeba/xml"
 
 /** channel 产出的 item 种类。 */
-export type { Kind } from "@tauri-playground/xml"
+export type { Kind } from "@amoeba/xml"
 
 /** 宿主 HTTP 便捷层(httpText/httpJson/httpGet)——core source 层(rsshub 直传)复用。 */
-export { httpGet, httpText, httpJson } from "@tauri-playground/resolve"
+export { httpGet, httpText, httpJson } from "@amoeba/resolve"
 
 /** 渠道参数字段定义(描述实例化一个 source 需要什么)。 */
 export type SourceInfo = Record<string, string>

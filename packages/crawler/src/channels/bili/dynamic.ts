@@ -16,14 +16,14 @@
  *   - DYNAMIC_TYPE_ARTICLE(专栏):major.opus.jump_url(cv 号)
  * 统一映射成 Social(content + images + likes/reposts/replies),链接指向 t.bilibili.com/{id_str}。
  */
-import type { Item, Social, SocialImage } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Social, SocialImage } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { biliClient } from "@tauri-playground/resolve"
-import { fillImageSizes } from "@tauri-playground/resolve"
-import { toHttps } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { biliClient } from "@amoeba/resolve"
+import { fillImageSizes } from "@amoeba/resolve"
+import { toHttps } from "@amoeba/resolve"
 
 const API = "https://api.bilibili.com"
 

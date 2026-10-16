@@ -7,7 +7,7 @@
  * ⚠️ 不能像 player 那样 spread 平铺——crawler 各域都是同名 `warn`,平铺会互相覆盖
  * (前缀全变成最后一个域)。故按 channel 分组命名空间:`log.bili.warn(...)`。
  */
-import { createLogDomain } from "@tauri-playground/log"
+import { createLogDomain } from "@amoeba/log"
 
 /** [bili] 视频档位降级警告。 */
 const biliLog = createLogDomain("bili", { color: "#fb7299", ansi: 211 })

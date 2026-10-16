@@ -4,11 +4,11 @@
  * 与 chart 的区别:`search` 接口**直接返回 `feedUrl`**(不需二次 Lookup),
  * 所以这里少一次往返。产出与 chart 同构(`kind: audio`,`url` = 节目 RSS)。
  */
-import type { Audio, Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Audio, Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now, searchApplePodcasts } from "@tauri-playground/resolve"
+import { now, searchApplePodcasts } from "@amoeba/resolve"
 
 export class ApplePodcastSearchChannel implements RssChannel {
   readonly key = "apple:podcast-search"

@@ -12,7 +12,7 @@
  * `platforms.ts`(共用常量)。本文件保留能力矩阵与三块 section 的布局。
  */
 import { useMemo, useState } from "react"
-import type { ChannelInfo } from "@tauri-playground/core"
+import type { ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { PLATFORMS, CAP_LABEL, type Cap } from "./platforms.ts"

@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-playground/resolve",
+  "name": "@amoeba/resolve",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,9 +8,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@tauri-playground/host": "workspace:*",
-    "@tauri-playground/log": "workspace:*",
-    "@tauri-playground/xml": "workspace:*",
+    "@amoeba/host": "workspace:*",
+    "@amoeba/log": "workspace:*",
+    "@amoeba/xml": "workspace:*",
     "ramda": "^0.32.0"
   },
   "scripts": {},

@@ -8,9 +8,9 @@
  * deserializeFeed 不在 core 公共面(收敛内部);CLI 作为 monorepo 内部观测面
  * 走相对路径引用,不发包。
  */
-import { serializeFeed } from "@tauri-playground/xml"
+import { serializeFeed } from "@amoeba/xml"
 import { deserializeFeed } from "../../../../packages/core/src/processing/deserialize.ts"
-import { resolveRoute } from "@tauri-playground/resolve"
+import { resolveRoute } from "@amoeba/resolve"
 
 /** RSSHub 侧标准 RSS 2.0 fixture(与外部实例输出同构,含 media:* 增强)。 */
 function rsshubXml(): string {

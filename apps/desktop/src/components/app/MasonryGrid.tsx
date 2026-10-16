@@ -17,7 +17,7 @@
  */
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react"
 import { useMasonry, usePositioner } from "masonic"
-import type { MediaItem } from "@tauri-playground/core"
+import type { MediaItem } from "@amoeba/core"
 import { LoadMoreFooter } from "./LoadMoreFooter.tsx"
 import { useDesktop } from "../../store/index.ts"
 import { isSmartFeed, isTabNode } from "../../store/nodes.ts"

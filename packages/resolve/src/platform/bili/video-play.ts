@@ -5,7 +5,7 @@
  * 按 item.url 路由调用。bvid/aid → cid → 全档位 durl mp4 直链。
  * info 携带 core 层注入的登录 cookie → 解锁更高档位(登录 1080P+);无则零登录。
  */
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import type { SourceInfo } from "../../index.ts"
 import { biliClient } from "./index.ts"
 

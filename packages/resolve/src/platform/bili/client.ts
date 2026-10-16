@@ -13,7 +13,7 @@
  * 零登录:nav 未登录(`code:-101`)仍返回 wbi_img → MD5 即可签名。
  */
 import * as R from "ramda"
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import { log } from "../../log.ts"
 import { httpJson, now } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"

@@ -9,12 +9,12 @@
  * ⚠️ 能力抽离:只输出 Live item 基础信息(与 rsshub 一致)。流/弹幕解析统一走
  * crawler/resolver(按 item.url→live.bilibili.com/{roomId} 路由)。翻页(Pageable)保留。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { biliClient } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { biliClient } from "@amoeba/resolve"
 
 const API_LIVE = "https://api.live.bilibili.com"
 const PAGE_SIZE = 30

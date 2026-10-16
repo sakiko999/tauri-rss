@@ -3,12 +3,12 @@
  *
  * wbi 签名(signWeb)→ search/square 热搜榜。零登录可用。
  */
-import type { Article, Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Article, Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { biliClient } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { biliClient } from "@amoeba/resolve"
 import { API } from "./video-common.ts"
 
 export class BiliSquareChannel implements RssChannel {

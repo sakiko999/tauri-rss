@@ -15,7 +15,7 @@
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
 import { useEffect, useRef, useState } from "react"
-import type { MediaStream, ResolvePlayback } from "@tauri-playground/core"
+import type { MediaStream, ResolvePlayback } from "@amoeba/core"
 import { useMediaStream } from "./hooks/useMediaStream.ts"
 import {
   isProgressiveAudio,

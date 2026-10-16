@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-playground/core",
+  "name": "@amoeba/core",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,12 +9,12 @@
     "./source/rsshub": "./src/source/rsshub.ts"
   },
   "dependencies": {
-    "@tauri-playground/crawler": "workspace:*",
-    "@tauri-playground/resolve": "workspace:*",
-    "@tauri-playground/xml": "workspace:*"
+    "@amoeba/crawler": "workspace:*",
+    "@amoeba/resolve": "workspace:*",
+    "@amoeba/xml": "workspace:*"
   },
   "scripts": {},
   "devDependencies": {
-    "@tauri-playground/host": "workspace:*"
+    "@amoeba/host": "workspace:*"
   }
 }

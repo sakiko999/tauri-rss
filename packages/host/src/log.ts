@@ -1,4 +1,4 @@
-import { createLogDomain } from "@tauri-playground/log"
+import { createLogDomain } from "@amoeba/log"
 
 /**
  * host:http 域 —— HTTP 隧道请求日志。

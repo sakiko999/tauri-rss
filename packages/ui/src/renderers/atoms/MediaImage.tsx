@@ -20,7 +20,7 @@
  * 不做 Folo 的 proxy/blurhash/fitContent —— 无代理部署场景下是死代码。
  */
 import { useEffect, useState } from "react"
-import { mediaReferrerFor } from "@tauri-playground/host"
+import { mediaReferrerFor } from "@amoeba/host"
 import { Skeleton } from "./Skeleton.tsx"
 import { ImageOffIcon } from "./Icons.tsx"
 

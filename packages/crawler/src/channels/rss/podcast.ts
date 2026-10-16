@@ -5,13 +5,13 @@
  * enclosure + itunes 元数据,归一成 Audio Item 再 serializeFeed(带 tpl: 扩展),
  * 让 core 能按 tpl:kind=audio 正确解析。
  */
-import type { Audio, Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Audio, Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpText, now } from "@tauri-playground/resolve"
-import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
-import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
+import { httpText, now } from "@amoeba/resolve"
+import { parseFeed, type ParsedItem } from "@amoeba/xml"
+import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
 
 const UA = DESKTOP_CHROME_UA
 

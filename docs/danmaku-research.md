@@ -270,7 +270,7 @@ relative 容器(16:9 自撑)正是覆盖层载体;`useVideoElement.state` 已提
 | Live 对齐 | YouTube live chat 是「当前时刻」轮询,实时追加即可,**不与播放时间轴对齐**(DVR setLiveEdge 不回溯聊天) |
 | 颜色 | 各平台 crawler 侧归一为 `#RRGGBB`(复用 dart `numberToColor` 逻辑;douyu 独立 6 色表) |
 | superChat | MVP 显示为带边框高亮弹幕(不单独建模型) |
-| 依赖 | player 加 `@tauri-playground/crawler`(类型引用,无运行时耦合) |
+| 依赖 | player 加 `@amoeba/crawler`(类型引用,无运行时耦合) |
 
 ## 七、弹幕渲染选型
 

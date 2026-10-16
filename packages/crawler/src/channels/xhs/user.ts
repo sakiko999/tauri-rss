@@ -31,14 +31,14 @@
  *     `__INITIAL_STATE__.user.notes`(浏览器已解析 new Map 等表达式,天然干净)。
  *   - HTTP(无 browser 门面):带 cookie 请求 profile 页 HTML → extractInitialState 解析。
  */
-import type { Item, Social } from "@tauri-playground/xml"
-import { serializeFeed, type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Social } from "@amoeba/xml"
+import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@tauri-playground/resolve"
-import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@tauri-playground/resolve"
-import { log } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@amoeba/resolve"
+import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@amoeba/resolve"
+import { log } from "@amoeba/resolve"
 
 /** 短延时(滚动翻页等网络/加载)。 */
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))

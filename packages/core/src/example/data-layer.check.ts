@@ -8,8 +8,8 @@
  * 不触网 —— 判的是编排逻辑,不是抓取。
  */
 import assert from "node:assert/strict"
-import { injectNodeHost } from "@tauri-playground/host"
-import { registerAllChannels } from "@tauri-playground/crawler"
+import { injectNodeHost } from "@amoeba/host"
+import { registerAllChannels } from "@amoeba/crawler"
 import { createDataLayer } from "../index.ts"
 import type { Subscription } from "../types/subscription.ts"
 
@@ -63,8 +63,8 @@ if (inStore) {
 // 真实场景:源临时故障 / 反爬返回空壳页 → fetch 成功但解析出 0 条。旧实现会
 // store.replace(空) 并把空 XML 写进缓存,内容在内存和磁盘上一起消失。
 {
-  const { registerChannel } = await import("@tauri-playground/crawler")
-  const { serializeFeed } = await import("@tauri-playground/xml")
+  const { registerChannel } = await import("@amoeba/crawler")
+  const { serializeFeed } = await import("@amoeba/xml")
   let mode: "items" | "empty" = "items"
   registerChannel({
     key: "chk:fake",
@@ -110,8 +110,8 @@ if (inStore) {
 // 走真实 refresh 路径(refresh 内部调 applyReadingState),断言 lastReadAt 从 reading 回填到
 // store 的 MediaItem —— 漏回填则「继续」只能按 publishedAt 排,丢「接着上次看」语义。
 {
-  const { registerChannel } = await import("@tauri-playground/crawler")
-  const { serializeFeed } = await import("@tauri-playground/xml")
+  const { registerChannel } = await import("@amoeba/crawler")
+  const { serializeFeed } = await import("@amoeba/xml")
   registerChannel({
     key: "chk-readat",
     name: "回填源",
@@ -137,8 +137,8 @@ if (inStore) {
 // 退订竞态:在途 refresh 完成后若订阅已退订,不再写回内容(否则 rail 消失但条目
 // 仍留在「全部」—— 退订不彻底)。用慢速 fake channel 制造 refresh 与 remove 竞态。
 {
-  const { registerChannel } = await import("@tauri-playground/crawler")
-  const { serializeFeed } = await import("@tauri-playground/xml")
+  const { registerChannel } = await import("@amoeba/crawler")
+  const { serializeFeed } = await import("@amoeba/xml")
   let release!: () => void
   const gate = new Promise<void>((r) => (release = r))
   registerChannel({

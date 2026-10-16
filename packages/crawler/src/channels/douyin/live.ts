@@ -10,17 +10,17 @@
  * liveStatus 判定:**status==2 才是直播中**(复刻 dart,实测在播房间返回 2);
  * status==4 是 roomId 一次性、需改用 webRid,非直播中。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { log } from "@tauri-playground/resolve"
-import { toInt } from "@tauri-playground/resolve"
-import { parseRoomIds } from "@tauri-playground/resolve"
-import { strOr } from "@tauri-playground/resolve"
-import { fetchRoom } from "@tauri-playground/resolve"
-import { douyinOnline } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { log } from "@amoeba/resolve"
+import { toInt } from "@amoeba/resolve"
+import { parseRoomIds } from "@amoeba/resolve"
+import { strOr } from "@amoeba/resolve"
+import { fetchRoom } from "@amoeba/resolve"
+import { douyinOnline } from "@amoeba/resolve"
 
 const LIVE = "https://live.douyin.com"
 

@@ -1,5 +1,5 @@
 /**
- * @tauri-playground/player Tailwind 入口(仅给 VSCode IntelliSense,不进任何 bundle)。
+ * @amoeba/player Tailwind 入口(仅给 VSCode IntelliSense,不进任何 bundle)。
  *
  * 真实构建由消费方(desktop styles.css)经 `@source "../../../packages/player/src"`
  * 扫描完成。本文件纯声明「player 包是 tailwind 项目」,让 tailwindcss-intellisense

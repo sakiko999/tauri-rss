@@ -5,8 +5,8 @@
  * resolve/platform/bili/danmaku-live.ts)。
  */
 import pc from "picocolors"
-import type { DanmakuItem } from "@tauri-playground/resolve"
-import { getDanmakuByUrl } from "@tauri-playground/resolve"
+import type { DanmakuItem } from "@amoeba/resolve"
+import { getDanmakuByUrl } from "@amoeba/resolve"
 import { routeWithCookie } from "./item.ts"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 

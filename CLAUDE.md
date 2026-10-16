@@ -37,7 +37,7 @@ apps/
                  `src/components/app/*.tsx`    = 业务件，读 useDesktop/usePrefs 或吃 domain 类型
                    Rail(+RailGroupTree) · TitleBar · Toaster · SocialDetailModal ·
                    MasonryGrid · LoadMoreFooter · Cards · ListRow
-               判据就是「有没有 `useDesktop`/`usePrefs`/`@tauri-playground/core` 类型 / domain 常量」。
+               判据就是「有没有 `useDesktop`/`usePrefs`/`@amoeba/core` 类型 / domain 常量」。
                往 components/ 加新组件前先问要在哪一层；业务件一律进 app/。
                ⚠️ **文件命名统一 PascalCase**（2026-10-14 改，原 `cards.tsx`/`icons.tsx` 是小写遗留）：
                组件文件即默认导出物，大写开头；"一族组件"从**导出名**看就够，不靠文件名首字母。
@@ -197,7 +197,11 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - `cargo test/build` 前若 amoeba.exe 仍在跑会锁二进制报 `拒绝访问 (os error 5)`，
   先 `taskkill //F //IM amoeba.exe`。增量编译偶报同错，无害，忽略。
   ⚠️ 进程名 = Cargo **package name**（2026-10-16 由 `tauri-app` 改名而来），
-  改名后这条命令要同步，否则杀不掉旧进程。
+  改名后这条命令要同步，否则杀不掉旧进程。**改产品名时一并检查这五处**：
+  `tauri.conf*.json` 的 productName/title/identifier、`Cargo.toml` 的 name/lib name、
+  `main.rs` 与 `tests/*.rs` 的 `*_lib` 引用、`.vscode/{tasks,launch}.json`、
+  以及 `apps/cli/.../browser-reset.ts` 里那份**硬编码的 identifier 副本**
+  （不同步会静默 no-op —— 去删一个不存在的目录）。
 - tsc 用根 `./node_modules/.bin/tsc -p <项目>`；**不要** `npx tsc`（会误装 tsc@2.0.3），
   **不要**裸 `-p tsconfig.app.json`（扫全仓含 tmp/ 噪声）。
 - ⚠️ **改源码一律用 Edit/Write，不要用 PowerShell `Set-Content -Encoding utf8` 整份重写**
@@ -408,7 +412,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   同理 `Switch`/`Menu`/`Modal` 都在那个模块。原生 `<input>`/`<textarea>` 保留（可主题化）。
 - ⚠️ **加了新依赖必须重启 dev server + `bun install`**：Vite 的依赖预打包只在启动时做，
   热重载不会补新包 → `Xxx is not defined` / `Failed to resolve import` 白屏或 Vite
-  error overlay。workspace 包（如 `@tauri-playground/xml`）还须先在**消费方
+  error overlay。workspace 包（如 `@amoeba/xml`）还须先在**消费方
   package.json** 声明 `workspace:*`（desktop 曾在缺该声明时炸过：store 一 import 就白屏）。
   改完清 `node_modules/.vite` 后 `bun install` 再重启。
 - ⚠️ **元素级 reset 必须写在 `@layer base` 里**：`styles.css` 的 `@layer base{}` 一旦被

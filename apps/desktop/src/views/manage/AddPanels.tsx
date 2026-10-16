@@ -6,11 +6,11 @@
  * 添加到)与「按渠道配置」(渠道 chip / 摘要 / 参数表单)两大块 JSX 和表单状态
  * 堆在同一个 591 行的组件里。两块互不依赖,只有共享的 `form` 对象。
  */
-import type { ChannelInfo } from "@tauri-playground/core"
+import type { ChannelInfo } from "@amoeba/core"
 import { KIND_META } from "../../store/nodes.ts"
 import { Banner } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
-import { MediaImage } from "@tauri-playground/ui"
+import { MediaImage } from "@amoeba/ui"
 import { platformOf, SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
 import { isImeComposing } from "../../lib/ime.ts"
 

@@ -153,7 +153,7 @@ declare global {
   }
 
   /**
-   * 全局宿主门面(由 @tauri-playground/host 初始化)。字段是 getter:
+   * 全局宿主门面(由 @amoeba/host 初始化)。字段是 getter:
    * http/js/storage 未注入时访问抛清晰错误;log/now 缺失用兜底。
    * 应用/example 启动时调 injectXxxHost() 填实现,之后依赖它的包直接
    * `globalThis.appHost.http` 等。

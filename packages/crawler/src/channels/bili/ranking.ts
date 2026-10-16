@@ -3,12 +3,12 @@
  *
  * `/x/web-interface/ranking/v2` 分区榜。rid 支持英文分区名(见 RID_TABLE)或数字。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { biliClient } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { biliClient } from "@amoeba/resolve"
 import { API, ugc } from "./video-common.ts"
 
 const RID_TABLE: Record<string, string> = {

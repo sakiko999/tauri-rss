@@ -5,8 +5,8 @@
  * settings 更新,不固化),这是与 fetch/item 探针直连 source 的关键差异。
  */
 import pc from "picocolors"
-import { createDataLayer } from "@tauri-playground/core"
-import { getChannel } from "@tauri-playground/crawler"
+import { createDataLayer } from "@amoeba/core"
+import { getChannel } from "@amoeba/crawler"
 import { exampleInfo, parseKvPairs } from "../info.ts"
 import { fail, fmtMs, ok, printJson, startTimer, trunc } from "../ui/render.ts"
 

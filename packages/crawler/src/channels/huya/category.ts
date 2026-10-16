@@ -6,11 +6,11 @@
  *
  * 分页:页码制(page 递增),服务端每页固定 ~120 条(不接受 pageSize)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { httpJson, now } from "@tauri-playground/resolve"
+import { httpJson, now } from "@amoeba/resolve"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"

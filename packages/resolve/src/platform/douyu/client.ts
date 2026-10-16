@@ -4,7 +4,7 @@
  * 无状态单例:签名/请求全从参数取(cookie/referer 每次传)。从 DouyuLiveChannel
  * 下沉(原 channel 私有方法)。签名脚本 CRYPTO_JS 经 host.js 执行。
  */
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import { httpGet, httpJson, now } from "../../host.ts"
 import { log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"

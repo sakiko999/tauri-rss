@@ -1,11 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router/dom";
-import { injectTauriHost } from "@tauri-playground/host";
+import { injectTauriHost } from "@amoeba/host";
 import { router } from "./router";
 import { useDesktop } from "./store/index";
 import { showSkeleton } from "./store/selectors.ts";
-import "@tauri-playground/core/source/rsshub";
+import "@amoeba/core/source/rsshub";
 import "./styles.css";
 
 // 注入桌面宿主能力到全局 appHost(core/crawler 从它读 http/js/storage/now)

@@ -5,7 +5,7 @@
  */
 import { useMemo } from "react"
 import { Virtuoso } from "react-virtuoso"
-import type { MediaItem } from "@tauri-playground/core"
+import type { MediaItem } from "@amoeba/core"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { healthOf, queryView } from "../../store/selectors.ts"

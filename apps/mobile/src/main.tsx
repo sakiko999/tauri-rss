@@ -1,6 +1,6 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { injectTauriHost, injectBrowserHost } from "@tauri-playground/host"
+import { injectTauriHost, injectBrowserHost } from "@amoeba/host"
 import { App } from "./App.tsx"
 import { useMobile } from "./store.ts"
 import "./styles.css"

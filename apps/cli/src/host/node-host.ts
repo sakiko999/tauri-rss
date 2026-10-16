@@ -6,12 +6,12 @@
  * Cookie,Bun 原生 WebSocket 是浏览器标准 API 不支持自定义头
  * (docs/cli-plan.md §三),绝不透传原生 WS。
  *
- * log 开关:CLI 环境没有 localStorage,@tauri-playground/log 会视为「开」,
+ * log 开关:CLI 环境没有 localStorage,@amoeba/log 会视为「开」,
  * crawler/resolve 的数据路径 info/debug 会淹没探针输出。这里垫一个
  * localStorage shim 默认 log="0"(warn/error 永保留),RSS_LOG=1 放开——
  * CLI 的观测面是探针本身的结构化输出,不是散装 log(docs/cli-plan.md §七)。
  */
-import { nodeBackend, nodeJsBackend, nodeWsBackend, setHostCaps } from "@tauri-playground/host"
+import { nodeBackend, nodeJsBackend, nodeWsBackend, setHostCaps } from "@amoeba/host"
 import { sqliteStorage } from "../store/sqlite-storage.ts"
 
 export function setupHost(): void {

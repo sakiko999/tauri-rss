@@ -8,16 +8,16 @@
  * 签名只用于 getH5Play(拉 RTMP 直链)。本 channel 产出 Live Item(状态+元数据),
  * playUrls 需额外 H5Play 请求,交由下游 resolveLivePlay 懒解析(同 huya)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { log } from "@tauri-playground/resolve"
-import { toInt } from "@tauri-playground/resolve"
-import { parseRoomIds } from "@tauri-playground/resolve"
-import { strOr } from "@tauri-playground/resolve"
-import { douyuRoomInfo } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { log } from "@amoeba/resolve"
+import { toInt } from "@amoeba/resolve"
+import { parseRoomIds } from "@amoeba/resolve"
+import { strOr } from "@amoeba/resolve"
+import { douyuRoomInfo } from "@amoeba/resolve"
 
 const BASE = "https://www.douyu.com"
 

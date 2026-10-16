@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-playground/ui",
+  "name": "@amoeba/ui",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,9 +8,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@tauri-playground/core": "workspace:*",
-    "@tauri-playground/host": "workspace:*",
-    "@tauri-playground/player": "workspace:*",
+    "@amoeba/core": "workspace:*",
+    "@amoeba/host": "workspace:*",
+    "@amoeba/player": "workspace:*",
     "react": "^19.2.8"
   },
   "devDependencies": {

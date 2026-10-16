@@ -8,11 +8,11 @@
  * `start>=20` 一律返同一批 40 条(首条相同,与 start 值无关)。故只取首页、
  * 不声明 Pageable(避免下游翻页拿到重复结果)。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { searchHuyaRooms } from "@tauri-playground/resolve"
+import { searchHuyaRooms } from "@amoeba/resolve"
 
 const PAGE = 20
 

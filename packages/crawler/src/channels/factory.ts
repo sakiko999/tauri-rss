@@ -8,9 +8,9 @@
  *   - api channel(items → serializeFeed → XML):用 `apiFetch` 包出 fetch;
  *   - 原生直传(上游已是 XML):channel 自行 `() => this.fetchXml(info)`。
  */
-import type { Item, SerializeOptions } from "@tauri-playground/xml"
-import { serializeFeed } from "@tauri-playground/xml"
-import { log } from "@tauri-playground/resolve"
+import type { Item, SerializeOptions } from "@amoeba/xml"
+import { serializeFeed } from "@amoeba/xml"
+import { log } from "@amoeba/resolve"
 
 /** serializeFeed + 可选 total(翻页渠道真实总数,经 tpl:total 带出)。apiFetch / fetchMore 共用。 */
 export function serializeWithTotal(items: Item[], opts: SerializeOptions, total?: number): string {

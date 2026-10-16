@@ -8,7 +8,7 @@
  * 后面却有,就会跳过低档去取那个渐进式。
  */
 import assert from "node:assert/strict"
-import type { MediaStream } from "@tauri-playground/core"
+import type { MediaStream } from "@amoeba/core"
 import { pickDefaultStream } from "./streamKind.ts"
 
 const s = (format: string, url: string): MediaStream => ({ url, format }) as MediaStream

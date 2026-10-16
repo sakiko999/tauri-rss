@@ -13,7 +13,7 @@
  * 契约:最高清晰度排最前(player 默认选流取第一个)。
  */
 import * as R from "ramda"
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import type { SourceInfo } from "../../index.ts"
 import { BILIBILI_UA, biliClient } from "./index.ts"
 

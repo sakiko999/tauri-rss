@@ -9,8 +9,8 @@
  * resolve 的 fetchDouyinSuggestions 是纯函数(无 cookie/无状态),直调最轻。
  */
 import { useEffect, useRef, useState } from "react"
-import type { ChannelInfo, MediaItem } from "@tauri-playground/core"
-import { fetchDouyinSuggestions } from "@tauri-playground/resolve"
+import type { ChannelInfo, MediaItem } from "@amoeba/core"
+import { fetchDouyinSuggestions } from "@amoeba/resolve"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"

@@ -11,7 +11,7 @@
  * 每次 resolve 独立取新鲜签名直链(带过期时间)。
  */
 import * as R from "ramda"
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import { httpJson, httpText } from "../../host.ts"
 import { log } from "../../log.ts"
 import { parseJsonSafe } from "../../utils/inline-json.ts"

@@ -8,10 +8,10 @@
  * kind 是构造时传入的宽 `Kind`(上游 feed 类型运行时才知道),只用于产出描述
  * (deserialize 兜底)。
  */
-import type { Item } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
 import type { Kind, RssChannel, RssSource, SourceInfo, ItemDetailSource } from "../../index.ts"
-import { httpText } from "@tauri-playground/resolve"
-import { DESKTOP_CHROME_UA } from "@tauri-playground/resolve"
+import { httpText } from "@amoeba/resolve"
+import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
 import { extractArticle, visibleTextLength } from "./extract.ts"
 
 const UA = DESKTOP_CHROME_UA

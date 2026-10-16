@@ -1,4 +1,4 @@
-import { createLogDomain } from "@tauri-playground/log"
+import { createLogDomain } from "@amoeba/log"
 
 /** loader 域:隧道请求错误(hls/flv/dash 自定义 loader)。 */
 export const loaderLog = createLogDomain("player:loader", {

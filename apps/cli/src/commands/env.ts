@@ -5,7 +5,7 @@
  */
 import pc from "picocolors"
 import { existsSync } from "node:fs"
-import { nodeBackend, nodeJsBackend } from "@tauri-playground/host"
+import { nodeBackend, nodeJsBackend } from "@amoeba/host"
 import { sqliteFilePath } from "../store/sqlite-storage.ts"
 import { fail, fmtMs, ok, row, startTimer } from "../ui/render.ts"
 

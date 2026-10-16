@@ -16,11 +16,11 @@
  * **上游命中 ∪ 本地分区树 title 匹配**(见 `searchDouyinRooms`),无需登录、无需浏览器。
  * 残留:分区树只到「大类」粒度,`美食`(属「生活」)这类三级词仍返空。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { searchDouyinRooms } from "@tauri-playground/resolve"
+import { searchDouyinRooms } from "@amoeba/resolve"
 
 const PAGE_SIZE = 20
 

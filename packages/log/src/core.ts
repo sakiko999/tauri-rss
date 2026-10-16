@@ -1,5 +1,5 @@
 /**
- * core — @tauri-playground/log 核心:域注册 + 模板事件 + 颜色输出。
+ * core — @amoeba/log 核心:域注册 + 模板事件 + 颜色输出。
  *
  * 每个模块 `createLogDomain(name, config)` 注册自己的日志域:
  *   - name → 前缀 `[${name}]`(如 "player:resolve" → `[player:resolve]`);

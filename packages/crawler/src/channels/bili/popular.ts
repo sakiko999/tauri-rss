@@ -8,12 +8,12 @@
  * 纯 HTTP 协议(`passport.bilibili.com/x/passport-login/web/qrcode/*`),不需要
  * appHost.browser —— 扫一次所有 bili channel 共享(登录态按 channelKey 前缀注入)。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { biliClient, biliScanLogin, biliQrGenerate } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { biliClient, biliScanLogin, biliQrGenerate } from "@amoeba/resolve"
 import { API, ugc } from "./video-common.ts"
 
 export class BiliPopularChannel implements RssChannel, Loginable {

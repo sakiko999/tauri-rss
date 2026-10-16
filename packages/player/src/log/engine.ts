@@ -1,4 +1,4 @@
-import { createLogDomain, formatError } from "@tauri-playground/log"
+import { createLogDomain, formatError } from "@amoeba/log"
 
 /**
  * engine 域:流媒体引擎(hls/flv/dash)生命周期。

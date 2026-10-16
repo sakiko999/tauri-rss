@@ -15,7 +15,7 @@
  * 本 client 在 resolve 后统一解 n(见 signature.ts 的 deobfuscateNParam)。
  */
 import * as R from "ramda"
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import { log } from "../../log.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 import { getItag, isPlayableItag } from "./itag.ts"

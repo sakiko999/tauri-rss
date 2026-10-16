@@ -3,8 +3,8 @@
  *
  * 操作区常驻占位(只切 opacity)以避免行宽跳动。
  */
-import type { MediaItem } from "@tauri-playground/core"
-import { MediaImage } from "@tauri-playground/ui"
+import type { MediaItem } from "@amoeba/core"
+import { MediaImage } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
 import { excerptOf, fmtAgo, mediaUrl, ratioOf } from "../../lib/media.ts"
 

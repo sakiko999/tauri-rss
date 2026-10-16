@@ -13,9 +13,9 @@
  *   但「保留实例只暂停」需给它加命令式 pause API（当前没有，不做）。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { PlayableMedia } from "@tauri-playground/player"
-import { MediaImage } from "@tauri-playground/ui"
-import type { MediaItem } from "@tauri-playground/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
+import type { MediaItem } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
@@ -37,7 +37,7 @@ function Slide({ item, index, active, onClose }: { item: MediaItem; index: numbe
         <PlayableMedia
           key={item.id}
           className="sv-media"
-          streams={(item as { stream?: import("@tauri-playground/core").MediaStream }).stream ? [(item as { stream: import("@tauri-playground/core").MediaStream }).stream] : undefined}
+          streams={(item as { stream?: import("@amoeba/core").MediaStream }).stream ? [(item as { stream: import("@amoeba/core").MediaStream }).stream] : undefined}
           resolve={() =>
             isLive ? resolveLivePlay(item.subscriptionId, item.id) : resolvePlay(item.subscriptionId, item.id)
           }

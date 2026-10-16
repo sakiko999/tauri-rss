@@ -1,4 +1,4 @@
-import { createLogDomain } from "@tauri-playground/log"
+import { createLogDomain } from "@amoeba/log"
 
 /**
  * danmaku 域:Canvas 弹幕渲染层的订阅生命周期。

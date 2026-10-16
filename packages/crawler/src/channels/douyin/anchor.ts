@@ -11,11 +11,11 @@
  *
  * ⚠️ **不可分页**:无页码语义(本地过滤合成结果),不声明 Pageable。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { searchDouyinAnchors } from "@tauri-playground/resolve"
+import { searchDouyinAnchors } from "@amoeba/resolve"
 
 const PAGE_SIZE = 20
 

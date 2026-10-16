@@ -27,7 +27,7 @@ export class TauriHttpBackend implements HttpBackend {
     const method = req.method ?? "GET"
     const responseType = req.responseType ?? "text"
 
-    // 日志走 @tauri-playground/log 的 host:http 域(requestStart/requestDone/
+    // 日志走 @amoeba/log 的 host:http 域(requestStart/requestDone/
     // requestError)——devtools Console 过滤 [host:http] 看完整 URL/状态/耗时。
     // 开关:localStorage["log:host:http"]="0" 按域关;旧 key host-log 兼容。
     const started = performance.now()

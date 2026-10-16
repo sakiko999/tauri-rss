@@ -1,5 +1,5 @@
 /**
- * @tauri-playground/ui 设计令牌 —— Tailwind 4 @theme(唯一来源)。
+ * @amoeba/ui 设计令牌 —— Tailwind 4 @theme(唯一来源)。
  *
  * 由消费方(desktop/mobile)的 styles.css `@import` 引入,并用 `@source`
  * 显式扫描 ui 包源码,让 ui 组件里写的 tailwind 类被消费方构建。

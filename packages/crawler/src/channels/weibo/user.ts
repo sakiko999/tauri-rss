@@ -12,12 +12,12 @@
  * 用浏览器页面 fetch 打 m.weibo.cn——自动带 Edge profile 登录态,绕开冷 cookie
  * 时效问题(微博 cookie 几分钟就失效)。未注入时降级现有 HTTP + cookie 路径。
  */
-import type { Item } from "@tauri-playground/xml"
-import type { SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import type { SerializeOptions } from "@amoeba/xml"
 import type { LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
-import { WB_BASE, apiHeaders, mblogCardsToItems, weiboClient, weiboScanLogin } from "@tauri-playground/resolve"
-import { cdpJson, cdpNavigate, withBrowserLock } from "@tauri-playground/resolve"
+import { WB_BASE, apiHeaders, mblogCardsToItems, weiboClient, weiboScanLogin } from "@amoeba/resolve"
+import { cdpJson, cdpNavigate, withBrowserLock } from "@amoeba/resolve"
 
 export class WeiboUserChannel implements RssChannel, Loginable {
   readonly key = "weibo:user"

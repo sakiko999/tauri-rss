@@ -6,12 +6,12 @@
  * 点热搜词 → resolveHotWord(word):`container/getIndex?containerid=100103type=1&q={word}`
  * 搜索该词微博流(需完整登录 cookie)。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { HotWordSource, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpJson, now } from "@tauri-playground/resolve"
-import { PC_UA, WB_BASE, mblogCardsToItems, weiboClient } from "@tauri-playground/resolve"
+import { httpJson, now } from "@amoeba/resolve"
+import { PC_UA, WB_BASE, mblogCardsToItems, weiboClient } from "@amoeba/resolve"
 
 export class WeiboHotChannel implements RssChannel {
   readonly key = "weibo:hot"

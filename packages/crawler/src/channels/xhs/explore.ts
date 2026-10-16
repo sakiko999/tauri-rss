@@ -11,13 +11,13 @@
  *     (WAF 指纹判定,非代码问题)。浏览器是真 Chrome 指纹 → 能拿到真实 feeds。
  *   - HTTP(无 browser 门面):xhsClient.getHtml + extractInitialState。
  */
-import type { Item, Social } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Social } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@tauri-playground/resolve"
-import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@amoeba/resolve"
+import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@amoeba/resolve"
 
 export class XhsExploreChannel implements RssChannel, Loginable {
   readonly key = "xhs:explore"

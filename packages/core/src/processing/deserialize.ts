@@ -13,7 +13,7 @@
  */
 import type { MediaAttachment, MediaAuthor, MediaItem, MediaKind, MediaStream, SocialImage, StreamingFormat } from "../types/media-item.ts"
 import type { LivePlatformId, LiveStatus } from "../types/live.ts"
-import { parseFeed, type ParsedItem } from "@tauri-playground/xml"
+import { parseFeed, type ParsedItem } from "@amoeba/xml"
 
 /** 反序列化上下文:app 层语义由调用方注入。 */
 export interface DeserializeContext {

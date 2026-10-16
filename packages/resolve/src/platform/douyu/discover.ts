@@ -11,7 +11,7 @@
  * **2026-09 实测匿名同样返回全部结果**(带/不带 cookie 响应一致),故不注入。
  * 是否在播 = `isLive==1 && roomType==0`(roomType 非 0 是录播/轮播)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
 import { httpJson, now } from "../../host.ts"
 import { parseCount } from "../../utils/count.ts"
 

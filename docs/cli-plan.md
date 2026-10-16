@@ -37,7 +37,7 @@ square/user_video/dynamic/live)、`youtube`/`youtube:live`、`live:{douyu,huya,d
 
 ```
 apps/cli/
-  package.json     # @tauri-playground/cli;deps: core, host, log + cac + picocolors + qrcode
+  package.json     # @amoeba/cli;deps: core, host, log + cac + picocolors + qrcode
   tsconfig.json    # 不 extends tsconfig.app.json(DOM/vite 环境);面向 bun/node:
                    #   types: ["@types/bun"], moduleResolution bundler, allowImportingTsExtensions
   src/
@@ -147,7 +147,7 @@ core 数据层认 repo 接口(`subscription/reading/settings-repo` 注入 `creat
 2. ✅ **M2 核心闭环**(2026-08-28):`dm` + `align` + `env` + settings 持久化 +
    `refresh` 冒烟(`play --open` 顺带完成)
 3. ✅ **M2.5 example 清退 + hot 命令**(2026-08-31):见 §五;新增 `rss hot <词>`
-4. **M3 打磨**:`--log` 域开关全面接 `@tauri-playground/log`、表格渲染打磨
+4. **M3 打磨**:`--log` 域开关全面接 `@amoeba/log`、表格渲染打磨
 5. **M4 log 清退**:按 §七 分批清退数据路径 log + 精简域(探针已在岗,顺序前提满足)
 6. 待办(搁置):Bun 版 browser backend(spawn Edge + CDP over ws 包)→ 解锁 weibo/xhs;
    login 扫码(qr.ts)

@@ -9,7 +9,7 @@
  * refresh 时按 channelKey 前缀自动注入。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { ChannelInfo } from "@tauri-playground/core"
+import type { ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"

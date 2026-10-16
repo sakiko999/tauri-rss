@@ -6,8 +6,8 @@
  * settings 键即可换真实值),订阅级 info.cookie 永远优先(计划 §六:
  * file-JSON 只做 settings 级小量)。
  */
-import { DEFAULT_SETTINGS, type AppSettings } from "@tauri-playground/core"
-import { getChannel, type SourceInfo } from "@tauri-playground/crawler"
+import { DEFAULT_SETTINGS, type AppSettings } from "@amoeba/core"
+import { getChannel, type SourceInfo } from "@amoeba/crawler"
 import { sqliteStorage } from "./store/sqlite-storage.ts"
 
 /** 各 channel 的示例参数(收编自 crawler example/backend.ts;无参 channel 空)。 */

@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-playground/log",
+  "name": "@amoeba/log",
   "private": true,
   "version": "0.1.0",
   "type": "module",

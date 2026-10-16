@@ -1,5 +1,5 @@
 /**
- * @tauri-playground/resolve —— 平台解析层(独立包,持有平台全部能力)。
+ * @amoeba/resolve —— 平台解析层(独立包,持有平台全部能力)。
  *
  * 定位(2026-08-26 架构重构):platform 与 crawler 解耦,平台能力(请求签名/取数/
  * 播放解析/弹幕)全集中在此。crawler 只输出订阅数据(依赖 resolve 的平台 client

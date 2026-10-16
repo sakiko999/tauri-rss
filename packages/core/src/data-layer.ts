@@ -8,10 +8,10 @@
  * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
-import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@tauri-playground/crawler"
-import { getDanmakuByUrl, resolveLivePlayByUrl as resolveLiveByUrl, resolvePlayByUrl as resolveVideoByUrl } from "@tauri-playground/resolve"
+import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
+import { getDanmakuByUrl, resolveLivePlayByUrl as resolveLiveByUrl, resolvePlayByUrl as resolveVideoByUrl } from "@amoeba/resolve"
 import { getChannel, listChannels as listAllChannels } from "./source/index.ts"
-import { serializeFeed } from "@tauri-playground/xml"
+import { serializeFeed } from "@amoeba/xml"
 import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"

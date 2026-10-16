@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-playground/crawler",
+  "name": "@amoeba/crawler",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -8,11 +8,11 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@tauri-playground/resolve": "workspace:*",
-    "@tauri-playground/xml": "workspace:*"
+    "@amoeba/resolve": "workspace:*",
+    "@amoeba/xml": "workspace:*"
   },
   "scripts": {},
   "devDependencies": {
-    "@tauri-playground/host": "workspace:*"
+    "@amoeba/host": "workspace:*"
   }
 }

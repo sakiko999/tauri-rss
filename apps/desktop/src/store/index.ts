@@ -27,10 +27,10 @@ import {
   type ResolvePlayback,
   type Subscription,
   type SubscriptionGroup,
-} from "@tauri-playground/core"
+} from "@amoeba/core"
 import { SEED_GROUPS, SEED_SUBSCRIPTIONS } from "../subscriptions.ts"
 import { exportOpml, pendingImports } from "../lib/opml.ts"
-import { parseOpml } from "@tauri-playground/xml"
+import { parseOpml } from "@amoeba/xml"
 import { nodeKindOf, nodeMeta, isSmartFeed, subscriptionIdsOfGroup, type NodeMeta, type NodeType } from "./nodes.ts"
 import {
   PAGE_SIZE,

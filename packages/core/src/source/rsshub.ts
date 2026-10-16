@@ -7,13 +7,13 @@
  * 而不是静默连不存在的本地端口。
  *
  * import 本模块即自注册(模块副作用,与 injectTauriHost 同模式)——desktop 入口
- * `import "@tauri-playground/core/source/rsshub"`,mobile 不 import 即不进 bundle。
+ * `import "@amoeba/core/source/rsshub"`,mobile 不 import 即不进 bundle。
  *
  * 渠道只有 fetch(直传外部 RSSHub 的标准 RSS 2.0 XML):无播放能力——视频/直播/弹幕由
  * crawler/resolver 按 item.url 统一路由解析(与 crawler 输出一起生效)。
  * ⚠️ 不把平台 cookie 附给 RSSHub 请求(公网实例泄露风险)。
  */
-import { httpText } from "@tauri-playground/crawler"
+import { httpText } from "@amoeba/crawler"
 import { registerSourceProvider, type RssChannel, type SourceInfo, type SourceInfoField } from "./index.ts"
 
 /** 公网 RSSHub 实例兜底(settings.rsshubBaseUrl 缺失时用的默认外挂)。 */

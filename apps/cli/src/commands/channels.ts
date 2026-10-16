@@ -3,7 +3,7 @@
  * key / kind / name / 参数 tpl(* = required)/ defaultInfo。
  */
 import pc from "picocolors"
-import { listChannels } from "@tauri-playground/crawler"
+import { listChannels } from "@amoeba/crawler"
 import { printJson } from "../ui/render.ts"
 
 export interface ChannelsOptions {

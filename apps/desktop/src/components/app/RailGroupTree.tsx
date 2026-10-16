@@ -11,7 +11,7 @@
  */
 import { useCallback, useMemo, useRef, useState } from "react"
 import * as Accordion from "@radix-ui/react-accordion"
-import type { Subscription, SubscriptionGroup } from "@tauri-playground/core"
+import type { Subscription, SubscriptionGroup } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { KIND_META } from "../../store/nodes.ts"
 import { healthOf, type Health } from "../../store/selectors.ts"

@@ -1,5 +1,5 @@
 /**
- * @tauri-playground/host — 宿主后端实现 + 全局 appHost 门面。
+ * @amoeba/host — 宿主后端实现 + 全局 appHost 门面。
  *
  * 全局 appHost 是 getter 门面(runtime.ts),字段访问时校验;各环境 inject
  * 函数只填闭包值。读取端(crawler/core)直接访问 globalThis.appHost.*。

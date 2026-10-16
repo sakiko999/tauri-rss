@@ -5,7 +5,7 @@
  * key 正则缩范围,只排除原生 RSS 直链)。
  */
 import { useState } from "react"
-import type { ChannelInfo } from "@tauri-playground/core"
+import type { ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"

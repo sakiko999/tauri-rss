@@ -6,7 +6,7 @@
  * bun:sqlite 内置零依赖同步 API;库文件 apps/cli/.data/rss.db(gitignore)。
  */
 import { Database } from "bun:sqlite"
-import { KV_TABLE, MIGRATIONS } from "@tauri-playground/core"
+import { KV_TABLE, MIGRATIONS } from "@amoeba/core"
 import { mkdirSync } from "node:fs"
 import { join } from "node:path"
 

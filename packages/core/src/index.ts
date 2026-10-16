@@ -1,5 +1,5 @@
 /**
- * @tauri-playground/core — 订阅维护者。
+ * @amoeba/core — 订阅维护者。
  *
  * 基于 crawler(订阅源抓取层)维护订阅列表 + 分组 + 刷新编排 + 持久化。
  * crawler 只输出 RSS 2.0 + `tpl:` XML;core 自己解析 XML、自建渲染模型
@@ -11,7 +11,7 @@
  *   - 设置:   AppSettings / DEFAULT_SETTINGS(读写走 DataLayer.settings)
  *   - 内容:   MediaItem(判别联合)/ MediaStream / MediaQuery / ResolvePlayback
  *   - 错误:   NoChannelError
- *   - 宿主:   直接访问 globalThis.appHost(门面在 @tauri-playground/host)
+ *   - 宿主:   直接访问 globalThis.appHost(门面在 @amoeba/host)
  *
  * 收敛内部:repo/media-store/xml 反序列化/parseFeed 均不对外(core 内部实现)。
  * apps 不直接 import crawler(渠道能力经 DataLayer.listChannels/channelKind)。

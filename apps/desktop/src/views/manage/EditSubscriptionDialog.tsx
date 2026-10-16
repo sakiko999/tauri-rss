@@ -8,7 +8,7 @@
  * `<EditSubscriptionDialog sub={s} onClose={...} />` 就能用。
  */
 import { useState } from "react"
-import type { Subscription } from "@tauri-playground/core"
+import type { Subscription } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Modal, Select, Switch } from "../../components/Modal.tsx"
 import { isImeComposing } from "../../lib/ime.ts"

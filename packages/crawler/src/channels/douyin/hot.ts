@@ -7,13 +7,13 @@
  * 分页:**offset 游标制**(每页 COUNT 条,offset 递增),`isPageable` 探测 → fetchMore
  * 翻页(本页为空 = 没有更多)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { douyinClient } from "@tauri-playground/resolve"
-import { douyinOnline } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { douyinClient } from "@amoeba/resolve"
+import { douyinOnline } from "@amoeba/resolve"
 
 const LIVE = "https://live.douyin.com"
 const COUNT = 15

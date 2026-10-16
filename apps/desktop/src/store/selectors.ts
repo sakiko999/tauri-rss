@@ -5,7 +5,7 @@
  * 与 new_desktop 的 store.js 派生段同构,但条目与阅读态改由 core 提供
  * (MediaItem.isUnread / isStarred 已是权威,不再另存 read/starred 映射)。
  */
-import type { MediaItem, MediaKind, Subscription } from "@tauri-playground/core"
+import type { MediaItem, MediaKind, Subscription } from "@amoeba/core"
 import { groupIdOf, isGroupNode, isTabNode } from "./nodes.ts"
 
 /** 视图筛选(按节点分别记忆)。 */

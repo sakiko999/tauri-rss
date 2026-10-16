@@ -1,5 +1,5 @@
 /**
- * @tauri-playground/ui Tailwind 入口(仅给 VSCode IntelliSense,不进任何 bundle)。
+ * @amoeba/ui Tailwind 入口(仅给 VSCode IntelliSense,不进任何 bundle)。
  *
  * 真实构建由消费方(desktop styles.css)经 `@import "../../../packages/ui/src/styles/theme.css"`
  * + `@source "../../../packages/ui/src"` 完成。本文件纯声明「ui 包是 tailwind 项目」,

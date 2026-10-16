@@ -6,9 +6,9 @@
  * 播放器控件 —— 那些归 desktop 工作台。
  */
 import { useEffect, useState } from "react"
-import { PlayableMedia } from "@tauri-playground/player"
-import { MediaImage } from "@tauri-playground/ui"
-import type { MediaItem } from "@tauri-playground/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
+import type { MediaItem } from "@amoeba/core"
 import { useMobile, isPlayable } from "./store.ts"
 import { displayBody } from "./html.ts"
 

@@ -15,8 +15,8 @@
  */
 import { useCallback, useMemo } from "react"
 import { useNavigate } from "react-router"
-import type { MediaItem } from "@tauri-playground/core"
-import { unlockAudioPlayback } from "@tauri-playground/player"
+import type { MediaItem } from "@amoeba/core"
+import { unlockAudioPlayback } from "@amoeba/player"
 import { nodeTypeOf, useDesktop } from "../../store/index.ts"
 import { usePlayNavigate, viewPath } from "../../router.tsx"
 import { openExternalSafely } from "../../lib/host.ts"

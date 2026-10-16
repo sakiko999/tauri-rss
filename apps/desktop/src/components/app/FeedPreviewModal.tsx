@@ -10,8 +10,8 @@
  * 才找得到条目(见 PlayerPage 的 item 查找)。
  */
 import { useEffect, useState } from "react"
-import type { MediaItem } from "@tauri-playground/core"
-import { MediaImage } from "@tauri-playground/ui"
+import type { MediaItem } from "@amoeba/core"
+import { MediaImage } from "@amoeba/ui"
 import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../Modal.tsx"
 import { Icon } from "../Icon.tsx"

@@ -7,14 +7,14 @@
  * ⚠️ 关播房间 `data.stream` 为空但 `liveData` 仍在,状态看 `liveStatus`(ON/OFF)。
  * resolveLivePlay 走 play.ts(profileRoom → 全档位 × 多线路)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { httpJson, now } from "@tauri-playground/resolve"
-import { parseRoomIds } from "@tauri-playground/resolve"
-import { log } from "@tauri-playground/resolve"
-import { HUYA_UA } from "@tauri-playground/resolve"
+import { httpJson, now } from "@amoeba/resolve"
+import { parseRoomIds } from "@amoeba/resolve"
+import { log } from "@amoeba/resolve"
+import { HUYA_UA } from "@amoeba/resolve"
 
 /** 单房间 → Live item(profileRoom API)。房间失败抛错,由调用方 catch 隔离。 */
 async function fetchHuyaRoom(roomId: string): Promise<Live> {

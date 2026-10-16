@@ -30,7 +30,7 @@
  * 如 `原神`)+ 本地 title 匹配(`舞蹈` → 105/type4)合并去重。**无需登录、无需浏览器**。
  * 残留缺口:分区树只到「大类」粒度,`美食`(属「生活」)这类三级词仍无直接命中。
  */
-import type { Item, Live } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
 import { httpJson, httpText, now } from "../../host.ts"
 import { UA_ENTER } from "./abogus.ts"
 import { douyinClient } from "./client.ts"

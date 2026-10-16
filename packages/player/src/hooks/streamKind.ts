@@ -6,7 +6,7 @@
  * 跟着它一起进不了 node 侧的自检(`useStreamSelection.check.ts` 曾因此直接崩)。
  * 需要判据的地方(useStreamSelection / 测试)从此引这里,不引引擎模块。
  */
-import type { MediaStream } from "@tauri-playground/core"
+import type { MediaStream } from "@amoeba/core"
 
 export function isHlsStream(stream: MediaStream): boolean {
   return stream.format === "hls" || /\.m3u8(\?|#|$)/i.test(stream.url)

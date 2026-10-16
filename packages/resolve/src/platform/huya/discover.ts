@@ -9,7 +9,7 @@
  * 房间桶,但其中的 `room_id` 可能是错的——需拿 `uid+yyid` 去 `response["1"]`
  * (主播桶)匹配真实 `room_id`,失败才回退原值(参照 huya_site.dart:858 findRoomId)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
 import { httpJson, now } from "../../host.ts"
 
 /** 二级分区接口要求的 UA(Android Mobile,与主站桌面 UA 不同)。 */

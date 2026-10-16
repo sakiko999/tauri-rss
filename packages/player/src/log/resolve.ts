@@ -1,4 +1,4 @@
-import { createLogDomain, formatError } from "@tauri-playground/log"
+import { createLogDomain, formatError } from "@amoeba/log"
 
 /**
  * resolve 域:懒解析失败(点击播放 → 拿流)。

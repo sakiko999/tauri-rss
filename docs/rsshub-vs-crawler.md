@@ -7,7 +7,7 @@
 ## 定位
 
 - **内置 crawler 是主供给**:自解析平台 API / 官方 RSS / 直链,零外部依赖。
-  **crawler 只输出订阅数据**(channel + 标准 RSS);平台能力全在 `@tauri-playground/resolve`。
+  **crawler 只输出订阅数据**(channel + 标准 RSS);平台能力全在 `@amoeba/resolve`。
 - **resolve 是平台解析层**(2026-08-26 架构重构):platform 与 crawler 解耦,平台
   全部能力(签名/取数/播放/弹幕)集中在此。crawler channel 依赖它抓数据,core 依赖它播放。
 - **RSSHub 是可选外挂**:用户配置 `settings.rsshubBaseUrl`(默认公网 `https://rsshub.app`

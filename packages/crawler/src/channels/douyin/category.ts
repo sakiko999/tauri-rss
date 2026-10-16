@@ -8,11 +8,11 @@
  * type=4,子分区(射击游戏/竞技游戏…)type=1。传错取不到数据。分区树见
  * `resolve/platform/douyin/discover.ts`(`fetchDouyinCategories`)。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { fetchDouyinPartitionRooms } from "@tauri-playground/resolve"
+import { fetchDouyinPartitionRooms } from "@amoeba/resolve"
 
 const COUNT = 15
 

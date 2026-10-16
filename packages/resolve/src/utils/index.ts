@@ -1,6 +1,6 @@
 /**
  * resolve utils —— 平台解析公共工具(从 crawler utils 迁入)。
- * 各函数供 resolver/danmaku/channel 共用;channel 经 `@tauri-playground/resolve` 取。
+ * 各函数供 resolver/danmaku/channel 共用;channel 经 `@amoeba/resolve` 取。
  */
 export * from "./cookie.ts"
 export * from "./count.ts"

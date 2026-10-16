@@ -9,15 +9,15 @@
 
     "moduleResolution": "bundler",
     "paths": {
-      "@tauri-playground/xml": ["./packages/xml/src/index.ts"],
-      "@tauri-playground/host": ["./packages/host/src/index.ts"],
-      "@tauri-playground/log": ["./packages/log/src/index.ts"],
-      "@tauri-playground/crawler": ["./packages/crawler/src/index.ts"],
-      "@tauri-playground/core": ["./packages/core/src/index.ts"],
-      "@tauri-playground/core/source/rsshub": ["./packages/core/src/source/rsshub.ts"],
-      "@tauri-playground/resolve": ["./packages/resolve/src/index.ts"],
-      "@tauri-playground/player": ["./packages/player/src/index.ts"],
-      "@tauri-playground/ui": ["./packages/ui/src/index.ts"]
+      "@amoeba/xml": ["./packages/xml/src/index.ts"],
+      "@amoeba/host": ["./packages/host/src/index.ts"],
+      "@amoeba/log": ["./packages/log/src/index.ts"],
+      "@amoeba/crawler": ["./packages/crawler/src/index.ts"],
+      "@amoeba/core": ["./packages/core/src/index.ts"],
+      "@amoeba/core/source/rsshub": ["./packages/core/src/source/rsshub.ts"],
+      "@amoeba/resolve": ["./packages/resolve/src/index.ts"],
+      "@amoeba/player": ["./packages/player/src/index.ts"],
+      "@amoeba/ui": ["./packages/ui/src/index.ts"]
     },
     "allowImportingTsExtensions": true,
     "useDefineForClassFields": true,

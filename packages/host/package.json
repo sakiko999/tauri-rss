@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-playground/host",
+  "name": "@amoeba/host",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -11,8 +11,8 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2.7.1",
     "@tauri-apps/plugin-sql": "^2",
-    "@tauri-playground/core": "workspace:*",
-    "@tauri-playground/log": "workspace:*",
+    "@amoeba/core": "workspace:*",
+    "@amoeba/log": "workspace:*",
     "ws": "^8.21.3"
   },
   "scripts": {},

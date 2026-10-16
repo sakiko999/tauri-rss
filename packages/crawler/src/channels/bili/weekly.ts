@@ -3,12 +3,12 @@
  *
  * app 接口拿 series 列表 + 期内容。implements VideoPlayable + DanmakuPlayable。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { biliClient } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { biliClient } from "@amoeba/resolve"
 import { ugc } from "./video-common.ts"
 
 export class BiliWeeklyChannel implements RssChannel {

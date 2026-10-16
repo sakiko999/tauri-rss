@@ -12,7 +12,7 @@
  * 按渠道配置);这里只留**表单状态与提交编排**。
  */
 import { useEffect, useMemo, useState } from "react"
-import type { MediaItem } from "@tauri-playground/core"
+import type { MediaItem } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Modal, Select } from "../../components/Modal.tsx"
 import { Icon } from "../../components/Icon.tsx"

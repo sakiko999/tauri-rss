@@ -1,4 +1,4 @@
-import { createLogDomain, formatError } from "@tauri-playground/log"
+import { createLogDomain, formatError } from "@amoeba/log"
 
 /** play 域:起播 + 媒体元素事件。 */
 export const playLog = createLogDomain("player:play", {

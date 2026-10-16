@@ -7,9 +7,9 @@
  *   - bili/weibo:列表已含完整图文,此命令仅提示(无独立详情接口需求)。
  */
 import pc from "picocolors"
-import { getChannel } from "@tauri-playground/crawler"
-import { parseFeed } from "@tauri-playground/xml"
-import { XHS_BASE, noteDetailToSocial, extractNoteDetail, xhsClient } from "@tauri-playground/resolve"
+import { getChannel } from "@amoeba/crawler"
+import { parseFeed } from "@amoeba/xml"
+import { XHS_BASE, noteDetailToSocial, extractNoteDetail, xhsClient } from "@amoeba/resolve"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface DetailOptions {

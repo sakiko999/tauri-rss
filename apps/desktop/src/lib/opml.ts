@@ -1,13 +1,13 @@
 /**
- * opml — SubscriptionGroup[] ↔ OpmlFeed[] 映射(OPML 编解码在 `@tauri-playground/xml`)。
+ * opml — SubscriptionGroup[] ↔ OpmlFeed[] 映射(OPML 编解码在 `@amoeba/xml`)。
  *
  * 导出:订阅按分组树拼 groupPath(顶层 = []);只导出有可分享 URL 的订阅
  *   (rss:* / rsshub:* 取 info.url)。
  * 导入:groupPath 逐级建/复用分组(标题为路径键,同名共享),每条 feed 落 `rss:url`;
  *   同 xmlUrl 已存在则跳过(不重复订阅)。
  */
-import type { Subscription, SubscriptionGroup } from "@tauri-playground/core"
-import { serializeOpml, type OpmlDoc, type OpmlFeed } from "@tauri-playground/xml"
+import type { Subscription, SubscriptionGroup } from "@amoeba/core"
+import { serializeOpml, type OpmlDoc, type OpmlFeed } from "@amoeba/xml"
 
 /** 订阅 → 上游 feed URL(可分享的订阅才有)。 */
 function feedUrlOf(sub: Subscription): string | undefined {

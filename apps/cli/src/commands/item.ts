@@ -4,14 +4,14 @@
  * → 弹幕元信息。play 命令共用 resolveByUrl/printStreams。
  */
 import pc from "picocolors"
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import {
   resolveLivePlayByUrl,
   resolvePlayByUrl,
   resolveRoute,
   type ResolveRoute,
   type SourceInfo,
-} from "@tauri-playground/resolve"
+} from "@amoeba/resolve"
 import { cookieForUrl, loadSettings } from "../info.ts"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 

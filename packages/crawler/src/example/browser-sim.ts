@@ -15,7 +15,7 @@
  * ⚠️ xhs:user / weibo:user 需登录态——干净 profile 是匿名的,登录态走
  *    launch_clean_edge.sh --keep(复用已有 profile)。反复验证会触发账号风控,低频单次。
  */
-import { injectNodeHost, setHostCaps, nodeBackend, nodeJsBackend, memStorage } from "@tauri-playground/host"
+import { injectNodeHost, setHostCaps, nodeBackend, nodeJsBackend, memStorage } from "@amoeba/host"
 
 const PORT = Number(process.env.EDGE_CDP_PORT ?? 9322)
 

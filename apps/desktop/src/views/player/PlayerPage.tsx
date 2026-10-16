@@ -9,13 +9,13 @@
  * `{ streams, danmaku }`,danmaku 由 PlayableMedia 内部接给 DanmakuLayer。
  */
 import { useEffect, useMemo } from "react"
-import { PlayableMedia } from "@tauri-playground/player"
-import type { MediaItem, MediaStream } from "@tauri-playground/core"
+import { PlayableMedia } from "@amoeba/player"
+import type { MediaItem, MediaStream } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { usePlayNavigate, usePlayParams, useViewNavigate } from "../../router.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock, SideCard } from "../../components/StateBlock.tsx"
-import { MediaImage } from "@tauri-playground/ui"
+import { MediaImage } from "@amoeba/ui"
 import { fmtAgo, fmtTime, itemKey, mediaUrl, onlineOf, platformOf, PLATFORM_LABEL } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 

@@ -23,7 +23,7 @@
  *              ⚠️ room.status==2 才是直播中,==4 是 roomId 一次性需换 webRid,见 dart)
  *   huya 在播房间可从 www.huya.com/l 页实时列表取(WebFetch 可见)。
  */
-import type { Subscription, SubscriptionGroup } from "@tauri-playground/core"
+import type { Subscription, SubscriptionGroup } from "@amoeba/core"
 
 /**
  * 分组种子(rail 的分组树)。只在**首次运行(空库)**写入,之后不覆盖。

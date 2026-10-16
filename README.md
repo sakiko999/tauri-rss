@@ -58,6 +58,9 @@ packages/
 
 依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`；`log`/`host` 是零依赖叶子。
 
+内部包统一用 **`@amoeba/*`** scope（Bun workspace）。⚠️ 与官方 `@tauri-apps/*` 是两个不同的
+scope，前者的包名是 `@amoeba/core`、后者是 `@tauri-apps/api`，改一处别误伤另一处。
+
 ## 核心契约
 
 - **crawler → 下游只走 XML**：`channel.getSource(info).fetch()` 直出 RSS 2.0 + `tpl:` 扩展。

@@ -6,11 +6,11 @@
  *
  * ⚠️ 同平台的分区列房(`second/getList`)需登录态,未做——见 docs/capability-gaps.md。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { searchBiliRooms } from "@tauri-playground/resolve"
+import { searchBiliRooms } from "@amoeba/resolve"
 
 const PAGE = 20
 

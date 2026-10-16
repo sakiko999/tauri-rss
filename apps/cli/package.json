@@ -1,5 +1,5 @@
 {
-  "name": "@tauri-playground/cli",
+  "name": "@amoeba/cli",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -7,11 +7,11 @@
     ".": "./src/main.ts"
   },
   "dependencies": {
-    "@tauri-playground/crawler": "workspace:*",
-    "@tauri-playground/core": "workspace:*",
-    "@tauri-playground/host": "workspace:*",
-    "@tauri-playground/resolve": "workspace:*",
-    "@tauri-playground/xml": "workspace:*",
+    "@amoeba/crawler": "workspace:*",
+    "@amoeba/core": "workspace:*",
+    "@amoeba/host": "workspace:*",
+    "@amoeba/resolve": "workspace:*",
+    "@amoeba/xml": "workspace:*",
     "cac": "^6.7.14",
     "picocolors": "^1.1.1"
   }

@@ -10,7 +10,7 @@
  * 搜索:`api.bilibili.com/x/web-interface/search/type?search_type=live`(**匿名可用**,
  * 实测 40 条)。⚠️ 标题带 `<em class="keyword">` 高亮标签,须剥离。
  */
-import type { Item, Live } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
 import { now } from "../../host.ts"
 import { biliClient } from "./client.ts"
 

@@ -4,7 +4,7 @@
  * 候选值一律取自本机订阅库里已抓到的真实条目,派生不出就返回空数组由界面降级为手填
  * ——绝不编造 uid / 房号。
  */
-import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@tauri-playground/core"
+import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/core"
 import { mediaUrl } from "./media.ts"
 
 /** 逗号分隔、可把候选**并入**已有订阅的列表型参数(直播房间号)。 */

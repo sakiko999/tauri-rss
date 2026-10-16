@@ -17,7 +17,7 @@
  * 选流契约:最高清晰度在前(档位原序输出)。
  *
  */
-import type { Stream } from "@tauri-playground/xml"
+import type { Stream } from "@amoeba/xml"
 import { httpJson } from "../../host.ts"
 import { M_HUYA, HUYA_UA } from "./client.ts"
 

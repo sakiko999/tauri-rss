@@ -4,7 +4,7 @@
  *   bun apps/desktop/src/lib/subscriptions.check.ts
  */
 import { candidatesFromSearch, multiParamOf, SEARCH_CHANNEL, searchChannelOf, valueList, subsHolding } from "./subscriptions.ts"
-import type { ChannelInfo, LiveItem, Subscription } from "@tauri-playground/core"
+import type { ChannelInfo, LiveItem, Subscription } from "@amoeba/core"
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`)

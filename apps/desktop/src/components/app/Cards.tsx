@@ -4,8 +4,8 @@
  * 结构照 new_desktop 的 components.js(mediaCard/cardMini/socialCard),但图片走
  * ui 包的 MediaImage(自带防盗链隧道 + 骨架 + 失败占位),不再自己写 <img>。
  */
-import type { AudioItem, MediaItem } from "@tauri-playground/core"
-import { MediaImage, fmtCount } from "@tauri-playground/ui"
+import type { AudioItem, MediaItem } from "@amoeba/core"
+import { MediaImage, fmtCount } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
 import { fmtAgo, fmtTime, httpsify, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
 import { rememberSocialSource } from "../../lib/viewTransition.ts"

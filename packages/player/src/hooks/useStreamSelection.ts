@@ -10,7 +10,7 @@
  * 切档态在 streams 变化(重新 resolve / props 更新)时自动重置。
  */
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { MediaStream } from "@tauri-playground/core"
+import type { MediaStream } from "@amoeba/core"
 
 // ⚠️ 判据统一放 `streamKind.ts`(纯函数、不 import 引擎),本模块与自检共用一份。
 // 曾经这里与 useMediaStream 各写一遍(实现已经开始漂移)。

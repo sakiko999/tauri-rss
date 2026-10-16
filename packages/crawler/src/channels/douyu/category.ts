@@ -6,11 +6,11 @@
  *
  * 分页:页码制(page 在 path 里,从 1 起);服务端每页固定条数。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { fetchDouyuCategoryRooms } from "@tauri-playground/resolve"
+import { fetchDouyuCategoryRooms } from "@amoeba/resolve"
 
 export class DouyuCategoryChannel implements RssChannel {
   readonly key = "live:douyu:category"

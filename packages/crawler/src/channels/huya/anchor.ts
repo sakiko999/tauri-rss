@@ -6,11 +6,11 @@
  *
  * ⚠️ **不可分页**(接口 `start` 实测无效,同搜房间)。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { searchHuyaAnchors } from "@tauri-playground/resolve"
+import { searchHuyaAnchors } from "@amoeba/resolve"
 
 const PAGE = 20
 

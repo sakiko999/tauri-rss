@@ -5,7 +5,7 @@
  * 导入去重(同 xmlUrl 跳过)。
  */
 import { exportOpml, pendingImports } from "./opml.ts"
-import { parseOpml } from "@tauri-playground/xml"
+import { parseOpml } from "@amoeba/xml"
 
 let fails = 0
 const ok = (cond: unknown, label: string) => {

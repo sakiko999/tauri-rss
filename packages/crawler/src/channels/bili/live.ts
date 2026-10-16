@@ -8,14 +8,14 @@
  * 可播流/弹幕解析在 crawler/src/resolver(按 item.url 路由 → platform/bili)。
  * resolveBiliLivePlay + helpers 已迁 platform/bili/live-play.ts。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now } from "@tauri-playground/resolve"
-import { log } from "@tauri-playground/resolve"
-import { parseRoomIds } from "@tauri-playground/resolve"
-import { biliClient } from "@tauri-playground/resolve"
+import { now } from "@amoeba/resolve"
+import { log } from "@amoeba/resolve"
+import { parseRoomIds } from "@amoeba/resolve"
+import { biliClient } from "@amoeba/resolve"
 
 const API_LIVE = "https://api.live.bilibili.com"
 

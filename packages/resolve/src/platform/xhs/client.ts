@@ -9,7 +9,7 @@
  *
  * cookie 由 core 层 DEFAULT_XHS_COOKIE 经 info.cookie 注入。
  */
-import type { Social, SocialImage } from "@tauri-playground/xml"
+import type { Social, SocialImage } from "@amoeba/xml"
 import { httpJson, httpText } from "../../host.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"

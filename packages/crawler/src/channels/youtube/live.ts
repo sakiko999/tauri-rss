@@ -10,11 +10,11 @@
  * 留未来增强)。播放走懒解析:resolveLivePlay(roomId=videoId)→ resolveYoutubeStreams
  * (iOS client hlsManifestUrl,失败降级 web 页)。
  */
-import type { Item, Live } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item, Live } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch } from "../factory.ts"
-import { now, getYoutubeLiveMeta } from "@tauri-playground/resolve"
+import { now, getYoutubeLiveMeta } from "@amoeba/resolve"
 
 export class YoutubeLiveChannel implements RssChannel {
   readonly key = "youtube:live"

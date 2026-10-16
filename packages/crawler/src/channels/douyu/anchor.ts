@@ -4,11 +4,11 @@
  * 取数在 `resolve/platform/douyu/discover.ts` 的 `searchDouyuAnchors`。
  * 分页:页码制(page 从 1 起,pageSize 真消费)。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { searchDouyuAnchors } from "@tauri-playground/resolve"
+import { searchDouyuAnchors } from "@amoeba/resolve"
 
 const PAGE = 20
 

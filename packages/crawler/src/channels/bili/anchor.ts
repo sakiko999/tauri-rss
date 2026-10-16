@@ -5,11 +5,11 @@
  * 分页:页码制(page 从 1 起)。⚠️ 该接口**无 `page_size`**(与搜房间相异),
  * 服务端固定每页条数。
  */
-import type { Item } from "@tauri-playground/xml"
-import { type SerializeOptions } from "@tauri-playground/xml"
+import type { Item } from "@amoeba/xml"
+import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, apiFetchMore } from "../factory.ts"
-import { searchBiliAnchors } from "@tauri-playground/resolve"
+import { searchBiliAnchors } from "@amoeba/resolve"
 
 export class BiliAnchorChannel implements RssChannel {
   readonly key = "bili:anchor"

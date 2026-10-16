@@ -11,7 +11,7 @@
  * 为空时写入)。搬完 localStorage 不再持有状态。
  */
 import Database from "@tauri-apps/plugin-sql"
-import { KV_TABLE, MIGRATIONS } from "@tauri-playground/core"
+import { KV_TABLE, MIGRATIONS } from "@amoeba/core"
 
 /** 库文件(appData 相对路径,插件解析为 BaseDirectory::App)。 */
 const DB_PATH = "sqlite:rss.db"
