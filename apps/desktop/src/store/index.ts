@@ -157,6 +157,14 @@ interface DesktopState {
    * 落 localStorage(`ui-queue`),重开应用队列还在。
    */
   queue: string[]
+  /**
+   * 播客 feed 的**临时单集预览**(Apple 榜单那种「条目是节目、不是单集」的源)。
+   *
+   * 点开这类条目 → 拉它那个 RSS feed → 列出单集让用户挑。这批单集**不落库、
+   * 不建订阅**（`previewChannel` 语义）—— 它们只活在这次会话里,故单独存这里,
+   * 播放页找不到条目时回退查它。关掉弹窗即清。
+   */
+  feedPreview: { title: string; feedUrl: string; items: MediaItem[] } | null
   /** 播放页取消的弹幕(设置项为总开关,此处是临时覆盖)。 */
   danmakuVisible: boolean
 
@@ -173,6 +181,12 @@ interface DesktopState {
   selectArticle(id: string | null): void
   openSocialDetail(item: MediaItem): void
   closeSocialDetail(): void
+  /**
+   * 展开一条**播客 feed 条目**的单集列表(Apple 榜单的节目:url 是 feed 不是单集)。
+   * 拉一次该 feed、列出单集,临时存 `feedPreview`(不建订阅、不落库)。
+   */
+  openFeedPreview(item: MediaItem): Promise<void>
+  closeFeedPreview(): void
 
   refresh(id: string): Promise<void>
   refreshAll(force?: boolean): Promise<void>
@@ -393,6 +407,7 @@ export const useDesktop = create<DesktopState>((set, get) => {
 
     paletteOpen: false,
     queue: loadQueue(),
+    feedPreview: null,
     danmakuVisible: true,
     toasts: [],
 
@@ -528,6 +543,34 @@ export const useDesktop = create<DesktopState>((set, get) => {
 
     closeSocialDetail() {
       set({ socialDetail: null })
+    },
+
+    async openFeedPreview(item) {
+      const dl = get().dl
+      if (!dl) return
+      const feedUrl = item.url ?? ""
+      if (!feedUrl) {
+        get().toast("error", "这条没有 feed 地址", "Apple 目录偶有缺 feedUrl 的条目,已在上游过滤。")
+        return
+      }
+      // 先占位(空列表 + 标题),让弹窗立刻出现骨架,不要点下去像没反应。
+      set({ feedPreview: { title: item.title, feedUrl, items: [] } })
+      try {
+        // ⚠️ 复用 `rss:podcast` 渠道取单集 —— 它就是「feed URL → Audio 条目」,
+        // 与订阅后走的是同一段解析,不另造。`previewChannel` 不写缓存、不落 store。
+        const { items } = await dl.previewChannel("rss:podcast", { url: feedUrl })
+        // 用户在等待期间可能已经关了弹窗/换了一条 —— 过期结果不覆盖(用 feedUrl 判).
+        if (get().feedPreview?.feedUrl !== feedUrl) return
+        set({ feedPreview: { title: item.title, feedUrl, items } })
+      } catch (e) {
+        if (get().feedPreview?.feedUrl !== feedUrl) return
+        get().toast("error", "读不到该节目的单集", e instanceof Error ? e.message : String(e))
+        set({ feedPreview: null })
+      }
+    },
+
+    closeFeedPreview() {
+      set({ feedPreview: null })
     },
 
     async refresh(id) {

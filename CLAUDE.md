@@ -165,6 +165,8 @@ bun packages/xml/src/example/opml.check.ts              # OPML 编解码往返�
 bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射（导出过滤 / 导入去重）
 bun apps/desktop/src/lib/rail-nav.check.ts              # 侧栏树方向键映射（→ 折叠态只展开 / ← 回父行 / 未分组不折叠）
 bun apps/desktop/src/lib/ime.check.ts                   # IME 组合态守卫（nativeEvent 取值 + 229 兜底 + 原生/合成两路径）
+bun packages/player/src/hooks/useStreamSelection.check.ts # 默认选流 = streams[0]（不被格式族抢走）
+bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契约（两份手写字面量必须一致）
 
 # UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 已由 dev 配置开启）
 bun scripts/ui-probe.ts goto tab:all        # 导航 + 巡检（逐字竖排 / 溢出 / 遮挡 / 破图）
@@ -279,10 +281,15 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   产出 `kind:audio`，`url` = 该节目的 **RSS feed** → 接进既有 `rss:podcast`，不另造解析器。
   每集 enclosure **不在榜单里**，故榜单条目的 `stream` 留空。⚠️ **留空 ≠ 可播**：
   `isPlayableKind("audio")` 恒真，卡片会摆播放按钮，但 resolver 只认平台域名、feed 域名
-  路由不上 → 点必碎（「该条目不指向可解析的视频链接」）。现已加 `isFeedItem()`
-  （`kind:"audio" && !stream`，`Cards.tsx`）把这批条目的主操作改成**订阅**（`rss:podcast`）。
+  路由不上 → 点必碎（「该条目不指向可解析的视频链接」）。
+  这批条目的主操作是 **`isFeedItem()`**（`kind:"audio" && !stream`，`Cards.tsx`）判出的
+  「**展开单集列表**」（`FeedPreviewModal`）：点开 → `dl.previewChannel("rss:podcast", {url})`
+  拉一次该 feed（**复用播客渠道，不另造解析器**；`previewChannel` 不写缓存不落库）→ 列单集 →
+  选一集直接播（单集带 enclosure 直链，`PlayableMedia` 走 `streams` prop 不解析）。
+  弹窗里同时有「订阅该节目」。⚠️ 预览单集**不落库、不建订阅**，只活在 store 的
+  `feedPreview` 里；**`PlayerPage` 的 item 查找必须回退查它**，否则「找不到这条内容」。
   `rss:podcast` 的条目**必有 enclosure**（没 enclosure 的 item 在建 Audio 时就被丢），
-  故这个判据不会误伤真正的单集
+  故 `isFeedItem` 不会误伤真正的单集
 - ⚠️ **榜单不含 `feedUrl`**（旧 iTunes RSS 只给 `im:id`）→ 必须再 Lookup 一次换 feedUrl。
   Lookup 返回顺序**不保证**与请求一致，按榜单原序重排；**没 feedUrl 的条目直接丢**（只能显示不能订阅）
 - ⚠️ **搜索渠道刻意不声明 `defaultInfo`**：发现页「可一键订阅」判据 `!!defaultInfo || 无必填项`，
@@ -302,8 +309,13 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 ## 播放
 
 **选流契约**：crawler 保证返回数组内**最高清晰度排最前**（bili/youtube/douyin/huya 显式
-按 rate 降序；douyu 例外见上）。player `useStreamSelection` 取第一个，不做二次排序
-（渐进式优先=原生可播最稳，其次 hls/flv）。
+按 rate 降序；douyu 例外见上）。player `pickDefaultStream`（`hooks/streamKind.ts`）
+**就取 `streams[0]`**，不做二次排序。
+⚠️ 曾按**格式族**挑（`find(渐进式) ?? find(hls) ?? find(flv) ?? [0]`），以为「原生可播的
+最稳」—— 那会在首档不是渐进式、后面却有的时候**静默降画质**（首档 1080p dash 后面跟一条
+360p mp4 就去取 360p）。契约既保证顺序，就别再挑拣。回归：`useStreamSelection.check.ts`。
+⚠️ 格式判据在 `streamKind.ts`（纯函数、**不 import 引擎**）—— `useMediaStream.ts` 引了
+hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起来。
 
 - **HLS/DASH 锁最高档**（`currentLevel=max`，ABR 关闭）。原因：宿主隧道的固定开销
   （Rust reqwest + base64）让 ABR 带宽估算失真（1080p 实测仅 ~1Mbps），自动降档会骤降
@@ -457,6 +469,20 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - ⚠️ **`AddSubscriptionDialog` 的 `rss:` 过滤器只放行两个**：`rss:url`（任意直链）
   与 `rss:podcast`（播客，解 enclosure → 可播条目）。其余 `rss:*` 是 36 条种子清单，
   列出来太噪。⚠️ 曾把整个 `rss:` 前缀滤掉 → **手工加外部 feed / 订阅播客都没有入口**
+- ⚠️ **`MediaItem.id` 只在订阅内唯一，跨订阅会撞**：实测 `bilibili:7734200` 同时在
+  `bili:live`（roomIds 解析成该房）与 `bili:live:hot`。凡是「按 id 记/改/查」的地方
+  **都要带 subscriptionId**，否则两个订阅互相串：
+  - **reading 键** = `readingKey(subId, itemId)`（`core/types/reading.ts`，分隔符 `\u0000`）。
+    ⚠️ 读取经 `findRecord` **回退旧版裸 id 键**（2026-10-15 前的存量数据），否则历史
+    已读/星标/续播一次性消失；**回退命中不删旧键**（同一旧记录可能被多个订阅共享）。
+  - **内存 store** `patch(subscriptionId, id, patch)`（`media-store.ts`）—— 原来按裸 id
+    打**所有**订阅的同 id 条目。
+  - **播放队列**存 `itemKey` 复合键 + 落 localStorage `ui-queue`（原来只存内存，重开就没）。
+  - 定位用 `findItem(items, subId, id)`；列表 key 用 `lib/media.ts` 的 `itemKey`。
+- ⚠️ **播完自动下一条**（`core` settings `autoPlayNext`，默认开）：`PlayableMedia` 的
+  `onEnded` 必须**两处都挂** —— video 挂 `videoRef`，播客（audio）挂 `AudioShell` 的
+  `audioRef`。只挂前者的话音频播完永远不触发（audio 根本不经过 videoRef）。
+  播过的当前条同时出队（队列是待播列表，不是播放历史）。
 - ⚠️ **通用 RSS 文章按需补全正文**：feed 只带 description 摘要时，点开阅读视图会抓
   `item.url` 原文页、提正文纯文本（`crawler/channels/rss/extract.ts`，零依赖正则启发式
   —— 全仓无 HTML 解析器，HTMLRewriter/DOMParser 各只在一端）。阈值：feed 自带正文

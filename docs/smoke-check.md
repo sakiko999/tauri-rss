@@ -10,7 +10,10 @@
 | --- | --- |
 | **任何** 改动 | 6 包 `tsc --noEmit`（见下）+ 相关 `.check.ts` |
 | crawler→core 字段 | `serialize-roundtrip.check.ts` + `serialize-contract.check.ts` |
-| player 选流/兜底/autoplay | `scripts/ui-play-check.ts`（真机播放矩阵） |
+| player 选流/兜底/autoplay | `scripts/ui-play-check.ts`（真机播放矩阵）+ `packages/player/src/hooks/useStreamSelection.check.ts` |
+| 播放队列 / 播完下一条 | `packages/core/src/example/media-store.check.ts`；真机：入队 → 重载看仍在（localStorage `ui-queue`）→ 派发 `ended` 看是否跳下一条 |
+| **按 id 记/改/查任何东西** | ⚠️ `MediaItem.id` 只在**订阅内**唯一（实测 `bilibili:7734200` 同时在 `bili:live` 与 `bili:live:hot`）—— 必须带 `subscriptionId`；`repo-concurrency.check.ts` 有跨订阅隔离用例 |
+| 启动骨架 / 侧栏宽度 | `apps/desktop/src/lib/boot-skeleton.check.ts`（两份手写字面量必须一致，否则冷启动第一帧跳一下） |
 | by-url 路由 | `packages/resolve/src/example/router.check.ts` |
 | 文章正文提取 | `packages/crawler/src/example/extract.check.ts` |
 | 正文持久缓存 | `packages/core/src/example/body-cache.check.ts` |
@@ -357,3 +360,29 @@ bun run rss fetch apple:podcast-search --kv q=故事 --json
     **tab:all 18 → 0**（`git stash` 基线对比确认这 18 条与本次业务改动无关）。
     ⚠️ 教训：巡检数字**变了不等于业务坏了**，先 `stash` 拿基线再归因；
     而稳定复现的「已知良性」项要么豁免、要么记进本文件，否则真问题来了看不出来。
+- 2026-10-16 **backlog 集中处理（阅读态/队列按订阅维度隔离 · 播完下一条 · 选流 · 榜单可播）**：
+  - **根因是同一条**：`MediaItem.id` 只在**订阅内**唯一（实测 `bilibili:7734200`
+    同时在 `bili:live` 与 `bili:live:hot`）。凡按 id 记/改/查的地方都会让两个订阅**串**：
+    - reading 键 → `readingKey(subId, itemId)`；内存 `store.patch(subId, id, patch)`；
+      播放队列存 `itemKey` 复合键。⚠️ reading **回退旧版裸 id 键**（存量数据），
+      且**回退命中不删旧键**（同一旧记录可能被多订阅共享）。
+    - store 里 `get().allItems.find(i => i.id === item.id)` 这类定位也一并改 `findItem`。
+  - **播放队列**：落 localStorage `ui-queue` + 复合键。实测入队 → **重载后仍在**。
+  - **播完自动下一条**（`autoPlayNext`，默认开）：`PlayableMedia` 的 `onEnded`
+    ⚠️ 必须挂**两处** —— video 的 `videoRef` 与播客的 `AudioShell.audioRef`；
+    只挂前者音频播完永不触发。实测派发 `ended` → 切下一条且播过的出队（3→2）；
+    关掉设置后同操作**不跳转、队列不变**。
+  - **默认选流改取 `streams[0]`**：旧实现按格式族挑，首档 1080p dash 后面跟 360p mp4
+    时会**静默降画质**。判据另抽到纯函数模块 `streamKind.ts`（`useMediaStream` 引了
+    hls/flv/dashjs，加载即要 window，判据留那儿自检跑不了）。
+    ⚠️ 顺带修 `ui-play-check` 的取样口径 —— 它原来会挑中 Apple 榜单的 **feed 条目**
+    （audio 但无 stream），选进来必报「无法从 URL 解析视频流」，**假失败**。
+  - **Apple 榜单条目可播**：`isFeedItem` 的主操作从「订阅」改成「**展开单集列表**」
+    （`FeedPreviewModal`）—— 点开 → `previewChannel("rss:podcast", {url})`（复用播客渠道，
+    不另造解析器）→ 列单集 → 选一集直接播。⚠️ 预览单集**不落库/不建订阅**，只活在
+    store 的 `feedPreview`，**`PlayerPage` 的 item 查找必须回退查它**。
+    实测：榜单卡 → 弹窗「共 1058 集」→ 点第一集 → **真播**（`currentTime 6.47s`）。
+  - **骨架宽度契约自检**：两份手写字面量（`boot-skeleton.css` vs `styles/10-tokens.css`
+    + `90-responsive.css`）**故意改坏验证过会失败**（非空转）。
+  - 回归：6 包 tsc 0 错；播放矩阵 3/3 起播；`ui-probe` tab:all / page:discover issueCount 0；
+    9 个 `.check` 全过。

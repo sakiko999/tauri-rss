@@ -22,6 +22,7 @@ import { openExternalSafely } from "../../lib/host.ts"
 export function PlayerPage() {
   const { itemId, from } = usePlayParams()
   const allItems = useDesktop((s) => s.allItems)
+  const feedPreview = useDesktop((s) => s.feedPreview)
   const queue = useDesktop((s) => s.queue)
   const resolvePlay = useDesktop((s) => s.resolvePlay)
   const resolveLivePlay = useDesktop((s) => s.resolveLivePlay)
@@ -38,7 +39,12 @@ export function PlayerPage() {
   // `/v/play%3Aid`,App 的 isPlay 判的是 params.itemId → 落到 MediaMain 网格。
   const playTo = usePlayNavigate()
 
-  const item = useMemo(() => allItems.find((i) => i.id === itemId) ?? null, [allItems, itemId])
+  // ⚠️ 回退查 `feedPreview`:播客 feed 的单集是**临时预览**出来的(未落库、未建订阅),
+  // 只查 allItems 会「找不到这条内容」。见 store 的 openFeedPreview。
+  const item = useMemo(
+    () => allItems.find((i) => i.id === itemId) ?? feedPreview?.items.find((i) => i.id === itemId) ?? null,
+    [allItems, itemId, feedPreview],
+  )
   // ⚠️ 队列存的是 `subId:itemId` 复合键(见 store 的 queue 注释),用 itemKey 反查 ——
   // 只比 id 会命中**别的订阅**的同 id 条目。已不在库里的(退订/被刷新换掉)直接跳过。
   const queueItems = useMemo(() => {

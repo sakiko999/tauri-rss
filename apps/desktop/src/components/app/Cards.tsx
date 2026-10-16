@@ -15,8 +15,8 @@ export interface CardActions {
   onPlay: (item: MediaItem) => void
   onOpen?: (item: MediaItem) => void
   onQueue?: (item: MediaItem) => void
-  /** 条目是一条**播客 feed**(而非一集)时的主操作:把它订成 `rss:podcast`。 */
-  onSubscribeFeed?: (item: MediaItem) => void
+  /** 条目是一条**播客 feed**(而非一集)时的主操作:展开它的单集列表。 */
+  onOpenFeed?: (item: MediaItem) => void
 }
 
 function badged(item: MediaItem, actions: CardActions) {
@@ -99,7 +99,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
   // article 同 social:没有可播流,整卡点击应是「打开原文」而不是播放。
   // 播客 feed 条目(Apple 榜单)同理 —— 但它的主操作是「订阅」,见 isFeedItem。
   const feed = isFeedItem(item)
-  const onFeed = actions.onSubscribeFeed
+  const onFeed = actions.onOpenFeed
   const primary = feed && onFeed ? () => onFeed(item) : playable ? () => actions.onPlay(item) : () => actions.onOpen?.(item)
 
   return (
@@ -180,12 +180,12 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
 export function CardMini({ item, actions }: { item: MediaItem; actions: CardActions }) {
   const img = mediaUrl(item)
   const playable = isPlayableKind(item.kind)
-  // 播客 feed 条目(发现页「取数据」预览的一条节目):主操作 = 订阅,不是播放。
-  const feed = isFeedItem(item) && !!actions.onSubscribeFeed
+  // 播客 feed 条目(发现页「取数据」预览的一条节目):主操作 = 展开单集,不是播放。
+  const feed = isFeedItem(item) && !!actions.onOpenFeed
   return (
     <button
       className="card"
-      onClick={() => (feed ? actions.onSubscribeFeed?.(item) : playable ? actions.onPlay(item) : actions.onOpen?.(item))}
+      onClick={() => (feed ? actions.onOpenFeed?.(item) : playable ? actions.onPlay(item) : actions.onOpen?.(item))}
       aria-label={item.title}
     >
       <div className="card-media" style={{ aspectRatio: "16 / 9" }}>

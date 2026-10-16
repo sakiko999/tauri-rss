@@ -54,11 +54,10 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
       相等时返回**第二个参数**,故 `maxBy(height,f,best)` 相等取 best(保留首个)——注释正确,
       忠实原 `>` 语义。无功能问题。
 
-- [ ] **[medium] `player/hooks/useStreamSelection.ts:59`** — 默认选流按格式族
-      `find(isProgressiveVideo) ?? find(isHlsStream) ?? …` 而非取 `streams[0]`；若某源
-      产出「更低清晰度的 progressive 排在更高档 hls 之后」（或首档只有 flv），会静默选低画质。
-      ⚠️ 实测现有 crawler 不触发（huya 每档先 push HLS 再 push flv，无混排倒序），
-      改动会变选流策略、有回归风险 → 待真出现混排源再改。
+- [x] **[medium] `player/hooks/useStreamSelection.ts` 默认选流按格式族** — **已修（2026-10-16）**：
+      改取 `streams[0]`（契约本就保证「最高清晰度排最前」）。复核确认**确实会翻车**：
+      首档 1080p dash 后面跟一条 360p mp4 时 `find(isProgressiveVideo)` 跳过首档取 360p。
+      判据抽到纯函数模块 `streamKind.ts`；守卫 `useStreamSelection.check.ts`。播放矩阵 3/3 起播。
 - [ ] **[low] `player/hooks/useMediaStream.ts:101`** — 档位锁定 `hls.currentLevel = max`
       在每次 MANIFEST_PARSED 重跑，直播 LL-HLS 持续重载、levels 增长时重锁到新末档。
       点播只触发一次；直播未见问题 → **判定非缺陷（2026-10-13 复核）**：重锁的语义就是
@@ -108,10 +107,11 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
   不作废在途请求 → 旧响应覆盖新面板。改 useEffect([platform,view]) 作废 + 清 busy。
 - [x] **[低] `player/hooks/useStreamSelection.ts:53`** — `useEffect([streams])` 按引用重置
   切档态;props 流路径每次渲染新建数组 → 切档立即失效。改内容签名依赖。
-- [ ] **[中/暂缓] reading 按裸 `item.id` 落库** — 跨订阅同 id 条目(如同一 bilibili 房间在
-  「手填订阅」与「热门榜」两处)共享已读/星标/续播。修需给 reading 键加 `subscriptionId`
-  维度 + 持久化格式迁移(旧数据 key 是裸 id),**改动面大且有迁移风险**。`itemKey`(lib/media.ts)
-  已用 `subId:itemId` 复合键做列表 key,说明作者知情。无失败证据 → 暂缓。
+- [x] **[中] reading 按裸 `item.id` 落库** — **已修（2026-10-16）**：键改 `readingKey(subId, itemId)`
+      （`core/types/reading.ts`）。迁移策略：**读取回退旧版裸 id 键**，且**回退命中不删旧键**
+      （同一旧记录可能被多个订阅共享，删了别的订阅就读不到）—— 零数据丢失、无需一次性迁移。
+      同轮修掉同源的内存 `store.patch(subId, id, patch)` 与三处 `allItems.find(i => i.id === ...)`
+      定位。守卫：`repo-concurrency.check.ts` 的跨订阅隔离用例。
 
 ## xml 包审计（2026-10-13 第五轮）
 
@@ -169,6 +169,7 @@ Atom 多 link / rsshubArticleMedia 重复 / 死协议字段与死代码清理。
 
 - [x] **[高] `apps/desktop/src/store/index.ts:589` `markRead`** — 语义反转:算 `next = !item.isUnread`
       (内存的**未读**标志)却把 `next` 当「已读」传给 `reading.markRead(id, read)`(持久层 read
+      ⚠️ 2026-10-16 起签名为 `markRead(subscriptionId, id, read)` —— 见「reading 按裸 id」那条。
       语义是「已读」)→ 标已读存 read=false → applyReadingState 不回填 → **刷新后回到未读**;
       反向也无法标未读。CDP 实测复现。修:`markRead(item.id, !next)`。toggleStar 用 setStarred
       (同义值)无此问题。

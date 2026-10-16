@@ -1,12 +1,13 @@
 /**
  * usePlayerNav —— 卡片/列表的「播放入口」回调收敛处。
  *
- * 三个动作:
+ * 四个动作:
  *   - onPlay  → 手势内先 unlockAudioPlayback(否则带声自动播会被 autoplay policy 拦),
  *               再导航到播放页;
  *   - onQueue → 加入播放队列(不跳转);
  *   - onOpen  → social 卡片开详情弹窗,其余打开原文(走宿主 openExternal);
- *   - onSubscribeFeed → 播客 feed 条目(Apple 榜单)订成 `rss:podcast`(它没有流)。
+ *   - onOpenFeed → 播客 feed 条目(Apple 榜单)**展开它的单集列表**(它没有流,
+ *               直接播必碎;弹窗里选一集即可播,也有「订阅该节目」)。
  *
  * ⚠️ unlockAudioPlayback 必须在**用户手势的同步调用栈**里调用,不能挪进 effect。
  * ⚠️ 打开外链必须走 `appHost.openExternal`(桌面是 Tauri opener 插件)——WebView
@@ -29,7 +30,7 @@ export function usePlayerNav(): CardActions {
   const selectArticle = useDesktop((s) => s.selectArticle)
   const markRead = useDesktop((s) => s.markRead)
   const addToQueue = useDesktop((s) => s.addToQueue)
-  const addSubscription = useDesktop((s) => s.addSubscription)
+  const openFeedPreview = useDesktop((s) => s.openFeedPreview)
   const toast = useDesktop((s) => s.toast)
 
   /**
@@ -59,28 +60,28 @@ export function usePlayerNav(): CardActions {
   )
 
   /**
-   * 播客 feed 条目(Apple 榜单/搜索)的主操作:**把它订成 `rss:podcast`**。
+   * 播客 feed 条目(Apple 榜单/搜索)的主操作:**展开它的单集列表**。
    *
    * 这类条目 `kind:"audio"` 但没有流 —— `url` 是节目的 RSS feed,不是一集音频。
    * 点「播放」必然掉进「该条目不指向可解析的视频链接」,用户只看到「打不开」。
-   * 它携带的 feed 恰恰就是订阅所需的参数,所以主操作理应是订阅。
    *
-   * 订阅后落到 `rss:podcast`,真正的**单集**会带着 enclosure 直链进来,那些是可播的。
+   * 展开(而非直接订阅):用户点它多半是**想听**,不是想订阅。弹窗里列出最近若干集
+   * 直接可播,同时给「订阅该节目」按钮 —— 两条路都在,不替用户预设。
+   * 单集是**临时预览**(不落库/不建订阅),见 store 的 openFeedPreview。
    *
    * ⚠️ 必须声明在 `onPlay` **之前** —— 它进了 onPlay 的依赖数组,是 `const` 绑定,
    * 放后面会 TDZ 报错。
    */
-  const onSubscribeFeed = useCallback(
+  const onOpenFeed = useCallback(
     (item: MediaItem) => {
       const feedUrl = item.url ?? ""
       if (!feedUrl) {
         toast("error", "这条没有 feed 地址", "Apple 目录偶有缺 feedUrl 的条目,已在上游过滤。")
         return
       }
-      void addSubscription("rss:podcast", item.title, { url: feedUrl })
-        .catch((e: unknown) => toast("error", "订阅失败", e instanceof Error ? e.message : String(e)))
+      void openFeedPreview(item)
     },
-    [addSubscription, toast],
+    [openFeedPreview],
   )
 
   const onPlay = useCallback(
@@ -99,13 +100,13 @@ export function usePlayerNav(): CardActions {
       }
       // 播客 feed 条目同理:没有流,送进播放页必然破碎 —— 改走「订阅这个播客」。
       if (isFeedItem(item)) {
-        onSubscribeFeed(item)
+        onOpenFeed(item)
         return
       }
       unlockAudioPlayback()
       navigateToPlay(item.id)
     },
-    [navigateToPlay, openSocialDetail, openArticle, onSubscribeFeed],
+    [navigateToPlay, openSocialDetail, openArticle, onOpenFeed],
   )
 
   const onOpen = useCallback(
@@ -126,7 +127,7 @@ export function usePlayerNav(): CardActions {
   )
 
   return useMemo(
-    () => ({ onPlay, onOpen, onQueue, onSubscribeFeed }),
-    [onPlay, onOpen, onQueue, onSubscribeFeed],
+    () => ({ onPlay, onOpen, onQueue, onOpenFeed }),
+    [onPlay, onOpen, onQueue, onOpenFeed],
   )
 }
