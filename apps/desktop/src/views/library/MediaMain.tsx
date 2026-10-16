@@ -76,7 +76,7 @@ export function MediaMain() {
       <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
         <GridHead title={viewTitleFor(meta, hotWord)} />
         {hotWord.loading ? (
-          <StateBlock icon="loader" title={`正在取「${hotWord.word}」下的微博…`} text="热搜词流依赖登录 cookie;若失败会给出提示。" />
+          <StateBlock icon="loader" title={`正在取「${hotWord.word}」下的微博…`} text="热搜词流需要登录；若失败会给出提示。" />
         ) : hotWord.error ? (
           <StateBlock
             tone="error"

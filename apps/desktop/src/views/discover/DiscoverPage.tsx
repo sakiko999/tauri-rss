@@ -141,7 +141,7 @@ export function DiscoverPage() {
           <section className="section">
             <div className="section-head">
               <h2 className="section-title">数据源</h2>
-              <span className="section-desc">抓取在本机完成,内容与凭证都存本地 SQLite,不经中转服务器</span>
+              <span className="section-desc">抓取在本机完成，内容与凭证只存本地，不经中转服务器</span>
             </div>
             <div className="stat-strip">
               {[

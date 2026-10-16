@@ -1,7 +1,7 @@
 /**
  * ShortVideoView —— 第三模式：短视频全屏上下滑流。
  *
- * 设计取舍（对照 docs/technical-plan.md 的 Swiper 方案）：
+ * 设计取舍（曾评估 Swiper，最终不引）：
  * - **不引 Swiper**：竖向整页滑动用原生 **CSS scroll-snap**（`snap-y snap-mandatory`
  *   + 每屏 `snap-start h-full`）—— 零依赖、滚动手感由浏览器保证、键盘/触控/滚轮全支持。
  *   Swiper 的 Cube/Flip 3D 转场是加分项，但本模式只需要「一屏一条」，原生足够。

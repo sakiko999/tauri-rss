@@ -21,10 +21,10 @@ const PLATFORM_META: Record<string, { label: string; field: "bilibiliCookie" | "
   bili: {
     label: "哔哩哔哩",
     field: "bilibiliCookie",
-    note: "解锁视频 1080P / 直播原画档位;弹幕与动态接口也依赖登录态。",
+    note: "解锁视频 1080P / 直播原画档位；弹幕与动态也依赖登录态。",
   },
-  weibo: { label: "微博", field: "weiboCookie", note: "关注人时间线与热搜词流需要登录态。" },
-  xhs: { label: "小红书", field: "xhsCookie", note: "用户主页 SSR 需要登录态;推荐流匿名可用。" },
+  weibo: { label: "微博", field: "weiboCookie", note: "关注人时间线与热搜词流需要登录。" },
+  xhs: { label: "小红书", field: "xhsCookie", note: "用户主页需要登录；推荐流不登录也能看。" },
 }
 
 export function AccountPage() {
@@ -53,15 +53,13 @@ export function AccountPage() {
         <div className="page-wrap">
           <h1 className="page-title">账号与凭证</h1>
           <p className="page-lead">
-            凭证存在本地 SQLite（appData/rss.db），只随对应平台的请求发出。填了 cookie 就会自动应用到同平台的所有订阅;
-            订阅级 info.cookie 优先级更高。
+            凭证只存本地，也只会随对应平台的请求发出。填了凭证就自动应用到同平台的所有订阅。
           </p>
 
           <Banner tone="info" icon="info">
             <span className="banner-title">凭证到期了怎么办</span>
-            登录态是有期限的(各平台从几天到数月不等)。失效时抓取会失败、侧栏对应订阅标红,
-            但旧缓存会保留展示,不会出现内容空窗。重新扫码或粘贴新 cookie 即可恢复。
-            <span className="t-dim">（未做自动保活——不会替你续期。bilibili 与小红书支持扫码。）</span>
+            登录态有期限（各平台从几天到数月不等）。失效时抓取会失败、侧栏对应订阅标红，
+            但旧内容会保留，不会空窗。重新扫码或粘贴新凭证即可恢复。
           </Banner>
 
           <div className="stack" style={{ marginTop: "var(--sp-6)" }}>
@@ -78,12 +76,12 @@ export function AccountPage() {
             ))}
           </div>
 
-          <SideCard title="匿名可用范围" icon="info">
+          <SideCard title="不登录能用什么" icon="info">
             <ul className="platform-notes" style={{ padding: "var(--sp-2) 0" }}>
-              <li>bilibili：热门 / 排行榜 / 视频 720P 与直播弹幕匿名可用;动态与登录档位需 cookie。</li>
-              <li>微博：热搜列表匿名可用;关注人时间线与热搜词流需登录。</li>
-              <li>小红书：推荐流（explore）匿名可用;用户主页需登录。</li>
-              <li>斗鱼 / 虎牙 / 抖音 / YouTube 流:全部匿名可解析。</li>
+              <li>哔哩哔哩：热门 / 排行榜 / 视频 720P 与直播弹幕；动态与高清档位要登录。</li>
+              <li>微博：热搜列表；关注人时间线与热搜词流要登录。</li>
+              <li>小红书：推荐流；用户主页要登录。</li>
+              <li>斗鱼 / 虎牙 / 抖音 / YouTube 直播：全部可用。</li>
             </ul>
           </SideCard>
         </div>
@@ -131,13 +129,13 @@ function CredentialCard({
 
       <div className="field">
         <label className="field-label" htmlFor={`ck-${platform}`}>
-          Cookie 串
+          登录凭证
         </label>
         <textarea
           id={`ck-${platform}`}
           className="textarea mono"
           value={draft}
-          placeholder="从浏览器已登录页面复制完整 cookie（含 SESSDATA / SUB / web_session）"
+          placeholder="从浏览器已登录页面复制完整凭证"
           spellCheck={false}
           onChange={(e) => setDraft(e.target.value)}
         />

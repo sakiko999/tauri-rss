@@ -29,7 +29,7 @@ export function Diagnostics() {
     if (
       !window.confirm(
         "清空内容缓存？\n\n" +
-          "会删除全部订阅的已抓取内容(TTL 缓存)。已显示的条目保留在列表里," +
+          "会删除全部订阅的已抓取内容。已显示的条目保留在列表里," +
           "但下次刷新会真正走网络重新抓取。\n不影响:订阅列表、阅读状态、凭证。",
       )
     )
@@ -46,14 +46,14 @@ export function Diagnostics() {
     }
   }
 
-  /** 清掉 CDP 用的 Edge profile(扩展/账户态越养越脏)。走后端命令,不自己删目录。 */
+  /** 清掉抓取用的内置浏览器数据(扩展/登录态越积越乱)。走后端命令,不自己删目录。 */
   async function clearBrowserProfile() {
     if (
       !window.confirm(
         "清理浏览器数据?\n\n" +
-          "会结束 CDP 用的 Edge 并删除它的 profile(扩展、缓存、登录态)。\n" +
-          "影响:微博/小红书等需要重新登录;下次抓取会重建全新 profile。\n" +
-          "不影响:订阅、已缓存内容、bilibili 凭证。",
+          "会删除抓取用的浏览器数据(缓存、登录态)。\n" +
+          "影响:微博/小红书等需要重新登录;下次抓取会重建一份全新的。\n" +
+          "不影响:订阅、已缓存内容、哔哩哔哩凭证。",
       )
     )
       return
@@ -104,9 +104,7 @@ export function Diagnostics() {
           </button>
         </div>
         <p className="setting-help">
-          清单与阅读状态存在 SQLite（appData/rss.db）；内容缓存是同一 KV 表里的 content:* 记录。
-          浏览器数据 = CDP 用的 Edge profile（扩展/账户态会越养越脏），清理后下次抓取重建全新实例，
-          微博/小红书需重新登录。
+          订阅、阅读状态与内容缓存都存本地。清理浏览器数据后，微博/小红书需重新登录。
         </p>
       </SideCard>
 

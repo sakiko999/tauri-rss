@@ -403,7 +403,7 @@ export function AddSubscriptionDialog({
               />
               <span className="t-small t-dim">分钟，留空跟随全局</span>
             </span>
-            <span className="field-help">该订阅的 TTL 优先于全局设置，用于降低反爬源被请求的频率。</span>
+            <span className="field-help">该订阅的刷新间隔优先于全局设置，可降低被频繁访问的源的压力。</span>
           </div>
         </div>
       ) : null}

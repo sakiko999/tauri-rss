@@ -33,7 +33,7 @@ export function Reading() {
         </Row>
         <Row
           label="自动刷新间隔"
-          help="同时也是内容缓存 TTL。TTL 内刷新直接复用缓存,不会发起网络请求(反爬源友好)。"
+          help="两次抓取的最短间隔。间隔内刷新直接复用已抓到的内容，不会重复访问源站。"
         >
           <div className="range">
             <input
@@ -54,7 +54,7 @@ export function Reading() {
       </SideCard>
 
       <SideCard title="RSSHub" icon="rss">
-        <Row label="实例地址" help="rsshub:* 源的默认 baseUrl;订阅级 info.baseUrl 可覆盖。">
+        <Row label="实例地址" help="用于 RSSHub 类型订阅的默认地址；单个订阅里可以单独指定。">
           <input
             className="input input-wide"
             value={rsshubDraft}

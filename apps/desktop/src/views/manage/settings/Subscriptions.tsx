@@ -39,7 +39,7 @@ export function Subscriptions() {
       if (xml === null) return // 取消
       const r = await doImportOpml(xml)
       if (r.added === 0 && r.skipped === 0) {
-        toast("error", "导入失败", "文件里没找到可用的 RSS 订阅(outline 缺 xmlUrl)。")
+        toast("error", "导入失败", "文件里没找到可用的 RSS 订阅。")
       } else {
         toast("ok", `导入 ${r.added} 条订阅`, `跳过 ${r.skipped} 条${r.failed ? `,失败 ${r.failed} 条` : ""}。`)
       }
@@ -101,8 +101,8 @@ function SideCardOPML({
         </button>
       </div>
       <p className="setting-help">
-        导入按 OPML 的分组层级建分组、逐条落成 RSS 直链(同 URL 已订阅则跳过)；
-        导出只含带 URL 的 RSS 订阅(直播/社交渠道无通用 feed URL，不在其中)。
+        导入按 OPML 的分组层级建分组、逐条落成 RSS 直链（同一地址已订阅则跳过）；
+        导出只含 RSS 订阅（直播/社交类不含在内）。
       </p>
     </SideCard>
   )

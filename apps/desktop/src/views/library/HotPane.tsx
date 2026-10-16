@@ -43,7 +43,7 @@ export function HotPane() {
           icon="radio"
           tight
           title="没有取到热搜"
-          text="wb:hot 的列表接口匿名可用;若为空,可能是网络或实例配置问题,试着刷新。"
+          text="可能是网络问题，试着刷新一下。"
         />
       ) : (
         <div className="scroll-area" style={{ flex: 1 }}>

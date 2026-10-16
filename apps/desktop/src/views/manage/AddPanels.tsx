@@ -229,7 +229,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
               <span className="t-micro t-dim mono od-truncate">{f.channel.key}</span>
             </span>
             <span className="tag">{KIND_META[f.channel.kind]?.label ?? f.channel.kind}</span>
-            {f.channel.loginable ? <span className="tag tag-warn">需登录 cookie</span> : <span className="tag tag-ok">匿名可用</span>}
+            {f.channel.loginable ? <span className="tag tag-warn">需登录</span> : <span className="tag tag-ok">匿名可用</span>}
           </div>
 
           {f.channel.defaultInfo ? (
@@ -239,7 +239,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
           ) : null}
           {f.channel.loginable ? (
             <Banner tone="warn" icon="lock">
-              该渠道需要登录，请先在「账号与凭证」里扫码或填 cookie。
+              该渠道需要登录，请先在「账号与凭证」里扫码或填写凭证。
             </Banner>
           ) : null}
 

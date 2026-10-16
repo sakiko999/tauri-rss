@@ -227,7 +227,7 @@ export function SocialDetailModal() {
                   ? "正在向源站补全详情…"
                   : resolveFailed
                     ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
-                    : "列表页只带封面与标题；详情按列表项的 xsec_token 补全，匿名可读全文与多图。"}
+                    : "列表只带封面与标题；详情按需补全，不登录也能读全文与多图。"}
               </span>
             </p>
           </div>

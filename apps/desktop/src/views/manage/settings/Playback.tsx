@@ -24,7 +24,7 @@ export function Playback() {
             onChange={(v) => void setSetting("autoPlayNext", v)}
           />
         </Row>
-        <Row label="画质" help="本播放器一律选最高清晰度并锁档 —— 隧道转发的带宽估算不可靠，自动降档会骤降且不回升。">
+        <Row label="画质" help="一律选最高清晰度并锁定，不会自动降档。">
           <span className="tag">锁最高档</span>
         </Row>
       </SideCard>
@@ -37,8 +37,8 @@ export function Playback() {
 
       <SideCard title="图片" icon="image">
         <Row
-          label="防盗链图片走隧道"
-          help="命中防盗链图床(sinaimg 等)的图片经宿主转发并带上站内 Referer;关闭后这类图会 403。"
+          label="图片防盗链处理"
+          help="部分图床会拒绝外部直接加载，开启后由本机代为取图，图片能正常显示。"
         >
           <Switch checked={settings.imageProxy} label="图片代理" onChange={(v) => void setSetting("imageProxy", v)} />
         </Row>

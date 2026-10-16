@@ -39,19 +39,17 @@ export function OnboardingModal() {
         </li>
         <li>
           <span>
-            <b>发现</b>里可以按平台浏览分区、搜索房间与主播,取到想看的内容再一键订阅。能力矩阵取自实际注册的渠道,
-            灰掉的项就是还没实现的。
+            <b>发现</b>里可以按平台浏览分区、搜索房间与主播，取到想看的内容再一键订阅。
           </span>
         </li>
         <li>
           <span>
-            <b>播放页</b>是真正的播放器（HLS / FLV / DASH 直连解析，带弹幕），不是封面占位。直播会显示在线人数与「回直播」按钮。
+            <b>播放页</b>是真正的播放器，支持弹幕；直播会显示在线人数与「回直播」按钮。
           </span>
         </li>
         <li>
           <span>
-            <b>账号与凭证</b>里扫码或粘贴 cookie，可解锁登录档位（如 bilibili 1080P）。不登录也能用:热门、排行榜、
-            弹幕与全部直播流都匿名可用。
+            <b>账号与凭证</b>里扫码或粘贴凭证，可解锁登录档位（如哔哩哔哩 1080P）。不登录也能用：热门、排行榜、弹幕与全部直播流。
           </span>
         </li>
         <li>
@@ -64,7 +62,7 @@ export function OnboardingModal() {
         <Icon name="checkCircle" size={15} />
         <div className="banner-body">
           <span className="banner-title">抓取在本机完成</span>
-          内容与凭证都存本地 SQLite，不经任何中转服务器。刷新受 TTL 缓存约束，命中缓存时不会发起网络请求。
+          内容与凭证只存本地，不经任何中转服务器。
         </div>
       </div>
     </Modal>
