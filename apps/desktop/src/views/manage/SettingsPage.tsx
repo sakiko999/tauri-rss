@@ -1,12 +1,13 @@
 /**
  * SettingsPage —— 设置外壳:深链解析 + tab 切换。
  *
- * 五个 tab 各在自己的文件里(views/manage/settings/):
+ * 六个 tab 各在自己的文件里(views/manage/settings/):
  *   Appearance(表现型偏好,usePrefs)· Reading(缓存/RSSHub)· Playback ·
- *   Subscriptions(OPML + 分组 + 订阅 CRUD)· Diagnostics(存储与诊断)。
+ *   Subscriptions(OPML + 分组 + 订阅 CRUD)· Diagnostics(存储与诊断)·
+ *   About(版本与自动更新)。
  * 本文件只保留 tab 定义与外壳 —— 原来它们全挤在一个 555 行的组件里。
  */
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router"
 import { Icon } from "../../components/Icon.tsx"
 import { Appearance } from "./settings/Appearance.tsx"
@@ -14,8 +15,9 @@ import { Reading } from "./settings/Reading.tsx"
 import { Playback } from "./settings/Playback.tsx"
 import { Subscriptions } from "./settings/Subscriptions.tsx"
 import { Diagnostics } from "./settings/Diagnostics.tsx"
+import { About } from "./settings/About.tsx"
 
-type Tab = "appearance" | "reading" | "playback" | "subscriptions" | "diagnostics"
+type Tab = "appearance" | "reading" | "playback" | "subscriptions" | "diagnostics" | "about"
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "appearance", label: "外观", icon: "sun" },
@@ -23,6 +25,7 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "playback", label: "播放", icon: "play" },
   { id: "subscriptions", label: "订阅与分组", icon: "rss" },
   { id: "diagnostics", label: "存储与诊断", icon: "database" },
+  { id: "about", label: "关于与更新", icon: "info" },
 ]
 
 export function SettingsPage() {
@@ -31,6 +34,12 @@ export function SettingsPage() {
   const [sp] = useSearchParams()
   const initial = (sp.get("tab") as Tab) || "appearance"
   const [tab, setTab] = useState<Tab>(TABS.some((t) => t.id === initial) ? initial : "appearance")
+  // URL 变化也要跟随(启动更新 toast 的「查看」会 push ?tab=about —— 若组件已挂载,
+  // 只读 useState 初值会让点击「没反应」)。用户点 tab 只改本地 state,不回写 URL。
+  useEffect(() => {
+    const t = sp.get("tab") as Tab | null
+    if (t && TABS.some((x) => x.id === t)) setTab(t)
+  }, [sp])
   return (
     <div className="page">
       <div className="scroll-area page-scroll">
@@ -49,6 +58,7 @@ export function SettingsPage() {
           {tab === "playback" ? <Playback /> : null}
           {tab === "subscriptions" ? <Subscriptions /> : null}
           {tab === "diagnostics" ? <Diagnostics /> : null}
+          {tab === "about" ? <About /> : null}
         </div>
       </div>
     </div>

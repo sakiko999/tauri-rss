@@ -33,6 +33,7 @@ import { SocialDetailModal } from "./components/app/SocialDetailModal.tsx"
 import { FeedPreviewModal } from "./components/app/FeedPreviewModal.tsx"
 import { usePrefs } from "./store/prefs.ts"
 import { useGlobalShortcuts } from "./lib/shortcuts.ts"
+import { scheduleStartupCheck } from "./lib/update.ts"
 
 export default function App() {
   const params = useParams()
@@ -52,6 +53,7 @@ export default function App() {
   const nodeId = isPlay ? null : storeNodeId
   const init = useDesktop((s) => s.init)
   const initError = useDesktop((s) => s.initError)
+  const toast = useDesktop((s) => s.toast)
   const selectedArticleId = useDesktop((s) => s.selectedArticleId)
   const booting = useDesktop(showSkeleton)
   const meta = useNodeMeta(nodeId)
@@ -61,6 +63,18 @@ export default function App() {
   useEffect(() => {
     void init()
   }, [init])
+
+  // 启动静默检查更新:有新版本才弹 toast(带「查看」跳到设置页),失败/离线都不打扰。
+  // scheduleStartupCheck 内部有 once 守卫,StrictMode 双调用不会打两次请求。
+  useEffect(() => {
+    if (initError) return
+    scheduleStartupCheck((info) => {
+      toast("info", `发现新版本 ${info.version}`, `当前版本 ${info.currentVersion}。`, {
+        label: "查看",
+        run: () => void navigate(`/v/${encodeURIComponent("page:settings")}?tab=about`),
+      })
+    })
+  }, [initError, toast, navigate])
 
   // 把 router 的 navigate 注入 store(store 不能 import router)——删除当前节点后
   // store 借它同步 URL(「URL 是位置权威」)。

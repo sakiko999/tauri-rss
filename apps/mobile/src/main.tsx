@@ -10,7 +10,8 @@ import "./styles.css"
 // 门面——移动端不做 CDP 模拟(见 docs/mobile-cdp-feasibility.md),自动降级 HTTP/SSR。
 // ⚠️ 纯浏览器(非 Tauri WebView)下 `invoke` 不存在 → 降级 browser host,让
 // `vite dev` 能开页调 UI(有 CORS 限制,平台抓取会失败,仅壳层/本地存储可用)。
-if ("__TAURI_INTERNALS__" in globalThis) injectTauriHost()
+// ⚠️ updater:false —— 自动更新是桌面专属能力,Rust 侧未给移动端注册插件。
+if ("__TAURI_INTERNALS__" in globalThis) injectTauriHost({ updater: false })
 else injectBrowserHost()
 
 // dev 调试锚点(同 desktop):CDP 连进来用 `__store.getState()` 读权威状态。

@@ -41,6 +41,37 @@ declare global {
     imageProxy?: boolean
     /** 省流模式:不加载任何图片(镜像 settings.dataSaver;ui 的 MediaImage 直读)。 */
     dataSaver?: boolean
+    /** 自动更新(仅 Tauri 桌面注入;浏览器/CLI/移动端为 undefined)。 */
+    updater?: UpdaterBackend
+  }
+
+  /** 一条可安装的更新。 */
+  interface UpdateInfo {
+    version: string
+    currentVersion: string
+    body?: string
+    date?: string
+  }
+
+  /** 更新包下载进度。`downloaded` 是累计字节数。 */
+  type UpdateEvent =
+    | { event: "started"; contentLength?: number }
+    | { event: "progress"; downloaded: number; contentLength?: number }
+    | { event: "finished" }
+
+  /**
+   * 自动更新能力。签名校验与安装包执行都在 Rust 侧(tauri-plugin-updater),
+   * 前端只负责查询/展示/触发;安装包必须是签名过的 NSIS setup.exe。
+   */
+  interface UpdaterBackend {
+    /** 当前应用版本(不联网)。 */
+    version(): Promise<string>
+    /** 查询最新版;已是最新返回 null。 */
+    check(): Promise<UpdateInfo | null>
+    /** 下载并安装最近一次 check() 的结果(Windows 会拉起 NSIS 安装器)。 */
+    downloadAndInstall(onEvent: (e: UpdateEvent) => void): Promise<void>
+    /** 安装完成后重启应用。 */
+    relaunch(): Promise<void>
   }
 
   /** 一条 WS 长连接(桌面/node 由宿主管理;crawler createWsStream 消费)。 */

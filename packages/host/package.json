@@ -10,7 +10,9 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2.7.1",
+    "@tauri-apps/plugin-process": "^2",
     "@tauri-apps/plugin-sql": "^2",
+    "@tauri-apps/plugin-updater": "^2",
     "@amoeba/core": "workspace:*",
     "@amoeba/log": "workspace:*",
     "ws": "^8.21.3"

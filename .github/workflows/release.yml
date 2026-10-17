@@ -1,0 +1,69 @@
+name: release
+
+# 打 v* tag 即发布:构建 NSIS 安装包 + 签名 + latest.json,全部挂到 GitHub Release。
+# 版本号唯一来源 = apps/src-tauri/tauri.conf.json(tauri-action 用 __VERSION__ 替换)。
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # 与本地 bun.lock 生成版本一致,避免解析差异。
+          bun-version: 1.4.3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # 根 Cargo.toml 是 workspace,产物落在仓库根的 target/。
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+
+      # 防止 tag 与 tauri.conf 版本不一致:那会让 latest.json 的版本号与 Release 对不上,
+      # 已安装用户永远检测不到这一版。
+      - name: Verify tag matches app version
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne "${{ github.ref_name }}") {
+            throw "tag ${{ github.ref_name }} != v$version (apps/src-tauri/tauri.conf.json)"
+          }
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # 产物必须先生成到 dist/desktop(tauri.conf 的 frontendDist,tauri build 不会再跑 Vite)。
+      - name: Build frontend
+        run: bun run build:desktop
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 更新包签名(私钥只存在仓库 secret;公钥在 tauri.conf.json 的 plugins.updater.pubkey)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        with:
+          # 前端与 src-tauri 分属两个目录:tauri 命令必须在 src-tauri 里执行。
+          projectPath: apps/src-tauri
+          tauriScript: bunx tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: "Amoeba __VERSION__"
+          releaseBody: |
+            下载 `Amoeba___VERSION___x64-setup.exe` 安装(按用户安装,无需管理员)。
+
+            已安装旧版本的用户可在应用内「设置 → 关于与更新」检查更新;
+            更新包经签名校验后安装。
+          releaseDraft: false
+          prerelease: false
+          # 只有 NSIS 一种安装器;显式指定,避免 latest.json 指向 msi。
+          updaterJsonPreferNsis: true

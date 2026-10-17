@@ -420,6 +420,23 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   执行环境须遮蔽 node 全局（否则走 node 分支指纹被拒）；enter 用 QQBrowser UA、
   WS 用 Chrome 150 UA。proto `progress` 是毫秒，XML 弹幕是秒
 
+## 发布与自动更新
+
+- **Windows 只发 NSIS `*-setup.exe`**（`bundle.targets: ["nsis"]`，按用户装到
+  `%LOCALAPPDATA%`，免管理员）。**不是 MSIX**（Tauri 没有该 target）、**不是 portable**
+  （无安装记录，updater 无法替换）。⚠️ **别再加回 MSI**：per-machine 与 NSIS 是两条
+  安装记录，`latest.json` 只能指向一种安装器，混发会断更新链。
+- **updater**：`tauri-plugin-updater` + `tauri-plugin-process`（Rust 侧 `#[cfg(desktop)]`
+  注册）；前端经 appHost 可选能力 `updater`（`packages/host/src/tauri/updater-backend.ts`）。
+  启动静默检查（`apps/desktop/src/lib/update.ts`：4s 后、离线跳过、失败不打扰）+
+  「设置 → 关于与更新」手动检查/下载进度/重启。
+- **签名密钥**：私钥 `~/.tauri/amoeba.key`（不入库），公钥写 `plugins.updater.pubkey`，
+  CI 用 secret `TAURI_SIGNING_PRIVATE_KEY`。⚠️ **私钥丢失或公钥更换 = 已安装用户永远
+  收不到更新** —— 备份私钥。
+- **发版**：同步三处版本号（`tauri.conf.json` / `Cargo.toml` / `package.json`）→ 提交 →
+  `git tag vX.Y.Z && git push origin vX.Y.Z`。`.github/workflows/release.yml` 在
+  windows-latest 构建、签名并发布 Release + `latest.json`。详见 `docs/release-updater.md`。
+
 ## 其他约定
 
 - ⚠️ **「回车提交」的输入框必须过 `lib/ime.ts` 的 `isImeComposing(e)`**：中文输入法候选
@@ -579,6 +596,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/smoke-check.md` | ★ 端到端巡检清单（改了什么 → 跑什么） |
 | `docs/rail-tree-accordion.md` | 侧栏树选型（为何用 Accordion 而非树组件 + 三个静默失败坑） |
 | `docs/audit-backlog.md` | 审计发现积压：故意不改的理由 + 误报证伪（已修不在此） |
+| `docs/release-updater.md` | 发布产物（NSIS）、签名密钥、自动更新链路与发版步骤 |
 
 ## 下一步
 

@@ -116,7 +116,9 @@
         "@amoeba/log": "workspace:*",
         "@tauri-apps/api": "^2",
         "@tauri-apps/plugin-opener": "^2.7.1",
+        "@tauri-apps/plugin-process": "^2",
         "@tauri-apps/plugin-sql": "^2",
+        "@tauri-apps/plugin-updater": "^2",
         "ws": "^8.21.3",
       },
       "devDependencies": {
@@ -461,7 +463,11 @@
 
     "@tauri-apps/plugin-opener": ["@tauri-apps/plugin-opener@2.7.1", "https://registry.npmmirror.com/@tauri-apps/plugin-opener/-/plugin-opener-2.7.1.tgz", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-XkXdt30rontti9TII/gBBxFRXWfj8DiprFW7RgBFRBj1OhdfjBNVcFqSEWkkZ4hXafHnuEnB7F1sFsmu6uyywQ=="],
 
+    "@tauri-apps/plugin-process": ["@tauri-apps/plugin-process@2.4.0", "https://registry.npmmirror.com/@tauri-apps/plugin-process/-/plugin-process-2.4.0.tgz", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-GddrmsSLAYrLa/yTXlXK/YRDzUgYeeOnUXTbiyvJWkmI424RmDPD3FVLeqcon7rv6O6ZfhBilcrHWnSo7o6hIQ=="],
+
     "@tauri-apps/plugin-sql": ["@tauri-apps/plugin-sql@2.5.0", "https://registry.npmmirror.com/@tauri-apps/plugin-sql/-/plugin-sql-2.5.0.tgz", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-wHzfXAgMbn3G1xWQWM1LlWLJkBEfO2CkAWvu+VYigRBXBocPXZqvGEkYWSM1RrZSSc4iJYAWXkFZrgTyu8zBkw=="],
+
+    "@tauri-apps/plugin-updater": ["@tauri-apps/plugin-updater@2.14.0", "https://registry.npmmirror.com/@tauri-apps/plugin-updater/-/plugin-updater-2.14.0.tgz", { "dependencies": { "@tauri-apps/api": "^2.12.0" } }, "sha512-gdylJ9tger4hkyOn24QZd6MNOKVo2Eh53iw5th2Qj1vKTR/+u4PIwJWuiis5hohYvobn6iOvlnALfrqIPSzh7Q=="],
 
     "@types/babel__core": ["@types/babel__core@7.20.5", "https://registry.npmmirror.com/@types/babel__core/-/babel__core-7.20.5.tgz", { "dependencies": { "@babel/parser": "^7.20.7", "@babel/types": "^7.20.7", "@types/babel__generator": "*", "@types/babel__template": "*", "@types/babel__traverse": "*" } }, "sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA=="],
 

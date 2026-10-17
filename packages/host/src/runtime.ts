@@ -19,6 +19,8 @@ let _ws: WsBackend | undefined
 let _browser: BrowserBackend | undefined
 /** 打开外部链接(系统浏览器)。Tauri 注入 opener 插件;其余环境兜底 window.open。 */
 let _openExternal: ((url: string) => Promise<void>) | undefined
+/** 自动更新(仅 Tauri 桌面注入;缺失 = 当前环境不支持)。 */
+let _updater: UpdaterBackend | undefined
 
 /**
  * `openExternal` 允许的协议 —— **安全边界,不是配置项**。
@@ -72,6 +74,11 @@ export function initAppHost(): void {
     get browser(): BrowserBackend | undefined {
       return _browser
     },
+    // updater 同 ws/browser:可选(仅 Tauri 桌面)。浏览器/CLI/移动端不注入,
+    // 设置页据此隐藏「检查更新」并降级为只读版本号。
+    get updater(): UpdaterBackend | undefined {
+      return _updater
+    },
     /**
      * 打开外部链接(系统默认浏览器)。
      *
@@ -104,6 +111,7 @@ export function setHostCaps(caps: {
   ws?: WsBackend
   browser?: BrowserBackend
   openExternal?: (url: string) => Promise<void>
+  updater?: UpdaterBackend
 }): void {
   _http = caps.http
   _js = caps.js
@@ -113,4 +121,5 @@ export function setHostCaps(caps: {
   _ws = caps.ws
   _browser = caps.browser
   _openExternal = caps.openExternal
+  _updater = caps.updater
 }

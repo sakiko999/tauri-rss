@@ -345,4 +345,48 @@
   display: flex;
   gap: var(--sp-8);
 }
+
+/* 关于与更新 */
+.update-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+.update-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.update-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  font-weight: 600;
+}
+.update-notes {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+.update-progress {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+.update-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--dur-fast) linear;
+}
+.update-error {
+  color: var(--danger);
+}
 
