@@ -76,6 +76,10 @@ git push origin v0.2.0
 
 ## 本地验证（打 tag 前）
 
+VSCode 的 **「Tauri Release (true production)」** 调试入口等价于下面两步 + 直接运行
+`target/release/amoeba.exe`（不启动 dev server、不开 9222、用生产库 `rss.db`）。
+它只验证运行时行为，**不产出安装包/签名**；要验证签名产物仍按下面的命令。
+
 必须在带 MSVC 的终端（或 `vcvars64.bat`）里执行，并注入私钥：
 
 ```powershell

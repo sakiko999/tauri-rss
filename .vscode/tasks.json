@@ -45,6 +45,58 @@
       }
     },
     {
+      // 真 release 的前端：走 `vite build`（PROD）→ 生产包无种子、DB 用 rss.db。
+      "label": "tauri-release-frontend",
+      "type": "shell",
+      "command": "bun run build:desktop",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": ["kill-tauri"],
+      "dependsOrder": "sequence",
+      "problemMatcher": {
+        "owner": "typescript",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^(.+)\\((\\d+),(\\d+)\\): error TS\\d+: (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        ]
+      }
+    },
+    {
+      // 真 release 的 Rust：只产出可执行文件（不生成安装包）。前端已由上一个任务构建到
+      // dist/desktop（tauri.conf 的 frontendDist）；这里**不**启动 Vite dev server。
+      "label": "tauri-release-nobundle",
+      "type": "shell",
+      "command": "bunx tauri build --no-bundle",
+      "options": {
+        "cwd": "${workspaceFolder}/apps/src-tauri"
+      },
+      "dependsOn": ["tauri-release-frontend"],
+      "dependsOrder": "sequence",
+      "problemMatcher": {
+        "owner": "rust",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^error\\[E\\d+\\]: (.*)$",
+            "message": 1
+          },
+          {
+            "regexp": "^\\s*-->\\s*([^:]+):(\\d+):(\\d+)",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          }
+        ]
+      }
+    },
+    {
       "label": "tauri-dev-release",
       "type": "shell",
       "command": "bun run scripts/tauri.ts tauri desktop --release",

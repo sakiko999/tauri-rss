@@ -24,6 +24,20 @@
       "postDebugTask": "kill-tauri"
     },
     {
+      // 真 release：`vite build`(PROD) + `tauri build --no-bundle`，然后直接启动
+      // target/release/amoeba.exe。**不**跑 Vite dev server、**不**开 9222、
+      // 用生产 DB `rss.db`、生产包不含测试种子 —— 与用户装到的版本一致。
+      // ⚠️ 没开 release debug 符号，断点不可用；要断点用上面的
+      //    「Tauri Dev (desktop, release)」（保留 dev server + 独立 DB）。
+      "name": "Tauri Release (true production)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/release/amoeba.exe",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "tauri-release-nobundle",
+      "postDebugTask": "kill-tauri"
+    },
+    {
       "name": "Tauri Rust Unit Tests",
       "type": "lldb",
       "request": "launch",

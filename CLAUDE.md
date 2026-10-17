@@ -450,6 +450,9 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **发版**：同步三处版本号（`tauri.conf.json` / `Cargo.toml` / `package.json`）→ 提交 →
   `git tag vX.Y.Z && git push origin vX.Y.Z`。`.github/workflows/release.yml` 在
   windows-latest 构建、签名并发布 Release + `latest.json`。详见 `docs/release-updater.md`。
+- **VSCode「Tauri Release (true production)」**：`vite build`（PROD）+ `tauri build
+  --no-bundle` 后直接启动 `target/release/amoeba.exe` —— 无 dev server / 无 9222、
+  用生产库 `rss.db`、无测试种子，与用户装到的版本一致（release 无调试符号，断点不可用）。
 
 ## 其他约定
 
