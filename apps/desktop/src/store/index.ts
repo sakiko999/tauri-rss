@@ -424,7 +424,11 @@ export const useDesktop = create<DesktopState>((set, get) => {
             dl.settings.get(),
           ])
           // **只在首次运行(空库)写种子**:之后再启动不覆盖——用户 CRUD 后的订阅是权威。
-          if (subs.length === 0 && groups.length === 0) {
+          // ⚠️ 且**只在开发构建**写:SEED_* 是测试/演示源(含需登录、下播的房间),
+          // 发布版绝不能默认塞进用户的订阅列表。生产构建下此分支连同 import 一起被摇掉。
+          // （`tauri dev --release` / VSCode 的 release debug 仍走 Vite dev server,
+          //   DEV=true,所以它继续共用 dev 数据、继续写种子——那是开发环境,不是发布产物。）
+          if (import.meta.env.DEV && subs.length === 0 && groups.length === 0) {
             const t = now()
             for (const g of SEED_GROUPS) await dl.subscriptions.addGroup({ ...g })
             for (const s of SEED_SUBSCRIPTIONS) {

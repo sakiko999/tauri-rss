@@ -560,7 +560,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
   List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱
 - **首启种子订阅**在 `apps/desktop/src/subscriptions.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS）。
-  ⚠️ **只在空库写入** —— 之后再启动不覆盖，否则用户 CRUD 的订阅会被启动时删掉
+  ⚠️ **只在空库 + `import.meta.env.DEV` 下写入** —— 之后再启动不覆盖（否则用户 CRUD 的
+  订阅会被启动时删掉）；生产构建里种子 import 被摇掉，**发布版首启是空库**（走 onboarding）。
+  ⚠️ `tauri dev` 与 VSCode 的 release debug 共用 `app.amoeba.desktop` 的
+  `%APPDATA%\app.amoeba.desktop\rss.db`（identifier 相同），所以两者数据互通；release
+  debug 仍走 Vite dev server（DEV=true），**仍会写种子**——那是开发环境，不是发布产物
 - **一键按类型归组**（`store/index.ts` 的 `autoGroupByKind`）先把未分组订阅按
   `channelKind` 分桶，**只为实际有成员的 kind 建组** —— 否则会留下 0 成员空分组
   （用户看着像归类失败）；带撤销（分组本身留着）
