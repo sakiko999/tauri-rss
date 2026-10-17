@@ -563,8 +563,13 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
   List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱
 - **首启种子订阅**在 `apps/desktop/src/dev/seed.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS，仅 dev 构建动态 import）。
-  ⚠️ **只在空库 + `import.meta.env.DEV` 下写入** —— 之后再启动不覆盖（否则用户 CRUD 的
-  订阅会被启动时删掉）；生产构建里种子 import 被摇掉，**发布版首启是空库**（走 onboarding）。
+  首次写入后落 `dev:seeded` 标记 —— **重置数据/手动删空后不会再次写入**（要恢复测试种子：
+  删掉该 KV key 或整个 dev DB）。⚠️ **只在空库 + 无标记 + `import.meta.env.DEV` 下写入** ——
+  之后再启动不覆盖（否则用户 CRUD 的订阅会被启动时删掉）；生产构建里种子 import 被摇掉，
+  **发布版首启是空库**（走 onboarding）。
+- **存储与诊断 → 完全重置数据**（`settings/Diagnostics.tsx`）：删空 SQLite KV + 清
+  localStorage，然后整页重载；dev 下写 `dev:seeded` 防止种子回填。**不碰**浏览器
+  profile/登录态——那是同页「清理浏览器数据」的职责。
   ⚠️ **DB 按运行形态隔离**（`packages/host/src/tauri/sqlite-storage-backend.ts`）：
   生产 `rss.db` · 普通 dev `rss.dev.db` · release debug `rss.release-debug.db`
   （`scripts/tauri.ts` 在 `--release` 时给 Vite 注入 `VITE_AMOEBA_PROFILE`）。

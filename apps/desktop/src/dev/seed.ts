@@ -204,15 +204,27 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
 ]
 
 /**
- * 空库时写入种子;非空库直接返回(用户 CRUD 后的数据是权威)。
+ * 种子只写一次:写过后落 `dev:seeded` 标记。这样「完全重置数据」或用户手动删空订阅后,
+ * 下次启动不会又把测试源塞回来(首次开发者想恢复种子:删掉该 key 或整个 dev DB)。
+ */
+const SEEDED_KEY = "dev:seeded"
+
+/**
+ * 空库且未写过种子时写入;其余情况直接返回。
  * 由 `store/index.ts` 在 DEV 下动态 import 调用 —— 生产构建不会包含本模块。
  */
 export async function seedIfEmpty(dl: DataLayer): Promise<void> {
+  const storage = globalThis.appHost.storage
+  if (await storage.get(SEEDED_KEY)) return
   const [subs, groups] = await Promise.all([dl.subscriptions.list(), dl.subscriptions.listGroups()])
-  if (subs.length > 0 || groups.length > 0) return
+  if (subs.length > 0 || groups.length > 0) {
+    await storage.set(SEEDED_KEY, "1")
+    return
+  }
   const t = Date.now()
   for (const g of SEED_GROUPS) await dl.subscriptions.addGroup({ ...g })
   for (const s of SEED_SUBSCRIPTIONS) {
     await dl.subscriptions.add({ ...s, createdAt: t, updatedAt: t })
   }
+  await storage.set(SEEDED_KEY, "1")
 }

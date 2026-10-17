@@ -1,4 +1,4 @@
-/** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile + 最近抓取错误。 */
+/** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile / 完全重置 + 最近抓取错误。 */
 import { useState } from "react"
 import { useDesktop } from "../../../store/index.ts"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
@@ -67,6 +67,35 @@ export function Diagnostics() {
     }
   }
 
+  /**
+   * 完全重置:删空 SQLite KV(订阅/分组/阅读/设置/内容缓存)+ localStorage(界面偏好/
+   * 播放队列),然后整页重载让 DataLayer 从空库重建。
+   *
+   * ⚠️ dev 构建下要落 `dev:seeded` 标记 —— 否则重载后空库会再次触发测试种子写入,
+   * 用户以为「重置没生效」。生产构建没有种子逻辑,标记为无害冗余(这里仍只在 DEV 写)。
+   * ⚠️ 不碰浏览器 profile(登录态);需要时用上面的「清理浏览器数据」单独处理。
+   */
+  async function resetAll() {
+    if (
+      !window.confirm(
+        "完全重置本地数据？\n\n" +
+          "会删除:订阅与分组、阅读/星标/播放进度、设置、内容缓存、界面偏好与播放队列。\n" +
+          "不会删除:抓取用的浏览器登录态(用上面的「清理浏览器数据」单独处理)。\n\n" +
+          "重置后应用会立即重新加载。此操作不可撤销。",
+      )
+    )
+      return
+    try {
+      const keys = await globalThis.appHost.storage.keys()
+      for (const k of keys) await globalThis.appHost.storage.delete(k)
+      if (import.meta.env.DEV) await globalThis.appHost.storage.set("dev:seeded", "1")
+      localStorage.clear()
+      window.location.reload()
+    } catch (e) {
+      toast("error", "重置失败", e instanceof Error ? e.message : String(e))
+    }
+  }
+
   const errs = Object.entries(refreshErrors)
 
   return (
@@ -106,6 +135,18 @@ export function Diagnostics() {
         <p className="setting-help">
           订阅、阅读状态与内容缓存都存本地。清理浏览器数据后，微博/小红书需重新登录。
         </p>
+      </SideCard>
+
+      <SideCard title="完全重置" icon="alert">
+        <p className="setting-help" style={{ padding: "var(--sp-2) 0" }}>
+          删除本机全部应用数据（订阅、阅读记录、设置、内容缓存、界面偏好），应用会重新加载。
+          抓取用的浏览器登录态不在此列。
+        </p>
+        <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
+          <button className="btn btn-danger" onClick={() => void resetAll()}>
+            <Icon name="trash" size={14} /> 完全重置数据
+          </button>
+        </div>
       </SideCard>
 
       <SideCard title={`最近的抓取错误 ${errs.length}`} icon="alert">
