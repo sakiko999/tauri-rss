@@ -29,7 +29,7 @@
 
 ## 二、立即可用的原生 feed（已 curl 实测 200 + 真 XML）
 
-可直接塞进 `apps/desktop/src/subscriptions.ts` 的 `SEED_SUBSCRIPTIONS`，无需任何抓取逻辑，走现有 RawRssChannel（`rss:{id}`）：
+可直接塞进 `apps/desktop/src/dev/seed.ts` 的 `SEED_SUBSCRIPTIONS`，无需任何抓取逻辑，走现有 RawRssChannel（`rss:{id}`）：
 
 | # | 平台 | feed URL | 类型 |
 |---|---|---|---|
@@ -76,7 +76,7 @@ w_rid    = MD5(sortedParams & wts & mixinKey)
 已实现为 `packages/crawler/src/channels/bili/square.ts` 的 `BiliSquareChannel`（`bili:square` channel，wbi 签名在 `packages/resolve/src/platform/bili/client.ts`）：
 - 端到端验证：真实抓取热搜 50 条（code:0），零 cookie
 - 复用 live 层同款 `MIXIN_KEY_ENC_TAB` 换位表（`bili/live.ts` 同源）
-- desktop 测试订阅已接入（`apps/desktop/src/subscriptions.ts` 的 `bili:popular`）
+- desktop 测试订阅已接入（`apps/desktop/src/dev/seed.ts` 的 `bili:popular`）
 
 后续可加：`/user/article/:uid`（UP 主图文）、`/video/danmaku/:bvid`（弹幕）、`/ranking`
 （排行榜）。同法可试其它走 wbi 签名的 bilibili API。
@@ -108,7 +108,7 @@ w_rid    = MD5(sortedParams & wts & mixinKey)
 ## 六、订阅来源
 
 - 内置 RSS 直链全量清单：`packages/crawler/src/channels/rss/builtin.ts`（36 条，含上表多数源）。
-- 首启种子订阅：`apps/desktop/src/subscriptions.ts` 的 `SEED_SUBSCRIPTIONS` / `SEED_GROUPS`
+- 首启种子订阅：`apps/desktop/src/dev/seed.ts` 的 `SEED_SUBSCRIPTIONS` / `SEED_GROUPS`（仅 dev）
   （**只在空库写入**，覆盖全部 kind 与平台）。⚠️ 这份清单会随开发调整，**以文件为准**，不在文档里
   再抄一份（曾抄过一版 19 条，很快失效）。
 

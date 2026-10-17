@@ -13,8 +13,22 @@
 import Database from "@tauri-apps/plugin-sql"
 import { KV_TABLE, MIGRATIONS } from "@amoeba/core"
 
-/** 库文件(appData 相对路径,插件解析为 BaseDirectory::App)。 */
-const DB_PATH = "sqlite:rss.db"
+/**
+ * 库文件(appData 相对路径,插件解析为 BaseDirectory::App)。
+ *
+ * 按运行形态隔离,避免 VSCode 的 dev / release debug 与正式安装版互相污染:
+ *   - 生产构建(Vite build,PROD=true)      → rss.db
+ *   - `tauri dev --release`(VITE_AMOEBA_PROFILE) → rss.release-debug.db
+ *   - 普通 dev                              → rss.dev.db
+ * ⚠️ `import.meta.env` 用可选链容错:CLI(Bun)也会 import 本模块,但不会实例化。
+ */
+const viteEnv = (import.meta as unknown as { env?: { PROD?: unknown; VITE_AMOEBA_PROFILE?: unknown } }).env ?? {}
+const DB_PATH =
+  viteEnv.PROD === true
+    ? "sqlite:rss.db"
+    : viteEnv.VITE_AMOEBA_PROFILE === "release-debug"
+      ? "sqlite:rss.release-debug.db"
+      : "sqlite:rss.dev.db"
 
 /** localStorage 迁移覆盖的 key(repo 层的三个存储键)。 */
 const MIGRATE_KEYS = ["subscriptions", "reading", "settings"] as const

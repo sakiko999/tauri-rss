@@ -27,6 +27,8 @@ interface CmdSpec {
   cmd: string;
   args: string[];
   cwd: string;
+  /** 额外环境变量(只作用于本子进程)。 */
+  env?: Record<string, string>;
 }
 
 /** 执行单元：单条前台命令，或一组并行长驻进程。 */
@@ -82,7 +84,17 @@ release 编译，首次会全量编译数分钟。
 // ── 纯函数核心：参数 → 执行计划（无 I/O）────────────────────
 
 /** 命令描述工厂（纯数据）。 */
-const viteDev = (p: Platform): CmdSpec => ({ label: `Vite dev (${p})`, cmd: "bun", args: ["run", "dev"], cwd: APP(p) });
+/**
+ * Vite dev server。`profile="release-debug"` 时注入 `VITE_AMOEBA_PROFILE` —— 前端据此
+ * 选**独立的 DB**(rss.release-debug.db),与 dev(rss.dev.db)/发布版(rss.db)互不污染。
+ */
+const viteDev = (p: Platform, profile?: "release-debug"): CmdSpec => ({
+  label: `Vite dev (${p})`,
+  cmd: "bun",
+  args: ["run", "dev"],
+  cwd: APP(p),
+  ...(profile ? { env: { VITE_AMOEBA_PROFILE: profile } } : {}),
+});
 const viteBuild = (p: Platform): CmdSpec => ({ label: `前端构建 (${p})`, cmd: "bun", args: ["run", "build"], cwd: APP(p) });
 /**
  * `--release` → `tauri dev --release`：**Rust 以 release 优化编译**，但仍保留 Vite dev
@@ -130,7 +142,13 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
       return [{ kind: "once", spec: viteBuild(platform) }];
     case "tauri":
       // `--release` → Rust 以 release 编译（调「只在 release 走」的分支，如隐藏 Edge 窗口）。
-      return [{ kind: "parallel", specs: [viteDev(platform), tauriDev(platform, opts.release)] }];
+      // 同时让 Vite 用 release-debug 的独立 DB,避免和普通 dev 数据互串。
+      return [
+        {
+          kind: "parallel",
+          specs: [viteDev(platform, opts.release ? "release-debug" : undefined), tauriDev(platform, opts.release)],
+        },
+      ];
     case "build-release":
       return [
         { kind: "once", spec: viteBuild(platform) },
@@ -146,7 +164,9 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
 /** 单条前台命令：bun $ 的 .cwd() 局部定位，不污染全局 cwd。 */
 async function runOnce(spec: CmdSpec): Promise<void> {
   console.log(`▶ ${spec.label}`);
-  await $`${spec.cmd} ${spec.args}`.cwd(spec.cwd);
+  let cmd = $`${spec.cmd} ${spec.args}`.cwd(spec.cwd);
+  if (spec.env) cmd = cmd.env({ ...process.env, ...spec.env });
+  await cmd;
 }
 
 /**
@@ -157,7 +177,12 @@ async function runOnce(spec: CmdSpec): Promise<void> {
 function spawnParallel(specs: CmdSpec[]): void {
   const procs = specs.map((s) => {
     console.log(`▶ ${s.label}`);
-    return spawn(s.cmd, s.args, { cwd: s.cwd, stdio: "inherit", shell: process.platform === "win32" });
+    return spawn(s.cmd, s.args, {
+      cwd: s.cwd,
+      stdio: "inherit",
+      shell: process.platform === "win32",
+      ...(s.env ? { env: { ...process.env, ...s.env } } : {}),
+    });
   });
 
   const killTree = (p: ReturnType<typeof spawn>) => {

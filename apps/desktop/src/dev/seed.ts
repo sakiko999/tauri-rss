@@ -1,5 +1,10 @@
 /**
- * 测试订阅清单 —— 覆盖不同 kind + 真实可播演示源。
+ * 开发环境种子订阅 —— **只被 dev 构建动态 import**,生产包不包含此文件。
+ *
+ * 覆盖不同 kind + 真实可播演示源。`store/index.ts` 在 `import.meta.env.DEV` 下
+ * `await import("../dev/seed.ts")` 调 `seedIfEmpty`;生产构建里这段分支被摇掉。
+ *
+ * ⚠️ 不要把这些源写进应用默认数据:含需登录、下播、测试性质的房间。
  *
  * 数据供给(2026-08-26 反转后)**以内置 crawler 为主**:youtube/bili 视频、播客、
  * 直播全走 crawler 渠道(自解析,零外部依赖)。
@@ -23,18 +28,16 @@
  *              ⚠️ room.status==2 才是直播中,==4 是 roomId 一次性需换 webRid,见 dart)
  *   huya 在播房间可从 www.huya.com/l 页实时列表取(WebFetch 可见)。
  */
-import type { Subscription, SubscriptionGroup } from "@amoeba/core"
+import type { DataLayer, Subscription, SubscriptionGroup } from "@amoeba/core"
 
-/**
- * 分组种子(rail 的分组树)。只在**首次运行(空库)**写入,之后不覆盖。
- */
-export const SEED_GROUPS: SubscriptionGroup[] = [
+/** 分组种子(rail 的分组树)。只在**首次运行(空库)**写入,之后不覆盖。 */
+const SEED_GROUPS: SubscriptionGroup[] = [
   { id: "g-video", title: "视频" },
   { id: "g-live", title: "直播" },
   { id: "g-social", title: "社交" },
 ]
 
-export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
+const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-article",
     // ⚠️ 用**内置 rss:hn**,不用 `rsshub:feed` + `/hackernews`:
@@ -199,3 +202,17 @@ export const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[]
     info: { user_id: "5c6d75a400000000100278fa" },
   },
 ]
+
+/**
+ * 空库时写入种子;非空库直接返回(用户 CRUD 后的数据是权威)。
+ * 由 `store/index.ts` 在 DEV 下动态 import 调用 —— 生产构建不会包含本模块。
+ */
+export async function seedIfEmpty(dl: DataLayer): Promise<void> {
+  const [subs, groups] = await Promise.all([dl.subscriptions.list(), dl.subscriptions.listGroups()])
+  if (subs.length > 0 || groups.length > 0) return
+  const t = Date.now()
+  for (const g of SEED_GROUPS) await dl.subscriptions.addGroup({ ...g })
+  for (const s of SEED_SUBSCRIPTIONS) {
+    await dl.subscriptions.add({ ...s, createdAt: t, updatedAt: t })
+  }
+}

@@ -60,7 +60,7 @@
 
 ## 当前种子订阅(subscriptions.ts)
 
-见 `apps/desktop/src/subscriptions.ts` 的 `SEED_SUBSCRIPTIONS`（**以文件为准，不在文档里抄**）。
+见 `apps/desktop/src/dev/seed.ts` 的 `SEED_SUBSCRIPTIONS`（**以文件为准，不在文档里抄**）。
 外挂示例：`rsshub:feed` `{route:"/hackernews"}`。
 
 ## 历史决策教训
