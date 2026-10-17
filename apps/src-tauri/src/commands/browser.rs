@@ -214,6 +214,14 @@ fn edge_args(port: u16, data_dir: &std::path::Path, hide: bool) -> Vec<String> {
         "--remote-allow-origins=*".to_string(),
         "--no-first-run".to_string(),
         "--no-default-browser-check".to_string(),
+        // 关掉会「带出日常账号形态」的三个入口(对齐 edge-cdp 插件的干净实例做法):
+        // Edge 账户层会把同步/扩展/默认应用挂到任何 profile 上,换 user-data-dir 挡不住。
+        // ⚠️ .msn/.bing 的账户 cookie 仍会被注入(那是账户层行为,flag 挡不住),
+        // 但不影响抓取;需要清零时在 CDP 内删 cookie。
+        "--disable-sync".to_string(),
+        "--disable-extensions".to_string(),
+        "--disable-default-apps".to_string(),
+        "--edge-redirect-feed-at-first-run-disabled=1".to_string(),
     ];
     if hide {
         args.push("--window-position=-32000,-32000".to_string());

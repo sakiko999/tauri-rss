@@ -394,6 +394,13 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   此时 `edge_args` 拼 `--blink-settings=imagesEnabled=false` —— SSR 只读 DOM 文本，
   图片纯浪费内存/带宽。扫码不受影响：微博读远程 `img.src`（图另走 `appHost.http`）、
   小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制；debug 不禁图便于观察
+- **CDP Edge 干净度（对齐 edge-cdp 插件）**：`edge_args` 带
+  `--disable-sync --disable-extensions --disable-default-apps
+  --edge-redirect-feed-at-first-run-disabled=1`，避免把本机登录账号的同步设置/扩展
+  带进抓取实例。⚠️ `.msn/.bing` 账户 cookie 仍会被 Edge 账户层注入（flag 挡不住，
+  不影响抓取）；要真正清空 profile 用「存储与诊断 → 清理浏览器数据」
+  （先杀我们的 Edge 再删目录）。⚠️ 不能像插件的 WSL 脚本那样 `taskkill /IM msedge.exe`
+  杀全部 Edge —— 那会关掉用户正在用的浏览器
 - ⚠️ **player 包方角（产品决定，非待补样式）**：`VideoShell`/`PlayerControls`/`PlayableMedia`
   **都不带 border-radius** —— 常见播放器都是满幅方角设计。曾经三处各写死一档
   （`rounded-xl`/`rounded-b-lg`/`rounded`）互相错位，且给画面套圆角本就不符合播放器惯例。
@@ -491,6 +498,10 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **social 瀑布流**用 **masonic** 虚拟化（CSS columns 追加会重排已渲染卡片）。
   ⚠️ 内层滚动容器（masonic 默认绑 window）需用 `usePositioner + useMasonry` 手动喂
   `scrollTop/height`；append 保持 positioner，refresh 重建 layoutVersion
+- **发现页搜索与「添加订阅」同形态**：两者共用 `AddPanels.tsx` 的 `CandidateList`
+  （缩略图 + label/sub/meta + 选中态 + 已订阅标记）。发现页（分区/搜索/搜主播）的
+  结果都转成候选，选中后可直接 `addSubscription`（roomId/videoId 单值），不用再开
+  弹窗；「订阅该搜索词」仍走 `AddSubscriptionDialog`。
 - ⚠️ **不用原生 `<select>`**：下拉面板由 WebView/系统渲染，深色主题下弹的是**亮色
   系统菜单**且 CSS 管不到。统一用 `components/Modal.tsx` 的 `Select`（radix，自带浮层）。
   同理 `Switch`/`Menu`/`Modal` 都在那个模块。原生 `<input>`/`<textarea>` 保留（可主题化）。
@@ -608,10 +619,6 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 ## 下一步
 
 **未做的功能**（按可行性排序）：
-
-- **发现页重构**（2026-10-16 用户反馈）：现有 `PlatformBrowser`（分区/搜索/搜主播三视图 +
-  `CardMini` 网格）体验**远不如**「添加订阅」的 `SearchPanel`——候选行信息直观（label/sub/meta
-  一行看全）、操作顺（搜→选→订阅一步到位）。后续以 SearchPanel 形态重构发现页的搜索路径。
 
 - **自动保活**（仅 bili 可行）：扫码已拿 `refresh_token`，但无续期调度——登录态到期
   只能重扫。协议与量级见 `docs/platform-login-research.md`（`bili_ticket` 软因子 /

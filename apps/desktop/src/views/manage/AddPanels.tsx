@@ -54,6 +54,74 @@ export interface SearchPanelProps {
   landParam: string | undefined
 }
 
+/** 候选列表的入参(SearchPanel 与发现页共用)。 */
+export interface CandidateListProps {
+  cands: Candidate[]
+  shown: Candidate[]
+  candidateValue: string
+  onPick: (c: Candidate) => void
+  subscribed: Set<string>
+  platform: string
+  /** shown 为空时的提示(默认按「筛选无匹配」措辞)。 */
+  emptyText?: string
+}
+
+/**
+ * 候选列表:缩略图 + label/sub/meta 一行看全,点击选中(再点取消)。
+ * 发现页的搜索/分区/搜主播也用它 —— 与「添加订阅」保持同一套候选形态。
+ */
+export function CandidateList(f: CandidateListProps) {
+  if (f.cands.length === 0) return null
+  return (
+    <div className="field">
+      <span className="field-label">
+        匹配 <span className="num">{f.shown.length}</span> / {f.cands.length} 项
+      </span>
+      {f.shown.length > 0 ? (
+        <div className="cand-list" role="listbox" aria-label="候选项">
+          {f.shown.map((c) => (
+            <button
+              key={c.value}
+              className="cand"
+              role="option"
+              aria-selected={f.candidateValue === c.value}
+              onClick={() => f.onPick(c)}
+            >
+              {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
+              {c.thumb ? (
+                <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
+              ) : (
+                <span className="cand-thumb cand-thumb-plain">
+                  <Icon name={PLATFORM_ICON[f.platform] ?? "layers"} size={18} />
+                </span>
+              )}
+              <span className="cand-main">
+                <span className="cand-label od-truncate">{c.label}</span>
+                {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
+                {c.meta.length > 0 ? (
+                  <span className="cand-meta">
+                    {c.meta.map((m) => (
+                      <span className="cand-chip" key={m}>
+                        {m}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+              </span>
+              {f.subscribed.has(c.value) ? <span className="tag tag-warn chip-tag">已订阅</span> : null}
+              <span className="cand-check">
+                <Icon name="check" size={15} />
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="t-small t-dim">{f.emptyText ?? "没有匹配的结果，换个关键词或清空筛选。"}</p>
+      )}
+    </div>
+  )
+}
+
 /** 搜索添加:选类型(房间/用户) → 选平台 → 输关键词调接口 → 点选一个候选。 */
 export function SearchPanel(f: SearchPanelProps) {
   const kindPlatforms = f.searchKind === "user" ? f.userSearchPlatforms : f.searchPlatforms
@@ -145,54 +213,14 @@ export function SearchPanel(f: SearchPanelProps) {
         </div>
       ) : null}
 
-      {f.cands.length > 0 ? (
-        <div className="field">
-          <span className="field-label" id="lbl-cand">
-            匹配 <span className="num">{f.shown.length}</span> / {f.cands.length} 项
-          </span>
-          {f.shown.length > 0 ? (
-            <div className="cand-list" role="listbox" aria-labelledby="lbl-cand">
-              {f.shown.map((c) => (
-                <button
-                  key={c.value}
-                  className="cand"
-                  role="option"
-                  aria-selected={f.candidateValue === c.value}
-                  onClick={() => f.onPickCandidate(c)}
-                >
-                  {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
-                  {c.thumb ? (
-                    <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
-                  ) : (
-                    <span className="cand-thumb cand-thumb-plain">
-                      <Icon name={PLATFORM_ICON[f.platform] ?? "layers"} size={18} />
-                    </span>
-                  )}
-                  <span className="cand-main">
-                    <span className="cand-label od-truncate">{c.label}</span>
-                    {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
-                    {c.meta.length > 0 ? (
-                      <span className="cand-meta">
-                        {c.meta.map((m) => (
-                          <span className="cand-chip" key={m}>
-                            {m}
-                          </span>
-                        ))}
-                      </span>
-                    ) : null}
-                  </span>
-                  {f.subscribed.has(c.value) ? <span className="tag tag-warn chip-tag">已订阅</span> : null}
-                  <span className="cand-check">
-                    <Icon name="check" size={15} />
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="t-small t-dim">没有匹配的结果，换个关键词或清空筛选。</p>
-          )}
-        </div>
-      ) : null}
+      <CandidateList
+        cands={f.cands}
+        shown={f.shown}
+        candidateValue={f.candidateValue}
+        onPick={f.onPickCandidate}
+        subscribed={f.subscribed}
+        platform={f.platform}
+      />
     </div>
   )
 }

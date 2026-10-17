@@ -16,6 +16,7 @@ import type { ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { PLATFORMS, CAP_LABEL, type Cap } from "./platforms.ts"
+import { SEARCH_CHANNEL } from "../../lib/subscriptions.ts"
 import { PlatformBrowser } from "./PlatformBrowser.tsx"
 import { BoardList } from "./BoardList.tsx"
 
@@ -32,7 +33,10 @@ export function DiscoverPage() {
     const m: Record<string, Record<Cap, ChannelInfo | undefined>> = {}
     for (const p of PLATFORMS) {
       const find = (suffix: string) => channels.find((c) => c.key === `${p.id}:${suffix}` || c.key === `live:${p.id}:${suffix}`)
-      m[p.id] = { category: find("category"), search: find("search"), anchor: find("anchor") }
+      // 搜索渠道 key 不一定叫 `<platform>:search`(如 youtube:live-search),
+      // 以 SEARCH_CHANNEL 映射为准,再回退旧的命名约定。
+      const search = channels.find((c) => c.key === SEARCH_CHANNEL[p.id]) ?? find("search")
+      m[p.id] = { category: find("category"), search, anchor: find("anchor") }
     }
     return m
   }, [channels])

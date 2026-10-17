@@ -173,6 +173,26 @@
 .add-mode {
   display: flex;
 }
+/* 发现页候选选中后的操作条:粘在视口底部,长列表下按钮也始终可见 */
+.pick-action {
+  position: sticky;
+  bottom: var(--sp-4);
+  z-index: var(--z-sticky);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: 0 6px 20px oklch(0 0 0 / 18%);
+}
+.pick-action .t-small {
+  flex: 1;
+  min-width: 0;
+}
+
 /* 候选列表:不做内层滚动,交给弹窗内容区唯一一条滚动条,避免嵌套滚动 */
 .cand-list {
   display: grid;
