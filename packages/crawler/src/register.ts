@@ -18,7 +18,12 @@ import {
   BiliAnchorChannel,
   BiliUserChannel,
 } from "./channels/bili/index.ts"
-import { YoutubeChannel, YoutubeLiveChannel, YoutubeUserChannel } from "./channels/youtube/index.ts"
+import {
+  YoutubeChannel,
+  YoutubeLiveChannel,
+  YoutubeLiveSearchChannel,
+  YoutubeUserChannel,
+} from "./channels/youtube/index.ts"
 import {
   HuyaLiveChannel,
   HuyaLiveHotChannel,
@@ -80,6 +85,7 @@ export function registerBuiltinChannels(): void {
   // ── YouTube(官方 RSS 视频 + 直播订阅)──
   registerChannel(new YoutubeChannel())
   registerChannel(new YoutubeLiveChannel())
+  registerChannel(new YoutubeLiveSearchChannel())
   registerChannel(new YoutubeUserChannel())
 
   // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──

@@ -4,4 +4,5 @@
  */
 export * from "./channel.ts"
 export * from "./live.ts"
+export * from "./live-search.ts"
 export * from "./user.ts"

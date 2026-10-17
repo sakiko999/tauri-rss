@@ -221,6 +221,11 @@ fn edge_args(port: u16, data_dir: &std::path::Path, hide: bool) -> Vec<String> {
         args.push("--disable-renderer-backgrounding".to_string());
         args.push("--disable-backgrounding-occluded-windows".to_string());
         args.push("--disable-features=CalculateNativeWinOcclusion".to_string());
+        // 隐藏窗口只用于 SSR 抓取/扫码,不给人看:禁图省内存与带宽。
+        // ⚠️ 登录二维码不受影响——微博读 img.src(远程图由 appHost.http 另取),
+        // 小红书读 img.qrcode-img 的 data URL 属性,抖音是 canvas 绘制;都只读 DOM,
+        // 不依赖图片真正解码。debug(hide=false)不加载此参数,保留可视调试。
+        args.push("--blink-settings=imagesEnabled=false".to_string());
     }
     args.push("about:blank".to_string());
     args

@@ -303,6 +303,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - ✅ **搜频道**（2026-10-16，`searchYouTubeChannels` / 渠道 `youtube:user`）：InnerTube
   `search` + `params:"EgIQAg=="`（仅频道过滤）匿名可用（WEB client + visitorData），
   解 `channelRenderer`。与 `youtube` 渠道（channelId 订阅）配对
+- ✅ **搜直播间**（2026-10-18，`searchYouTubeLive` / 渠道 `youtube:live-search`）：同端点
+  + `params:"EgJAAQ=="`（直播过滤，实为 protobuf field 8=1），匿名返回 18~20 条且全带
+  LIVE badge，解 `videoRenderer`。搜索添加「直播间」→ 落地 `youtube:live`（参数 videoId）
 
 **小红书**（细节见 `docs/xhs-signature-research.md`）
 - 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
@@ -387,6 +390,10 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
 - ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版
   开无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用
   `scripts/tauri.ts` 叠的 `tauri.conf.dev.json`（`bun run tauri` 自动带上）
+- **release 下 CDP Edge 禁图**：隐藏窗口只在 release 出现（`hide = !cfg!(debug_assertions)`），
+  此时 `edge_args` 拼 `--blink-settings=imagesEnabled=false` —— SSR 只读 DOM 文本，
+  图片纯浪费内存/带宽。扫码不受影响：微博读远程 `img.src`（图另走 `appHost.http`）、
+  小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制；debug 不禁图便于观察
 - ⚠️ **player 包方角（产品决定，非待补样式）**：`VideoShell`/`PlayerControls`/`PlayableMedia`
   **都不带 border-radius** —— 常见播放器都是满幅方角设计。曾经三处各写死一档
   （`rounded-xl`/`rounded-b-lg`/`rounded`）互相错位，且给画面套圆角本就不符合播放器惯例。
@@ -612,18 +619,6 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
   `docs/desktop-crawler-service.md`。
 - **bili 按分区列房**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
-- **YouTube 搜直播间**（2026-10-16 记）：搜索添加里 youtube 目前只有「搜频道」（`USER_SEARCH_CHANNEL`），
-  `SEARCH_CHANNEL` 无 youtube 条目 → 直播间搜索缺位。可行路径：InnerTube `search`
-  换直播过滤 `params`（对照 `searchYouTubeChannels` 的 `EgIQAg==`，直播过滤码需抓包/查
-  community 表）→ 新渠道 `youtube:live-search` + `SEARCH_CHANNEL.youtube` 落地
-  `youtube:live`（channelId 参数）。
-- **release 下 CDP Edge 禁图提性能**（2026-10-16 记）：隐藏窗口里的 Edge 仍会加载页面
-  全部资源；扫码/SSR 抓取只读 DOM 文本，图片纯浪费（内存 + 带宽）。可行路径：
-  启动参数 `--blink-settings=imagesEnabled=false`（browser_ensure 拼args）或
-  CDP `Network.setBlockedURLS`（attach 后一次性下发，`["*"]` 或按扩展名）。
-  ⚠️ 别禁到出二维码的那次导航——扫码 UI 读的就是页面图片/canvas（douyin 弹窗是
-  canvas 渲染不受禁图影响，xhs 是 `img.qrcode-img` 的 data URL 也不受网络禁图影响；
-  真正受影响的是 SSR 抓取路径里的 `<img>` 探测逻辑，改前先 grep img 依赖）。
 - **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行（`docs/mobile-cdp-feasibility.md`）。
 - **live 按平台二次聚合**：`tab:live` 已聚合**全部** live 条目（`selectors.baseFor`
   的 tab 分支 `filter(kind==="live")`，方案 B，2026-10-13 落地）。若要「哔哩哔哩直播 /

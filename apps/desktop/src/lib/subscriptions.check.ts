@@ -51,6 +51,7 @@ assert(subsHolding(subs, "bili:live", "roomIds", "999").length === 0, "未收录
 
 // 搜索渠道映射:每个登记平台都有对应 search channel;未登记平台返回 undefined(UI 降级手填)
 assert(searchChannelOf("douyu") === "live:douyu:search", "douyu → 斗鱼搜索渠道")
+assert(searchChannelOf("youtube") === "youtube:live-search", "youtube → 直播搜索渠道")
 assert(searchChannelOf("douyin") === undefined, "未登记平台(抖音 search 只认游戏名)→ undefined")
 assert(Object.values(SEARCH_CHANNEL).every((k) => typeof k === "string"), "映射值为渠道 key 字符串")
 

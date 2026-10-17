@@ -507,6 +507,59 @@ export async function searchYouTubeChannels(keyword: string): Promise<YoutubeCha
   return out
 }
 
+/** 直播搜索命中(videoId = `youtube:live` 的订阅参数)。 */
+export interface YoutubeLiveHit {
+  videoId: string
+  title: string
+  channelTitle?: string
+  thumb?: string
+  /** 观看数(解析 "1,234 watching";"Waiting" 等非数字返回 undefined)。 */
+  viewers?: number
+}
+
+/**
+ * 搜正在直播的视频(InnerTube search + `params:"EgJAAQ=="`)。
+ *
+ * `EgJAAQ==` 是 protobuf 过滤器:外层 field 2 包一个 field 8 = 1(直播)。
+ * 实测匿名返回 18~20 条、全部带 LIVE badge,无分页(取首页)。
+ * 与 searchYouTubeChannels 同一套 WEB client context。
+ */
+export async function searchYouTubeLive(keyword: string): Promise<YoutubeLiveHit[]> {
+  const visitorData = await getVisitorData()
+  const res = (await postJson(
+    `${YOUTUBEI_V1}/search?prettyPrint=false`,
+    {
+      context: {
+        client: { clientName: "WEB", clientVersion: WEB_CLIENT_VERSION, hl: "en", gl: "US", visitorData },
+      },
+      query: keyword,
+      params: "EgJAAQ==",
+    },
+    { "user-agent": WEB_UA },
+  )) as Record<string, any>
+  const sections =
+    res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? []
+  const out: YoutubeLiveHit[] = []
+  for (const sec of sections) {
+    for (const it of sec?.itemSectionRenderer?.contents ?? []) {
+      const r = it?.videoRenderer
+      const videoId = String(r?.videoId ?? "")
+      if (!videoId) continue
+      // "1,234 watching" → 1234;直播搜索里还有 "Waiting"/"Upcoming" 等文案。
+      const viewersText = ytText(r?.viewCountText)
+      const viewers = viewersText ? Number(viewersText.replace(/[^\d]/g, "")) || undefined : undefined
+      out.push({
+        videoId,
+        title: ytText(r?.title) ?? videoId,
+        channelTitle: ytText(r?.ownerText) ?? ytText(r?.longBylineText),
+        thumb: ytThumb(r?.thumbnail),
+        viewers,
+      })
+    }
+  }
+  return out
+}
+
 /** 组装最终 Stream[](带 referer/UA header,浏览器原生 <video> 能播 mp4)。 */
 export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> {
   const visitorData = await getVisitorData()

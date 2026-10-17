@@ -78,6 +78,7 @@ export const SEARCH_CHANNEL: Record<string, string> = {
   bili: "bili:search",
   douyu: "live:douyu:search",
   huya: "live:huya:search",
+  youtube: "youtube:live-search",
 }
 
 /** 平台 → 直播**订阅渠道**(roomIds 列表型参数)。 */
@@ -86,6 +87,8 @@ export const LIVE_SUB_CHANNEL: Record<string, string> = {
   douyu: "live:douyu",
   huya: "live:huya",
   douyin: "live:douyin",
+  // 搜索命中的 videoId 直接作为 youtube:live 的订阅参数。
+  youtube: "youtube:live",
 }
 
 /** 平台 → 用户**搜索渠道**(搜 UP主/频道名 → 订阅目标候选;同 SEARCH_CHANNEL 的用户版)。 */
@@ -128,10 +131,12 @@ export function candidatesFromSearch(items: MediaItem[]): Candidate[] {
     if (!roomId || seen.has(roomId)) continue
     seen.add(roomId)
     const online = live.online ? `${fmtNum(live.online)} 在看` : ""
+    // YouTube 没有「房号」概念,直播的 roomId 就是 videoId。
+    const idLabel = live.platform === "youtube" ? "视频" : "房号"
     out.push({
       value: roomId,
       label: i.title,
-      sub: `${i.author?.name ?? "未知"} · 房号 ${roomId}`,
+      sub: `${i.author?.name ?? "未知"} · ${idLabel} ${roomId}`,
       thumb: mediaUrl(i),
       meta: [online].filter(Boolean),
     })
