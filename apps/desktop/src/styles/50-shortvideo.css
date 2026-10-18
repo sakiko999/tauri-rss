@@ -463,6 +463,11 @@
   font-size: var(--fs-micro);
   font-weight: 600;
 }
+/* 徽标本身是 --live 底；状态点若继续用 --live 就与底色重合（看起来是空白）。
+   这里改用 on-media 白点，保留 pulse 动画。 */
+.live-pulse .status-dot[data-state="live"] {
+  background: var(--on-media);
+}
 .live-online {
   position: absolute;
   left: var(--sp-2);

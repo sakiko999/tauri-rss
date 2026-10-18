@@ -6,10 +6,12 @@
 import {
   candidatesFromSearch,
   candidatesFromUsers,
+  mergeValues,
   multiParamOf,
   MULTI_PARAMS,
   SEARCH_CHANNEL,
   searchChannelOf,
+  splitValues,
   valueList,
   subsHolding,
 } from "./subscriptions.ts"
@@ -37,6 +39,21 @@ assert(
 
 assert(valueList(sub({ roomIds: "" }), "roomIds").length === 0, "空值 → 空列表")
 assert(valueList(sub({}), undefined).length === 0, "参数名缺失 → 空列表")
+// 旧订阅只有 roomId(单房间)：与 parseRoomIds 的兼容分支对齐
+assert(
+  JSON.stringify(valueList(sub({ roomId: "998" }), "roomIds")) === JSON.stringify(["998"]),
+  "roomIds 为空时回退旧 roomId",
+)
+assert(
+  JSON.stringify(valueList(sub({ roomIds: "6", roomId: "998" }), "roomIds")) === JSON.stringify(["6"]),
+  "roomIds 非空时优先，不混入旧 roomId",
+)
+// 合并已有订阅时也用同一把切分尺：中文逗号/空格/换行都算分隔
+assert(
+  JSON.stringify(splitValues("6，21452505 9\n10", "roomIds")) === JSON.stringify(["6", "21452505", "9", "10"]),
+  "splitValues 支持中文逗号/空格/换行",
+)
+assert(JSON.stringify(splitValues("英雄联盟,王者", "keyword")) === JSON.stringify(["英雄联盟,王者"]), "splitValues 单值参数不切")
 
 // multiParamOf:只有列表型参数能并入
 const ch = (key: string, field: string): ChannelInfo =>
@@ -49,10 +66,15 @@ const subs = [sub({ roomIds: "6,21452505" }), { ...sub({ roomIds: "9" }), id: "s
 assert(subsHolding(subs, "bili:live", "roomIds", "21452505").length === 1, "并入命中第二条房间号")
 assert(subsHolding(subs, "bili:live", "roomIds", "999").length === 0, "未收录的房号不命中")
 
+// mergeValues:保留原顺序,新值去重后追加;重复项不重复加
+const merged = mergeValues(["6", "21452505"], ["21452505", "9", "9"])
+assert(JSON.stringify(merged.merged) === JSON.stringify(["6", "21452505", "9"]), "并入去重且保留原顺序")
+assert(JSON.stringify(merged.added) === JSON.stringify(["9"]), "added 只含本次新增")
+
 // 搜索渠道映射:每个登记平台都有对应 search channel;未登记平台返回 undefined(UI 降级手填)
 assert(searchChannelOf("douyu") === "live:douyu:search", "douyu → 斗鱼搜索渠道")
 assert(searchChannelOf("youtube") === "youtube:live-search", "youtube → 直播搜索渠道")
-assert(searchChannelOf("douyin") === undefined, "未登记平台(抖音 search 只认游戏名)→ undefined")
+assert(searchChannelOf("douyin") === "live:douyin:search", "douyin → 抖音分区搜索渠道")
 assert(Object.values(SEARCH_CHANNEL).every((k) => typeof k === "string"), "映射值为渠道 key 字符串")
 
 // candidatesFromSearch:从接口条目派生候选(roomId 去重、无 roomId 丢弃)

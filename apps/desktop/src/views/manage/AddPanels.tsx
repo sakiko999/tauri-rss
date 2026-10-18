@@ -10,6 +10,7 @@ import type { ChannelInfo } from "@amoeba/core"
 import { KIND_META } from "../../store/nodes.ts"
 import { Banner } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
+import { Select } from "../../components/Modal.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { MediaImage } from "@amoeba/ui"
 import { platformOf, SEARCH_CHANNEL, USER_SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
@@ -24,6 +25,8 @@ export const PLATFORM_ICON: Record<string, string> = {
   youtube: "play",
   weibo: "message",
   xhs: "image",
+  apple: "music",
+  rss: "rss",
   rsshub: "rss",
 }
 
@@ -229,6 +232,8 @@ export function SearchPanel(f: SearchPanelProps) {
 /** 「按渠道配置」面板的入参。 */
 export interface ChannelPanelProps {
   builtins: ChannelInfo[]
+  /** 内置 RSS 直链清单(36 条,用下拉收起来,不铺 chip)。 */
+  rssFeeds: ChannelInfo[]
   rsshub: ChannelInfo[]
   channelKey: string
   onPick: (key: string) => void
@@ -237,19 +242,49 @@ export interface ChannelPanelProps {
   values: Record<string, string>
   onValue: (key: string, v: string) => void
   missing: string[]
+  /** 可并入的已有订阅（列表型参数 roomIds 才非空）。 */
+  targets: { id: string; title: string }[]
+  targetId: string
+  onTargetId: (v: string) => void
+  landParam: string | undefined
 }
 
 const GROUP_TITLE: Record<string, string> = { builtin: "内置渠道", rsshub: "RSSHub 外挂" }
 
 /** 按渠道配置:选渠道 → 出摘要 + 参数表单(必填现场校验)。 */
 export function ChannelPanel(f: ChannelPanelProps) {
-  const channelChip = (c: ChannelInfo) => (
-    <button key={c.key} className="chip" aria-pressed={f.channelKey === c.key} onClick={() => f.onPick(c.key)}>
-      <Icon name={PLATFORM_ICON[platformOf(c.key)] ?? "layers"} size={14} />
-      {c.name}
-      {c.loginable ? <span className="tag tag-warn chip-tag">需登录</span> : null}
-    </button>
+  // loginable 是**channel 级**能力，但登录态是**平台级**的（同平台共用一个 cookie）。
+  // 先按平台聚合，避免「B站只有综合热门有标记、其余三个没有」这种不可解释的差异。
+  // 用 QR 小标记而不是「可扫码登录」文字 tag：chip 里的小字读不懂、还像警告。
+  const loginPlatforms = new Set(
+    [...f.builtins, ...f.rsshub]
+      .filter((c) => c.loginable)
+      .map((c) => platformOf(c.key)),
   )
+  const channelChip = (c: ChannelInfo) => {
+    const platform = platformOf(c.key)
+    const canLogin = loginPlatforms.has(platform)
+    return (
+      <button
+        key={c.key}
+        className="chip"
+        aria-pressed={f.channelKey === c.key}
+        aria-label={canLogin ? `${c.name}（支持扫码登录）` : undefined}
+        onClick={() => f.onPick(c.key)}
+      >
+        <Icon
+          name={c.kind === "audio" ? "music" : (PLATFORM_ICON[platform] ?? "layers")}
+          size={14}
+        />
+        {c.name}
+        {canLogin ? (
+          <span className="chip-login" title="支持扫码登录；未登录也能先订阅" aria-hidden="true">
+            <Icon name="qr" size={13} strokeWidth={2} />
+          </span>
+        ) : null}
+      </button>
+    )
+  }
   return (
     <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("channel-panel", "add:channel")}>
       <div className="field">
@@ -269,7 +304,38 @@ export function ChannelPanel(f: ChannelPanelProps) {
               </div>
             ))}
         </div>
+        <span className="field-help">
+          带二维码标记的渠道支持扫码登录（同平台共用登录态）；未登录也能先订阅。
+        </span>
       </div>
+
+      {f.rssFeeds.length > 0 ? (
+        <div className="field">
+          <label className="field-label" htmlFor="add-rss-feed">
+            内置 RSS 源
+          </label>
+          <Select
+            id="add-rss-feed"
+            value={f.rssFeeds.some((c) => c.key === f.channelKey) ? f.channelKey : ""}
+            onChange={(v) => {
+              if (v) f.onPick(v)
+              // 「不使用内置源」不是空操作：当前正选中某条内置 RSS 时退回通用直链；
+              // 当前本来就是其它渠道（bili 等）则保持不动。
+              else if (f.channelKey.startsWith("rss:")) f.onPick("rss:url")
+            }}
+            placeholder="选择内置 RSS 源（可选）"
+            options={[
+              // radix 不接受空串 value；给一个显式的「未选」项，避免 value 为哨兵时
+              // 触发器渲染成空白。
+              { value: "", label: "不使用内置源" },
+              ...f.rssFeeds.map((c) => ({ value: c.key, label: c.name })),
+            ]}
+          />
+          <span className="field-help">
+            Hacker News、V2EX 等预置直链；选中后参数已填好，直接订阅即可。
+          </span>
+        </div>
+      ) : null}
 
       {f.channel ? (
         <div className="channel-form">
@@ -282,7 +348,6 @@ export function ChannelPanel(f: ChannelPanelProps) {
               <span className="t-micro t-dim mono od-truncate">{f.channel.key}</span>
             </span>
             <span className="tag">{KIND_META[f.channel.kind]?.label ?? f.channel.kind}</span>
-            {f.channel.loginable ? <span className="tag tag-warn">需登录</span> : <span className="tag tag-ok">匿名可用</span>}
           </div>
 
           {f.channel.defaultInfo ? (
@@ -291,9 +356,41 @@ export function ChannelPanel(f: ChannelPanelProps) {
             </Banner>
           ) : null}
           {f.channel.loginable ? (
-            <Banner tone="warn" icon="lock">
-              该渠道需要登录，请先在「账号与凭证」里扫码或填写凭证。
+            <Banner tone="info" icon="lock">
+              登录后可解锁部分内容或更高画质；需要时到「账号与凭证」扫码登录。未登录也能先订阅。
             </Banner>
+          ) : null}
+
+          {/* 列表型参数(roomIds)才允许并入已有订阅；与搜索模式的「添加到」同义。 */}
+          {f.targets.length > 0 ? (
+            <div className="field">
+              <span className="field-label" id="lbl-manual-target">
+                添加到
+              </span>
+              <div className="chip-row" role="radiogroup" aria-labelledby="lbl-manual-target">
+                <button
+                  className="chip"
+                  role="radio"
+                  aria-checked={f.targetId === "new"}
+                  onClick={() => f.onTargetId("new")}
+                >
+                  <Icon name="plus" size={13} /> 新建订阅
+                </button>
+                {f.targets.map((s) => (
+                  <button
+                    key={s.id}
+                    className="chip"
+                    role="radio"
+                    aria-checked={f.targetId === s.id}
+                    onClick={() => f.onTargetId(s.id)}
+                  >
+                    {s.title}
+                    <span className="cand-chip">{valueList(s as never, f.landParam).length} 房</span>
+                  </button>
+                ))}
+              </div>
+              <span className="field-help">选中已有订阅后，本次填写的房间会并入它，原有房间保留。</span>
+            </div>
           ) : null}
 
           {f.fields.length > 0 ? (

@@ -10,8 +10,9 @@
  * liveStatus 判定:**status==2 才是直播中**(复刻 dart,实测在播房间返回 2);
  * status==4 是 roomId 一次性、需改用 webRid,非直播中。
  *
- * `roomIds` 接受 抖音号(unique_id) / 数字 short_id / 直播间链接,归一后当 web_rid 用
- * (2026-10-18 实测);主页链接需要先换 sec_uid → 抖音号,走 `live:douyin:user`。
+ * `roomIds` 接受 抖音号(unique_id) / 数字 short_id / 直播间链接 / 用户主页链接,
+ * 归一后当 web_rid 用(2026-10-18 实测)。主页链接会先经匿名资料 API 换 sec_uid →
+ * 抖音号,再走 enter;`live:douyin:user` 保留给存量订阅。
  */
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
@@ -22,7 +23,7 @@ import { log } from "@amoeba/resolve"
 import { toInt } from "@amoeba/resolve"
 import { parseRoomIds } from "@amoeba/resolve"
 import { strOr } from "@amoeba/resolve"
-import { fetchRoom } from "@amoeba/resolve"
+import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
 import { douyinOnline } from "@amoeba/resolve"
 import { douyinScanLogin } from "@amoeba/resolve"
 import { isDouyinProfileUrl } from "@amoeba/resolve"
@@ -37,9 +38,9 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
   readonly sourceInfoTpl = [
     {
       key: "roomIds",
-      label: "抖音号 / 直播间 ID(逗号分隔,可多个)",
+      label: "抖音号 / 直播间 ID / 用户主页(逗号分隔,可多个)",
       required: true,
-      placeholder: "如 pvcyinse, 6753235366 或 live.douyin.com/6753235366",
+      placeholder: "如 pvcyinse, 6753235366 或 douyin.com/user/MS4wLj...",
     },
   ]
 
@@ -66,14 +67,31 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const raw = parseRoomIds(info)
     if (!raw.length) throw new Error("live:douyin 需要 roomIds")
-    // 主页链接要先换 sec_uid → 抖音号，交给 live:douyin:user（这里静默失败只会得到
-    // 「全部房间拉取失败」，用户看不出该用哪个渠道）。
-    if (raw.some(isDouyinProfileUrl)) {
-      throw new Error("live:douyin 不支持主页链接；请使用「抖音用户直播间」(live:douyin:user) 渠道")
+    // 允许抖音号 / 短 ID / 直播间 URL / 用户主页 / @抖音号 / 「抖音号：xxx」。
+    // 主页链接先匿名解析成抖音号(web_rid),与 live:douyin:user 用同一条资料 API;
+    // 解析失败只跳过该条,全部失败时下面统一报错,不会静默清空内容。
+    const profileErrors: string[] = []
+    const resolved = await Promise.all(
+      raw.map(async (r) => {
+        if (!isDouyinProfileUrl(r)) return normalizeDouyinRoomId(r)
+        try {
+          return (await fetchDouyinUserLive(r)).webRid
+        } catch (e) {
+          const msg = (e as Error)?.message ?? String(e)
+          profileErrors.push(`${r}: ${msg}`)
+          log.douyin.warn(`主页解析失败,跳过 ${r}:`, msg)
+          return ""
+        }
+      }),
+    )
+    const roomIds = [...new Set(resolved.filter(Boolean))]
+    if (!roomIds.length) {
+      // 输入非空但全被解析成空 = 主页解析失败，不要误报成「没填参数」。
+      if (profileErrors.length) {
+        throw new Error(`抖音主页链接解析失败（${profileErrors.length} 个）：${profileErrors[0]}`)
+      }
+      throw new Error("live:douyin 需要 roomIds")
     }
-    // 允许抖音号 / 短 ID / 直播间 URL / @抖音号 / 「抖音号：xxx」。
-    const roomIds = [...new Set(raw.map(normalizeDouyinRoomId).filter(Boolean))]
-    if (!roomIds.length) throw new Error("live:douyin 需要 roomIds")
     const t = now()
     const rooms = await Promise.all(
       roomIds.map((roomId) =>
@@ -96,8 +114,13 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
 
   private channelOptions(info: SourceInfo): SerializeOptions {
     const raw = String(info.roomIds ?? info.roomId ?? "")
-    const first = normalizeDouyinRoomId(raw.split(/[,，\s]+/)[0] ?? "")
-    return { channelTitle: `抖音直播 ${first}`, channelLink: first ? `${LIVE}/${first}` : LIVE }
+    const firstRaw = raw.split(/[,，\s]+/)[0] ?? ""
+    // 主页链接这里拿不到解析后的 web_rid(channelOptions 是同步的),用通用标题兜底。
+    const first = isDouyinProfileUrl(firstRaw) ? "" : normalizeDouyinRoomId(firstRaw)
+    return {
+      channelTitle: first ? `抖音直播 ${first}` : "抖音直播",
+      channelLink: first ? `${LIVE}/${first}` : LIVE,
+    }
   }
 }
 

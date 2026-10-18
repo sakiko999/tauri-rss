@@ -101,8 +101,13 @@ export function DiscoverPage() {
             <div className="platform-grid">
               {PLATFORMS.map((p) => {
                 const c = caps[p.id]
-                // 用户主页 → 直播间的解析渠道（如 live:douyin:user）；有则给一个直达入口。
+                // 用户主页 → 直播间的入口（目前只有抖音）。落地点统一用 live:<platform>
+                // （roomIds 已支持主页链接），这样新订阅能和搜索添加/并入已有共用一条渠道；
+                // live:douyin:user 只保留给存量订阅。
                 const userCh = channels.find((ch) => ch.key === `live:${p.id}:user`)
+                const userSubKey = userCh
+                  ? (channels.find((ch) => ch.key === `live:${p.id}`)?.key ?? userCh.key)
+                  : ""
                 const supported = CAPS.filter((k) => c[k])
                 // 没有任何入口的平台（如微博/小红书）不摆一张空卡；它们的内容走「可订阅榜单」。
                 if (supported.length === 0 && !userCh) return null
@@ -162,7 +167,7 @@ export function DiscoverPage() {
                         </button>
                       ) : null}
                       {userCh ? (
-                        <button className="chip chip-sm" onClick={() => setUserDialogKey(userCh.key)}>
+                        <button className="chip chip-sm" onClick={() => setUserDialogKey(userSubKey)}>
                           用户直播间
                         </button>
                       ) : null}

@@ -23,6 +23,9 @@ import {
   LIVE_SUB_CHANNEL,
   SEARCH_CHANNEL,
   searchChannelOf,
+  mergeValues,
+  multiParamOf,
+  splitValues,
   subsOfChannel,
   USER_SEARCH_CHANNEL,
   USER_SUB_CHANNEL,
@@ -69,6 +72,8 @@ export function AddSubscriptionDialog({
   const [candidateValue, setCandidateValue] = useState("")
   /** 候选落到哪里:'new' = 新建订阅,否则 = 并入该订阅 id。 */
   const [targetId, setTargetId] = useState("new")
+  /** 手工模式同理：列表型参数(roomIds)可并入已有订阅。 */
+  const [manualTargetId, setManualTargetId] = useState("new")
   const [filter] = useState("")
   const [title, setTitle] = useState("")
   const [groupId, setGroupId] = useState("")
@@ -85,11 +90,19 @@ export function AddSubscriptionDialog({
   //   `rss:url`     = 任意 RSS 直链(OPML 导入也落它);
   //   `rss:podcast` = 播客 RSS(解 enclosure → kind:audio,条目可播)。
   // 原先把整个 `rss:` 前缀都滤掉,导致**手工加外部 feed / 订阅一个播客都没有入口**。
+  const RSS_GENERIC = new Set(["rss:url", "rss:podcast"])
+  // live:douyin:user 是存量渠道：新建订阅统一走 live:douyin(roomIds 已支持主页链接)，
+  // 这里不再列出，避免同一件事出现两个入口；渠道本身仍注册，旧订阅照常刷新。
+  const LEGACY_CHANNELS = new Set(["live:douyin:user"])
   const builtins = channels.filter(
     (c) =>
       !c.key.startsWith("rsshub:") &&
-      (!c.key.startsWith("rss:") || c.key === "rss:url" || c.key === "rss:podcast"),
+      !LEGACY_CHANNELS.has(c.key) &&
+      (!c.key.startsWith("rss:") || RSS_GENERIC.has(c.key)),
   )
+  // 36 条内置 RSS 直链(Hacker News / V2EX 等)不铺成 chip(太噪),单独用下拉暴露。
+  // 它们带 defaultInfo,选中即可直接订阅。
+  const rssFeeds = channels.filter((c) => c.key.startsWith("rss:") && !RSS_GENERIC.has(c.key))
   const rsshub = channels.filter((c) => c.key.startsWith("rsshub:"))
   const channel = channels.find((c) => c.key === channelKey)
 
@@ -135,10 +148,16 @@ export function AddSubscriptionDialog({
   const landParam =
     searchMode && searchKind === "user" ? USER_SUB_PARAM[platform] : landChannel?.sourceInfoTpl?.[0]?.key
   /** 该落地渠道已有的订阅(搜索的「添加到」候选:新建,或并入其中一条)。
-   *  用户搜索是单值参数(一人一订),无并入语义 → 恒空(targets.length===0 自动隐藏该区块)。 */
+   *  只有列表型参数(roomIds)能并入：用户搜索是单值(uid/channelId)，YouTube 直播是
+   *  单值 videoId，硬拼逗号会把订阅写坏 → 非 multiParam 恒空，自动隐藏「添加到」。 */
   const targets = useMemo(
-    () => (searchMode && searchKind === "user" ? [] : subsOfChannel(subscriptions, landKey)),
-    [searchMode, searchKind, subscriptions, landKey],
+    () =>
+      searchMode && searchKind === "user"
+        ? []
+        : multiParamOf(landChannel)
+          ? subsOfChannel(subscriptions, landKey)
+          : [],
+    [searchMode, searchKind, subscriptions, landKey, landChannel],
   )
   /** 已订阅过的候选值(重复添加会得到两条相同订阅,先标出来)。 */
   const subscribed = useMemo(() => new Set(targets.flatMap((s) => valueList(s, landParam))), [targets, landParam])
@@ -153,15 +172,25 @@ export function AddSubscriptionDialog({
     setTtl("")
     setCandidateValue("")
     setTargetId("new")
+    setManualTargetId("new")
     // 带预置渠道(从「发现」页订阅分区/搜索词)→ 直接进手工模式,预填参数。
     setMode(presetKey ? "manual" : "search")
     setKeyword("")
     setSearchItems(null)
-    const key = presetKey ?? channels.find((c) => c.defaultInfo)?.key ?? channels[0]?.key ?? ""
+    // 手工模式默认落「RSS 直链」(通用入口),不要取第一条带 defaultInfo 的渠道 ——
+    // 注册表首条是内置清单里的 Hacker News,会在标题框里冒出一条与当前操作无关的预填。
+    const key =
+      presetKey ??
+      channels.find((c) => c.key === "rss:url")?.key ??
+      channels.find((c) => !c.defaultInfo)?.key ??
+      channels[0]?.key ??
+      ""
     const ch = channels.find((c) => c.key === key)
     setChannelKey(key)
     setValues({ ...(ch?.defaultInfo ?? {}), ...(presetKey ? presetInfo : {}) })
-    setTitle(ch?.name ?? "")
+    // 标题留空,由 placeholder 显示渠道名;提交时仍回退到 channel.name。
+    // 预置入口(发现页订阅分区/搜索词)才用渠道名做初始标题。
+    setTitle(presetKey ? (ch?.name ?? "") : "")
     // 搜索模式默认选房间类型 + 第一个可搜平台(无房间渠道时退到搜用户)。
     setSearchKind("room")
     const p = searchPlatforms[0] ?? userSearchPlatforms[0] ?? ""
@@ -169,6 +198,14 @@ export function AddSubscriptionDialog({
   }, [open, channels, searchPlatforms, presetKey, presetInfo])
 
   const fields = channel?.sourceInfoTpl ?? []
+  /** 手工模式可并入的已有订阅：只有列表型参数(roomIds)才有「加进去」语义。 */
+  const manualParam = channel?.sourceInfoTpl?.[0]?.key
+  const manualTargets = useMemo(
+    () => (multiParamOf(channel) ? subsOfChannel(subscriptions, channelKey) : []),
+    [channel, channelKey, subscriptions],
+  )
+  /** 当前是「并入已有订阅」：此时标题/分组/刷新间隔都不生效，不渲染以免误解。 */
+  const merging = searchMode ? targetId !== "new" : manualTargetId !== "new"
 
   /** 搜索模式:调平台 search 渠道拿候选(不建订阅,走 previewChannel)。 */
   async function runSearch() {
@@ -196,10 +233,11 @@ export function AddSubscriptionDialog({
     const ch = channels.find((c) => c.key === key)
     setChannelKey(key)
     setValues({ ...(ch?.defaultInfo ?? {}) })
-    setTitle(ch?.name ?? "")
+    setTitle("")
     setMissing([])
     setCandidateValue("")
     setTargetId("new")
+    setManualTargetId("new")
   }
 
   /** 切换搜索平台(清空上一平台的候选与选中)。 */
@@ -250,6 +288,9 @@ export function AddSubscriptionDialog({
       setError("")
       try {
         if (targetId !== "new") {
+          if (!landParam || !multiParamOf(landChannel)) {
+            throw new Error("该渠道的参数不支持并入已有订阅，请改选「新建订阅」。")
+          }
           const sub = targets.find((s) => s.id === targetId)
           if (!sub) throw new Error("目标订阅已不存在,可能刚刚被删除,请改选「新建订阅」。")
           const held = valueList(sub, landParam)
@@ -258,7 +299,11 @@ export function AddSubscriptionDialog({
             onOpenChange(false)
             return
           }
-          await updateSubscription(sub.id, { info: { ...sub.info, [landParam]: [...held, candidateValue].join(",") } })
+          const info = { ...sub.info, [landParam]: [...held, candidateValue].join(",") }
+          // 旧订阅可能只有 roomId；写回 roomIds 后删掉旧键，避免 parseRoomIds 的优先分支
+          // 让两个键长期并存（值已并入 roomIds，旧键只会造成困惑）。
+          if (landParam === "roomIds") delete info.roomId
+          await updateSubscription(sub.id, { info })
           toast("ok", `已并入「${sub.title}」`, `现在共 ${held.length + 1} 个房间，内容已更新。`)
         } else {
           const info = { [landParam]: candidateValue }
@@ -293,6 +338,27 @@ export function AddSubscriptionDialog({
       const miss = fields.filter((f) => f.required && !(values[f.key] ?? "").trim()).map((f) => f.key)
       if (miss.length) {
         setMissing(miss)
+        return
+      }
+      // 列表型参数 + 选中已有订阅 → 把本次填的房间并进去（不新建）。
+      // 与搜索模式的「添加到」同一语义，但手工模式没有候选，直接用工单里的值。
+      if (multiParamOf(channel) && manualTargetId !== "new" && manualParam) {
+        const target = manualTargets.find((s) => s.id === manualTargetId)
+        if (!target) throw new Error("目标订阅已不存在,可能刚被删除,请改选「新建订阅」。")
+        const held = valueList(target, manualParam)
+        const { merged, added } = mergeValues(held, splitValues(values[manualParam], manualParam))
+        if (!added.length) {
+          toast("info", "已经在该订阅里了", `「${target.title}」中已有这些房间。`)
+          onOpenChange(false)
+          return
+        }
+        const info = { ...target.info, [manualParam]: merged.join(",") }
+        // 旧订阅可能只有 roomId；并入 roomIds 后删掉旧键，避免 parseRoomIds 的优先分支
+        // 让两个键长期并存。
+        if (manualParam === "roomIds") delete info.roomId
+        await updateSubscription(target.id, { info })
+        toast("ok", `已并入「${target.title}」`, `新增 ${added.length} 个房间，现在共 ${merged.length} 个。`)
+        onOpenChange(false)
         return
       }
       const ttlMin = Number(ttl)
@@ -394,6 +460,7 @@ export function AddSubscriptionDialog({
       ) : (
         <ChannelPanel
           builtins={builtins}
+          rssFeeds={rssFeeds}
           rsshub={rsshub}
           channelKey={channelKey}
           onPick={pick}
@@ -402,10 +469,14 @@ export function AddSubscriptionDialog({
           values={values}
           onValue={(k, v) => setValues((prev) => ({ ...prev, [k]: v }))}
           missing={missing}
+          targets={manualTargets}
+          targetId={manualTargetId}
+          onTargetId={setManualTargetId}
+          landParam={manualParam}
         />
       )}
 
-      {channel ? (
+      {landChannel && !merging ? (
         <div className="stack" style={{ gap: "var(--sp-5)" }}>
           <div className="field">
             <label className="field-label" htmlFor="add-title">
@@ -415,7 +486,7 @@ export function AddSubscriptionDialog({
               id="add-title"
               className="input"
               value={title}
-              placeholder={channel.name}
+              placeholder={landChannel.name}
               onChange={(e) => setTitle(e.target.value)}
             />
             <span className="field-help">显示在侧边导航与列表顶部，可随时在编辑订阅中修改。</span>

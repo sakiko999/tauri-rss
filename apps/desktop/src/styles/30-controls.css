@@ -126,6 +126,24 @@
   font-size: var(--fs-micro);
 }
 
+/* 渠道 chip 的「支持扫码登录」标记：13px QR + 淡 accent 小 pill。
+   刻意不用文字 tag（太小读不懂、像警告），也不只靠颜色——图形本身承担区分。
+   选中态 chip 本身就是 accent-soft 底，pill 换回 surface-1 避免糊在一起。 */
+.chip-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: 16px;
+  padding-inline: 4px;
+  border-radius: var(--r-xs);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.chip[aria-pressed="true"] .chip-login {
+  background: var(--surface-1);
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

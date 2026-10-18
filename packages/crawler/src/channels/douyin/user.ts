@@ -1,6 +1,9 @@
 /**
  * 抖音用户直播间 —— 输入**用户主页链接 / sec_uid**，解析并订阅该用户的直播间。
  *
+ * ⚠️ 2026-10-19 起新入口统一走 `live:douyin`（`roomIds` 也接受主页链接）；
+ * 本渠道保留给**存量订阅**，不再出现在「添加订阅」的渠道列表里。
+ *
  * 流程（2026-10-18 实测）：
  *   1. 匿名资料 API `aweme/v1/web/user/profile/other/?sec_user_id=...`
  *      拿 `user.unique_id`（抖音号）/ `short_id` / `nickname` / `live_status`；

@@ -21,15 +21,34 @@ export function multiParamOf(channel: ChannelInfo | undefined): boolean {
  * ⚠️ 只有列表型参数按逗号切分 —— 关键词之类的单值参数本身就可能含逗号
  * (「英雄联盟,王者」),切了会把一条订阅误判成「两个目标都已订阅」。
  */
-export function valueList(sub: Subscription | undefined, param: string | undefined): string[] {
+export function splitValues(raw: string | undefined, param: string | undefined): string[] {
   if (!param) return []
-  const raw = String(sub?.info?.[param] ?? "").trim()
-  if (!raw) return []
-  if (!MULTI_PARAMS.includes(param)) return [raw]
-  return raw
-    .split(",")
+  const s = String(raw ?? "").trim()
+  if (!s) return []
+  if (!MULTI_PARAMS.includes(param)) return [s]
+  return s
+    .split(/[,，\s]+/)
     .map((v) => v.trim())
     .filter(Boolean)
+}
+
+export function valueList(sub: Subscription | undefined, param: string | undefined): string[] {
+  if (!param) return []
+  const list = splitValues(String(sub?.info?.[param] ?? ""), param)
+  if (list.length) return list
+  // 与 resolve 的 parseRoomIds 对齐：多房间改造前的订阅只有 info.roomId(单房间)。
+  // 不补这条回退，旧订阅会显示「0 房」，合并时还会把原房间挤掉。
+  if (param === "roomIds") {
+    const legacy = String(sub?.info?.roomId ?? "").trim()
+    return legacy ? [legacy] : []
+  }
+  return []
+}
+
+/** 把本次输入并入已有列表：保留原顺序，新值去重后追加。 */
+export function mergeValues(held: string[], incoming: string[]): { merged: string[]; added: string[] } {
+  const added = [...new Set(incoming)].filter((v) => !held.includes(v))
+  return { merged: [...held, ...added], added }
 }
 
 /** 该渠道下已存在的订阅(搜索添加的「添加到」候选)。 */

@@ -293,12 +293,14 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - ✅ **抖音号可直接当 web_rid 用**（2026-10-18 实测）：`live:douyin` 的 `roomIds`
   支持用户抖音号（`unique_id`，如 `pvcyinse`）/ 数字 short_id / 直播间 URL 的
   `<web_rid>`；enter API 会解析到当前房间，**离线也返 offline 条目**，开播后刷新变
-  live。⚠️ 不能填长 `room_id`（`4001038`）或主页链接（`10011`，会提示改用
-  `live:douyin:user`）；`roomIds` 会自动归一 `@抖音号` / `抖音号：xxx` /
-  `live.douyin.com/<id>` 链接。主页链接走 `live:douyin:user`（`channels/douyin/user.ts`）：
-  匿名资料 API `aweme/v1/web/user/profile/other/?sec_user_id=...`（a_bogus+ttwid）
-  返回 `unique_id`/`short_id`/`room_id_str`/`live_status`（1=在播），再拿
-  `unique_id` 当 web_rid 走 enter（离线也能建订阅）
+  live。⚠️ 不能填长 `room_id`（`4001038`）。`roomIds` 会自动归一 `@抖音号` /
+  `抖音号：xxx` / `live.douyin.com/<id>` 链接。
+- ✅ **主页链接也走 `live:douyin`**（2026-10-19）：`roomIds` 接受
+  `www.douyin.com/user/<sec_uid>`，先经匿名资料 API
+  `aweme/v1/web/user/profile/other/?sec_user_id=...`（a_bogus+ttwid）换
+  `unique_id`/`short_id`，再当 web_rid 走 enter。`live:douyin:user`
+  （`channels/douyin/user.ts`）**保留给存量订阅**，新入口不再列出 —— 统一到
+  `live:douyin` 后，新订阅才能和搜索添加/「并入已有订阅」共用同一个渠道。
 - ✅ **抖音扫码登录**（2026-10-16，`resolve/platform/douyin/login.ts`）：纯 HTTP 走
   `sso.douyin.com` 通行证（get_qrcode → check_qrconnect 轮询 → redirect_url 落
   cookie），**实测被 JS 挑战页拦**（warmup 只给 `__ac_nonce`，无 JS 执行过不了
@@ -315,8 +317,8 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `live:douyin:search` 本质是**分区搜索**（关键词 → 分区 → 列房），只认大类/游戏名，
   不搜主播/房间标题；`live:douyin:anchor` 已删除（本地过滤热门房间没有意义）。
   已登记进 `SEARCH_CHANNEL`（发现页/搜索面板的平台名显示「抖音分区」）；
-  已知主播用 `live:douyin` + 抖音号，或 `live:douyin:user` + 主页链接（发现页抖音卡片
-  有「用户直播间」直达入口）。缺口见 `docs/capability-gaps.md`
+  已知主播用 `live:douyin` + 抖音号/主页链接（发现页抖音卡片的「用户直播间」入口
+  也预置 `live:douyin`）。缺口见 `docs/capability-gaps.md`
 
 **YouTube**（`docs/youtube-stream-extraction.md`）
 - 主力 client = **ANDROID_VR**：2026-08 起 ANDROID/IOS 标准 client 在部分 IP 触发
@@ -513,6 +515,14 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `sourceInfoTpl[0]`——`youtube` 渠道首参是 videoId（订阅单视频），频道订阅是第二参
   channelId。候选值从 **url 解析**（`candidatesFromUsers`：`space.bilibili.com/<mid>` /
   `channel/<UC...>`）——raw 不穿 XML 边界，粉丝/订阅数走 summary 字段。
+- **`loginable` 是「支持扫码登录」，不是「必须登录」**：抖音直播/分区搜索等匿名也可用。
+  渠道 chip 用紧凑 QR 标记（13px + accent-soft pill），并按**平台**聚合 —— 同平台
+  任一渠道支持登录就给该平台所有 chip 同一标记；不要用文字 tag「需登录/可扫码登录」
+  （太小读不懂、像警告）。选中渠道后另有登录说明，入口统一在「账号与凭证」
+  （2026-10-19 修正）。
+- **手工添加直播房间也能并入已有订阅**（2026-10-19）：`AddSubscriptionDialog` 手工模式下，
+  `roomIds` 列表型参数会列出同渠道已有订阅；提交时用 `splitValues` 合并去重，
+  不新建。搜索模式的「添加到」同义。
 - **侧栏窄栏隐藏列表必须两份对齐**：`styles.css` 里 `.rail.rail-collapsed`（手动折叠）
   与 `@media (max-width:1080px)`（窄窗）各有一份 `display:none` 清单，**逐项必须
   一致**（`nav-label`/`nav-count`/`nav-warn`/`rail-empty`/`group-empty`/…）。曾漏掉

@@ -52,8 +52,8 @@ export function parseDouyinSecUid(raw: string): string {
  *   `live.douyin.com/6753235366` → `6753235366`
  * 其余原样返回（裸抖音号 / 短 ID / web_rid）。
  *
- * ⚠️ 主页链接会原样返回；调用方先用 `isDouyinProfileUrl` 拦住并提示改用
- * `live:douyin:user`。
+ * ⚠️ 主页链接会原样返回；调用方先用 `isDouyinProfileUrl` 拦住，再交给资料 API
+ * 解析成 web_rid（`live:douyin` 与存量 `live:douyin:user` 共用）。
  */
 export function normalizeDouyinRoomId(raw: string): string {
   let s = raw.trim()
