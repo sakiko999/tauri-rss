@@ -5,6 +5,7 @@ import { usePrefs } from "../../store/prefs.ts"
 import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../../components/Modal.tsx"
 import { Icon } from "../../components/Icon.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function OnboardingModal() {
   const onboarded = usePrefs((s) => s.onboarded)
@@ -22,7 +23,7 @@ export function OnboardingModal() {
       desc="一个把 RSS、视频、直播、社交聚到一起的本地阅读器"
       footer={
         <>
-          <span className="t-micro t-dim" style={{ flex: 1 }}>
+          <span className="t-micro t-dim flex-1">
             当前 {subscriptions.length} 个订阅，{allItems.length} 条内容
           </span>
           <button className="btn btn-primary" onClick={() => setPrefs({ onboarded: true })}>
@@ -31,7 +32,7 @@ export function OnboardingModal() {
         </>
       }
     >
-      <ol className="steps-list">
+      <ol className="steps-list" {...overlayBlock("onboarding-steps", "onboarding:steps")}>
         <li>
           <span>
             <b>侧栏</b>是订阅树：内容类型 / 智能订阅（今日、未读、星标、继续）/ 分组下的各个源。顶部的 + 添加新源。
@@ -49,7 +50,7 @@ export function OnboardingModal() {
         </li>
         <li>
           <span>
-            <b>账号与凭证</b>里扫码或粘贴凭证，可解锁登录档位（如哔哩哔哩 1080P）。不登录也能用：热门、排行榜、弹幕与全部直播流。
+            <b>账号与凭证</b>里扫码或粘贴凭证，可解锁登录档位（如 B站 1080P）。不登录也能用：热门、排行榜、弹幕与全部直播流。
           </span>
         </li>
         <li>

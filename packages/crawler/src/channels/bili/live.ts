@@ -65,7 +65,7 @@ async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | nu
 
 export class BiliLiveChannel implements RssChannel {
   readonly key = "bili:live"
-  readonly name = "bilibili 直播房间"
+  readonly name = "B站直播房间"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [
     { key: "roomIds", label: "直播间 ID(逗号分隔,可多个)", required: true },
@@ -97,6 +97,6 @@ export class BiliLiveChannel implements RssChannel {
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `bilibili 直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: "https://live.bilibili.com/" }
+    return { channelTitle: `B站直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: "https://live.bilibili.com/" }
   }
 }

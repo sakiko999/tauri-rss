@@ -53,7 +53,7 @@ export function Diagnostics() {
         "清理浏览器数据?\n\n" +
           "会删除抓取用的浏览器数据(缓存、登录态)。\n" +
           "影响:微博/小红书等需要重新登录;下次抓取会重建一份全新的。\n" +
-          "不影响:订阅、已缓存内容、哔哩哔哩凭证。",
+          "不影响:订阅、已缓存内容、B站凭证。",
       )
     )
       return
@@ -149,7 +149,7 @@ export function Diagnostics() {
         </div>
       </SideCard>
 
-      <SideCard title={`最近的抓取错误 ${errs.length}`} icon="alert">
+      <SideCard title={`最近的抓取错误 ${errs.length}`} icon="alert" blockKey="settings:errors">
         {errs.length === 0 ? (
           <StateBlock icon="checkCircle" tone="ok" tight title="没有错误" text="最近一次刷新全部成功。" />
         ) : (

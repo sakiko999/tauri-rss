@@ -49,7 +49,7 @@ export async function runAlign(): Promise<void> {
         thumbnail: "https://i2.hdslb.com/bfs/archive/crawler.jpg",
       },
     ],
-    { channelTitle: "bilibili 热门" },
+    { channelTitle: "B站热门" },
   )
   const fromCrawler = deserializeFeed(crawlerXml, { subscriptionId: "s-crawler", now: Date.now() })
   const fromRsshub = deserializeFeed(rsshubXml(), { subscriptionId: "s-rsshub", now: Date.now() })

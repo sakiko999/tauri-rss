@@ -334,7 +334,7 @@ export function AddSubscriptionDialog({
       dismissable={!busy}
       footer={
         <>
-          <span className="t-micro t-dim" style={{ flex: 1 }}>
+          <span className="t-micro t-dim flex-1">
             {searchMode
               ? targetHint || "先搜索并选中一个房间，再添加到订阅。"
               : channel?.defaultInfo

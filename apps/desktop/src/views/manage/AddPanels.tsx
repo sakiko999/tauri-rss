@@ -10,6 +10,7 @@ import type { ChannelInfo } from "@amoeba/core"
 import { KIND_META } from "../../store/nodes.ts"
 import { Banner } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { MediaImage } from "@amoeba/ui"
 import { platformOf, SEARCH_CHANNEL, USER_SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
 import { isImeComposing } from "../../lib/ime.ts"
@@ -73,7 +74,7 @@ export interface CandidateListProps {
 export function CandidateList(f: CandidateListProps) {
   if (f.cands.length === 0) return null
   return (
-    <div className="field">
+    <div className="field" {...overlayBlock("candidate-list", "add:candidates")}>
       <span className="field-label">
         匹配 <span className="num">{f.shown.length}</span> / {f.cands.length} 项
       </span>
@@ -126,7 +127,7 @@ export function CandidateList(f: CandidateListProps) {
 export function SearchPanel(f: SearchPanelProps) {
   const kindPlatforms = f.searchKind === "user" ? f.userSearchPlatforms : f.searchPlatforms
   return (
-    <div className="stack" style={{ gap: "var(--sp-5)" }}>
+    <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("search-panel", "add:search")}>
       {/* 类型切换:两种都有才渲染(只有一种时无须选择)。「搜用户」落地到该用户/频道的
           投稿订阅(uid/channelId 单值参数,无「并入已有」)。 */}
       {f.userSearchPlatforms.length > 0 && f.searchPlatforms.length > 0 ? (
@@ -250,7 +251,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
     </button>
   )
   return (
-    <div className="stack" style={{ gap: "var(--sp-5)" }}>
+    <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("channel-panel", "add:channel")}>
       <div className="field">
         <span className="field-label" id="lbl-channel">
           渠道

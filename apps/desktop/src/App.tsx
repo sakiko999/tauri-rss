@@ -34,6 +34,7 @@ import { FeedPreviewModal } from "./components/app/FeedPreviewModal.tsx"
 import { usePrefs } from "./store/prefs.ts"
 import { useGlobalShortcuts } from "./lib/shortcuts.ts"
 import { scheduleStartupCheck } from "./lib/update.ts"
+import { overlayBlock } from "./lib/uiOverlay.ts"
 
 export default function App() {
   const params = useParams()
@@ -115,13 +116,20 @@ export default function App() {
         data-view={viewType}
         data-rail={railCollapsed ? "collapsed" : "expanded"}
         data-sel={String(sel)}
+        {...overlayBlock("app-body", "app:body")}
       >
         <Rail />
         {viewType === "reader" ? <ArticlePane /> : viewType === "hot" ? <HotPane /> : null}
         {/* ⚠️ key=nodeId:换节点时重挂主区。不这么做的话 Virtuoso/VirtuosoGrid 会保留
             上一个 feed 的 scrollTop(切换订阅后停在原位置,列表看着像空的)。
             key 只在节点变化时变 —— 热搜词切换(同一节点换 ?word=)不重挂,不会闪。 */}
-        <main id="main-region" key={nodeId ?? "home"} className="main-region" tabIndex={-1}>
+        <main
+          id="main-region"
+          key={nodeId ?? "home"}
+          className="main-region"
+          tabIndex={-1}
+          {...overlayBlock("main-region", "app:main")}
+        >
           {isPlay ? (
             <PlayerPage />
           ) : meta.type === "reader" ? (
@@ -147,7 +155,7 @@ export default function App() {
           位置;main.tsx 按同一个判据摘它,所以这里补一层完全重合的 React 骨架就行。
           铺上时首屏与启动骨架逐像素同构(同一套 .bs-* 类),换手不会被看出来。 */}
       {booting ? (
-        <div className="boot-overlay">
+        <div className="boot-overlay" {...overlayBlock("boot-overlay", "app:boot")}>
           <GridSkeleton mode={viewType === "reader" ? "list" : "grid"} />
         </div>
       ) : null}

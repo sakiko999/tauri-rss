@@ -48,6 +48,18 @@ done
 ⚠️ player 包 tsconfig 单独跑会报 `Cannot find type definition file for 'vite/client'`（历史配置问题，
 非代码错）；用 `tsc -p apps/desktop` 会连带编译 player，能查到 player 的类型错。
 
+## 二点五、Numbered UI Overlay（dev-only）
+
+```bash
+bun apps/desktop/src/dev/ui-overlay/overlay.check.ts   # 快捷键/编号/定位/标签选择纯逻辑
+# 需 dev 实例（9222）；Ctrl+Shift+U 开关覆盖层
+bun scripts/ui-probe.ts eval "__uiOverlay.stats()"     # candidates / blocks / labels / overflow
+bun scripts/ui-probe.ts eval "__uiOverlay.json()"      # AI 可读清单（区块 + 控件）
+bun scripts/ui-probe.ts eval "__uiOverlay.list().filter(e => e.block).length"  # 区块数
+```
+⚠️ 400 是**同屏标签上限**，不是编号上限；区块优先保留。编号在同一路由内固定，路由变化重置。
+详见 `docs/numbered-ui-overlay.md`。
+
 ## 三、播放矩阵（必须 4/4 起播）
 
 需 `bun run tauri` 在跑（9222 已开）。
@@ -61,9 +73,12 @@ bun scripts/ui-play-check.ts
 
 ```bash
 bun run rss fetch bili:popular --json        # bili 视频列表
+bun run rss fetch bili:precious --json       # bili 入站必刷（匿名，~98 条）
 bun run rss fetch xhs:explore --json         # 小红书匿名流
 bun run rss fetch douyin:trend --json        # 抖音热点榜（匿名，含热度/榜位）
 bun run rss sug 王者                          # 抖音搜索联想词（匿名）
+bun run rss fetch live:douyin --kv roomIds=@<抖音号> --json       # 抖音号/短 ID/直播间链接归一
+bun run rss fetch live:douyin:user --kv secUid=<主页链接> --json  # 主页链接 → 抖音号 → 房间（在播/离线）
 bun run rss play "https://live.douyin.com/<在线房间>"   # douyin 直播多档位
 bun run rss dm   "https://live.douyin.com/<在线房间>" -s 6  # douyin 弹幕（需在线房间）
 bun run rss item <url>                        # by-url 路由 + 全档位

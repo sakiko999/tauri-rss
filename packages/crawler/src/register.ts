@@ -8,6 +8,7 @@ import { RawRssChannel, RssPodcastChannel, RSS_BUILTIN_FEEDS } from "./channels/
 import {
   BiliSquareChannel,
   BiliPopularChannel,
+  BiliPreciousChannel,
   BiliRankingChannel,
   BiliWeeklyChannel,
   BiliUserVideoChannel,
@@ -42,8 +43,8 @@ import {
   DouyinLiveChannel,
   DouyinLiveHotChannel,
   DouyinCategoryChannel,
-  DouyinSearchChannel,
-  DouyinAnchorChannel,
+  DouyinPartitionSearchChannel,
+  DouyinUserLiveChannel,
   DouyinTrendChannel,
 } from "./channels/douyin/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
@@ -72,6 +73,7 @@ export function registerBuiltinChannels(): void {
   // ── bilibili(wbi 签名 API,零登录)──
   registerChannel(new BiliSquareChannel())
   registerChannel(new BiliPopularChannel())
+  registerChannel(new BiliPreciousChannel())
   registerChannel(new BiliRankingChannel())
   registerChannel(new BiliWeeklyChannel())
   registerChannel(new BiliUserVideoChannel())
@@ -104,8 +106,8 @@ export function registerBuiltinChannels(): void {
   registerChannel(new DouyinLiveChannel())
   registerChannel(new DouyinLiveHotChannel())
   registerChannel(new DouyinCategoryChannel())
-  registerChannel(new DouyinSearchChannel())
-  registerChannel(new DouyinAnchorChannel())
+  registerChannel(new DouyinPartitionSearchChannel())
+  registerChannel(new DouyinUserLiveChannel())
   registerChannel(new DouyinTrendChannel())
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──

@@ -71,13 +71,15 @@ export function platformOf(key: string): string {
  * 平台 → 直播**搜索渠道**(搜房间关键词 → 房间候选)。
  * 键 = `platformOf(订阅渠道 key)`;值 = 该平台的 search channel key。
  * ⚠️ 只登记**匿名可用**的 search 渠道(实测):
- *   - douyin search 仅 `partition/search` 且只认游戏名级(见 docs/capability-gaps.md)→ 不登记
+ *   - douyin search 本质是**分区搜索**（关键词→分区→列房，不搜主播/房间标题）；
+ *     登记后搜索面板的输入框会明确写「分区关键词」，结果仍是可订阅的直播间
  *   - huya search 不可分页但首页可用 → 登记
  */
 export const SEARCH_CHANNEL: Record<string, string> = {
   bili: "bili:search",
   douyu: "live:douyu:search",
   huya: "live:huya:search",
+  douyin: "live:douyin:search",
   youtube: "youtube:live-search",
 }
 

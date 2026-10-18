@@ -11,6 +11,7 @@ import { useViewNavigate } from "../../router.tsx"
 import { usePrefs } from "../../store/prefs.ts"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
 import { isImeComposing } from "../../lib/ime.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 interface Entry {
   id: string
@@ -183,8 +184,14 @@ export function CommandPalette() {
   let lastGroup = ""
   return (
     <div className="scrim" data-variant="top" onClick={() => setOpen(false)}>
-      <div className="palette" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="命令面板">
-        <div className="palette-input">
+      <div
+        className="palette"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-label="命令面板"
+        {...overlayBlock("command-palette", "palette:root")}
+      >
+        <div className="palette-input" {...overlayBlock("palette-input", "palette:input")}>
           <Icon name="search" size={17} />
           <input
             autoFocus
@@ -195,7 +202,7 @@ export function CommandPalette() {
           />
           <kbd>Esc</kbd>
         </div>
-        <div className="palette-list" ref={listRef}>
+        <div className="palette-list" ref={listRef} {...overlayBlock("palette-list", "palette:list")}>
           {filtered.length === 0 ? <p className="rail-empty">没有匹配项。</p> : null}
           {filtered.map((e, i) => {
             const header = e.group !== lastGroup ? e.group : null

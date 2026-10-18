@@ -53,10 +53,27 @@
 
 ## 当前 provider 渠道(source/rsshub.ts,外挂模式)
 
-- `rsshub:weibo:hot` / `rsshub:weibo:user` — 信息源补充
-- `rsshub:bili:popular` / `rsshub:bili:weekly` / `rsshub:bili:precious` — 视频信息
-- `rsshub:youtube:channel` — YouTube 频道
+**2026-10-18 收口：只保留 `rsshub:feed` 一条泛用渠道。**
+
 - `rsshub:feed` — 任意路由兜底(`{route}` + 可选 `baseUrl`)
+
+原具名渠道已删：`rsshub:weibo:hot` / `weibo:user`、`rsshub:bili:popular` /
+`bili:weekly` / `bili:precious`、`rsshub:youtube:channel`。它们与内置 crawler 重复；
+其中「入站必刷」已收编为 `bili:precious`（见下）。已有使用旧 key 的订阅会因
+`getChannel` 找不到而刷新失败——如需保留存量数据，先迁移到对应内置渠道
+（`weibo:hot` / `weibo:user` / `bili:popular` / `bili:weekly` / `bili:precious` /
+`youtube`），或继续用 `rsshub:feed` 填原路由。
+
+### `bili:precious` 收编说明
+
+RSSHub 的 `/bilibili/precious` 实现就是
+`GET https://api.bilibili.com/x/web-interface/popular/precious`（带
+`Referer: https://www.bilibili.com/v/popular/history`），映射 `data.list`。
+2026-10-18 匿名实测 `code=0`、98 条，无需 wbi/cookie/登录；crawler 用
+`biliClient.getJson` + `ugc()` 即可，播放仍走 resolve by-url。故新增
+`packages/crawler/src/channels/bili/precious.ts`，不再依赖 RSSHub。
+映射时 `pubdate: 0`（精选榜按接口顺序，不按视频发布时间重排）+ `forceBvid: true`
+（有 bvid 就用现代链接）。
 
 ## 当前种子订阅(subscriptions.ts)
 

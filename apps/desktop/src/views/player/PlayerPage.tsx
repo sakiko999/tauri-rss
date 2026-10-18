@@ -18,6 +18,7 @@ import { StateBlock, SideCard } from "../../components/StateBlock.tsx"
 import { MediaImage } from "@amoeba/ui"
 import { fmtAgo, fmtTime, itemKey, mediaUrl, onlineOf, platformOf, PLATFORM_LABEL } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function PlayerPage() {
   const { itemId, from } = usePlayParams()
@@ -81,8 +82,8 @@ export function PlayerPage() {
 
   if (!item) {
     return (
-      <div className="page">
-        <div className="page-scroll scroll-area">
+      <div className="page" {...overlayBlock("player-missing", "player:missing")}>
+        <div className="page-scroll scroll-area" {...overlayBlock("player-missing-scroll", "player:missing:scroll")}>
           <StateBlock
             icon="play"
             title="找不到这条内容"
@@ -105,12 +106,12 @@ export function PlayerPage() {
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
 
   return (
-    <div className="player-view">
-      <header className="detail-head">
+    <div className="player-view" {...overlayBlock("player-view", "player:view")}>
+      <header className="detail-head" {...overlayBlock("player-head", "player:head")}>
         <button className="icon-btn sm" aria-label="返回" onClick={() => go(from ?? "tab:all")}>
           <Icon name="back" size={15} />
         </button>
-        <span className="titlebar-path od-truncate" style={{ flex: 1, minWidth: 0 }}>
+        <span className="titlebar-path od-truncate flex-1 min-w-0">
           {item.title}
         </span>
         <button
@@ -131,10 +132,10 @@ export function PlayerPage() {
         </button>
       </header>
 
-      <div className="scroll-area player-scroll">
-        <div className="player-layout">
-          <div>
-            <div className="stage">
+      <div className="scroll-area player-scroll" {...overlayBlock("player-scroll", "player:scroll")}>
+        <div className="player-layout" {...overlayBlock("player-layout", "player:layout")}>
+          <div {...overlayBlock("player-main-col", "player:main-col")}>
+            <div className="stage" {...overlayBlock("player-stage", "player:stage")}>
               {/* PlayableMedia/VideoShell 自带 relative + aspect-ratio 容器与控件层。
                   ⚠️ **播放器无圆角**(常见播放器都是满幅方角设计)——player 包方角,
                   这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。 */}
@@ -169,7 +170,7 @@ export function PlayerPage() {
               />
             </div>
 
-            <div className="player-meta">
+            <div className="player-meta" {...overlayBlock("player-meta", "player:meta")}>
               <h1 className="player-title">{item.title}</h1>
               <div className="player-sub">
                 {isLive ? (
@@ -219,7 +220,7 @@ export function PlayerPage() {
 
             {item.summary ? (
               <div className="section-first">
-                <SideCard title="简介" icon="info" pad>
+                <SideCard title="简介" icon="info" pad blockKey="player:summary">
                   <p className="t-small t-muted" style={{ lineHeight: 1.7 }}>
                     {item.summary}
                   </p>
@@ -228,8 +229,8 @@ export function PlayerPage() {
             ) : null}
           </div>
 
-          <aside className="stack">
-            <SideCard title={`播放队列 ${queueItems.length}`} icon="queue">
+          <aside className="stack" {...overlayBlock("player-side", "player:side")}>
+            <SideCard title={`播放队列 ${queueItems.length}`} icon="queue" blockKey="player:queue">
               {queueItems.length === 0 ? (
                 <p className="rail-empty">队列为空。在卡片上点 + 加入,或从列表播放。</p>
               ) : (
@@ -265,7 +266,7 @@ export function PlayerPage() {
               )}
             </SideCard>
 
-            <SideCard title="来自同一订阅" icon="rss">
+            <SideCard title="来自同一订阅" icon="rss" blockKey="player:related">
               {related.length === 0 ? (
                 <p className="rail-empty">该订阅下暂无其它条目。</p>
               ) : (

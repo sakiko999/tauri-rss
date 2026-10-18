@@ -116,7 +116,7 @@ function parseItem(it: DynItem): { content: string; images: SocialImage[]; likes
 /** bilibili 用户动态(社交)channel。 */
 export class BiliDynamicChannel implements RssChannel {
   readonly key = "bili:dynamic"
-  readonly name = "bilibili 用户动态"
+  readonly name = "B站用户动态"
   readonly kind = "social" as const
   readonly sourceInfoTpl = [
     { key: "uid", label: "UP 主 uid", required: true },
@@ -161,7 +161,7 @@ export class BiliDynamicChannel implements RssChannel {
   }
   private channelOptions(info: SourceInfo): SerializeOptions {
     return {
-      channelTitle: `bilibili 动态 · ${info.uid}`,
+      channelTitle: `B站动态 · ${info.uid}`,
       channelLink: `https://space.bilibili.com/${info.uid}/dynamic`,
     }
   }

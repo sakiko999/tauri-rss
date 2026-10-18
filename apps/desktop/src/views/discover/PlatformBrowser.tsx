@@ -17,6 +17,7 @@ import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
 import { CandidateList } from "../manage/AddPanels.tsx"
 import { useLatestOnly } from "../../lib/useLatestOnly.ts"
 import { isImeComposing } from "../../lib/ime.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 import {
   candidatesFromSearch,
   LIVE_SUB_CHANNEL,
@@ -24,16 +25,19 @@ import {
   valueList,
   type Candidate,
 } from "../../lib/subscriptions.ts"
-import { PLATFORMS, VIEW_LABEL, type Cap } from "./platforms.ts"
+import { VIEW_LABEL, type Cap } from "./platforms.ts"
 
 export function PlatformBrowser({
   platform,
+  platforms,
   caps,
   view,
   onView,
   onPickPlatform,
 }: {
   platform: string
+  /** 只传有分区/搜索能力的平台（能力矩阵同源过滤）。 */
+  platforms: Array<{ id: string; label: string }>
   caps: Record<Cap, ChannelInfo | undefined>
   view: Cap
   onView: (v: Cap) => void
@@ -127,14 +131,14 @@ export function PlatformBrowser({
   }
 
   return (
-    <section className="section">
+    <section className="section" {...overlayBlock("platform-browser", "discover:browser")}>
       <div className="section-head">
         <h2 className="section-title">分区浏览与搜索</h2>
         <span className="section-desc">取真实数据，不写进订阅列表；选中候选可直接订阅</span>
       </div>
 
       <div className="chip-row" style={{ marginBottom: "var(--sp-4)" }}>
-        {PLATFORMS.map((p) => (
+        {platforms.map((p) => (
           <button
             key={p.id}
             className="chip"
@@ -151,44 +155,47 @@ export function PlatformBrowser({
       </div>
 
       <div className="segmented" style={{ marginBottom: "var(--sp-4)" }}>
-        <button
-          aria-pressed={view === "category"}
-          onClick={() => {
-            onView("category")
-            setItems(null) // 换视图清旧结果,否则「分区」的数据留在「搜索」视图里、标注对不上
-            setSelected("")
-          }}
-          disabled={!caps.category}
-        >
-          分区
-        </button>
-        <button
-          aria-pressed={view === "search"}
-          onClick={() => {
-            onView("search")
-            setItems(null)
-            setSelected("")
-          }}
-          disabled={!caps.search}
-        >
-          搜索
-        </button>
-        <button
-          aria-pressed={view === "anchor"}
-          onClick={() => {
-            onView("anchor")
-            setItems(null)
-            setSelected("")
-          }}
-          disabled={!caps.anchor}
-        >
-          搜主播
-        </button>
+        {caps.category ? (
+          <button
+            aria-pressed={view === "category"}
+            onClick={() => {
+              onView("category")
+              setItems(null) // 换视图清旧结果,否则「分区」的数据留在「搜索」视图里、标注对不上
+              setSelected("")
+            }}
+          >
+            分区
+          </button>
+        ) : null}
+        {caps.search ? (
+          <button
+            aria-pressed={view === "search"}
+            onClick={() => {
+              onView("search")
+              setItems(null)
+              setSelected("")
+            }}
+          >
+            搜索
+          </button>
+        ) : null}
+        {caps.anchor ? (
+          <button
+            aria-pressed={view === "anchor"}
+            onClick={() => {
+              onView("anchor")
+              setItems(null)
+              setSelected("")
+            }}
+          >
+            搜主播
+          </button>
+        ) : null}
       </div>
 
       {!ch ? (
         <Banner tone="warn" icon="warning">
-          {platform} 当前没有「{VIEW_LABEL[view]}」渠道（能力矩阵里是灰的）。
+          {platform} 当前没有「{VIEW_LABEL[view]}」渠道。
         </Banner>
       ) : (
         <div className="inline-row" style={{ marginBottom: "var(--sp-4)" }}>

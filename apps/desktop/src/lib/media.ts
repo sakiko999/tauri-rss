@@ -161,7 +161,7 @@ export function fmtNum(n?: number | string): string {
 
 /** 直播平台 → 显示名 + 品牌图标名。 */
 export const PLATFORM_LABEL: Record<string, string> = {
-  bilibili: "bilibili",
+  bilibili: "B站",
   douyu: "斗鱼",
   huya: "虎牙",
   douyin: "抖音",

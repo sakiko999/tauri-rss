@@ -68,6 +68,7 @@ const AUDIT_JS = `(() => {
     return false
   };
   for (const el of document.querySelectorAll('body *')) {
+    if (el.closest('[data-dev-overlay]')) continue;
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
     const r = el.getBoundingClientRect();
@@ -91,6 +92,7 @@ const AUDIT_JS = `(() => {
   // 可点元素中心是否被**不相关**元素遮挡(排除滚动裁剪的祖先)
   let covered = 0;
   for (const el of document.querySelectorAll('button, a[href], [role="button"]')) {
+    if (el.closest('[data-dev-overlay]')) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) continue;
     const cx = r.left + r.width/2, cy = r.top + r.height/2;

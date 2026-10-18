@@ -6,7 +6,8 @@
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
-import { excerptOf, fmtAgo, mediaUrl, ratioOf } from "../../lib/media.ts"
+import { excerptOf, fmtAgo, itemKey, mediaUrl, ratioOf } from "../../lib/media.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function ListRow({
   item,
@@ -31,6 +32,7 @@ export function ListRow({
       tabIndex={0}
       aria-current={active ? "true" : undefined}
       data-read={String(read)}
+      {...overlayBlock("list-row", `list:${itemKey(item)}`)}
       onClick={() => onOpen(item)}
       onKeyDown={(e) => {
         // ⚠️ 行内还有星标/已读按钮:它们的 Enter/Space 会冒泡到这里,不区分 target 的话

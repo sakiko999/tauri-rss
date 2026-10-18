@@ -21,7 +21,7 @@ const PAGE_SIZE = 30
 
 export class BiliLiveHotChannel implements RssChannel {
   readonly key = "bili:live:hot"
-  readonly name = "bilibili 直播热门"
+  readonly name = "B站直播热门"
   readonly kind = "live" as const
   readonly defaultInfo = {}
   /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
@@ -66,6 +66,6 @@ export class BiliLiveHotChannel implements RssChannel {
   }
 
   private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "bilibili 直播热门", channelLink: "https://live.bilibili.com/" }
+    return { channelTitle: "B站直播热门", channelLink: "https://live.bilibili.com/" }
   }
 }

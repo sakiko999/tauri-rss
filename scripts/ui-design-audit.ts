@@ -99,6 +99,8 @@ const AUDIT = `(() => {
   const contrastIssues = [], smallTargets = [], tinyText = [], fontSizes = {}, gaps = {};
 
   for (const el of document.querySelectorAll('body *')) {
+    // 跳过 dev overlay（标签/工具栏会把小点击目标、字号、对比度统计打成假阳性）
+    if (el.closest('[data-dev-overlay]')) continue;
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0') continue;
     const r = el.getBoundingClientRect();

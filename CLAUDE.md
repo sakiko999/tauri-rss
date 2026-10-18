@@ -180,6 +180,11 @@ bun scripts/ui-shot.ts tmp/shots            # 给各模块截图存档（用于�
 bun scripts/ui-play-check.ts               # ★ 播放矩阵巡检（video/live/audio/yt 真播，报起播）
 bun scripts/ui-resize.ts 1500 950           # 改窗口尺寸（验证响应式断点）
 
+# Numbered UI Overlay（dev-only，Ctrl+Shift+U；清单不依赖是否显示）
+bun apps/desktop/src/dev/ui-overlay/overlay.check.ts  # 快捷键/编号/定位纯逻辑自检
+bun scripts/ui-probe.ts eval "__uiOverlay.json()"     # 当前视口交互元素清单（给 AI）
+bun scripts/ui-probe.ts eval "__uiOverlay.stats()"    # candidates/labels/overflow
+
 # 浏览器模拟（先起干净 Edge，见 edge-cdp skill；脚本自连 CDP，零额外依赖）
 bun packages/crawler/src/example/browser-sim.ts weibo:user   # 或 xhs:user（低频防风控）
 ```
@@ -252,6 +257,8 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 ## 平台现状与坑
 
 **bilibili**
+- **UI 显示名统一「B站」**（2026-10-18）：平台标签、渠道名、账号页/引导/诊断文案都用
+  「B站」；仅渠道 key（`bili:*`）、URL、API、代码标识保留 bilibili。
 - **wbi 签名零登录可复刻**：`GET /x/web-interface/nav` 未登录（code:-101）仍返回
   `data.wbi_img`，无需 cookie/puppeteer，纯 `MD5(排序参数&wts&mixinKey)`。
   换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源
@@ -266,6 +273,11 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - ✅ **搜UP主**（2026-10-16，`searchBiliUsers` / 渠道 `bili:user`）：
   `search_type=bili_user` + **匿名 buvid3/4**（`biliClient.getJson(..., {buvid:true})`，
   裸请求 412）。与 `bili:user_video`（uid 投稿订阅）配对，走「添加订阅 → UP主 / 频道」
+- ✅ **入站必刷**（2026-10-18，渠道 `bili:precious`）：
+  `GET /x/web-interface/popular/precious` + 站内 Referer，匿名实测 98 条，无需
+  wbi/cookie。原 RSSHub `/bilibili/precious` 是同一端点，已收编进 crawler；
+  RSSHub 具名渠道（`rsshub:bili:*` / `weibo:*` / `youtube:*`）随之删除，只留
+  `rsshub:feed` 泛用路由
 - **扫码登录**：纯 HTTP（`passport.bilibili.com` qrcode/generate + poll），不需
   `appHost.browser`。⚠️ 上游只给**二维码内容 URL**，编码在 UI 侧（`QrImage`）；
   `biliScanLogin` 必须复用已生成的码，否则它会自己再生成一个、轮询的 key 与你展示的不是同一个
@@ -278,6 +290,15 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   ⚠️ **低档位只产 HLS**（`ratio=` 切档）；`ratio=` 低档 flv.js 播几秒断
 - **douyin**（`channels/douyin/index.ts`）：enter API ABogus 签名 → `stream_url`。
   ⚠️ `liveStatus ==2` 才是直播中（`==4` 是 roomId 一次性，需换 webRid）
+- ✅ **抖音号可直接当 web_rid 用**（2026-10-18 实测）：`live:douyin` 的 `roomIds`
+  支持用户抖音号（`unique_id`，如 `pvcyinse`）/ 数字 short_id / 直播间 URL 的
+  `<web_rid>`；enter API 会解析到当前房间，**离线也返 offline 条目**，开播后刷新变
+  live。⚠️ 不能填长 `room_id`（`4001038`）或主页链接（`10011`，会提示改用
+  `live:douyin:user`）；`roomIds` 会自动归一 `@抖音号` / `抖音号：xxx` /
+  `live.douyin.com/<id>` 链接。主页链接走 `live:douyin:user`（`channels/douyin/user.ts`）：
+  匿名资料 API `aweme/v1/web/user/profile/other/?sec_user_id=...`（a_bogus+ttwid）
+  返回 `unique_id`/`short_id`/`room_id_str`/`live_status`（1=在播），再拿
+  `unique_id` 当 web_rid 走 enter（离线也能建订阅）
 - ✅ **抖音扫码登录**（2026-10-16，`resolve/platform/douyin/login.ts`）：纯 HTTP 走
   `sso.douyin.com` 通行证（get_qrcode → check_qrconnect 轮询 → redirect_url 落
   cookie），**实测被 JS 挑战页拦**（warmup 只给 `__ac_nonce`，无 JS 执行过不了
@@ -290,9 +311,12 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
   ⚠️ **匿名搜抖音无解已用真实 Edge 复核**（路 1/2 仍 2483，搜索页被 verify-center 4031 拦）：
   登录硬门槛，**browser 模拟解不了**（xhs 是 TLS 指纹差异能解，抖音是账号门槛不能）。
-  虎牙搜索/搜主播不可分页。✅ **抖音搜主播**（`live:douyin:anchor`）：无匿名主播搜索接口
-  （2483 登录门槛，browser 解不了），走**本地过滤**——抓「综合热门(partition=720,type=1) +
-  命中分区流」房间按 `owner.nickname` 匹配（只命中在播主播）。缺口见 `docs/capability-gaps.md`
+  虎牙搜索/搜主播不可分页。✅ **抖音搜索渠道**（2026-10-18 调整）：
+  `live:douyin:search` 本质是**分区搜索**（关键词 → 分区 → 列房），只认大类/游戏名，
+  不搜主播/房间标题；`live:douyin:anchor` 已删除（本地过滤热门房间没有意义）。
+  已登记进 `SEARCH_CHANNEL`（发现页/搜索面板的平台名显示「抖音分区」）；
+  已知主播用 `live:douyin` + 抖音号，或 `live:douyin:user` + 主页链接（发现页抖音卡片
+  有「用户直播间」直达入口）。缺口见 `docs/capability-gaps.md`
 
 **YouTube**（`docs/youtube-stream-extraction.md`）
 - 主力 client = **ANDROID_VR**：2026-08 起 ANDROID/IOS 标准 client 在部分 IP 触发
@@ -501,6 +525,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **social 瀑布流**用 **masonic** 虚拟化（CSS columns 追加会重排已渲染卡片）。
   ⚠️ 内层滚动容器（masonic 默认绑 window）需用 `usePositioner + useMasonry` 手动喂
   `scrollTop/height`；append 保持 positioner，refresh 重建 layoutVersion
+- **发现页能力矩阵只显示已实现入口**：不再渲染「无渠道」灰行；没有分区/搜索能力的
+  平台整卡不出现（微博/小红书走「可订阅榜单」）；切平台时视图自动落到该平台支持的
+  第一个能力（`DiscoverPage` 的 `pickPlatform` + `caps` 效应）。平台卡用
+  `flex-direction:column` + `.chip-row{margin-top:auto}`，能力行数不同也把操作按钮
+  固定在卡片底部。
 - **发现页搜索与「添加订阅」同形态**：两者共用 `AddPanels.tsx` 的 `CandidateList`
   （缩略图 + label/sub/meta + 选中态 + 已订阅标记）。发现页（分区/搜索/搜主播）的
   结果都转成候选，选中后可直接 `addSubscription`（roomId/videoId 单值），不用再开
@@ -523,6 +552,10 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   2026-10-14 修复：把 `h1..figure/ul,ol/img/button,input,select,textarea/button` 全部移进
   base 层。**改 styles.css 的结构性规则后，务必用 CDP 量一次真实 computed style**
   （`getComputedStyle(btn).padding` 应为 `6px 12px` 而非 `0px`）。
+- ⚠️ **app 的 `styles/` 是无层 CSS；Tailwind utility 在 `@layer utilities`**。同一属性
+  若被无层语义类设置（如 `.stack{gap}`、`.pane > .scroll-area{flex}`、
+  `.article-body{...}`），utility 会被压过，表现为「类写了但没生效」。给已有语义类
+  元素加 utility 覆盖前先 grep 该属性；必要时保留 inline 或改语义类，不要盲目加 `!`。
 - **字体**：IBM Plex 自托管（`apps/desktop/public/fonts`，~136KB，离线可用）。
   Sans=UI/标题，**Serif=正文**，Mono=数字/通道号。中文回落到系统栈（字体包太大不随包）。
 - **视觉基调**：暖石墨中性（色相 72/75）+ 琥珀 accent；深/浅两套同色相，改一处要改两处。
@@ -605,6 +638,17 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   能力总线，已从 `resolveSocialDetail` 更名）。SPA / 反爬占位页提取失败 → 回退原摘要。
   **持久缓存**：抓到的正文落 KV（`core/repo/body-cache-repo.ts`，`body:<sub>:<item>`），
   退订一并清；**只对 article**（xhs social 补全含多图/标签，只缓存 content 会丢）。
+- **Numbered UI Overlay**（`apps/desktop/src/dev/ui-overlay/`，dev-only）：`Ctrl+Shift+U`。
+  扫描**已挂载 + 视口内**的候选 = **组件显式声明的区块**（`data-ui-overlay-block`）
+  + 自动发现的可交互控件。区块用 `lib/uiOverlay.ts` 的
+  `{...overlayBlock("kind", "可选业务 key")}` 声明（DEV 之外返回 `{}`，生产无属性）；
+  区块 = 绿色标签 + **整个区块的绿色描边边界框**（随滚动实时重定位），控件 = 琥珀
+  标签；工具栏可「仅区块」。`400` 是**同屏标签上限**，不是编号
+  上限（编号可超 400，超出部分只显示 `+N`，**区块优先保留**）。同一元素/条目在本路由
+  会话内编号固定：稳定 key 优先取 `data-ui-overlay-key` / React fiber 业务 id
+  （`item.subscriptionId:id` / `sub.id` / `group.id`），其次 data-* / 唯一 id / 列表
+  标题；虚拟列表滚出滚回、DOM 重建都复用同号。路由变化重置，隐藏/显示不重置。
+  见 `docs/numbered-ui-overlay.md`。
 
 ## 调研文档索引
 
@@ -628,6 +672,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/rail-tree-accordion.md` | 侧栏树选型（为何用 Accordion 而非树组件 + 三个静默失败坑） |
 | `docs/audit-backlog.md` | 审计发现积压：故意不改的理由 + 误报证伪（已修不在此） |
 | `docs/release-updater.md` | 发布产物（NSIS）、签名密钥、自动更新链路与发版步骤 |
+| `docs/numbered-ui-overlay.md` | Numbered UI Overlay（dev-only，已实现）：编号语义/400 上限/AI 清单 |
 
 ## 下一步
 
@@ -646,7 +691,10 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   方案对比见 git 历史的 `docs/technical-plan.md`（2026-10-16 删）。
 
 **已完成的**（细节在代码与 git log，不在此堆叠）：三分栏/瀑布流/短视频三模式、续播与
-阅读进度、OPML 导入导出、扫码登录 UI、文章正文补全（含 KV 持久缓存）、mobile 接入。
+阅读进度、OPML 导入导出、扫码登录 UI、文章正文补全（含 KV 持久缓存）、mobile 接入、
+抖音用户直播间（主页链接 → 抖音号 → 房间）与分区搜索（2026-10-18）、
+Numbered UI Overlay（dev-only，2026-10-18）、RSSHub 收口为 `rsshub:feed` +
+`bili:precious` 收编（2026-10-18）。
 
 **长期悬置**（收益不抵复杂度，暂不做）：
 - **CSP**：现 `csp: null`。要配最小 CSP 须放 `unsafe-eval`（抖音/斗鱼签名脚本靠 `eval`），

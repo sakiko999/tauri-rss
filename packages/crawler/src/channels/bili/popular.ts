@@ -18,7 +18,7 @@ import { API, ugc } from "./video-common.ts"
 
 export class BiliPopularChannel implements RssChannel, Loginable {
   readonly key = "bili:popular"
-  readonly name = "bilibili 综合热门"
+  readonly name = "B站综合热门"
   readonly kind = "video" as const
 
   /**
@@ -65,6 +65,6 @@ export class BiliPopularChannel implements RssChannel, Loginable {
     )
   }
   private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "bilibili 综合热门", channelLink: "https://www.bilibili.com/" }
+    return { channelTitle: "B站综合热门", channelLink: "https://www.bilibili.com/" }
   }
 }

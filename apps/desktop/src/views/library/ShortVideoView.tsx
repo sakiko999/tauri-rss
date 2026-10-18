@@ -22,6 +22,7 @@ import { useViewNavigate } from "../../router.tsx"
 import { itemKey } from "../../lib/media.ts"
 import { scrollBehavior } from "../../lib/motion.ts"
 import { openExternalSafely } from "../../lib/host.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /** 单个 slide。active=false 时只渲染 poster 占位（不挂播放器）。 */
 function Slide({ item, index, active, onClose }: { item: MediaItem; index: number; active: boolean; onClose: () => void }) {
@@ -32,7 +33,12 @@ function Slide({ item, index, active, onClose }: { item: MediaItem; index: numbe
   const playable = item.kind === "video" || item.kind === "audio" || item.kind === "live"
 
   return (
-    <section className="sv-slide snap-start" data-item={item.id} data-index={index}>
+    <section
+      className="sv-slide snap-start"
+      data-item={item.id}
+      data-index={index}
+      {...overlayBlock("shortvideo-slide", `shortvideo:slide:${itemKey(item)}`)}
+    >
       {playable && active ? (
         <PlayableMedia
           key={item.id}
@@ -53,7 +59,7 @@ function Slide({ item, index, active, onClose }: { item: MediaItem; index: numbe
           )}
         </div>
       )}
-      <div className="sv-overlay">
+      <div className="sv-overlay" {...overlayBlock("shortvideo-overlay", `shortvideo:overlay:${itemKey(item)}`)}>
         <div className="sv-info">
           <span className="sv-title">{item.title}</span>
           {item.author?.name ? <span className="sv-author">{item.author.name}</span> : null}
@@ -140,7 +146,7 @@ export function ShortVideoView() {
 
   if (items.length === 0) {
     return (
-      <div className="sv-empty">
+      <div className="sv-empty" {...overlayBlock("shortvideo-empty", "shortvideo:empty")}>
         <Icon name="play" size={32} />
         <p>这个视图没有可播放的条目。</p>
         <p className="t-dim t-small">短视频模式只收 video / audio / live 三类。</p>
@@ -149,7 +155,7 @@ export function ShortVideoView() {
   }
 
   return (
-    <div className="shortvideo" ref={containerRef}>
+    <div className="shortvideo" ref={containerRef} {...overlayBlock("shortvideo", "shortvideo:root")}>
       {items.map((it, i) => (
         <div key={itemKey(it, i)} className="sv-slot">
           <Slide item={it} index={i} active={i === activeIdx} onClose={exit} />

@@ -13,7 +13,11 @@ injectTauriHost();
 
 // dev 调试锚点:CDP 连进运行实例时用 `__store.getState()` 读权威状态
 // (订阅表 / refreshErrors / view —— 这些 UI 只以图标/计数呈现,文本读不到)。
-if (import.meta.env.DEV) (globalThis as { __store?: unknown }).__store = useDesktop;
+if (import.meta.env.DEV) {
+  (globalThis as { __store?: unknown }).__store = useDesktop;
+  // dev-only 可交互元素编号覆盖层（生产构建里整个分支被摇掉，chunk 不会产出）。
+  void import("./dev/ui-overlay/index.ts").then((m) => m.installUiOverlay());
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

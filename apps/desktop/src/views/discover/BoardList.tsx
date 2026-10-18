@@ -9,6 +9,7 @@ import type { ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function BoardList({ boards }: { boards: ChannelInfo[] }) {
   const subscriptions = useDesktop((s) => s.subscriptions)
@@ -21,11 +22,11 @@ export function BoardList({ boards }: { boards: ChannelInfo[] }) {
   }
 
   return (
-    <div className="result-grid">
+    <div className="result-grid" {...overlayBlock("board-list", "discover:boards:list")}>
       {boards.map((b) => {
         const subscribed = subscriptions.some((s) => s.channelKey === b.key)
         return (
-          <div className="platform-card" key={b.key}>
+          <div className="platform-card" key={b.key} {...overlayBlock("board-card", `board:${b.key}`)}>
             <div className="platform-head">
               <span className="platform-mark">
                 <Icon name={b.kind === "live" ? "radio" : "layers"} size={17} />

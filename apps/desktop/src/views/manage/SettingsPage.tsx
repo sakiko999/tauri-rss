@@ -16,6 +16,7 @@ import { Playback } from "./settings/Playback.tsx"
 import { Subscriptions } from "./settings/Subscriptions.tsx"
 import { Diagnostics } from "./settings/Diagnostics.tsx"
 import { About } from "./settings/About.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 type Tab = "appearance" | "reading" | "playback" | "subscriptions" | "diagnostics" | "about"
 
@@ -41,11 +42,11 @@ export function SettingsPage() {
     if (t && TABS.some((x) => x.id === t)) setTab(t)
   }, [sp])
   return (
-    <div className="page">
-      <div className="scroll-area page-scroll">
-        <div className="page-wrap">
+    <div className="page" {...overlayBlock("settings-page", "page:settings")}>
+      <div className="scroll-area page-scroll" {...overlayBlock("settings-scroll", "page:settings:scroll")}>
+        <div className="page-wrap" {...overlayBlock("settings-wrap", "page:settings:wrap")}>
           <h1 className="page-title">设置</h1>
-          <div className="segmented" style={{ marginBlock: "var(--sp-5)" }}>
+          <div className="segmented" style={{ marginBlock: "var(--sp-5)" }} {...overlayBlock("settings-tabs", "page:settings:tabs")}>
             {TABS.map((t) => (
               <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
                 <Icon name={t.icon} size={13} /> {t.label}

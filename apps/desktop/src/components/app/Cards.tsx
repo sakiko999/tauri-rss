@@ -7,8 +7,9 @@
 import type { AudioItem, MediaItem } from "@amoeba/core"
 import { MediaImage, fmtCount } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
-import { fmtAgo, fmtTime, httpsify, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, httpsify, itemKey, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
 import { rememberSocialSource } from "../../lib/viewTransition.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /** 播放器回调:交给宿主(MediaMain/PlayerPage)决定如何开播。 */
 export interface CardActions {
@@ -108,6 +109,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
       role="button"
       tabIndex={0}
       aria-label={item.title}
+      {...overlayBlock("media-card", `card:${itemKey(item)}`)}
       onClick={(e) => {
         // 社交卡片:记下源图,供「缩略图 → 全屏」形变用(见 lib/viewTransition.ts)。
         // 只对 social 记 —— 其它 kind 的主操作是播放/打开原文,没有形变目标。
@@ -124,7 +126,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
         }
       }}
     >
-      <div className="card-media" style={{ aspectRatio: "16 / 9" }}>
+      <div className="card-media aspect-video">
         <MediaImage src={img} ratio={16 / 9} fill />
         {isLiveNow ? (
           <span className="live-pulse">
@@ -145,7 +147,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
             播客 feed 条目也没有流(点它 = 订阅),同样不摆。 */}
         {playable && !feed ? (
           <span className="card-play">
-            <span onClick={b.onSelect} role="presentation" style={{ pointerEvents: "auto" }}>
+            <span onClick={b.onSelect} role="presentation" className="pointer-events-auto">
               <Icon name="play" size={18} />
             </span>
           </span>
@@ -188,7 +190,7 @@ export function CardMini({ item, actions }: { item: MediaItem; actions: CardActi
       onClick={() => (feed ? actions.onOpenFeed?.(item) : playable ? actions.onPlay(item) : actions.onOpen?.(item))}
       aria-label={item.title}
     >
-      <div className="card-media" style={{ aspectRatio: "16 / 9" }}>
+      <div className="card-media aspect-video">
         <MediaImage src={img} ratio={16 / 9} fill />
         {playable && !feed ? (
           <span className="card-play">
@@ -227,6 +229,7 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
         actions.onOpen?.(item)
       }}
       aria-label={item.title}
+      {...overlayBlock("social-card", `social:${itemKey(item)}`)}
     >
       {cover ? (
         <span className="social-media" style={{ aspectRatio: socialRatio(cover) }}>

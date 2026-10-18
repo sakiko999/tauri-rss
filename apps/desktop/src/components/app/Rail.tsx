@@ -17,6 +17,7 @@ import { NavRow, RailSection } from "../NavRow.tsx"
 import { useSettingsNavigate, useViewNavigate } from "../../router.tsx"
 import { AddSubscriptionDialog } from "../../views/manage/AddSubscriptionDialog.tsx"
 import { RailGroupTree } from "./RailGroupTree.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function Rail() {
   const nodeId = useDesktop((s) => s.selectedNodeId)
@@ -55,8 +56,8 @@ export function Rail() {
   }, [allItems])
 
   return (
-    <aside className={`rail${collapsed ? " rail-collapsed" : ""}`}>
-      <div className="rail-head">
+    <aside className={`rail${collapsed ? " rail-collapsed" : ""}`} {...overlayBlock("rail", "app:rail")}>
+      <div className="rail-head" {...overlayBlock("rail-head", "app:rail:head")}>
         <div className="rail-actions">
           <button className="icon-btn" title="刷新全部 (Ctrl+R)" aria-label="刷新全部" onClick={() => void refreshAll(true)}>
             <Icon name="refresh" />
@@ -70,7 +71,7 @@ export function Rail() {
         </div>
       </div>
 
-      <div className="rail-scroll scroll-area">
+      <div className="rail-scroll scroll-area" {...overlayBlock("rail-scroll", "app:rail:scroll")}>
         <RailSection title="内容类型">
           {TABS.map((t) => {
             const id = t.id === "all" ? "tab:all" : `tab:${t.id}`

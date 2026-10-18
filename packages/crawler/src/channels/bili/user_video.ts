@@ -13,7 +13,7 @@ import { API, ugc } from "./video-common.ts"
 
 export class BiliUserVideoChannel implements RssChannel {
   readonly key = "bili:user_video"
-  readonly name = "bilibili UP 主投稿"
+  readonly name = "B站 UP 主投稿"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "uid", label: "UP 主 uid", required: true }]
   getSource(info: SourceInfo): RssSource {
@@ -45,6 +45,6 @@ export class BiliUserVideoChannel implements RssChannel {
   }
   private channelOptions(info: SourceInfo): SerializeOptions {
     const uid = info.uid ?? ""
-    return { channelTitle: `bilibili UP 主 ${uid}`, channelLink: `https://space.bilibili.com/${uid}` }
+    return { channelTitle: `B站 UP 主 ${uid}`, channelLink: `https://space.bilibili.com/${uid}` }
   }
 }

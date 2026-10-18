@@ -20,7 +20,7 @@ const RID_TABLE: Record<string, string> = {
 
 export class BiliRankingChannel implements RssChannel {
   readonly key = "bili:ranking"
-  readonly name = "bilibili 排行榜"
+  readonly name = "B站排行榜"
   readonly kind = "video" as const
   readonly sourceInfoTpl = [{ key: "rid", label: "分区(all/douga/…)", required: false }]
   getSource(info: SourceInfo): RssSource {
@@ -51,6 +51,6 @@ export class BiliRankingChannel implements RssChannel {
     )
   }
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `bilibili 排行榜·${info.rid ?? "all"}`, channelLink: "https://www.bilibili.com/v/popular/rank/all" }
+    return { channelTitle: `B站排行榜·${info.rid ?? "all"}`, channelLink: "https://www.bilibili.com/v/popular/rank/all" }
   }
 }

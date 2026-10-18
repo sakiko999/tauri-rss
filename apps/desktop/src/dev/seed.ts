@@ -60,7 +60,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-video-bili",
     channelKey: "bili:popular",
-    title: "bilibili 综合热门",
+    title: "B站综合热门",
     enabled: true,
     groupId: "g-video",
     info: {},
@@ -68,7 +68,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-video-bili-weekly",
     channelKey: "bili:weekly",
-    title: "bilibili 每周必看",
+    title: "B站每周必看",
     enabled: true,
     groupId: "g-video",
     info: {},
@@ -100,7 +100,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-live-bili",
     channelKey: "bili:live",
-    title: "bilibili 直播",
+    title: "B站直播",
     enabled: true,
     groupId: "g-live",
     info: { roomIds: "6" },
@@ -126,7 +126,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-live-hot-bili",
     channelKey: "bili:live:hot",
-    title: "bilibili 直播热门",
+    title: "B站直播热门",
     enabled: true,
     groupId: "g-live",
     info: {}, // 匿名可用:防 -352 靠爬到请求里的匿名 buvid3,与 cookie 无关
@@ -161,7 +161,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   {
     id: "s-social-bili-dyn",
     channelKey: "bili:dynamic",
-    title: "bilibili 动态 · 半佛仙人",
+    title: "B站动态 · 半佛仙人",
     enabled: false,
     groupId: "g-social",
     info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)

@@ -3,15 +3,17 @@
 > 背景：对照 `tmp/pure_live`（Flutter 直播聚合器，23 平台）逐平台比对。
 > **已落地的能力不在此登记**（代码与 CLAUDE.md 可查）；本文件只留**未做的缺口**与
 > **实测证伪的结论**（防止后人重走已证明走不通的路）。
-> 状态更新至 2026-10-16。
+> 状态更新至 2026-10-18。
 
 ## 一、未做的缺口
 
 - **bili 按分区列房** —— `second/getList` 需 wbi 签名 + access_id + cookie，且匿名实测
   **仍 `-352` 风控**（带 buvid3/access_id/wbi 均无效），必须登录态。分区树
   （`Area/getList`）匿名可用、已实现但未挂 channel（它并非 feed）。
-- **抖音搜主播的覆盖局限** —— `live:douyin:anchor` 走本地过滤（无匿名主播搜索接口），
-  只命中**当前在播**主播（离线不在任何列表），受扫描量限制（热门 + 前 3 分区 ≈ 90 房）。
+- **抖音分区搜索的词表局限** —— `live:douyin:search` 本质是分区搜索，只按分区名匹配；
+  主播名（`旭旭宝宝`）与三级词（`美食`）返回 0。已知主播请用 `live:douyin` + 抖音号，
+  或 `live:douyin:user` + 主页链接（见第四节）。`live:douyin:anchor` 已删除（本地过滤
+  热门房间没有意义）。
 - **虎牙搜索不可分页** —— 接口 `start` 参数实测无效（`start=0` 返 20 条、`start>=20` 一律
   返同一批 40 条），故只取首页、不声明 `Pageable`。
 - **微博无纯 HTTP 扫码登录** —— `weiboScanLogin` 走 CDP 浏览器路径（passport 页自带
@@ -56,6 +58,76 @@
   （否则 UI 说谎、菜单出现三个重复档）。
 - **bili 匿名弹幕真因** —— 此前误判「匿名 uid=0 被 1006 拒」，真实根因是 buvid3 取自 cookie、
   匿名时必然为空。改用 `/x/frontend/finger/spi` 的匿名 buvid3（`client.ts` 的 `anonBuvid3()`）后匿名可收。
+
+## 四、2026-10-18 抖音直播补充实测
+
+> 触发：确认「已知用户抖音号/主页信息，如何订阅其直播间」。探针脚本为临时文件
+> （`tmp/douyin-live-probe*.ts`，已废弃），结论均已用 CLI 复现。
+
+### 4.1 已知抖音号：直接当 `web_rid` 用（可落地）
+
+`live:douyin` 的 `roomIds` **不要求纯数字**。把用户抖音号（`unique_id`，如
+`pvcyinse`）或数字短 ID（如 `3482057509`）填进去，enter API 会解析到该用户当前
+直播间：
+
+```bash
+bun run rss fetch live:douyin --kv roomIds=pvcyinse --json
+bun run rss fetch live:douyin --kv roomIds=3482057509 --json
+bun run rss item https://live.douyin.com/pvcyinse --json   # 4 档 flv 全出
+```
+
+实测结果：
+
+| 输入 | 结果 |
+| --- | --- |
+| `pvcyinse`（抖音号，在播） | 1 条 live，标题/作者/在线数正确；播放解析出 4 档 |
+| `3482057509`（short_id，在播） | 1 条 live，同一房间 |
+| `22316883325`（杨楷文，离线） | 1 条 offline，标题/头像为最近一场 |
+| `renyixu1989`（旭旭宝宝，离线） | 1 条 offline，同上 |
+| `7697963097109187378`（长 room_id） | enter API `4001038`，**不可用** |
+| `https://www.douyin.com/user/<sec_uid>`（主页链接） | `10011`，**不可用** |
+
+结论：**知道抖音号就是最优解**；离线也能建订阅，开播后刷新自动变 live。
+`roomIds` 会自动归一 `@抖音号`、`抖音号：xxx`、`live.douyin.com/<id>`；主页链接会被
+拦截并提示改用 4.2 的 `live:douyin:user`。
+
+### 4.2 主页链接（sec_uid）→ 抖音号：匿名资料 API 可用
+
+`GET https://www.douyin.com/aweme/v1/web/user/profile/other/?sec_user_id=<sec_uid>&...`
+带 ABogus 签名 + ttwid（现有 `signDouyinUrl` 可复用）**匿名 200**，返回
+`user.unique_id` / `short_id` / `uid` / `room_id_str` / `live_status`：
+
+- `live_status: 1` = 直播中（对应 enter `room.status=2`）；`0` = 未开播。
+- `room_id_str` 是精确长 ID；`room_id` 是 JSON number，超过 2^53 会丢精度，**别用**。
+- 该接口只认 `sec_user_id`；传 `unique_id` / `short_id` / `uid` 均返回
+  `UserId不合法`（status_code 2）。
+- `www.douyin.com/user/<sec_uid>` 是客户端渲染 shell（约 72KB，无用户数据）；
+  `iesdouyin.com/web/api/v2/user/info` 已返回空 body（旧接口失效）。
+- `webcast.amemv.com/douyin/webcast/reflow/<room_id>?sec_user_id=<sec_uid>` 可返回房间
+  页（含 webRid），但页面里可能有推荐房间的同名字段，**不要取第一个 `webRid`**；
+  已知抖音号时无需这条路径。
+
+✅ 已落地（2026-10-18）：新增渠道 `live:douyin:user`（`channels/douyin/user.ts`）——
+sec_uid/主页链接 → 资料 API → `unique_id`/`short_id` → enter API（离线也返 offline；
+从未开播的账号可能拿不到房间数据，会报抓取失败）；`live:douyin` 的 `roomIds` 增加归一
+（`@抖音号`、`抖音号：xxx`、`live.douyin.com/<id>`），
+主页链接会提示改用用户渠道。纯函数在 `resolve/platform/douyin/ids.ts`，自检
+`resolve/src/example/douyin-user.check.ts`。
+
+### 4.3 现有搜索渠道实测（都不适合「找指定主播」）
+
+| 渠道 | 输入 | 结果 |
+| --- | --- | --- |
+| `live:douyin:search` | `原神` | 20 条（分区名命中） |
+| `live:douyin:search` | `舞蹈` | 20 条（本地顶层分区匹配） |
+| `live:douyin:search` | `旭旭宝宝` | 0 条 |
+| `live:douyin:search` | `美食` | 0 条（三级词不在分区树） |
+
+原因：`live:douyin:search` 本质是「关键词 → 分区 → 列房」，不是搜房间标题/主播；
+渠道已更名为「抖音分区搜索」。`live:douyin:anchor` 已于 2026-10-18 删除（本地过滤
+热门房间没有意义）。`SEARCH_CHANNEL` 已登记 douyin → `live:douyin:search`（发现页/
+搜索面板显示「抖音分区」，输入框明确写「分区关键词」；结果仍是可一键订阅的直播间）。
+**已知主播时直接用 4.1 的抖音号或 4.2 的 `live:douyin:user`，不要依赖分区搜索。**
 
 ## 附：参照项目位置
 

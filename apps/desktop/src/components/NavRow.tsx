@@ -8,6 +8,7 @@
  * 折叠态规则(`.rail-collapsed` 与 `@media (max-width:1080px)` 两份清单)的选择器锚点。
  */
 import { Icon } from "./Icon.tsx"
+import { overlayBlock } from "../lib/uiOverlay.ts"
 
 export function NavRow({
   icon,
@@ -41,8 +42,9 @@ export function NavRow({
 
 /** 侧栏分节(标题 + 若干行)。标题里可塞一个操作按钮(如「订阅」旁的管理分组)。 */
 export function RailSection({ title, action, children }: { title: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+  const key = typeof title === "string" ? `rail-section:${title}` : undefined
   return (
-    <section className="rail-section">
+    <section className="rail-section" {...overlayBlock("rail-section", key)}>
       <div className="rail-section-title">
         {title}
         {action}

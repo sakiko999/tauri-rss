@@ -17,6 +17,7 @@ import { GridSkeleton } from "../../components/BootSkeleton.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Menu, MenuItem, MenuSeparator } from "../../components/Modal.tsx"
 import { useViewNavigate } from "../../router.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function ArticlePane() {
   const nodeId = useDesktop((s) => s.selectedNodeId)
@@ -62,7 +63,7 @@ export function ArticlePane() {
   }
 
   return (
-    <section className="pane col-pane">
+    <section className="pane col-pane" {...overlayBlock("article-pane", "article:pane")}>
       <header className="pane-head">
         <div className="pane-head-main">
           <h2 className="pane-title">{viewTitleFor(meta, hotWord)}</h2>

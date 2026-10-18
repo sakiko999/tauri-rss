@@ -11,14 +11,16 @@
  * 面板与榜单已拆到同目录:`PlatformBrowser.tsx`(分区/搜索)· `BoardList.tsx`(一键订阅)·
  * `platforms.ts`(共用常量)。本文件保留能力矩阵与三块 section 的布局。
  */
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
-import { PLATFORMS, CAP_LABEL, type Cap } from "./platforms.ts"
+import { CAPS, PLATFORMS, CAP_LABEL, type Cap } from "./platforms.ts"
 import { SEARCH_CHANNEL } from "../../lib/subscriptions.ts"
 import { PlatformBrowser } from "./PlatformBrowser.tsx"
 import { BoardList } from "./BoardList.tsx"
+import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function DiscoverPage() {
   const dl = useDesktop((s) => s.dl)
@@ -27,6 +29,8 @@ export function DiscoverPage() {
   // 子视图提升到此处:能力矩阵的「浏览分区/搜索」按钮要能一并切视图
   // (否则点「搜索」只换平台、视图停在「分区」,bili 无分区渠道 → 显示分区警告)。
   const [view, setView] = useState<Cap>("category")
+  /** 带「用户主页 → 直播间」解析渠道的平台（目前只有 douyin）→ 弹窗预选该渠道。 */
+  const [userDialogKey, setUserDialogKey] = useState<string | null>(null)
 
   // 能力矩阵:某平台的某能力是否可用 = 注册表里存在对应渠道。
   const caps = useMemo(() => {
@@ -40,6 +44,28 @@ export function DiscoverPage() {
     }
     return m
   }, [channels])
+
+  /** 有任意分区/搜索能力的平台才进入「分区浏览与搜索」平台条。 */
+  const discoverable = useMemo(
+    () => PLATFORMS.filter((p) => CAPS.some((k) => caps[p.id][k])),
+    [caps],
+  )
+
+  /** 切平台时把视图落到该平台**实际支持的第一个能力**，避免停在空视图。 */
+  const pickPlatform = (id: string) => {
+    setPlatform(id)
+    const first = CAPS.find((k) => caps[id][k])
+    if (first) setView(first)
+  }
+
+  // 能力异步就绪/平台能力变化后，当前 view 已不受支持 → 落到第一个可用能力。
+  useEffect(() => {
+    const c = caps[platform]
+    if (c && !c[view]) {
+      const first = CAPS.find((k) => c[k])
+      if (first) setView(first)
+    }
+  }, [caps, platform, view])
 
   // 「可一键订阅」= 无需用户输入:有 defaultInfo,或参数表里没有 required 字段。
   // ⚠️ 别再按 kind / key 正则缩范围:榜单语义就是「无参渠道」——曾经 /hot|live/ 正则
@@ -58,25 +84,30 @@ export function DiscoverPage() {
   )
 
   return (
-    <div className="page">
-      <div className="scroll-area page-scroll">
-        <div className="page-wrap">
+    <div className="page" {...overlayBlock("discover-page", "page:discover")}>
+      <div className="scroll-area page-scroll" {...overlayBlock("discover-scroll", "page:discover:scroll")}>
+        <div className="page-wrap" {...overlayBlock("discover-wrap", "page:discover:wrap")}>
           <h1 className="page-title">发现</h1>
           <p className="page-lead">
             平台能力从已注册渠道推导:能看到的按钮就有对应实现。分区浏览与搜索直接取真实数据,
             不需要先建订阅;找到想看的内容再一键订阅。
           </p>
 
-          <section className="section-first section">
+          <section className="section-first section" {...overlayBlock("discover-caps", "discover:caps")}>
             <div className="section-head">
               <h2 className="section-title">平台能力</h2>
-              <span className="section-desc">灰掉的项 = 该平台当前没有对应渠道实现</span>
+              <span className="section-desc">只显示该平台已实现的入口</span>
             </div>
             <div className="platform-grid">
               {PLATFORMS.map((p) => {
                 const c = caps[p.id]
+                // 用户主页 → 直播间的解析渠道（如 live:douyin:user）；有则给一个直达入口。
+                const userCh = channels.find((ch) => ch.key === `live:${p.id}:user`)
+                const supported = CAPS.filter((k) => c[k])
+                // 没有任何入口的平台（如微博/小红书）不摆一张空卡；它们的内容走「可订阅榜单」。
+                if (supported.length === 0 && !userCh) return null
                 return (
-                  <div className="platform-card" key={p.id}>
+                  <div className="platform-card" key={p.id} {...overlayBlock("platform-card", `discover:platform:${p.id}`)}>
                     <div className="platform-head">
                       <span className="platform-mark">
                         <Icon name={p.icon} size={17} />
@@ -86,16 +117,16 @@ export function DiscoverPage() {
                         <span className="t-micro t-dim">{p.id}</span>
                       </span>
                     </div>
-                    <div className="cap-list">
-                      {(Object.keys(CAP_LABEL) as Cap[]).map((k) => (
-                        <div className="cap-row" data-on={String(!!c[k])} key={k}>
-                          <Icon name={c[k] ? "checkCircle" : "close"} size={13} />
-                          <span>{CAP_LABEL[k]}</span>
-                          <span className="spacer" />
-                          <span className="t-micro t-dim">{c[k] ? "可用" : "无渠道"}</span>
-                        </div>
-                      ))}
-                    </div>
+                    {supported.length > 0 ? (
+                      <div className="cap-list">
+                        {supported.map((k) => (
+                          <div className="cap-row" data-on="true" key={k}>
+                            <Icon name="checkCircle" size={13} />
+                            <span>{CAP_LABEL[k]}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="chip-row">
                       {c.category ? (
                         <button
@@ -108,7 +139,7 @@ export function DiscoverPage() {
                           浏览分区
                         </button>
                       ) : null}
-                      {c.search || c.anchor ? (
+                      {c.search ? (
                         <button
                           className="chip chip-sm"
                           onClick={() => {
@@ -117,6 +148,22 @@ export function DiscoverPage() {
                           }}
                         >
                           搜索
+                        </button>
+                      ) : null}
+                      {c.anchor ? (
+                        <button
+                          className="chip chip-sm"
+                          onClick={() => {
+                            setPlatform(p.id)
+                            setView("anchor")
+                          }}
+                        >
+                          {CAP_LABEL.anchor}
+                        </button>
+                      ) : null}
+                      {userCh ? (
+                        <button className="chip chip-sm" onClick={() => setUserDialogKey(userCh.key)}>
+                          用户直播间
                         </button>
                       ) : null}
                     </div>
@@ -128,13 +175,14 @@ export function DiscoverPage() {
 
           <PlatformBrowser
             platform={platform}
+            platforms={discoverable}
             caps={caps[platform]}
             view={view}
             onView={setView}
-            onPickPlatform={setPlatform}
+            onPickPlatform={pickPlatform}
           />
 
-          <section className="section">
+          <section className="section" {...overlayBlock("discover-section", "discover:boards")}>
             <div className="section-head">
               <h2 className="section-title">可订阅榜单</h2>
               <span className="section-desc">无参渠道，一键订阅即可持续收到内容</span>
@@ -142,12 +190,12 @@ export function DiscoverPage() {
             <BoardList boards={boards} />
           </section>
 
-          <section className="section">
+          <section className="section" {...overlayBlock("discover-section", "discover:sources")}>
             <div className="section-head">
               <h2 className="section-title">数据源</h2>
               <span className="section-desc">抓取在本机完成，内容与凭证只存本地，不经中转服务器</span>
             </div>
-            <div className="stat-strip">
+            <div className="stat-strip" {...overlayBlock("stat-strip", "discover:stats")}>
               {[
                 { k: "可用渠道", v: channels.length },
                 { k: "平台能力", v: Object.values(caps).reduce((n, c) => n + Object.values(c).filter(Boolean).length, 0) },
@@ -162,6 +210,15 @@ export function DiscoverPage() {
           </section>
         </div>
       </div>
+
+      {/* 用户主页链接 → 直播间的直达入口（目前只有 douyin）。 */}
+      <AddSubscriptionDialog
+        open={!!userDialogKey}
+        onOpenChange={(open) => {
+          if (!open) setUserDialogKey(null)
+        }}
+        presetKey={userDialogKey ?? undefined}
+      />
     </div>
   )
 }

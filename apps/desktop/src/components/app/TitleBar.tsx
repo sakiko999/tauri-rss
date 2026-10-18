@@ -10,6 +10,7 @@ import { usePrefs } from "../../store/prefs.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { Icon } from "../Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function TitleBar() {
   const nodeId = useDesktop((s) => s.selectedNodeId)
@@ -47,8 +48,8 @@ export function TitleBar() {
   const chipText = offline ? "离线" : loading ? "更新中" : errCount ? `${errCount} 条失败` : "已同步"
 
   return (
-    <header className="titlebar">
-      <div className="titlebar-brand">
+    <header className="titlebar" {...overlayBlock("titlebar", "app:titlebar")}>
+      <div className="titlebar-brand" {...overlayBlock("titlebar-brand", "app:titlebar:brand")}>
         <span className="titlebar-mark">
           <Icon name="rss" size={14} />
         </span>
@@ -57,7 +58,7 @@ export function TitleBar() {
         <span className="titlebar-path">{viewTitleFor(meta, hotWord)}</span>
       </div>
 
-      <div className="titlebar-center">
+      <div className="titlebar-center" {...overlayBlock("titlebar-center", "app:titlebar:center")}>
         <label className="titlebar-search">
           <Icon name="search" size={14} />
           <input
@@ -75,7 +76,7 @@ export function TitleBar() {
         </button>
       </div>
 
-      <div className="titlebar-side">
+      <div className="titlebar-side" {...overlayBlock("titlebar-side", "app:titlebar:side")}>
         <button
           className="icon-btn"
           title="命令面板 (Ctrl+K)"

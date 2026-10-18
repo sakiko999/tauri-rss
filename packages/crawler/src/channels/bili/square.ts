@@ -13,7 +13,7 @@ import { API } from "./video-common.ts"
 
 export class BiliSquareChannel implements RssChannel {
   readonly key = "bili:square"
-  readonly name = "bilibili 热搜"
+  readonly name = "B站热搜"
   readonly kind = "article" as const
   getSource(info: SourceInfo): RssSource {
     return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
@@ -47,6 +47,6 @@ export class BiliSquareChannel implements RssChannel {
     })
   }
   private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "bilibili 热搜", channelLink: "https://www.bilibili.com/" }
+    return { channelTitle: "B站热搜", channelLink: "https://www.bilibili.com/" }
   }
 }

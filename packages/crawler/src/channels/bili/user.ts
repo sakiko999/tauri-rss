@@ -16,7 +16,7 @@ import { now, searchBiliUsers } from "@amoeba/resolve"
 
 export class BiliUserChannel implements RssChannel {
   readonly key = "bili:user"
-  readonly name = "bilibili 搜UP主"
+  readonly name = "B站搜UP主"
   readonly kind = "video" as const
   // ⚠️ 刻意不声明 defaultInfo(防误入发现页「一键订阅」榜单,同 bili:search)。
   readonly sourceInfoTpl = [
@@ -47,7 +47,7 @@ export class BiliUserChannel implements RssChannel {
 
   private channelOptions(info: SourceInfo): SerializeOptions {
     return {
-      channelTitle: `bilibili 搜UP主 ${info.keyword ?? ""}`,
+      channelTitle: `B站搜UP主 ${info.keyword ?? ""}`,
       channelLink: "https://space.bilibili.com/",
     }
   }

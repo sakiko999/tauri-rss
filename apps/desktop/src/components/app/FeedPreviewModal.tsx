@@ -18,6 +18,7 @@ import { Icon } from "../Icon.tsx"
 import { StateBlock } from "../StateBlock.tsx"
 import { fmtAgo, fmtTime, mediaUrl } from "../../lib/media.ts"
 import { usePlayerNav } from "../../views/player/usePlayerNav.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function FeedPreviewModal() {
   const preview = useDesktop((s) => s.feedPreview)
@@ -48,7 +49,7 @@ export function FeedPreviewModal() {
       size="wide"
       footer={
         <>
-          <span className="t-micro t-dim" style={{ flex: 1 }}>
+          <span className="t-micro t-dim flex-1">
             单集为临时读取，不会写进订阅列表。
           </span>
           <button className="btn btn-secondary" onClick={close}>
@@ -74,7 +75,7 @@ export function FeedPreviewModal() {
         <StateBlock icon="loader" tight title="正在读取单集…" text="首次读取要拉一次该节目的 feed。" />
       ) : (
         <>
-          <div className="stack" style={{ gap: "var(--sp-2)" }}>
+          <div className="stack" style={{ gap: "var(--sp-2)" }} {...overlayBlock("feed-preview-list", "feed:preview:list")}>
             {list.map((it) => {
               const dur = (it as { duration?: number }).duration
               return (

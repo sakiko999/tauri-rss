@@ -11,6 +11,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import * as SwitchPrimitive from "@radix-ui/react-switch"
 import { Icon } from "./Icon.tsx"
+import { overlayBlock } from "../lib/uiOverlay.ts"
 
 export function Modal({
   open,
@@ -46,6 +47,7 @@ export function Modal({
           // 原来写 `desc ? undefined : undefined` 是恒 undefined 的死表达式(两头一样)。
           aria-describedby={desc ? undefined : ""}
           className={`modal${size === "wide" ? " modal-wide" : ""}${flush ? " modal-flush" : ""}`}
+          {...overlayBlock("modal", title ? `modal:${title}` : undefined)}
           style={{
             position: "fixed",
             left: "50%",
@@ -54,7 +56,7 @@ export function Modal({
             zIndex: "var(--z-modal)",
           }}
         >
-          <div className="modal-head">
+          <div className="modal-head" {...overlayBlock("modal-head", title ? `modal:head:${title}` : undefined)}>
             <div className="modal-head-text">
               <Dialog.Title className="modal-title">{title}</Dialog.Title>
               {desc ? <Dialog.Description className="modal-desc">{desc}</Dialog.Description> : null}
@@ -63,7 +65,7 @@ export function Modal({
               <Icon name="close" size={15} />
             </Dialog.Close>
           </div>
-          <div className="modal-body">{children}</div>
+          <div className="modal-body" {...overlayBlock("modal-body", title ? `modal:body:${title}` : undefined)}>{children}</div>
           {footer ? <div className="modal-foot">{footer}</div> : null}
         </Dialog.Content>
       </Dialog.Portal>
@@ -121,7 +123,7 @@ export function MenuItem({
       style={danger ? { color: "var(--danger)" } : undefined}
     >
       {icon ? <Icon name={icon} size={14} /> : null}
-      <span style={{ flex: 1 }}>{children}</span>
+      <span className="flex-1">{children}</span>
       {checked ? <Icon name="check" size={13} className="check" /> : null}
       {hint ? <span className="menu-hint">{hint}</span> : null}
     </DropdownMenu.Item>

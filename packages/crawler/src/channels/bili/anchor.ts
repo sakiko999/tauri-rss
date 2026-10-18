@@ -13,7 +13,7 @@ import { searchBiliAnchors } from "@amoeba/resolve"
 
 export class BiliAnchorChannel implements RssChannel {
   readonly key = "bili:anchor"
-  readonly name = "bilibili 搜主播"
+  readonly name = "B站搜主播"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "keyword", label: "主播关键词", required: true }]
 
@@ -34,6 +34,6 @@ export class BiliAnchorChannel implements RssChannel {
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `bilibili 主播 ${info.keyword ?? ""}`, channelLink: "https://live.bilibili.com/" }
+    return { channelTitle: `B站主播 ${info.keyword ?? ""}`, channelLink: "https://live.bilibili.com/" }
   }
 }

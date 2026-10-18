@@ -5,6 +5,7 @@
  */
 export * from "./square.ts"
 export * from "./popular.ts"
+export * from "./precious.ts"
 export * from "./ranking.ts"
 export * from "./weekly.ts"
 export * from "./user_video.ts"

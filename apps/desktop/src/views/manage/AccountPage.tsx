@@ -15,6 +15,7 @@ import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
 import { QrImage } from "../../components/QrImage.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { platformOf } from "../../lib/subscriptions.ts"
 
 /** 平台前缀 → 展示名 + 对应的 settings cookie 字段。 */
@@ -23,7 +24,7 @@ const PLATFORM_META: Record<
   { label: string; field: "bilibiliCookie" | "weiboCookie" | "xhsCookie" | "douyinCookie"; note: string }
 > = {
   bili: {
-    label: "哔哩哔哩",
+    label: "B站",
     field: "bilibiliCookie",
     note: "解锁视频 1080P / 直播原画档位；弹幕与动态也依赖登录态。",
   },
@@ -54,9 +55,9 @@ export function AccountPage() {
   if (!settings) return null
 
   return (
-    <div className="page">
-      <div className="scroll-area page-scroll">
-        <div className="page-wrap">
+    <div className="page" {...overlayBlock("account-page", "page:account")}>
+      <div className="scroll-area page-scroll" {...overlayBlock("account-scroll", "page:account:scroll")}>
+        <div className="page-wrap" {...overlayBlock("account-wrap", "page:account:wrap")}>
           <h1 className="page-title">账号与凭证</h1>
           <p className="page-lead">
             凭证只存本地，也只会随对应平台的请求发出。填了凭证就自动应用到同平台的所有订阅。
@@ -84,7 +85,7 @@ export function AccountPage() {
 
           <SideCard title="不登录能用什么" icon="info">
             <ul className="platform-notes" style={{ padding: "var(--sp-2) 0" }}>
-              <li>哔哩哔哩：热门 / 排行榜 / 视频 720P 与直播弹幕；动态与高清档位要登录。</li>
+              <li>B站：热门 / 排行榜 / 视频 720P 与直播弹幕；动态与高清档位要登录。</li>
               <li>微博：热搜列表；关注人时间线与热搜词流要登录。</li>
               <li>小红书：推荐流；用户主页要登录。</li>
               <li>斗鱼 / 虎牙 / YouTube 直播：全部可用；抖音直播可看，登录后解锁原画。</li>

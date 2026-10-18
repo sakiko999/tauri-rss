@@ -11,6 +11,7 @@ import { baseFor } from "../../store/selectors.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { useViewNavigate } from "../../router.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function HotPane() {
   const view = useDesktop((s) => s.view)
@@ -27,7 +28,7 @@ export function HotPane() {
   }, [nodeId, view])
 
   return (
-    <section className="pane col-pane">
+    <section className="pane col-pane" {...overlayBlock("hot-pane", "hot:pane")}>
       <header className="pane-head">
         <div className="pane-head-main">
           <h2 className="pane-title">热搜榜</h2>
@@ -46,7 +47,7 @@ export function HotPane() {
           text="可能是网络问题，试着刷新一下。"
         />
       ) : (
-        <div className="scroll-area" style={{ flex: 1 }}>
+        <div className="scroll-area" style={{ flex: 1 }} {...overlayBlock("hot-list", "hot:list")}>
           {words.map((w, i) => {
             const heat = (w as { author?: { name?: string } }).author?.name
             const active = hotWord?.word === w.title

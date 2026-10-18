@@ -230,7 +230,7 @@ function SubscriptionTable({
   removeSubscription: Store["removeSubscription"]
 }) {
   return (
-    <SideCard title={`订阅 ${subscriptions.length}`} icon="rss">
+    <SideCard title={`订阅 ${subscriptions.length}`} icon="rss" blockKey="settings:subscriptions">
       {subscriptions.length === 0 ? (
         <StateBlock icon="rss" tight title="还没有订阅" text="到「发现」浏览,或点侧栏的 + 添加。" />
       ) : (

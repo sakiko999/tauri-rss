@@ -6,6 +6,7 @@
  * 卸载,动画一秒都看不到。兜底超时防「动画被 CSS 关掉/时长令牌变 0」时元素卡住不消失。
  */
 import { useEffect } from "react"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { createPortal } from "react-dom"
 import { useDesktop, type Toast } from "../../store/index.ts"
 import { Icon } from "../Icon.tsx"
@@ -36,6 +37,7 @@ function ToastItem({ t }: { t: Toast }) {
       className="toast"
       data-tone={t.tone}
       data-closing={t.closing ? "" : undefined}
+      {...overlayBlock("toast", `toast:${t.id}`)}
       role={t.tone === "error" ? "alert" : "status"}
     >
       <Icon name={ICON[t.tone] ?? "info"} size={15} />

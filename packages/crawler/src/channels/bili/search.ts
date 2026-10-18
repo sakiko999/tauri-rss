@@ -16,7 +16,7 @@ const PAGE = 20
 
 export class BiliSearchChannel implements RssChannel {
   readonly key = "bili:search"
-  readonly name = "bilibili 搜索"
+  readonly name = "B站搜索"
   readonly kind = "live" as const
   readonly sourceInfoTpl = [{ key: "keyword", label: "搜索关键词", required: true }]
 
@@ -37,6 +37,6 @@ export class BiliSearchChannel implements RssChannel {
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `bilibili 搜索 ${info.keyword ?? ""}`, channelLink: "https://live.bilibili.com/" }
+    return { channelTitle: `B站搜索 ${info.keyword ?? ""}`, channelLink: "https://live.bilibili.com/" }
   }
 }

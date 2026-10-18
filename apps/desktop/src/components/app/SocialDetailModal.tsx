@@ -16,8 +16,9 @@ import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../Modal.tsx"
 import { Icon } from "../Icon.tsx"
 import { MediaImage, fmtCount } from "@amoeba/ui"
-import { fmtAgo, mediaUrl, socialRatio } from "../../lib/media.ts"
+import { fmtAgo, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { looksLikeHtml } from "../../lib/html.ts"
 
 export function SocialDetailModal() {
@@ -119,7 +120,7 @@ export function SocialDetailModal() {
       }
     >
       <div id="social-detail">
-        <div className="social-detail">
+        <div className="social-detail" {...overlayBlock("social-detail", `social:detail:${itemKey(item)}`)}>
           {/* ⚠️ 缩略图条**不能**放在 media 与 info 之间:它 grid-column:1/-1 会占满
               第一行两列,把 info 自动推到第三行。放在 info 之后,自动放置才会是
               media=1/1 → info=1/2 → thumbs=第二行整行。 */}
@@ -127,7 +128,11 @@ export function SocialDetailModal() {
               容器再按同一比例定宽。这样网格的 1.4fr/1fr 折中值就不会把竖图挤成一条。
               比例异常的图(超长截图 / 超宽 banner)在 CSS 里被 clamp 到 0.5~1.9,
               此时 contain 留一点缝是有意的(完整显示 > 填满裁剪)。 */}
-          <div className="social-detail-media" style={{ "--detail-media-ratio": String(imgRatio) } as React.CSSProperties}>
+          <div
+            className="social-detail-media"
+            style={{ "--detail-media-ratio": String(imgRatio) } as React.CSSProperties}
+            {...overlayBlock("social-detail-media", `social:detail:media:${itemKey(item)}`)}
+          >
             {cover ? (
               <span className="social-detail-cover">
                 {imgs.length > 1 ? (
@@ -164,7 +169,7 @@ export function SocialDetailModal() {
             )}
           </div>
 
-          <div className="social-detail-info">
+          <div className="social-detail-info" {...overlayBlock("social-detail-info", `social:detail:info:${itemKey(item)}`)}>
             <div className="social-detail-head">
               <span className="social-avatar social-avatar-letter avatar-round" style={{ width: 34, height: 34 }}>
                 {(item.author?.name?.[0] ?? "?").toUpperCase()}

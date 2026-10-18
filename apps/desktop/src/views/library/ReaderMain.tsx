@@ -15,6 +15,7 @@ import { fmtDate, heroWidth, mediaUrl, ratioOf } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 import { looksLikeHtml, visibleLength } from "../../lib/html.ts"
 import { usePrefs } from "../../store/prefs.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /** 正文最大宽度(阅读舒适度档位)。 */
 const MEASURE_LABEL: Record<string, string> = { narrow: "窄", comfortable: "适中", wide: "宽" }
@@ -148,7 +149,7 @@ export function ReaderMain() {
 
   if (!item) {
     return (
-      <div className="scroll-area article-scroll">
+      <div className="scroll-area article-scroll" {...overlayBlock("reader-empty", "reader:empty")}>
         <StateBlock icon="columns" title="选择一篇文章开始阅读" text="在左侧列表里点任意条目。" />
       </div>
     )
@@ -188,7 +189,7 @@ export function ReaderMain() {
       <div className="progress-bar" aria-hidden>
         <span ref={barRef} />
       </div>
-      <header className="detail-head">
+      <header className="detail-head" {...overlayBlock("reader-head", "reader:head")}>
         <button
           className="icon-btn sm narrow-only"
           aria-label="返回列表"
@@ -243,8 +244,8 @@ export function ReaderMain() {
         ) : null}
       </header>
 
-      <div className="scroll-area article-scroll" ref={scrollRef}>
-        <article className="article">
+      <div className="scroll-area article-scroll" ref={scrollRef} {...overlayBlock("reader-scroll", "reader:scroll")}>
+        <article className="article" {...overlayBlock("reader-article", "reader:article")}>
           <div className="article-kicker">
             {item.author?.name ? <span>{item.author.name}</span> : null}
             {item.author?.name ? <span className="dot-sep" /> : null}
@@ -278,7 +279,7 @@ export function ReaderMain() {
               // Tauri on_navigation),界面被外部网页顶掉,只能重启应用才回来。
               <div className="article-body" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: cleanHtml }} />
             ) : (
-              <div className="article-body" style={{ whiteSpace: "pre-wrap" }}>
+              <div className="article-body whitespace-pre-wrap">
                 {shownContent || item.summary || "（该条目没有正文，请打开原文查看）"}
               </div>
             )

@@ -5,6 +5,7 @@
  */
 import type { ReactNode } from "react"
 import { Icon } from "./Icon.tsx"
+import { overlayBlock } from "../lib/uiOverlay.ts"
 
 export function StateBlock({
   icon = "layers",
@@ -22,7 +23,7 @@ export function StateBlock({
   tight?: boolean
 }) {
   return (
-    <div className={`state-block${tight ? " state-block-tight" : ""}`}>
+    <div className={`state-block${tight ? " state-block-tight" : ""}`} {...overlayBlock("state-block", `state:${title}`)}>
       <span className={`state-glyph${tone === "ok" ? " state-glyph-ok" : ""}`} data-tone={tone === "ok" ? undefined : tone}>
         <Icon name={icon} size={22} />
       </span>
@@ -67,9 +68,23 @@ export function Banner({
 }
 
 /** 卡片壳(设置页 / 账号页的分组容器)。 */
-export function SideCard({ title, icon, children, pad }: { title?: string; icon?: string; children: ReactNode; pad?: boolean }) {
+export function SideCard({
+  title,
+  icon,
+  children,
+  pad,
+  blockKey,
+}: {
+  title?: string
+  icon?: string
+  children: ReactNode
+  pad?: boolean
+  /** 标题含动态计数时传一个稳定键，避免 overlay 编号跟着计数跳。 */
+  blockKey?: string
+}) {
+  const key = blockKey ?? (title ? `side-card:${title}` : undefined)
   return (
-    <section className="side-card">
+    <section className="side-card" {...overlayBlock("side-card", key)}>
       {title ? (
         <header className="side-card-head">
           {icon ? <Icon name={icon} size={15} /> : null}

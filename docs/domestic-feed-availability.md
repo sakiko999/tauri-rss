@@ -55,7 +55,7 @@ catalog 显示 bilibili **29 个简单路由**，全走 `ofetch` API 且 `antiCr
 | `/app/:id?` | 更新情报 | 应用更新 |
 | `/user/article/:uid` | UP 主图文 | 结合本项目 live 的 bilibili 平台可复用 |
 | `/audio/:id` | 歌单 | |
-| `/precious/:embed?` | 入站必刷 | |
+| `/precious/:embed?` | 入站必刷 | ✅ 已实现 `bili:precious`（2026-10-18，匿名 ~98 条） |
 | `/user/coin/:uid` | UP 主投币视频 | |
 | `/user/fav/:uid/:fid` | UP 主收藏夹 | |
 | `/video/danmaku/:bvid/:pid?` | 视频弹幕 | 注意：catalog 抓的 `comment.bilibili.com/${cid}.xml` 是**弹幕 XML 非 feed** |

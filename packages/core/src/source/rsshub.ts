@@ -6,12 +6,14 @@
  * 因此 baseUrl 必须存在(settings.rsshubBaseUrl 或订阅 info.baseUrl);无则抛清晰错误,
  * 而不是静默连不存在的本地端口。
  *
- * import 本模块即自注册(模块副作用,与 injectTauriHost 同模式)——desktop 入口
- * `import "@amoeba/core/source/rsshub"`,mobile 不 import 即不进 bundle。
+ * import 本模块即自注册(模块副作用,与 injectTauriHost 同模式)——desktop
+ * `apps/desktop/src/main.tsx` 与 mobile `apps/mobile/src/store.ts` 各 import 一次。
  *
- * 渠道只有 fetch(直传外部 RSSHub 的标准 RSS 2.0 XML):无播放能力——视频/直播/弹幕由
- * crawler/resolver 按 item.url 统一路由解析(与 crawler 输出一起生效)。
- * ⚠️ 不把平台 cookie 附给 RSSHub 请求(公网实例泄露风险)。
+ * **只保留 `rsshub:feed` 一条泛用渠道**(2026-10-18):任意 RSSHub 路由 + 订阅级
+ * baseUrl,作为内置 crawler 未覆盖信息源的逃生口。原 `rsshub:bili:*` / `weibo:*` /
+ * `youtube:*` 具名渠道已删——能力与内置渠道重复;其中「入站必刷」已收编为
+ * crawler 的 `bili:precious`。RSSHub 只做信息抓取,不注入平台 cookie、不负责播放,
+ * 视频/直播/弹幕仍由 crawler/resolver 按 item.url 统一解析。
  */
 import { httpText } from "@amoeba/crawler"
 import { registerSourceProvider, type RssChannel, type SourceInfo, type SourceInfoField } from "./index.ts"
@@ -65,51 +67,12 @@ function rsshubChannel(spec: RsshubChannelSpec): RssChannel {
   }
 }
 
-/** 首期渠道清单:高频具名 + 泛用兜底(可按需扩充;kind 是 item 默认,加工层可推断覆盖)。 */
+/**
+ * 只保留泛用路由:具名渠道(weibo/bili/youtube)与内置 crawler 重复,已删。
+ * 用户需要某个 RSSHub 特有路由时,用 `rsshub:feed` + `route` 直接填。
+ * kind 是 item 默认,加工层可推断覆盖。
+ */
 const CHANNEL_SPECS: RsshubChannelSpec[] = [
-  {
-    key: "rsshub:weibo:hot",
-    name: "微博热搜(RSSHub)",
-    kind: "article",
-    routeTpl: "/weibo/search/hot",
-    defaultInfo: {},
-  },
-  {
-    key: "rsshub:weibo:user",
-    name: "微博用户(RSSHub)",
-    kind: "article",
-    routeTpl: "/weibo/user/{uid}",
-    fields: [{ key: "uid", label: "用户 uid", required: true, placeholder: "1195230310" }],
-  },
-  // ── 视频(点击播放走 crawler/resolver by-url:RSSHub 输出 item.link → 平台解析) ──
-  {
-    key: "rsshub:bili:popular",
-    name: "B站综合热门(RSSHub)",
-    kind: "video",
-    routeTpl: "/bilibili/popular/all",
-    defaultInfo: {},
-  },
-  {
-    key: "rsshub:bili:weekly",
-    name: "B站每周必看(RSSHub)",
-    kind: "video",
-    routeTpl: "/bilibili/weekly",
-    defaultInfo: {},
-  },
-  {
-    key: "rsshub:bili:precious",
-    name: "B站入站必刷(RSSHub)",
-    kind: "video",
-    routeTpl: "/bilibili/precious",
-    defaultInfo: {},
-  },
-  {
-    key: "rsshub:youtube:channel",
-    name: "YouTube 频道(RSSHub)",
-    kind: "video",
-    routeTpl: "/youtube/channel/{channelId}",
-    fields: [{ key: "channelId", label: "频道 ID", required: true, placeholder: "UCYO_jab_esuFRV4b17AJtAw" }],
-  },
   {
     key: "rsshub:feed",
     name: "RSSHub 任意路由",

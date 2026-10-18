@@ -21,6 +21,7 @@ import { StateBlock } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
 import { useViewNavigate } from "../../router.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /**
  * Virtuoso 网格的列宽/间距全部走 CSS —— `listClassName="media-grid"`(grid 列模板)
@@ -61,7 +62,7 @@ export function MediaMain() {
   // 与左栏「热搜榜」完全重复,而且每张卡都显示「未知作者」。没选词时给引导,不复读。
   if (meta.type === "hot" && !hotWord) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:main")}>
         <GridHead title={meta.title} />
         <StateBlock icon="speed" title="选一个热搜词" text="点左侧榜单里的任意词，这里会显示该词下的微博。" />
       </div>
@@ -73,7 +74,7 @@ export function MediaMain() {
   if (hotWord && hotWord.items.length === 0) {
     const retry = () => void loadHotWord(hotWord.word)
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:main")}>
         <GridHead title={viewTitleFor(meta, hotWord)} />
         {hotWord.loading ? (
           <StateBlock icon="loader" title={`正在取「${hotWord.word}」下的微博…`} text="热搜词流需要登录；若失败会给出提示。" />
@@ -111,7 +112,7 @@ export function MediaMain() {
     // 这里只需要管「库已读到、但这一轮刷新还没回来」。
     if (!query && loading) {
       return (
-        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+        <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:main")}>
           <GridHead title={viewTitleFor(meta, hotWord)} />
           <GridSkeleton />
         </div>
@@ -128,11 +129,11 @@ export function MediaMain() {
 
   if (socialOnly) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:main")}>
         {/* ⚠️ MasonryGrid 自带内层滚动容器(overflow-y-auto),外面不能再套
             scroll-area,否则出现双重滚动条。头部**传进去**(而不是放外面):
             在外面就是滚动死区,而且头不会跟着滚走 —— 用户要的是整体一起滚。 */}
-        <div style={{ flex: 1, minHeight: 0 }}>
+        <div className="flex-1 min-h-0" {...overlayBlock("social-grid", "media:social-grid")}>
           <MasonryGrid
             items={items}
             renderItem={(it) => <SocialCard item={it} actions={actions} />}
@@ -151,7 +152,7 @@ export function MediaMain() {
     const mixHeader = (
       <>
         {pageHead}
-        <div className="live-block">
+        <div className="live-block" {...overlayBlock("live-block", "media:live")}>
           <div className="live-block-head">
             <span className="grid-title" style={{ fontSize: "var(--fs-h3)" }}>
               正在直播
@@ -162,7 +163,7 @@ export function MediaMain() {
               <Icon name="radio" size={12} /> 只看直播
             </button>
           </div>
-          <div className="live-track">
+          <div className="live-track" {...overlayBlock("live-track", "media:live-track")}>
             {liveItems.slice(0, 12).map((it) => (
               <MediaCard key={itemKey(it)} item={it} actions={actions} />
             ))}
@@ -172,12 +173,11 @@ export function MediaMain() {
       </>
     )
     return (
-      <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+      <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:main")}>
         {/* ⚠️ 滚动器由 VirtuosoGrid 自己持有(className 给它),头/尾走 components,
             不要再包一层 overflow 容器。 */}
         <VirtuosoGrid
-          className="scroll-area"
-          style={{ flex: 1, minHeight: 0 }}
+          className="scroll-area flex-1 min-h-0"
           data={restItems}
           listClassName="media-grid"
           itemClassName="media-card-item"
@@ -193,10 +193,9 @@ export function MediaMain() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+    <div className="flex min-h-0 flex-1 flex-col">
       <VirtuosoGrid
-        className="scroll-area"
-        style={{ flex: 1, minHeight: 0 }}
+        className="scroll-area flex-1 min-h-0"
         data={items}
         listClassName="media-grid"
         itemClassName="media-card-item"
@@ -210,7 +209,7 @@ export function MediaMain() {
 
 function GridHead({ title, sub, health }: { title: string; sub?: string; health?: string }) {
   return (
-    <div className="grid-head">
+    <div className="grid-head" {...overlayBlock("media-head", `media:head:${title}`)}>
       <span className="grid-title">{title}</span>
       {sub ? <span className="grid-sub num">{sub}</span> : null}
       <span className="spacer" />
