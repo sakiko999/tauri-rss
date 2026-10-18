@@ -102,6 +102,10 @@
   z-index: var(--z-modal);
   width: max-content;
   min-width: 200px;
+  /* Radix 在 Content 上写入可用高度；超长菜单在内部滚动，不顶出视口。
+     （Select 的 .select-pop 已有同款 max-height，菜单此前漏了。） */
+  max-height: var(--radix-dropdown-menu-content-available-height, 70vh);
+  overflow-y: auto;
   padding: var(--sp-1);
   background: var(--surface-2);
   border: 1px solid var(--border-strong);

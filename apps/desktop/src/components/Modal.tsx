@@ -90,7 +90,14 @@ export function Menu({
         {/* ⚠️ 不写 `position: relative` —— radix 的 popper 用 fixed 策略,方向由外层
             wrapper 的 transform 决定;这里再写一个 relative 会让下一条 `.menu` 的
             `position: fixed` 钉死在视口原点(详见 styles.css 的 .menu 注释)。 */}
-        <DropdownMenu.Content align={align} sideOffset={6} className="menu">
+        <DropdownMenu.Content
+          align={align}
+          sideOffset={6}
+          // Radix 默认会 flip/shift，但 collisionPadding=0 时会贴着视口边缘。
+          // 留 10px 安全边距；空间不足时 CSS 再用 available-height 限高并内部滚动。
+          collisionPadding={10}
+          className="menu"
+        >
           {children}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -182,7 +189,12 @@ export function Select({
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content className="select-pop" position="popper" sideOffset={4}>
+        <SelectPrimitive.Content
+          className="select-pop"
+          position="popper"
+          sideOffset={4}
+          collisionPadding={8}
+        >
           <SelectPrimitive.Viewport>
             {options.map((o) => (
               <SelectPrimitive.Item key={o.value || NONE} className="select-item" value={o.value || NONE}>
