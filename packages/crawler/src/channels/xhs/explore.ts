@@ -19,7 +19,7 @@ import { capturePage } from "../../passive/capture.ts"
 import { passiveBuffer } from "../../passive/buffer.ts"
 import { now } from "@amoeba/resolve"
 import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, reportXhsRisk, xhsClient, xhsScanLogin } from "@amoeba/resolve"
-import { cdpFetch, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
+import { cdpEvaluate, cdpFetch, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
 
 export class XhsExploreChannel implements RssChannel, Loginable {
   readonly key = "xhs:explore"
@@ -64,23 +64,34 @@ export class XhsExploreChannel implements RssChannel, Loginable {
       await cdpNavigate(browser, `${XHS_BASE}/explore`, true)
       await waitUntil(browser, `typeof window.__INITIAL_STATE__ !== 'undefined'`, 15_000, "xhs SSR 状态未挂载")
       // 风控验证框出现 = 当前环境被拦,如实报错而非静默 0 条。
-      const verify = await browser.evaluate<boolean>(`!!document.querySelector('.fe-verify-box')`)
-      if (verify) {
+      if (await this.hasVerifyBox(browser)) {
         // .fe-verify-box = 小红书人机校验拦截(明确风控信号)
         reportXhsRisk("verify-box")
         throw new Error("小红书风控校验(.fe-verify-box)出现——请稍后再试或重新扫码登录")
       }
-      const r = await browser.evaluate<{ feeds: any[] }>(
-        `(() => {
-          const f = window.__INITIAL_STATE__?.feed;
-          const raw = f?._rawValue ?? f;
-          const feeds = raw?.feeds?._rawValue ?? raw?.feeds;
-          return { feeds: Array.isArray(feeds) ? feeds.flat() : [] };
-        })()`,
-        { awaitPromise: true, returnByValue: true },
-      )
-      return this.toItems(r?.feeds ?? [])
+      // 页面内取 SSR feed.feeds(统一走 readFeeds,不重复手写表达式)。
+      const { list } = await this.readFeeds(browser)
+      return this.toItems(list)
     })
+  }
+
+  /** 页面内检测风控验证框(与 xhs:user 同款选择器)。 */
+  private async hasVerifyBox(browser: BrowserBackend): Promise<boolean> {
+    return cdpEvaluate<boolean>(browser, `!!document.querySelector('.fe-verify-box')`)
+  }
+
+  /** 页面内读当前 explore feed(解 _rawValue + flat)。 */
+  private async readFeeds(browser: BrowserBackend): Promise<{ list: any[] }> {
+    const r = await cdpEvaluate<{ list: any[] }>(
+      browser,
+      `(() => {
+        const f = window.__INITIAL_STATE__?.feed;
+        const raw = f?._rawValue ?? f;
+        const feeds = raw?.feeds?._rawValue ?? raw?.feeds;
+        return { list: Array.isArray(feeds) ? feeds.flat() : [] };
+      })()`,
+    )
+    return r ?? { list: [] }
   }
 
   /**

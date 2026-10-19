@@ -17,7 +17,7 @@
  * 本就是 data URL。两条路径 emitQr 推的都是 `data:image/...`(QrImage 直接当 img 用)。
  */
 import { log } from "../../log.ts"
-import { cdpNavigate } from "../../browser/cdp.ts"
+import { cdpEvaluate, cdpNavigate } from "../../browser/cdp.ts"
 import type { LoginResult } from "../../index.ts"
 
 const SSO = "https://sso.douyin.com"
@@ -167,7 +167,8 @@ function serializeCookies(cookies: Record<string, string>): string {
 
 /** 点首页「登录」按钮触发登录弹窗(douyin 的按钮带 data-e2e=login-button,文本兜底)。 */
 async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
-  return browser.evaluate<boolean>(
+  return cdpEvaluate<boolean>(
+    browser,
     `(() => {
       const el = [...document.querySelectorAll('button, a, [data-e2e]')].find(
         (n) => n.getAttribute('data-e2e') === 'login-button'
@@ -178,7 +179,6 @@ async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
       el.click();
       return true;
     })()`,
-    { awaitPromise: false, returnByValue: true },
   )
 }
 
@@ -187,7 +187,8 @@ async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
  * 含「扫码登录」文案且带 canvas/img 的**最小** div(canvas 转出来)。
  */
 async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
-  return browser.evaluate<string | null>(
+  return cdpEvaluate<string | null>(
+    browser,
     `(() => {
       const roots = [...document.querySelectorAll('div')].filter(
         (d) => (d.textContent || '').includes('扫码登录') && d.querySelector('canvas, img'),
@@ -199,7 +200,6 @@ async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
       if (cv) { try { return cv.toDataURL('image/png'); } catch { return null; } }
       return null;
     })()`,
-    { awaitPromise: false, returnByValue: true },
   )
 }
 

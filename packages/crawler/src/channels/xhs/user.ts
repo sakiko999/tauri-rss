@@ -37,7 +37,7 @@ import type { ItemDetailSource, LoginResult, Loginable, Pageable, RssChannel, Rs
 import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, reportXhsRisk, xhsClient, xhsScanLogin } from "@amoeba/resolve"
-import { cdpFetch, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
+import { cdpEvaluate, cdpFetch, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
 import { log } from "@amoeba/resolve"
 
 /** 短延时(滚动翻页等网络/加载)。 */
@@ -195,7 +195,7 @@ export class XhsUserChannel implements RssChannel, Loginable {
       // 页面内取 SSR user.notes(统一走 readNotes,不重复手写表达式)。空结果时查登录态区分根因。
       const { list: notes } = await this.readNotes(browser)
       if (!notes.length) {
-        const loggedIn = await browser.evaluate<boolean>(`!!window.__INITIAL_STATE__?.user?.loggedIn`)
+        const loggedIn = await cdpEvaluate<boolean>(browser, `!!window.__INITIAL_STATE__?.user?.loggedIn`)
         log.xhs.userEmpty({ body: `user.notes 空(登录态=${loggedIn}),profile 页 SSR` })
       }
       return this.notesToItems(notes)
@@ -247,8 +247,8 @@ export class XhsUserChannel implements RssChannel, Loginable {
           // 小步滚动(分 3 次,每步 ~400ms)触发平台懒加载——一步滚到底时平台
           // 的 scroll/IO 处理来不及（实测连续 loadMore 无增长 → 0 条 → hasMore false）。
           // 步进加随机抖动去机械化(固定节奏易被平台识别为自动化)。
-          const hBefore = await browser.evaluate<number>(`document.body.scrollHeight`)
-          await browser.evaluate(`(async () => {
+          const hBefore = await cdpEvaluate<number>(browser, `document.body.scrollHeight`)
+          await cdpEvaluate(browser, `(async () => {
             const dist = document.body.scrollHeight - window.scrollY;
             for (let i = 1; i <= 3; i++) {
               window.scrollTo(0, window.scrollY + dist * (i / 3));
@@ -266,7 +266,7 @@ export class XhsUserChannel implements RssChannel, Loginable {
               break // 新批已到位(即使平台加载多批,我们只取窗口)
             }
           }
-          const hAfter = await browser.evaluate<number>(`document.body.scrollHeight`)
+          const hAfter = await cdpEvaluate<number>(browser, `document.body.scrollHeight`)
           if (hAfter > hBefore) platformActive = true
           if (grew) break
         }
@@ -290,31 +290,31 @@ export class XhsUserChannel implements RssChannel, Loginable {
 
   /** 页面内检测风控验证框(RSSHub getUser 同款选择器)。 */
   private async hasVerifyBox(browser: BrowserBackend): Promise<boolean> {
-    return browser.evaluate<boolean>(`!!document.querySelector('.fe-verify-box')`)
+    return cdpEvaluate<boolean>(browser, `!!document.querySelector('.fe-verify-box')`)
   }
 
   /** 页面内读当前全部 notes(解 _rawValue + flat)。 */
   private async readNotes(browser: BrowserBackend): Promise<{ list: any[] }> {
-    const r = await browser.evaluate<{ list: any[] }>(
+    const r = await cdpEvaluate<{ list: any[] }>(
+      browser,
       `(() => {
         const u = window.__INITIAL_STATE__?.user;
         const raw = u?.notes?._rawValue ?? u?.notes;
         return { list: Array.isArray(raw) ? raw.flat() : [] };
       })()`,
-      { awaitPromise: true, returnByValue: true },
     )
     return r ?? { list: [] }
   }
 
   /** 只读 notes 数量(滚动轮询用——整棵 ~1MB 序列化只为判增长太贵,轻量 evaluate 只返回长度)。 */
   private async readNotesCount(browser: BrowserBackend): Promise<number> {
-    const n = await browser.evaluate<number>(
+    const n = await cdpEvaluate<number>(
+      browser,
       `(() => {
         const u = window.__INITIAL_STATE__?.user;
         const raw = u?.notes?._rawValue ?? u?.notes;
         return Array.isArray(raw) ? raw.flat().length : 0;
       })()`,
-      { awaitPromise: true, returnByValue: true },
     )
     return n ?? 0
   }

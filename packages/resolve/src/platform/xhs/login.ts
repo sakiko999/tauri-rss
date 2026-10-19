@@ -11,7 +11,7 @@
  * 页面已渲染的 data URL(非截屏),登录态检测是 document.cookie 轮询。
  */
 import { XHS_BASE } from "./client.ts"
-import { cdpNavigate } from "../../browser/cdp.ts"
+import { cdpEvaluate, cdpNavigate } from "../../browser/cdp.ts"
 import { log } from "../../log.ts"
 import type { LoginResult } from "../../index.ts"
 
@@ -29,7 +29,8 @@ function serializeCookies(cookies: Record<string, string>): string {
 
 /** 读二维码 data URL(找不到返回 null)。img.qrcode-img 为主,canvas.qrcode 兜底。 */
 async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
-  return browser.evaluate<string | null>(
+  return cdpEvaluate<string | null>(
+    browser,
     `(() => {
       const img = document.querySelector('img.qrcode-img');
       if (img && img.src) return img.src;
@@ -39,13 +40,13 @@ async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
       }
       return null;
     })()`,
-    { awaitPromise: false, returnByValue: true },
   )
 }
 
 /** 点「登录」按钮(首页顶部),触发登录弹窗。返回是否点到。 */
 async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
-  return browser.evaluate<boolean>(
+  return cdpEvaluate<boolean>(
+    browser,
     `(() => {
       const el = [...document.querySelectorAll('button, a')].find(
         (n) => n.textContent && n.textContent.trim() === '登录' && (n as HTMLElement).offsetParent !== null
@@ -54,7 +55,6 @@ async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
       (el as HTMLElement).click();
       return true;
     })()`,
-    { awaitPromise: false, returnByValue: true },
   )
 }
 

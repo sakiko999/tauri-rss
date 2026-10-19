@@ -12,7 +12,7 @@
  * 与 xhs 的差别:二维码不是 data URL、也不需要点登录按钮;登录态判定用 `SUB`
  * (微博会话 cookie,HttpOnly → 只能经 CDP Network.getAllCookies 读)。
  */
-import { cdpNavigate } from "../../browser/cdp.ts"
+import { cdpEvaluate, cdpNavigate } from "../../browser/cdp.ts"
 import { log } from "../../log.ts"
 import type { LoginResult } from "../../index.ts"
 
@@ -34,7 +34,8 @@ function serializeCookies(cookies: Record<string, string>): string {
 
 /** 读二维码远程 src(找不到返回 null)。 */
 async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
-  return browser.evaluate<string | null>(
+  return cdpEvaluate<string | null>(
+    browser,
     `(() => {
       // 二维码是 v2.qr.weibo.cn 的 gen 图(180x180),按域名/尺寸定位,不依赖易变的 class。
       const img = [...document.querySelectorAll('img')].find(
@@ -42,7 +43,6 @@ async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
       );
       return img && img.src ? img.src : null;
     })()`,
-    { awaitPromise: false, returnByValue: true },
   )
 }
 
