@@ -210,7 +210,11 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   `withBrowserMode(browser, mode, fn, platform)` 入口调 `net.browserGate(platform)`
   （平台冷却 + 最小间隔 600ms~2.4s + 0~400ms 抖动，字符串与 HTTP 冷却一致）。
   ⚠️ **登录流程不要传 platform**：冷却期正是用户需要重新扫码自救的时候，登录只走
-  `withBrowserLock` 串行，不被冷却拦住。
+  `withBrowserLock` 串行，不被冷却拦住。登录用 `withScanLoginLock(browser, mode, run)`
+  （2026-10-20）：三平台统一持锁 + `scanLoginActive`（刷新超时跳过 abortPending），
+  并接受 `opts.signal` —— UI 关掉二维码弹窗即 abort，否则锁被占到 5 分钟 deadline。
+  ⚠️ 窗口模式按平台选：xhs/weibo 的二维码是图片（hidden 即可），douyin 是 canvas 绘制，
+  hidden 下渲染停摆画不出来，必须 interactive。
 - 平台等级由 `netLevels` 覆盖；channelKey（如 `xhs:user`）也能写进这张表，但只有 core
   的抓取闸门识别，宿主 governor 仍按 URL 平台执行配额。
 - L9（LX）收敛 `doRefresh` + **详情补全**（2026-10-19）：`doRefresh` 只调

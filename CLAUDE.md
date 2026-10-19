@@ -440,7 +440,8 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
     重载**：增量只能从页面累计的 `feed.feeds` 里切，重载会让 state 回到首屏。判据只比
     `pathname`（`shared.ts` 的 `ensureXhsPath`，三处入口包成 `ensureXhsPageReady`）——
     SPA 会往地址栏写 query，完整 `href` 永不相等，用 `cdpNavigate` 自带的同址判据会
-    每次都重载。
+    每次都重载。⚠️ `feed.feeds` 是**扁平数组**（`flat()` 对它是 no-op），滚动加载的
+    新条目**追加在尾部**（实测 862 → 915 → 968）；prepend 判断只是防御，不是常态。
   - 详情同理：登录态导航详情页读 `noteDetailMap`（被动）；匿名走页面内 fetch 详情 HTML。
     `core.resolveDetail` 在等级 9 时传 `{ passive: true }`（禁止 fetch），匿名则直接
     回退列表 item。explore/user 的详情实现已收敛到 `channels/xhs/shared.ts`。
@@ -495,6 +496,8 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   的平台匹配都为它写了专门分支（裸 `split(":")[0]` 得 "live" 匹配不上）
 - 恢复登录：填真实 cookie → `git update-index --no-skip-worktree` 再改，**勿提交真实值**
   （文件有 skip-worktree 保护 + 空占位模板 `.example`）
+- ⚠️ **`clearCookies` 的域匹配必须按标签边界**（2026-10-20）：裸 `endsWith("xiaohongshu.com")`
+  会把 `notxiaohongshu.com` 这类第三方 cookie 一起删掉。判据 = `d === host || d.endsWith("." + host)`。
 - 扫码登录是 **channel 级能力 `Loginable`**（平台级操作，不依赖 info 实例化）。
   `emitQr` 载荷语义：`data:image/...`（浏览器路径已编码）**或**待编码文本（纯 HTTP 路径）。
   ⚠️ `opts.signal`（2026-10-20）：UI 关闭二维码弹窗必须 abort —— 登录在 `withScanLoginLock`
@@ -618,9 +621,9 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   顶部一屏一换），用户描述成「往下滑一直看同一页」。修法：`core.loadMore` 把本页条目的
   `fetchedAt` 覆盖成该订阅已有内容的抓取时间（同一订阅 = 同一批快照）→ 排序键相同 →
   稳定排序保持 append 顺序。**新增分页渠道时不需要额外处理**（在 core 统一做）。
-  另有守卫：游标前进但 `store.append` **实际新增 0 条** = 上游把已返回内容又给了一遍 →
-  `hasMore=false`；游标没动（或本轮是**首次翻页**，core 原本无游标，渠道返回的重试
-  游标不算「前进」）才是「平台还在加载」的 retry 语义。
+  另有守卫：游标前进但 `store.append`（按 id 去重后**返回实际新增数**）为 0 条 =
+  上游把已返回内容又给了一遍 → `hasMore=false`；游标没动（或本轮是**首次翻页**，
+  core 原本无游标，渠道返回的重试游标不算「前进」）才是「平台还在加载」的 retry 语义。
   配套两条：① 渠道的 cursor **不能 clamp 到当前页面条数** —— 页面被重载过（点开笔记/
   刷新别的 xhs 订阅会把共享 Edge 导航走）时 clamp 会把切片压回已返回前缀，表现为「加载
   更多点了没反应」；正确做法是保持旧 cursor 滚到超过它，滚不到就返回空 + 原 cursor 重试。
@@ -728,6 +731,14 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   对比度用 `scripts/ui-design-audit.ts` 复测（目标 0 处低于 WCAG AA）。
 - ⚠️ **UI 自动化的 CDP target 必须按 URL 过滤**：DevTools 自己也是 `type: "page"`，
   取第一个会连到 DevTools 而不是应用页面（曾因此截了一堆 DevTools 的图当"应用截图"）。
+- ⭐ **抓取用 Edge 的 CDP 端口固定 9223，可从外部脚本直连**（`GET http://127.0.0.1:9223/json/list`
+  → page target → WebSocket `Runtime.evaluate`）。验证 browser 侧行为（页面 state / 滚动 /
+  翻页方向）不必往产品代码加日志：前后两次读 `__INITIAL_STATE__` 对比即可（2026-10-20 用它
+  定位了 explore 分页方向）。⚠️ 两个测量陷阱：① state 树里有**循环引用**（`user.loggedIn`
+  可能是对象），`JSON.stringify` 整棵树抛「Converting circular structure」—— 只挑标量/字符串
+  再序列化，布尔判据写 `=== true` 或解 `_rawValue`；② 虚拟列表 `scrollTo(0,0)` 后**立即**读
+  `innerText` 拿到的是滚动前的卡片（Virtuoso/masonic 重渲染是异步），等 ~1s 再读，否则会把
+  「顶部没变」误判成「顶部被换掉」。
 - ⚠️ **正文里的外链必须拦截**：`.article-body` 的委托 click 命中 `<a>` 要走
   `openExternalSafely`；不拦的话 WebView 会整页导航走（应用没配 Tauri `on_navigation`），
   界面被外部网页顶掉、只能重启才回来

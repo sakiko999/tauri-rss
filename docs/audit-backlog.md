@@ -24,6 +24,10 @@
 - **[低/潜在] 无生产者的 latent 丢字段** — `Item.raw`（不往返）、`Live.quality`（不往返）、
   `article.media[]` 图片（只保首个为 thumbnail）。三者当前**无 channel 产出**，不触发；未来有
   channel 依赖再补 serialize + deserialize 两侧。
+- **[low] `crawler/channels/xhs/explore.ts` prepend 判定** — 只识别「纯前插/纯追加」（比较滚动
+  前后首条 id）。头部非纯前插的变动（首卡被替换、同轮前插+后插）会切到已返回过的旧条目，
+  靠 `store.append` 按 id 去重兜底（最多丢一批，不会重复展示）。实测（2026-10-20，862→968 条）
+  平台推荐流是**尾部追加**；要精确需维护已见 id 集合，收益不抵复杂度。
 - **[低] `serialize-contract.check.ts` 盲区** — 只检测「deserialize 读、serialize 不写」，
   检测不到「**两侧都漏**」的字段（如上面的 quality/raw/media[]）。扩展需维护「应透传字段」期望
   清单，成本不低；当前新增字段时显式加守卫用例，暂够。
@@ -58,6 +62,14 @@
   属性含 "em" 的标签。
 - **`resolve/platform/youtube/client.ts:270`** — 审计称 `maxBy` 语义有误。实测 `R.maxBy(h,a,b)`
   相等时返回**第二个参数**，故 `maxBy(height,f,best)` 相等取 best（保留首个）——注释正确。
+- **「扫码登录会把浏览器锁永久占死、只能重启」**（2026-10-20 审查）— 登录持锁那段确实成立，
+  但「永久」不成立：CDP 单命令有 30s 超时（`browser-backend.ts`），`abortPending` 只 reject
+  在途 CDP 命令、对 `browser_ensure`/`ws_connect` 本就无效。实际影响上限是关窗后锁被占到
+  deadline（已在同一轮修掉：`opts.signal` 取消）。别再按「永久锁死」设计。
+- **`resolveXhsItemDetail` 的 `!browser` 分支忽略 `passiveOnly`（会走 HTTP）** — 代码事实成立，
+  但不可达：唯一会传 `{passive:true}` 的是 desktop `resolveDetail`，而能持有 xhs 条目的宿主
+  只有 desktop Tauri（mobile/CLI 只对 `kind==="article"` 调详情补全，xhs 是 social）。
+  保留现状；若未来出现非 Tauri 宿主消费 social 详情，需在此分支也尊重 passive。
 
 ## 三、存疑（未确证，未改）
 
@@ -67,7 +79,7 @@
 - `douyin/stream.ts:111` — `stream_data` 键名级别变更时主路径返回空 → 降级链（慢 2 RTT +
   可能低画质）。无失败证据，待上游字段变更时再处理。
 - `data-layer` `removedSubs` 墓碑无界增长（量级极小）；`resolveKind` 的 enclosure→audio 覆盖
-  `ctx.kind`（对播客可能有意）；`loadMore` 空页+非空游标 → `hasMore` 恒 true（赖源行为）。
+  `ctx.kind`（对播客可能有意）。
 - mobile：补全阈值 400 vs crawler 800 错配（白抓一次）；`looksLikeHtml` 误伤「讲 HTML 的纯文本」；
   li onClick 无 role/tabIndex、触控目标偏小；初始化失败无重试按钮。
 - `view.total` 口径（loaded vs 渠道 total）与表头脱钩（语义取舍）；`usePlayerNav` 的
