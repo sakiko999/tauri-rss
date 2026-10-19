@@ -106,6 +106,8 @@ export function heatOf(i: MediaItem): number {
  * live **无一条**有时间戳,于是「全部」里第一条 live 落在第 **112** 位(PAGE_SIZE 才 60),
  * 首屏窗口内 0 条 live → `MediaMain` 的 `hasMix` 恒假 → **「正在直播」横滑轨从来不渲染**。
  * 直播间本就该按「在线/抓到的时间」参与排序,用 `fetchedAt` 兜底即符合直觉。
+ * ⚠️ 分页追加的条目由 `core.loadMore` 把 `fetchedAt` 对齐到首屏时间,否则新一批整体排到
+ * 最前(见 CLAUDE.md「分页条目的 fetchedAt 必须对齐到首屏」)。
  */
 const timeKey = (i: MediaItem): number => i.publishedAt ?? i.fetchedAt ?? 0
 

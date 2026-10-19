@@ -231,6 +231,39 @@ export class TauriBrowserBackend implements BrowserBackend {
     return out
   }
 
+  /**
+   * 清除匹配域名后缀的 cookie(含 HttpOnly)。
+   *
+   * 「清除凭证」如果只清 settings,桌面抓取仍走 Edge profile 的登录态 —— 用户以为
+   * 退出了,实际还在用同一个真实账号访问小红书。这里按域名精确删除,避免连带把
+   * 微博/抖音等其他平台的登录态一起清掉(那是「清理浏览器数据」的职责)。
+   *
+   * ⚠️ 浏览器没启动时会 `ensureConn()` 拉起一次(否则下次抓取照样带着 cookie),
+   * 用完保持运行,不额外 close。
+   */
+  async clearCookies(domainSuffix: string): Promise<number> {
+    await this.ensureConn()
+    const suffix = domainSuffix.replace(/^\./, "")
+    const r = (await this.send("Network.getAllCookies", {})) as {
+      cookies?: Array<{ name: string; domain?: string; path?: string }>
+    }
+    // 只认「自身或子域」:`notxiaohongshu.com`.endsWith(`xiaohongshu.com`) 也是 true,
+    // 裸 endsWith 会误删第三方站点。域名按标签边界匹配。
+    const host = suffix.toLowerCase()
+    const targets = (r.cookies ?? []).filter((c) => {
+      const d = (c.domain ?? "").replace(/^\./, "").toLowerCase()
+      return d === host || d.endsWith(`.${host}`)
+    })
+    for (const c of targets) {
+      await this.send("Network.deleteCookies", {
+        name: c.name,
+        domain: c.domain,
+        path: c.path ?? "/",
+      })
+    }
+    return targets.length
+  }
+
   async close(): Promise<void> {
     if (this.connId) {
       await this.track(invoke("ws_close", { connectionId: this.connId })).catch(() => {})

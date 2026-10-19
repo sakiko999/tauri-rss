@@ -42,7 +42,11 @@ export class RawRssChannel implements RssChannel {
 
   /** 纯 fetch:透传上游 XML + 单条详情(抓原文页提正文;feed 已带全文则原样返回)。 */
   getSource(info: SourceInfo): RssSource & ItemDetailSource {
-    return { fetch: () => this.fetchXml(info), resolveDetail: (item) => this.resolveDetail(item) }
+    return {
+      fetch: () => this.fetchXml(info),
+      // 通用 RSS 没有被动详情能力;L9 下不能构造 HTTP 提取正文。
+      resolveDetail: (item, opts) => (opts?.passive ? Promise.resolve(null) : this.resolveDetail(item)),
+    }
   }
 
   private async fetchXml(info: SourceInfo): Promise<string> {

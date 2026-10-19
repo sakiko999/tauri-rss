@@ -96,7 +96,7 @@ export interface DataLayer {
   scanLogin(
     channelKey: string,
     emitQr: (qrDataUrl: string | null) => void,
-    opts?: { timeoutMs?: number },
+    opts?: { timeoutMs?: number; signal?: AbortSignal },
   ): Promise<LoginResult>
 }
 
@@ -601,12 +601,31 @@ export function createDataLayer(): DataLayer {
       const hit = await bodyCache.get(subscriptionId, itemId).catch(() => null)
       if (hit) return { ...item, content: hit.content, contentFormat: hit.contentFormat }
     }
-    const info = await sourceInfoFor(sub)
+    // 与 doRefresh 用同一份 settings 快照:详情补全也要遵守等级闸门。
+    // ⚠️ L9(LX)以前只拦 doRefresh,详情补全仍是应用构造的请求(行内 fetch / HTTP),
+    // 与「浏览器被动」的承诺不符。现在把 `{ passive: true }` 交给渠道:渠道只能走
+    // 「导航 + 读页面 SSR」,不支持时返回 null → 原样返回列表 item,**不发主动请求**。
+    const s = await settings.get()
+    const info = await sourceInfoFor(sub, s)
+    const level = netLevelFor(sub.channelKey, s)
     const source = channel.getSource(info)
     if (!isItemDetailSource(source)) return item // 无详情能力(bili/weibo 列表已完整)→ 原样返回
     // 传**完整 item**(不是仅 url/id):通用 RSS 的 resolveDetail 是增量补全(先 spread 原
     // item 再填 content),只给三字段会序列化出残缺条目。xhs 只读 url/xsecToken,多传无损。
-    const detailItem = await source.resolveDetail(item as never).catch(() => null)
+    // ⚠️ 详情失败仍然回退原 item(不空窗),但**必须留下原因**:登录失效、风控冷却、
+    // 详情页非 2xx 都从这里经过;静默吞掉会让用户以为「这条笔记本来只有摘要」。
+    let detailItem: Awaited<ReturnType<typeof source.resolveDetail>> | null = null
+    try {
+      // passive 由渠道自己决定怎么降级(L9 下不得构造 fetch/API);不支持的渠道返回 null。
+      detailItem = await source.resolveDetail(item as never, { passive: level === 9 })
+    } catch (e) {
+      log.log("warn", "resolveDetail failed", {
+        subscriptionId,
+        itemId,
+        channel: sub.channelKey,
+        error: e instanceof Error ? e.message : String(e),
+      })
+    }
     if (!detailItem) return item // 详情失败回退原 item(不空窗)
     // crawler Item(含完整图文)→ XML → core MediaItem(复用 XML 契约,不新增序列化面)。
     const xml = serializeFeed([detailItem], { channelTitle: channel.name })
@@ -653,12 +672,26 @@ export function createDataLayer(): DataLayer {
       const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
       if (removedSubs.has(subscriptionId)) return { addedCount: 0, hasMore: false } // 已退订:丢弃
+      // ⚠️ 分页条目的 fetchedAt 对齐到该订阅已有内容(首屏)的抓取时间。
+      // 没有 `publishedAt` 的源(小红书发现页等)排序走 `publishedAt ?? fetchedAt` 兜底;
+      // 若保留「本次抓取时间」,新一批会因时间更新而**整体排到列表最前** —— 用户滚到底
+      // 点「加载更多」,视口里还是原来那批,新内容全插到顶部(实测 89 → 272 条,顶部换了一屏)。
+      // 同一订阅的分页内容视为同一批快照:排序键相同 → 稳定排序保持 append 顺序(新内容在末尾)。
+      const batchTime = store.query({ subscriptionId }).reduce((min, it) => Math.min(min, it.fetchedAt), Infinity)
+      const aligned = Number.isFinite(batchTime)
+        ? items.map((it) => ({ ...it, fetchedAt: batchTime }))
+        : items
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
-      store.append(subscriptionId, await applyReadingState(items))
+      const addedCount = store.append(subscriptionId, await applyReadingState(aligned))
       if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
       else pageCursors.delete(subscriptionId)
-      return { addedCount: items.length, hasMore: !!nextCursor }
+      // ⚠️ 游标前进了但一条都没新增 = 上游把已返回过的内容又给了一遍（典型：xhs 页面
+      // 被整页重载后 state 回到首屏）。继续 hasMore 会让 UI 反复「加载更多」拿到同一页。
+      // 游标没动（或本轮是首次翻页，core 原本无游标，渠道返回的重试游标不算「前进」）
+      // 则是「平台还在加载」的 retry 语义，保留 hasMore。
+      const cursorMoved = cursor !== undefined && nextCursor !== undefined && nextCursor !== cursor
+      return { addedCount, hasMore: !!nextCursor && !(cursorMoved && addedCount === 0) }
     })
   }
 
@@ -679,7 +712,7 @@ export function createDataLayer(): DataLayer {
   async function scanLogin(
     channelKey: string,
     emitQr: (qrDataUrl: string | null) => void,
-    opts?: { timeoutMs?: number },
+    opts?: { timeoutMs?: number; signal?: AbortSignal },
   ): Promise<LoginResult> {
     const channel = getChannel(channelKey)
     if (!channel) throw new NoChannelError(channelKey)

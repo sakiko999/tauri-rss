@@ -11,6 +11,7 @@
  */
 import type { Social, SocialImage } from "@amoeba/xml"
 import { httpJson, httpText } from "../../host.ts"
+import { cdpEvaluate, cdpFetch } from "../../browser/cdp.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"
 import { parseCount } from "../../utils/count.ts"
@@ -81,6 +82,91 @@ const BROWSER_HEADERS: Record<string, string> = {
 export function reportXhsRisk(signal: string): void {
   // 宿主未注入 net 或调用方未注入 appHost 时静默(best-effort)
   globalThis.appHost?.net?.reportRisk("xhs", signal)
+}
+
+/**
+ * 页面 SSR 的登录位(解 Vue ref 包装)。返回 null = 读不到(未挂载/导航过渡/结构变化),
+ * 调用方自行决定回退判据 —— 登录抓取与扫码登录共用这一份页面判据,避免漂移。
+ */
+export async function xhsPageLoggedIn(browser: BrowserBackend): Promise<boolean | null> {
+  try {
+    const v = await cdpEvaluate<boolean | null>(
+      browser,
+      `(() => {
+        const u = window.__INITIAL_STATE__?.user;
+        const l = u?.loggedIn?._rawValue ?? u?.loggedIn;
+        return typeof l === 'boolean' ? l : null;
+      })()`,
+    )
+    return v ?? null
+  } catch {
+    return null
+  }
+}
+
+/** 登录后侧栏有指向自己的「我」入口;匿名页没有(MediaCrawler 同款判据)。 */
+export async function xhsDomLoggedIn(browser: BrowserBackend): Promise<boolean> {
+  try {
+    return await cdpEvaluate<boolean>(
+      browser,
+      `(() => {
+        const a = [...document.querySelectorAll('a[href*="/user/profile/"]')]
+          .find((n) => n.textContent && n.textContent.trim() === '我');
+        return !!a;
+      })()`,
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 当前页面是否**真的登录**了(不是游客)。
+ *
+ * ⚠️ 不能用 `web_session` —— 小红书对匿名访客也会立即签发游客 web_session。
+ * 优先页面 SSR `user.loggedIn`(导航到 xhs 页面后即可读),读不到再回退 `user_id`
+ * cookie(游客 cookie 里没有它;注意短信登录的 Set-Cookie 也可能不带,故只作兜底)。
+ *
+ * 调用前提:页面已导航到 xhs 域。未导航时 SSR 读不到,只剩 cookie 兜底。
+ */
+export async function isXhsLoggedIn(browser: BrowserBackend): Promise<boolean> {
+  const page = await xhsPageLoggedIn(browser)
+  if (page !== null) return page
+  if (await xhsDomLoggedIn(browser)) return true
+  try {
+    const c = await browser.getCookies(XHS_BASE)
+    return !!c["user_id"]
+  } catch {
+    return false
+  }
+}
+
+/** 当前页面是否已在 xhs origin(页面内 fetch 同源的前提)。 */
+export async function isXhsOrigin(browser: BrowserBackend): Promise<boolean> {
+  try {
+    return await cdpEvaluate<boolean>(browser, `location.origin === ${JSON.stringify(XHS_BASE)}`)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 匿名/普通 fetch:页面内取站点 HTML(Chrome TLS 指纹,绕开 WAF 对 reqwest 的空壳)。
+ * `credentials:"omit"` 用于匿名放行(带 profile cookie 反而可能拿空壳)。
+ */
+export async function xhsFetchPage(
+  browser: BrowserBackend,
+  url: string,
+  credentials: "omit" | "include" = "include",
+): Promise<string> {
+  const r = await cdpFetch(browser, url, { credentials })
+  if (r.status < 200 || r.status >= 300) throw new Error(`小红书 HTTP ${r.status}`)
+  // 页面内 fetch 也会返回 300011(账号风控码),HTTP 通路能检测,这里不能漏。
+  if (/"(?:code|result_code)"\s*:\s*300011\b/.test(r.bodyText)) {
+    reportXhsRisk("300011")
+    throw new Error("小红书接口返回 300011(账号风控)")
+  }
+  return r.bodyText
 }
 
 /** 抓页面 HTML(带 cookie)。复用 httpText(2xx 校验 + body 归一)。 */
@@ -266,6 +352,25 @@ export function extractNoteDetail(html: string, noteId: string): any {
   if (!noteMap) return null
   const entry = noteMap[noteId]
   return entry ? rawOf(entry.note) ?? rawOf(entry) : null
+}
+
+/**
+ * 页面内读取详情状态的表达式(L9 被动详情用)。
+ *
+ * 与 `extractNoteDetail` 的区别:这里读的是**浏览器里已求值的** `__INITIAL_STATE__`,
+ * 所以 `noteDetailMap` 可能是真正的 `Map`(登录态 SSR 里的 `new Map(...)`),不是普通对象;
+ * 同时要兼容 Vue 的 `_rawValue` 包装。只读页面已有状态,不构造任何请求。
+ */
+export function noteDetailStateExpr(noteId: string): string {
+  const id = JSON.stringify(noteId)
+  return `(() => {
+    const n = window.__INITIAL_STATE__?.note;
+    const map = n?.noteDetailMap?._rawValue ?? n?.noteDetailMap;
+    if (!map) return null;
+    const entry = typeof map.get === 'function' ? map.get(${id}) : map[${id}];
+    const note = entry?.note?._rawValue ?? entry?.note ?? entry;
+    return note ?? null;
+  })()`
 }
 
 /**

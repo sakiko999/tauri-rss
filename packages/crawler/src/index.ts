@@ -55,8 +55,13 @@ export interface HotWordSource {
 
 /** 单条详情能力(可选能力):列表 item 缺全文/多图时(如 xhs 列表只有单图摘要),按需抓详情。 */
 export interface ItemDetailSource {
-  /** 单条 → 完整详情 Item(xhs 匿名 GET /explore/<id>?xsec_token= 补全文/多图/tag/video)。 */
-  resolveDetail(item: Item): Promise<Item | null>
+  /**
+   * 单条 → 完整详情 Item(xhs 匿名 GET /explore/<id>?xsec_token= 补全文/多图/tag/video)。
+   *
+   * `passive = true` 来自 core 的 L9 闸门:只允许**页面自然行为**(导航 + 读页面 SSR),
+   * 不得构造自定义 fetch / API。渠道不按 passive 降级时应返回 null(而不是偷偷发请求)。
+   */
+  resolveDetail(item: Item, opts?: { passive?: boolean }): Promise<Item | null>
 }
 
 /**
@@ -74,12 +79,15 @@ export interface Loginable {
    *     用自己的 QR 编码器画出来。
    * 这样纯 HTTP 的登录不必把 QR 编码器拖进 crawler(编码是展示关切)。
    *
+   * `opts.signal`:UI 关闭二维码弹窗时 abort。登录在实现里持全局浏览器锁直到成功或
+   * 超时(最长 5 分钟),没有取消通道的话,关窗后所有 xhs/weibo 浏览器操作都被排队卡住。
+   *
    * 成功后 cookie 已落浏览器 profile 或由本方法返回(HTTP 路径),返回串供 core
    * 落 settings。无 appHost.browser 的路径(xhs)会抛错,bili 纯 HTTP 不需要。
    */
   scanLogin(
     emitQr: (qr: string | null) => void,
-    opts?: { timeoutMs?: number },
+    opts?: { timeoutMs?: number; signal?: AbortSignal },
   ): Promise<LoginResult>
 }
 

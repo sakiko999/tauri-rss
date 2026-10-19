@@ -12,7 +12,7 @@
 |---|---|---|---|---|
 | bili | ✅ 纯 HTTP，无签名 | 无 | SESSDATA / bili_jct / DedeUserID / **refresh_token**（响应体，dart 没拿） | ✅ bili_ticket 3 天自动续 + SESSDATA 用 refresh_token 续期 |
 | weibo | ✅ 纯 HTTP，JSONP 解析 | 无 | SUB / SUBP / SSOLoginState / SCF / ALF | ⚠️ SUB ~1 年，无刷新接口，到期重登 |
-| xhs | ✅ **走 CDP 读页面 DOM**（非签名，见 §3 更正） | 无（浏览器路径绕开） | web_session / a1 / gid / webId（**1 年有效**） | ⚠️ 1 年有效，无刷新接口，到期重登 |
+| xhs | ✅ **走 CDP 读页面 DOM**（非签名，见 §3 更正） | 无（浏览器路径绕开） | web_session / a1 / gid / webId（**1 年有效**） | ⚠️ 1 年有效，无刷新接口，到期重登；⚠️ **web_session 游客也会下发，不能当登录判据**（2026-10-19 实测/社区复核） |
 
 三平台扫码登录全部可行；**只有 bili 支持真·自动续期**（但**尚未实现**），weibo/xhs 是
 「长效 cookie + 到期重登」模式（1 年/1 年，低频维护，可接受）。

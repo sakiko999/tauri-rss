@@ -84,6 +84,13 @@ export function createDataActions(ctx: StoreCtx): DataActions {
             busy,
             ...(total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}),
             loadMoreEnded: result.error ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: false },
+            // ⚠️ 首屏可能超过 PAGE_SIZE(xhs:explore 实测 89 条):本地窗口初始只有 60,
+            // 而渠道分页只按 addedCount 增长窗口 —— 首屏就存在的缺口永远不会被补上
+            // (尾部 29 条不可见、footer 却报「已加载全部」)。刷新拿到新首页后把窗口
+            // 抬到至少覆盖它(用户翻过的更大窗口保留)。
+            page: result.error
+              ? s.page
+              : { ...s.page, [id]: Math.max(s.page[id] ?? 0, result.itemCount) },
             refreshErrors: result.error
               ? { ...s.refreshErrors, [id]: result.error }
               : (() => {
@@ -125,19 +132,23 @@ export function createDataActions(ctx: StoreCtx): DataActions {
       const subs = await dl.subscriptions.list()
       set({ loading: true, busy: Object.fromEntries(subs.map((s) => [s.id, true])) })
       const errors: Record<string, string> = {}
+      type RefreshOutcome = Awaited<ReturnType<typeof dl.refresh>>
+      let results: PromiseSettledResult<RefreshOutcome>[] = []
       try {
         // ⚠️ 必须 allSettled + 逐条超时 + finally:
         //   - 用 Promise.all 时,任一 reject 会让下面的 set({loading:false}) **永不执行**
         //     → 顶栏「更新中」永久转圈(且 Promise.all 会丢结果,其余订阅的白抓);
         //   - 任一 promise 永不 settle(如 browser 通道 invoke 无超时)同样卡死整轮。
         // 逐条超时把「无限等待」变成「这一条报错」,finally 保证 loading 一定落回。
-        const results = await Promise.allSettled(
+        results = await Promise.allSettled(
           subs.map((s) =>
             withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id, () => {
               // 超时中止在途调用,让持锁的 await 立刻返回错误,withBrowserLock 得以释放
               // ⚠️ **只对浏览器路径的订阅中止**:abortPending 是**进程级全局**的,一个
               // 非浏览器订阅(慢 HTTP 抓取)超时也会把别的订阅在途的浏览器操作一起杀掉。
-              if (/^(weibo|xhs):/.test(s.channelKey)) {
+              // ⚠️ 扫码登录持锁期间不要中止:登录可能等用户 1~5 分钟,排队中的刷新超时
+              // 若掐断连接,会表现成「手机已确认但登录超时」。
+              if (/^(weibo|xhs):/.test(s.channelKey) && !globalThis.appHost.browser?.scanLoginActive) {
                 globalThis.appHost.browser?.abortPending?.(`刷新超时:${s.id}`)
               }
             }),
@@ -158,7 +169,16 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         // 恒 false,新内容翻不出来。与 refresh(id) 成功路径对称(该处已在 :466 清)。
         const clearedEnded = { ...get().loadMoreEnded }
         for (const s of subs) clearedEnded[s.id] = false
-        set({ loading: false, busy: {}, refreshErrors: errors, loadMoreEnded: clearedEnded })
+        // ⚠️ 本地窗口抬到至少覆盖新首屏(同 refresh(id):首屏可能超过 PAGE_SIZE,
+        // 渠道分页只按 addedCount 增长窗口,首屏缺口永远补不上)。
+        const page = { ...get().page }
+        for (let i = 0; i < subs.length; i++) {
+          const r = results[i]
+          if (r?.status !== "fulfilled" || r.value.error) continue
+          const id = subs[i]!.id
+          page[id] = Math.max(page[id] ?? 0, r.value.itemCount)
+        }
+        set({ loading: false, busy: {}, refreshErrors: errors, loadMoreEnded: clearedEnded, page })
       }
       const failed = Object.keys(errors).length
       get().toast(

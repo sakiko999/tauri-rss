@@ -11,41 +11,29 @@
  * (标题/封面/点赞/作者/xsecToken 全有),但平台把 noteId 定向抹空(外层 `id` 与
  * `noteCard.noteId` 全空串,DOM 亦零笔记链接)——无法构造笔记 URL、无稳定 id,
  * noteCardToSocial 按「无 noteId → null」全过滤 → 自然空结果。即 user 笔记流
- * **必须登录态**(explore 推荐流匿名不抹 noteId,可用,见 explore.ts)。
+ * **完整数据必须登录态**(explore 推荐流匿名可用)。
  *
- * ⚠️ 2026-08-28 浏览器路径定性(playwright 连真实 Edge,匿名全新 context):SSR 抹空
- * 后**前端水合不拉取真实笔记**——静置 10s 无变化,滚动触发后 notes 被**清空为 0**,
- * 页面发出的请求全是安全风控探测(`as.xiaohongshu.com/api/sec/v1/*`、redcaptcha、
- * login/activate、user/me),**零 user_posted 笔记请求**。即浏览器内「不登录可看」
- * 实为**登录态 Edge profile**(应用自带)的持久化 cookie,匿名无此能力。
+ * 抓取策略统一在 `shared.ts`:
+ *   - 登录态 → passive(导航后读页面 SSR);
+ *   - 匿名访客 → fetch(页面内抓匿名 profile HTML,noteId 抹空 → 虚拟 ID 兜底);
+ *   - L9 刷新 → `fetchPassive`(匿名不 fetch,返回 null 让 core 回退缓存)。
  *
- * 结论(user 与 explore 的口径差异):
- *   - **非完整数据(匿名)= 平台设计**:SSR 渲染卡片但抹空 noteId → 无稳定 id/URL →
- *     全部条目被过滤。这与网络栈无关,换 browser 也拿不到完整数据(浏览器内同样抹空)。
- *   - **完整数据 = 必须有登录态**。浏览器路径下这份登录态来自**持久的 Edge profile**;
- *     因此清过 profile(设置→清理浏览器数据 / `rss browser-reset`)后必然为空,
- *     要重新扫码登录才会恢复。
- *
- * 双路径(均 SSR,无需签名):
- *   - 浏览器(Tauri appHost.browser,CDP 附加真实 Edge):导航 profile 页 → 页面内取
- *     `__INITIAL_STATE__.user.notes`(浏览器已解析 new Map 等表达式,天然干净)。
- *   - HTTP(无 browser 门面):带 cookie 请求 profile 页 HTML → extractInitialState 解析。
+ * 翻页是**滚动驱动**(页面自己发 user_posted),属于被动;匿名无法翻页。
  */
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
-import type { ItemDetailSource, LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { ItemDetailSource, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, reportXhsRisk, xhsClient, xhsScanLogin } from "@amoeba/resolve"
-import { cdpEvaluate, cdpFetch, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
-import { log } from "@amoeba/resolve"
-
-/** 短延时(滚动翻页等网络/加载)。 */
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-
-/** fetchMore 每次返回的条数(窗口)。平台滚动一次加载 ~120 条,我们只取窗口大小,
- * cursor 用「已返回条数」索引定位——state 缓存命中时零滚动(秒回),缓存耗尽才滚一次。 */
-const FETCH_MORE_WINDOW = 30
+import { XHS_BASE, extractInitialState, isXhsLoggedIn, log, noteCardToSocial, now, rawOf, xhsClient } from "@amoeba/resolve"
+import { cdpEvaluate, withBrowserMode } from "@amoeba/resolve"
+import {
+  ensureXhsPageReady,
+  fetchXhsList,
+  resolveXhsItemDetail,
+  scrollXhsUntilGrown,
+  XHS_FETCH_MORE_WINDOW,
+  XhsChannelBase,
+} from "./shared.ts"
 
 /** SSR `user.notes` → 扁平笔记数组(每项 { id, noteCard, xsecToken })。解 _rawValue 包装。 */
 function extractSsrNotes(state: any): any[] {
@@ -53,23 +41,11 @@ function extractSsrNotes(state: any): any[] {
   return Array.isArray(notes) ? notes.flat() : []
 }
 
-export class XhsUserChannel implements RssChannel, Loginable {
+export class XhsUserChannel extends XhsChannelBase implements RssChannel {
   readonly key = "xhs:user"
   readonly name = "小红书用户笔记"
   readonly kind = "social" as const
   readonly sourceInfoTpl = [{ key: "user_id", label: "用户 ID(24 位)", required: true }]
-  /** 支持 L9：浏览器导航读 SSR 页面（页面内 fetch 不属于被动采集）。 */
-  readonly supportsL9 = true
-
-  /** 扫码登录(Loginable,channel 级能力)。浏览器路径登录一次,同平台 channel 共享账号。 */
-  scanLogin(
-    emitQr: (qrDataUrl: string | null) => void,
-    opts?: { timeoutMs?: number },
-  ): Promise<LoginResult> {
-    const browser = globalThis.appHost?.browser
-    if (!browser) throw new Error("扫码登录需 Tauri 桌面环境(未注入 appHost.browser)")
-    return xhsScanLogin(browser, emitQr, opts)
-  }
 
   getSource(info: SourceInfo): RssSource & Partial<Pageable> & ItemDetailSource {
     const userId = String(info.user_id ?? "").trim()
@@ -83,33 +59,31 @@ export class XhsUserChannel implements RssChannel, Loginable {
           fetchPassive: () => this.fetchPassive(browser, userId),
         }
       : { fetch }) as RssSource & Partial<Pageable> & ItemDetailSource
-    // 单条详情:user 流 item 也是 xhs note,详情页补全(匿名可用),与 explore 同逻辑。
-    base.resolveDetail = (item: Item) => this.resolveDetail(item)
+    // 详情与 explore 共用同一套策略;刻意不传 cookie —— reqwest 带账号 cookie 既拿不到
+    // 数据(xhs WAF 按客户端栈判定),又让会话凭据走非浏览器栈出站。
+    base.resolveDetail = (item, opts) =>
+      resolveXhsItemDetail({
+        item,
+        sourceKey: this.key,
+        browser,
+        passiveOnly: opts?.passive,
+      })
     return base
   }
 
   /**
-   * LX 被动采集:导航 profile 页 + 读页面 SSR(`fetchViaBrowser`,路线 B)。
-   * ⚠️ **不**走 `fetchViaInPageFetch` —— 那是页面内自定义 fetch(类别②),
-   * 按定义不属于 LX。匿名导航拿不到完整笔记时返回 null,core 回退内容缓存。
+   * LX 被动采集:导航 profile 页 + 读页面 SSR(路线 B),不构造任何请求。
+   * 匿名访客在 L9 下**不 fetch** → 返回 null,让 core 回退内容缓存。
    */
   private async fetchPassive(browser: BrowserBackend, userId: string): Promise<string | null> {
     if (!browser.send || !userId) return null
-    const items = await this.fetchViaBrowser(browser, userId)
-    if (!items.length) return null
+    const items = await fetchXhsList(browser, {
+      url: `${XHS_BASE}/user/profile/${userId}`,
+      passiveOnly: true,
+      readPage: async (b) => this.notesToItems((await this.readNotes(b)).list),
+    })
+    if (!items?.length) return null
     return serializeFeed(items, this.channelOptions({ user_id: userId }))
-  }
-
-  /** 单条笔记详情(列表 item 缺全文/多图/标签,详情页补全)。匿名可用需列表项 xsec_token。 */
-  private async resolveDetail(item: Item): Promise<Item | null> {
-    const noteId = String(item.url ?? "").match(/\/explore\/([^?/?#]+)/)?.[1] ?? ""
-    if (!noteId) return null
-    const xsec = (item as Social).xsecToken
-    const url = `${XHS_BASE}/explore/${noteId}${xsec ? `?xsec_token=${encodeURIComponent(xsec)}&xsec_source=pc_feed` : ""}`
-    const html = await xhsClient.getHtml(url, {})
-    const note = extractNoteDetail(html, noteId)
-    if (!note) return null
-    return noteDetailToSocial(note, this.key, now())
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
@@ -117,43 +91,25 @@ export class XhsUserChannel implements RssChannel, Loginable {
     if (!userId) throw new Error("xhs:user 需要 user_id")
     const cookie = (info.cookie as string) || ""
     const browser = globalThis.appHost?.browser
-
-    if (browser) {
-      const viaBrowser = await this.fetchViaBrowser(browser, userId)
-      // ⚠️ 浏览器路径**空结果时回落**(两条路径匿名行为不同,实测):
-      //   - 浏览器导航 profile(未登录):被 **302 → /login?redirectPath=**,
-      //     页面里没有 `__INITIAL_STATE__.user.notes` → 0 条;
-      //   - 页面内 fetch profile HTML(未登录):200 + **253KB 完整 SSR / 31 条笔记**
-      //     (仅 noteId 被抹空,由 client 的虚拟 ID 兜底)。
-      // ⚠️ 回落**必须走页面内 fetch(Chrome 网络栈),不能用 appHost.http(reqwest)**:
-      //   xhs WAF 按 **TLS/客户端指纹**放行 —— 实测同一 URL、同一 headers,
-      //   Bun fetch / Chrome fetch = 31 条,reqwest / curl = 36KB「onebox 空壳页」
-      //   (0 条)。这是客户端栈差异,换 header 无效(同 explore.ts 记载的现象)。
-      // 登录态下浏览器导航拿完整数据(真 noteId/token) → 优先浏览器。
-      if (viaBrowser.length) return viaBrowser
-      return this.fetchViaInPageFetch(browser, userId)
-    }
+    if (browser) return this.fetchViaBrowser(browser, userId)
     return this.fetchViaHttp(userId, cookie)
   }
 
-  /**
-   * HTTP 回落的**浏览器内**版本:在 xhs origin 页面里 `fetch(profile)` —— 走 Chrome
-   * 网络栈(TLS 指纹放行)+ 自带 Edge profile 的 xhs cookie 上下文。reqwest 拿不到
-   * 的完整 SSR(见 fetchItems 注释),这里能拿到。
-   */
-  private async fetchViaInPageFetch(browser: BrowserBackend, userId: string): Promise<Item[]> {
-    // 页面内 fetch 不需要渲染：hidden 即可。
-    return withBrowserMode(browser, "hidden", async () => {
-      // 先落到 xhs origin(同源才能发同源 fetch)。
-      await cdpNavigate(browser, `${XHS_BASE}/explore`, true)
-      // ⚠️ credentials: "omit" —— 匿名才拿到完整 SSR。实测同一 URL:
-      //   omit = 253KB / 31 cards;include(带 profile cookie)= 47KB / 0 cards。
-      // 该 Edge profile 的小红书登录态反而是「被限制」状态(带 cookie 触发空壳),
-      // 匿名反而放行 —— 与 CLI 匿名 31 条一致。
-      const res = await cdpFetch(browser, `${XHS_BASE}/user/profile/${userId}`, { credentials: "omit" })
-      if (res.status < 200 || res.status >= 300) return []
-      return this.notesToItems(extractSsrNotes(extractInitialState(res.bodyText)))
+  /** 正常刷新:登录态 passive(读页面 SSR),匿名 fetch(匿名 profile HTML → 虚拟 ID)。 */
+  private async fetchViaBrowser(browser: BrowserBackend, userId: string): Promise<Item[]> {
+    const items = await fetchXhsList(browser, {
+      url: `${XHS_BASE}/user/profile/${userId}`,
+      readPage: async (b) => {
+        const { list } = await this.readNotes(b)
+        if (!list.length) log.xhs.userEmpty({ body: "user.notes 空(已登录),profile 页 SSR" })
+        return this.notesToItems(list)
+      },
+      parseHtml: (html) => {
+        log.xhs.userEmpty({ body: "未登录,回退匿名 fetch" })
+        return this.notesToItems(extractSsrNotes(extractInitialState(html)))
+      },
     })
+    return items ?? []
   }
 
   /** HTTP 路径:带 cookie 请求 profile 页 HTML → 解析 SSR user.notes(RSSHub getUserWithCookie 同路径)。 */
@@ -170,36 +126,6 @@ export class XhsUserChannel implements RssChannel, Loginable {
         n?.noteCard ? noteCardToSocial(n.noteCard, this.key, t, n.id, n.xsecToken) : null,
       )
       .filter((x): x is Social => !!x)
-  }
-
-  /**
-   * 浏览器路径:导航 profile 页 = 正常浏览行为(SSR 登录态渲染笔记,非 XHR API →
-   * 无签名/参数/风控负担)。页面内取 `__INITIAL_STATE__.user.notes`(浏览器已解析
-   * new Map 等表达式,天然干净)。与 RSSHub getUserWithCookie 同路径。
-   */
-  private async fetchViaBrowser(browser: BrowserBackend, userId: string): Promise<Item[]> {
-    // 导航 + 提取原子完成(单 Edge 共享,防并发抢页→跨域)；SSR 读取不需要渲染。
-    return withBrowserMode(browser, "hidden", async () => {
-      // forceReload:refresh 需整页重载拿最新 SSR——同址不重载(fetchMore 用)会读到旧 SPA state。
-      await cdpNavigate(browser, `${XHS_BASE}/user/profile/${userId}`, true)
-      // 等 SSR 状态挂载(首个 script 即挂,domcontentloaded 前后都有;超时防结构变化)。
-      await waitUntil(browser, `typeof window.__INITIAL_STATE__ !== 'undefined'`, 15_000, "xhs SSR 状态未挂载")
-
-      // 风控检测(RSSHub getUser 同款):验证框出现 = 当前环境被拦。
-      if (await this.hasVerifyBox(browser)) {
-        // .fe-verify-box = 小红书人机校验拦截(明确风控信号)
-        reportXhsRisk("verify-box")
-        throw new Error("小红书风控校验(.fe-verify-box)出现——账号可能被风控,请稍后再试或重新扫码登录")
-      }
-
-      // 页面内取 SSR user.notes(统一走 readNotes,不重复手写表达式)。空结果时查登录态区分根因。
-      const { list: notes } = await this.readNotes(browser)
-      if (!notes.length) {
-        const loggedIn = await cdpEvaluate<boolean>(browser, `!!window.__INITIAL_STATE__?.user?.loggedIn`)
-        log.xhs.userEmpty({ body: `user.notes 空(登录态=${loggedIn}),profile 页 SSR` })
-      }
-      return this.notesToItems(notes)
-    })
   }
 
   /**
@@ -224,73 +150,56 @@ export class XhsUserChannel implements RssChannel, Loginable {
     // window.scrollTo 只改 scrollTop、不派发 scroll 事件，IntersectionObserver
     // 与 lazy 加载也不触发（2026-10-19 实测，见 docs/crawler-risk-control.md §3.9）。
     // wrapper 会在结束后自动切回 hidden（interactive 常驻有 CPU/GPU 开销）。
-    return withBrowserMode(browser, "interactive", async () => {
-      await cdpNavigate(browser, `${XHS_BASE}/user/profile/${userId}`)
-      await waitUntil(browser, `typeof window.__INITIAL_STATE__ !== 'undefined'`, 15_000, "xhs SSR 状态未挂载")
-
-      const initial = await this.readNotes(browser)
-      // 已返回条数(索引定位)。无 cursor:跳过当前已加载(含 fetch 首页 32 条,不重复返回)。
-      const startIdx = cursor ? Number(cursor) || 0 : initial.list.length
-
-      // state 缓存不足才滚动(平台自己签名加载,我们只触发);缓存够则零滚动直接取窗口(快)。
-      let after = initial
-      // 平台是否「还在追加内容」(滚动后 scrollHeight 增长)——0 条时据此区分「真到底」vs
-      // 「加载慢/未触发」:前者 hasMore false(停),后者返回 cursor 让 core 重试(别标 ended)。
-      let platformActive = false
-      if (initial.list.length <= startIdx) {
-        for (let round = 0; round < 3; round++) {
-          if (await this.hasVerifyBox(browser)) {
-            // .fe-verify-box = 小红书人机校验拦截(明确风控信号)
-            reportXhsRisk("verify-box")
-            throw new Error("小红书风控验证码出现(滚动触发),已停止翻页——请降低刷新频率或稍后再试")
-          }
-          // 小步滚动(分 3 次,每步 ~400ms)触发平台懒加载——一步滚到底时平台
-          // 的 scroll/IO 处理来不及（实测连续 loadMore 无增长 → 0 条 → hasMore false）。
-          // 步进加随机抖动去机械化(固定节奏易被平台识别为自动化)。
-          const hBefore = await cdpEvaluate<number>(browser, `document.body.scrollHeight`)
-          await cdpEvaluate(browser, `(async () => {
-            const dist = document.body.scrollHeight - window.scrollY;
-            for (let i = 1; i <= 3; i++) {
-              window.scrollTo(0, window.scrollY + dist * (i / 3));
-              await new Promise((r) => setTimeout(r, 400 + Math.random() * 200));
-            }
-          })()`)
-          // 轮询等待 notes 增长(平台 user_posted 网络+渲染耗时 > 固定 sleep,实测 1.4~2.4s 不够)。
-          // 只读数量(轻量)判增长,确认到位后再完整 readNotes 一次取窗口——整棵序列化 6 次/轮太贵。
-          // 轮询间隔加随机抖动去机械化。
-          let grew = false
-          for (let i = 0; i < 6; i++) {
-            await sleep(500 + Math.floor(Math.random() * 300))
-            if ((await this.readNotesCount(browser)) > startIdx) {
-              grew = true
-              break // 新批已到位(即使平台加载多批,我们只取窗口)
-            }
-          }
-          const hAfter = await cdpEvaluate<number>(browser, `document.body.scrollHeight`)
-          if (hAfter > hBefore) platformActive = true
-          if (grew) break
+    return withBrowserMode(
+      browser,
+      "interactive",
+      async () => {
+        // 已在 profile 页(忽略 query)就不重载:滚动驱动的增量依赖页面累计的 notes,
+        // 重载会让 state 回到首屏,`slice(startIdx)` 又切到已返回过的条目。
+        await ensureXhsPageReady(
+          browser,
+          `/user/profile/${userId}`,
+          "小红书登录已失效或未登录：用户主页需要登录，请到「账号与凭证」重新扫码",
+        )
+        // 匿名 SSR 的 noteId 全被抹空,滚动也加载不出更多 —— 直接给出可操作的错误,
+        // 不要静默滚到底再报「已加载全部」。
+        if (!(await isXhsLoggedIn(browser))) {
+          throw new Error("小红书用户主页翻页需要登录：请先到「账号与凭证」扫码登录")
         }
-        after = await this.readNotes(browser)
-      }
 
-      // 窗口化:只取 [startIdx, startIdx+WINDOW)——平台一次滚到底加载 120 条,每次只返回 30。
-      const page = after.list.slice(startIdx, startIdx + FETCH_MORE_WINDOW)
-      const items = this.notesToItems(page)
-      const xml = serializeFeed(items, this.channelOptions({ user_id: userId }))
-      if (!page.length) {
-        // 0 条:平台还在追加(scrollHeight 增长)但 notes 未渲染到位 → 返回 cursor 让 core 重试
-        // (而非 hasMore false → desktop 标 ended → 用户被迫手动刷新)。cursor 不变,desktop
-        // onRender 无进展保护(items 不增长)不会自动重复触发,只由用户手动再点「加载更多」。
-        if (platformActive) return { xml, cursor: String(startIdx) }
-        return { xml } // 真到底:多次滚动 scrollHeight 无增长 = 平台无更多
-      }
-      return { xml, cursor: String(startIdx + page.length) }
-    })
-  }
+        const initial = await this.readNotes(browser)
+        // 已返回条数(索引定位)。无 cursor:跳过当前已加载(含 fetch 首页 32 条,不重复返回)。
+        // ⚠️ 不能 clamp 到当前页面条数:页面被重载过时(点开笔记会把共享 Edge 导航走),
+        // clamp 会把窗口压回**已返回过的前缀** —— 「加载更多点了没反应」。保持旧 cursor:
+        // 滚动把页面养到超过它;这轮滚不到就返回空 + 原 cursor 让 core 重试(别标 ended)。
+        const startIdx = cursor ? Number(cursor) || 0 : initial.list.length
 
-  /** 页面内检测风控验证框(RSSHub getUser 同款选择器)。 */
-  private async hasVerifyBox(browser: BrowserBackend): Promise<boolean> {
-    return cdpEvaluate<boolean>(browser, `!!document.querySelector('.fe-verify-box')`)
+        // state 缓存不足才滚动(平台自己签名加载,我们只触发);缓存够则零滚动直接取窗口(快)。
+        let after = initial
+        // 平台是否「还在追加内容」(滚动后 scrollHeight 增长)——0 条时据此区分「真到底」vs
+        // 「加载慢/未触发」:前者 hasMore false(停),后者返回 cursor 让 core 重试(别标 ended)。
+        let platformActive = false
+        if (initial.list.length <= startIdx) {
+          const r = await scrollXhsUntilGrown(browser, () => this.readNotesCount(browser), startIdx)
+          platformActive = r.platformActive
+          after = await this.readNotes(browser)
+        }
+
+        // 窗口化:只取 [startIdx, startIdx+WINDOW)——平台一次滚到底加载 120 条,每次只返回 30。
+        const page = after.list.slice(startIdx, startIdx + XHS_FETCH_MORE_WINDOW)
+        const items = this.notesToItems(page)
+        const xml = serializeFeed(items, this.channelOptions({ user_id: userId }))
+        if (!page.length) {
+          // 0 条:平台还在追加(scrollHeight 增长)但 notes 未渲染到位 → 返回 cursor 让 core 重试
+          // (而非 hasMore false → desktop 标 ended → 用户被迫手动刷新)。cursor 不变,desktop
+          // onRender 无进展保护(items 不增长)不会自动重复触发,只由用户手动再点「加载更多」。
+          if (platformActive) return { xml, cursor: String(startIdx) }
+          return { xml } // 真到底:多次滚动 scrollHeight 无增长 = 平台无更多
+        }
+        return { xml, cursor: String(startIdx + page.length) }
+      },
+      "xhs",
+    )
   }
 
   /** 页面内读当前全部 notes(解 _rawValue + flat)。 */

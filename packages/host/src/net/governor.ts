@@ -331,6 +331,8 @@ const _inflight = new Map<string, Promise<HttpResponse>>()
 /** 平台级最小间隔与 RPM 滑动窗口。 */
 const _nextAllowedAt = new Map<string, number>()
 const _rpmLog = new Map<string, number[]>()
+/** 浏览器操作最近一次放行时间(平台 → epoch ms)。 */
+const _lastBrowserAt = new Map<string, number>()
 
 const RPM_WINDOW_MS = 60_000
 /** 这些状态码视为平台风控信号,自动写冷却(§2.3 规则 2)。 */
@@ -392,6 +394,47 @@ export function reportRisk(platform: string, signal: string): void {
   }
   _cooldowns.set(platform, { until: now + ms, signal: sig })
   persistCooldowns()
+}
+
+/**
+ * browserGate —— 浏览器(CDP)操作的准入闸门。
+ *
+ * ⚠️ CDP 流量不经过 `governedHttp`,平台配额/冷却原本只作用于 `appHost.http`;
+ * 而 xhs 的**真实主路径恰恰是浏览器导航**(整页导航 + 页面自身 XHR)。不在入口补闸,
+ * 「风控后冷却 60 分钟」就只是一句安慰:下一次刷新仍会驱动已登录的 Edge 撞验证页。
+ *
+ * 语义:
+ *   1. L0 直通(调试,与 HTTP 一致);
+ *   2. 平台冷却未到期 → 拒绝,文案与 HTTP 通路相同;
+ *   3. 同平台两次浏览器操作之间至少间隔 `max(600ms, minIntervalMs × 12)` + 0~400ms
+ *      随机抖动(L2/L3 随等级放大)。浏览器操作比单个 HTTP 请求重得多,基准取 600ms;
+ *      抖动避免 N 个订阅刷新时形成完全固定的节奏。
+ *
+ * ⚠️ **登录流程不要调用它**:冷却期正是用户需要重新扫码恢复的时候,拦住登录会让
+ * 账号永远无法自救。登录只用 `withBrowserMode` 的互斥锁即可。
+ */
+export async function browserGate(platform: string): Promise<void> {
+  if (levelFor(platform) === 0) return
+  ensureLoaded()
+
+  const now = nowMs()
+  const cooldown = _cooldowns.get(platform)
+  if (cooldown) {
+    if (cooldown.until > now) {
+      const left = Math.ceil((cooldown.until - now) / 1000)
+      const wait = left >= 60 ? `${Math.ceil(left / 60)} 分钟` : `${left} 秒`
+      throw new Error(`平台冷却中（${platform}，剩余 ${wait}，信号 ${cooldown.signal}）`)
+    }
+    _cooldowns.delete(platform)
+  }
+
+  const pol = effectivePlatformPolicy(platform)
+  const interval = Math.max(600, pol.minIntervalMs * 12)
+  const jitter = Math.floor(Math.random() * 400)
+  const last = _lastBrowserAt.get(platform) ?? 0
+  const wait = last + interval + jitter - nowMs()
+  if (wait > 0) await sleep(wait)
+  _lastBrowserAt.set(platform, nowMs())
 }
 
 /** 供诊断:活跃冷却的剩余毫秒;过期项顺手清理。 */

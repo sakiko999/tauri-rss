@@ -193,6 +193,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | 平台配额 | L1 软限制：bili/youtube 12/600/50ms，其它平台 8/300/50ms；未知 host 一 host 一桶 8/300/50。L2 = ×0.5 / 间隔 ×2，L3 = ×0.25 / 间隔 ×4。全局并发 32 |
 | 等级 | **全局默认 + 平台覆盖 + 渠道覆盖**：`AppSettings.netLevel`（只允许 0~3）+ `netLevels`（含 `"*"` 兜底，9 = L9）；core 解析 `用户渠道 → 内置渠道 → 平台 → "*" → 全局`，内置 `xhs:user = 9`；host 的 `levelFor(platform)` 只认精确平台 → `"*"` → 全局 |
 | 冷却 | `reportRisk(platform, signal)`；计量请求返回 412/418/403/429 时自动写；`governor:cooldowns` best-effort 持久化 |
+| 浏览器闸门 | `net.browserGate(platform)`：CDP 操作入口的冷却 + 最小间隔 + 抖动（CDP 不经 `governedHttp`）；登录流程显式绕过冷却 |
 | 等级与开关 | `AppSettings.netLevel / netLevels / autoRefresh` + 设置页「网络与风控」（全局默认 + 渠道覆盖表） |
 | L9 声明 | `RssChannel.supportsL9`（crawler channel 级，core 投影 `ChannelInfo.supportsL9`）；未声明 = L9 下不尝试 `fetchPassive`、只读缓存 |
 | 等级闸门 | `packages/core/src/data-layer.ts` 的 `doRefresh`：`autoRefresh=false` 且非 force 只读缓存；`level === 9` 且渠道声明支持时只调 `fetchPassive()`，**绝不回退 `fetch()`** |
@@ -204,12 +205,23 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   冷却账本用一个 KV `governor:cooldowns`。运行期改配额走 `appHost.net.configure`。
 - `reportRisk` 的「只对计量生效」按**平台名**判断（localhost / 已知媒体 CDN 忽略），
   显式调用不会因 URL 未知而丢失。
-- **未实现** §2.4 的每平台传输策略 `auto / browser-only`；CDP 内部流量也不经 governor
-  （浏览器侧由 `withBrowserLock` 串行）。
+- **未实现** §2.4 的每平台传输策略 `auto / browser-only`；CDP 内部流量不经过
+  `governedHttp`。2026-10-19 补了一道显式闸门：xhs/weibo 的浏览器操作在
+  `withBrowserMode(browser, mode, fn, platform)` 入口调 `net.browserGate(platform)`
+  （平台冷却 + 最小间隔 600ms~2.4s + 0~400ms 抖动，字符串与 HTTP 冷却一致）。
+  ⚠️ **登录流程不要传 platform**：冷却期正是用户需要重新扫码自救的时候，登录只走
+  `withBrowserLock` 串行，不被冷却拦住。
 - 平台等级由 `netLevels` 覆盖；channelKey（如 `xhs:user`）也能写进这张表，但只有 core
   的抓取闸门识别，宿主 governor 仍按 URL 平台执行配额。
-- L9（LX）只收敛了 `doRefresh`。`loadMore` / `previewChannel` / 详情补全 / 播放解析
-  仍走主动请求，L9 下会被 governor 拒绝并回退缓存/报错——这是等级语义，不是遗漏。
+- L9（LX）收敛 `doRefresh` + **详情补全**（2026-10-19）：`doRefresh` 只调
+  `fetchPassive`；`resolveDetail` 在等级 9 时传 `{ passive: true }`，渠道只能导航到
+  详情 URL 读页面 `__INITIAL_STATE__`（不构造 fetch/API），不支持就返回 `null` →
+  原样返回列表 item。`loadMore` / `previewChannel` / 播放解析仍走主动请求，L9 下会被
+  governor 拒绝并回退缓存/报错——这是等级语义，不是遗漏。
+- xhs 渠道按**登录态/渠道**分流（2026-10-20）：登录 → 被动（导航 + 读 SSR / L9 捕获）；
+  匿名时 `xhs:explore` 也走被动（匿名推荐流 SSR 有 feeds），`xhs:user` 才回退 fetch
+  （匿名 profile 的 noteId 被抹空）。登录判据 `isXhsLoggedIn` 不看 `web_session`（游客也有）。
+  `xhs:explore` 的翻页也是被动：滚动驱动、读 `feed.feeds` 增量，登录/匿名共用。
 - 计量请求的 in-flight 去重按 `method + url + body` 或 `policy.dedupeKey`；媒体/图片不参与。
 
 ## 3. LX 被动采集

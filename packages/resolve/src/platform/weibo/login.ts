@@ -12,7 +12,7 @@
  * 与 xhs 的差别:二维码不是 data URL、也不需要点登录按钮;登录态判定用 `SUB`
  * (微博会话 cookie,HttpOnly → 只能经 CDP Network.getAllCookies 读)。
  */
-import { cdpEvaluate, cdpNavigate } from "../../browser/cdp.ts"
+import { cdpEvaluate, cdpNavigate, withScanLoginLock } from "../../browser/cdp.ts"
 import { log } from "../../log.ts"
 import type { LoginResult } from "../../index.ts"
 
@@ -23,6 +23,8 @@ const LOGIN_URL =
 export interface WeiboScanLoginOptions {
   /** 总超时(默认 5 分钟;微博二维码约 3~5 分钟有效)。 */
   timeoutMs?: number
+  /** UI 关闭弹窗时 abort(登录持全局浏览器锁,必须可取消)。 */
+  signal?: AbortSignal
 }
 
 /** Record → "k=v; k2=v2"(含 HttpOnly,供 HTTP 降级路径 / settings 落库用)。 */
@@ -83,9 +85,24 @@ export async function weiboScanLogin(
   emitQr: (qr: string | null) => void,
   opts?: WeiboScanLoginOptions,
 ): Promise<LoginResult> {
+  // 与 xhs 同构:持锁 + scanLoginActive(见 cdp.ts withScanLoginLock);不传 platform ——
+  // 冷却期仍需允许用户重新扫码自救。
+  return withScanLoginLock(browser, "hidden", () => runWeiboScanLogin(browser, emitQr, opts))
+}
+
+async function runWeiboScanLogin(
+  browser: BrowserBackend,
+  emitQr: (qr: string | null) => void,
+  opts?: WeiboScanLoginOptions,
+): Promise<LoginResult> {
   const timeoutMs = opts?.timeoutMs ?? 300_000
   const deadline = Date.now() + timeoutMs
+  // UI 关闭弹窗时 abort(同 xhs:登录持全局浏览器锁,必须可取消)。
+  const assertLive = () => {
+    if (opts?.signal?.aborted) throw new Error("扫码登录已取消")
+  }
 
+  assertLive()
   await cdpNavigate(browser, LOGIN_URL, true)
   log.weibo?.loginNavigate?.({ url: LOGIN_URL })
 
@@ -98,6 +115,7 @@ export async function weiboScanLogin(
 
   // 2. 二维码是页面自带的 img(不用点按钮);等它渲染出来。
   for (;;) {
+    assertLive()
     const src = await readQrSrc(browser)
     if (src) {
       emitQr(await qrToDataUrl(src))
@@ -109,6 +127,7 @@ export async function weiboScanLogin(
 
   // 3. 轮询 SUB 出现 = 用户扫码成功(页面自身完成确认与种 cookie)。
   for (;;) {
+    assertLive()
     const c = await browser.getCookies("https://weibo.com")
     if (c["SUB"]) {
       emitQr(null)

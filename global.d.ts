@@ -67,6 +67,7 @@ declare global {
    * 网络治理能力(NetworkGovernor 门面):
    *   - configure: 切换等级(L0 / L1 / LX)与配额,局部字段合并;
    *   - reportRisk: 显式上报平台风控信号,按信号写平台冷却;
+   *   - browserGate: 浏览器(CDP)操作的准入(冷却 + 最小间隔 + 抖动);
    *   - governorStats: 自检/诊断(活跃冷却剩余毫秒 / 在途 / 排队)。
    */
   interface NetBackend {
@@ -82,6 +83,12 @@ declare global {
       platforms?: Record<string, PlatformQuotaConfig>
     }): void
     reportRisk(platform: string, signal: string): void
+    /**
+     * 浏览器操作准入:平台冷却未到期时抛错,否则按最小间隔 + 随机抖动放行。
+     * CDP 流量不经过 `governedHttp`,xhs/weibo 的主路径必须显式过这道闸。
+     * ⚠️ 登录流程不应调用(冷却期仍需允许用户重新扫码)。
+     */
+    browserGate(platform: string): Promise<void>
     governorStats(): { cooldowns: Record<string, number>; inFlight: number; queued: number }
   }
 
@@ -158,6 +165,11 @@ declare global {
      *  ⚠️ document.cookie 读不到 HttpOnly(如 xhs web_session),登录态检测/取 cookie 必须走这里。 */
     getCookies(url?: string): Promise<Record<string, string>>
     /**
+     * 清除匹配域名后缀的 cookie(含 HttpOnly),返回删除数量。
+     * 「清除凭证」用它真正退出浏览器账号;没有该方法的宿主跳过。
+     */
+    clearCookies?(domainSuffix: string): Promise<number>
+    /**
      * 切换窗口模式（可选：非 Tauri 后端没有可切换的窗口）。
      * 幂等；未启动时会按该模式拉起。见 `BrowserWindowMode`。
      */
@@ -186,6 +198,11 @@ declare global {
      * 可选:非 Tauri 后端不提供(它们底层走 fetch,自带超时)。
      */
     abortPending?(reason: string): void
+    /**
+     * 长操作(扫码登录)进行中。刷新超时时不能 abortPending —— 否则会把登录正在用的
+     * CDP 连接一起掐断,表现为「手机已确认但登录超时」。由登录流程设置/清理。
+     */
+    scanLoginActive?: boolean
   }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */

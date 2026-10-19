@@ -17,7 +17,7 @@
  * 本就是 data URL。两条路径 emitQr 推的都是 `data:image/...`(QrImage 直接当 img 用)。
  */
 import { log } from "../../log.ts"
-import { cdpEvaluate, cdpNavigate } from "../../browser/cdp.ts"
+import { cdpEvaluate, cdpNavigate, withScanLoginLock } from "../../browser/cdp.ts"
 import type { LoginResult } from "../../index.ts"
 
 const SSO = "https://sso.douyin.com"
@@ -103,11 +103,15 @@ async function fetchIntoJar(jar: CookieJar, url: string, referer: string): Promi
 /** 纯 HTTP 扫码(失败抛错,由调用方决定是否回退 browser)。 */
 async function douyinHttpScanLogin(
   emitQr: (qr: string | null) => void,
-  opts?: { timeoutMs?: number; onScanned?: () => void },
+  opts?: { timeoutMs?: number; onScanned?: () => void; signal?: AbortSignal },
 ): Promise<LoginResult> {
   const deadline = Date.now() + (opts?.timeoutMs ?? 180_000)
   const jar = new CookieJar()
   const fp = genVerifyFp()
+  // UI 关闭弹窗时 abort(登录占着「凭证卡片」交互,必须可取消)。
+  const assertLive = () => {
+    if (opts?.signal?.aborted) throw new Error("扫码登录已取消")
+  }
 
   // 主站 warmup:拿 ttwid 等基础 cookie(通行证接口对冷 cookie 更敏感)。失败不拦路。
   await fetchIntoJar(jar, `${MAIN}/`, MAIN).catch(() => undefined)
@@ -128,6 +132,7 @@ async function douyinHttpScanLogin(
 
   // 2. 轮询扫码状态(1待扫 / 2已扫 / 3已确认 / 5过期)。
   for (;;) {
+    assertLive()
     if (Date.now() > deadline) throw new Error("douyin 扫码: 超时未完成")
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
     const poll = await fetchIntoJar(jar, `${SSO}/check_qrconnect/?${qrParams(fp, token).toString()}`, `${MAIN}/`)
@@ -206,10 +211,29 @@ async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
 async function douyinBrowserScanLogin(
   browser: BrowserBackend,
   emitQr: (qr: string | null) => void,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; signal?: AbortSignal },
+): Promise<LoginResult> {
+  // 与 xhs/weibo 同构持锁:登录与抓取共享同一个 page target,不持锁的话一次刷新就会把
+  // 登录页导航走(canvas 二维码与页面自身轮询一起消失),已扫码也等不到 sessionid。
+  // ⚠️ 模式必须 interactive:二维码是 canvas 绘制,hidden(SW_HIDE)下渲染管线停摆画
+  // 不出来(xhs/weibo 是 img data URL/远程 src,读 DOM 即可,才能用 hidden)。
+  return withScanLoginLock(browser, "interactive", () =>
+    runDouyinBrowserScanLogin(browser, emitQr, opts),
+  )
+}
+
+async function runDouyinBrowserScanLogin(
+  browser: BrowserBackend,
+  emitQr: (qr: string | null) => void,
+  opts?: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<LoginResult> {
   const deadline = Date.now() + (opts?.timeoutMs ?? 180_000)
+  // UI 关闭弹窗时 abort(登录持全局浏览器锁,必须可取消)。
+  const assertLive = () => {
+    if (opts?.signal?.aborted) throw new Error("扫码登录已取消")
+  }
 
+  assertLive()
   await cdpNavigate(browser, MAIN)
   log.douyin.info(`扫码登录导航 ${MAIN}(browser 路径)`)
 
@@ -224,6 +248,7 @@ async function douyinBrowserScanLogin(
   if (!(await readQrSrc(browser))) {
     await clickLoginButton(browser)
     for (;;) {
+      assertLive()
       const src = await readQrSrc(browser)
       if (src) break
       if (Date.now() > deadline) throw new Error("二维码未出现(登录弹窗可能未打开)")
@@ -234,6 +259,7 @@ async function douyinBrowserScanLogin(
 
   // 用户扫码确认后 cookie 落 profile,轮询 sessionid(含 HttpOnly)。
   for (;;) {
+    assertLive()
     const c = await browser.getCookies(MAIN)
     if (c[LOGIN_COOKIE]) {
       log.douyin.info("登录成功(browser 路径)")
@@ -250,7 +276,7 @@ async function douyinBrowserScanLogin(
  */
 export async function douyinScanLogin(
   emitQr: (qr: string | null) => void,
-  opts?: { timeoutMs?: number; onScanned?: () => void },
+  opts?: { timeoutMs?: number; onScanned?: () => void; signal?: AbortSignal },
 ): Promise<LoginResult> {
   try {
     return await douyinHttpScanLogin(emitQr, opts)

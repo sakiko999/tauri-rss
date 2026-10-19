@@ -33,7 +33,8 @@ export type GlobalNetLevel = 0 | 1 | 2 | 3
  *
  * `xhs:user` 必须走浏览器导航读 SSR —— 应用构造的 HTTP 请求拿不到完整数据，
  * 页面内自定义 fetch 又属于 LX 定义里的类别②，所以它默认就是 L9。
- * 匿名导航拿不到笔记时回退内容缓存(这是 L9 的既定语义)。
+ * 未登录/登录失效时：L9 的 `fetchPassive` 返回 null → core 回退内容缓存；
+ * 非 L9 的匿名访客走 fetch（匿名 SSR 抹空 noteId → `anon-*` 虚拟条目）。
  *
  * ⚠️ 只在**有浏览器能力**(`appHost.browser`)时生效；移动端没有 browser，
  * 由 `netLevelFor` 回落到平台/全局等级(否则该渠道会永远只剩缓存)。

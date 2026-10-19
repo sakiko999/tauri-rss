@@ -15,6 +15,7 @@ export { mediaReferrerFor } from "./media-referrer.ts"
 export {
   configureNetwork,
   reportRisk,
+  browserGate,
   governorStats,
   levelFor,
   DEFAULT_NET_POLICY,

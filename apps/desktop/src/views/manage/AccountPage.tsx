@@ -33,6 +33,17 @@ const PLATFORM_META: Record<
   douyin: { label: "抖音", field: "douyinCookie", note: "解锁直播原画档位；搜索类能力始终需要账号。" },
 }
 
+/**
+ * 桌面抓取实际用的是 Edge profile 的登录态，不是 settings 里的 cookie 串。
+ * 「清除凭证」必须同时登出这些站点，否则只是清掉 UI 显示，下一次刷新仍以真实账号导航。
+ * 只列**浏览器登录路径**的平台：B站是纯 HTTP 扫码，清 settings 即可，不该为此拉起 Edge。
+ */
+const COOKIE_HOSTS: Record<string, string[]> = {
+  xhs: ["xiaohongshu.com"],
+  weibo: ["weibo.cn", "weibo.com"],
+  douyin: ["douyin.com"],
+}
+
 export function AccountPage() {
   const dl = useDesktop((s) => s.dl)
   const settings = useDesktop((s) => s.settings)
@@ -176,9 +187,18 @@ function CredentialCard({
           className="btn btn-quiet"
           disabled={!configured || busy}
           onClick={async () => {
-            if (!window.confirm(`清除 ${meta.label} 凭证？相关订阅会退回匿名档位。`)) return
+            const hosts = COOKIE_HOSTS[platform] ?? []
+            const extra = hosts.length
+              ? "会同时退出抓取浏览器里该平台的登录态（无法撤销）。\n\n"
+              : ""
+            if (!window.confirm(`清除 ${meta.label} 凭证？\n\n${extra}相关订阅会退回匿名档位。`)) return
             setBusy(true)
             try {
+              // 先清浏览器登录态，再清 settings：中途失败时不会出现「设置已清、账号还挂着」。
+              const browser = globalThis.appHost?.browser
+              for (const host of hosts) {
+                await browser?.clearCookies?.(host)
+              }
               await onSave("")
               onToast("warn", `${meta.label} 凭证已清除`)
             } catch (e) {
@@ -213,11 +233,14 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
     setQr("")
     setError("")
     setAlready(false)
+    // ⚠️ 关闭弹窗必须 abort:登录持全局浏览器锁直到成功/超时(最长 5 分钟),不取消的话
+    // 关窗后所有 xhs/weibo 浏览器操作都被排队卡住,重开弹窗也出不了码。
+    const ac = new AbortController()
     dl.scanLogin(channel.key, (dataUrl) => {
       if (!mounted.current || !dataUrl) return
       setQr(dataUrl)
       setPhase("qr")
-    })
+    }, { signal: ac.signal })
       .then(async (r) => {
         if (!mounted.current) return
         setAlready(r.alreadyLoggedIn === true)
@@ -238,6 +261,7 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
       })
     return () => {
       mounted.current = false
+      ac.abort()
     }
   }, [channel?.key, dl])
 

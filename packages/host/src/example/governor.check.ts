@@ -7,6 +7,7 @@
 import assert from "node:assert/strict"
 import { injectNodeHost } from "../index.ts"
 import {
+  browserGate,
   classifyRequest,
   configureNetwork,
   effectivePlatformPolicy,
@@ -310,7 +311,31 @@ console.log("── 并发上限:平台 / 全局 ──")
   assert.equal(gActive, 0)
 }
 
+console.log("── 浏览器闸门:冷却拒绝 / 最小间隔 / L0 直通 ──")
+{
+  configureNetwork({ level: 1, levels: {} })
+
+  // 风控信号写入的冷却必须能拦住浏览器操作 —— CDP 流量不走 governedHttp,
+  // 这是 xhs/weibo 真实账号主路径唯一的退避入口。
+  reportRisk("xhs", "verify-box")
+  await assert.rejects(() => browserGate("xhs"), /平台冷却中/)
+
+  // 无冷却的平台:连续两次浏览器操作至少隔一个基准间隔(600ms + 0~400ms 抖动)。
+  const t0 = Date.now()
+  await browserGate("douyu")
+  await browserGate("douyu")
+  const gap = Date.now() - t0
+  assert.ok(gap >= 550, `浏览器操作应受最小间隔约束(实际 ${gap}ms)`)
+
+  // L0 直通:调试档不排队。
+  configureNetwork({ level: 0, levels: {} })
+  const t1 = Date.now()
+  await browserGate("douyu")
+  await browserGate("douyu")
+  assert.ok(Date.now() - t1 < 200, "L0 不应受浏览器闸门约束")
+}
+
 // 恢复默认等级,避免后续本进程内其它自检受影响。
 configureNetwork({ level: 1, levels: {} })
 
-console.log("✔ NetworkGovernor 自检通过(分类 / L0 直通 / L9 拒绝 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限)")
+console.log("✔ NetworkGovernor 自检通过(分类 / L0 直通 / L9 拒绝 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限 / 浏览器闸门)")

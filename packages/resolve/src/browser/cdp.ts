@@ -52,13 +52,19 @@ async function setBrowserModeQuiet(
  * - `hidden`：SSR/DOM 读取、页面内 fetch；模式切不过去也不影响数据路径。
  * - `interactive`：滚动/懒加载页面；切不过去会抛错（否则滚动会静默 0 条），
  *   结束后自动切回 `hidden`（interactive 是真实渲染，常驻有 CPU/GPU 开销）。
+ *
+ * `platform` 传入时先过宿主的 `net.browserGate`（平台冷却 + 最小间隔 + 随机抖动）。
+ * ⚠️ CDP 流量不经过 `appHost.http`，不过闸的话 governor 的配额/冷却对真实账号
+ * 的主路径完全不生效。**登录流程不要传 platform**（冷却期仍需允许重新扫码）。
  */
 export function withBrowserMode<T>(
   browser: BrowserBackend,
   mode: BrowserWindowMode,
   fn: () => Promise<T>,
+  platform?: string,
 ): Promise<T> {
   return withBrowserLock(async () => {
+    if (platform) await globalThis.appHost?.net?.browserGate?.(platform)
     if (mode === "interactive") {
       await browser.setMode?.("interactive")
       try {
@@ -69,6 +75,35 @@ export function withBrowserMode<T>(
     }
     await setBrowserModeQuiet(browser, mode)
     return fn()
+  })
+}
+
+/**
+ * 扫码登录的持锁包装(xhs / weibo / douyin 三平台同构)。
+ *
+ * 登录与抓取共享同一个 page target，必须持浏览器锁：否则刷新会把登录弹窗导航走，
+ * 手机确认后页面自身的轮询已停止，登录永远等不到凭证。登录可能持锁数分钟（等用户
+ * 扫码），期间排队中的刷新会先撞上 45s 超时，那个超时原本会 abortPending 掐断共享
+ * 连接 —— `scanLoginActive` 让超时方跳过中止。
+ *
+ * ⚠️ 刻意**不传 platform**：冷却期正是用户需要重新扫码自救的时候，不能被 browserGate
+ * 拦住；登录仍然走锁串行。`mode` 由平台自选（xhs/weibo 的二维码是 img data URL，
+ * hidden 即可；douyin 是 canvas 绘制，hidden 下渲染停摆画不出来，要 interactive）。
+ */
+export function withScanLoginLock<T>(
+  browser: BrowserBackend,
+  mode: BrowserWindowMode,
+  run: () => Promise<T>,
+): Promise<T> {
+  return withBrowserMode(browser, mode, async () => {
+    // 只在真正持锁时置位：排队中的登录不能提前把标记打开，否则前一个登录结束时
+    // 会把标记清掉、让刷新超时误杀后一个登录。
+    browser.scanLoginActive = true
+    try {
+      return await run()
+    } finally {
+      browser.scanLoginActive = false
+    }
   })
 }
 
@@ -170,6 +205,17 @@ export async function cdpNavigate(browser: BrowserBackend, url: string, forceRel
     }
     if (same) return
   }
+  // ⚠️ 先记旧文档的 `performance.timeOrigin`。只用 `readyState === 'complete'` 判就绪
+  // 会踩一个静默竞态：赋值 `location.href` 后导航是异步提交的，此刻**旧文档本来就是
+  // complete**，首个轮询立即通过；紧接着的 `waitUntil(__INITIAL_STATE__)` 也会被旧
+  // xhs 页面满足 —— 于是两个 xhs:user 订阅交替刷新时，B 会读到 A 的笔记并写入缓存。
+  // timeOrigin 在新文档提交后才会变，用它区分「旧文档」与「新文档」。
+  let beforeOrigin: number | undefined
+  try {
+    beforeOrigin = await browser.evaluate<number>(`performance.timeOrigin`, { returnByValue: true })
+  } catch {
+    // 读不到(处于导航过渡等) → 退回旧判据,不阻塞导航。
+  }
   try {
     await browser.evaluate(`location.href = ${JSON.stringify(url)}; true`, {
       awaitPromise: false,
@@ -178,7 +224,11 @@ export async function cdpNavigate(browser: BrowserBackend, url: string, forceRel
   } catch {
     // 导航瞬间旧 execution context 销毁,evaluate 可能抛错——属正常,忽略。
   }
-  await waitUntil(browser, `document.readyState === 'complete'`, 20_000, `页面未加载完成: ${url}`)
+  const ready =
+    typeof beforeOrigin === "number" && Number.isFinite(beforeOrigin)
+      ? `performance.timeOrigin !== ${beforeOrigin} && document.readyState === 'complete'`
+      : `document.readyState === 'complete'`
+  await waitUntil(browser, ready, 20_000, `页面未加载完成: ${url}`)
 }
 
 /**

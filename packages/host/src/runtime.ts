@@ -10,7 +10,7 @@
  * 各自的 getter 包装。
  */
 
-import { configureNetwork, governedHttp, governorStats, reportRisk } from "./net/governor.ts"
+import { browserGate, configureNetwork, governedHttp, governorStats, reportRisk } from "./net/governor.ts"
 
 let _http: HttpBackend | undefined
 let _js: JsBackend | undefined
@@ -36,6 +36,7 @@ const OPENABLE_SCHEMES = new Set(["http", "https", "mailto"])
 const netBackend: NetBackend = {
   configure: configureNetwork,
   reportRisk,
+  browserGate,
   governorStats,
 }
 

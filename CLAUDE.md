@@ -155,9 +155,17 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
   全局 32），正常刷新/搜索/详情/解析不应感到排队——它只兜极端情况。
   `autoRefresh=false` 时**非 force** 刷新只读内容缓存（不发网络）；手动刷新/刷新全部
   走 `force:true`，不受该开关限制。
+- **CDP 也要过闸**（2026-10-19）：浏览器操作不经过 `governedHttp`，xhs/weibo 的主路径
+  全是导航 + 页面内 fetch。现在 `withBrowserMode(browser, mode, fn, platform)` 会在持锁后
+  调 `net.browserGate(platform)`：平台冷却未到期直接拒绝，否则按「600ms~2.4s 基准 +
+  0~400ms 抖动」放行（L2/L3 随等级放大）。**登录流程不传 platform** —— 冷却期仍需允许
+  用户重新扫码自救。
 - **L9 闸门在 core**：`data-layer.ts` 的 `doRefresh` 按渠道解析等级，`level === 9` 时
   只调 `source.fetchPassive?.()`；拿不到就回退内容缓存（即使过期），**绝不回退
-  `source.fetch()`**。被动采集入口是 `crawler/passive/capture.ts`（只观察 CDP
+  `source.fetch()`**。⚠️ 详情补全同样过闸（2026-10-19）：`core.resolveDetail` 在等级 9
+  时给 `source.resolveDetail(item, { passive: true })` —— 渠道只能导航到详情页读页面 SSR，
+  不构造 fetch；不支持就返回 `null`（原样返回列表 item）。`loadMore` / `previewChannel` /
+  播放解析仍会主动请求。被动采集入口是 `crawler/passive/capture.ts`（只观察 CDP
   Network，`trigger` 只能导航/滚动/点击）+ `passive/buffer.ts`（内存 TTL 30min）。
   已接 `xhs:explore` / `xhs:user`（导航读 SSR，不用页面内 fetch）；
   其余渠道在 L9 下只显示缓存。⚠️ L9 对该**平台**的所有主动请求生效 —— 抓取之外的
@@ -412,13 +420,31 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   LIVE badge，解 `videoRenderer`。搜索添加「直播间」→ 落地 `youtube:live`（参数 videoId）
 
 **小红书**（细节见 `docs/xhs-signature-research.md`）
+- ⚠️ **`web_session` 不是登录标志**（2026-10-19 实测 + 社区复核）：小红书对**匿名访客**
+  首次打开页面就会签发一个游客 `web_session`（伴随 `a1`/`webId`/`sec_poison_id` 等）。
+  按它判断登录会出现「还没扫码就显示已登录」，并把游客 cookie 当成账号凭证写进
+  `settings.xhsCookie`。登录判据 = 页面 `__INITIAL_STATE__.user.loggedIn === true`
+  / 侧栏「我」入口 / `user_id` cookie（后两者兜底）。权威接口是
+  `/api/sns/web/v2/user/me` 的 `data.guest === false && data.user_id`。
 - 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
   xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）
-- ⚠️ **`xhs:user` 匿名也能出条目**（2026-10-12 起）：匿名 SSR 渲染卡片但平台**抹空 noteId**，
-  仅**浏览器导航**路径被 302→/login（真·0 条）；HTTP / 页面内 fetch 路径匿名拿到卡片，
-  `noteCardToSocial`（`resolve/client.ts`）用**虚拟 ID 兜底**（`anon-<hash>`，查实为
-  commit ff86e5a 引入），清掉 url + 假 xsecToken（全列表共用、拿它补全会串号）后正常 emit。
-  「必须登录」只对浏览器导航路径成立
+- ⚠️ **xhs 渠道按登录态/渠道分流**（2026-10-20）：登录态 → **被动**（导航后读页面
+  `__INITIAL_STATE__`，或 L9 的 Network 捕获），不构造请求。匿名：
+  - `xhs:explore` **也走被动** —— 匿名推荐流 SSR 本身有 feeds，首屏与 `fetchMore`
+    共用同一份页面 state，不再多抓一次 HTML；
+  - `xhs:user` 走 **fetch** —— 匿名 profile SSR 会**抹空 noteId**，`noteCardToSocial`
+    只能生成 `anon-<hash>` 虚拟条目并清掉 url/xsecToken（预期降级）。
+  登录判据统一走 `isXhsLoggedIn`（页面 `loggedIn` + 侧栏「我」+ `user_id` cookie），
+  **不能看 `web_session`**（游客也有）。
+  - `xhs:explore` 也实现了被动 `fetchMore`（滚动驱动，登录/匿名共用）。⚠️ 翻页**不能整页
+    重载**：增量只能从页面累计的 `feed.feeds` 里切，重载会让 state 回到首屏。判据只比
+    `pathname`（`shared.ts` 的 `ensureXhsPath`，三处入口包成 `ensureXhsPageReady`）——
+    SPA 会往地址栏写 query，完整 `href` 永不相等，用 `cdpNavigate` 自带的同址判据会
+    每次都重载。
+  - 详情同理：登录态导航详情页读 `noteDetailMap`（被动）；匿名走页面内 fetch 详情 HTML。
+    `core.resolveDetail` 在等级 9 时传 `{ passive: true }`（禁止 fetch），匿名则直接
+    回退列表 item。explore/user 的详情实现已收敛到 `channels/xhs/shared.ts`。
+  - L9 的 `fetchPassive` 对未登录用户返回 null → core 回退内容缓存，不会偷偷改走 fetch。
 - ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——
   `extractInitialState` 用**平衡大括号截纯 JSON** + 空容器归一
 - ⚠️ **不要手拼 user_posted fetch**（页面内 `_webmsxyw` 只返回部分头 → 300011 风控）。
@@ -470,7 +496,12 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - 恢复登录：填真实 cookie → `git update-index --no-skip-worktree` 再改，**勿提交真实值**
   （文件有 skip-worktree 保护 + 空占位模板 `.example`）
 - 扫码登录是 **channel 级能力 `Loginable`**（平台级操作，不依赖 info 实例化）。
-  `emitQr` 载荷语义：`data:image/...`（浏览器路径已编码）**或**待编码文本（纯 HTTP 路径）
+  `emitQr` 载荷语义：`data:image/...`（浏览器路径已编码）**或**待编码文本（纯 HTTP 路径）。
+  ⚠️ `opts.signal`（2026-10-20）：UI 关闭二维码弹窗必须 abort —— 登录在 `withScanLoginLock`
+  （cdp.ts，xhs/weibo hidden / douyin interactive，douyin 二维码是 canvas 绘制 hidden 画不出）
+  里持全局浏览器锁直到成功/超时，没有取消通道的话关窗后所有浏览器操作都被排队卡住。
+  ⚠️ xhs 登录的**初始检测只用页面证据**（`user.loggedIn`/侧栏「我」，cookie 完全不参与）；
+  轮询判据是 `user_id` **相对基线变化** —— 服务端 session 失效时残留的旧 user_id 不算登录。
 
 ## 播放
 
@@ -580,6 +611,22 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 
 ## 其他约定
 
+- ⚠️ **分页条目的 `fetchedAt` 必须对齐到首屏**（2026-10-20，小红书发现页实测）：
+  没有 `publishedAt` 的源，`selectors.sortItems` 走 `publishedAt ?? fetchedAt` 兜底，
+  而 `loadMore` 是**另一次抓取**（`tpl:fetchedAt` 更新）—— 新一批会整体排到列表最前。
+  现象：滚到底点「加载更多」，视口里还是原来那批，**新内容全插到顶部**（实测 89 → 272 条，
+  顶部一屏一换），用户描述成「往下滑一直看同一页」。修法：`core.loadMore` 把本页条目的
+  `fetchedAt` 覆盖成该订阅已有内容的抓取时间（同一订阅 = 同一批快照）→ 排序键相同 →
+  稳定排序保持 append 顺序。**新增分页渠道时不需要额外处理**（在 core 统一做）。
+  另有守卫：游标前进但 `store.append` **实际新增 0 条** = 上游把已返回内容又给了一遍 →
+  `hasMore=false`；游标没动（或本轮是**首次翻页**，core 原本无游标，渠道返回的重试
+  游标不算「前进」）才是「平台还在加载」的 retry 语义。
+  配套两条：① 渠道的 cursor **不能 clamp 到当前页面条数** —— 页面被重载过（点开笔记/
+  刷新别的 xhs 订阅会把共享 Edge 导航走）时 clamp 会把切片压回已返回前缀，表现为「加载
+  更多点了没反应」；正确做法是保持旧 cursor 滚到超过它，滚不到就返回空 + 原 cursor 重试。
+  ② refresh/refreshAll 后要把本地窗口（desktop `page[id]`）抬到至少覆盖新首屏 —— 首屏
+  可能超过 PAGE_SIZE（xhs:explore 实测 89 条），而渠道分页只按 `addedCount` 增长窗口，
+  首屏缺口永远补不上（尾部条目不可见、footer 却报「已加载全部」）。
 - ⚠️ **「回车提交」的输入框必须过 `lib/ime.ts` 的 `isImeComposing(e)`**：中文输入法候选
   未上屏时的回车是**选词**，不是提交。不拦的后果全是**静默错值** —— 会建出名叫 `fenzu` 的
   分组、搜索拿半截拼音发请求、订阅标题存成半截。曾散落 6 处、两种手写写法（`e.isComposing ||
@@ -613,6 +660,10 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `sourceInfoTpl[0]`——`youtube` 渠道首参是 videoId（订阅单视频），频道订阅是第二参
   channelId。候选值从 **url 解析**（`candidatesFromUsers`：`space.bilibili.com/<mid>` /
   `channel/<UC...>`）——raw 不穿 XML 边界，粉丝/订阅数走 summary 字段。
+- **「清除凭证」现在会真正登出浏览器账号**（2026-10-19）：桌面 xhs/weibo/抖音抓取用的是
+  Edge profile 的登录态，只清 `settings.*Cookie` 等于没退。账号页的清除按钮先调
+  `browser.clearCookies(<域后缀>)`（按域精确删除，不连带其它平台），再清 settings；
+  中途失败则 settings 保持不动。⚠️ 不要改成 `clearBrowserCookies`（会登出所有站点）。
 - **`loginable` 是「支持扫码登录」，不是「必须登录」**：抖音直播/分区搜索等匿名也可用。
   渠道 chip 用紧凑 QR 标记（13px + accent-soft pill），并按**平台**聚合 —— 同平台
   任一渠道支持登录就给该平台所有 chip 同一标记；不要用文字 tag「需登录/可扫码登录」
