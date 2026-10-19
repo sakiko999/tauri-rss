@@ -8,7 +8,7 @@
 import type { Item, Video } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { httpText, now, getYoutubeLiveMeta } from "@amoeba/resolve"
 import { parseFeed, type ParsedItem } from "@amoeba/xml"
 import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
@@ -40,7 +40,7 @@ export class YoutubeChannel implements RssChannel {
   // 仅输出 Video item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→watch?v=)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
     }
   }
 

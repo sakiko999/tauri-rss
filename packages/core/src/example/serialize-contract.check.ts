@@ -18,8 +18,6 @@ const DE = "packages/core/src/processing/deserialize.ts"
 
 /** 已知且**有意**的差异(两侧都要有解释)。 */
 const READ_ONLY_OK = new Set([
-  "isUnread", // 阅读态由 core reading repo 管,不经 crawler feed 往返
-  "isStarred",
   "image", // 社交图:serialize 走 media:content,deserialize 从它重建(parseImagesFromMedia)
   "images",
 ])

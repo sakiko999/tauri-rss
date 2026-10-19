@@ -3,7 +3,7 @@
  *
  * `search_type=bili_user`(匿名 + buvid,取数在 resolve/platform/bili/discover.ts 的
  * searchBiliUsers)。产出 Video item:每个 UP 主一条,url = 空间页 —— 候选提取从 url
- * 解析 mid(raw 不穿 XML 边界,serialize 不写;同 parseLive 的 liveFromUrl 先例)。
+ * 解析 mid(raw 不穿 XML 边界,serialize 不写,只能从 url 取)。
  *
  * 下游订阅走 `bili:user_video`(uid 参数):本渠道的角色同 `bili:search` 之于
  * `bili:live` —— 只作「搜索添加」的取数源(previewChannel 取候选),不设计为长期订阅。
@@ -11,7 +11,7 @@
 import type { Item, Video } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now, searchBiliUsers } from "@amoeba/resolve"
 
 export class BiliUserChannel implements RssChannel {
@@ -24,7 +24,7 @@ export class BiliUserChannel implements RssChannel {
   ]
 
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

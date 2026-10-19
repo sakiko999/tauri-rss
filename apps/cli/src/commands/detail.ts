@@ -81,8 +81,7 @@ export async function runDetail(url: string, opts: DetailOptions): Promise<void>
 
   console.log(`${pc.cyan(detail?.title ?? "(untitled)")} — ${fmtMs(ms)}`)
   if (detail?.content) console.log(pc.dim(detail.content))
-  // images 是 (string | SocialImage)[](xml Social 混合),统一取 url(字符串直用)。
-  const imgUrls = (detail?.images ?? []).map((img) => (typeof img === "string" ? img : img.url))
+  const imgUrls = (detail?.images ?? []).map((img) => img.url)
   if (imgUrls.length) {
     console.log(pc.dim(`图: ${imgUrls.length} 张`))
     for (const u of imgUrls.slice(0, 5)) console.log(`  · ${trunc(u, 90)}`)

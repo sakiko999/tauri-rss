@@ -338,7 +338,7 @@ DanmakuLayer (canvas 2D)
 | **`extractInlineJson`** | `packages/resolve/src/utils/inline-json.ts` | 提取 ytcfg.set / ytInitialData(平衡括号,嵌套不截断) |
 | youtube channel(ANDROID_VR) | `packages/resolve/src/platform/youtube/` | 提供 liveId(直播弹幕 + live chat 共用) |
 | `DEFAULT_BILIBILI_COOKIE` | `packages/core/src/bilibili-cookie.ts` | 带登录态更稳(视频/直播弹幕) |
-| 懒解析范式 | `resolveBiliPlay`(channels.ts) | 弹幕懒解析照抄(YouTube live chat 轮询起始) |
+| 懒解析范式 | `resolveBiliVideoPlay`(platform/bili/video-play.ts) | 弹幕懒解析照抄(YouTube live chat 轮询起始) |
 | 播放器时间 | `useVideoElement.state.currentTime` | 弹幕时间窗口(currentTime 秒 × 1000) |
 | 弹幕层挂载点 | `VideoShell.tsx` relative 容器 | 加 DanmakuLayer |
 | **dart 统一消息模型** | `tmp/dart_simple_live/.../model/live_message.dart` | `DanmakuItem` 字段/颜色归一直接参考(LiveMessage + numberToColor) |

@@ -4,7 +4,6 @@ import { createLogDomain } from "@amoeba/log"
 export const loaderLog = createLogDomain("player:loader", {
   color: "#2dd4bf", // teal-400
   ansi: 79,
-  legacyKey: "player-log",
   events: {
     loaderHttpError: {
       level: "warn",

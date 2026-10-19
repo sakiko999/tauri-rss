@@ -161,11 +161,8 @@ function itemMediaNodes(item: Item): Array<Record<string, unknown>> {
     nodes.push(node)
   }
   // social images → media:content(medium=image)。瀑布流图不丢(用户选标准 RSS,但图是社交核心)。
-  // ⚠️ images 允许 `string | SocialImage`(types.ts 契约)——纯字符串 URL 也要写出来,
-  // 否则类型允许、serialize 却静默丢(曾只处理对象形态)。
-  const images = (item as { images?: Array<string | { url: string; width?: number; height?: number }> }).images ?? []
-  for (const raw of images) {
-    const img = typeof raw === "string" ? { url: raw } : raw
+  const images = (item as { images?: Array<{ url: string; width?: number; height?: number }> }).images ?? []
+  for (const img of images) {
     if (!img.url) continue
     const node: Record<string, unknown> = { "@_url": img.url, "@_medium": "image" }
     if (img.width !== undefined) node["@_width"] = String(img.width)

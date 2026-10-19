@@ -2,9 +2,8 @@
  * info 组装 —— channel 实例化参数与登录 cookie 的统一入口(各探针共用)。
  *
  * cookie 策略与 desktop 对齐:core 层 settings 按平台前缀存默认 cookie
- * (DEFAULT_SETTINGS 内嵌占位,本地改 apps/cli/.data/storage.json 的
- * settings 键即可换真实值),订阅级 info.cookie 永远优先(计划 §六:
- * file-JSON 只做 settings 级小量)。
+ * (DEFAULT_SETTINGS 内嵌占位,本地改 apps/cli/.data/rss.db 的 settings 键
+ * 即可换真实值),订阅级 info.cookie 永远优先。
  */
 import { DEFAULT_SETTINGS, type AppSettings } from "@amoeba/core"
 import { getChannel, type SourceInfo } from "@amoeba/crawler"

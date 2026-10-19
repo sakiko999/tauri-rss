@@ -10,7 +10,7 @@
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { httpJson, now } from "@amoeba/resolve"
 import { parseRoomIds } from "@amoeba/resolve"
 import { log } from "@amoeba/resolve"
@@ -52,7 +52,7 @@ export class HuyaLiveChannel implements RssChannel {
   // fetch 支持多房间(roomIds 逗号分隔)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
     }
   }
 

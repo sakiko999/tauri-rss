@@ -7,7 +7,7 @@
 import type { Audio, Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now, searchApplePodcasts } from "@amoeba/resolve"
 
 export class ApplePodcastSearchChannel implements RssChannel {
@@ -25,7 +25,7 @@ export class ApplePodcastSearchChannel implements RssChannel {
   ]
 
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

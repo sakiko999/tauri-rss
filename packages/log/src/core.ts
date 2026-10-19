@@ -9,8 +9,8 @@
  * 域对象 = 模板语义方法(按 events key 生成)+ 自由级别方法(log/debug/info/warn/error)。
  * 幂等:同名重复注册**返回同一引用**,合并/覆盖 events、应用新颜色(HMR 友好)——域方法
  * 每次调用动态读 registry 最新 entry,新模板/新颜色/新增 key 即时生效。
- * 开关:localStorage["log"]="0" 全局关 info/debug;`log:<name>`="0" 按域关;
- *       legacyKey 兼容旧 key(如 "player-log")。warn/error 永保留。
+ * 开关:localStorage["log"]="0" 全局关 info/debug;`log:<name>`="0" 按域关。
+ * warn/error 永保留。
  * 环境:浏览器(WebView devtools)走 %c CSS 着色;node/bun 终端走 ANSI 256 色。
  */
 import { isBrowser, readSwitch } from "./env.ts"
@@ -30,8 +30,6 @@ export interface DomainLogConfig<E extends Record<string, LogEvent<any>>> {
   color: string
   /** 终端 ANSI 256 色索引(`\x1b[38;5;N`)。 */
   ansi: number
-  /** 旧开关兼容:如 "player-log"/"host-log";未设置则不查。 */
-  legacyKey?: string
   /** 模板事件表。⚠️ key 勿与 log/debug/info/warn/error 同名(会被自由方法覆盖)。 */
   events?: E
 }
@@ -56,7 +54,6 @@ interface RegistryEntry {
   name: string
   color: string
   ansi: number
-  legacyKey?: string
   events?: Record<string, LogEvent<any>>
   domain: DomainLog<Record<string, LogEvent<any>>>
 }
@@ -78,7 +75,7 @@ function consoleFn(level: LogLevel): (msg?: unknown, ...args: unknown[]) => void
 
 function emit(entry: RegistryEntry, level: LogLevel, msg: string, args: unknown[]): void {
   // warn/error 永保留;info/debug 受开关控制。
-  if (level !== "warn" && level !== "error" && readSwitch(entry.name, entry.legacyKey) === "0") return
+  if (level !== "warn" && level !== "error" && readSwitch(entry.name) === "0") return
   const prefix = `[${entry.name}]`
   const fn = consoleFn(level)
   if (isBrowser()) {
@@ -131,7 +128,7 @@ function buildDomain(name: string): DomainLog<Record<string, LogEvent<any>>> {
 
 /**
  * 注册(或幂等复用)一个日志域。同名重复调用:
- * 返回**同一引用**,合并/覆盖 events、应用新 color/ansi,legacyKey 保留首建;
+ * 返回**同一引用**,合并/覆盖 events、应用新 color/ansi;
  * HMR 新增模板 key 自动补方法。调用方持有的旧引用立即看到新模板/新颜色。
  */
 export function createLogDomain<E extends Record<string, LogEvent<any>>>(
@@ -157,7 +154,6 @@ export function createLogDomain<E extends Record<string, LogEvent<any>>>(
     name,
     color: config.color,
     ansi: config.ansi,
-    legacyKey: config.legacyKey,
     events,
     domain: {} as DomainLog<Record<string, LogEvent<any>>>,
   }

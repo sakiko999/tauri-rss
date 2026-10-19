@@ -4,29 +4,50 @@
 > 严格意义的**向前兼容**（旧版本读新版本写的数据）本项目基本没有——KV 是整块 JSON，
 > 没有 `schemaVersion`，旧版本遇到新字段只会原样保留、不认识；只有 `MIGRATIONS`
 > 属于正向脚手架。
+>
+> ⚠️ **2026-10-19 同日清理：不再兼容旧持久化数据**。全新安装（库里只有当前代码写的
+> 数据、无旧 localStorage/旧缓存 XML）为前提，已删除的条目见「一、附」。
 
-## 一、持久化数据兼容（高风险，删了会静默丢状态）
+## 一、持久化数据兼容（当前保留）
 
 | 兼容点 | 旧形态 → 现行为 | 位置 |
 | --- | --- | --- |
-| reading 裸 id 键 | 2026-10-15 前按 `itemId` 存 → 先查 `subscriptionId\u0000itemId`，未命中回退裸 id；**命中后不删旧键**（同一旧记录可能被多个订阅共享） | `packages/core/src/types/reading.ts:34-53`、`repo/reading-repo.ts:95` |
-| 单房间 → 多房间 | 旧订阅只有 `info.roomId` → `parseRoomIds` 优先 `roomIds`，为空回退 `roomId` | `packages/resolve/src/utils/room-ids.ts:11-17` |
-| 同上（桌面侧） | `valueList` 做同样的回退，否则旧订阅显示「0 房」、合并时把原房间挤掉 | `apps/desktop/src/lib/subscriptions.ts:35-44` |
-| 同上（写回） | 并入新房间时把 legacy 值拼进 `roomIds`，再删掉旧 `roomId`，避免两个键长期并存 | `AddSubscriptionDialog.tsx:303-305,355-358` |
-| localStorage → SQLite | 旧 `tauri-rss:{subscriptions,reading,settings}` → SQLite 该 key 为空时一次性搬入；先写成功再删 local，避免双源皆失 | `packages/host/src/tauri/sqlite-storage-backend.ts:34,59-71` |
-| 内置 RSS 旧订阅 | 旧订阅只存 channel key、`info.url` 为空 → 用构造期 `defaultUrl` 兜底；这是常态路径，不是异常 | `packages/crawler/src/channels/rss/raw.ts:38-50` |
-| 抖音存量渠道 | `live:douyin:user` 不再出现在新建入口，但**仍注册**，旧订阅照常刷新 | `packages/crawler/src/register.ts:110`、`AddSubscriptionDialog.tsx:94-96` |
-| 旧缓存 XML 缺字段 | 无 `tpl:platform` / `tpl:roomId` → 从 item URL 推导（B站/斗鱼/虎牙/抖音） | `packages/core/src/processing/deserialize.ts:220-221,431-446` |
-| 旧正文格式 | 无 `tpl:contentFormat` → `content ? "html" : undefined`，不把旧缓存正文降级成纯文本 | `deserialize.ts:160` |
-| 社交图片旧形态 | `images: string[]` → 归一成 `{url}` 再序列化；对象形态保留宽高 | `packages/xml/src/types.ts:102`、`serialize.ts:166-174` |
-| 日志旧开关 | 旧 `host-log=0` / `player-log=0` 仍生效 | `packages/log/src/env.ts:17-22`、`packages/host/src/log.ts:37` |
+| 单房间 → 多房间 | 旧订阅只有 `info.roomId` → `parseRoomIds` 优先 `roomIds`，为空回退 `roomId`；4 个直播渠道的标题/链接也用 `info.roomIds ?? info.roomId` | `packages/resolve/src/utils/room-ids.ts:11-17`、`channels/{bili,douyu,huya,douyin}/live.ts` |
+| 内置 RSS 旧订阅 | 旧订阅只存 channel key、`info.url` 为空 → 用构造期 `defaultUrl` 兜底（`defaultInfo` 一键订阅能力本身也依赖它） | `packages/crawler/src/channels/rss/raw.ts:38-50` |
+| 抖音存量渠道 | `live:douyin:user` 不再出现在新建入口，但**仍注册**，旧订阅照常刷新；同时是 Discover 页「用户直播间」能力的判据 | `packages/crawler/src/register.ts:110`、`views/discover/DiscoverPage.tsx:107-110` |
+| 旧正文格式 | 无 `tpl:contentFormat` → `content ? "html" : undefined`，RSS 文章本来就可能不写该字段 | `packages/core/src/processing/deserialize.ts:160` |
 
 **不能删的几处**：
 
-- reading 回退命中后**不能删旧键**。
-- `parseRoomIds`、桌面 `valueList`、并入写回三处必须同时保留；只删写回会在合并时丢原房间。
-- localStorage 搬迁是一次性的；删掉这段代码 = 放弃所有仍从旧版本升级的用户。
-- `live:douyin:user` 的注册不能随 UI 隐藏一起删。
+- `parseRoomIds` 与 4 个直播渠道的标题回退：**CLI 当前仍以 `{roomId}` 建订阅**
+  （`apps/cli/src/info.ts:18,21-23`，`rss refresh` 会落库）。要删先把 CLI 改成
+  `roomIds`。
+- 内置 RSS 的 `defaultUrl` 兜底：`apps/desktop/src/dev/seed.ts:46-51` 仍以
+  `info:{}` 建 `rss:hn`；改成显式写 url 后才可删。
+- `live:douyin:user` 的注册：`DiscoverPage.tsx:107` 用它判断是否渲染「用户直播间」
+  入口，删掉是功能回退，不是清理旧数据。
+- `contentFormat` 推断：属于当前 RSS 文章的常态兜底。
+
+**一、附：2026-10-19 已删除的兼容补丁**（前提：不兼容旧数据）
+
+- reading 裸 id 键：`readingKey` 的 `undefined` 退化、`findRecord` 的裸 id 回退、
+  `repo-concurrency.check.ts` 的旧键断言。
+- localStorage → SQLite 一次性搬迁（`packages/host/src/tauri/sqlite-storage-backend.ts`）。
+- 旧日志开关 `host-log=0` / `player-log=0`（`readSwitch` 的 `legacyKey` 与 7 处配置）。
+- 读 `tpl:isUnread` / `tpl:isStarred`（当前 serialize 不写；阅读态由 reading repo 负责）。
+- Live 缺 `tpl:platform` / `tpl:roomId` 时从 item URL 推导（`liveFromUrl` 已删）。
+- 并入订阅时 `delete info.roomId`（当前 UI 只写 `roomIds`，纯 no-op）。
+- 桌面 `valueList` 的 `info.roomId` 回退（`subscriptions.ts` + check）。
+- 社交图片 `string | SocialImage` 联合形态（xml types/serialize、`fillImageSizes`、
+  CLI detail、roundtrip check）。
+- `SocialCard` 读 `item.raw.type` 与 core `MediaItem.raw` 字段。
+- `heatOf` 的 `views` / 字符串 `likes`（参考原型遗留）。
+- `LocalStorageBackend` 的默认前缀（唯一实例显式传 `browser-rss:`）。
+- 订阅 blob 缺 `subscriptions`/`groups` 时补空数组（改为结构非法就走 corrupt 流程）。
+- 死兼容代码：`useMediaStream` 的三个判据 re-export、crawler 的 `resolveBiliPlay`
+  别名、`findItemUrl` 的 `roomId` 分支、Tauri HTTP 的 `withBody` 断言。
+- `apiFetch` 的 `Item[]` 联合：现只接受统一 `FetchResult`（`{items,total?}`）；
+  只产数组的渠道经 `apiFetchItems` 适配。
 
 ## 二、旧输入 / 旧格式归一化
 
@@ -39,19 +60,17 @@
 | 小红书 SSR | `new Map([])`、`{_rawValue}`、noteId 在外层/noteCard → 清洗、解包、两处取 | `xhs/client.ts:81-100,184-185` |
 | Atom | `<feed><entry>` → 归一成 RSS 字段（id→guid、published→pubDate 等） | `packages/xml/src/xml-parser.ts:78-131` |
 | OPML | outline 省 `type`、标题在 `text/title/#text` → 逐级回退 | `packages/xml/src/opml.ts:94-110` |
-| fetch 返回形状 | `Item[]` 与 `{items,total}` 都接受 | `crawler/channels/factory.ts:33-36` |
 | 流格式缺失 | 无 `format` → 按 URL 后缀判 HLS/FLV/MP4 | `player/hooks/streamKind.ts:11-40` |
 | 二维码载荷 | `data:image/...` 直接显示；纯文本本地编码成二维码 | `apps/desktop/src/components/QrImage.tsx:14-26` |
 | cookie 字段前缀 | `douyin:*` 与 `live:douyin*` 都映射到 `douyinCookie` | `AccountPage.tsx:294` |
 | 发现页渠道 key | 同时匹配 `<platform>:<cap>` 与 `live:<platform>:<cap>`；搜索先查映射再回退旧命名 | `DiscoverPage.tsx:39-42` |
-| 旧 import 路径 | `isHlsStream` / `resolveBiliPlay` 等仍 re-export，旧调用方不破 | `player/hooks/useMediaStream.ts:21-25` 等 |
 
 ## 三、向前兼容脚手架
 
 - **DB 迁移数组**：`packages/core/src/db/schema.ts:20-26` 预留有序 `MIGRATIONS`，两端按序执行；目前只有 v1 幂等 DDL，尚未落版本表。
 - **settings 预留字段**：`viewMode/startMuted/defaultQuality` 暂时没有消费者，但保留并用默认值 spread 合并，避免以后加字段要迁移。
 - **未知枚举值**：`deserialize.ts:336-348` 只放行已知的 `streamingFormat/contentFormat`，未知值返回 `undefined`，不抛错、不透传。
-- **日志域重注册**：`log/src/core.ts:141-153` 同域二次创建返回同一引用，HMR 不重置开关。
+- **日志域重注册**：`log/src/core.ts` 同域二次创建返回同一引用，HMR 不重置开关。
 
 ## 四、运行时降级（不是数据兼容）
 
@@ -96,5 +115,5 @@
 ## 七、维护提醒
 
 兼容层散落在各个读取点，因为 KV 存的是整块 JSON、没有 `schemaVersion`。好处是不用
-集中迁移；坏处是删掉任何一处都不会报错，只会静默降级——比如旧已读消失、旧房间不再
-抓取、旧订阅显示 0 房。改这些读取逻辑时，最好把对应的 `.check.ts` 一起跑。
+集中迁移；坏处是删掉任何一处都不会报错，只会静默降级——比如旧房间不再抓取、旧订阅
+显示 0 房。改这些读取逻辑时，最好把对应的 `.check.ts` 一起跑。

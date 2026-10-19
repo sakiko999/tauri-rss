@@ -18,11 +18,9 @@ import { DashHostLoader } from "../engines/dashHostLoader.ts"
 import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
 import { log } from "../log/index.ts"
 
-// ⚠️ 判据已抽到 `streamKind.ts`(纯函数、不 import 引擎)——本模块 import 了
+// ⚠️ 判据在 `streamKind.ts`(纯函数、不 import 引擎)——本模块 import 了
 // hls.js/flv.js/dashjs,加载即要 window,判据留在这里会让 node 侧自检跑不了。
-// 既 import(下面要用)又 re-export(保持既有 import 路径可用)。
 import { isDashStream, isFlvStream, isHlsStream } from "./streamKind.ts"
-export { isDashStream, isFlvStream, isHlsStream }
 
 export function useMediaStream({
   stream,

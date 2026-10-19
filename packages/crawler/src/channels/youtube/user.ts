@@ -11,7 +11,7 @@
 import type { Item, Video } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now, searchYouTubeChannels } from "@amoeba/resolve"
 
 export class YoutubeUserChannel implements RssChannel {
@@ -23,7 +23,7 @@ export class YoutubeUserChannel implements RssChannel {
   ]
 
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

@@ -71,25 +71,6 @@ function laggyStorage() {
   assert.equal(hand?.positionSec, undefined, "手填那条被写进了热门榜的续播位置 —— 两处串号")
 }
 
-// ── reading:旧版裸 id 键必须仍能读到(迁移期回退,不能让历史状态消失)──────────
-{
-  const storage = laggyStorage()
-  const reading = createReadingRepository(storage, () => 1)
-  // 模拟 2026-10-15 之前的存量数据:键是裸 id。
-  await storage.set("reading", JSON.stringify({ "old-item": { read: true, starred: true, lastReadAt: 1 } }))
-
-  const rec = await reading.get("s-any", "old-item")
-  assert.equal(rec?.read, true, "旧版裸 id 键读不到了 —— 历史已读会全部消失")
-  assert.equal(rec?.starred, true, "旧版星标读不到了")
-
-  // ⚠️ 回退命中后**不删旧键**:同一条旧记录可能被多个订阅共享,删了别的订阅就读不到。
-  await reading.markRead("s-other", "old-item", true)
-  const map = await reading.getAll()
-  assert.ok(map["old-item"], "旧键被删掉了 —— 多订阅共享的那份会丢")
-  assert.ok(map["s-other\u0000old-item"], "新键没写进去")
-  assert.equal((await reading.get("s-any", "old-item"))?.read, true, "另一个订阅读不到共享的旧记录")
-}
-
 // ── reading:批量标记一次落盘 ────────────────────────────────────────────────
 {
   const storage = laggyStorage()

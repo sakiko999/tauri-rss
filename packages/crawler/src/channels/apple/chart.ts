@@ -13,7 +13,7 @@
 import type { Audio, Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { APPLE_PODCAST_GENRES, fetchApplePodcastChart, now } from "@amoeba/resolve"
 
 export class ApplePodcastChartChannel implements RssChannel {
@@ -32,7 +32,7 @@ export class ApplePodcastChartChannel implements RssChannel {
   ]
 
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

@@ -14,7 +14,7 @@
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { fetchDouyinTrends, now } from "@amoeba/resolve"
 
 export class DouyinTrendChannel implements RssChannel {
@@ -25,7 +25,7 @@ export class DouyinTrendChannel implements RssChannel {
 
   getSource(_info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(), () => this.channelOptions()),
+      fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()),
     }
   }
 

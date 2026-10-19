@@ -17,7 +17,7 @@
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { log } from "@amoeba/resolve"
 import { toInt } from "@amoeba/resolve"
@@ -60,7 +60,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
   // fetch 支持多房间(roomIds 逗号分隔)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
     }
   }
 

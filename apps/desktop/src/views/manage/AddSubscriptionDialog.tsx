@@ -300,9 +300,6 @@ export function AddSubscriptionDialog({
             return
           }
           const info = { ...sub.info, [landParam]: [...held, candidateValue].join(",") }
-          // 旧订阅可能只有 roomId；写回 roomIds 后删掉旧键，避免 parseRoomIds 的优先分支
-          // 让两个键长期并存（值已并入 roomIds，旧键只会造成困惑）。
-          if (landParam === "roomIds") delete info.roomId
           await updateSubscription(sub.id, { info })
           toast("ok", `已并入「${sub.title}」`, `现在共 ${held.length + 1} 个房间，内容已更新。`)
         } else {
@@ -353,9 +350,6 @@ export function AddSubscriptionDialog({
           return
         }
         const info = { ...target.info, [manualParam]: merged.join(",") }
-        // 旧订阅可能只有 roomId；并入 roomIds 后删掉旧键，避免 parseRoomIds 的优先分支
-        // 让两个键长期并存。
-        if (manualParam === "roomIds") delete info.roomId
         await updateSubscription(target.id, { info })
         toast("ok", `已并入「${target.title}」`, `新增 ${added.length} 个房间，现在共 ${merged.length} 个。`)
         onOpenChange(false)

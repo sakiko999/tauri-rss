@@ -49,10 +49,11 @@ export function createSubscriptionRepository(
     if (!raw) return { subscriptions: [], groups: [] }
     try {
       const parsed = JSON.parse(raw) as PersistedState
-      return {
-        subscriptions: Array.isArray(parsed?.subscriptions) ? parsed.subscriptions : [],
-        groups: Array.isArray(parsed?.groups) ? parsed.groups : [],
+      // save() 恒写完整结构;缺字段只可能是坏数据 → 走 catch 的留证/重建流程。
+      if (!Array.isArray(parsed?.subscriptions) || !Array.isArray(parsed?.groups)) {
+        throw new Error("invalid persisted subscriptions blob")
       }
+      return parsed
     } catch {
       // ⚠️ 解析失败不能静默返回空树:下一次 add/update 就会把空树写回去,用户的订阅
       // 与分组永久消失。先留证再让调用方按「无订阅」继续。

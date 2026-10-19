@@ -10,7 +10,7 @@
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore } from "../factory.ts"
+import { apiFetchItems, apiFetchMore } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { douyinClient } from "@amoeba/resolve"
 import { douyinOnline } from "@amoeba/resolve"
@@ -26,7 +26,7 @@ export class DouyinLiveHotChannel implements RssChannel {
   /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
   getSource(info: SourceInfo): RssSource & Pageable {
     return {
-      fetch: apiFetch(() => this.fetchItems(info, 0), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info, 0), () => this.channelOptions(info)),
       // offset 游标(首页 fetch 用 offset=0,翻页每页 COUNT 条递增;本页为空即止)。
       fetchMore: apiFetchMore(
         (offset) => this.fetchItems(info, offset),

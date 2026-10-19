@@ -379,8 +379,7 @@ bun run rss fetch apple:podcast-search --kv q=故事 --json
   - **根因是同一条**：`MediaItem.id` 只在**订阅内**唯一（实测 `bilibili:7734200`
     同时在 `bili:live` 与 `bili:live:hot`）。凡按 id 记/改/查的地方都会让两个订阅**串**：
     - reading 键 → `readingKey(subId, itemId)`；内存 `store.patch(subId, id, patch)`；
-      播放队列存 `itemKey` 复合键。⚠️ reading **回退旧版裸 id 键**（存量数据），
-      且**回退命中不删旧键**（同一旧记录可能被多订阅共享）。
+      播放队列存 `itemKey` 复合键。reading 键必须带订阅维度（不再有裸 id 回退）。
     - store 里 `get().allItems.find(i => i.id === item.id)` 这类定位也一并改 `findItem`。
   - **播放队列**：落 localStorage `ui-queue` + 复合键。实测入队 → **重载后仍在**。
   - **播完自动下一条**（`autoPlayNext`，默认开）：`PlayableMedia` 的 `onEnded`

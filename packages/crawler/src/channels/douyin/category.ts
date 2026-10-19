@@ -11,7 +11,7 @@
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore } from "../factory.ts"
+import { apiFetchItems, apiFetchMore } from "../factory.ts"
 import { fetchDouyinPartitionRooms } from "@amoeba/resolve"
 
 const COUNT = 15
@@ -27,7 +27,7 @@ export class DouyinCategoryChannel implements RssChannel {
 
   getSource(info: SourceInfo): RssSource & Pageable {
     return {
-      fetch: apiFetch(() => this.fetchItems(info, 0), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info, 0), () => this.channelOptions(info)),
       fetchMore: apiFetchMore((offset) => this.fetchItems(info, offset), () => this.channelOptions(info), {
         first: COUNT,
         step: COUNT,

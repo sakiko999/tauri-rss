@@ -8,7 +8,7 @@
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore } from "../factory.ts"
+import { apiFetchItems, apiFetchMore } from "../factory.ts"
 import { searchBiliAnchors } from "@amoeba/resolve"
 
 export class BiliAnchorChannel implements RssChannel {
@@ -19,7 +19,7 @@ export class BiliAnchorChannel implements RssChannel {
 
   getSource(info: SourceInfo): RssSource & Pageable {
     return {
-      fetch: apiFetch(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
       fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), {
         first: 2,
         step: 1,

@@ -11,7 +11,7 @@
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { searchHuyaRooms } from "@amoeba/resolve"
 
 const PAGE = 20
@@ -24,7 +24,7 @@ export class HuyaSearchChannel implements RssChannel {
 
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
     }
   }
 

@@ -29,19 +29,17 @@ export class TauriHttpBackend implements HttpBackend {
 
     // 日志走 @amoeba/log 的 host:http 域(requestStart/requestDone/
     // requestError)——devtools Console 过滤 [host:http] 看完整 URL/状态/耗时。
-    // 开关:localStorage["log:host:http"]="0" 按域关;旧 key host-log 兼容。
+    // 开关:localStorage["log:host:http"]="0" 按域关。
     const started = performance.now()
     httpLog.requestStart({ method, url: req.url })
 
     // The Rust command returns base64 for arraybuffer, utf-8 otherwise.
-    // 全局 HttpRequest 无 body 字段;Rust command 支持,此处经 withBody 传递。
-    const withBody = req as HttpRequest & { body?: unknown }
     const res = await invoke<TauriHttpResponse>("http_get", {
       req: {
         url: req.url,
         method,
         headers: req.headers ?? {},
-        body: typeof withBody.body === "string" ? withBody.body : undefined,
+        body: req.body,
         timeoutMs: req.timeoutMs ?? 20000,
         responseType,
       },

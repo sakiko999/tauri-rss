@@ -93,13 +93,10 @@ export function baseFor(s: StoreSlice, node: string | null, now: number): MediaI
 }
 
 
-/** 热度排序键:播放量 → 在线人数 → 点赞数(社交)。 */
+/** 热度排序键:在线人数 → 点赞数(社交)。 */
 export function heatOf(i: MediaItem): number {
-  const any = i as { views?: number; online?: number; likes?: number | string }
-  if (any.views) return any.views
-  if (any.online) return any.online
-  if (any.likes) return Number(String(any.likes).replace(/\D/g, "")) || 0
-  return 0
+  const any = i as { online?: number; likes?: number }
+  return any.online ?? any.likes ?? 0
 }
 
 /**

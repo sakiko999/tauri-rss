@@ -4,7 +4,6 @@ import { createLogDomain, formatError } from "@amoeba/log"
 export const playLog = createLogDomain("player:play", {
   color: "#f472b6", // pink-400
   ansi: 212,
-  legacyKey: "player-log",
   events: {
     // 媒体事件(原 MEDIA_EVENT_TEXT 表,key 即事件名 → playLog.play() 等)。
     play: { level: "debug", text: "play 事件" },

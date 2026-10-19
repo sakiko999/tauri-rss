@@ -6,7 +6,7 @@
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { biliClient } from "@amoeba/resolve"
 import { API, ugc } from "./video-common.ts"
@@ -25,7 +25,7 @@ export class BiliRankingChannel implements RssChannel {
   readonly sourceInfoTpl = [{ key: "rid", label: "分区(all/douga/…)", required: false }]
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

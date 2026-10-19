@@ -34,15 +34,7 @@ export function splitValues(raw: string | undefined, param: string | undefined):
 
 export function valueList(sub: Subscription | undefined, param: string | undefined): string[] {
   if (!param) return []
-  const list = splitValues(String(sub?.info?.[param] ?? ""), param)
-  if (list.length) return list
-  // 与 resolve 的 parseRoomIds 对齐：多房间改造前的订阅只有 info.roomId(单房间)。
-  // 不补这条回退，旧订阅会显示「0 房」，合并时还会把原房间挤掉。
-  if (param === "roomIds") {
-    const legacy = String(sub?.info?.roomId ?? "").trim()
-    return legacy ? [legacy] : []
-  }
-  return []
+  return splitValues(String(sub?.info?.[param] ?? ""), param)
 }
 
 /** 把本次输入并入已有列表：保留原顺序，新值去重后追加。 */
@@ -167,8 +159,8 @@ export function candidatesFromSearch(items: MediaItem[]): Candidate[] {
 
 /**
  * 用户搜索渠道返回的条目 → 候选(搜 UP主/频道 → 订阅其投稿)。
- * value 从 **url 解析**(raw 不穿 XML 边界,serialize 不写 —— 同 parseLive 的
- * liveFromUrl 先例):`space.bilibili.com/<mid>` / `youtube.com/channel/<channelId>`。
+ * value 从 **url 解析**(raw 不穿 XML 边界,serialize 不写,所以只能从 url 取):
+ * `space.bilibili.com/<mid>` / `youtube.com/channel/<channelId>`。
  * 次行信息(粉丝/订阅数)来自条目 summary(channel 侧已拼好)。
  */
 export function candidatesFromUsers(items: MediaItem[]): Candidate[] {

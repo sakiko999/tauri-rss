@@ -17,6 +17,13 @@ export function serializeWithTotal(items: Item[], opts: SerializeOptions, total?
   return serializeFeed(items, total !== undefined ? { ...opts, total } : opts)
 }
 
+/** api channel 抓取的唯一返回形状(翻页渠道可带真实总数)。 */
+export interface FetchResult {
+  items: Item[]
+  /** 上游给出的真实总数(经 tpl:total 带出);未知则省略。 */
+  total?: number
+}
+
 /**
  * api channel 的 fetch 装配:抓 items → serializeFeed 成 RSS 2.0 XML。
  * 返回无参 `() => Promise<string>`,channel 在 getSource 里绑定 info 后塞进 source.fetch。
@@ -24,22 +31,30 @@ export function serializeWithTotal(items: Item[], opts: SerializeOptions, total?
  * 耗时/条数,见 docs/cli-plan.md §7)。失败 rethrow(调用方 core 编排层隔离单源失败)。
  */
 export function apiFetch(
-  fetchItems: () => Promise<Item[] | { items: Item[]; total?: number }>,
+  fetchResult: () => Promise<FetchResult>,
   channelOptions: () => SerializeOptions,
 ): () => Promise<string> {
   return async () => {
     const opts = channelOptions()
     try {
-      // 兼容两种返回:Item[](旧) / { items, total }(翻页渠道带真实总数,如 weibo)。
-      const r = await fetchItems()
-      const items = Array.isArray(r) ? r : r.items
-      const total = Array.isArray(r) ? undefined : r.total
+      const { items, total } = await fetchResult()
       return serializeWithTotal(items, opts, total)
     } catch (e) {
       log.crawler.fetchError({ source: opts.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
       throw e
     }
   }
+}
+
+/**
+ * 无 total 的渠道(大多数)适配到统一 `FetchResult`。
+ * 新增 api channel 默认用它;只有需要把上游总数带到 `tpl:total` 时才直接用 apiFetch。
+ */
+export function apiFetchItems(
+  fetchItems: () => Promise<Item[]>,
+  channelOptions: () => SerializeOptions,
+): () => Promise<string> {
+  return apiFetch(async () => ({ items: await fetchItems() }), channelOptions)
 }
 
 /**

@@ -19,7 +19,7 @@
 import type { Item, Social, SocialImage } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { biliClient } from "@amoeba/resolve"
 import { fillImageSizes } from "@amoeba/resolve"
@@ -122,7 +122,7 @@ export class BiliDynamicChannel implements RssChannel {
     { key: "uid", label: "UP 主 uid", required: true },
   ]
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const uid = String(info.uid ?? "")

@@ -20,7 +20,7 @@
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
 import { douyinLiveItem } from "./live.ts"
 
@@ -39,7 +39,7 @@ export class DouyinUserLiveChannel implements RssChannel {
 
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
     }
   }
 

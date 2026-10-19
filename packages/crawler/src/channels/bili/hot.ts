@@ -12,7 +12,7 @@
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore } from "../factory.ts"
+import { apiFetchItems, apiFetchMore } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { biliClient } from "@amoeba/resolve"
 
@@ -27,7 +27,7 @@ export class BiliLiveHotChannel implements RssChannel {
   /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
   getSource(info: SourceInfo): RssSource & Pageable {
     return {
-      fetch: apiFetch(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
       // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
       fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), { first: 2, step: 1 }),
     }

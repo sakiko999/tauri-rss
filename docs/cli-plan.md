@@ -110,8 +110,7 @@ core 数据层认 repo 接口(`subscription/reading/settings-repo` 注入 `creat
 
 - 两端都**不用插件/库各自的 migration 机制**(防与对方各写各的 SQL 漂移);desktop 用
   官方 tauri-plugin-sql(sqlx 底层),CLI 用内置 `bun:sqlite`;StorageBackend 语义保持
-  (KV string),三 repo 与 commands 全身而退。desktop 首次访问自动从 localStorage 搬迁
-  subscriptions/reading/settings 三 key 并删 local 防双源漂移。选型/迁移/验证状态见
+  (KV string),三 repo 与 commands 全身而退。选型/迁移/验证状态见
   `docs/sqlite-storage-research.md`。
 - WAL:两端各持独立库文件、单进程访问,暂不开;sidecar 互通(同库文件)时再开。
 

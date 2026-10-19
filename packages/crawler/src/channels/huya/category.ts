@@ -9,7 +9,7 @@
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch, apiFetchMore } from "../factory.ts"
+import { apiFetchItems, apiFetchMore } from "../factory.ts"
 import { httpJson, now } from "@amoeba/resolve"
 
 const UA =
@@ -23,7 +23,7 @@ export class HuyaCategoryChannel implements RssChannel {
 
   getSource(info: SourceInfo): RssSource & Pageable {
     return {
-      fetch: apiFetch(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
       fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), {
         first: 2,
         step: 1,

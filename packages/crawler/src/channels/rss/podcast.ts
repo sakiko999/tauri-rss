@@ -8,7 +8,7 @@
 import type { Audio, Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { httpText, now } from "@amoeba/resolve"
 import { parseFeed, type ParsedItem } from "@amoeba/xml"
 import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
@@ -22,7 +22,7 @@ export class RssPodcastChannel implements RssChannel {
   readonly sourceInfoTpl = [{ key: "url", label: "Feed URL", required: true }]
   // 无能力 source:只 { fetch }(audio enclosure 是直链,无需懒解析)。
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

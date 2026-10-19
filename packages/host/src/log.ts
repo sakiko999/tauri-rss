@@ -8,8 +8,7 @@ import { createLogDomain } from "@amoeba/log"
  *   发起 → requestStart(debug,devtools Console 需勾选 Verbose 才显示)
  *   完成 → requestDone(info,非 2xx 用 requestError(warn) 显眼标出失败)
  * 打开 devtools Console → 过滤 [host:http] 即可看到完整 URL/状态/耗时。
- * 开关:localStorage["log:host:http"]="0" 只关本域 info/debug;旧 key
- * `host-log`="0" 仍兼容(legacyKey)。warn/error 永保留。
+ * 开关:localStorage["log:host:http"]="0" 只关本域 info/debug。warn/error 永保留。
  */
 /**
  * 日志里的 URL 先脱敏再打印。
@@ -34,7 +33,6 @@ function redactUrl(raw: string): string {
 export const httpLog = createLogDomain("host:http", {
   color: "#60a5fa", // blue-400
   ansi: 75,
-  legacyKey: "host-log",
   events: {
     requestStart: {
       level: "debug",

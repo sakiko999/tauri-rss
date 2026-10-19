@@ -34,7 +34,7 @@
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@amoeba/resolve"
 import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@amoeba/resolve"
@@ -72,7 +72,7 @@ export class XhsUserChannel implements RssChannel, Loginable {
   getSource(info: SourceInfo): RssSource & Partial<Pageable> & ItemDetailSource {
     const userId = String(info.user_id ?? "").trim()
     const browser = globalThis.appHost?.browser
-    const fetch = apiFetch(() => this.fetchItems(info), () => this.channelOptions(info))
+    const fetch = apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info))
     const base = (browser
       ? { fetch, fetchMore: (cursor?: string) => this.fetchMoreViaBrowser(browser, userId, cursor) }
       : { fetch }) as RssSource & Partial<Pageable> & ItemDetailSource

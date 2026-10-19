@@ -5,7 +5,7 @@
 export class LocalStorageBackend implements StorageBackend {
   private readonly prefix: string
 
-  constructor(prefix: string = "tauri-rss:") {
+  constructor(prefix: string) {
     this.prefix = prefix
   }
 

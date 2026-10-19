@@ -9,7 +9,7 @@
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { HotWordSource, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { httpJson, now } from "@amoeba/resolve"
 import { PC_UA, WB_BASE, mblogCardsToItems, weiboClient } from "@amoeba/resolve"
 
@@ -21,7 +21,7 @@ export class WeiboHotChannel implements RssChannel {
   getSource(info: SourceInfo): RssSource & HotWordSource {
     const cookie = (info.cookie as string) || undefined
     return {
-      fetch: apiFetch(() => this.fetchItems(), () => this.channelOptions()),
+      fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()),
       resolveHotWord: (word) => this.resolveHotWordImpl(word, cookie),
     }
   }

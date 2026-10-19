@@ -9,7 +9,6 @@ import { createLogDomain } from "@amoeba/log"
 export const danmakuLog = createLogDomain("player:danmaku", {
   color: "#e879f9", // fuchsia-400
   ansi: 177,
-  legacyKey: "player-log",
   events: {
     danmakuSubscribed: { level: "info", text: "订阅弹幕流" },
     danmakuUnsubscribed: { level: "info", text: "弹幕层卸载,退订流" },

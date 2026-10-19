@@ -99,8 +99,8 @@ export interface SocialImage {
 export interface Social extends Base {
   kind: "social"
   content: string
-  /** 图片列表;每个可带宽高(协议向后兼容纯文本 URL)。 */
-  images?: (string | SocialImage)[]
+  /** 图片列表;每个可带宽高。 */
+  images?: SocialImage[]
   likes?: number
   reposts?: number
   replies?: number

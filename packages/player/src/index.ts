@@ -8,7 +8,7 @@
  */
 export { PlayableMedia } from "./PlayableMedia.tsx"
 export { unlockAudioPlayback } from "./PlayableMedia.tsx"
-export { useMediaStream, isHlsStream, isFlvStream, isDashStream } from "./hooks/useMediaStream.ts"
+export { useMediaStream } from "./hooks/useMediaStream.ts"
 export {
   useStreamSelection,
   isProgressiveVideo,

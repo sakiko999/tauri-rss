@@ -116,8 +116,8 @@ Video 的 `channel`、Audio 的 `artist`/`album`、Social 的 `likes` **全丢**
 - **`imageProxy` / `dataSaver`**：渲染管线开关（AppSettings 的镜像，ui 的 MediaImage
   直读，避免层层传 props）。由 app 层在设置变化时写入
 
-**storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db，
-首次访问自动从 localStorage 搬迁）· CLI `sqliteStorage`（bun:sqlite）· example 内存版。
+**storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db）·
+CLI `sqliteStorage`（bun:sqlite）· example 内存版。
 **DDL 唯一权威 = core `db/schema.ts`**（两端共用，插件自带的 migration 机制不用，防漂移）。
 
 **内容缓存**：refresh 走 TTL 缓存（KV key `content:<subId>`，value = `{fetchedAt, xml}`）
@@ -633,8 +633,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `bili:live`（roomIds 解析成该房）与 `bili:live:hot`。凡是「按 id 记/改/查」的地方
   **都要带 subscriptionId**，否则两个订阅互相串：
   - **reading 键** = `readingKey(subId, itemId)`（`core/types/reading.ts`，分隔符 `\u0000`）。
-    ⚠️ 读取经 `findRecord` **回退旧版裸 id 键**（2026-10-15 前的存量数据），否则历史
-    已读/星标/续播一次性消失；**回退命中不删旧键**（同一旧记录可能被多个订阅共享）。
+    `subscriptionId` 是必填 —— 不再有裸 id 形态（旧版回退已于 2026-10-19 删除）。
   - **内存 store** `patch(subscriptionId, id, patch)`（`media-store.ts`）—— 原来按裸 id
     打**所有**订阅的同 id 条目。
   - **播放队列**存 `itemKey` 复合键 + 落 localStorage `ui-queue`（原来只存内存，重开就没）。
@@ -685,6 +684,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/rail-tree-accordion.md` | 侧栏树选型（为何用 Accordion 而非树组件 + 三个静默失败坑） |
 | `docs/audit-backlog.md` | 审计发现积压：故意不改的理由 + 误报证伪（已修不在此） |
 | `docs/compatibility-inventory.md` | 兼容补丁清单（持久化数据 / 输入归一化 / 脚手架 / 破坏性变更）+ 侧栏菜单视口审计 |
+| `docs/crawler-risk-control.md` | ★ 风控分级（L0 / L1 / LX）+ 集中式 governor + CDP 被动采集调研（设计草案） |
 | `docs/release-updater.md` | 发布产物（NSIS）、签名密钥、自动更新链路与发版步骤 |
 | `docs/numbered-ui-overlay.md` | Numbered UI Overlay（dev-only，已实现）：编号语义/400 上限/AI 清单 |
 

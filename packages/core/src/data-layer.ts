@@ -171,7 +171,7 @@ export function createDataLayer(): DataLayer {
     if (!map) return items
     return items.map((it) => {
       // ⚠️ 必须走复合键（带 subscriptionId）——同一条目 id 跨订阅共享已读/星标/续播
-      // 是真实存在的（见 types/reading.ts 的 readingKey）。findRecord 含旧版裸 id 回退。
+      // 是真实存在的（见 types/reading.ts 的 readingKey）。
       const rec = findRecord(map, it.subscriptionId, it.id)
       if (!rec) return it
       const next: Partial<MediaItem> = {}
@@ -373,18 +373,12 @@ export function createDataLayer(): DataLayer {
    * 入参 → 可路由的 URL。resolver 的 `resolveRoute` **只认 URL**(平台域名 + 路径),
    * 所以这里必须先把条目查出来取 `item.url`,不能把入参直接当 URL 用。
    *
-   * ⚠️ 按 **id 或 roomId** 命中:直播条目的两者不同
-   * (bilibili 房间 → `id: "bilibili:6"`、`roomId: "6"`、`url: "https://live.bilibili.com/6"`),
-   * 而历史调用方(ui 包的 UnifiedCard)传的是 `item.roomId`、新调用方传 `item.id`
-   * ——两种都接受,免得各调用方各踩一遍。
+   * 按 `item.id` 命中,取 `item.url`。
    *
    * 兜底:入参本身就是 URL(`://`)时直接用它(如条目已不在 store 里)。
    */
   function findItemUrl(itemId: string): string | null {
-    const items = store.all()
-    const hit =
-      items.find((it) => it.id === itemId) ??
-      items.find((it) => (it as { roomId?: string }).roomId === itemId)
+    const hit = store.all().find((it) => it.id === itemId)
     const url = hit?.url ?? (itemId.includes("://") ? itemId : null)
     return url || null
   }

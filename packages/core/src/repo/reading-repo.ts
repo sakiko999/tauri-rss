@@ -9,15 +9,15 @@ const STORAGE_KEY = "reading"
 /**
  * ⚠️ 每个方法都收 `subscriptionId` —— 见 `types/reading.ts` 的 `readingKey`。
  * 同一个 item.id 出现在多个订阅里（bili:live 与 bili:live:hot）时，只按裸 id
- * 落库会让两处共享已读/星标/续播。`subscriptionId` 传 undefined 时退化为旧行为。
+ * 落库会让两处共享已读/星标/续播。
  */
 export interface ReadingRepository {
   getAll(): Promise<ReadingMap>
-  get(subscriptionId: string | undefined, itemId: string): Promise<ReadRecord | undefined>
-  markRead(subscriptionId: string | undefined, itemId: string, read?: boolean): Promise<void>
-  setStarred(subscriptionId: string | undefined, itemId: string, starred: boolean): Promise<void>
-  setPosition(subscriptionId: string | undefined, itemId: string, positionSec: number): Promise<void>
-  setScrollRatio(subscriptionId: string | undefined, itemId: string, scrollRatio: number): Promise<void>
+  get(subscriptionId: string, itemId: string): Promise<ReadRecord | undefined>
+  markRead(subscriptionId: string, itemId: string, read?: boolean): Promise<void>
+  setStarred(subscriptionId: string, itemId: string, starred: boolean): Promise<void>
+  setPosition(subscriptionId: string, itemId: string, positionSec: number): Promise<void>
+  setScrollRatio(subscriptionId: string, itemId: string, scrollRatio: number): Promise<void>
   /** 批量标已读:一次读改写落盘。逐条 markRead 并发会互相覆盖(见 serial 注释)。 */
   markManyRead(keys: string[], read?: boolean): Promise<void>
 }
@@ -67,7 +67,7 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
     await storage.set(STORAGE_KEY, JSON.stringify(map))
   }
 
-  async function patch(subscriptionId: string | undefined, itemId: string, patch: Partial<ReadRecord>): Promise<void> {
+  async function patch(subscriptionId: string, itemId: string, patch: Partial<ReadRecord>): Promise<void> {
     return run(() => patchMany([readingKey(subscriptionId, itemId)], patch))
   }
 
@@ -92,7 +92,6 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
       return load()
     },
     async get(subscriptionId, itemId) {
-      // 回退旧版裸 id 键(迁移期)——见 types/reading.ts 的 findRecord。
       return findRecord(await load(), subscriptionId, itemId)
     },
     async markRead(subscriptionId, itemId, read = true) {

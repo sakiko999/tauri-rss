@@ -6,7 +6,7 @@
 import type { Article, Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { biliClient } from "@amoeba/resolve"
 import { API } from "./video-common.ts"
@@ -16,7 +16,7 @@ export class BiliSquareChannel implements RssChannel {
   readonly name = "B站热搜"
   readonly kind = "article" as const
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
     const signed = await biliClient.signWeb("limit=50&platform=web")

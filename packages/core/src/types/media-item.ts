@@ -65,8 +65,6 @@ export interface MediaItemBase {
    * (最近观看优先),否则只会按 publishedAt 排、失去「接着上次看」的语义。
    */
   lastReadAt?: number
-  /** 不透明源负载,保真 round-trip。 */
-  raw?: unknown
 
   // ── 渲染 / 播放提示 ──────────────────────────────────────────────
   mimeType?: string

@@ -8,7 +8,6 @@ import { createLogDomain, formatError } from "@amoeba/log"
 export const resolveLog = createLogDomain("player:resolve", {
   color: "#38bdf8", // sky-400
   ansi: 117,
-  legacyKey: "player-log",
   events: {
     resolveFailed: { level: "error", text: (ctx: { err: unknown }) => `失败: ${formatError(ctx.err)}` },
   },

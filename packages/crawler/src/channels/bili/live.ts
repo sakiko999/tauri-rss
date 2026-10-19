@@ -11,7 +11,7 @@
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { log } from "@amoeba/resolve"
 import { parseRoomIds } from "@amoeba/resolve"
@@ -79,7 +79,7 @@ export class BiliLiveChannel implements RssChannel {
   // 仅输出 Live item;流/弹幕统一走 crawler/resolver(按 item.url)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetch(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
     }
   }
 

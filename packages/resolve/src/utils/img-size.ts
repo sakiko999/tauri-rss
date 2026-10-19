@@ -118,14 +118,13 @@ export async function fetchImageSize(url: string): Promise<ImageSize | null> {
 }
 
 /**
- * 批量补缺宽高的图(接受 `string | SocialImage`,string 旧协议形态跳过)。
+ * 批量补缺宽高的图。
  * 缺宽高才发请求,命中缓存直接复用。多个 social channel 共用,不在各 channel
  * 重复「filter 缺 → fetch → 回填」编排。
  */
-export async function fillImageSizes(images: Array<SocialImage | string>): Promise<void> {
+export async function fillImageSizes(images: SocialImage[]): Promise<void> {
   await Promise.all(
     images
-      .filter((img): img is SocialImage => typeof img !== "string")
       .filter((img) => !img.width || !img.height)
       .map(async (img) => {
         const size = await fetchImageSize(img.url)

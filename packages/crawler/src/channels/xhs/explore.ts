@@ -14,7 +14,7 @@
 import type { Item, Social } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetch } from "../factory.ts"
+import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@amoeba/resolve"
 import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@amoeba/resolve"
@@ -39,7 +39,7 @@ export class XhsExploreChannel implements RssChannel, Loginable {
     const cookie = (info.cookie as string) || undefined
     const browser = globalThis.appHost?.browser
     return {
-      fetch: apiFetch(
+      fetch: apiFetchItems(
         () => (browser ? this.fetchViaBrowser(browser) : this.fetchItems(cookie)),
         () => this.channelOptions(),
       ),

@@ -135,8 +135,10 @@ function baseFields(it: ParsedItem, ctx: DeserializeContext) {
     author,
     publishedAt: it.pubDate ? tryEpoch(it.pubDate) : undefined,
     fetchedAt: num(raw["tpl:fetchedAt"]) ?? ctx.now,
-    isUnread: boolTpl(raw["tpl:isUnread"], true),
-    isStarred: boolTpl(raw["tpl:isStarred"], false),
+    // 阅读态只在 core reading repo 持久化,refresh 后由 applyReadingState 回填;
+    // XML 边界从不携带这两个字段(serialize 也不写)。
+    isUnread: true,
+    isStarred: false,
     mimeType: str(raw["tpl:mimeType"]),
     poster: str(raw["tpl:poster"]),
     width: num(raw["tpl:width"]),
@@ -209,16 +211,16 @@ function parseAudio(it: ParsedItem, ctx: DeserializeContext): MediaItem {
   }
 }
 
-/** live:platform/roomId 从 item.url 推导,不依赖 resolver。 */
+/** live:platform/roomId 由 serialize 无条件写出(见 xml/serialize.ts 的 live 分支)。 */
 function parseLive(it: ParsedItem, ctx: DeserializeContext): MediaItem {
   const b = baseFields(it, ctx)
   const raw = it.raw ?? {}
-  const { platform, roomId } = liveFromUrl(it.link)
   return {
     ...b,
     kind: "live",
-    platform: (str(raw["tpl:platform"]) as LivePlatformId | undefined) ?? platform,
-    roomId: str(raw["tpl:roomId"]) ?? roomId,
+    // 外部 feed 理论上可能缺字段;给静态默认值保证 LiveItem 的必填约束,不再从 URL 猜。
+    platform: (str(raw["tpl:platform"]) as LivePlatformId | undefined) ?? "bilibili",
+    roomId: str(raw["tpl:roomId"]) ?? "",
     liveStatus: (str(raw["tpl:liveStatus"]) as LiveStatus | undefined) ?? "unknown",
     online: num(raw["tpl:online"]),
     isRecord: boolTpl(raw["tpl:isRecord"], undefined),
@@ -305,7 +307,7 @@ function num(v: unknown): number | undefined {
   return Number.isNaN(n) ? undefined : n
 }
 
-/** `tpl:isUnread=0|1`. `fallback` applies when the tpl field is absent. */
+/** `tpl:<name>=0|1`. `fallback` applies when the tpl field is absent. */
 function boolTpl(v: unknown, fallback: boolean | undefined): boolean | undefined {
   if (v === undefined || v === null) return fallback
   return str(v) === "1"
@@ -428,19 +430,4 @@ function rsshubArticleMedia(raw: Record<string, unknown>): MediaAttachment[] | u
   return out.length ? out : undefined
 }
 
-/** 从 live item.url 推导 platform/roomId(复刻 resolver 路由语义,不依赖 crawler)。 */
-function liveFromUrl(url: string | undefined): { platform: LivePlatformId; roomId: string } {
-  const u = url ?? ""
-  const platform: LivePlatformId =
-    /live\.bilibili\.com/.test(u) ? "bilibili"
-    : /(?:^|\.)douyu\.com/.test(u) ? "douyu"
-    : /(?:^|\.)huya\.com/.test(u) ? "huya"
-    : /live\.douyin\.com/.test(u) ? "douyin"
-    : "bilibili"
-  const rid =
-    platform === "bilibili" ? u.match(/live\.bilibili\.com\/(\d+)/)?.[1] ?? ""
-    : platform === "douyu" ? u.match(/douyu\.com\/(\d+)/)?.[1] ?? ""
-    : platform === "huya" ? u.match(/huya\.com\/(\d+)/)?.[1] ?? ""
-    : u.match(/live\.douyin\.com\/(\S+)/)?.[1] ?? ""
-  return { platform, roomId: rid }
-}
+/* 历史:曾从 item.url 推导 platform/roomId;现 serialize 必写 tpl:platform/tpl:roomId。 */

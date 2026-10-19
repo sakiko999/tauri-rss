@@ -2,13 +2,9 @@
  * bilibili UGC 视频共享装配 —— 多个 video channel 共用的序列化装配。
  *
  * `ugc` 把 API 返回的原始视频对象归一成 Video item(kind=video,stream 留空——
- * playurl 直链由下游懒解析)。`resolveBiliPlay` 已迁 platform/bili/video-play.ts
- * (能力抽离:resolver/各 channel 从 resolver 或 platform/bili 引用)。
+ * playurl 直链由下游懒解析)。播放解析在 resolve 的 platform/bili/video-play.ts。
  */
 import type { Video } from "@amoeba/xml"
-
-// 兼容 re-export:现有 4 video channel 仍引 resolveBiliPlay(M4 收窄后改 resolveBiliVideoPlay)。
-export { resolveBiliVideoPlay as resolveBiliPlay } from "@amoeba/resolve"
 
 export const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400

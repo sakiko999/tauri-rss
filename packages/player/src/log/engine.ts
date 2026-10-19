@@ -9,7 +9,6 @@ import { createLogDomain, formatError } from "@amoeba/log"
 export const engineLog = createLogDomain("player:engine", {
   color: "#fbbf24", // amber-400
   ansi: 221,
-  legacyKey: "player-log",
   events: {
     hlsLevelLoaded: {
       level: "debug",

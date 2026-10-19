@@ -219,7 +219,6 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
   const text = (item as { content?: string }).content ?? item.summary ?? ""
   const likes = (item as { likes?: number }).likes
   const replies = (item as { replies?: number }).replies
-  const video = /视频|video/i.test(String((item as { raw?: { type?: string } }).raw?.type ?? ""))
   return (
     <button
       className="social-card"
@@ -234,11 +233,6 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
       {cover ? (
         <span className="social-media" style={{ aspectRatio: socialRatio(cover) }}>
           <MediaImage src={httpsify(cover.url)} ratio={socialRatio(cover)} loading="eager" />
-          {video ? (
-            <span className="social-video-badge">
-              <Icon name="play" size={11} /> 视频
-            </span>
-          ) : null}
         </span>
       ) : null}
       <div className="social-body">

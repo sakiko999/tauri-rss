@@ -30,7 +30,7 @@ async function fetchDanmakuSeg(cid: number, n: number): Promise<Uint8Array | nul
 
 /**
  * B站视频弹幕懒解析:bvid/aid → view(cid+duration) → 逐段 seg.so → DanmakuItem[]。
- * 4 个 video channel 的 `resolveDanmaku` 都调它(与 resolveBiliPlay 同范式)。
+ * 4 个 video channel 的 `resolveDanmaku` 都调它(与 resolveBiliVideoPlay 同范式)。
  */
 export async function resolveBiliDanmaku(itemId: string, cookie?: string): Promise<DanmakuItem[]> {
   // ⚠️ av 号必须用 `aid=`,不能塞进 `bvid=av123`(view 接口判非法 → 拿不到 cid →

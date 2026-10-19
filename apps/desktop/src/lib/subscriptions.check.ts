@@ -39,14 +39,9 @@ assert(
 
 assert(valueList(sub({ roomIds: "" }), "roomIds").length === 0, "空值 → 空列表")
 assert(valueList(sub({}), undefined).length === 0, "参数名缺失 → 空列表")
-// 旧订阅只有 roomId(单房间)：与 parseRoomIds 的兼容分支对齐
-assert(
-  JSON.stringify(valueList(sub({ roomId: "998" }), "roomIds")) === JSON.stringify(["998"]),
-  "roomIds 为空时回退旧 roomId",
-)
 assert(
   JSON.stringify(valueList(sub({ roomIds: "6", roomId: "998" }), "roomIds")) === JSON.stringify(["6"]),
-  "roomIds 非空时优先，不混入旧 roomId",
+  "只读 roomIds，不混入 legacy roomId",
 )
 // 合并已有订阅时也用同一把切分尺：中文逗号/空格/换行都算分隔
 assert(
