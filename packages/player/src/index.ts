@@ -33,7 +33,9 @@ export {
   MediaTimeRange,
   MediaRateButton,
   MediaQualityButton,
+  MediaDanmakuButton,
   MediaFullscreenButton,
   MediaLiveEdgeButton,
   MediaTimeDisplay,
 } from "./controls/index.ts"
+export type { DanmakuControl } from "./controls/index.ts"

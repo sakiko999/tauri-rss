@@ -76,6 +76,47 @@ export function FullscreenExitIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** 弹幕:对话气泡 + 两行文字(开着时)。 */
+export function DanmakuIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V7a3 3 0 0 1 3-3h7a8 8 0 0 1 8 8z" />
+      <path d="M8 10h8M8 14h5" />
+    </svg>
+  )
+}
+
+/** 弹幕关闭:同一气泡加斜线。 */
+export function DanmakuOffIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V7a3 3 0 0 1 3-3h7a8 8 0 0 1 8 8z" />
+      <path d="M8 10h8M8 14h5" />
+      <path d="M3 3l18 18" />
+    </svg>
+  )
+}
+
 /** 缓冲 spinner:单弧线 + 缺口,配合 `animate-spin` 旋转。 */
 export function SpinnerIcon(props: SVGProps<SVGSVGElement>) {
   return (

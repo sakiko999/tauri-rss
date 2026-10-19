@@ -13,6 +13,34 @@ export type ThemeMode = "light" | "dark" | "system"
 export type Density = "comfortable" | "compact"
 /** 播放默认档位策略:锁最高档(防隧道带宽估算降档)/ 自动。 */
 export type QualityMode = "highest" | "auto"
+/**
+ * 网络请求风控等级(见 docs/crawler-risk-control.md §2.4):
+ *   0 = 无限制,governor 直通(仅调试);
+ *   1 = 入门(L1,最宽松的受控档);
+ *   2 = 标准(L2);
+ *   3 = 严格(L3);
+ *   9 = 浏览器被动(L9 / LX),禁止应用主动请求,只读被动采集缓冲 / 内容缓存。
+ *
+ * ⚠️ 全局默认只能是 0~3 —— L9 意味着"该平台完全不能主动抓取",不能一刀切
+ * 套到所有渠道;它只出现在 `netLevels` 的平台覆盖里。
+ */
+export type NetLevel = 0 | 1 | 2 | 3 | 9
+/** 全局默认档(不含 L9)。 */
+export type GlobalNetLevel = 0 | 1 | 2 | 3
+
+/**
+ * 内置的**渠道级**默认等级(可被 `netLevels[channelKey]` 覆盖)。
+ *
+ * `xhs:user` 必须走浏览器导航读 SSR —— 应用构造的 HTTP 请求拿不到完整数据，
+ * 页面内自定义 fetch 又属于 LX 定义里的类别②，所以它默认就是 L9。
+ * 匿名导航拿不到笔记时回退内容缓存(这是 L9 的既定语义)。
+ *
+ * ⚠️ 只在**有浏览器能力**(`appHost.browser`)时生效；移动端没有 browser，
+ * 由 `netLevelFor` 回落到平台/全局等级(否则该渠道会永远只剩缓存)。
+ */
+export const BUILTIN_CHANNEL_LEVELS: Readonly<Record<string, NetLevel>> = {
+  "xhs:user": 9,
+}
 
 export interface AppSettings {
   /**
@@ -37,6 +65,16 @@ export interface AppSettings {
   dataSaver: boolean
   /** 自动刷新间隔(分钟)。同时是内容缓存 TTL:订阅级 refreshIntervalSec 优先,否则本值。 */
   refreshIntervalMin: number
+  /** 网络请求风控**全局默认**等级。0 无限制 / 1 入门 / 2 标准 / 3 严格(不含 9)。 */
+  netLevel: GlobalNetLevel
+  /**
+   * 平台级等级覆盖(平台名 → 等级)。未列出的平台继承 `netLevel`。
+   * 键支持 `"*"`(未知 host / RSS 兜底)与 channelKey(如 `xhs:user`,仅 core 的
+   * 抓取闸门识别;宿主 governor 只认平台名)。
+   */
+  netLevels: Record<string, NetLevel>
+  /** 后台自动刷新。关闭后启动 / 新建订阅不自动抓取,只允许手动刷新。 */
+  autoRefresh: boolean
   /** 打开文章即标已读。 */
   markReadOnOpen: boolean
   /**
@@ -79,6 +117,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   startMuted: true,
   dataSaver: false,
   refreshIntervalMin: 30,
+  netLevel: 1,
+  netLevels: {},
+  autoRefresh: true,
   markReadOnOpen: true,
   defaultQuality: "highest",
   danmakuEnabled: true,

@@ -35,7 +35,17 @@ export type SourceInfo = Record<string, string>
 export interface RssSource {
   /** 抓取并返回 RSS 2.0 XML 字符串。 */
   fetch(): Promise<string>
+  /**
+   * LX 被动采集：从 `passiveBuffer` 取最近一份页面响应并解析（见风控 §3.8/§3.10）。
+   * 无可用数据返回 null；**缺失 = 该渠道不支持 LX**。core 在 LX 下只调用它，
+   * 读不到就走内容缓存，绝不回退 `fetch()`（否则就变成主动请求了）。
+   */
+  fetchPassive?(): Promise<string | null>
 }
+
+/** LX 被动采集的内存缓冲（原始 body 只进内存，不落盘）。 */
+export { PassiveBuffer, passiveBuffer, canonicalUrl } from "./passive/buffer.ts"
+export type { PassiveEntry, PassiveBufferOptions, PassivePushInput } from "./passive/buffer.ts"
 
 /** 热搜词懒加载能力(可选能力,有该能力的 source 才 implements)。 */
 export interface HotWordSource {
@@ -140,6 +150,14 @@ export interface RssChannel {
    * ——「无需输入即可订阅」由 empty info 表达,不必用 `{}` 占位。
    */
   readonly defaultInfo?: SourceInfo
+  /**
+   * 是否支持 L9（浏览器被动采集）。**channel 级显式声明**，UI/编排据此判断该渠道
+   * 能否走 L9；未声明 = 不支持（L9 下只读缓存）。
+   *
+   * ⚠️ 声明为 true 的渠道必须在 `getSource()` 返回的 source 上提供 `fetchPassive()`；
+   * core 在 L9 下只调它，绝不回退 `fetch()`。声明与实现不一致时 L9 会退化为缓存。
+   */
+  readonly supportsL9?: boolean
   /** 按 info(url/uid/…)实例化一个可抓取的 source(行为载体);返回类型可按需收窄成 RssSource & VideoPlayable 等。 */
   getSource(info: SourceInfo): RssSource
 }

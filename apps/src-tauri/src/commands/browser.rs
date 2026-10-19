@@ -18,27 +18,81 @@ use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
-use windows_sys::Win32::Foundation::{BOOL, CloseHandle, HANDLE, HWND, LPARAM};
+use windows_sys::Win32::Foundation::{BOOL, CloseHandle, HANDLE, HWND, LPARAM, RECT};
 use windows_sys::Win32::System::Threading::{
     CreateProcessW, OpenProcess, PROCESS_INFORMATION, PROCESS_TERMINATE, STARTF_USESHOWWINDOW,
     STARTUPINFOW, TerminateProcess, WaitForSingleObject,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetWindowThreadProcessId, IsWindowVisible, ShowWindow, SW_HIDE,
+    EnumWindows, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId,
+    IsWindowVisible, SetForegroundWindow, SetWindowLongPtrW, ShowWindow, GWL_EXSTYLE, SW_HIDE,
+    SW_SHOWNA, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 
 /// 进程句柄包装(HANDLE 是裸指针默认 !Send;进程句柄无线程亲和,可跨线程用)。
 struct SafeHandle(HANDLE);
 unsafe impl Send for SafeHandle {}
 
+/// 窗口模式。
+///
+/// - `Hidden`：`SW_HIDE`。不渲染、无任务栏、CPU 近 0；SSR/DOM 读取够用。
+/// - `Interactive`：屏外 shown（遮挡 flag 关闭）。渲染/IO/懒加载/scroll 事件与
+///   可见窗口一致，供滚动驱动页面（xhs:user 翻页）使用。
+///
+/// ⚠️ 两者共用同一 Edge 实例，通过 `ShowWindow` 切换；遮挡/定时器 flag 是**启动参数**，
+/// 所以启动时就全带上（见 `edge_args`），否则切到 Interactive 也唤不醒渲染。
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+enum BrowserMode {
+    #[default]
+    Hidden,
+    Interactive,
+}
+
+/// 解析可选模式。`None` = 调用方只要求「确保就绪」，**不改变**当前模式
+/// （`ensureConn` 会在每次首次 evaluate 时调 `browser_ensure`，带默认值会把
+/// 刚切好的 interactive 又打回 hidden）。未知字符串报错，不静默降级。
+fn parse_mode(mode: Option<&str>) -> Result<Option<BrowserMode>, String> {
+    match mode {
+        None => Ok(None),
+        Some("interactive") => Ok(Some(BrowserMode::Interactive)),
+        Some("hidden") => Ok(Some(BrowserMode::Hidden)),
+        Some(other) => Err(format!("未知窗口模式: {other}（可用: hidden / interactive）")),
+    }
+}
+
 /// 浏览器进程管理:持有 spawn 的 Edge 进程句柄,供 browser_close 终止。
 pub struct BrowserManager {
     process: Mutex<Option<SafeHandle>>,
+    /// spawn 的主进程 PID（窗口切换时要重新收集整棵进程树）。
+    pid: Mutex<Option<u32>>,
+    /// `None` = 模式未知（失败/未应用），下次切换强制重新应用；
+    /// 不能只存 Hidden/Interactive，否则切换失败后会被「模式已一致」快路径永久跳过。
+    mode: Mutex<Option<BrowserMode>>,
+    /// 串行化窗口切换：读-改-写 mode 与阻塞的 ShowWindow 必须在同一临界区。
+    switch_lock: Mutex<()>,
 }
 
 impl Default for BrowserManager {
     fn default() -> Self {
-        Self { process: Mutex::new(None) }
+        Self {
+            process: Mutex::new(None),
+            pid: Mutex::new(None),
+            mode: Mutex::new(None),
+            switch_lock: Mutex::new(()),
+        }
+    }
+}
+
+/// 替换进程句柄槽，旧的立即 `CloseHandle`（重复 ensure 不泄漏内核句柄）。
+fn set_process_handle(manager: &BrowserManager, next: Option<SafeHandle>) {
+    let old = {
+        let mut slot = manager.process.lock().unwrap();
+        std::mem::replace(&mut *slot, next)
+    };
+    if let Some(SafeHandle(h)) = old {
+        unsafe {
+            let _ = CloseHandle(h);
+        }
     }
 }
 
@@ -114,7 +168,8 @@ fn collect_process_descendants(root: u32) -> std::collections::HashSet<u32> {
 /// 用于定位我们的 Edge——9223 只可能是我们 spawn 的 Edge(用户日常 Edge 不开调试端口)。
 fn tcp_listen_pids(port: u16) -> Vec<u32> {
     use windows_sys::Win32::NetworkManagement::IpHelper::{
-        GetExtendedTcpTable, MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_ALL,
+        GetExtendedTcpTable, MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, MIB_TCP_STATE_LISTEN,
+        TCP_TABLE_OWNER_PID_ALL,
     };
     use windows_sys::Win32::Networking::WinSock::AF_INET;
     let mut size: u32 = 0;
@@ -135,6 +190,11 @@ fn tcp_listen_pids(port: u16) -> Vec<u32> {
         let rows = std::ptr::addr_of!((*table).table) as *const MIB_TCPROW_OWNER_PID;
         for i in 0..count as usize {
             let row = rows.add(i);
+            // ⚠️ 必须只认 LISTEN + 非 0 PID：ALL 表里同一端口还有 TIME_WAIT 行，
+            // 其 OwningProcess 是 0；拿它当根 PID 会让隐藏/显示全部静默失效。
+            if (*row).dwState != MIB_TCP_STATE_LISTEN as u32 || (*row).dwOwningPid == 0 {
+                continue;
+            }
             // dwLocalPort 是网络字节序存储的低 16 位 → 交换字节得到主机序端口。
             let lp = (*row).dwLocalPort;
             let host_port = ((lp & 0xFF) << 8) | ((lp & 0xFF00) >> 8);
@@ -146,22 +206,27 @@ fn tcp_listen_pids(port: u16) -> Vec<u32> {
     pids
 }
 
-/// 杀掉占用给定端口的进程及其整棵进程树。
+/// 杀掉以 `root` 为根的整棵进程树。
 /// TerminateProcess(单进程)不保证连带杀 Edge 子进程(Job Object 未设 KILL_ON_CLOSE),
 /// 须显式枚举整树逐个杀。
-fn kill_edge_tree_on_port(port: u16) {
-    for pid in tcp_listen_pids(port) {
-        let tree = collect_process_descendants(pid);
-        eprintln!("[browser] kill Edge tree root={pid}: {} procs", tree.len());
-        for p in &tree {
-            let h = unsafe { OpenProcess(PROCESS_TERMINATE, 0, *p) };
-            if h != std::ptr::null_mut() {
-                unsafe {
-                    TerminateProcess(h, 0);
-                    let _ = CloseHandle(h);
-                }
+fn kill_process_tree(root: u32) {
+    let tree = collect_process_descendants(root);
+    eprintln!("[browser] kill Edge tree root={root}: {} procs", tree.len());
+    for p in &tree {
+        let h = unsafe { OpenProcess(PROCESS_TERMINATE, 0, *p) };
+        if h != std::ptr::null_mut() {
+            unsafe {
+                TerminateProcess(h, 0);
+                let _ = CloseHandle(h);
             }
         }
+    }
+}
+
+/// 杀掉占用给定端口的进程及其整棵进程树。
+fn kill_edge_tree_on_port(port: u16) {
+    for pid in tcp_listen_pids(port) {
+        kill_process_tree(pid);
     }
 }
 
@@ -204,9 +269,168 @@ fn hide_windows_for_pids(pids: &std::collections::HashSet<u32>) -> usize {
     ctx.hidden
 }
 
-/// Edge 启动参数。hide 时加屏幕外(配合循环 ShowWindow 防闪现)+ 禁节流(隐藏后
-/// 页面不被后台节流,登录轮询/签名照常);debug 不隐藏则窗口正常显示。
-fn edge_args(port: u16, data_dir: &std::path::Path, hide: bool) -> Vec<String> {
+// ── 窗口模式切换（hidden ↔ interactive） ───────────────────────────────────────
+
+/// 记录当前前台窗口（切换模式前后用于还原焦点）。
+fn foreground_hwnd() -> HWND {
+    unsafe { GetForegroundWindow() }
+}
+
+/// 把前台还给原窗口。
+///
+/// ⚠️ Chromium 显示窗口时会自己 `SetForegroundWindow`，`SW_SHOWNA` /
+/// `WS_EX_NOACTIVATE` 都挡不住（2026-10-19 实测）。只能显示后稍等再还回去；
+/// 若调用进程当时不是前台，Windows 可能拒绝这次还原（尽力而为）。
+fn restore_foreground(hwnd: HWND) {
+    if hwnd.is_null() {
+        return;
+    }
+    std::thread::sleep(std::time::Duration::from_millis(350));
+    unsafe {
+        let _ = SetForegroundWindow(hwnd);
+    }
+}
+
+struct MainWinCtx {
+    pids: *const std::collections::HashSet<u32>,
+    best: HWND,
+    best_area: i64,
+}
+
+/// 找进程树里**面积最大**的顶层窗口（主框架；Chromium 的辅助/IPC 窗口面积很小或为 0，
+/// 用 10 万 px 下限排除——启动早期小窗可能先于主框架出现）。
+fn main_window_for_pids(pids: &std::collections::HashSet<u32>) -> Option<HWND> {
+    unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let ctx = &mut *(lparam as *mut MainWinCtx);
+        let mut wnd_pid: u32 = 0;
+        unsafe {
+            GetWindowThreadProcessId(hwnd, &mut wnd_pid);
+            if !(*ctx.pids).contains(&wnd_pid) {
+                return 1;
+            }
+            let mut rect: RECT = std::mem::zeroed();
+            if GetWindowRect(hwnd, &mut rect) == 0 {
+                return 1;
+            }
+            let area = (rect.right - rect.left).max(0) as i64 * (rect.bottom - rect.top).max(0) as i64;
+            // 排除 Chromium 的辅助/IPC 小窗：启动早期它们可能先于主框架出现。
+            if area < 100_000 {
+                return 1;
+            }
+            if area > ctx.best_area {
+                ctx.best_area = area;
+                ctx.best = hwnd;
+            }
+        }
+        1
+    }
+    let mut ctx = MainWinCtx {
+        pids,
+        best: std::ptr::null_mut(),
+        best_area: 0,
+    };
+    unsafe {
+        EnumWindows(Some(enum_cb), &mut ctx as *mut MainWinCtx as isize);
+    }
+    if ctx.best.is_null() {
+        None
+    } else {
+        Some(ctx.best)
+    }
+}
+
+/// 以「不激活 + 去任务栏」的方式显示主窗口，返回是否已显示。
+///
+/// `WS_EX_TOOLWINDOW` 去掉任务栏按钮；`SW_SHOWNA` 避免主动激活
+/// （但 Chromium 仍可能前台化，调用方负责 `restore_foreground`）。
+fn show_main_window(pids: &std::collections::HashSet<u32>) -> bool {
+    let Some(hwnd) = main_window_for_pids(pids) else {
+        return false;
+    };
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+        let ex = (ex & !WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW;
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex as isize);
+        ShowWindow(hwnd, SW_SHOWNA);
+        IsWindowVisible(hwnd) != 0
+    }
+}
+
+/// 隐藏到稳定态。
+///
+/// `require_seen`：
+///   - true（启动路径）：主框架窗口比 CDP 就绪晚约 1s，必须「曾见可见窗口 + 连续 3 轮
+///     0 命中」才返回；否则会在主窗口创建前误判「藏净」。
+///   - false（模式切换）：窗口本来就在，第一轮没东西可藏即可返回。
+///
+/// `seen0`：预热循环已经藏过窗口时传 true（否则 seen 永远为 false，会白等 2s）。
+fn hide_until_stable(root: u32, require_seen: bool, seen0: bool) -> bool {
+    let mut seen = seen0;
+    let mut quiet = 0u32;
+    for _ in 0..20 {
+        let pids = collect_process_descendants(root);
+        let main_like = main_window_for_pids(&pids).is_some();
+        let hidden = hide_windows_for_pids(&pids);
+        // 窗口可能在「取 main_like」与「藏窗口」之间创建：藏完再确认一次，
+        // 否则 require_seen 路径会永远置不上 seen（白等 2s 且日志报 ok=false）。
+        let main_now = main_like || (hidden > 0 && main_window_for_pids(&pids).is_some());
+        if hidden > 0 && (main_now || !require_seen) {
+            seen = true;
+            quiet = 0;
+        } else if hidden > 0 {
+            // 启动路径只藏到辅助窗口：不算「见过主框架」，继续等。
+        } else if seen || !require_seen {
+            quiet += 1;
+        }
+        if seen && quiet >= 3 {
+            return true;
+        }
+        if !require_seen && !seen && quiet >= 1 {
+            return true; // 切隐藏时本来就没有可见窗口
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    seen
+}
+
+/// 显示主窗口直到确认可见（窗口创建可能晚于 CDP 就绪）。
+fn show_until_visible(root: u32) -> bool {
+    for _ in 0..20 {
+        let pids = collect_process_descendants(root);
+        if show_main_window(&pids) {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    false
+}
+
+/// 取进程树的根 PID：优先用本进程 spawn 的 pid；复用残留实例时按 CDP 端口反查。
+fn browser_root_pid(manager: &BrowserManager) -> Option<u32> {
+    if let Some(pid) = *manager.pid.lock().unwrap() {
+        return Some(pid);
+    }
+    tcp_listen_pids(CDP_PORT).into_iter().next()
+}
+
+/// 等 CDP 端口就绪（spawn 后最多 6s）。
+fn wait_cdp(port: u16) -> Result<(), String> {
+    for _ in 0..60 {
+        if cdp_alive(port) {
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    Err("Edge 已启动但 CDP 未就绪".to_string())
+}
+
+/// Edge 启动参数。
+///
+/// `hide_capable` = release 构建（窗口可隐藏/切模式）。debug 保留可见窗口便于开发观察。
+///
+/// ⚠️ 遮挡与节流 flag 是**启动参数**，两种模式共用同一实例，所以必须无条件带上：
+/// 若只在 hidden 时带，后来切到 interactive 也唤不醒渲染管线（见 docs §3.9）。
+fn edge_args(port: u16, data_dir: &std::path::Path, hide_capable: bool) -> Vec<String> {
     let mut args = vec![
         format!("--remote-debugging-port={port}"),
         format!("--user-data-dir={}", data_dir.display()),
@@ -222,17 +446,18 @@ fn edge_args(port: u16, data_dir: &std::path::Path, hide: bool) -> Vec<String> {
         "--disable-extensions".to_string(),
         "--disable-default-apps".to_string(),
         "--edge-redirect-feed-at-first-run-disabled=1".to_string(),
+        // 后台不被节流/降权：hidden 下定时器照常；切 interactive 后无需重启即可渲染。
+        "--disable-background-timer-throttling".to_string(),
+        "--disable-renderer-backgrounding".to_string(),
+        "--disable-backgrounding-occluded-windows".to_string(),
+        "--disable-features=CalculateNativeWinOcclusion".to_string(),
     ];
-    if hide {
+    if hide_capable {
+        // 屏外启动：即使 Chromium 先 ShowWindow 也不会闪在用户屏幕上。
         args.push("--window-position=-32000,-32000".to_string());
-        args.push("--disable-background-timer-throttling".to_string());
-        args.push("--disable-renderer-backgrounding".to_string());
-        args.push("--disable-backgrounding-occluded-windows".to_string());
-        args.push("--disable-features=CalculateNativeWinOcclusion".to_string());
-        // 隐藏窗口只用于 SSR 抓取/扫码,不给人看:禁图省内存与带宽。
-        // ⚠️ 登录二维码不受影响——微博读 img.src(远程图由 appHost.http 另取),
-        // 小红书读 img.qrcode-img 的 data URL 属性,抖音是 canvas 绘制;都只读 DOM,
-        // 不依赖图片真正解码。debug(hide=false)不加载此参数,保留可视调试。
+        // 只用于 SSR/滚动抓取，不给人看：禁图省内存与带宽。
+        // 实测不影响 interactive 下的 rAF / IO / scroll 事件（只影响图片本身）。
+        // ⚠️ 登录二维码不受影响——微博读 img.src、小红书读 data URL、抖音是 canvas 绘制。
         args.push("--blink-settings=imagesEnabled=false".to_string());
     }
     args.push("about:blank".to_string());
@@ -241,12 +466,12 @@ fn edge_args(port: u16, data_dir: &std::path::Path, hide: bool) -> Vec<String> {
 
 /// 用 Windows API 启动 Edge,返回 (进程句柄, 主进程 PID)。
 ///
-/// hide=true 时以 SW_HIDE 启动(窗口完全隐藏含任务栏)——浏览器内部仍是正常模式
+/// start_hidden=true 时以 SW_HIDE 启动(窗口完全隐藏含任务栏)——浏览器内部仍是正常模式
 /// (非 headless),UA/指纹与可见窗口一致,反爬检测不出;仅窗口被 Windows 层隐藏。
-/// hide=false(debug 构建)正常显示窗口,便于开发观察 Edge 行为。
+/// start_hidden=false 时正常显示(交互模式 / debug 构建)。
 /// 进程句柄由 BrowserManager 持有,browser_close 用 TerminateProcess 终止。
 /// Command + from_raw_handle 转 Child 在稳定 rustc 不可用(被 gate),故直接管 HANDLE。
-fn spawn_edge(exe: &Path, args: &[String], hide: bool) -> std::io::Result<(HANDLE, u32)> {
+fn spawn_edge(exe: &Path, args: &[String], start_hidden: bool) -> std::io::Result<(HANDLE, u32)> {
     // lpApplicationName 给 exe 路径 + lpCommandLine 拼完整命令行(引号防空格路径)。
     let exe_w: Vec<u16> = exe.as_os_str().encode_wide().chain(Some(0)).collect();
     let mut cmdline = format!("\"{}\"", exe.display());
@@ -264,13 +489,13 @@ fn spawn_edge(exe: &Path, args: &[String], hide: bool) -> std::io::Result<(HANDL
     }
     let mut cmdline_w: Vec<u16> = cmdline.encode_utf16().chain(Some(0)).collect();
 
-    // hide:STARTUPINFO 带 SW_HIDE(Chromium 会忽略它,需配合 hide_windows_for_pids);
+    // start_hidden:STARTUPINFO 带 SW_HIDE(Chromium 会忽略它,需配合 hide_windows_for_pids);
     // debug 不隐藏:默认窗口显示。
     let mut si = STARTUPINFOW {
         cb: std::mem::size_of::<STARTUPINFOW>() as u32,
         ..unsafe { std::mem::zeroed() }
     };
-    if hide {
+    if start_hidden {
         si.dwFlags = STARTF_USESHOWWINDOW;
         si.wShowWindow = SW_HIDE as u16;
     }
@@ -334,7 +559,14 @@ fn rm_dir(path: &Path) -> std::io::Result<()> {
 pub fn browser_reset_profile(app: AppHandle) -> Result<String, String> {
     let dir = profile_dir(&app)?;
     let pids = tcp_listen_pids(CDP_PORT).len();
+    let manager = app.state::<BrowserManager>();
+    // 与模式切换互斥，避免切换中途进程被删。
+    let _switch = manager.switch_lock.lock().unwrap();
     kill_edge_tree_on_port(CDP_PORT);
+    // 进程已杀：关掉旧句柄并清空状态，下次 ensure 按请求重新应用模式。
+    set_process_handle(&manager, None);
+    *manager.pid.lock().unwrap() = None;
+    *manager.mode.lock().unwrap() = None;
     // 杀进程后 Chromium 子进程释放文件句柄有延迟,重试几次再放弃。
     let mut last_err = None;
     for _ in 0..10 {
@@ -359,14 +591,32 @@ pub fn browser_reset_profile(app: AppHandle) -> Result<String, String> {
 
 /// 确保浏览器就绪,返回 CDP 端口。
 ///
-/// 幂等:端口上已有 CDP 服务(之前 spawn 的 Edge 存活)则直接复用。
-/// 否则 spawn 系统 Edge(--remote-debugging-port + --user-data-dir 持久化登录态)。
-// ⚠️ `(async)`:本命令 spawn Edge 后含最多 30×100ms + 两次 300ms 的 CDP 就绪忙等
-// (约 3s+),主线程执行会冻窗口。见 browser_reset_profile 上方注释。
+/// `mode`: `"hidden"`（默认）/ `"interactive"`，见 `BrowserMode`。
+/// 幂等：端口上已有 CDP 服务时只按请求切换窗口模式，不重复 spawn。
+/// 否则 spawn 系统 Edge（--remote-debugging-port + --user-data-dir 持久化登录态）。
+// ⚠️ `(async)`：本命令 spawn Edge 后含最多 60×100ms 的 CDP 就绪忙等 + 窗口稳定
+// 等待（约 3s+），主线程执行会冻窗口。见 browser_reset_profile 上方注释。
 #[tauri::command(async)]
-pub fn browser_ensure(app: AppHandle) -> Result<u16, String> {
+pub fn browser_ensure(app: AppHandle, mode: Option<String>) -> Result<u16, String> {
     let port = CDP_PORT;
+    let requested = parse_mode(mode.as_deref())?;
+    let manager = app.state::<BrowserManager>();
+
     if cdp_alive(port) {
+        if let Some(m) = requested {
+            switch_mode(&manager, m)?;
+        }
+        return Ok(port);
+    }
+
+    // 串行化整段「双检 → 清理 → spawn → 应用模式」：否则两个并发 ensure 会互相
+    // 把对方刚起的 Edge 杀掉。持锁后必须重新检查端口。
+    let _switch = manager.switch_lock.lock().unwrap();
+    if cdp_alive(port) {
+        drop(_switch); // 不能在持锁时调 switch_mode（它会再次取同一把锁）
+        if let Some(m) = requested {
+            switch_mode(&manager, m)?;
+        }
         return Ok(port);
     }
 
@@ -383,70 +633,147 @@ pub fn browser_ensure(app: AppHandle) -> Result<u16, String> {
     let data_dir = profile_dir(&app)?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
 
-    // debug 构建(dev)不隐藏窗口,便于开发观察 Edge 行为;release 构建隐藏(生产无感)。
-    let hide = !cfg!(debug_assertions);
-    let (handle, pid) = spawn_edge(&path, &edge_args(port, &data_dir, hide), hide)
-        .map_err(|e| format!("spawn Edge 失败: {e}"))?;
-    eprintln!("[browser] spawn Edge pid={pid} (hide={hide}, profile={})", data_dir.display());
+    // debug 构建(dev)不隐藏窗口,便于开发观察 Edge 行为;release 构建可隐藏/切模式。
+    let hide_capable = !cfg!(debug_assertions);
+    let initial = requested.unwrap_or(BrowserMode::Hidden);
+    let start_hidden = hide_capable && initial == BrowserMode::Hidden;
 
-    // 保存进程句柄供 browser_close 终止。
-    let manager = app.state::<BrowserManager>();
-    *manager.process.lock().unwrap() = Some(SafeHandle(handle));
+    // （switch_lock 已在上面获取，覆盖 spawn 与模式应用。）
+    let (handle, pid) = spawn_edge(
+        &path,
+        &edge_args(port, &data_dir, hide_capable),
+        start_hidden,
+    )
+    .map_err(|e| format!("spawn Edge 失败: {e}"))?;
+    eprintln!(
+        "[browser] spawn Edge pid={pid} (mode={initial:?}, hide_capable={hide_capable}, profile={})",
+        data_dir.display()
+    );
 
-    if hide {
-        // ⚠️ 持窗进程 ≠ spawn pid(Edge 动态 fork 子进程承载窗口),须每次重新收集整棵
-        // 进程树再隐藏——启动早期快照会漏掉稍后创建的持窗进程。
-        // ⚠️ **不能只看「藏到 ≥1 个」就返回**(旧代码的 bug):主框架窗口比首个可见窗口
-        // 晚创建,须等「**见过可见窗口之后** + 连续若干轮无人现身」的稳定态才认为藏净。
-        // 两个条件缺一不可:
-        //   ① `seen` —— 全程**至少藏到过一个可见窗口**,否则无从判断主窗口是否已创建;
-        //      只有隐形辅助窗口时 `hidden` 恒 0,不加这条 0.3s 内就会误判「藏净」返回,
-        //      再晚创建的主框架窗口照样漏(2026-10-16 复现:主框架比 CDP 晚 ~1s)。
-        //   ② `quiet >= STABLE` —— 连续几轮 0 命中,确认主窗口已创建且已被藏。
-        const STABLE: u32 = 3;
-        let mut quiet = 0u32;
-        let mut seen = false;
-        for _ in 0..50 {
-            let pids = collect_process_descendants(pid);
-            let hidden = hide_windows_for_pids(&pids);
-            if hidden > 0 {
-                seen = true;
-                quiet = 0;
-            } else if seen {
-                quiet += 1;
+    // 保存进程句柄供 browser_close 终止（替换旧句柄并关闭，避免泄漏）。
+    set_process_handle(&manager, Some(SafeHandle(handle)));
+    *manager.pid.lock().unwrap() = Some(pid);
+
+    // 失败清理：杀半启动的进程树、关句柄、状态置未知（下次 ensure 重新应用模式）。
+    let abort = |e: String| -> Result<u16, String> {
+        kill_process_tree(pid);
+        set_process_handle(&manager, None);
+        *manager.pid.lock().unwrap() = None;
+        *manager.mode.lock().unwrap() = None;
+        eprintln!("[browser] spawn aborted: {e}");
+        Err(e)
+    };
+
+    if hide_capable {
+        let fg = foreground_hwnd();
+        let result = (|| -> Result<bool, String> {
+            match initial {
+                BrowserMode::Hidden => {
+                    // 边等 CDP 边藏：Chromium 往往在 CDP 就绪前就 ShowWindow，
+                    // 尽早藏掉可缩短「屏外可见 + 可能抢前台」的暴露时间。
+                    let mut pre_seen = false;
+                    for _ in 0..60 {
+                        let pids = collect_process_descendants(pid);
+                        // 只把「主框架级」窗口算作 seen，避免辅助小窗让稳定判定过早成立。
+                        if main_window_for_pids(&pids).is_some() {
+                            pre_seen = true;
+                        }
+                        hide_windows_for_pids(&pids);
+                        if cdp_alive(port) {
+                            break;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                    wait_cdp(port)?;
+                    Ok(hide_until_stable(pid, true, pre_seen))
+                }
+                BrowserMode::Interactive => {
+                    wait_cdp(port)?;
+                    Ok(show_until_visible(pid))
+                }
             }
-            // CDP 就绪 + 曾见过可见窗口 + 已稳定藏净 → 成功。
-            if cdp_alive(port) && seen && quiet >= STABLE {
-                eprintln!("[browser] CDP ready port={port}, hidden stably ({STABLE} quiet rounds)");
-                return Ok(port);
+        })();
+        restore_foreground(fg);
+        match result {
+            Ok(ok) => {
+                *manager.mode.lock().unwrap() = if ok { Some(initial) } else { None };
+                eprintln!("[browser] ready port={port} mode={initial:?} ok={ok}");
             }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-        // 兜底(5s 内未达稳定态):再补藏,尽最大努力。
-        eprintln!("[browser] window hide not stable in 5s (seen={seen}), force retry…");
-        let pids = collect_process_descendants(pid);
-        let hidden = hide_windows_for_pids(&pids);
-        eprintln!("[browser] final hide: {hidden} windows");
-        if cdp_alive(port) {
-            return Ok(port);
+            Err(e) => return abort(e),
         }
     } else {
-        // debug:等 CDP 就绪即可,窗口保持可见。
-        for _ in 0..30 {
-            if cdp_alive(port) {
-                eprintln!("[browser] CDP ready port={port} (debug, window visible)");
-                return Ok(port);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
+        if let Err(e) = wait_cdp(port) {
+            return abort(e);
         }
+        *manager.mode.lock().unwrap() = Some(initial);
+        eprintln!("[browser] ready port={port} (debug, window visible)");
     }
-    Err("Edge 已启动但 CDP 未就绪".to_string())
+    Ok(port)
+}
+
+/// 切换窗口模式（不重启 Edge）。浏览器未启动时按目标模式 spawn。
+#[tauri::command(async)]
+pub fn browser_set_mode(app: AppHandle, mode: String) -> Result<(), String> {
+    let requested = parse_mode(Some(&mode))?.ok_or_else(|| "缺少窗口模式".to_string())?;
+    if !cdp_alive(CDP_PORT) {
+        browser_ensure(app.clone(), Some(mode))?;
+        // spawn 路径的应用失败目前只把 mode 置 None；这里必须把它变成显式错误，
+        // 否则冷启动的 interactive 会「假成功」，滚动翻页静默 0 条。
+        let manager = app.state::<BrowserManager>();
+        if *manager.mode.lock().unwrap() != Some(requested) {
+            return Err(format!("浏览器窗口模式未生效: {requested:?}"));
+        }
+        return Ok(());
+    }
+    let manager = app.state::<BrowserManager>();
+    switch_mode(&manager, requested)
+}
+
+/// 已有实例的模式切换：按需 hide/show，并还原前台。
+fn switch_mode(manager: &BrowserManager, requested: BrowserMode) -> Result<(), String> {
+    // 整个切换临界区：读-改-写 mode 与阻塞的 ShowWindow 必须原子（命令跑在线程池，
+    // JS 侧的 withBrowserLock 只覆盖 crawler 路径，挡不住并发的 browser_set_mode）。
+    let _guard = manager.switch_lock.lock().unwrap();
+
+    // 只有「本进程 spawn 的实例」才能信内存里的模式；复用残留实例时状态未知，
+    // 必须强制应用一次（否则 app 重启后可能把 interactive 窗口当成 hidden 跳过）。
+    let owned = manager.pid.lock().unwrap().is_some();
+    let current = *manager.mode.lock().unwrap();
+    if owned && current == Some(requested) {
+        return Ok(());
+    }
+    // debug 窗口始终可见，模式无意义。
+    if cfg!(debug_assertions) {
+        *manager.mode.lock().unwrap() = Some(requested);
+        return Ok(());
+    }
+    let root = browser_root_pid(manager).ok_or("未找到浏览器进程")?;
+    // 记住残留实例的根 PID：后续切换按 owned 快路径走，不必每次都强制应用。
+    if !owned {
+        *manager.pid.lock().unwrap() = Some(root);
+    }
+    let fg = foreground_hwnd();
+    let ok = match requested {
+        BrowserMode::Hidden => hide_until_stable(root, false, false),
+        BrowserMode::Interactive => show_until_visible(root),
+    };
+    restore_foreground(fg);
+    // 失败时置「未知」而不是记成成功态：否则下次同向请求会命中「模式已一致」快路径，
+    // 永久跳过重试（窗口可能仍可见）。
+    *manager.mode.lock().unwrap() = if ok { Some(requested) } else { None };
+    if !ok {
+        return Err(format!("浏览器窗口模式切换失败: {requested:?}"));
+    }
+    eprintln!("[browser] mode -> {requested:?}");
+    Ok(())
 }
 
 /// 关闭浏览器进程(应用退出时调用,避免残留 Edge)。
 #[tauri::command]
 pub fn browser_close(app: AppHandle) -> Result<(), String> {
     let manager = app.state::<BrowserManager>();
+    // 与应用退出互斥，但**不能阻塞退出**：切换最长约 12s，拿不到锁就直接按端口杀树。
+    let _switch = manager.switch_lock.try_lock().ok();
     let handle = manager.process.lock().unwrap().take();
     if let Some(SafeHandle(h)) = handle {
         eprintln!("[browser] close: terminating Edge (handle)");
@@ -460,5 +787,7 @@ pub fn browser_close(app: AppHandle) -> Result<(), String> {
     }
     // TerminateProcess(单进程)不连带杀 Edge 子进程 → 按 9223 定位并杀整树兜底。
     kill_edge_tree_on_port(CDP_PORT);
+    *manager.pid.lock().unwrap() = None;
+    *manager.mode.lock().unwrap() = None;
     Ok(())
 }

@@ -17,7 +17,7 @@ import type { SerializeOptions } from "@amoeba/xml"
 import type { LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
 import { WB_BASE, apiHeaders, mblogCardsToItems, weiboClient, weiboScanLogin } from "@amoeba/resolve"
-import { cdpJson, cdpNavigate, withBrowserLock } from "@amoeba/resolve"
+import { cdpJson, cdpNavigate, withBrowserMode } from "@amoeba/resolve"
 
 export class WeiboUserChannel implements RssChannel, Loginable {
   readonly key = "weibo:user"
@@ -72,10 +72,11 @@ export class WeiboUserChannel implements RssChannel, Loginable {
     const referer = `${WB_BASE}/u/${uid}`
     const browser = globalThis.appHost?.browser
 
-    // 浏览器路径:导航 + 两步 fetch 用 withBrowserLock 包成原子单元(单 Edge 共享,
+    // 浏览器路径:导航 + 两步 fetch 用 withBrowserMode 包成原子单元(单 Edge 共享,
     // 并发刷新会互相抢页面 → 页面停在别的域 fetch 变跨域 Failed to fetch)。
     if (browser) {
-      return withBrowserLock(async () => {
+      // 页面内 fetch 不需要渲染：hidden（SW_HIDE，CPU≈0）。
+      return withBrowserMode(browser, "hidden", async () => {
         // ① 先导航到 m.weibo.cn:页面 fetch 同源 API 无 CORS;②自动带 profile 登录态。
         await cdpNavigate(browser, `${WB_BASE}/`)
         // ⚠️ 必须带 apiHeaders(X-Requested-With / MWeibo-Pwa):翻页请求(带 page/since_id)

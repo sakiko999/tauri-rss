@@ -156,6 +156,8 @@ export function PlayerPage() {
                 autoResolve={isLive && item.liveStatus === "offline" ? false : (settings?.autoplayVideo ?? true)}
                 // 弹幕总开关关闭时不建弹幕连接(而非建了再藏)。
                 showDanmaku={danmakuOn}
+                // 开关渲染在播放器控件栏里;全局设置关闭时不给按钮(按了也不会生效)。
+                onToggleDanmaku={(settings?.danmakuEnabled ?? true) ? toggleDanmaku : undefined}
                 // 续播:非直播才有位置语义(item.positionSec 由 core 从 reading 回填)。
                 startAtSec={isLive ? undefined : item.positionSec}
                 onProgress={(sec, dur) => savePosition(item, sec, dur)}
@@ -199,9 +201,6 @@ export function PlayerPage() {
                 <span className="player-time">{fmtAgo(item.publishedAt)}</span>
               </div>
               <div className="player-actions">
-                <button className="btn btn-secondary" aria-pressed={danmakuOn} onClick={toggleDanmaku}>
-                  <Icon name="captions" size={14} /> 弹幕{danmakuOn ? "开" : "关"}
-                </button>
                 <button className="btn btn-quiet" onClick={() => addToQueue(item)}>
                   <Icon name="queue" size={14} /> 加入队列
                 </button>

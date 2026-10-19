@@ -86,6 +86,8 @@ function getNavData(cookie?: string): Promise<Record<string, any>> {
       // ⚠️ 失败**逐出缓存**:否则一次瞬时 nav 失败(断网/5xx/抖动)会把 rejected promise
       // 永久缓存,该进程内所有 bili channel(wbi 签名全经此)此后全抛错,直到重启。
       navCache.delete(key)
+      // 412 是 B 站 WAF 风控拦截
+      if ((e as Error)?.message?.includes("HTTP 412")) reportRisk("412")
       throw e
     })
     navCache.set(key, p)
@@ -128,6 +130,8 @@ async function ensureBuvid(): Promise<void> {
       // promise 永久缓存 → 本进程内所有走 buvid 的 bili channel(search/anchor/live:hot/
       // user_video)此后全抛错,直到重启。
       buvidPromise = null
+      // 412 是 B 站 WAF 风控拦截
+      if ((e as Error)?.message?.includes("HTTP 412")) reportRisk("412")
       throw e
     })
   }
@@ -166,6 +170,15 @@ async function signLiveParams(params: Record<string, string>, cookie?: string): 
   return `${query}&w_rid=${wRid}`
 }
 
+/**
+ * 风控信号上报(best-effort):宿主未注入 `net` 时静默,不影响请求/返回逻辑。
+ * 契约 `appHost.net.reportRisk(platform, signal)` 见 docs/crawler-risk-control.md §2.6。
+ */
+function reportRisk(signal: string): void {
+  // 宿主未注入 net 或调用方未注入 appHost 时静默(best-effort)
+  globalThis.appHost?.net?.reportRisk("bili", signal)
+}
+
 async function getJson<T = Record<string, any>>(
   url: string,
   opts: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean } = {},
@@ -182,7 +195,13 @@ async function getJson<T = Record<string, any>>(
     "user-agent": BILIBILI_UA,
     referer: opts.referer ?? DEFAULT_REFERER,
     ...extra,
+  }).catch((e: unknown) => {
+    // 412 是 B 站 WAF 风控拦截(httpJson 只把状态码留在错误文案里)
+    if ((e as Error)?.message?.includes("HTTP 412")) reportRisk("412")
+    throw e
   })
+  // -352 是 B 站风控校验码,-509 是请求过于频繁(明确风控信号)
+  if (data?.code === -352 || data?.code === -509) reportRisk(String(data.code))
   if (data?.code !== undefined && data.code !== 0 && !opts.allowCodeError) {
     throw new Error(`bilibili API ${data.code}: ${data.message ?? "unknown error"}`)
   }

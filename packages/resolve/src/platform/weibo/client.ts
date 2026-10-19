@@ -30,6 +30,15 @@ export const apiHeaders: Record<string, string> = {
 }
 
 /**
+ * 风控信号上报(best-effort):宿主未注入 `net` 时静默,不影响请求/返回逻辑。
+ * 契约 `appHost.net.reportRisk(platform, signal)` 见 docs/crawler-risk-control.md §2.6。
+ */
+function reportRisk(signal: string): void {
+  // 宿主未注入 net 或调用方未注入 appHost 时静默(best-effort)
+  globalThis.appHost?.net?.reportRisk("weibo", signal)
+}
+
+/**
  * 打一次 m.weibo.cn JSON API。基于 httpGet(text 响应,非 2xx 不抛)——保留
  * status + 原始 body 供诊断:风控/限流时 body 是 HTML,调用方据此报可读错误。
  * 空 body 或非 `{` 开头(风控 HTML)原样返回 text,调用方 `body?.ok` 判断。
@@ -40,10 +49,15 @@ export async function wbJson(
   extraHeaders?: Record<string, string>,
 ): Promise<{ status: number; body: any }> {
   const res = await httpGet(url, { ...apiHeaders, ...(cookie ? { Cookie: cookie } : {}), ...(extraHeaders ?? {}) })
+  // 418 / 403 / 432 是微博 WAF 拦截或半登录态限流(明确风控信号)
+  if (res.status === 418 || res.status === 403 || res.status === 432) reportRisk(String(res.status))
   const text = res.bodyText
   if (res.status !== 200) return { status: res.status, body: text }
   if (!text.trimStart().startsWith("{")) return { status: res.status, body: text }
-  return { status: res.status, body: parseJsonSafe(text) }
+  const body = parseJsonSafe(text)
+  // ok === -100 是微博「请求过于频繁」风控码
+  if (body?.ok === -100) reportRisk("-100")
+  return { status: res.status, body }
 }
 
 /**

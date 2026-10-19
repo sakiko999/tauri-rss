@@ -36,8 +36,8 @@ import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
-import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@amoeba/resolve"
-import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@amoeba/resolve"
+import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, reportXhsRisk, xhsClient, xhsScanLogin } from "@amoeba/resolve"
+import { cdpFetch, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
 import { log } from "@amoeba/resolve"
 
 /** 短延时(滚动翻页等网络/加载)。 */
@@ -58,6 +58,8 @@ export class XhsUserChannel implements RssChannel, Loginable {
   readonly name = "小红书用户笔记"
   readonly kind = "social" as const
   readonly sourceInfoTpl = [{ key: "user_id", label: "用户 ID(24 位)", required: true }]
+  /** 支持 L9：浏览器导航读 SSR 页面（页面内 fetch 不属于被动采集）。 */
+  readonly supportsL9 = true
 
   /** 扫码登录(Loginable,channel 级能力)。浏览器路径登录一次,同平台 channel 共享账号。 */
   scanLogin(
@@ -74,11 +76,28 @@ export class XhsUserChannel implements RssChannel, Loginable {
     const browser = globalThis.appHost?.browser
     const fetch = apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info))
     const base = (browser
-      ? { fetch, fetchMore: (cursor?: string) => this.fetchMoreViaBrowser(browser, userId, cursor) }
+      ? {
+          fetch,
+          fetchMore: (cursor?: string) => this.fetchMoreViaBrowser(browser, userId, cursor),
+          // LX:只导航 + 读页面 SSR(路线 B),不构造任何请求。
+          fetchPassive: () => this.fetchPassive(browser, userId),
+        }
       : { fetch }) as RssSource & Partial<Pageable> & ItemDetailSource
     // 单条详情:user 流 item 也是 xhs note,详情页补全(匿名可用),与 explore 同逻辑。
     base.resolveDetail = (item: Item) => this.resolveDetail(item)
     return base
+  }
+
+  /**
+   * LX 被动采集:导航 profile 页 + 读页面 SSR(`fetchViaBrowser`,路线 B)。
+   * ⚠️ **不**走 `fetchViaInPageFetch` —— 那是页面内自定义 fetch(类别②),
+   * 按定义不属于 LX。匿名导航拿不到完整笔记时返回 null,core 回退内容缓存。
+   */
+  private async fetchPassive(browser: BrowserBackend, userId: string): Promise<string | null> {
+    if (!browser.send || !userId) return null
+    const items = await this.fetchViaBrowser(browser, userId)
+    if (!items.length) return null
+    return serializeFeed(items, this.channelOptions({ user_id: userId }))
   }
 
   /** 单条笔记详情(列表 item 缺全文/多图/标签,详情页补全)。匿名可用需列表项 xsec_token。 */
@@ -123,7 +142,8 @@ export class XhsUserChannel implements RssChannel, Loginable {
    * 的完整 SSR(见 fetchItems 注释),这里能拿到。
    */
   private async fetchViaInPageFetch(browser: BrowserBackend, userId: string): Promise<Item[]> {
-    return withBrowserLock(async () => {
+    // 页面内 fetch 不需要渲染：hidden 即可。
+    return withBrowserMode(browser, "hidden", async () => {
       // 先落到 xhs origin(同源才能发同源 fetch)。
       await cdpNavigate(browser, `${XHS_BASE}/explore`, true)
       // ⚠️ credentials: "omit" —— 匿名才拿到完整 SSR。实测同一 URL:
@@ -158,8 +178,8 @@ export class XhsUserChannel implements RssChannel, Loginable {
    * new Map 等表达式,天然干净)。与 RSSHub getUserWithCookie 同路径。
    */
   private async fetchViaBrowser(browser: BrowserBackend, userId: string): Promise<Item[]> {
-    // withBrowserLock:导航 + 提取原子完成(单 Edge 共享,防并发抢页→跨域)。
-    return withBrowserLock(async () => {
+    // 导航 + 提取原子完成(单 Edge 共享,防并发抢页→跨域)；SSR 读取不需要渲染。
+    return withBrowserMode(browser, "hidden", async () => {
       // forceReload:refresh 需整页重载拿最新 SSR——同址不重载(fetchMore 用)会读到旧 SPA state。
       await cdpNavigate(browser, `${XHS_BASE}/user/profile/${userId}`, true)
       // 等 SSR 状态挂载(首个 script 即挂,domcontentloaded 前后都有;超时防结构变化)。
@@ -167,6 +187,8 @@ export class XhsUserChannel implements RssChannel, Loginable {
 
       // 风控检测(RSSHub getUser 同款):验证框出现 = 当前环境被拦。
       if (await this.hasVerifyBox(browser)) {
+        // .fe-verify-box = 小红书人机校验拦截(明确风控信号)
+        reportXhsRisk("verify-box")
         throw new Error("小红书风控校验(.fe-verify-box)出现——账号可能被风控,请稍后再试或重新扫码登录")
       }
 
@@ -197,8 +219,12 @@ export class XhsUserChannel implements RssChannel, Loginable {
     userId: string,
     cursor?: string,
   ): Promise<{ xml: string; cursor?: string }> {
-    // withBrowserLock:滚动 + 读 state 原子(单 Edge 共享,防并发抢页)。
-    return withBrowserLock(async () => {
+    // 滚动 + 读 state 原子(单 Edge 共享,防并发抢页)。
+    // ⚠️ 滚动驱动必须 interactive：hidden（SW_HIDE）下渲染管线停摆，
+    // window.scrollTo 只改 scrollTop、不派发 scroll 事件，IntersectionObserver
+    // 与 lazy 加载也不触发（2026-10-19 实测，见 docs/crawler-risk-control.md §3.9）。
+    // wrapper 会在结束后自动切回 hidden（interactive 常驻有 CPU/GPU 开销）。
+    return withBrowserMode(browser, "interactive", async () => {
       await cdpNavigate(browser, `${XHS_BASE}/user/profile/${userId}`)
       await waitUntil(browser, `typeof window.__INITIAL_STATE__ !== 'undefined'`, 15_000, "xhs SSR 状态未挂载")
 
@@ -214,10 +240,12 @@ export class XhsUserChannel implements RssChannel, Loginable {
       if (initial.list.length <= startIdx) {
         for (let round = 0; round < 3; round++) {
           if (await this.hasVerifyBox(browser)) {
+            // .fe-verify-box = 小红书人机校验拦截(明确风控信号)
+            reportXhsRisk("verify-box")
             throw new Error("小红书风控验证码出现(滚动触发),已停止翻页——请降低刷新频率或稍后再试")
           }
-          // 小步滚动(分 3 次,每步 ~400ms)触发平台懒加载——一步滚到底对平台 IntersectionObserver
-          // /scroll listener 不敏感(实测连续 loadMore 滚动无增长 → 0 条 → hasMore false)。
+          // 小步滚动(分 3 次,每步 ~400ms)触发平台懒加载——一步滚到底时平台
+          // 的 scroll/IO 处理来不及（实测连续 loadMore 无增长 → 0 条 → hasMore false）。
           // 步进加随机抖动去机械化(固定节奏易被平台识别为自动化)。
           const hBefore = await browser.evaluate<number>(`document.body.scrollHeight`)
           await browser.evaluate(`(async () => {

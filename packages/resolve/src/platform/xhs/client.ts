@@ -73,9 +73,23 @@ const BROWSER_HEADERS: Record<string, string> = {
   Referer: `${XHS_BASE}/`,
 }
 
+/**
+ * 风控信号上报(best-effort):宿主未注入 `net` 时静默,不影响请求/返回逻辑。
+ * 契约 `appHost.net.reportRisk(platform, signal)` 见 docs/crawler-risk-control.md §2.6。
+ * 导出供 crawler 的 xhs channel 在 `.fe-verify-box` 检查处复用。
+ */
+export function reportXhsRisk(signal: string): void {
+  // 宿主未注入 net 或调用方未注入 appHost 时静默(best-effort)
+  globalThis.appHost?.net?.reportRisk("xhs", signal)
+}
+
 /** 抓页面 HTML(带 cookie)。复用 httpText(2xx 校验 + body 归一)。 */
 export async function fetchHtml(url: string, cookie?: string): Promise<string> {
-  return httpText(url, cookie ? { ...BROWSER_HEADERS, Cookie: cookie } : BROWSER_HEADERS)
+  const html = await httpText(url, cookie ? { ...BROWSER_HEADERS, Cookie: cookie } : BROWSER_HEADERS)
+  // 300011 是小红书账号风控码(签名/参数异常)。只认 JSON 键位,避免正文里
+  // 恰好出现这串数字时误写 60 分钟冷却(会连带停掉所有 xhs 主动请求)。
+  if (/"(?:code|result_code)"\s*:\s*300011\b/.test(html)) reportXhsRisk("300011")
+  return html
 }
 
 /**

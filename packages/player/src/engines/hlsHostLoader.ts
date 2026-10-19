@@ -56,6 +56,8 @@ export class HlsHostLoader implements Loader<LoaderContext> {
         method: "GET",
         responseType: isBinary ? "arraybuffer" : "text",
         headers: reqHeaders,
+        // 播放分片不参与平台 RPM/冷却(只受宿主全局并发约束);不靠 host/扩展名猜。
+        policy: { metered: false },
       })
       .then((res) => {
         if (this.aborted) return

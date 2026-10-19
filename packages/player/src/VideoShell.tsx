@@ -13,6 +13,7 @@ import { bindFullscreen, type FullscreenApi, useVideoElement } from "./hooks/use
 import { useAutoHideControls } from "./hooks/useAutoHideControls.ts"
 import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"
 import { PlayerControls } from "./PlayerControls.tsx"
+import type { DanmakuControl } from "./controls/index.ts"
 import { PlayIcon, SpinnerIcon } from "./icons.tsx"
 import { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
 
@@ -27,6 +28,7 @@ export function VideoShell({
   onQuality,
   onMediaError,
   danmaku,
+  danmakuControl,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   /** 是否由 useMediaStream(hls/flv/dash)驱动(决定直播判定)。 */
@@ -43,6 +45,8 @@ export function VideoShell({
   onMediaError?: (code: number | undefined, msg: string) => void
   /** 弹幕流(随 resolve 结果附带;无弹幕平台 undefined 不渲染层)。 */
   danmaku?: DanmakuStream
+  /** 弹幕开关(仅当解析结果确实带弹幕时传入);按钮渲染在控件栏内。 */
+  danmakuControl?: DanmakuControl
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const { state, ops } = useVideoElement(videoRef, isStreaming, onMediaError)
@@ -168,6 +172,7 @@ export function VideoShell({
             qualityOptions={qualityOptions}
             activeQuality={activeQuality}
             onQuality={onQuality}
+            danmakuControl={danmakuControl}
           />
         </div>
       </div>

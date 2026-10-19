@@ -42,6 +42,8 @@ export interface RssChannel {
   readonly sourceInfoTpl?: SourceInfoField[]
   /** 带默认参数的实例(可选;存在 = 无需输入即可订阅)。 */
   readonly defaultInfo?: SourceInfo
+  /** channel 级 L9（浏览器被动）支持声明;未声明 = 不支持,core 在 L9 下只读缓存。 */
+  readonly supportsL9?: boolean
   /** 按 info(url/uid/…)实例化一个可抓取的 source。 */
   getSource(info: SourceInfo): RssSource
 }

@@ -20,7 +20,7 @@ import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import { findRecord } from "./types/reading.ts"
-import type { AppSettings } from "./types/settings.ts"
+import { BUILTIN_CHANNEL_LEVELS, type AppSettings, type NetLevel } from "./types/settings.ts"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
@@ -100,6 +100,16 @@ export interface DataLayer {
   ): Promise<LoginResult>
 }
 
+/**
+ * 带 LX 被动采集能力的 source(crawler 的 `RssSource` 已声明 `fetchPassive?`;
+ * core 的镜像接口只列 `fetch`,这里按结构类型取——可选能力不进镜像契约)。
+ */
+type FetchableSource = {
+  fetch(): Promise<string>
+  /** LX:从被动缓冲取最近一份页面响应;null/缺失 = 无可用数据(绝不回退 fetch)。 */
+  fetchPassive?(): Promise<string | null>
+}
+
 export function createDataLayer(): DataLayer {
   registerAllChannels()
   // 全局 appHost 门面(getter 校验未注入抛清晰错误;now/log 兜底)。
@@ -111,6 +121,8 @@ export function createDataLayer(): DataLayer {
   const bodyCache = createBodyCacheRepo(storage)
   const reading = createReadingRepository(storage, now)
   const settings = createSettingsRepository(storage)
+  // 启动时把网络策略同步给宿主 governor(best-effort;不阻塞 DataLayer 创建)。
+  void settings.get().then(syncNetPolicy).catch(() => {})
   const store = createMediaStore(now)
   /** 分页游标:订阅 → 当前翻到的位置(refresh 重置;UI 无感,由 loadMore 内部维护)。 */
   const pageCursors = new Map<string, string>()
@@ -123,6 +135,74 @@ export function createDataLayer(): DataLayer {
   function replaceIfLive(id: string, items: MediaItem[]): void {
     if (removedSubs.has(id)) return
     store.replace(id, items)
+  }
+
+  /**
+   * 从内容缓存重建喂 store(**即使已过期**)——「本轮不发网络」的路径共用:
+   * 自动刷新关闭 / LX 无被动数据。返回 null = 无可用缓存(调用方按各自语义处理)。
+   * ⚠️ 缓存总是首页 → 一并清分页游标,否则 loadMore 会从旧位置续翻跳页。
+   */
+  async function restoreFromCache(
+    subscriptionId: string,
+    kind: MediaKind | undefined,
+  ): Promise<{ subscriptionId: string; itemCount: number; fetchedAt: number } | null> {
+    const cached = await contentCache.get(subscriptionId).catch(() => null)
+    if (!cached) return null
+    try {
+      const { items, total } = deserializeFeedWithTotal(cached.xml, { subscriptionId, kind, now: now() })
+      if (total !== undefined) pageTotals.set(subscriptionId, total)
+      else pageTotals.delete(subscriptionId)
+      pageCursors.delete(subscriptionId)
+      replaceIfLive(subscriptionId, await applyReadingState(items))
+      return { subscriptionId, itemCount: items.length, fetchedAt: cached.fetchedAt }
+    } catch {
+      return null // 缓存损坏 → 视为无可用数据
+    }
+  }
+
+  /**
+   * 把网络策略同步给宿主 governor(best-effort)。
+   * host 未注入 `net`(浏览器/CLI/旧宿主)时静默跳过 —— doRefresh 内的等级闸门仍生效。
+   */
+  function syncNetPolicy(s: AppSettings): void {
+    try {
+      // levels 是**整表替换**语义(设置页的完整平台覆盖快照)。
+      globalThis.appHost?.net?.configure({ level: s.netLevel, levels: s.netLevels })
+    } catch {
+      /* net 未注入 / 旧宿主:沿用宿主默认策略 */
+    }
+  }
+
+  /** channelKey → 平台名(与 host governor 的 URL 平台分类同名)。 */
+  function platformOfChannel(channelKey: string): string | undefined {
+    if (channelKey.startsWith("bili:")) return "bili"
+    if (channelKey.startsWith("weibo:")) return "weibo"
+    if (channelKey.startsWith("xhs:")) return "xhs"
+    if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyin"
+    if (channelKey.startsWith("live:douyu") || channelKey.startsWith("douyu:")) return "douyu"
+    if (channelKey.startsWith("live:huya") || channelKey.startsWith("huya:")) return "huya"
+    if (channelKey.startsWith("youtube:")) return "youtube"
+    if (channelKey.startsWith("apple:")) return "apple"
+    return undefined
+  }
+
+  /**
+   * 渠道生效等级:channelKey 精确覆盖 → 平台覆盖 → `"*"` → 全局默认。
+   * 这让「小红书 LX、其它平台 L1」可以共存;未知渠道(RSS 等)吃 `"*"` 或全局。
+   */
+  function netLevelFor(channelKey: string, s: AppSettings): NetLevel {
+    const platform = platformOfChannel(channelKey)
+    // 内置渠道默认(如 xhs:user = 9)先于平台覆盖 —— 它是"该渠道必须这样"，
+    // 不是"该平台通常这样"。⚠️ 只在**有浏览器能力**时生效：移动端没有
+    // appHost.browser，强制 L9 会让该渠道永远只剩缓存，故回落到普通等级。
+    const builtin = globalThis.appHost?.browser ? BUILTIN_CHANNEL_LEVELS[channelKey] : undefined
+    return (
+      s.netLevels[channelKey] ??
+      builtin ??
+      (platform ? s.netLevels[platform] : undefined) ??
+      s.netLevels["*"] ??
+      s.netLevel
+    )
   }
 
   /** channelKey 前缀 → settings 里存的 cookie 字段(读 cookieFor / 写 scanLogin 共用一张表)。 */
@@ -147,13 +227,17 @@ export function createDataLayer(): DataLayer {
    *   rsshub 外挂源:只注入 baseUrl(供 fetch 请求外部实例),**不注入平台 cookie**
    *     ——外挂只做信息抓取,无需登录态;平台 cookie 也不应泄露给公网实例。
    */
-  async function sourceInfoFor(sub: { channelKey: string; info: Record<string, string> }): Promise<Record<string, string>> {
-    const s = await settings.get()
+  async function sourceInfoFor(
+    sub: { channelKey: string; info: Record<string, string> },
+    /** 已读出的 settings 快照(doRefresh 复用同一次读);不传则现读。 */
+    s?: AppSettings,
+  ): Promise<Record<string, string>> {
+    const cfg = s ?? (await settings.get())
     if (sub.channelKey.startsWith("rsshub:")) {
       if (sub.info["baseUrl"]) return sub.info
-      return { ...sub.info, baseUrl: s.rsshubBaseUrl }
+      return { ...sub.info, baseUrl: cfg.rsshubBaseUrl }
     }
-    const cookie = cookieFor(sub.channelKey, s)
+    const cookie = cookieFor(sub.channelKey, cfg)
     if (!cookie || sub.info["cookie"]) return sub.info
     return { ...sub.info, cookie }
   }
@@ -191,6 +275,9 @@ export function createDataLayer(): DataLayer {
    *     跳过网络抓取(减少反爬源被打频率);fetchedAt 回缓存时间。
    *   - 抓取失败 → 回退旧缓存(即便过期)喂 store,error 字段保留(UI 可见失败不空窗)。
    *   - TTL = 订阅级 refreshIntervalSec 优先,否则全局 settings.refreshIntervalMin。
+   *   - autoRefresh=false 且非 force → 不发网络,只复用缓存(即使过期);无缓存返回 0 条不报错。
+   *   - 该渠道等级 = 9(L9/LX) → 只调 source.fetchPassive(),读不到走缓存,**绝不回退 fetch()**
+   *     (风控 §2.4/§3.8:应用构造的平台 API 请求正是 LX 要禁的)。
    */
   async function doRefresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
     const sub = await repo.get(subscriptionId)
@@ -232,7 +319,25 @@ export function createDataLayer(): DataLayer {
       const channel = getChannel(sub.channelKey)
       if (!channel) throw new NoChannelError(sub.channelKey)
       kind = channel.kind
-      const info = await sourceInfoFor(sub)
+      // ⚠️ settings 只读一次:TTL / 自动刷新开关 / LX 闸门 / cookie 注入共用同一快照。
+      const s = await settings.get()
+      // 网络策略同步给宿主 governor(best-effort;未注入 net 时由下面的闸门兜底)。
+      // 幂等,每次刷新同步一次 —— 设置页改等级后下一轮刷新即生效。
+      syncNetPolicy(s)
+
+      // ── 自动刷新关闭(正交开关):非手动刷新不发网络,只复用缓存(即使过期) ──
+      // force(手动刷新)不受它约束 —— 否则用户点「刷新」也拿不到新内容。
+      if (!s.autoRefresh && !opts?.force) {
+        return (
+          (await restoreFromCache(subscriptionId, kind)) ?? {
+            subscriptionId,
+            itemCount: 0,
+            fetchedAt: now(),
+          }
+        )
+      }
+
+      const info = await sourceInfoFor(sub, s)
 
       // ── TTL 短路:未 force 且缓存命中且未过期 → 跳过网络抓取 ──
       if (!opts?.force) {
@@ -240,7 +345,7 @@ export function createDataLayer(): DataLayer {
         if (cached) {
           const ttlMs = sub.refreshIntervalSec
             ? sub.refreshIntervalSec * 1000
-            : (await settings.get()).refreshIntervalMin * 60 * 1000
+            : s.refreshIntervalMin * 60 * 1000
           if (now() - cached.fetchedAt < ttlMs) {
             const { items, total } = deserializeFeedWithTotal(cached.xml, {
               subscriptionId,
@@ -256,8 +361,45 @@ export function createDataLayer(): DataLayer {
         }
       }
 
+      // ── 抓取:等级闸门(风控 §2.4 / §3.8) ──
+      const source: FetchableSource = channel.getSource(info)
+      // 等级按渠道解析(平台覆盖,如小红书 9=L9 / B站 1)。
+      const level = netLevelFor(sub.channelKey, s)
+      let xml: string
+      if (level === 9) {
+        // LX = 浏览器唯一发起请求:只取页面自然请求的响应体。**绝不回退 fetch()**
+        // —— 应用构造的平台 API 调用正是 LX 要禁的行为(否则等级形同虚设)。
+        //
+        // 先看 channel 的显式声明:没声明支持 L9 的渠道不尝试 fetchPassive
+        // (有的 source 可能内部还有主动请求),直接读缓存并给出明确原因。
+        if (!channel.supportsL9) {
+          const hit = await restoreFromCache(subscriptionId, kind)
+          if (hit) return hit
+          return {
+            subscriptionId,
+            itemCount: 0,
+            error: `L9(LX)：渠道 ${sub.channelKey} 未声明支持浏览器被动采集`,
+            fetchedAt: now(),
+          }
+        }
+        const passive = (await source.fetchPassive?.()) ?? null
+        if (!passive) {
+          // 无被动数据 → 复用内容缓存(即使过期);连缓存都没有才如实报错。
+          const hit = await restoreFromCache(subscriptionId, kind)
+          if (hit) return hit
+          return {
+            subscriptionId,
+            itemCount: 0,
+            error: "L9(LX) 模式：没有可用的被动采集数据",
+            fetchedAt: now(),
+          }
+        }
+        xml = passive
+      } else {
+        // L0(调试直通)/ L1:L1 严格只是更紧的配额,由宿主 governor 执行,同样走主动抓取。
+        xml = await source.fetch()
+      }
       // ── 正常抓取 + 回写缓存 ──
-      const xml = await channel.getSource(info).fetch()
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
       // ⚠️ 抓取「成功」但解析出 0 条(源临时故障 / 反爬返回空壳页)= 不能当成功处理:
       //   往下走会用空数组 replace(清空列表) 并把空 XML 写进缓存,内容在内存和磁盘上
@@ -529,6 +671,7 @@ export function createDataLayer(): DataLayer {
       sourceInfoTpl: c.sourceInfoTpl,
       defaultInfo: c.defaultInfo,
       loginable: isLoginable(c),
+      supportsL9: c.supportsL9 === true,
     }))
   }
 

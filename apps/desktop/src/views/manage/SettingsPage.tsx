@@ -1,9 +1,9 @@
 /**
  * SettingsPage —— 设置外壳:深链解析 + tab 切换。
  *
- * 六个 tab 各在自己的文件里(views/manage/settings/):
- *   Appearance(表现型偏好,usePrefs)· Reading(缓存/RSSHub)· Playback ·
- *   Subscriptions(OPML + 分组 + 订阅 CRUD)· Diagnostics(存储与诊断)·
+ * 七个 tab 各在自己的文件里(views/manage/settings/):
+ *   Appearance(表现型偏好,usePrefs)· Reading(缓存/RSSHub)· Network(网络与风控)·
+ *   Playback · Subscriptions(OPML + 分组 + 订阅 CRUD)· Diagnostics(存储与诊断)·
  *   About(版本与自动更新)。
  * 本文件只保留 tab 定义与外壳 —— 原来它们全挤在一个 555 行的组件里。
  */
@@ -12,17 +12,19 @@ import { useSearchParams } from "react-router"
 import { Icon } from "../../components/Icon.tsx"
 import { Appearance } from "./settings/Appearance.tsx"
 import { Reading } from "./settings/Reading.tsx"
+import { Network } from "./settings/Network.tsx"
 import { Playback } from "./settings/Playback.tsx"
 import { Subscriptions } from "./settings/Subscriptions.tsx"
 import { Diagnostics } from "./settings/Diagnostics.tsx"
 import { About } from "./settings/About.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
-type Tab = "appearance" | "reading" | "playback" | "subscriptions" | "diagnostics" | "about"
+type Tab = "appearance" | "reading" | "network" | "playback" | "subscriptions" | "diagnostics" | "about"
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "appearance", label: "外观", icon: "sun" },
   { id: "reading", label: "阅读与缓存", icon: "type" },
+  { id: "network", label: "网络与风控", icon: "shield" },
   { id: "playback", label: "播放", icon: "play" },
   { id: "subscriptions", label: "订阅与分组", icon: "rss" },
   { id: "diagnostics", label: "存储与诊断", icon: "database" },
@@ -56,6 +58,7 @@ export function SettingsPage() {
 
           {tab === "appearance" ? <Appearance /> : null}
           {tab === "reading" ? <Reading /> : null}
+          {tab === "network" ? <Network /> : null}
           {tab === "playback" ? <Playback /> : null}
           {tab === "subscriptions" ? <Subscriptions /> : null}
           {tab === "diagnostics" ? <Diagnostics /> : null}

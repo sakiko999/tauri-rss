@@ -55,6 +55,15 @@ export async function fetchRoom(roomId: string, referer?: string): Promise<Recor
   return douyinClient.getJson(url, { referer: referer ?? `${LIVE}/${roomId}` })
 }
 
+/**
+ * 风控信号上报(best-effort):宿主未注入 `net` 时静默,不影响请求/返回逻辑。
+ * 契约 `appHost.net.reportRisk(platform, signal)` 见 docs/crawler-risk-control.md §2.6。
+ */
+function reportRisk(signal: string): void {
+  // 宿主未注入 net 或调用方未注入 appHost 时静默(best-effort)
+  globalThis.appHost?.net?.reportRisk("douyin", signal)
+}
+
 export const douyinClient = {
   /** 原始 URL → a_bogus 签名 → 带 ttwid 请求;空 body / status_code 抛清晰错误。 */
   async getJson<T = any>(url: string, opts?: PlatformRequestOptions): Promise<T> {
@@ -71,6 +80,9 @@ export const douyinClient = {
     const code = (json as Record<string, any>)?.status_code
     if (code !== undefined && code !== 0) {
       const msg = String((json as Record<string, any>)?.prompts ?? (json as Record<string, any>)?.status_msg ?? `status_code=${code}`)
+      // 4031 = verify-center 拦截,2483 = 需登录(抖音明确风控码)
+      const riskCode = Number(code)
+      if (riskCode === 4031 || riskCode === 2483) reportRisk(String(riskCode))
       throw new Error(`douyin 内容不可用:${msg}(code ${code})`)
     }
     return json

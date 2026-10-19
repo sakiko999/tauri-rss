@@ -24,12 +24,13 @@ const PORT = Number(process.env.EDGE_CDP_PORT ?? 9322)
  * bun 对等物,形状对齐 global.d.ts 的 BrowserBackend。
  *
  * 走 bun 内置 WebSocket(浏览器原生 API,自带帧封装),不再需要 playwright-core。
- * CDP 帧带数字 id,用 pending map 配对响应;无 id 的帧是事件,忽略。
+ * CDP 帧带数字 id,用 pending map 配对响应;无 id 的帧是事件,分发给 onEvent 订阅者。
  */
 class CdpPage implements BrowserBackend {
   private ws: WebSocket
   private nextId = 1
   private pending = new Map<number, { resolve: (v: any) => void; reject: (e: Error) => void }>()
+  private eventListeners = new Set<(method: string, params: unknown, sessionId?: string) => void>()
   private ready: Promise<void>
 
   private constructor(wsUrl: string) {
@@ -58,13 +59,17 @@ class CdpPage implements BrowserBackend {
   }
 
   private handle(text: string): void {
-    let msg: { id?: number; result?: any; error?: { message?: string } }
+    let msg: { id?: number; method?: string; params?: unknown; sessionId?: string; result?: any; error?: { message?: string } }
     try {
       msg = JSON.parse(text)
     } catch {
       return
     }
-    if (msg.id == null) return // 事件帧(Page.*/Runtime.* 通知),无 id
+    if (msg.id == null) {
+      // 事件帧(Page.* / Network.* / Target.* 通知)
+      if (msg.method) for (const cb of this.eventListeners) cb(msg.method, msg.params, msg.sessionId)
+      return
+    }
     const p = this.pending.get(msg.id)
     if (!p) return
     this.pending.delete(msg.id)
@@ -77,18 +82,25 @@ class CdpPage implements BrowserBackend {
     this.pending.clear()
   }
 
-  private async send(method: string, params: Record<string, unknown> = {}): Promise<any> {
+  async send(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<any> {
     await this.ready
     const id = this.nextId++
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject })
       try {
-        this.ws.send(JSON.stringify({ id, method, params }))
+        this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }))
       } catch (e) {
         this.pending.delete(id)
         reject(e instanceof Error ? e : new Error(String(e)))
       }
     })
+  }
+
+  onEvent(cb: (method: string, params: unknown, sessionId?: string) => void): () => void {
+    this.eventListeners.add(cb)
+    return () => {
+      this.eventListeners.delete(cb)
+    }
   }
 
   // ── BrowserBackend ────────────────────────────────────────────────────────

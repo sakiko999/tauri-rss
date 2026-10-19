@@ -9,12 +9,35 @@
  * appHost.browser —— 扫一次所有 bili channel 共享(登录态按 channelKey 前缀注入)。
  */
 import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
+import type { SerializeOptions } from "@amoeba/xml"
 import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient, biliScanLogin, biliQrGenerate } from "@amoeba/resolve"
+import { biliClient, biliQrGenerate, biliScanLogin, now } from "@amoeba/resolve"
 import { API, ugc } from "./video-common.ts"
+
+/** `/x/web-interface/popular` 的响应形状（只取用到的字段）。 */
+export interface PopularPayload {
+  data?: { list?: Array<Record<string, unknown>> }
+}
+
+/** 热门列表 payload → Item[]。纯函数：只做字段映射，不发请求。 */
+export function parsePopularItems(payload: unknown): Item[] {
+  const list = (payload as PopularPayload | null)?.data?.list
+  if (!Array.isArray(list)) return []
+  const t = now()
+  return list.map((raw) =>
+    ugc("bili:popular", t, {
+      title: raw.title,
+      pic: raw.pic,
+      desc: raw.desc,
+      pubdate: raw.pubdate,
+      aid: raw.aid,
+      bvid: raw.bvid,
+      duration: raw.duration,
+      owner: (raw.owner as { name?: string }) ?? undefined,
+    }),
+  )
+}
 
 export class BiliPopularChannel implements RssChannel, Loginable {
   readonly key = "bili:popular"
@@ -46,25 +69,11 @@ export class BiliPopularChannel implements RssChannel, Loginable {
     }
   }
   private async fetchItems(_info: SourceInfo): Promise<Item[]> {
-    const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
-      `${API}/x/web-interface/popular`,
-    )
-    const list = data?.data?.list ?? []
-    const t = now()
-    return list.map((raw) =>
-      ugc("bili:popular", t, {
-        title: raw.title,
-        pic: raw.pic,
-        desc: raw.desc,
-        pubdate: raw.pubdate,
-        aid: raw.aid,
-        bvid: raw.bvid,
-        duration: raw.duration,
-        owner: (raw.owner as { name?: string }) ?? undefined,
-      }),
-    )
+    const data = await biliClient.getJson<PopularPayload>(`${API}/x/web-interface/popular`)
+    return parsePopularItems(data)
   }
-  private channelOptions(_info: SourceInfo): SerializeOptions {
+
+  private channelOptions(_info?: SourceInfo): SerializeOptions {
     return { channelTitle: "B站综合热门", channelLink: "https://www.bilibili.com/" }
   }
 }

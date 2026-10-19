@@ -2,7 +2,7 @@
  * SettingsRepository — app 设置持久化,走全局 appHost.storage。
  * 无存储内容时加载 DEFAULT_SETTINGS。
  */
-import { DEFAULT_SETTINGS, type AppSettings } from "../types/settings.ts"
+import { DEFAULT_SETTINGS, type AppSettings, type NetLevel } from "../types/settings.ts"
 
 const STORAGE_KEY = "settings"
 
@@ -27,11 +27,31 @@ export function createSettingsRepository(storage: StorageBackend): SettingsRepos
     return next
   }
 
+  /**
+   * 兼容旧草案:等级曾用字符串 "lx"。
+   *   - 平台覆盖里的 "lx" → 数字 9;
+   *   - 全局 "lx" 回退 1 —— 现在的全局档不允许 9(不是所有渠道都适合浏览器被动)。
+   */
+  function normalizeLevels(s: AppSettings): AppSettings {
+    if ((s.netLevel as unknown) === "lx") s.netLevel = 1
+    const raw = s.netLevels as unknown
+    if (!raw || typeof raw !== "object") {
+      s.netLevels = {}
+      return s
+    }
+    const fixed: Record<string, NetLevel> = {}
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      fixed[k] = (v === "lx" ? 9 : v) as NetLevel
+    }
+    s.netLevels = fixed
+    return s
+  }
+
   async function load(): Promise<AppSettings> {
     const raw = await storage.get(STORAGE_KEY)
     if (!raw) return { ...DEFAULT_SETTINGS }
     try {
-      return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<AppSettings>) }
+      return normalizeLevels({ ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<AppSettings>) })
     } catch {
       // ⚠️ 解析失败静默回默认值 = 下一次 set() 把默认值写回,用户设置(cookie /
       // rsshubBaseUrl / 刷新间隔)全部静默还原。先留证再回默认值。

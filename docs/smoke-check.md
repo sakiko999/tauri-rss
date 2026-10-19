@@ -33,6 +33,8 @@
 | **类名冲突（跨区块复用）** | ⚠️ `styles/` 拆成多文件后，**同名类会跨文件叠加**（`.rail-head` 同时给侧栏和直播区写过，`column` + `wrap` 叠加把头部撑成 132px）。改样式前先 `grep` 类名在 `styles/` 下**出现了几次**；新组件用**模块前缀**（`live-*`），别借侧栏的命名空间 |
 
 | 新增/改动 channel | `bun run rss channels --kind <kind>` + `bun run rss fetch <key> --json`；⚠️ 发现页「可一键订阅」判据是 `!!defaultInfo \|\| 无必填项` —— **空对象是 truthy**，给需要参数的渠道写 `defaultInfo = {}` 会让它被误列进去 |
+| **网络风控 / governor / L9** | `bun packages/host/src/example/governor.check.ts` + `bun packages/core/src/example/lx-mode.check.ts` + `bun packages/crawler/src/example/bili-popular.check.ts`；真机：设置 →「网络与风控」把某渠道设为 L9 后手动刷新，未接被动采集的渠道应只读缓存（不产生主动请求） |
+| **改 `browser.rs` 窗口模式 / 浏览器抓取** | `cargo check --manifest-path apps/src-tauri/Cargo.toml`（必 0 错）+ **release 实例**验证（debug 窗口恒可见，模式切换是 no-op）：`ui-probe eval "__TAURI__.core.invoke('browser_set_mode',{mode:'interactive'})"` → xhs:user「加载更多」应增长；切回 `hidden` 后滚动不再加载。机制实测见 `docs/crawler-risk-control.md` §3.9 |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 | **时间戳单位 / 排序** | `bun packages/resolve/src/example/xhs-time.check.ts`；⚠️ **必须重新抓取**才生效 —— 坏值已落库，看旧数据会误判成「没修好」。判据：social 的 `publishedAt` 年份应在合理区间（修前是 58754） |
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
@@ -400,3 +402,16 @@ bun run rss fetch apple:podcast-search --kv q=故事 --json
     + `90-responsive.css`）**故意改坏验证过会失败**（非空转）。
   - 回归：6 包 tsc 0 错；播放矩阵 3/3 起播；`ui-probe` tab:all / page:discover issueCount 0；
     9 个 `.check` 全过。
+- 2026-10-19 **网络风控落地（governor + LX 闸门 + 被动采集）**：
+  - `packages/host/src/net/governor.ts` 包装全部 `appHost.http`：平台分类 → 冷却 →
+    in-flight 去重 → 平台并发/最小间隔/RPM → 全局并发。默认 L1；L0 直通；LX 拒绝计量请求。
+  - `AppSettings.netLevel / netLevels / autoRefresh` + 设置页「网络与风控」；
+    等级统一为数字 L0/L1/L2/L3/L9（L9=LX，只能平台覆盖，不能全局）。
+  - core `doRefresh` 在 lx 下**只调** `source.fetchPassive?.()`，拿不到回退内容缓存，
+    **绝不回退主动 `fetch()`**。
+  - 被动采集只接 `xhs:explore` / `xhs:user`（内置默认 L9）；`bili:popular` 已移除
+    L9（匿名 API 稳定，被动无收益）。平台风控信号统一走 `appHost.net.reportRisk`。
+  - 回归：6 包 tsc 0 错；`bun run build:desktop` 通过；`governor` / `lx-mode` /
+    `bili-popular` / `passive-*` 与既有 core+crawler+resolve 自检全过。
+  - ⚠️ **实机 LX 未验证**：`xhs:explore` / `xhs:user` 的真实页面请求仍待 release 实例
+    复核；capture 不到 = 返回 null → core 回退缓存，属预期降级。

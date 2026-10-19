@@ -89,16 +89,15 @@
 }
 
 /* 下拉菜单(radix DropdownMenu + .menu 类名)。
-   ⚠️ 这里**不要**写 `position: relative` —— radix 的 popper 用 fixed 策略定位,它把
-   方向交给外层 wrapper:`transform: translate(x, y)`,而 .menu 自己的 inline style 也带
-   `position: relative`(来自 Modal.tsx 的 style 对象)。两者叠加后,我们这条 `fixed`
-   会把菜单强行钉在 wrapper 的**视口原点**(0,0,左上角),方向 wrapper 的定位形同虚设。
-   ⚠️ 宽度必须 `max-content`:popup 的高度/宽度约束都只落在 wrapper 上,菜单拿不到
-   anchor 宽度;而 `width: auto` 的绝对定位盒收缩到「最近块容器宽 − left」,菜单紧贴
-   左边缘时收缩成 0 宽(实测 60px),文字挤出圆角框外 —— 用户截图里那团叠字就是它。
-   `.menu-item` 是 flex 子项,`max-content` 取四项里最长的一项,够用。 */
+   ⚠️ **不要写 position**（保持 static）—— Radix 的 popper wrapper
+   （`data-radix-popper-content-wrapper`）才是 floating 元素，它带
+   `position: fixed; transform: translate(...)`；`.menu` 只是它的**在流子元素**。
+   给 `.menu` 写 fixed/absolute 会让它脱离文档流 → wrapper 量成 0×0 → flip 不翻面、
+   `--radix-popper-available-height` 按 0 高计算（底部菜单被压成滚动条）、
+   `align=end` 也按 0 宽对齐（菜单向右溢出）。2026-10-19 实测修掉。
+   ⚠️ 宽度必须 `max-content`:popup 的高度/宽度约束都落在 wrapper 上。
+   `.menu-item` 是 flex 子项,`max-content` 取各项里最长的一项,够用。 */
 .menu {
-  position: fixed;
   z-index: var(--z-modal);
   width: max-content;
   min-width: 200px;
@@ -260,8 +259,9 @@ kbd {
   display: grid;
   gap: var(--sp-2);
   justify-items: end;
-  /* 400px 的吐司在网格视图里会横跨两列、盖住卡片正文。收紧并限宽。 */
-  max-width: min(360px, 32vw);
+  /* 400px 的吐司在网格视图里会横跨两列、盖住卡片正文。收紧并限宽。
+     窄窗口再用 calc 兜一层，保证左右各留 16px。 */
+  max-width: min(360px, 32vw, calc(100vw - 32px));
   pointer-events: none;
 }
 /* 吐司里的动作按钮(如「撤销」)。 */
@@ -287,6 +287,10 @@ kbd {
   align-items: flex-start;
   gap: var(--sp-3);
   max-width: 100%;
+  /* ⚠️ grid 项的 min-width 默认是 auto，长 URL 会把吐司的 min-content 撑到
+     远超 max-width（实测 592px，右侧出视口）。必须显式归零，配合 toast-text
+     的 overflow-wrap 才能让长链接换行。 */
+  min-width: 0;
   padding: var(--sp-3) var(--sp-4);
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
@@ -332,14 +336,19 @@ kbd {
 .toast-body {
   display: grid;
   gap: 2px;
+  min-width: 0;
 }
 .toast-title {
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 .toast-text {
   color: var(--text-muted);
   font-size: var(--fs-micro);
   line-height: 1.55;
+  /* 错误里常带完整 URL / 平台消息，必须允许任意断行，不能撑破 max-width。 */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* 二维码(扫码登录) */

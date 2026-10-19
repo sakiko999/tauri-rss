@@ -87,9 +87,10 @@ export function Menu({
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        {/* ⚠️ 不写 `position: relative` —— radix 的 popper 用 fixed 策略,方向由外层
-            wrapper 的 transform 决定;这里再写一个 relative 会让下一条 `.menu` 的
-            `position: fixed` 钉死在视口原点(详见 styles.css 的 .menu 注释)。 */}
+        {/* 定位完全交给 Radix 的 popper wrapper（data-radix-popper-content-wrapper）。
+            ⚠️ `.menu` 自己不能写 position: fixed/absolute —— 那会让它脱离 wrapper
+            的文档流，wrapper 量成 0×0，flip / available-height / 水平对齐全算错
+            （底部行被压成带滚动条的矮菜单，且 align=end 向右溢出）。 */}
         <DropdownMenu.Content
           align={align}
           sideOffset={6}
@@ -167,7 +168,7 @@ export function Select({
 }: {
   value: string
   onChange: (v: string) => void
-  options: Array<{ value: string; label: string }>
+  options: Array<{ value: string; label: string; disabled?: boolean }>
   placeholder?: string
   id?: string
   ariaLabel?: string
@@ -177,9 +178,13 @@ export function Select({
   // `"__none" || null` = `"__none"`(真值)→ 订阅指向一个不存在的分组 id。
   // 故这里在组件边界做哨兵:内部用 `__none` 喂 radix,对外**始终还原成 ""**。
   const NONE = "__none"
+  // 有 value="" 的选项(如「继承默认 / 未分组」)时用哨兵,Radix 才能选中它；
+  // 没有空值选项时(如「添加渠道」纯占位)直接传 "",Radix 才会显示 placeholder
+  // 且每次选择后受控值仍是 ""（触发器回到提示，不会残留上一个渠道名）。
+  const hasEmptyOption = options.some((o) => o.value === "")
   return (
     <SelectPrimitive.Root
-      value={value || NONE}
+      value={value || (hasEmptyOption ? NONE : "")}
       onValueChange={(v) => onChange(v === NONE ? "" : v)}
     >
       <SelectPrimitive.Trigger id={id} className="select" aria-label={ariaLabel}>
@@ -197,7 +202,12 @@ export function Select({
         >
           <SelectPrimitive.Viewport>
             {options.map((o) => (
-              <SelectPrimitive.Item key={o.value || NONE} className="select-item" value={o.value || NONE}>
+              <SelectPrimitive.Item
+                key={o.value || NONE}
+                className="select-item"
+                value={o.value || NONE}
+                disabled={o.disabled}
+              >
                 <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
                 <SelectPrimitive.ItemIndicator className="select-check">
                   <Icon name="check" size={13} />

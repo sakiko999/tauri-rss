@@ -6,6 +6,7 @@
  *   - `MediaTimeRange`(进度条,含缓冲/悬停/拖拽)
  *   - `MediaVolumeSlider`(悬停浮层音量)
  *   - `MediaRateButton`(倍速菜单,radix)/ `MediaQualityButton`(档位菜单,radix)
+ *   - `MediaDanmakuButton`(弹幕开关,纯受控)
  *   - `MediaTimeDisplay`(时间 / ●LIVE)
  *
  * 组合范式(等价 MediaChrome `<media-control-bar>`):
@@ -23,4 +24,6 @@ export { MediaTimeRange } from "./MediaTimeRange.tsx"
 export { MediaVolumeSlider } from "./MediaVolumeSlider.tsx"
 export { MediaRateButton, PLAYBACK_RATES } from "./MediaRateButton.tsx"
 export { MediaQualityButton } from "./MediaQualityButton.tsx"
+export { MediaDanmakuButton } from "./MediaDanmakuButton.tsx"
+export type { DanmakuControl } from "./MediaDanmakuButton.tsx"
 export { MediaTimeDisplay } from "./MediaTimeDisplay.tsx"

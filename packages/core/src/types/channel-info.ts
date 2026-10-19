@@ -20,4 +20,6 @@ export interface ChannelInfo {
   defaultInfo?: Record<string, string>
   /** 该渠道是否支持扫码登录(channel 级能力 Loginable;UI 据此显登录入口)。 */
   loginable: boolean
+  /** 该渠道是否声明支持 L9（浏览器被动采集;UI 据此禁用/提示 L9 选项）。 */
+  supportsL9: boolean
 }

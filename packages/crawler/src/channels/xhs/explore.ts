@@ -12,18 +12,22 @@
  *   - HTTP(无 browser 门面):xhsClient.getHtml + extractInitialState。
  */
 import type { Item, Social } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
+import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
+import { capturePage } from "../../passive/capture.ts"
+import { passiveBuffer } from "../../passive/buffer.ts"
 import { now } from "@amoeba/resolve"
-import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, xhsClient, xhsScanLogin } from "@amoeba/resolve"
-import { cdpFetch, cdpNavigate, waitUntil, withBrowserLock } from "@amoeba/resolve"
+import { XHS_BASE, extractInitialState, extractNoteDetail, noteCardToSocial, noteDetailToSocial, rawOf, reportXhsRisk, xhsClient, xhsScanLogin } from "@amoeba/resolve"
+import { cdpFetch, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
 
 export class XhsExploreChannel implements RssChannel, Loginable {
   readonly key = "xhs:explore"
   readonly name = "小红书发现页"
   readonly kind = "social" as const
   readonly defaultInfo: SourceInfo = {}
+  /** 支持 L9：getSource 提供 fetchPassive（导航读 SSR，不构造主动请求）。 */
+  readonly supportsL9 = true
 
   /** 扫码登录(Loginable,channel 级能力)。浏览器路径登录一次,同平台 channel 共享账号。 */
   scanLogin(
@@ -43,6 +47,8 @@ export class XhsExploreChannel implements RssChannel, Loginable {
         () => (browser ? this.fetchViaBrowser(browser) : this.fetchItems(cookie)),
         () => this.channelOptions(),
       ),
+      // LX：导航是页面自然行为；响应体从 CDP Network 缓冲取，不构造主动请求。
+      fetchPassive: () => this.fetchPassive(),
       // 单条详情:匿名 GET /explore/<id>?xsec_token= 补全文/多图/tag(video),见 item.url + xsecToken。
       resolveDetail: (item: Item) => this.resolveDetail(item, cookie, browser),
     }
@@ -53,12 +59,17 @@ export class XhsExploreChannel implements RssChannel, Loginable {
    * Rust/curl 的空壳响应)。与 xhs:user 的 fetchViaBrowser 同构。
    */
   private async fetchViaBrowser(browser: BrowserBackend): Promise<Item[]> {
-    return withBrowserLock(async () => {
+    // SSR 读取不需要渲染：hidden 即可。
+    return withBrowserMode(browser, "hidden", async () => {
       await cdpNavigate(browser, `${XHS_BASE}/explore`, true)
       await waitUntil(browser, `typeof window.__INITIAL_STATE__ !== 'undefined'`, 15_000, "xhs SSR 状态未挂载")
       // 风控验证框出现 = 当前环境被拦,如实报错而非静默 0 条。
       const verify = await browser.evaluate<boolean>(`!!document.querySelector('.fe-verify-box')`)
-      if (verify) throw new Error("小红书风控校验(.fe-verify-box)出现——请稍后再试或重新扫码登录")
+      if (verify) {
+        // .fe-verify-box = 小红书人机校验拦截(明确风控信号)
+        reportXhsRisk("verify-box")
+        throw new Error("小红书风控校验(.fe-verify-box)出现——请稍后再试或重新扫码登录")
+      }
       const r = await browser.evaluate<{ feeds: any[] }>(
         `(() => {
           const f = window.__INITIAL_STATE__?.feed;
@@ -72,6 +83,29 @@ export class XhsExploreChannel implements RssChannel, Loginable {
     })
   }
 
+  /**
+   * LX 被动采集：导航 `/explore`（页面自然行为）→ CDP Network 取 SSR 文档 → 解析。
+   * 拿不到缓冲返回 null（core 会回退内容缓存，绝不回退主动 `fetch()`）。
+   */
+  private async fetchPassive(): Promise<string | null> {
+    const browser = globalThis.appHost?.browser
+    if (!browser?.send || !browser.onEvent) return null
+    return withBrowserMode(browser, "hidden", async () => {
+      await capturePage(browser, {
+        platform: "xhs",
+        endpoint: "explore",
+        match: (u) => u.pathname === "/explore",
+        trigger: (b) => cdpNavigate(b, `${XHS_BASE}/explore`, true),
+      })
+      const entry = passiveBuffer.getLatest("xhs", "explore")
+      if (!entry) return null
+      const state = extractInitialState(entry.body)
+      const feed = rawOf(state.feed)
+      const feeds = feed?.feeds?._rawValue ?? feed?.feeds
+      return serializeFeed(this.toItems(Array.isArray(feeds) ? feeds.flat() : []), this.channelOptions())
+    })
+  }
+
   /** 单条笔记详情(列表 item 缺全文/多图/标签,详情页补全)。匿名可用(需列表项 xsec_token)。 */
   private async resolveDetail(item: Item, cookie?: string, browser?: BrowserBackend): Promise<Item | null> {
     const noteId = String(item.url ?? "").match(/\/explore\/([^?/?#]+)/)?.[1] ?? ""
@@ -80,7 +114,8 @@ export class XhsExploreChannel implements RssChannel, Loginable {
     const url = `${XHS_BASE}/explore/${noteId}${xsec ? `?xsec_token=${encodeURIComponent(xsec)}&xsec_source=pc_feed` : ""}`
     // ⚠️ 有 browser 时走**页面内 fetch**(Chrome TLS 指纹放行,reqwest 会被 WAF 判成空壳);否则回落 httpText。
     const html = browser
-      ? await withBrowserLock(async () => {
+      // 页面内 fetch 不需要渲染：hidden 即可。
+      ? await withBrowserMode(browser, "hidden", async () => {
           await cdpNavigate(browser, `${XHS_BASE}/explore`, true)
           // ⚠️ credentials: "omit" —— 匿名放行(见 xhs/user.ts 注释);带 cookie 反被 WAF 判空壳。
           const r = await cdpFetch(browser, url, { credentials: "omit" })

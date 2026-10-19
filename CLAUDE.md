@@ -62,6 +62,7 @@ packages/
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。
                node/ 真实网络+内存存储 · browser/ fetch+localStorage · tauri/ Rust
                http_get+ws_connect+sqlite+opener。ws 统一走宿主隧道（可带自定义握手头）
+               net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）
   resolve/     ★ 平台解析层。platform/（各平台 client + 播放解析 + 弹幕 codec）、
                resolver/（by-url 路由 → 播放/弹幕）、danmaku/（createWsStream/
                deferredStream 原语）、utils/、browser/（CDP 模拟）。
@@ -115,6 +116,8 @@ Video 的 `channel`、Audio 的 `artist`/`album`、Social 的 `likes` **全丢**
   WebView 会拦掉 `window.open`，表现为「点了没反应」
 - **`imageProxy` / `dataSaver`**：渲染管线开关（AppSettings 的镜像，ui 的 MediaImage
   直读，避免层层传 props）。由 app 层在设置变化时写入
+- **`net`**：网络治理门面（`configure` / `reportRisk` / `governorStats`）。governor 是
+  host 内建能力，未注入 http 也恒可用 —— 等级/冷却/统计见下方「网络风控」
 
 **storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db）·
 CLI `sqliteStorage`（bun:sqlite）· example 内存版。
@@ -125,6 +128,52 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
 否则 `settings.refreshIntervalMin`（默认 30min）。`refresh(id, {force:true})` 强制抓取
 （手动刷新 / CLI 默认）；抓取失败回退旧缓存不空窗；退订一并删缓存。
 `packages/core/src/repo/content-cache-repo.ts`。
+
+## 网络风控（L0 / L1 / L2 / L3 / L9）
+
+所有 `appHost.http` 出站都经 `packages/host/src/net/governor.ts` 的 `governedHttp`
+（`runtime.ts` 的 `setHostCaps` 统一包住）：分类 → 平台冷却 → in-flight 去重 → 平台
+并发/最小间隔/RPM → 全局并发。媒体/图片按 host+扩展名不计量，但仍占全局并发
+（`globalMaxConcurrent`，默认 32）；播放器的 HLS/DASH loader 显式传
+`policy: { metered: false }`，不靠 URL 猜。⚠️ 原生 `<img>` / 原生 mp4 不经
+`appHost.http`，不在治理范围内。
+
+- **等级统一用数字**（设置页「网络与风控」）：`0` 直通（仅调试）· `1` 入门 ·
+  `2` 标准 · `3` 严格 · `9` 浏览器被动（L9 / LX）。全局默认 `AppSettings.netLevel`
+  **只允许 0~3**（L9 不能一刀切套到所有渠道）；`netLevels` 同时支持**平台覆盖**与
+  **channelKey 覆盖**，解析顺序 `用户渠道覆盖 → 内置渠道默认 → 平台 → "*" → 全局`。
+  内置渠道默认在 `core/types/settings.ts` 的 `BUILTIN_CHANNEL_LEVELS`：
+  **`xhs:user` = 9**（必须走浏览器导航读 SSR；页面内 fetch 属类别②，不算 LX）。
+  ⚠️ 该内置规则只在 `appHost.browser` 存在时生效（移动端无 browser，回落普通等级，
+  否则会永远只剩缓存）。宿主 governor 只认平台名，channelKey 只影响 core 的抓取闸门。典型配置：
+  小红书平台 `9` 或仅 `xhs:user` `9`、B站/YouTube 保持 `1`。
+  旧持久化里的 `netStrict` 已移除（忽略即可）；`netLevels` 里的旧字符串 `"lx"` 会归一化为
+  `9`（全局默认位置则回落 `1`）。
+- **配额按等级缩放**：基准值是 `DEFAULT_NET_POLICY` 里的 L1；L2 = 并发/RPM ×0.5、
+  最小间隔 ×2；L3 = ×0.25、×4。冷却时长不随等级变。
+  L1 是**软限制**（bili/youtube 12 并发 / 600 RPM / 50ms；其它 8 / 300 / 50ms；
+  全局 32），正常刷新/搜索/详情/解析不应感到排队——它只兜极端情况。
+  `autoRefresh=false` 时**非 force** 刷新只读内容缓存（不发网络）；手动刷新/刷新全部
+  走 `force:true`，不受该开关限制。
+- **L9 闸门在 core**：`data-layer.ts` 的 `doRefresh` 按渠道解析等级，`level === 9` 时
+  只调 `source.fetchPassive?.()`；拿不到就回退内容缓存（即使过期），**绝不回退
+  `source.fetch()`**。被动采集入口是 `crawler/passive/capture.ts`（只观察 CDP
+  Network，`trigger` 只能导航/滚动/点击）+ `passive/buffer.ts`（内存 TTL 30min）。
+  已接 `xhs:explore` / `xhs:user`（导航读 SSR，不用页面内 fetch）；
+  其余渠道在 L9 下只显示缓存。⚠️ L9 对该**平台**的所有主动请求生效 —— 抓取之外的
+  详情补全、播放解析也会被 governor 拒绝。⚠️ `bili:popular` **不接 L9**：B站匿名
+  API 稳定，页面也不保证自然发 `/x/web-interface/popular`，被动采集没有收益。
+- **渠道必须声明 L9 支持**：`RssChannel.supportsL9`（crawler，channel 级；core 投影为
+  `ChannelInfo.supportsL9`）。目前为 true 的只有 `xhs:explore` / `xhs:user`；
+  **未声明的渠道即使设成 9，core 也不会尝试 `fetchPassive`**，直接读缓存并如实报错。
+  设置页据此**禁用未声明渠道的 L9 选项**（存量值仍显示，行 help 注明「选 L9 只会读
+  缓存」）。新增被动渠道时：`supportsL9 = true` + `getSource` 提供 `fetchPassive`，
+  两者缺一不可。
+- **风控信号**：平台 client 命中明确信号时调 `appHost.net.reportRisk(platform, signal)`
+  （bili 412/-352/-509；weibo 418/403/432/-100；douyin 4031/2483；youtube 429；
+  xhs verify-box/300011）。governor 对计量请求的 412/418/403/429 也会自动写冷却；
+  冷却按平台整体生效，未到期直接 reject，持久化 KV `governor:cooldowns`。
+- 自检：`governor.check.ts` / `lx-mode.check.ts` / `bili-popular.check.ts`。
 
 ## 关键命令
 
@@ -153,7 +202,12 @@ bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / read
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
 bun packages/core/src/reading-position.check.ts         # 续播落库判据（近片尾清除 / 5s 节流）
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
+bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/LX/去重/冷却/strict/并发）
+bun packages/core/src/example/lx-mode.check.ts          # LX 闸门（只走 fetchPassive / autoRefresh）
+bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload → Item 字段映射
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
+bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL 归一化 / TTL / 限额淘汰）
+bun packages/crawler/src/example/passive-capture.check.ts # LX 采集编排（假后端回放 CDP 事件）
 bun packages/resolve/src/example/router.check.ts        # by-url 路由表（host 边界 + 各平台命中）
 bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
 bun packages/resolve/src/example/danmaku-proto.check.ts # bili 弹幕 protobuf 解码（截断帧不死循环）
@@ -187,6 +241,9 @@ bun scripts/ui-probe.ts eval "__uiOverlay.stats()"    # candidates/labels/overfl
 
 # 浏览器模拟（先起干净 Edge，见 edge-cdp skill；脚本自连 CDP，零额外依赖）
 bun packages/crawler/src/example/browser-sim.ts weibo:user   # 或 xhs:user（低频防风控）
+bun scripts/lx-visibility-probe.ts     # 窗口可见性实测（隐藏/屏外/可见 → rAF/IO/lazy/scroll，见风控 §3.9）
+bun scripts/lx-request-profile.ts      # 渠道单次刷新的请求扇出与耗时（风控 §3.12）
+bun scripts/lx-probe.ts                # CDP 网络捕获边界（304/302/gzip/SSE/12MB/SW，见风控 §3.5/§3.7）
 ```
 
 产物输出到根 `dist/<platform>/`（Vite outDir；tauri.conf 的 frontendDist 指过去）。
@@ -216,8 +273,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   实为缓存。清法：`target/debug/{deps,.fingerprint,build}` 下按 `*tauri_app_lib*` /
   `*tauri-app*` / `incremental/tauri_app_lib-*` 删（release 侧是新编译的，无需动）。
 - ⭐ **`bun run tauri:release`（= `tauri dev --release`）用来调「只在 release 下才走」的分支**。
-  典型用例 = **隐藏 Edge 窗口**：`browser.rs` 的 `let hide = !cfg!(debug_assertions)` 是
-  **编译期**判据 —— 普通 `tauri dev` 跑 debug profile，窗口永远可见，那条分支根本不会执行。
+  典型用例 = **隐藏 Edge 窗口**：`browser.rs` 的 `let hide_capable = !cfg!(debug_assertions)` 是
+  **编译期**判据 —— 普通 `tauri dev` 跑 debug profile，窗口永远可见，那条分支根本不会执行
+  （`browser_set_mode` 在 debug 下也是 no-op）。
   它保留 Vite dev server 与 Rust 热重载，但**首次要全量 release 编译（实测 4min）**。
   ⚠️ release 默认**无 debug 符号** → 断点行号漂移。VSCode 的 `tauri-dev-release` task
   用 `CARGO_PROFILE_RELEASE_DEBUG=true`（**环境变量，不是 Cargo.toml** —— 后者会让发布版
@@ -236,6 +294,19 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   的窗口计数；② 等「**曾见过可见窗口** + 连续数轮 0 命中」的稳定态才返回（主框架比
   CDP 就绪晚约 1s，不加 `seen` 门槛 0.3s 就误判藏净）。**只在 release 显现**（debug 走
   可见分支不触发），改 `browser.rs` 的隐藏逻辑务必用 release 实例验证。
+  ⭐ **两种窗口模式**（2026-10-19）：`browser_ensure(mode)` / `browser_set_mode` 支持
+  `hidden`（`SW_HIDE`，默认，不渲染）与 `interactive`（屏外 shown + 遮挡 flag +
+  `WS_EX_TOOLWINDOW`，渲染/IO/懒加载/scroll 事件与可见窗口一致）。遮挡与节流 flag 是
+  **启动参数**，必须启动时就全带上；切换只靠 `ShowWindow`。⚠️ interactive 常驻渲染有
+  CPU 开销，必须按需启停；`WS_EX_TOOLWINDOW` 属 Win32 技巧，Edge 升级后要回归。
+  ⚠️ hidden 下 `scrollTo`
+  **不派发 scroll 事件**、IO/lazy 全停 —— 滚动驱动页面用
+  `withBrowserMode(browser, "interactive", fn)`（内部串行 + 结束自动切回 hidden），
+  不要手写 `withBrowserLock` + `setMode`。焦点抢占任何模式都挡不住（`SW_SHOWNA` /
+  `WS_EX_NOACTIVATE` 无效），已在每次 spawn/切换后用 `SetForegroundWindow` 还原原前台。
+  ⚠️ `browser_ensure()` **不带 mode 必须保持当前模式**（不能默认切 hidden）——
+  `ensureConn` 每次首连都会调用它，否则一轮滚动采集会把 interactive 打回 hidden。
+  实测表与落点见 `docs/crawler-risk-control.md` §3.9。
   ⭐ **单验 release 行为不必重编**（2026-10-16 实测）：`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`
   环境变量**追加**到 WebView2 的 Chromium 参数（不覆盖 tauri.conf 的），设成
   `--remote-debugging-port=9222` 再启动 `target/release/amoeba.exe` 就有调试口——
@@ -308,6 +379,13 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   （douyin.com 点登录读弹窗 canvas 二维码，成功判据 = `sessionid` cookie）。两层
   都封装在 `douyinScanLogin`，channel 只做薄委托。⚠️ 社区实现靠 curl_cffi TLS
   指纹；宿主 reqwest 无伪装，纯 HTTP 层保留是为了协议变化时可能直连。
+- ⚠️ **抖音登录 cookie 目前没有任何抓取/播放路径消费**（2026-10-19 核对）：登录成功只写
+  `settings.douyinCookie`；`live:douyin` / `:hot` / `:category` / 用户主页 / 播放解析
+  仍用首页 warmup 的 `ttwid`（`info.cookie` 未被读取）。真正的关键词搜索
+  `aweme/v1/web/live/search` / `general/search/stream` 匿名返回 2483，**需要登录但未做
+  调研与开发**；现有 `live:douyin:search` 只是匿名分区搜索。不要直接把主账号 cookie
+  接进自动化搜索（4031/限流/账号标记风险）；要做先在有登录态的 Edge 上用**专用小号**
+  做 1~2 次 CDP 被动探针，确认页面是否自然发 `live/search`、body 能否取到。
 - **发现层**（分区/搜索，`resolve/platform/*/discover.ts`）：douyin 三路搜索只
   `partition/search` 匿名可用且只认游戏名级——但**顶层分区名恰是大类词**（舞蹈/音乐/聊天/
   二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
@@ -416,10 +494,12 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
 - ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版
   开无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用
   `scripts/tauri.ts` 叠的 `tauri.conf.dev.json`（`bun run tauri` 自动带上）
-- **release 下 CDP Edge 禁图**：隐藏窗口只在 release 出现（`hide = !cfg!(debug_assertions)`），
-  此时 `edge_args` 拼 `--blink-settings=imagesEnabled=false` —— SSR 只读 DOM 文本，
-  图片纯浪费内存/带宽。扫码不受影响：微博读远程 `img.src`（图另走 `appHost.http`）、
-  小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制；debug 不禁图便于观察
+- **release 下 CDP Edge 禁图**：只有可隐藏的 release 构建才拼
+  `--blink-settings=imagesEnabled=false` —— SSR/滚动抓取只读 DOM 文本，图片纯浪费内存/带宽。
+  实测该参数**不影响** `interactive` 模式的 rAF / IntersectionObserver / scroll 事件
+  （只让图片不加载），所以模式切换不需要重开浏览器。扫码不受影响：微博读远程 `img.src`
+  （图另走 `appHost.http`）、小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制；
+  debug 不禁图便于观察
 - **CDP Edge 干净度（对齐 edge-cdp 插件）**：`edge_args` 带
   `--disable-sync --disable-extensions --disable-default-apps
   --edge-redirect-feed-at-first-run-disabled=1`，避免把本机登录账号的同步设置/扩展
@@ -439,8 +519,26 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   兜底」，注释还断言「对 WebView2 无效」——**说反了**，实测两处主滚动区 gutter 恒 9px。
   删掉后归 0（侧栏 258→267px）。折叠栏那两条「滚动条吃 10px → 图标偏左 5px」的对齐补丁
   都是它的连锁副产品。**改滚动条样式前先量 gutter，别用 `::-webkit-scrollbar`。**
+  ✅ 2026-10-19 复核（同一实例）：overlay gutter=0；`::-webkit-scrollbar{width:10px}` → 10；
+  `scrollbar-width:none` → 0（**标准属性不切经典模式**，要隐藏 overlay 条用它，别用伪元素）。
+  即：**能改样式但会失去 overlay**；想保留 fluentOverlay 就只能用 `scrollbar-width/color`。
+- ⚠️ **吐司的 grid 项必须 `min-width:0`**（2026-10-19）：`.toast-root` 是 grid，`.toast` 是
+  grid item；默认 `min-width:auto` 时，错误文案里的长 URL 会把 min-content 撑到 **592px**，
+  无视 `max-width:360px` 直接出视口。`.toast-body` 也要 `min-width:0`，`.toast-text` 加
+  `overflow-wrap:anywhere`。governor 的冷却/L9 错误已去掉完整 URL（只留平台/剩余时间/信号）。
+- ⚠️ **`.menu` 必须是 Radix popper wrapper 的在流子元素**（2026-10-19）：Radix 的 floating
+  元素是外层 `div[data-radix-popper-content-wrapper]`（`position:fixed; transform`），
+  `.menu` 只是它的子节点。给 `.menu` 写 `position:fixed/absolute` 会脱离文档流 →
+  wrapper 量成 **0×0** → flip 不翻面、`--radix-popper-available-height` 按 0 高算、
+  `align=end` 按 0 宽对齐。症状：侧栏底部行的菜单被压成 122px 带滚动条的矮条，且向右溢出。
+  修法 = `.menu` 不写 `position`。**这是「弹窗里为什么有滚动条」的根因，别再改回去。**
 
 ## 弹幕（细节见 `docs/danmaku-research.md`）
+
+- **弹幕开关在播放器控件栏**（`MediaDanmakuButton`），不在播放页 meta 的按钮组。
+  `PlayableMedia` 只在 `resolved.danmaku` 存在时把 control 传给 `VideoShell`；
+  `enabled` 跟 `showDanmaku` 而不是渲染用的 `danmaku` —— 关闭后流被丢弃但按钮仍在，
+  否则按钮会随流一起消失、无法再打开。全局设置 `danmakuEnabled` 关闭时不渲染按钮。
 
 四平台直播弹幕已全通（bili 16B 大端头+zlib、douyu STT、huya Tars、douyin protobuf+gzip），
 B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名可用）。
@@ -547,6 +645,10 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - ⚠️ **不用原生 `<select>`**：下拉面板由 WebView/系统渲染，深色主题下弹的是**亮色
   系统菜单**且 CSS 管不到。统一用 `components/Modal.tsx` 的 `Select`（radix，自带浮层）。
   同理 `Switch`/`Menu`/`Modal` 都在那个模块。原生 `<input>`/`<textarea>` 保留（可主题化）。
+  ⚠️ **占位提示走 `placeholder`，不要塞进 `options`**（否则会渲染成可点击的
+  `role=option`，选它只是空操作）；无空值选项时 Root 的 `value` 必须是 `""` 才显示
+  placeholder —— 内部哨兵 `__none` 会被 Radix 当成已选值。选项可带 `disabled`
+  （如未声明 L9 支持的渠道）。
 - ⚠️ **浮层必须处理视口**：共享 `Menu`（Radix DropdownMenu）已配 `collisionPadding`，
   `.menu` 用 `--radix-dropdown-menu-content-available-height` 限高并内部滚动；不要在
   业务组件里自造 absolute 菜单/提示层，否则窗口底部会贴边或顶出视口。
@@ -684,7 +786,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/rail-tree-accordion.md` | 侧栏树选型（为何用 Accordion 而非树组件 + 三个静默失败坑） |
 | `docs/audit-backlog.md` | 审计发现积压：故意不改的理由 + 误报证伪（已修不在此） |
 | `docs/compatibility-inventory.md` | 兼容补丁清单（持久化数据 / 输入归一化 / 脚手架 / 破坏性变更）+ 侧栏菜单视口审计 |
-| `docs/crawler-risk-control.md` | ★ 风控分级（L0 / L1 / LX）+ 集中式 governor + CDP 被动采集调研（设计草案） |
+| `docs/crawler-risk-control.md` | ★ 风控分级（L0 / L1 / L2 / L3 / L9）+ 集中式 governor + CDP 被动采集；窗口模式、governor、L9 闸门与 xhs:explore / xhs:user 被动采集已实现 |
 | `docs/release-updater.md` | 发布产物（NSIS）、签名密钥、自动更新链路与发版步骤 |
 | `docs/numbered-ui-overlay.md` | Numbered UI Overlay（dev-only，已实现）：编号语义/400 上限/AI 清单 |
 
@@ -699,10 +801,22 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `docs/desktop-crawler-service.md`。
 - **bili 按分区列房**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
 - **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行（`docs/mobile-cdp-feasibility.md`）。
+- **抖音登录态搜索调研**：先用专用小号 + CDP 被动探针确认 `live/search` 的页面自然
+  请求与账号风险，再决定是否实现（不要把主账号 cookie 直接接到 API 搜索）。
 - **live 按平台二次聚合**：`tab:live` 已聚合**全部** live 条目（`selectors.baseFor`
   的 tab 分支 `filter(kind==="live")`，方案 B，2026-10-13 落地）。若要「哔哩哔哩直播 /
   虎牙直播」这类**按平台**再分组，需在 core 编排层加二次聚合——问题定性与 A/B/C
   方案对比见 git 历史的 `docs/technical-plan.md`（2026-10-16 删）。
+
+**待实机验证（风控 / LX，没跑过不算完成）**：
+
+- release 实例：`browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
+- `xhs:explore` 设 L9 后手动刷新，确认命中 `passiveBuffer`。
+- `xhs:user` L9：登录态导航能出条目；匿名应回退缓存。
+- 接入 LX 前用 `Network.requestWillBeSent` 逐平台确认风险文档 §3.11 标「推断/未确认」
+  的页面请求。
+- ⚠️ **governor 的 `rsshub` 平台配额是死键**：平台名按 host 推导，需改成 host 后缀
+  匹配或显式映射（当前 RSSHub 请求落到通用 host 桶）。
 
 **已完成的**（细节在代码与 git log，不在此堆叠）：三分栏/瀑布流/短视频三模式、续播与
 阅读进度、OPML 导入导出、扫码登录 UI、文章正文补全（含 KV 持久缓存）、mobile 接入、

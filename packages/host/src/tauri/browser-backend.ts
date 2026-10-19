@@ -55,6 +55,8 @@ export class TauriBrowserBackend implements BrowserBackend {
    * abortPending() 至少让持锁的那个 await 立刻以错误返回,锁得以释放。
    */
   private inflight = new Set<Promise<unknown>>()
+  /** CDP 事件订阅（无 id 的帧）；LX 被动采集用。 */
+  private eventListeners = new Set<(method: string, params: unknown, sessionId?: string) => void>()
 
   /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。 */
   private track<T>(p: Promise<T>): Promise<T> {
@@ -83,10 +85,21 @@ export class TauriBrowserBackend implements BrowserBackend {
     }
   }
 
+  /** 并发首连去重：两个 evaluate 同时触发时只能 spawn 一个 Edge。 */
+  private connecting: Promise<void> | null = null
+
   /** 惰性建连(首次 evaluate 时)。返回的 ws 连到 page target 的 CDP 端点。 */
   private async ensureConn(): Promise<void> {
     if (this.connId) return
+    if (!this.connecting) {
+      this.connecting = this.connect().finally(() => {
+        this.connecting = null
+      })
+    }
+    return this.connecting
+  }
 
+  private async connect(): Promise<void> {
     const port = await this.track(invoke<number>("browser_ensure"))
     // 找第一个 page target 的 webSocketDebuggerUrl(/json/list 返回 page/background_page 等)。
     const res = await globalThis.appHost.http.request({
@@ -111,11 +124,25 @@ export class TauriBrowserBackend implements BrowserBackend {
     this.connId = c.connectionId
   }
 
+  /** 发一条 CDP 命令（公开入口；惰性建连）。 */
+  async send(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<unknown> {
+    await this.ensureConn()
+    return this.rawSend(method, params, sessionId)
+  }
+
+  /** 订阅 CDP 事件（无 id 的帧），返回取消订阅函数。 */
+  onEvent(cb: (method: string, params: unknown, sessionId?: string) => void): () => void {
+    this.eventListeners.add(cb)
+    return () => {
+      this.eventListeners.delete(cb)
+    }
+  }
+
   /** 发一条 CDP 命令(文本帧),等匹配 id 的响应。 */
-  private send(method: string, params: Record<string, unknown>): Promise<unknown> {
+  private rawSend(method: string, params: Record<string, unknown>, sessionId?: string): Promise<unknown> {
     if (!this.connId) return Promise.reject(new Error("CDP not connected"))
     const id = this.nextId++
-    const msg = JSON.stringify({ id, method, params })
+    const msg = JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })
     const payload = toBase64(msg)
     return new Promise((resolve, reject) => {
       // ⚠️ 单条命令超时是必须的:页面在命令未回话时被导航/替换,该 id 的回复会
@@ -142,13 +169,33 @@ export class TauriBrowserBackend implements BrowserBackend {
 
   private handleEvent(ev: CdpEventMsg): void {
     if (ev.event !== "Text") return
-    const msg = JSON.parse(fromBase64(ev.data as string)) as { id?: number; error?: unknown; result?: unknown }
-    if (msg.id === undefined) return // 事件帧(无 id),忽略
+    const msg = JSON.parse(fromBase64(ev.data as string)) as {
+      id?: number
+      method?: string
+      params?: unknown
+      sessionId?: string
+      error?: unknown
+      result?: unknown
+    }
+    if (msg.id === undefined) {
+      // 事件帧(无 id)：分发给 LX 订阅者（Network.* / Target.* 等）。
+      if (msg.method) for (const cb of this.eventListeners) cb(msg.method, msg.params, msg.sessionId)
+      return
+    }
     const p = this.pending.get(msg.id)
     if (!p) return
     this.pending.delete(msg.id)
     if (msg.error) p.reject(new Error(`CDP ${JSON.stringify(msg.error)}`))
     else p.resolve(msg.result)
+  }
+
+  /**
+   * 切换窗口模式（hidden = SW_HIDE，interactive = 屏外 shown + 渲染）。
+   * ⚠️ Rust 侧 `browser_ensure` 不带 mode 时只确保就绪、**不改模式**，
+   * 所以这里切完不会被后续 `ensureConn` 打回 hidden。
+   */
+  async setMode(mode: BrowserWindowMode): Promise<void> {
+    await this.track(invoke("browser_set_mode", { mode }))
   }
 
   async evaluate<T = unknown>(

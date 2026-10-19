@@ -116,6 +116,7 @@ export function PlayableMedia({
   onError,
   autoResolve = true,
   showDanmaku = true,
+  onToggleDanmaku,
   startAtSec,
   onProgress,
   onEnded,
@@ -130,6 +131,11 @@ export function PlayableMedia({
   autoResolve?: boolean
   /** 是否渲染弹幕层(设置总开关;false 时解析结果里的 danmaku 直接丢弃)。 */
   showDanmaku?: boolean
+  /**
+   * 弹幕开关(播放页的临时覆盖)。只有解析结果确实带弹幕时才把按钮渲染进控件栏;
+   * enabled 跟随 showDanmaku,所以关掉后按钮仍在、可再次打开。
+   */
+  onToggleDanmaku?: () => void
   /** 起播跳转到的秒数(续播)。URL 无参数即可;越界由 seek 侧 clamp。 */
   startAtSec?: number
   /** 播放中进度回调(秒;节流由宿主侧决定)。宿主据此持久化续播位置。 */
@@ -155,6 +161,12 @@ export function PlayableMedia({
   const hasPlayable = playStreams.some((s) => !!s.url || !!s.dashManifest)
   // 弹幕总开关关闭时不把流交给弹幕层(不建连接,而非建了再隐藏)。
   const danmaku = showDanmaku ? resolved?.danmaku : undefined
+  // 控件栏里的开关:解析结果带弹幕才出现。enabled 用 showDanmaku(而不是 danmaku),
+  // 关闭时流被丢弃但仍保留能力,按钮不会随流一起消失。
+  const danmakuControl =
+    resolved?.danmaku && onToggleDanmaku
+      ? { enabled: showDanmaku, onToggle: onToggleDanmaku }
+      : undefined
 
   async function handlePlay() {
     if (!resolve) return
@@ -408,6 +420,7 @@ export function PlayableMedia({
           onError?.(new Error(msg))
         }}
         danmaku={danmaku}
+        danmakuControl={danmakuControl}
       />
     )
   }

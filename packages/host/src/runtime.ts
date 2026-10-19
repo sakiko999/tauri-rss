@@ -10,6 +10,8 @@
  * 各自的 getter 包装。
  */
 
+import { configureNetwork, governedHttp, governorStats, reportRisk } from "./net/governor.ts"
+
 let _http: HttpBackend | undefined
 let _js: JsBackend | undefined
 let _storage: StorageBackend | undefined
@@ -29,6 +31,13 @@ let _updater: UpdaterBackend | undefined
  * scheme)一律拒绝。见门面里 openExternal 的注释。
  */
 const OPENABLE_SCHEMES = new Set(["http", "https", "mailto"])
+
+/** 网络治理门面(风控等级/冷却/统计)—— 与 http 是否注入无关,始终可用。 */
+const netBackend: NetBackend = {
+  configure: configureNetwork,
+  reportRisk,
+  governorStats,
+}
 
 const consoleLogger: Logger = {
   log(level, msg, ctx) {
@@ -79,6 +88,11 @@ export function initAppHost(): void {
     get updater(): UpdaterBackend | undefined {
       return _updater
     },
+    // 网络治理:等级配置 / 风控信号上报 / 自检统计。governor 是 host 内建能力,
+    // 不依赖某个后端注入,因此恒可用。
+    get net(): NetBackend {
+      return netBackend
+    },
     /**
      * 打开外部链接(系统默认浏览器)。
      *
@@ -113,7 +127,8 @@ export function setHostCaps(caps: {
   openExternal?: (url: string) => Promise<void>
   updater?: UpdaterBackend
 }): void {
-  _http = caps.http
+  // 所有出站 HTTP 统一过 governor(分类/去重/配额/冷却),见 net/governor.ts。
+  _http = governedHttp(caps.http)
   _js = caps.js
   _storage = caps.storage
   _log = caps.log

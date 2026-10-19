@@ -97,6 +97,15 @@ export function generateCpn(): string {
   return out
 }
 
+/**
+ * 风控信号上报(best-effort):宿主未注入 `net` 时静默,不影响请求/返回逻辑。
+ * 契约 `appHost.net.reportRisk(platform, signal)` 见 docs/crawler-risk-control.md §2.6。
+ */
+function reportRisk(signal: string): void {
+  // 宿主未注入 net 或调用方未注入 appHost 时静默(best-effort)
+  globalThis.appHost?.net?.reportRisk("youtube", signal)
+}
+
 async function postJson(url: string, body: unknown, headers: Record<string, string>): Promise<unknown> {
   const res = await globalThis.appHost.http.request({
     url,
@@ -105,7 +114,11 @@ async function postJson(url: string, body: unknown, headers: Record<string, stri
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   })
-  if (res.status < 200 || res.status >= 300) throw new Error(`YouTube HTTP ${res.status}: ${url}`)
+  if (res.status < 200 || res.status >= 300) {
+    // 429 是 YouTube 限流/风控信号
+    if (res.status === 429) reportRisk("429")
+    throw new Error(`YouTube HTTP ${res.status}: ${url}`)
+  }
   return res.body
 }
 

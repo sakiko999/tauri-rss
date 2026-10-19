@@ -52,7 +52,7 @@ assert(JSON.stringify(splitValues("英雄联盟,王者", "keyword")) === JSON.st
 
 // multiParamOf:只有列表型参数能并入
 const ch = (key: string, field: string): ChannelInfo =>
-  ({ key, name: key, kind: "live", loginable: false, sourceInfoTpl: [{ key: field, label: field }] }) as ChannelInfo
+  ({ key, name: key, kind: "live", loginable: false, supportsL9: false, sourceInfoTpl: [{ key: field, label: field }] }) as ChannelInfo
 assert(multiParamOf(ch("bili:live", "roomIds")) === true, "roomIds 渠道支持并入")
 assert(multiParamOf(ch("bili:search", "keyword")) === false, "keyword 渠道不支持并入")
 

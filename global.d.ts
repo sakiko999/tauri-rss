@@ -15,6 +15,14 @@
  */
 export {}
 declare global {
+  /**
+   * 浏览器窗口模式：
+   *   - `hidden`：SW_HIDE，不渲染（SSR/DOM 读取够用，CPU≈0）；
+   *   - `interactive`：屏外 shown + 遮挡 flag，渲染/IntersectionObserver/懒加载/
+   *     scroll 事件与可见窗口一致（滚动驱动页面需要）。
+   */
+  type BrowserWindowMode = "hidden" | "interactive"
+
   /** 宿主注入的工具集。 */
   interface AppHost {
     http: HttpBackend
@@ -43,6 +51,38 @@ declare global {
     dataSaver?: boolean
     /** 自动更新(仅 Tauri 桌面注入;浏览器/CLI/移动端为 undefined)。 */
     updater?: UpdaterBackend
+    /** 网络治理(等级/冷却/统计)。host 内建,始终存在。 */
+    net?: NetBackend
+  }
+
+  /** 单个平台的配额(与 host 的 NetPolicy 同形,见 docs/crawler-risk-control.md §2.5)。 */
+  interface PlatformQuotaConfig {
+    maxConcurrent: number
+    rpm: number
+    minIntervalMs: number
+    cooldownBaseMs: number
+  }
+
+  /**
+   * 网络治理能力(NetworkGovernor 门面):
+   *   - configure: 切换等级(L0 / L1 / LX)与配额,局部字段合并;
+   *   - reportRisk: 显式上报平台风控信号,按信号写平台冷却;
+   *   - governorStats: 自检/诊断(活跃冷却剩余毫秒 / 在途 / 排队)。
+   */
+  interface NetBackend {
+    configure(input: {
+      /** 全局默认等级(0 直通 / 1 入门 / 2 标准 / 3 严格)。 */
+      level?: 0 | 1 | 2 | 3 | 9
+      /**
+       * 平台级等级覆盖(整表替换)。`"*"` 是未知 host / RSS 的兜底覆盖;
+       * 优先顺序:精确平台 → `"*"` → `level`。9 = L9(LX 浏览器被动)。
+       */
+      levels?: Record<string, 0 | 1 | 2 | 3 | 9>
+      globalMaxConcurrent?: number
+      platforms?: Record<string, PlatformQuotaConfig>
+    }): void
+    reportRisk(platform: string, signal: string): void
+    governorStats(): { cooldowns: Record<string, number>; inFlight: number; queued: number }
   }
 
   /** 一条可安装的更新。 */
@@ -117,6 +157,21 @@ declare global {
      *  不传取全部(getAllCookies)。
      *  ⚠️ document.cookie 读不到 HttpOnly(如 xhs web_session),登录态检测/取 cookie 必须走这里。 */
     getCookies(url?: string): Promise<Record<string, string>>
+    /**
+     * 切换窗口模式（可选：非 Tauri 后端没有可切换的窗口）。
+     * 幂等；未启动时会按该模式拉起。见 `BrowserWindowMode`。
+     */
+    setMode?(mode: BrowserWindowMode): Promise<void>
+    /**
+     * 发送原始 CDP 命令（LX 被动采集用；默认 page target）。
+     * 可选：非 Tauri 后端不提供。调用方负责先确保连接。
+     */
+    send?(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<unknown>
+    /**
+     * 订阅 CDP 事件（无 id 的事件帧）；返回取消订阅函数。
+     * 可选：非 Tauri 后端不提供。
+     */
+    onEvent?(cb: (method: string, params: unknown, sessionId?: string) => void): () => void
     /** 关闭浏览器进程(应用退出)。 */
     close(): Promise<void>
     /**
@@ -157,6 +212,13 @@ declare global {
     /** "text" | "json" | "arraybuffer"(arraybuffer 走 base64,与 producer 一致) */
     responseType?: "text" | "json" | "arraybuffer"
     timeoutMs?: number
+    /**
+     * 网络治理覆盖(可选):
+     *   - platform: 显式指定平台桶(默认由 URL host 推导);
+     *   - metered: false 跳过 RPM/冷却(媒体/图片),true 强制计量;
+     *   - dedupeKey: 并发相同请求合并的键(默认 method+url+body)。
+     */
+    policy?: { platform?: string; metered?: boolean; dedupeKey?: string }
   }
 
   /** HTTP 响应(text/json → 字符串/json 对象;arraybuffer → Uint8Array)。 */

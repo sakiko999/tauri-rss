@@ -14,6 +14,7 @@
  */
 import type { VideoOps, VideoPlayState, FullscreenApi } from "./hooks/useVideoElement.ts"
 import {
+  MediaDanmakuButton,
   MediaFullscreenButton,
   MediaLiveEdgeButton,
   MediaPlayButton,
@@ -23,6 +24,7 @@ import {
   MediaTimeRange,
   MediaVolumeSlider,
 } from "./controls/index.ts"
+import type { DanmakuControl } from "./controls/index.ts"
 
 export function PlayerControls({
   state,
@@ -31,6 +33,7 @@ export function PlayerControls({
   qualityOptions,
   activeQuality,
   onQuality,
+  danmakuControl,
 }: {
   state: VideoPlayState
   ops: VideoOps
@@ -39,6 +42,8 @@ export function PlayerControls({
   qualityOptions: { rate: number; quality: string }[]
   activeQuality?: number
   onQuality: (rate: number) => void
+  /** 弹幕开关;无弹幕流或全局设置关闭时不传,按钮不渲染。 */
+  danmakuControl?: DanmakuControl
 }) {
   return (
     <div className="flex flex-col gap-1 bg-linear-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
@@ -61,6 +66,7 @@ export function PlayerControls({
           activeQuality={activeQuality}
           onQuality={onQuality}
         />
+        <MediaDanmakuButton control={danmakuControl} />
         <MediaFullscreenButton fullscreen={fullscreen} />
       </div>
     </div>

@@ -10,8 +10,8 @@
  *   - cdpNavigate:导航到 URL 并等待就绪(默认同址不重载保留 SPA state;forceReload 强刷)。
  *
  * ⚠️ 单 Edge 实例单 page target 被多平台 channel(weibo/xhs)共享——「导航到目标域 +
- * 同域 fetch」必须用 withBrowserLock 包成原子单元,否则并发刷新互相抢页面
- * (页面停在别的域 fetch → 跨域 Failed to fetch / 匿名 406)。
+ * 同域 fetch」必须用 withBrowserMode 包成原子单元（内部走 withBrowserLock）,
+ * 否则并发刷新互相抢页面(页面停在别的域 fetch → 跨域 Failed to fetch / 匿名 406)。
  *
  * 不直接引用 appHost.browser 类型——经参数传入,channel 侧检测门面存在才调用。
  */
@@ -19,12 +19,57 @@
 // ── 浏览器操作互斥 ──────────────────────────────────────────────────────────────
 // 全局 promise 链:任何浏览器模拟操作(导航+同域抓取)串行执行,互不交错。
 let browserLock: Promise<void> = Promise.resolve()
-/** 串行执行浏览器操作:持锁直到 fn 完成,期间其他浏览器操作排队。 */
-export function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
+/**
+ * 串行执行浏览器操作:持锁直到 fn 完成,期间其他浏览器操作排队。
+ * ⚠️ 一般**不直接用**：用 `withBrowserMode` 一并处理窗口模式与释放。
+ */
+function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
   const prev = browserLock
   let release!: () => void
   browserLock = new Promise<void>((r) => (release = r))
   return prev.then(() => fn()).finally(release)
+}
+
+/**
+ * 尽力切到某窗口模式：失败不影响数据路径。
+ * `hidden` 是默认态，切不过去（窗口未就绪等）也不该让抓取失败。
+ */
+async function setBrowserModeQuiet(
+  browser: BrowserBackend,
+  mode: BrowserWindowMode,
+): Promise<void> {
+  try {
+    await browser.setMode?.(mode)
+  } catch {
+    // 静默降级：SSR/页面 fetch 在 interactive 下同样能跑，只是多渲染开销。
+  }
+}
+
+/**
+ * 在指定窗口模式下**独占**浏览器执行操作（内部串行化，等价于旧的
+ * `withBrowserLock(async () => { setMode(...); ... })`）。
+ *
+ * - `hidden`：SSR/DOM 读取、页面内 fetch；模式切不过去也不影响数据路径。
+ * - `interactive`：滚动/懒加载页面；切不过去会抛错（否则滚动会静默 0 条），
+ *   结束后自动切回 `hidden`（interactive 是真实渲染，常驻有 CPU/GPU 开销）。
+ */
+export function withBrowserMode<T>(
+  browser: BrowserBackend,
+  mode: BrowserWindowMode,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return withBrowserLock(async () => {
+    if (mode === "interactive") {
+      await browser.setMode?.("interactive")
+      try {
+        return await fn()
+      } finally {
+        await setBrowserModeQuiet(browser, "hidden")
+      }
+    }
+    await setBrowserModeQuiet(browser, mode)
+    return fn()
+  })
 }
 
 /** 页面内 fetch 的入参(JSON 序列化传进 expression)。 */
