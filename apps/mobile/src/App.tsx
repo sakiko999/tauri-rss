@@ -158,7 +158,17 @@ function FeedRow({ item }: { item: MediaItem }) {
         <span className="row-title">{item.title}</span>
         <span className="row-sub">
           {item.author?.name ? `${item.author.name} · ` : ""}
-          {item.kind === "live" ? "直播" : item.kind === "video" ? "视频" : item.kind === "audio" ? "音频" : item.kind === "social" ? "动态" : "文章"}
+          {item.kind === "live"
+            ? "直播"
+            : item.kind === "video"
+              ? "视频"
+              : item.kind === "audio"
+                ? "音频"
+                : item.kind === "social"
+                  ? "动态"
+                  : item.kind === "category"
+                    ? "分区"
+                    : "文章"}
         </span>
       </span>
       {isPlayable(item) ? <span className="row-play">▶</span> : null}
@@ -209,7 +219,14 @@ function Detail({ item }: { item: MediaItem }) {
       ) : null}
       <h1 className="detail-title">{item.title}</h1>
       {item.author?.name ? <p className="detail-by">{item.author.name}</p> : null}
-      {item.kind === "article" ? (
+      {item.kind === "category" ? (
+        // 分区目录条目不是内容本身:移动端不做分区预览(桌面工作台职责),
+        // 至少给出明确说明而不是落到空的文章视图。
+        <div className="article-body">
+          {item.summary ? `${item.summary}\n\n` : ""}
+          分区目录条目。请在桌面端打开，预览并订阅该分区。
+        </div>
+      ) : item.kind === "article" ? (
         // ⚠️ 正文可能是 HTML(feed 带全文)—— 按纯文本渲染会露出 <p>/<a> 标签。
         // displayBody 判 HTML 则剥标签(mobile 无 sanitizer,富文本让位安全)。
         <div className="article-body">

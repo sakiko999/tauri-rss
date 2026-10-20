@@ -8,6 +8,7 @@ export const PLATFORMS: Array<{ id: string; label: string; icon: string }> = [
   { id: "huya", label: "虎牙", icon: "radio" },
   { id: "douyin", label: "抖音", icon: "radio" },
   { id: "youtube", label: "YouTube", icon: "play" },
+  { id: "twitch", label: "Twitch", icon: "radio" },
   { id: "weibo", label: "微博", icon: "message" },
   { id: "xhs", label: "小红书", icon: "image" },
 ]

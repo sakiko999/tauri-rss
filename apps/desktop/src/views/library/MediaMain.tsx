@@ -7,20 +7,23 @@
  * 网格保留 VirtuosoGrid 虚拟化(比 new_desktop 的 page-cap 全量渲染更适合大库)。
  * 点击卡片 → 播放入口(手势内 unlockAudioPlayback,见 usePlayerNav)。
  */
-import { useMemo } from "react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { useNavigate, useSearchParams } from "react-router"
 import { VirtuosoGrid } from "react-virtuoso"
+import type { CategoryItem, MediaItem } from "@amoeba/core"
 import { itemKey } from "../../lib/media.ts"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
-import { healthOf } from "../../store/selectors.ts"
-import { MediaCard, SocialCard } from "../../components/app/Cards.tsx"
+import { healthOf, matchesQuery } from "../../store/selectors.ts"
+import { sameInfo } from "../../store/lib.ts"
+import { isCategoryItem, isFeedItem, MediaCard, SocialCard } from "../../components/app/Cards.tsx"
 import { GridSkeleton } from "../../components/BootSkeleton.tsx"
 import { MasonryGrid } from "../../components/app/MasonryGrid.tsx"
 import { LoadMoreFooter } from "../../components/app/LoadMoreFooter.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
-import { useViewNavigate } from "../../router.tsx"
+import { useViewNavigate, viewPath } from "../../router.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /**
@@ -47,14 +50,100 @@ export function MediaMain() {
   const meta = useNodeMeta(nodeId)
   const actions = usePlayerNav()
   const go = useViewNavigate()
+  const allItems = useDesktop((s) => s.allItems)
+  const [searchParams] = useSearchParams()
+  const preview = useDesktop((s) => s.previewDetail)
+  const openPreview = useDesktop((s) => s.openPreviewDetail)
 
-  // 热搜词流优先(三栏右栏语义)。
-  const items = hotWord ? hotWord.items : view.list
+  // 二级订阅：`?open=<itemId>` 打开当前订阅里的「容器条目」(播客节目 / 分区目录)。
+  // ⚠️ 从 allItems 查而不是 view.list —— 目录订阅可能有几百条，view.list 只是窗口。
+  const openId = searchParams.get("open")
+  const openItem = useMemo(
+    () => (openId ? allItems.find((i) => i.subscriptionId === nodeId && i.id === openId) ?? null : null),
+    [allItems, nodeId, openId],
+  )
+  // 容器条目 → 拉它的二级内容。结果只存 store 的 previewDetail（不落库/不建订阅）。
+  const container = openItem && (isFeedItem(openItem) || isCategoryItem(openItem)) ? openItem : null
+  const previewKey = container ? `${container.subscriptionId}:${container.id}` : null
+  const previewCurrent = previewKey && preview?.key === previewKey ? preview : null
+  useEffect(() => {
+    if (container) void openPreview(container)
+  }, [container, openPreview])
+
+  // 热搜词流优先(三栏右栏语义)；二级订阅时是预览条目 —— 与正常订阅共用下面的网格。
+  // ⚠️ 预览也过一遍搜索:`previewDetail.items` 不走 `queryView`,不过滤的话顶栏搜索
+  // 在预览里会**静默失效**(输入后列表不变,用户以为搜索坏了)。
+  const items = container
+    ? (previewCurrent?.items ?? []).filter((i) => matchesQuery(i, query))
+    : hotWord
+      ? hotWord.items
+      : view.list
   const socialOnly = items.length > 0 && items.every((i) => i.kind === "social")
   const liveItems = useMemo(() => items.filter((i) => i.kind === "live"), [items])
   const restItems = useMemo(() => items.filter((i) => i.kind !== "live"), [items])
   const health = meta.sub ? healthOf(meta.sub, refreshErrors, busy) : "ok"
   const hasMix = liveItems.length > 0 && restItems.length > 0
+
+  // 二级订阅：只换表头与数据源，正文继续用与正常订阅**同一套网格/卡片**。
+  // 加载 / 失败 / 空 三态分开 —— 失败若与加载中同态，会永久停在骨架且没有重试入口。
+  if (container) {
+    const head = <PreviewHead item={container} count={items.length} />
+    const shell = (body: ReactNode) => (
+      <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:preview")}>
+        {head}
+        {body}
+      </div>
+    )
+    if (!previewCurrent || previewCurrent.loading) return shell(<GridSkeleton />)
+    if (previewCurrent.error) {
+      return shell(
+        <StateBlock
+          tone="error"
+          icon="alert"
+          title={container.kind === "category" ? "读不到该分区的内容" : "读不到该节目的单集"}
+          text={previewCurrent.error}
+          actions={
+            <button className="btn btn-secondary" onClick={() => void openPreview(container, { force: true })}>
+              <Icon name="refresh" size={14} /> 重试
+            </button>
+          }
+        />,
+      )
+    }
+    if (items.length === 0) {
+      return shell(
+        <StateBlock
+          icon="inbox"
+          title={container.kind === "category" ? "该分区当前没有内容" : "这个节目暂时没有单集"}
+          text="可能暂时没有内容；稍后重试或换一个条目。"
+          actions={
+            <button className="btn btn-secondary" onClick={() => void openPreview(container, { force: true })}>
+              <Icon name="refresh" size={14} /> 重新获取
+            </button>
+          }
+        />,
+      )
+    }
+  }
+
+  // `?open=` 指向的容器条目已被刷新替换掉(目录订阅换了一批):静默退回目录网格、
+  // 地址栏却还留着 `?open=`,用户看到的是「点了没反应」。明确报出来并给返回入口。
+  if (openId && !openItem) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:preview-missing")}>
+        <StateBlock
+          icon="inbox"
+          title="这条内容已被刷新替换"
+          text="目录订阅刷新后原来的条目可能不在了，返回列表重新选择。"
+          actions={
+            <button className="btn btn-secondary" onClick={() => go(nodeId ?? "tab:all")}>
+              <Icon name="back" size={14} /> 返回列表
+            </button>
+          }
+        />
+      </div>
+    )
+  }
 
   // ⚠️ 必须放在**所有 hook 之后**:早返回会让这一支少跑 useMemo,
   //    切换视图时 React 抛「Rendered fewer hooks than expected」整页崩掉。
@@ -123,9 +212,13 @@ export function MediaMain() {
 
   // ⚠️ 计数用 view.total(筛选后的**总数**),不是 items.length —— 后者是分页窗口
   // 内的条数(默认 60,滚动加载才增长)。用窗口长度会出现「侧栏说 900、表头说 240」
-  // 的同一视图两个数字。热搜词流不是窗口(全量返回),仍用长度。
-  const total = hotWord ? items.length : view.total
-  const pageHead = <GridHead title={viewTitleFor(meta, hotWord)} sub={`${total} 条`} health={health} />
+  // 的同一视图两个数字。热搜词流 / 二级预览不是窗口(全量返回),仍用长度。
+  const total = container || hotWord ? items.length : view.total
+  const pageHead = container ? (
+    <PreviewHead item={container} count={total} />
+  ) : (
+    <GridHead title={viewTitleFor(meta, hotWord)} sub={`${total} 条`} health={health} />
+  )
 
   if (socialOnly) {
     return (
@@ -199,10 +292,75 @@ export function MediaMain() {
         data={items}
         listClassName="media-grid"
         itemClassName="media-card-item"
-        components={{ Header: () => pageHead, Footer: LoadMoreFooter }}
+        // ⚠️ 预览不挂 LoadMoreFooter:它读的是**目录订阅节点**的 canLoadMore / growPage,
+        // 与预览数据无关 —— 会出现「点加载更多，预览一条不变，却把目录窗口撑大」。
+        components={{ Header: () => pageHead, ...(container ? {} : { Footer: LoadMoreFooter }) }}
         computeItemKey={(_, it) => itemKey(it)}
         itemContent={(_, it) => <MediaCard item={it} actions={actions} />}
       />
+    </div>
+  )
+}
+
+/**
+ * 二级订阅的表头：返回 / 标题 / 条数 / 订阅。**只换头，正文仍是下面的正常网格**。
+ * 订阅目标：播客 feed → `rss:podcast` + `{url}`；分区目录 → 条目自带的渠道 + 完整参数。
+ */
+function PreviewHead({ item, count }: { item: MediaItem; count: number }) {
+  const navigate = useNavigate()
+  const subscriptions = useDesktop((s) => s.subscriptions)
+  const addSubscription = useDesktop((s) => s.addSubscription)
+  const toast = useDesktop((s) => s.toast)
+  const [subscribing, setSubscribing] = useState(false)
+
+  const kind: "feed" | "category" = item.kind === "category" ? "category" : "feed"
+  const target =
+    item.kind === "category"
+      ? {
+          channelKey: (item as CategoryItem).categoryChannel,
+          info: (item as CategoryItem).categoryInfo ?? {},
+        }
+      : { channelKey: "rss:podcast", info: { url: item.url ?? "" } }
+  // ⚠️ 判重必须与 `addSubscription` 用同一套判据(`sameInfo`:键序无关、空值同义)。
+  // 自己写 `===` 会在参数被归一化过(如 Twitch 分类填目录链接)时判成「未订阅」→
+  // 点一下建出第二条同内容订阅;空 info 时 `every()` 又恒真 → 永远显示「已订阅」。
+  const alreadySubscribed = subscriptions.some((s) => s.channelKey === target.channelKey && sameInfo(s.info ?? {}, target.info))
+
+  async function subscribe() {
+    if (!target.channelKey || alreadySubscribed) return
+    setSubscribing(true)
+    try {
+      await addSubscription(target.channelKey, item.title, target.info)
+    } catch (e) {
+      toast("error", kind === "feed" ? "订阅失败" : "订阅该分区失败", e instanceof Error ? e.message : String(e))
+    } finally {
+      setSubscribing(false)
+    }
+  }
+
+  return (
+    <div
+      className="grid-head"
+      {...overlayBlock("preview-head", `preview:${item.subscriptionId}:${item.id}`)}
+    >
+      <button className="btn btn-quiet btn-sm" onClick={() => navigate(viewPath(item.subscriptionId))}>
+        <Icon name="back" size={13} /> 返回
+      </button>
+      <span className="grid-title od-truncate">{item.title}</span>
+      <span className="grid-sub">
+        {kind === "feed" ? "单集" : "分区内容"} · {count} 条（预览，不写入订阅）
+      </span>
+      <span className="spacer" />
+      <button className="btn btn-secondary btn-sm" disabled={subscribing || alreadySubscribed} onClick={() => void subscribe()}>
+        {subscribing ? (
+          <Icon name="loader" size={13} className="animate-spin" />
+        ) : alreadySubscribed ? (
+          <Icon name="check" size={13} />
+        ) : (
+          <Icon name="plus" size={13} />
+        )}
+        {alreadySubscribed ? "已订阅" : kind === "feed" ? "订阅该节目" : "订阅该分区"}
+      </button>
     </div>
   )
 }

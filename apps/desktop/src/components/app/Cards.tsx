@@ -4,7 +4,7 @@
  * 结构照 new_desktop 的 components.js(mediaCard/cardMini/socialCard),但图片走
  * ui 包的 MediaImage(自带防盗链隧道 + 骨架 + 失败占位),不再自己写 <img>。
  */
-import type { AudioItem, MediaItem } from "@amoeba/core"
+import type { AudioItem, CategoryItem, MediaItem } from "@amoeba/core"
 import { MediaImage, fmtCount } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
 import { fmtAgo, fmtTime, httpsify, itemKey, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
@@ -18,6 +18,8 @@ export interface CardActions {
   onQueue?: (item: MediaItem) => void
   /** 条目是一条**播客 feed**(而非一集)时的主操作:展开它的单集列表。 */
   onOpenFeed?: (item: MediaItem) => void
+  /** 条目是一条**分区目录**(而非房间)时的主操作:预览该分区的真实内容。 */
+  onOpenCategory?: (item: MediaItem) => void
 }
 
 function badged(item: MediaItem, actions: CardActions) {
@@ -55,6 +57,11 @@ export function isPlayableKind(kind: MediaItem["kind"]): boolean {
  */
 export function isFeedItem(item: MediaItem): boolean {
   return item.kind === "audio" && !(item as AudioItem).stream
+}
+
+/** 分区目录条目:本身不可播,点开是「该分区的内容预览」。 */
+export function isCategoryItem(item: MediaItem): item is CategoryItem {
+  return item.kind === "category"
 }
 
 /**
@@ -99,9 +106,18 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
   const b = badged(item, actions)
   // article 同 social:没有可播流,整卡点击应是「打开原文」而不是播放。
   // 播客 feed 条目(Apple 榜单)同理 —— 但它的主操作是「订阅」,见 isFeedItem。
+  // 分区目录条目同属「没有流」:点开 = 预览该分区的真实内容。
   const feed = isFeedItem(item)
+  const category = isCategoryItem(item)
   const onFeed = actions.onOpenFeed
-  const primary = feed && onFeed ? () => onFeed(item) : playable ? () => actions.onPlay(item) : () => actions.onOpen?.(item)
+  const primary =
+    category && actions.onOpenCategory
+      ? () => actions.onOpenCategory?.(item)
+      : feed && onFeed
+        ? () => onFeed(item)
+        : playable
+          ? () => actions.onPlay(item)
+          : () => actions.onOpen?.(item)
 
   return (
     <article
@@ -157,7 +173,14 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
         <span className="card-title clamp-2">{item.title}</span>
         {/* 作者 + 时间不再用 `·` 连接;时间贴右,作者名超长省略。 */}
         <span className="card-meta">
-          {item.author?.name ? <span className="card-author">{item.author.name}</span> : <span className="spacer" />}
+          {item.author?.name ? (
+            <span className="card-author">{item.author.name}</span>
+          ) : category && item.summary ? (
+            // 目录条目没有作者/时间:「N 人在看 / M 个子分区」放在副行,别空着。
+            <span className="card-author">{item.summary}</span>
+          ) : (
+            <span className="spacer" />
+          )}
           <span className="card-time">{fmtAgo(item.publishedAt)}</span>
         </span>
         <span className="card-foot">
@@ -184,10 +207,19 @@ export function CardMini({ item, actions }: { item: MediaItem; actions: CardActi
   const playable = isPlayableKind(item.kind)
   // 播客 feed 条目(发现页「取数据」预览的一条节目):主操作 = 展开单集,不是播放。
   const feed = isFeedItem(item) && !!actions.onOpenFeed
+  const category = isCategoryItem(item) && !!actions.onOpenCategory
   return (
     <button
       className="card"
-      onClick={() => (feed ? actions.onOpenFeed?.(item) : playable ? actions.onPlay(item) : actions.onOpen?.(item))}
+      onClick={() =>
+        category
+          ? actions.onOpenCategory?.(item)
+          : feed
+            ? actions.onOpenFeed?.(item)
+            : playable
+              ? actions.onPlay(item)
+              : actions.onOpen?.(item)
+      }
       aria-label={item.title}
     >
       <div className="card-media aspect-video">
@@ -266,5 +298,5 @@ export function LiveRailCard({ item, actions }: { item: MediaItem; actions: Card
 }
 
 function kindLabel(kind: string): string {
-  return { article: "文章", video: "视频", audio: "音频", live: "直播", social: "社交" }[kind] ?? kind
+  return { article: "文章", video: "视频", audio: "音频", live: "直播", social: "社交", category: "分区" }[kind] ?? kind
 }

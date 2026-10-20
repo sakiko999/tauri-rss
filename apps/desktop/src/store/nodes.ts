@@ -35,6 +35,9 @@ export const KIND_META: Record<MediaKind, KindMeta> = {
   audio: { label: "音频", icon: "music" },
   live: { label: "直播", icon: "radio" },
   social: { label: "社交", icon: "message" },
+  // 分区目录条目本身不可播/不可读,只作为「目录订阅」的内容;不生成独立 tab
+  // (它出现在「全部」和订阅节点里,点开走分区预览弹窗)。
+  category: { label: "分区", icon: "layers" },
 }
 
 export const KIND_ORDER: MediaKind[] = ["article", "video", "audio", "live", "social"]

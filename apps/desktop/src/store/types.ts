@@ -101,13 +101,35 @@ export interface DesktopState {
    */
   queue: string[]
   /**
-   * 播客 feed 的**临时单集预览**(Apple 榜单那种「条目是节目、不是单集」的源)。
+   * **二级订阅的内容预览**（`?open=<itemId>` 的右侧列表）。
    *
-   * 点开这类条目 → 拉它那个 RSS feed → 列出单集让用户挑。这批单集**不落库、
-   * 不建订阅**（`previewChannel` 语义）—— 它们只活在这次会话里,故单独存这里,
-   * 播放页找不到条目时回退查它。关掉弹窗即清。
+   * 两类「容器条目」共用：
+   *   - 播客 feed（Apple 榜单：`kind:"audio"` 且无 stream，url 是节目 RSS）；
+   *   - 分区目录（`kind:"category"`，自带 `categoryChannel` + `categoryInfo`）。
+   *
+   * 点开容器 → 用 `previewChannel` 取它的真实内容，`MediaMain` 用**与正常订阅同一套
+   * 网格/卡片**渲染（只换表头），不另造列表组件。
+   * 内容**不落库、不建订阅**；播放页找不到条目时回退查这里（单集/房间的
+   * subscriptionId 是 `preview:`，不在 store 里）。
    */
-  feedPreview: { title: string; feedUrl: string; items: MediaItem[] } | null
+  previewDetail: {
+    /** 容器所在订阅节点（页面 nodeId）。 */
+    nodeId: string
+    itemId: string
+    title: string
+    /** feed = 播客节目（内容为单集）；category = 分区目录（内容为房间）。 */
+    kind: "feed" | "category"
+    channelKey: string
+    info: Record<string, string>
+    /** 请求键（nodeId:itemId），防过期结果覆盖。 */
+    key: string
+    /** 抓取时间（TTL 内来回进出不重复拉；过期后再点开会重抓）。 */
+    at: number
+    items: MediaItem[]
+    /** 首次读取中；读完为空要能区分「空内容」。 */
+    loading: boolean
+    error?: string
+  } | null
   /** 播放页取消的弹幕(设置项为总开关,此处是临时覆盖)。 */
   danmakuVisible: boolean
 
@@ -125,11 +147,13 @@ export interface DesktopState {
   openSocialDetail(item: MediaItem): void
   closeSocialDetail(): void
   /**
-   * 展开一条**播客 feed 条目**的单集列表(Apple 榜单的节目:url 是 feed 不是单集)。
-   * 拉一次该 feed、列出单集,临时存 `feedPreview`(不建订阅、不落库)。
+   * 打开二级订阅的内容（播客节目 → 单集 / 分区 → 房间）。
+   *
+   * 容器条目自带目标渠道：feed 用 `rss:podcast` + `{url}`，category 用
+   * `categoryChannel` + `categoryInfo`。结果临时存 `previewDetail`（不建订阅、不落库）。
+   * `force` 用于失败重试。
    */
-  openFeedPreview(item: MediaItem): Promise<void>
-  closeFeedPreview(): void
+  openPreviewDetail(item: MediaItem, opts?: { force?: boolean }): Promise<void>
 
   /** `opts.silent` 时不弹「已更新」toast（供内部编排调用，调用方自己有提示）。 */
   refresh(id: string, opts?: { silent?: boolean }): Promise<void>

@@ -65,7 +65,7 @@ export const useDesktop = create<DesktopState>()((set, get) => {
 
     paletteOpen: false,
     queue: loadQueue(),
-    feedPreview: null,
+    previewDetail: null,
     danmakuVisible: true,
     toasts: [],
 

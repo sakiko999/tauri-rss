@@ -5,6 +5,10 @@
  * (不建订阅);结果用与「添加订阅」**同一套候选行**(CandidateList：label/sub/meta
  * 一行看全)，选中后可直接订阅一个房间，或把整个查询词设为订阅。
  *
+ * ⚠️ 分区**目录**不在这里 —— 目录本身是订阅(`twitch:categories` 等，见各平台
+ * channel 目录下的 categories.ts)；本面板只处理「已知分区 ID 直接取内容」。
+ * 参数按 `sourceInfoTpl` **逐字段**渲染（抖音 `partition + partitionType` 双参不漏）。
+ *
  * ⚠️ 三种视图的返回都是 live item(roomId 已由 tpl:roomId/URL 还原)，所以统一走
  * `candidatesFromSearch`；不再用 CardMini 网格(信息少、还要再点进弹窗才能订阅)。
  */
@@ -47,7 +51,8 @@ export function PlatformBrowser({
   const subscriptions = useDesktop((s) => s.subscriptions)
   const addSubscription = useDesktop((s) => s.addSubscription)
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
-  const [categoryValue, setCategoryValue] = useState("")
+  /** 分区视图的手输参数（按 sourceInfoTpl 逐字段收集）。 */
+  const [categoryValues, setCategoryValues] = useState<Record<string, string>>({})
   const [q, setQ] = useState("")
   const [busy, setBusy] = useState(false)
   const [subscribing, setSubscribing] = useState(false)
@@ -61,6 +66,8 @@ export function PlatformBrowser({
   /** 请求世代守卫(见 lib/useLatestOnly.ts):切平台/切视图/新搜索都作废在途请求。 */
   const latest = useLatestOnly()
   const ch = view === "category" ? caps.category : view === "anchor" ? caps.anchor : caps.search
+  /** 参数名/标签全部来自渠道的 sourceInfoTpl（不硬编码字段名）。 */
+  const fields = ch?.sourceInfoTpl ?? []
 
   // ⚠️ 切平台/切视图也要作废在途请求:只 setItems(null) 挡不住 —— 旧响应回来时
   // 世代仍相等会覆盖成上一个平台的数据(c4aab55 只覆盖了「被新 run 取代」)。
@@ -71,20 +78,43 @@ export function PlatformBrowser({
     setError("")
     setBusy(false) // 在途请求的 finally 因世代不符不再清 busy → 这里补，否则按钮卡禁用
     setSelected("")
+    setCategoryValues({})
   }, [platform, view, latest])
+
+  /** 当前手输参数:搜索/主播视图是单关键词,分区视图是完整的参数表。 */
+  function inputInfo(): Record<string, string> {
+    if (view !== "category") return fields[0] ? { [fields[0].key]: q } : {}
+    const info: Record<string, string> = {}
+    for (const f of fields) {
+      const v = String(categoryValues[f.key] ?? "").trim()
+      if (v) info[f.key] = v
+    }
+    return info
+  }
 
   async function run() {
     if (!dl || !ch) return
+    // ⚠️ 必填参数要在这里校验:空值被丢掉后渠道会用**默认值**兜底(如抖音
+    // partitionType 回落 1,而 101 是顶层分区应为 4)→ 上游返回空 → 界面只说
+    // 「该分区当前没有内容」,用户根本不知道是自己少填了一项。
+    // (「订阅该分区」走 AddSubscriptionDialog,那边本来就有 required 校验。)
+    const missing =
+      view === "category"
+        ? fields.filter((f) => f.required && !String(categoryValues[f.key] ?? "").trim())
+        : fields[0]?.required && !q.trim()
+          ? [fields[0]]
+          : []
+    if (missing.length) {
+      setError(`请填写：${missing.map((f) => f.label).join("、")}`)
+      setItems(null)
+      return
+    }
     const gen = latest.start()
     setBusy(true)
     setError("")
     setSelected("")
-    const info: Record<string, string> = {}
-    // 参数名来自渠道的 sourceInfoTpl(不硬编码字段名)。
-    const fields = ch.sourceInfoTpl ?? []
-    if (fields[0]) info[fields[0].key] = view === "category" ? categoryValue : q
     try {
-      const r = await dl.previewChannel(ch.key, info)
+      const r = await dl.previewChannel(ch.key, inputInfo())
       if (latest.stale(gen)) return // 已被更新的请求取代,丢弃(否则面板显示上一个平台的数据)
       setItems(r.items)
     } catch (e) {
@@ -96,7 +126,13 @@ export function PlatformBrowser({
     }
   }
 
-  const fields = ch?.sourceInfoTpl ?? []
+  /** 打开「订阅该分区」弹窗。 */
+  function openSubscribe() {
+    if (!ch) return
+    setSubscribeKey(ch.key)
+    setSubscribeInfo(inputInfo())
+    setDialogOpen(true)
+  }
 
   /** 结果 → 候选(与「添加订阅」同一套提取:只留带 roomId 的 live 条目)。 */
   const cands = useMemo(() => candidatesFromSearch(items ?? []), [items])
@@ -198,34 +234,28 @@ export function PlatformBrowser({
           {platform} 当前没有「{VIEW_LABEL[view]}」渠道。
         </Banner>
       ) : (
-        <div className="inline-row" style={{ marginBottom: "var(--sp-4)" }}>
-          <input
-            className="input input-wide"
-            value={view === "category" ? categoryValue : q}
-            placeholder={fields[0]?.placeholder ?? fields[0]?.label ?? "参数"}
-            aria-label={fields[0]?.label ?? "参数"}
-            onChange={(e) => {
-              const v = e.target.value
-              if (view === "category") setCategoryValue(v)
-              else setQ(v)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !isImeComposing(e)) void run()
-            }}
-          />
+        <div className="inline-row" style={{ marginBottom: "var(--sp-4)", flexWrap: "wrap" }}>
+          {fields.map((f) => (
+            <input
+              key={f.key}
+              className={fields.length > 1 ? "input" : "input input-wide"}
+              value={view === "category" ? categoryValues[f.key] ?? "" : q}
+              placeholder={f.placeholder ?? f.label ?? "参数"}
+              aria-label={f.label ?? "参数"}
+              onChange={(e) => {
+                const v = e.target.value
+                if (view === "category") setCategoryValues((prev) => ({ ...prev, [f.key]: v }))
+                else setQ(v)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isImeComposing(e)) void run()
+              }}
+            />
+          ))}
           <button className="btn btn-primary" disabled={busy} onClick={() => void run()}>
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="search" size={14} />} 取数据
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => {
-              setSubscribeKey(ch.key)
-              const info: Record<string, string> = {}
-              if (fields[0]) info[fields[0].key] = view === "category" ? categoryValue : q
-              setSubscribeInfo(info)
-              setDialogOpen(true)
-            }}
-          >
+          <button className="btn btn-secondary" onClick={openSubscribe}>
             <Icon name="plus" size={14} /> 订阅该{VIEW_LABEL[view]}
           </button>
         </div>

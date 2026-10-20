@@ -30,7 +30,6 @@ import { GridSkeleton } from "./components/BootSkeleton.tsx"
 import { showSkeleton } from "./store/selectors.ts"
 import { CommandPalette } from "./views/palette/CommandPalette.tsx"
 import { SocialDetailModal } from "./components/app/SocialDetailModal.tsx"
-import { FeedPreviewModal } from "./components/app/FeedPreviewModal.tsx"
 import { usePrefs } from "./store/prefs.ts"
 import { useGlobalShortcuts } from "./lib/shortcuts.ts"
 import { scheduleStartupCheck } from "./lib/update.ts"
@@ -161,7 +160,6 @@ export default function App() {
       ) : null}
       <CommandPalette />
       <SocialDetailModal />
-      <FeedPreviewModal />
       <OnboardingModal />
       <Toaster />
     </div>

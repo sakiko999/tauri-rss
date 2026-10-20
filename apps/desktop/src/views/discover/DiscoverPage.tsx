@@ -16,7 +16,7 @@ import type { ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { CAPS, PLATFORMS, CAP_LABEL, type Cap } from "./platforms.ts"
-import { SEARCH_CHANNEL } from "../../lib/subscriptions.ts"
+import { CATEGORY_CHANNEL, SEARCH_CHANNEL } from "../../lib/subscriptions.ts"
 import { PlatformBrowser } from "./PlatformBrowser.tsx"
 import { BoardList } from "./BoardList.tsx"
 import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
@@ -40,7 +40,10 @@ export function DiscoverPage() {
       // 搜索渠道 key 不一定叫 `<platform>:search`(如 youtube:live-search),
       // 以 SEARCH_CHANNEL 映射为准,再回退旧的命名约定。
       const search = channels.find((c) => c.key === SEARCH_CHANNEL[p.id]) ?? find("search")
-      m[p.id] = { category: find("category"), search, anchor: find("anchor") }
+      // 分区渠道名不统一（`youtube:live-category` 不在 `<platform>:category` 约定里），
+      // 以显式表为准，再回退旧的命名约定。
+      const category = channels.find((c) => c.key === CATEGORY_CHANNEL[p.id]) ?? find("category")
+      m[p.id] = { category, search, anchor: find("anchor") }
     }
     return m
   }, [channels])

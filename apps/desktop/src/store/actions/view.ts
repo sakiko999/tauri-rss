@@ -1,10 +1,16 @@
 /**
- * 视图/交互状态动作:节点切换、筛选/排序/分页窗口、热搜词、详情弹窗、feed 预览。
+ * 视图/交互状态动作:节点切换、筛选/排序/分页窗口、热搜词、详情弹窗、feed 预览、
+ * 分区目录预览。
  *
  * 从 store/index.ts 拆出;只依赖 StoreCtx。
  */
+import type { AudioItem, CategoryItem } from "@amoeba/core"
 import { PAGE_SIZE } from "../selectors.ts"
+import { now } from "../lib.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
+
+/** 二级预览的复用窗口：进出切换不重复拉；过期后再点开会重抓。 */
+const PREVIEW_TTL_MS = 60_000
 
 type ViewActions = Pick<
   DesktopState,
@@ -18,8 +24,7 @@ type ViewActions = Pick<
   | "selectArticle"
   | "openSocialDetail"
   | "closeSocialDetail"
-  | "openFeedPreview"
-  | "closeFeedPreview"
+  | "openPreviewDetail"
 >
 
 export function createViewActions(ctx: StoreCtx): ViewActions {
@@ -108,32 +113,72 @@ export function createViewActions(ctx: StoreCtx): ViewActions {
       set({ socialDetail: null })
     },
 
-    async openFeedPreview(item) {
+    /**
+     * 打开二级订阅的内容（右侧主区，不再是弹窗）。
+     *
+     * 两类容器条目：
+     *   - `kind:"category"` → 用自带的 `categoryChannel` + `categoryInfo`；
+     *   - 播客 feed（`kind:"audio"` 且无 stream）→ `rss:podcast` + `{url}`。
+     *
+     * 结果临时存 `previewDetail`（不建订阅、不落库）。播放页回退查它才能找到
+     * 预览里的单集（它们的 subscriptionId 是 `preview:<channel>`，不在 store 里）。
+     */
+    async openPreviewDetail(item, opts) {
       const dl = get().dl
       if (!dl) return
-      const feedUrl = item.url ?? ""
-      if (!feedUrl) {
-        get().toast("error", "这条没有 feed 地址", "Apple 目录偶有缺 feedUrl 的条目,已在上游过滤。")
+      let kind: "feed" | "category"
+      let channelKey: string
+      let info: Record<string, string>
+      let invalid = ""
+      if (item.kind === "category") {
+        const category = item as CategoryItem
+        kind = "category"
+        channelKey = category.categoryChannel
+        info = category.categoryInfo ?? {}
+        if (!channelKey) invalid = "目录条目缺少目标渠道（categoryChannel 为空），无法预览。"
+      } else if (item.kind === "audio" && !(item as AudioItem).stream) {
+        kind = "feed"
+        channelKey = "rss:podcast"
+        info = { url: item.url ?? "" }
+        if (!info.url) invalid = "这条没有 feed 地址（Apple 目录偶有缺 feedUrl 的条目）。"
+      } else {
         return
       }
-      // 先占位(空列表 + 标题),让弹窗立刻出现骨架,不要点下去像没反应。
-      set({ feedPreview: { title: item.title, feedUrl, items: [] } })
-      try {
-        // ⚠️ 复用 `rss:podcast` 渠道取单集 —— 它就是「feed URL → Audio 条目」,
-        // 与订阅后走的是同一段解析,不另造。`previewChannel` 不写缓存、不落 store。
-        const { items } = await dl.previewChannel("rss:podcast", { url: feedUrl })
-        // 用户在等待期间可能已经关了弹窗/换了一条 —— 过期结果不覆盖(用 feedUrl 判).
-        if (get().feedPreview?.feedUrl !== feedUrl) return
-        set({ feedPreview: { title: item.title, feedUrl, items } })
-      } catch (e) {
-        if (get().feedPreview?.feedUrl !== feedUrl) return
-        get().toast("error", "读不到该节目的单集", e instanceof Error ? e.message : String(e))
-        set({ feedPreview: null })
-      }
-    },
 
-    closeFeedPreview() {
-      set({ feedPreview: null })
+      // 请求键用「订阅 + 条目」：短时间内来回进出复用同一份结果，不重复拉。
+      // ⚠️ 必须有 TTL:永久短路的话,同一个分区/节目本会话内再也不会重抓 ——
+      // 10 点看到的房间列表 11 点还是它(全标 LIVE),空结果更是永远空。
+      const key = `${item.subscriptionId}:${item.id}`
+      const cur = get().previewDetail
+      if (!opts?.force && cur?.key === key && now() - cur.at < PREVIEW_TTL_MS) return
+      const base = {
+        nodeId: item.subscriptionId,
+        itemId: item.id,
+        title: item.title,
+        kind,
+        channelKey,
+        info,
+        key,
+        at: now(),
+      }
+      // ⚠️ 参数缺失也要落一条**错误态**的 previewDetail:直接 toast + return 的话,
+      // MediaMain 把「previewDetail 为 null」当加载中,主区会永久停在骨架屏。
+      if (invalid) {
+        set({ previewDetail: { ...base, items: [], loading: false, error: invalid } })
+        return
+      }
+      set({ previewDetail: { ...base, items: [], loading: true } })
+      try {
+        // ⚠️ 复用 `previewChannel` 的语义：不写缓存、不落 store、不建订阅。
+        const { items } = await dl.previewChannel(channelKey, info)
+        const cur = get().previewDetail
+        if (cur?.key !== key) return
+        set({ previewDetail: { ...cur, items, loading: false } })
+      } catch (e) {
+        const cur = get().previewDetail
+        if (cur?.key !== key) return
+        set({ previewDetail: { ...cur, loading: false, error: e instanceof Error ? e.message : String(e) } })
+      }
     },
   }
 }

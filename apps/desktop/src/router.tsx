@@ -18,6 +18,15 @@ export function viewPath(nodeId: string, word?: string): string {
   return word ? `/v/${encodeURIComponent(nodeId)}?word=${encodeURIComponent(word)}` : `/v/${encodeURIComponent(nodeId)}`
 }
 
+/**
+ * `/v/{nodeId}?open={itemId}` —— 在订阅节点里打开一个**容器条目**的二级内容
+ * （播客节目 → 单集 / 分区目录 → 房间）。`MediaMain` 据此把预览条目喂给
+ * **与正常订阅同一套网格**（只换表头），关掉/返回时去掉 query 即回到容器列表。
+ */
+export function previewPath(nodeId: string, itemId: string): string {
+  return `/v/${encodeURIComponent(nodeId)}?open=${encodeURIComponent(itemId)}`
+}
+
 /** `/play/{itemId}?from={nodeId}`。 */
 export function playPath(itemId: string, from?: string | null): string {
   const q = from ? `?from=${encodeURIComponent(from)}` : ""

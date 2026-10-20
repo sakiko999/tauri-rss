@@ -94,6 +94,20 @@ export const SEARCH_CHANNEL: Record<string, string> = {
   youtube: "youtube:live-search",
 }
 
+/**
+ * 平台 → 分区**订阅渠道**（已知分区 ID 直接取内容）。
+ * ⚠️ 这只是「手输分区 → 取内容」的入口；分区**目录**（分类列表本身）是独立订阅，
+ * 见 `*:categories` 渠道（`twitch:categories` / `youtube:live-categories` / …）。
+ * 分区渠道名不统一（`youtube:live-category`），故用显式表，不按命名约定猜。
+ */
+export const CATEGORY_CHANNEL: Record<string, string> = {
+  douyu: "live:douyu:category",
+  huya: "live:huya:category",
+  douyin: "live:douyin:category",
+  twitch: "twitch:category",
+  youtube: "youtube:live-category",
+}
+
 /** 平台 → 直播**订阅渠道**(roomIds 列表型参数)。 */
 export const LIVE_SUB_CHANNEL: Record<string, string> = {
   bili: "bili:live",

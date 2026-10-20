@@ -8,11 +8,12 @@
  * 解析走 core:video → resolvePlay, live → resolveLivePlay;两者都返回
  * `{ streams, danmaku }`,danmaku 由 PlayableMedia 内部接给 DanmakuLayer。
  */
-import { useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo } from "react"
+import { useNavigate } from "react-router"
 import { PlayableMedia } from "@amoeba/player"
 import type { MediaItem, MediaStream } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
-import { usePlayNavigate, usePlayParams, useViewNavigate } from "../../router.tsx"
+import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock, SideCard } from "../../components/StateBlock.tsx"
 import { MediaImage } from "@amoeba/ui"
@@ -23,7 +24,7 @@ import { overlayBlock } from "../../lib/uiOverlay.ts"
 export function PlayerPage() {
   const { itemId, from } = usePlayParams()
   const allItems = useDesktop((s) => s.allItems)
-  const feedPreview = useDesktop((s) => s.feedPreview)
+  const previewDetail = useDesktop((s) => s.previewDetail)
   const queue = useDesktop((s) => s.queue)
   const resolvePlay = useDesktop((s) => s.resolvePlay)
   const resolveLivePlay = useDesktop((s) => s.resolveLivePlay)
@@ -35,27 +36,58 @@ export function PlayerPage() {
   const danmakuVisible = useDesktop((s) => s.danmakuVisible)
   const toggleDanmaku = useDesktop((s) => s.toggleDanmaku)
   const settings = useDesktop((s) => s.settings)
-  const go = useViewNavigate()
+  const navigate = useNavigate()
   // ⚠️ 播放页内跳向另一条内容必须走 /play/:itemId。用 go("play:"+id) 会生成
   // `/v/play%3Aid`,App 的 isPlay 判的是 params.itemId → 落到 MediaMain 网格。
   const playTo = usePlayNavigate()
 
-  // ⚠️ 回退查 `feedPreview`:播客 feed 的单集是**临时预览**出来的(未落库、未建订阅),
-  // 只查 allItems 会「找不到这条内容」。见 store 的 openFeedPreview。
-  const item = useMemo(
-    () => allItems.find((i) => i.id === itemId) ?? feedPreview?.items.find((i) => i.id === itemId) ?? null,
-    [allItems, itemId, feedPreview],
+  // ⚠️ 合并 `previewDetail`:二级订阅的单集/房间是**临时预览**出来的(未落库、未建订阅),
+  // 只查 allItems 会「找不到这条内容」。队列/下一条也走这份合并表。
+  const known = useMemo(
+    () => (previewDetail?.items.length ? [...allItems, ...previewDetail.items] : allItems),
+    [allItems, previewDetail],
+  )
+  // ⚠️ `id` 只在订阅内唯一,必须带订阅定位:
+  //   ① 预览条目(`preview:*`)是刚抓的快照,比库里同一房间的旧快照新 —— 从该节点进来时优先;
+  //   ② 否则按 `?from=` 的订阅精确匹配;
+  //   ③ 最后才退回裸 id(理论上只剩「订阅已被删」的兜底)。
+  const item = useMemo(() => {
+    if (!itemId) return null
+    const inPreview =
+      previewDetail?.nodeId === from ? previewDetail.items.find((i) => i.id === itemId) : undefined
+    const bySub = from ? known.find((i) => i.id === itemId && i.subscriptionId === from) : undefined
+    return inPreview ?? bySub ?? known.find((i) => i.id === itemId) ?? null
+  }, [known, itemId, from, previewDetail])
+  // 预览条目不在库里(订阅 id 是 `preview:*`),播放解析要改走 url 兜底(见下方 resolve)。
+  const inStore = useMemo(
+    () => !!item && allItems.some((i) => i.subscriptionId === item.subscriptionId && i.id === item.id),
+    [allItems, item],
   )
   // ⚠️ 队列存的是 `subId:itemId` 复合键(见 store 的 queue 注释),用 itemKey 反查 ——
   // 只比 id 会命中**别的订阅**的同 id 条目。已不在库里的(退订/被刷新换掉)直接跳过。
   const queueItems = useMemo(() => {
-    const byKey = new Map(allItems.map((i) => [itemKey(i), i]))
+    const byKey = new Map(known.map((i) => [itemKey(i), i]))
     return queue.map((k) => byKey.get(k)).filter((x): x is MediaItem => !!x)
-  }, [queue, allItems])
+  }, [queue, known])
   const related = useMemo(
     () => (item ? allItems.filter((i) => i.subscriptionId === item.subscriptionId && i.id !== item.id).slice(0, 6) : []),
     [allItems, item],
   )
+
+  // 返回位置：从二级预览里播的，回预览（`?open=`）；否则回来源节点。
+  // 预览内容不在库里，回来源节点会丢掉"单集列表"这一层，用户得再点一次节目。
+  // ⚠️ 只有**当前这条确实来自预览**才回 `?open=`;previewDetail 不会被清空,
+  // 只比 nodeId 的话,同一订阅下播普通条目按返回会被送回上次的预览页。
+  const fromPreview = useMemo(
+    () => !!item && !!previewDetail && previewDetail.items.some(
+      (i) => i.id === item.id && i.subscriptionId === item.subscriptionId,
+    ),
+    [item, previewDetail],
+  )
+  const backTo = useCallback(() => {
+    if (from && fromPreview && previewDetail?.nodeId === from) return previewPath(from, previewDetail.itemId)
+    return viewPath(from ?? "tab:all")
+  }, [previewDetail, from, fromPreview])
 
   // 播放页按键:Esc 返回;←/→ 交给播放器控件;空格由播放器处理。
   useEffect(() => {
@@ -64,11 +96,11 @@ export function PlayerPage() {
       // ⚠️ 浮层守卫:命令面板(⌘K 全局可开)等也监听 Esc。不守卫的话一次 Esc 会**同时**
       // 关面板 + 退出播放页(两个导航副作用)。面板/已 preventDefault 的浮层先吃掉。
       if (e.defaultPrevented || useDesktop.getState().paletteOpen) return
-      go(from ?? "tab:all")
+      navigate(backTo())
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [go, from])
+  }, [backTo, navigate])
 
   // 播放队列里的下一条。按复合键定位(见上)。
   const nextInQueue = useMemo(() => {
@@ -77,8 +109,8 @@ export function PlayerPage() {
     if (idx < 0) return null
     const nextKey = queue[idx + 1]
     if (!nextKey) return null
-    return allItems.find((i) => itemKey(i) === nextKey) ?? null
-  }, [queue, item, allItems])
+    return known.find((i) => itemKey(i) === nextKey) ?? null
+  }, [queue, item, known])
 
   if (!item) {
     return (
@@ -89,7 +121,7 @@ export function PlayerPage() {
             title="找不到这条内容"
             text="它可能已被刷新替换。回到列表重新选择。"
             actions={
-              <button className="btn btn-secondary" onClick={() => go(from ?? "tab:all")}>
+              <button className="btn btn-secondary" onClick={() => navigate(backTo())}>
                 <Icon name="back" size={14} /> 返回列表
               </button>
             }
@@ -108,7 +140,7 @@ export function PlayerPage() {
   return (
     <div className="player-view" {...overlayBlock("player-view", "player:view")}>
       <header className="detail-head" {...overlayBlock("player-head", "player:head")}>
-        <button className="icon-btn sm" aria-label="返回" onClick={() => go(from ?? "tab:all")}>
+        <button className="icon-btn sm" aria-label="返回" onClick={() => navigate(backTo())}>
           <Icon name="back" size={15} />
         </button>
         <span className="titlebar-path od-truncate flex-1 min-w-0">
@@ -146,11 +178,12 @@ export function PlayerPage() {
                 // ⚠️ refresh 已带直链时(feed enclosure,如播客)直接给 streams —— 这类
                 // item.url 是**网页**(不可 by-url 路由),靠 resolve 必失败。
                 streams={(item as { stream?: MediaStream }).stream ? [(item as { stream: MediaStream }).stream] : undefined}
-                resolve={() =>
-                  isLive
-                    ? resolveLivePlay(item.subscriptionId, item.id)
-                    : resolvePlay(item.subscriptionId, item.id)
-                }
+                resolve={() => {
+                  // ⚠️ 预览条目(二级订阅)不在库里,core 的 findItemUrl 按 subscriptionId 查不到 →
+                  // 传 url 走它「入参本身是 URL」的兜底;否则会误报「不指向可解析的视频链接」。
+                  const ref = inStore || !item.url ? item.id : item.url
+                  return isLive ? resolveLivePlay(item.subscriptionId, ref) : resolvePlay(item.subscriptionId, ref)
+                }}
                 // ⚠️ 已下播的直播不自动解析:解析必得已验证失效的流(douyin flv 404 /
                 // huya 空),表现为黑屏 + 只有 console 报错。交给用户点「播放」手动重试。
                 autoResolve={isLive && item.liveStatus === "offline" ? false : (settings?.autoplayVideo ?? true)}

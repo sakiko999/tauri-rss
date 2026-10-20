@@ -6,8 +6,10 @@
  *               再导航到播放页;
  *   - onQueue → 加入播放队列(不跳转);
  *   - onOpen  → social 卡片开详情弹窗,其余打开原文(走宿主 openExternal);
- *   - onOpenFeed → 播客 feed 条目(Apple 榜单)**展开它的单集列表**(它没有流,
- *               直接播必碎;弹窗里选一集即可播,也有「订阅该节目」)。
+ *   - onOpenFeed → 播客 feed 条目(Apple 榜单)**在右侧主区列出单集**(它没有流,
+ *               直接播必碎;点一集即可播,表头也有「订阅该节目」)。
+ *   - onOpenCategory → 分区目录条目(目录订阅的内容)**在右侧主区列出该分区的真实内容**,
+ *               表头有「订阅该分区」。
  *
  * ⚠️ unlockAudioPlayback 必须在**用户手势的同步调用栈**里调用,不能挪进 effect。
  * ⚠️ 打开外链必须走 `appHost.openExternal`(桌面是 Tauri opener 插件)——WebView
@@ -18,7 +20,7 @@ import { useNavigate } from "react-router"
 import type { MediaItem } from "@amoeba/core"
 import { unlockAudioPlayback } from "@amoeba/player"
 import { nodeTypeOf, useDesktop } from "../../store/index.ts"
-import { usePlayNavigate, viewPath } from "../../router.tsx"
+import { previewPath, usePlayNavigate, viewPath } from "../../router.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
 import { openSocialDetailWithTransition } from "../../lib/viewTransition.ts"
 import { isFeedItem, type CardActions } from "../../components/app/Cards.tsx"
@@ -30,7 +32,6 @@ export function usePlayerNav(): CardActions {
   const selectArticle = useDesktop((s) => s.selectArticle)
   const markRead = useDesktop((s) => s.markRead)
   const addToQueue = useDesktop((s) => s.addToQueue)
-  const openFeedPreview = useDesktop((s) => s.openFeedPreview)
   const toast = useDesktop((s) => s.toast)
 
   /**
@@ -60,14 +61,14 @@ export function usePlayerNav(): CardActions {
   )
 
   /**
-   * 播客 feed 条目(Apple 榜单/搜索)的主操作:**展开它的单集列表**。
+   * 播客 feed 条目(Apple 榜单/搜索)的主操作:**在右侧主区打开它的单集列表**。
    *
    * 这类条目 `kind:"audio"` 但没有流 —— `url` 是节目的 RSS feed,不是一集音频。
    * 点「播放」必然掉进「该条目不指向可解析的视频链接」,用户只看到「打不开」。
    *
-   * 展开(而非直接订阅):用户点它多半是**想听**,不是想订阅。弹窗里列出最近若干集
-   * 直接可播,同时给「订阅该节目」按钮 —— 两条路都在,不替用户预设。
-   * 单集是**临时预览**(不落库/不建订阅),见 store 的 openFeedPreview。
+   * 导航到 `?open=<itemId>`:主区(MediaMain)拉一次该 feed,用**与正常订阅同一套网格**
+   * 列出单集,表头换成「返回 / 订阅该节目」。单集是**临时预览**(不落库/不建订阅),
+   * 播放页回退查 `previewDetail` 才找得到。
    *
    * ⚠️ 必须声明在 `onPlay` **之前** —— 它进了 onPlay 的依赖数组,是 `const` 绑定,
    * 放后面会 TDZ 报错。
@@ -79,9 +80,20 @@ export function usePlayerNav(): CardActions {
         toast("error", "这条没有 feed 地址", "Apple 目录偶有缺 feedUrl 的条目,已在上游过滤。")
         return
       }
-      void openFeedPreview(item)
+      navigate(previewPath(item.subscriptionId, item.id))
     },
-    [openFeedPreview],
+    [navigate, toast],
+  )
+
+  /**
+   * 分区目录条目的主操作:在右侧主区打开该分区的真实内容。
+   * 目录条目不可播(没有 roomId/stream),送进播放页必碎 —— 与 feed item 同款守卫。
+   */
+  const onOpenCategory = useCallback(
+    (item: MediaItem) => {
+      navigate(previewPath(item.subscriptionId, item.id))
+    },
+    [navigate],
   )
 
   const onPlay = useCallback(
@@ -103,19 +115,25 @@ export function usePlayerNav(): CardActions {
         onOpenFeed(item)
         return
       }
+      // 分区目录条目:没有流,主操作是「预览该分区内容」。
+      if (item.kind === "category") {
+        onOpenCategory(item)
+        return
+      }
       unlockAudioPlayback()
       navigateToPlay(item.id)
     },
-    [navigateToPlay, openSocialDetail, openArticle, onOpenFeed],
+    [navigateToPlay, openSocialDetail, openArticle, onOpenFeed, onOpenCategory],
   )
 
   const onOpen = useCallback(
     (item: MediaItem) => {
       if (item.kind === "social") openSocialDetailWithTransition(() => openSocialDetail(item))
       else if (item.kind === "article") openArticle(item)
+      else if (item.kind === "category") onOpenCategory(item)
       else openExternalSafely(item.url)
     },
-    [openSocialDetail, openArticle],
+    [openSocialDetail, openArticle, onOpenCategory],
   )
 
   const onQueue = useCallback(
@@ -127,7 +145,7 @@ export function usePlayerNav(): CardActions {
   )
 
   return useMemo(
-    () => ({ onPlay, onOpen, onQueue, onOpenFeed }),
-    [onPlay, onOpen, onQueue, onOpenFeed],
+    () => ({ onPlay, onOpen, onQueue, onOpenFeed, onOpenCategory }),
+    [onPlay, onOpen, onQueue, onOpenFeed, onOpenCategory],
   )
 }
