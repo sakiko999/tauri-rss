@@ -73,6 +73,12 @@ packages/
                不绑定流/弹幕解析（归 resolve by-url）。输出标准 RSS + 最小 tpl:kind/total
                twitch/（twitch:live 频道 + twitch:hot 热门 + twitch:category 分区，
                见 docs/twitch-channel.md）
+               bili/（season 合集 / series 视频列表 / favlist 公开收藏夹，均 Pageable）
+               youtube/（playlist 官方 RSS + live-hot / live-category 直播页栏目）
+               分区目录订阅：`twitch:categories` / `youtube:live-categories` /
+               `live:douyin:categories` / `live:douyu:categories` / `live:huya:categories`
+               （产 kind:"category" 条目，点开 = 预览目标分区）
+               可选 channel 级能力：Pageable / HotWordSource / ItemDetailSource / Loginable
   core/        订阅维护者。基于 crawler 输出维护订阅/分组/刷新编排/持久化；
                自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/      ★ 媒体播放器（video/audio/live 共用）。PlayableMedia = 唯一入口
@@ -196,13 +202,21 @@ bun run tauri:release               # ⭐ Rust 以 **release 编译**但保留�
 bun run scripts/tauri.ts help       # 全部用法
 
 # CLI 调试探针（收编全部 example；详见 docs/cli-plan.md）
-bun run rss channels                    # 渠道注册表（--kind/--json；播客 = --kind audio）
+bun run rss channels                    # 渠道注册表（--kind/--json；--kind category = 分区目录）
 bun run rss fetch bili:popular          # 单渠道抓取（--xml/--json）
 bun run rss fetch apple:podcast-chart   # Apple 播客热门榜（匿名；--kv genre=1318 换分类）
 bun run rss item <url>                  # by-url：路由 + streams 全档位 + 弹幕元信息
 bun run rss fetch twitch:live --kv roomIds=shroud,riotgames  # Twitch 直播频道（匿名；离线也返 item）
 bun run rss fetch twitch:hot            # Twitch 热门直播（观看数降序，游标翻页）
 bun run rss fetch twitch:category --kv category=just-chatting  # Twitch 分区（slug / 目录链接）
+bun run rss fetch twitch:categories     # 分区**目录**订阅（kind:category；点条目预览分区）
+bun run rss fetch live:douyin:categories  # 抖音分区目录（16 条，顶层+子分区）
+bun run rss fetch youtube:live-hot       # YouTube 直播热门（Live 页 Live Now）
+bun run rss fetch youtube:live-category --kv category=gaming  # YouTube 直播栏目（news/gaming/sports）
+bun run rss fetch youtube:playlist       # YouTube 播放列表（官方 RSS，≤15 条）
+bun run rss fetch bili:season            # B站合集（30/页，需 Referer）
+bun run rss fetch bili:series            # B站视频列表（20/页，pn/ps）
+bun run rss fetch bili:favlist           # B站公开收藏夹（20/页）
 bun run rss item https://www.twitch.tv/<login>  # Twitch 直播 HLS 档位（variant playlist，非 master）
 bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
 bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计
@@ -223,6 +237,8 @@ bun packages/host/src/example/governor.check.ts         # 网络治理（分类/
 bun packages/core/src/example/lx-mode.check.ts          # LX 闸门（只走 fetchPassive / autoRefresh）
 bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload → Item 字段映射
 bun packages/crawler/src/example/twitch-live.check.ts   # Twitch GQL → Live 映射（频道 live/offline + 热门/分区流列表）
+bun packages/crawler/src/example/youtube-channels.check.ts # YouTube 直播页栏目解析 + playlistId 归一
+bun packages/crawler/src/example/bili-channels.check.ts    # B站合集/视频列表/收藏夹参数归一
 bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录页/匿名/L9 路由矩阵 + origin 校验）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL 归一化 / TTL / 限额淘汰）
@@ -369,6 +385,15 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   wbi/cookie。原 RSSHub `/bilibili/precious` 是同一端点，已收编进 crawler；
   RSSHub 具名渠道（`rsshub:bili:*` / `weibo:*` / `youtube:*`）随之删除，只留
   `rsshub:feed` 泛用路由
+- ✅ **合集 / 视频列表 / 收藏夹**（2026-10-20，均匿名可读 + `Pageable`）：
+  `bili:season` 走 `x/polymer/web-space/seasons_archives_list`，**必须带 Referer**
+  `https://www.bilibili.com/`（否则 `-352`），`mid` 可为 0，30 条/页；输入可粘视频
+  链接（先读 `x/web-interface/view` 的 `data.ugc_season.id`）。
+  `bili:series` 走 `x/series/archives`，⚠️ **分页参数是 `pn`/`ps`**（传
+  `page_num=2` 会静默返回第 1 页，翻页永远重复首页），固定 20/页；`mid` 先由
+  `x/series/series?series_id=` 的 `meta.mid` 得到，不要求用户输入。
+  `bili:favlist` 走 `x/v3/fav/resource/list`（`fid` 与 `media_id` 同值），公开夹匿名、
+  私有需登录，`attr != 0` 跳过，20/页。合集/系列条目没有作者名（archives 只带 `mid`）。
 - **扫码登录**：纯 HTTP（`passport.bilibili.com` qrcode/generate + poll），不需
   `appHost.browser`。⚠️ 上游只给**二维码内容 URL**，编码在 UI 侧（`QrImage`）；
   `biliScanLogin` 必须复用已生成的码，否则它会自己再生成一个、轮询的 key 与你展示的不是同一个
@@ -430,6 +455,18 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - ✅ **搜直播间**（2026-10-18，`searchYouTubeLive` / 渠道 `youtube:live-search`）：同端点
   + `params:"EgJAAQ=="`（直播过滤，实为 protobuf field 8=1），匿名返回 18~20 条且全带
   LIVE badge，解 `videoRenderer`。搜索添加「直播间」→ 落地 `youtube:live`（参数 videoId）
+- ✅ **直播热门 / 栏目**（2026-10-20，`youtube:live-hot` / `youtube:live-category`）：
+  Live 页 `browseId=UC4R8DWoMoI7CAwX8_LjQHig` 匿名返回栏目；实测布局是
+  `richGridRenderer.contents[].richSectionRenderer.content.richShelfRenderer`（旧版
+  直接 `richShelfRenderer` 也兼容）。`Live Now` 12 条、News/Gaming/Sports 各 12，
+  **无 continuation**。client 固定 `hl=en`/`gl=US`（栏目名是解析依据），只认
+  `thumbnailOverlayTimeStatusRenderer.text === "LIVE"`（Recent/Upcoming 因此为空）；
+  观看数只取 `"N watching"`（`views`/`waiting` 不算）。整页 ~800KB → 5 分钟 Promise
+  缓存（并发去重），见 `resolve/platform/youtube/discover.ts`。
+- ✅ **播放列表**（2026-10-20，`youtube:playlist`）：官方
+  `feeds/videos.xml?playlist_id=` 匿名可用，**最多 15 条、无翻页**；条目结构与频道
+  feed 同构（复用 `entryToVideo`）。`RD`/`WL`/`LL`/`LM` 前缀拒收（动态/私有/需登录）。
+  完整列表（InnerTube `VL<playlistId>`，100/页 + continuation）未做。
 
 **小红书**（细节见 `docs/xhs-signature-research.md`）
 - ⚠️ **`web_session` 不是登录标志**（2026-10-19 实测 + 社区复核）：小红书对**匿名访客**
@@ -491,11 +528,12 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `isPlayableKind("audio")` 恒真，卡片会摆播放按钮，但 resolver 只认平台域名、feed 域名
   路由不上 → 点必碎（「该条目不指向可解析的视频链接」）。
   这批条目的主操作是 **`isFeedItem()`**（`kind:"audio" && !stream`，`Cards.tsx`）判出的
-  「**展开单集列表**」（`FeedPreviewModal`）：点开 → `dl.previewChannel("rss:podcast", {url})`
-  拉一次该 feed（**复用播客渠道，不另造解析器**；`previewChannel` 不写缓存不落库）→ 列单集 →
-  选一集直接播（单集带 enclosure 直链，`PlayableMedia` 走 `streams` prop 不解析）。
-  弹窗里同时有「订阅该节目」。⚠️ 预览单集**不落库、不建订阅**，只活在 store 的
-  `feedPreview` 里；**`PlayerPage` 的 item 查找必须回退查它**，否则「找不到这条内容」。
+  「**在右侧列出单集**」：点开 → URL 变 `?open=<itemId>` → `dl.previewChannel("rss:podcast", {url})`
+  拉一次该 feed（**复用播客渠道，不另造解析器**；`previewChannel` 不写缓存不落库）→
+  **`MediaMain` 用与正常订阅同一套网格/卡片**列出单集，只把表头换成「返回 / 订阅该节目」，
+  点一集直接播（单集带 enclosure 直链，`PlayableMedia` 走 `streams` prop 不解析）。
+  ⚠️ 预览单集**不落库、不建订阅**，只活在 store 的 `previewDetail` 里；
+  **`PlayerPage` 的 item 查找必须回退查它**，否则「找不到这条内容」。
   `rss:podcast` 的条目**必有 enclosure**（没 enclosure 的 item 在建 Audio 时就被丢），
   故 `isFeedItem` 不会误伤真正的单集
 - ⚠️ **榜单不含 `feedUrl`**（旧 iTunes RSS 只给 `im:id`）→ 必须再 Lookup 一次换 feedUrl。
@@ -701,9 +739,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   2. 回调里必须 `flushSync` —— React 的 setState 是异步的，不同步刷 DOM 则目标还没渲染。
   3. 别与元素的入场动画叠加（如 `.modal` 的 `modal-in`），过渡期间把它停掉。
   目标 name 用 **CSS 常驻声明**，别在过渡里动态挂/清（结束后清掉，下次就没形变了）。
-- **可播判定 = kind 门控**：只有 `video`/`audio`/`live` 有可播流，`article`/`social`
-  不是。卡片的整卡点击与播放按钮都走 `cards.tsx` 的 `isPlayableKind`——article 显示
-  0 个播放按钮、点击进「打开文章」（`tab:article` 三栏读），social 进详情弹窗。
+- **可播判定 = kind 门控**：只有 `video`/`audio`/`live` 有可播流，`article`/`social`/
+  `category` 不是。卡片的整卡点击与播放按钮都走 `cards.tsx` 的 `isPlayableKind`——article
+  显示 0 个播放按钮、点击进「打开文章」（`tab:article` 三栏读），social 进详情弹窗，
+  `category`（分区目录条目）在右侧列表打开目标分区（`?open=`，用条目的
+  categoryChannel + categoryInfo 预览）。
   ⚠️ 曾漏掉 article：点一下掉进「该条目不指向可解析的视频链接」的破碎播放页。
   ⚠️ **kind 门控不够**：`kind:"audio"` 也可能是**一个播客 feed**（Apple 榜单条目，
   `stream` 空）——见上方 Apple 播客段。判据是 `isFeedItem(item)`，主操作走
@@ -745,6 +785,15 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   第一个能力（`DiscoverPage` 的 `pickPlatform` + `caps` 效应）。平台卡用
   `flex-direction:column` + `.chip-row{margin-top:auto}`，能力行数不同也把操作按钮
   固定在卡片底部。
+  ⚠️ **分区目录本身是一个订阅**（`twitch:categories` 等，产 `kind:"category"` 条目），
+  不是发现页的一次性目录。它出现在「可订阅榜单」里，点分类卡片 → URL 变 `?open=` →
+  右侧**用正常网格**列出该分区内容（条目自带的 `categoryChannel` + **完整 `categoryInfo`**
+  调 `previewChannel`，苹果播客式二级）→ 表头「订阅该分区」。
+  ⚠️ 预览条目的 `subscriptionId` 是 `preview:<channelKey>`、没有订阅记录 —— 播放解析在
+  core 里按这个前缀补默认 info（`previewInfoFor`），否则会误报「不指向可解析的直播链接」。
+  ⚠️「浏览分区」入口（已知分区 ID 直接取内容）用显式 `CATEGORY_CHANNEL` 表，
+  不按 `<platform>:category` 命名约定 —— `youtube:live-category` 不在约定里；
+  手输参数**逐字段渲染 `sourceInfoTpl`**（抖音 `partition + partitionType` 双参不会漏）。
 - **发现页搜索与「添加订阅」同形态**：两者共用 `AddPanels.tsx` 的 `CandidateList`
   （缩略图 + label/sub/meta + 选中态 + 已订阅标记）。发现页（分区/搜索/搜主播）的
   结果都转成候选，选中后可直接 `addSubscription`（roomId/videoId 单值），不用再开
@@ -826,10 +875,14 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   `listClassName`/`itemClassName`（CSS），**不要用 `components.List/Item` 覆盖** ——
   List 的 inline style 带 virtuoso 的虚拟化偏移（paddingTop/Bottom），覆盖会让滚动定位错乱
 - **首启种子订阅**在 `apps/desktop/src/dev/seed.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS，仅 dev 构建动态 import）。
+  **覆盖全部 channel**（每个 channel 一条，2026-10-20）：需登录的 `bili:dynamic` / `weibo:user`
+  停用；关键词搜索类（`*:search` / `*:anchor` / 搜频道 / 搜UP主）进「搜索」组且**默认停用**
+  （启用即测）；36 条内置 RSS 直链属同一实现，只留 `rss:hn` 代表。
   首次写入后落 `dev:seeded` 标记 —— **重置数据/手动删空后不会再次写入**（要恢复测试种子：
   删掉该 KV key 或整个 dev DB）。⚠️ **只在空库 + 无标记 + `import.meta.env.DEV` 下写入** ——
   之后再启动不覆盖（否则用户 CRUD 的订阅会被启动时删掉）；生产构建里种子 import 被摇掉，
-  **发布版首启是空库**（走 onboarding）。
+  **发布版首启是空库**（走 onboarding）。⚠️ **改了种子列表存量 dev 库不会自动补** ——
+  需「设置 → 存储与诊断 → 完全重置数据」或删 dev DB 再启动。
 - **存储与诊断 → 完全重置数据**（`settings/Diagnostics.tsx`）：删空 SQLite KV + 清
   localStorage，然后整页重载；dev 下写 `dev:seeded` 防止种子回填。**不碰**浏览器
   profile/登录态——那是同页「清理浏览器数据」的职责。
@@ -890,7 +943,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/twitch-channel.md` | Twitch 渠道（匿名公开 GQL + PlaybackAccessToken + usher HLS；频道/热门/分区已做，VOD/clip/聊天/搜索未做） |
 | `docs/desktop-crawler-service.md` | desktop 爬虫服务化选型与切分边界 |
 | `docs/capability-gaps.md` | 各平台能力缺口（分区/搜索/主播） |
-| `docs/channel-expansion-research.md` | YouTube 直播热门/分区、YouTube/B站合集与播放列表、分区订阅二级化调研（2026-10-20） |
+| `docs/channel-expansion-research.md` | YouTube 直播热门/栏目、YouTube 播放列表、B站合集/视频列表/收藏夹、分区目录订阅（`kind:"category"` + `*:categories`）（均已实现，2026-10-20） |
 | `docs/cli-plan.md` | apps/cli 调试工具计划 |
 | `docs/sqlite-storage-research.md` | 存储三态与迁移 |
 | `docs/domestic-feed-availability.md` | 国内 feed 可用性实测 |
@@ -917,6 +970,8 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）——切分边界与落地清单见
   `docs/desktop-crawler-service.md`。
 - **bili 按分区列房**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
+- **B站直播分区目录**：其余平台的分区目录订阅已完成（`*:categories`）；B 站
+  `second/getList` 需登录，匿名 `-352`，暂不做。
 - **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行（`docs/mobile-cdp-feasibility.md`）。
 - **抖音登录态搜索调研**：先用专用小号 + CDP 被动探针确认 `live/search` 的页面自然
   请求与账号风险，再决定是否实现（不要把主账号 cookie 直接接到 API 搜索）。
@@ -924,6 +979,14 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   的 tab 分支 `filter(kind==="live")`，方案 B，2026-10-13 落地）。若要「哔哩哔哩直播 /
   虎牙直播」这类**按平台**再分组，需在 core 编排层加二次聚合——问题定性与 A/B/C
   方案对比见 git 历史的 `docs/technical-plan.md`（2026-10-16 删）。
+- **播放器「流状态监控」**（stats for nerds，右键菜单）：仿 YouTube 右键「统计信息」，
+  展示当前引擎（hls / flv / dash / 原生）、实际档位与分辨率、码率/缓冲区、丢帧、
+  音轨、以及宿主隧道耗时。落点 `packages/player` 的控件层；数据源已在
+  `useMediaStream` / `PlayableMedia` 的引擎句柄上（`currentLevel`、`levels`、
+  `<video>` 的 `getVideoPlaybackQuality()`），不需要新依赖。
+- **二级订阅进入时的骨架屏形态**（UI 细节）：`MediaMain` 在 `?open=` 预览时复用了
+  全局 `GridSkeleton`，与内容形态（播客单集是行列表、分区房间是网格）不对应 ——
+  按容器 kind 给对应骨架（单集行 / 房间网格），别让骨架和落地内容差太多。
 
 **待实机验证（风控 / LX，没跑过不算完成）**：
 

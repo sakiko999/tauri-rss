@@ -18,7 +18,8 @@ Twitch 匿名链路可用：公开 web Client-ID 的 GraphQL → `PlaybackAccess
   （`game(slug).streams`）。
 - 热门/分区共用 `fetchMore` 游标翻页（见 §3.1）。
 - resolver 支持 `https://www.twitch.tv/<login>` 的直播 HLS 解析。
-- 不做：登录、VOD、clip、聊天弹幕、关键词搜索、分类榜 channel、`supportsL9`、cookie 字段。
+- 不做：登录、VOD、clip、聊天弹幕、关键词搜索、`supportsL9`、cookie 字段。
+  （分类榜已做成独立目录订阅 `twitch:categories`，产 `kind:"category"` 条目。）
 
 二期再考虑 VOD/clip（路由要排在频道名之前）、关键词搜索、分类榜 channel、IRC 聊天
 （需宿主 ws 支持 text 帧——当前 `WsLike.send(Uint8Array)` 只发 binary，实测 Twitch 不收）。
@@ -182,9 +183,11 @@ core 首次翻页不传首页游标（首页游标从未经过 core），所以�
 `endCursor`，再取第二页 —— 不能把首页直接返回（会与首屏重复）。首页已到底则返回空
 XML 且不带 cursor（core 据此判「没有更多」）。Twitch 限额 120 RPM，两次请求在预算内。
 
-**分类榜（`games(first)`）暂不做 channel**：分类列表（name/slug/缩略图）匿名可查，
-但**分类本身没有可播房间**，订阅后只会是空列表。要做应走发现层模型（点分类 → 再订阅
-`twitch:category`），不另造一条「分类 feed」。
+**分类榜（`games(first)`）是独立目录订阅 `twitch:categories`**（2026-10-20）：分类元数据
+（name/slug/观看数/封面）匿名可查，产 `kind:"category"` 条目；**分类本身没有可播房间**，
+所以条目本身不可播。点条目 → 右侧内容视图（URL `?open=<itemId>`，复用正常网格）用
+`categoryChannel=twitch:category` + `categoryInfo={category:slug}` 预览房间 →
+表头「订阅该分区」落到 `twitch:category`。`fetchTwitchTopCategories()` 实测 30 条。
 
 ⚠️ 带 `after` 时**网页 Client-ID 会触发 `IntegrityCheckFailed`**，故流列表统一用
 Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移动端 ID 也失效，
@@ -217,7 +220,8 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
 
 新增 `packages/crawler/src/channels/twitch/`：`live.ts`（频道订阅 + 流列表共用映射
 `twitchStreamToLive`）、`streams.ts`（热门/分区共用的 source 装配与游标翻页）、`hot.ts`、
-`category.ts`、`index.ts`；`register.ts` 登记三个渠道。不实现 `resolveDetail` /
+`category.ts`、`categories.ts`（分类目录订阅，`kind:"category"`）、`index.ts`；
+`register.ts` 登记四个渠道。不实现 `resolveDetail` /
 `fetchPassive` / `Loginable` / `supportsL9`。
 
 ### 4.3 类型 / 平台标签 / 设置
@@ -250,7 +254,7 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
 | 一期 | 直播频道订阅 + 元数据 + 离线态 + HLS 播放 + router/governor/标签/CLI + 自检 |
 | 一期 · 热门/分区 | ✅ 已做（2026-10-20）：`twitch:hot`（无参数，观看数降序）+ `twitch:category`（slug/目录链接，`game(slug).streams`）；两者游标翻页 |
 | 二期 A | VOD / clip 播放（路由排在频道之前） |
-| 二期 B | 关键词搜索；分类榜 channel（`games(first)` 可用，但分类无可播房间，等发现层模型） |
+| 二期 B | 关键词搜索；分类榜已做成独立目录订阅 `twitch:categories`（2026-10-20 完成） |
 | 二期 C | IRC 聊天弹幕（先给宿主 ws 增加 text 帧） |
 | 三期 | OAuth「我的关注」（需注册应用，不建议近期） |
 | 暂不做 | `Client-Integrity` 浏览器兜底、去广告、订阅者专属流 |

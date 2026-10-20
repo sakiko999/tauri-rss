@@ -1,6 +1,8 @@
 # 频道扩展与分区二级化调研（2026-10-20）
 
-> 状态：调研结论，未实现。所有端点均为 2026-10-20 匿名实测；数据会变，接入前应重跑探针。
+> 状态：**§1~§4 已实现**（`youtube:live-hot` / `youtube:live-category` / `youtube:playlist` /
+> `bili:season` / `bili:series` / `bili:favlist` + 分区目录订阅 `kind:"category"`）。
+> 所有端点均为 2026-10-20 匿名实测；数据会变，接入前应重跑探针。
 > 相关：`docs/capability-gaps.md`、`docs/twitch-channel.md`、`docs/youtube-stream-extraction.md`。
 
 ## 0. 结论摘要
@@ -13,14 +15,14 @@
 | B站视频合集 | ✅ 可接 | `seasons_archives_list`，匿名 + 分页；需 Referer |
 | B站视频列表 / 系列 | ✅ 可接 | `x/series/archives`，匿名；固定 20/页；需要正确 mid |
 | B站收藏夹 | ✅ 公开夹可接 | `x/v3/fav/resource/list`，匿名；私有夹需登录 |
-| 现有分区订阅改二级操作 | ✅ 可做 | 缺的是「分类目录」；内容预览已经存在 |
+| 现有分区订阅改二级操作 | ✅ 已实现 | 目录渠道（`*:categories`）+ `kind:"category"`；虎牙/斗鱼/抖音/Twitch/YouTube |
 
 一句话：**YouTube 的「分区」只是 Live 页的编辑栏目，B站没有可匿名读取的直播分区列表**。其余几类都能用现有
 `previewChannel` + `Pageable` 模型接入，不需要新依赖，也不需要改播放解析。
 
 ---
 
-## 1. YouTube 直播热门 / 分区
+## 1. YouTube 直播热门 / 分区（✅ 已实现）
 
 ### 1.1 端点
 
@@ -30,7 +32,15 @@
 { "browseId": "UC4R8DWoMoI7CAwX8_LjQHig" }
 ```
 
-这是 YouTube 的 Live 页。响应不是平铺列表，而是若干 `richShelfRenderer`：
+这是 YouTube 的 Live 页。响应不是平铺列表，实际路径（2026-10-20 复核）是：
+
+```text
+contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content
+  .richGridRenderer.contents[]
+    .richSectionRenderer.content.richShelfRenderer
+```
+
+每个 shelf 是一个栏目（`richShelfRenderer` 也可能直接挂在 section 上，解析器两种都兼容）：
 
 | 栏目 | 实测条数 | 说明 |
 | --- | --- | --- |
@@ -47,12 +57,19 @@
 - `title` / `ownerText` / `viewCountText`（如 `3,748 watching`）
 - `thumbnailOverlays[].thumbnailOverlayTimeStatusRenderer.text === "LIVE"`（在播判据）
 
-### 1.2 建议渠道
+### 1.2 已实现渠道
 
-- `youtube:live-hot`：取 `Live Now` 栏，过滤 LIVE，按 watching 数降序。
-- `youtube:live-category`：参数 `category=news|gaming|sports`，匹配 `Live Now - <name>`。
-- 两者都输出 `kind:"live"`，可直接复用 `youtube:live-search` 的 `Live` 映射：
+- `youtube:live-hot`：取 `Live Now` 栏（slug `hot`），过滤 LIVE，按 watching 数降序。
+- `youtube:live-category`：参数 `category=news|gaming|sports`（也接受 `Live Now - Gaming`
+  这类完整栏目名），匹配 `Live Now - <name>`。
+- 两者都输出 `kind:"live"`，复用 `live-shelf.ts` 的 `youtubeLiveHitToLive`
+  （`youtube:live-search` 也走它）：
   `roomId=videoId`、`url=https://www.youtube.com/watch?v=<id>`、`platform:"youtube"`、`online=观看数`。
+- 直播页解析在 `resolve/platform/youtube/discover.ts`；整页约 800KB，结果做 **5 分钟内存
+  缓存（缓存 Promise，并发去重）**，热门 + 栏目两个订阅同一轮刷新只发一次请求。
+- 只看 `thumbnailOverlays[].thumbnailOverlayTimeStatusRenderer.text === "LIVE"`，
+  所以同页的 `Recent Live Streams` / `Upcoming Live Streams` 会解析成空数组。
+- `watching` 才计入观看数；`views`（回放）与 `waiting`（预告）不取数字。
 
 ### 1.3 限制
 
@@ -65,9 +82,9 @@
 
 ---
 
-## 2. YouTube 视频合集 / 播放列表
+## 2. YouTube 视频合集 / 播放列表（✅ 已实现方案 A）
 
-### 2.1 方案 A：官方 RSS（建议先做）
+### 2.1 方案 A：官方 RSS（已接入 `youtube:playlist`）
 
 ```text
 https://www.youtube.com/feeds/videos.xml?playlist_id=<playlistId>
@@ -78,6 +95,8 @@ https://www.youtube.com/feeds/videos.xml?playlist_id=<playlistId>
 - 最多 15 条，无翻页；按播放列表顺序返回，不保证是「最新」。
 - 可直接复用 `packages/crawler/src/channels/youtube/channel.ts` 的 `entryToVideo()`。
 - 适合「订阅一个播放列表，接收最近更新」；不适合需要完整列表的场景。
+- 输入归一化在 `channels/youtube/refs.ts`：裸 ID / `playlist?list=` / `watch?v=&list=` /
+  `youtu.be?list=`；`RD`（Mix）/ `WL`（稍后再看）/ `LL`（点赞）/ `LM` 前缀直接拒收。
 
 ### 2.2 方案 B：InnerTube 完整播放列表
 
@@ -104,11 +123,11 @@ https://www.youtube.com/feeds/videos.xml?playlist_id=<playlistId>
 
 ---
 
-## 3. B站视频合集 / 视频列表 / 收藏夹
+## 3. B站视频合集 / 视频列表 / 收藏夹（✅ 已实现）
 
 B站没有统一的「播放列表」概念，需要区分：
 
-| 用户说法 | B站功能 | 建议渠道 |
+| 用户说法 | B站功能 | 渠道（已实现） |
 | --- | --- | --- |
 | 合集 | `ugc_season` | `bili:season` |
 | 视频列表 / 系列 | `series` | `bili:series` |
@@ -129,17 +148,22 @@ GET https://api.bilibili.com/x/polymer/web-space/seasons_archives_list
 - `archives[]` 字段：`bvid` / `aid` / `title` / `pic` / `pubdate` / `duration` / `stat`；没有作者名。
 - 输入可以是 `seasonId`，也可以是视频 URL：先走 `x/web-interface/view?bvid=` 读 `data.ugc_season.id`。
 - 可直接复用 `packages/crawler/src/channels/bili/video-common.ts` 的 `ugc()`。
+- ✅ `bili:season` 已实现：`page_num` 递增翻页（`Pageable`），`seasonId` 按 source 实例
+  memo（视频链接只换一次）；输入归一化在 `channels/bili/refs.ts`。
 
 ### 3.2 视频列表 / 系列（series）
 
 ```text
 GET https://api.bilibili.com/x/series/archives
-  ?mid=<mid>&series_id=<seriesId>&page_num=1&page_size=20
+  ?mid=<mid>&series_id=<seriesId>&pn=1&ps=20
 ```
 
 - 匿名 200；实测 total 54，**固定 20 条/页**（传 50 也只给 20）。
+- ⚠️ **分页参数是 `pn`/`ps`**，不是 season 那套 `page_num`/`page_size`。实测传
+  `page_num=2` 会静默返回第 1 页（`page.num` 仍是 1），表现为翻页永远重复首页。
 - 需要 `mid`，而且必须是正确的作者 mid。`mid=1` 可能 code 0 但拿不到 archives。
-- 元信息走 `x/series/series?mid=&series_id=`。
+- 元信息走 `x/series/series?series_id=`（**只传 series_id 即可**，返回 `meta.mid`，
+  所以渠道不要求用户手填 mid）。
 - 输入建议只接受 URL：
   - `space.bilibili.com/<mid>/lists/<sid>?type=series`
   - `space.bilibili.com/<mid>/channel/seriesdetail?sid=<sid>`
@@ -158,12 +182,13 @@ GET https://api.bilibili.com/x/v3/fav/resource/list
 - `medias[].attr != 0` 表示失效视频，建议跳过。
 - 官方文档 `ps` 上限 20；实测 40 也返回过，但不要依赖，按 20 分页。
 - 返回 `info.title`、`medias[].bvid/title/cover/intro/upper.name/pubtime/duration`。
+- ✅ `bili:favlist` 已实现：`pn` 递增翻页，`attr != 0` 跳过；`fid` 与 `media_id` 同值。
 
 ---
 
-## 4. 分区订阅改造成「苹果播客式」二级操作
+## 4. 分区订阅改造成「苹果播客式」二级操作（✅ 已实现）
 
-### 4.1 现状
+### 4.1 改造前现状
 
 发现页已经具备**第二层**：
 
@@ -178,12 +203,14 @@ Apple 播客的模型是：
 
 ```text
 榜单（节目 feed）
-  → 点节目 → FeedPreviewModal（临时单集列表）
+  → 点节目 → 右侧列表（?open=，临时单集列表，复用正常网格）
   → 选单集播放 / 订阅该节目
 ```
 
-但**分类不是 feed**：它没有自己的 RSS，也不应进入订阅内容。因此不建议造「分类目录渠道」
-（会需要新的 item kind，污染 XML/store）；应在 core/channel 增加分类目录能力。
+分类不是 feed：它没有自己的 RSS。设计上曾考虑 channel 级 `listCategories` 能力（目录只在
+发现页临时用），但最终采用**目录渠道**模型 —— 用户明确要求「和播客热门榜一样作为一个订阅，
+订阅的内容就是分区列表，点进去看对应分区的内容」。因此新增 `kind:"category"` 条目：
+目录本身就是订阅内容，点击条目用自带的 `categoryChannel` + `categoryInfo` 预览目标分区。
 
 ### 4.2 可行性矩阵
 
@@ -193,102 +220,119 @@ Apple 播客的模型是：
 | 斗鱼 | `live:douyu:category` | `fetchDouyuCategories` 一次返回一二级 | ✅ |
 | 抖音 | `live:douyin:category` | `fetchDouyinCategories` 首页 SSR 的 `categoryData` | ✅（必须同时带 `partitionType`） |
 | Twitch | `twitch:category` | `games(first: 30)` 匿名返回 slug/displayName/viewersCount/boxArt | ✅ |
-| YouTube | 尚未建分区渠道 | Live 页的 `Live Now - <栏目>` | ✅（栏目级；随 `youtube:live-category` 一起做） |
+| YouTube | `youtube:live-category` | Live 页的 `Live Now - <栏目>` | ✅（栏目级） |
 | B站直播 | 无分区订阅渠道 | `Area/getList` 只有分区树；`second/getList` 需登录且匿名 `-352` | ❌ 不做 |
 
 **结论：除 B站直播分区外，现有/计划中的分区渠道都能改成二级操作。**
 
-### 4.3 推荐架构：`listCategories` 能力
+### 4.3 已落地架构：目录渠道 + `kind:"category"`
 
-在 crawler 增加一个可选的 channel 级能力，而不是新渠道：
+目录本身是一个**无参渠道**（与 `apple:podcast-chart` 同构）：
+
+| 目录渠道 | 内容 | 目标订阅渠道 |
+| --- | --- | --- |
+| `twitch:categories` | Twitch 分类（30 条） | `twitch:category` |
+| `youtube:live-categories` | 直播栏目（News/Gaming/Sports） | `youtube:live-category` |
+| `live:douyin:categories` | 抖音顶层 + 子分区（16 条） | `live:douyin:category` |
+| `live:douyu:categories` | 斗鱼二级分区（530 条） | `live:douyu:category` |
+| `live:huya:categories` | 虎牙二级分区（389 条） | `live:huya:category` |
+
+条目契约（xml `Category` / core `CategoryItem`）：
 
 ```ts
-export interface ChannelCategory {
-  id: string
-  name: string
-  parentId?: string
-  parentName?: string
-  /** 直接传给 getSource(info) 的完整参数（如抖音需同时带 partition + partitionType）。 */
-  info: Record<string, string>
-  thumb?: string
-  viewers?: number
-  meta?: string[]
-}
-
-export interface CategorizedChannel {
-  listCategories(): Promise<ChannelCategory[]>
-}
-
-export function isCategorized(c: RssChannel): c is RssChannel & CategorizedChannel {
-  return "listCategories" in c
+interface CategoryItem {
+  kind: "category"
+  title: string
+  /** 点进去预览/订阅的目标渠道（如 twitch:category）。 */
+  categoryChannel: string
+  /** 直接传给 previewChannel / addSubscription 的完整参数。 */
+  categoryInfo: Record<string, string>
 }
 ```
 
-core 投影：
+XML 边界：`tpl:categoryChannel` + `tpl:categoryInfo`（JSON 字符串），serialize 写、
+deserialize 读，`serialize-roundtrip.check.ts` 有专项用例。`serialize-contract.check.ts`
+也会盯着两侧字段不齐。
 
-- `ChannelInfo.categories: boolean`（UI 据此决定是否显示分类目录）
-- `DataLayer.listCategories(channelKey): Promise<ChannelCategory[]>`
-- 分类目录按 channelKey 做**内存 TTL 缓存**（建议 10 分钟）；不落库、不写内容缓存。
-- `previewChannel` 保持「不读不写缓存」的语义不变。
-
-UI：
+UI 流程（与播客榜单完全同构）：
 
 ```text
-分区视图
-  → dl.listCategories(ch.key)
-  → 分类列表（按 parentName 分组 / 带封面/观看数）
-  → 点击分类
-      → dl.previewChannel(ch.key, category.info)
-      → 房间列表（现有 CandidateList）
-      → 订阅这个房间（现有逻辑）
-      → 订阅该分区（presetKey=ch.key, presetInfo=category.info）
+发现页「可订阅榜单」→ 一键订阅 twitch:categories
+  → 订阅内容 = 分类卡片（kind:"category"，不摆播放按钮）
+  → 点卡片 → 右侧列表（URL `?open=<itemId>`，MediaMain 复用正常网格）
+      → dl.previewChannel(item.categoryChannel, item.categoryInfo)
+      → 房间列表（临时预览，不落库/不建订阅）
+      → 表头「订阅该分区」→ dl.addSubscription(item.categoryChannel, 标题, item.categoryInfo)
 ```
 
-保留「手动输入 ID」作为折叠兜底：分类目录请求失败、分类树变化、或用户知道特殊 ID 时仍可用。
-分类选择要用 `useLatestOnly` 作废在途请求，避免先点 A 再点 B 时 A 的结果覆盖 B。
+- `Kind` 增加 `category`，但**不加入 `KIND_ORDER`**：不生成新的内容 tab；目录条目出现在
+  「全部」和目录订阅节点里。
+- `MediaCard`/`CardMini` 按 `isCategoryItem` 走「预览」主操作；不发播放/加队列按钮。
+- 卡片副行展示 `summary`（「N 人在看」「M 个子分区」「父级分区名」）。
+- 预览弹窗里**不挂播放**：预览条目的 `subscriptionId` 是 `preview:<channel>`，
+  没有真实订阅，core 的 `resolveLivePlay` 取不到 info。要看内容/持续收更新请订阅分区。
+- 发现页的「浏览分区」仍保留手输参数入口（已知分区 ID 时最快）；参数按
+  `sourceInfoTpl` **逐字段渲染**（抖音 `partition + partitionType` 双参不漏）。
 
 ### 4.4 各平台目录实现要点
 
-- **虎牙**：`HUYA_TOP_CATEGORIES` 4 个顶层固定；二级走 `fetchHuyaSubCategories(parentId)`。
-  一次 `listCategories` 可能发 4 个请求（4 个顶层），可用 `Promise.all`，再按父级分组；结果缓存更重要。
-- **斗鱼**：`fetchDouyuCategories` 一次请求返回全树，直接 flatten 成带 `parentName` 的列表。
-- **抖音**：`fetchDouyinCategories` 返回顶层 + 子分区；每一项必须带
-  `{ partition: id, partitionType: String(type) }`。⚠️ **当前 `PlatformBrowser` 只填
-  `sourceInfoTpl[0]`，顶层分区会漏 `partitionType` 并默认成 `1`（顶层应为 `4`）——这是当前
-  手输流程的真实错值，目录化时一并修掉。**
-- **Twitch**：`games(first: 30)` 返回 `slug` / `displayName` / `viewersCount` / `boxArtURL`；
-  `info = { category: slug }`（`normalizeTwitchCategory` 也会接受目录链接）。
-- **YouTube**：`youtube:live-category` 的 `listCategories` 直接从 Live 页解析
-  `Live Now - News/Gaming/Sports`；`info = { category: "news" }`。`Live Now` 本身不是分区，
-  归 `youtube:live-hot`。
+- **虎牙** ✅：`HUYA_TOP_CATEGORIES` 4 个顶层固定，各发一次
+  `fetchHuyaSubCategories(parentId)`（`Promise.all`），实测 **389** 个二级分区；
+  单个顶层失败不影响其余，全空才抛错。
+- **斗鱼** ✅：`fetchDouyuCategories` 一次请求返回全树，flatten 成二级条目，实测
+  **530** 条（一级分区没有直接列房接口，不列入）；`summary` 用父级名。
+- **抖音** ✅：`fetchDouyinCategories` 返回顶层 + 子分区，实测 **16** 条；每条
+  `categoryInfo` **同时带** `{ partition, partitionType }`（顶层 `4` / 子 `1`）。
+  手输流程也已改为逐字段渲染 `sourceInfoTpl`，不再只填第一个参数。
+- **Twitch** ✅：`games(first: 30)` 返回 `slug` / `name` / `viewersCount` / `boxArtURL`，
+  实测 **30** 个分类；`categoryInfo = { category: slug }`。
+- **YouTube** ✅：复用 Live 页解析，实测 `News` / `Gaming` / `Sports` 3 个栏目；
+  `categoryInfo = { category: slug }`。`Live Now` 本身不是分区，归 `youtube:live-hot`。
 - **B站直播**：不实现；不要用 `Area/getList` 造一个只有名字、没有房间的假目录。
 
-### 4.5 为什么不做「分类目录渠道」
+### 4.5 为什么新增 `kind:"category"` 而不是伪装成文章/音频
 
-- 分类不是可播放/可阅读内容；如果做成 `kind:"article"` 或 `social`，会进入订阅内容、未读、
-  排序、缓存和 XML 序列化，语义全错。
-- 目录项没有 `publishedAt`、`roomId`、`stream`，会污染 `MediaItem` 的契约。
-- 分类目录是一次性 UI 数据，退出发现页即可丢弃；用 `listCategories` 最贴合。
+- 分类不是可播放/可阅读内容；伪装成 `article`/`social` 会进入阅读、未读、正文抓取等
+  语义，点击会落到空文章视图。
+- 伪装成 `audio`（播客榜单那种「无流 feed item」）会被 `isFeedItem` 当成播客，
+  点开去拉 RSS feed，同样错。
+- 独立的 `category` kind 让点击分流、卡片文案、无播放按钮都由 type 决定；XML 只多两个
+  `tpl:` 字段，契约清晰。
+- 目录条目没有 `publishedAt`，排序靠 `fetchedAt` 兜底；同一轮抓取时间一致，稳定排序
+  保持上游顺序（Twitch 按观看数、抖音/斗鱼/虎牙按分区树顺序）。
+- **不做** UI 侧 `listCategories` 能力：目录是订阅内容，走正常的存储/刷新/列表链路，
+  刷新间隔、分组、退订都与其它订阅一致，不需要单独的缓存层。
 
-### 4.6 建议落地顺序
+### 4.6 落地顺序（已完成）
 
-1. **core + 类型 + 一个最小平台**（建议 Twitch）：验证 `listCategories` / UI 二级流程。
-2. **抖音**：同时修 `partitionType` 两参问题（收益最大）。
-3. **斗鱼**：一次请求，接上即可。
-4. **虎牙**：4 个顶层请求 + 分组展示。
-5. **YouTube**：随 `youtube:live-hot` / `youtube:live-category` 一起做。
-6. **B站直播分区**：不做，除非登录态方案另行立项。
+1. ✅ `kind:"category"` + XML 契约 + 目录渠道 + 卡片点击分流。
+2. ✅ 右侧内容视图（`?open=`，复用正常网格）+ 「订阅该分区」（完整参数）。
+3. ✅ 抖音 `partitionType` 两参问题（目录与手输都带完整参数）。
+4. ✅ 五个平台目录渠道（Twitch / YouTube / 抖音 / 斗鱼 / 虎牙）。
+5. ⬜ **B站直播分区**：不做，除非登录态方案另行立项。
 
 ---
 
 ## 5. 频道扩展建议优先级
 
-1. `youtube:live-hot` + `youtube:live-category`（Live 页栏目解析，一次请求）
-2. `youtube:playlist`（先 RSS 15 条；需要完整列表再接 `VL` + continuation）
-3. `bili:season`（合集；匿名 + 分页 + 现有 `ugc()`）
-4. `bili:series`（视频列表；URL 解析 mid + seriesId）
-5. `bili:favlist`（公开收藏夹；私有夹需登录）
-6. 分区订阅二级化（`listCategories`；与 1、Twitch、抖音等一起做）
+1. ✅ `youtube:live-hot` + `youtube:live-category`（Live 页栏目解析，一次请求）
+2. ✅ `youtube:playlist`（先 RSS 15 条；需要完整列表再接 `VL` + continuation）
+3. ✅ `bili:season`（合集；匿名 + 分页 + 现有 `ugc()`）
+4. ✅ `bili:series`（视频列表；URL 解析 mid + seriesId）
+5. ✅ `bili:favlist`（公开收藏夹；私有夹需登录）
+6. ✅ 分区订阅二级化：目录渠道（`*:categories`）+ `kind:"category"` +
+   右侧内容视图（与 1、Twitch、抖音等一起做）
+
+实测补充（2026-10-20，接入后复核）：
+
+| 渠道 | 实测 |
+| --- | --- |
+| `youtube:live-hot` | 10 条（Live Now，按 watching 降序），864ms |
+| `youtube:live-category` | `gaming` 12 条，1.19s |
+| `youtube:playlist` | 15 条，178ms |
+| `bili:season` | 30 条/页；第二页新增 30，cursor 前进 |
+| `bili:series` | 20 条/页；第二页新增 20（修 `pn`/`ps` 前为 0） |
+| `bili:favlist` | 20 条/页；第二页 8 条（总数 28） |
 
 现有播放链路无需改：YouTube 条目落 `watch?v=`，B站条目落 `bilibili.com/video/<bvid>`，
 `resolve` 已覆盖。
@@ -306,3 +350,7 @@ UI：
 | B站 `x/series/archives`（series 358495） | 200/code 0；54 条、20/页；mid 必须匹配 |
 | B站公开收藏夹 `media_id=1052622027` | 200/code 0；28 条、20/页；匿名可读 |
 | Twitch `games(first: 10)` | 200；slug/displayName/viewersCount/boxArt 全出 |
+| 目录渠道（接入后复核） | `twitch:categories` 30 / `youtube:live-categories` 3 / `live:douyin:categories` 16 / `live:douyu:categories` 530 / `live:huya:categories` 389 |
+| 目录条目 XML 往返 | `kind/categoryChannel/categoryInfo` 全保住；抖音 `partition=101` + `partitionType=4` |
+| 抖音顶层分区列房 | `partition=101&partitionType=4` 出 15 条（修复前默认 type=1 取不到） |
+| desktop 二级流程 | 一键订阅 `twitch:categories` → 点 Just Chatting → 弹窗 30 个房间 →「订阅该分区」；抖音目录点「聊天」→ 15 个房间 → 订阅成功 |

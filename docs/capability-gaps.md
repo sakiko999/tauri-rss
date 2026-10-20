@@ -35,22 +35,27 @@
     （OAuth「我的关注」）需注册应用，不建议近期做。
   - **Helix 匿名 401**（`api.twitch.tv/helix/streams`），且不提供播放地址 → 不走 Helix；
     元数据与播放 token 都走公开 web GraphQL。
-  - **分类目录未做**：`games(first)` 匿名可用（slug/displayName/观看数/封面），应作为
-    `twitch:category` 的 `listCategories` 发现入口，不另造分类 feed（见
-    `docs/channel-expansion-research.md` §4）。
-- **YouTube 直播热门 / 分区 / 播放列表未做**（2026-10-20 调研）—— Live 页
-  `browseId=UC4R8DWoMoI7CAwX8_LjQHig` 匿名返回 `Live Now`（12 条）与
-  `Live Now - News/Gaming/Sports`（各 12 条），无翻页；播放列表可走官方 RSS（≤15 条）
-  或 `VL<playlistId>`（100/页 + continuation）。详见
-  `docs/channel-expansion-research.md` §1/§2。
-- **B站合集 / 视频列表 / 收藏夹未做**（2026-10-20 调研）—— 合集
-  `seasons_archives_list`（需 Referer，`mid` 可为 0）、视频列表 `x/series/archives`
-  （需正确 `mid`，固定 20/页）、公开收藏夹 `x/v3/fav/resource/list`（私有需登录）
-  均可匿名读取。详见 `docs/channel-expansion-research.md` §3。
-- **分区订阅的二级入口未做** —— 发现页当前需手填分区参数；内容预览与「订阅该分区」
-  已存在，缺的是分类目录。建议新增 channel 级 `listCategories` 能力（不造目录 feed）。
-  ⚠️ 现有 `PlatformBrowser` 只填 `sourceInfoTpl[0]`，抖音顶层分区会漏 `partitionType`
-  （默认成子分区的 `1`，顶层应为 `4`），目录化时一并修。详见
+  - ✅ **分类目录已做**（2026-10-20）：独立目录订阅 `twitch:categories`
+    （`games(first: 30)`，实测 30 条，`kind:"category"`）；点条目用
+    `categoryChannel` + `categoryInfo` 预览 `twitch:category`。
+- **YouTube 播放列表的完整列表未做**（2026-10-20）—— ✅ 已接 `youtube:playlist`
+  （官方 RSS，最多 15 条）；需要 >15 条时走 InnerTube `VL<playlistId>`
+  （100/页 + continuation，解析器绑 `lockupViewModel`，较脆弱）尚未实现。
+- **YouTube 直播分区只到栏目级**（2026-10-20）—— ✅ 已接 `youtube:live-hot`
+  （Live Now）与 `youtube:live-category`（News/Gaming/Sports 等 Live 页编辑栏目）；
+  **不是 Twitch 式完整分区树**，无 continuation。游戏级分区（`/gaming` 页的
+  Top live games，每个频道约 51 条）未做。
+- **B站合集 / 视频列表 / 收藏夹的分页深度**（2026-10-20）—— ✅ `bili:season` /
+  `bili:series` / `bili:favlist` 已接入（匿名 + Pageable）。剩余：
+  私有收藏夹需登录；「稍后再看」不接；合集/系列条目没有作者名（archives 里只有
+  `mid`，不回查用户资料）。详见 `docs/channel-expansion-research.md` §3。
+- **分区目录订阅的剩余项**（2026-10-20）—— ✅ 目录本身做成订阅
+  （`twitch:categories` / `youtube:live-categories` / `live:douyin:categories` /
+  `live:douyu:categories` / `live:huya:categories`），内容为 `kind:"category"` 条目；
+  点条目用 `categoryChannel` + 完整 `categoryInfo` 预览目标分区并订阅。
+  抖音 `partitionType` 双参已修（目录与手输都带完整参数）。
+  剩余：**B站直播分区**仍不做（`second/getList` 需登录，匿名 `-352`）；
+  预览弹窗里的房间**只读**（预览条目无真实订阅，不能直接播）。详见
   `docs/channel-expansion-research.md` §4。
 
 ## 二、条件触发的迁移（当前不做，等信号）

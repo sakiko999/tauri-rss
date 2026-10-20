@@ -76,6 +76,7 @@ desktop 前端 grep `@tauri-apps` 零命中——所有 Rust 能力只经门面�
 
 ```bash
 rss channels [--kind live]          # 渠道注册表:name/tpl 字段/defaultInfo 快照
+                                    #   --kind category 可看分区目录订阅
 rss fetch <key> k=v ...             # ★ 单渠道抓取探针:耗时+条数;--xml 看原始输出;
                                     #   --json 进管道配 jq;失败完整堆栈;--log <域,...> 细粒度日志开关
 rss item <url>                      # ★ by-url 一站式:resolveRoute 命中 → streams 全档位表

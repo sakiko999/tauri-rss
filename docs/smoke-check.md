@@ -34,6 +34,8 @@
 
 | 新增/改动 channel | `bun run rss channels --kind <kind>` + `bun run rss fetch <key> --json`；⚠️ 发现页「可一键订阅」判据是 `!!defaultInfo \|\| 无必填项` —— **空对象是 truthy**，给需要参数的渠道写 `defaultInfo = {}` 会让它被误列进去 |
 | **Twitch（直播频道 / 热门 / 分区 / HLS）**（2026-10-20） | `bun run rss fetch twitch:live --kv roomIds=shroud --json`（离线频道也返 `offline` item，非 bug）+ `bun run rss fetch twitch:hot --json`（观看数降序）+ `bun run rss fetch twitch:category --kv category=just-chatting --json`（slug 或 `twitch.tv/directory/category/<slug>`）+ `bun run rss item https://www.twitch.tv/<login>`（应出多档 `hls`，**首档最高、`audio_only` 最后**）+ `bun packages/resolve/src/example/twitch-playlist.check.ts` + `bun packages/crawler/src/example/twitch-live.check.ts` |
+| **YouTube 直播热门/栏目 / 播放列表 / B站合集·列表·收藏夹**（2026-10-20） | `bun packages/crawler/src/example/youtube-channels.check.ts` + `bun packages/crawler/src/example/bili-channels.check.ts` + 六个真机探针：`bun run rss fetch youtube:live-hot`、`youtube:live-category --kv category=gaming`、`youtube:playlist`、`bili:season`、`bili:series`、`bili:favlist`。⚠️ B站三个都要验**第二页有新增**（series 曾因 `page_num` 静默返回首页）；season 不带 Referer 会 `-352` |
+| **分区目录订阅（`kind:"category"`）**（2026-10-20） | `bun packages/crawler/src/example/category-directory.check.ts` + `bun packages/core/src/example/serialize-roundtrip.check.ts`（category 专项）+ `bun run rss fetch twitch:categories`（及 `youtube:live-categories` / `live:douyin:categories` / `live:douyu:categories` / `live:huya:categories`）+ tsc；真机：发现页「可订阅榜单」一键订阅目录 → 订阅内容是分类卡片（**无播放按钮**，foot = 分区）→ 点卡片右侧**用正常网格**列出该分区内容（URL `?open=<itemId>`）→ 表头「订阅该分区」用**完整参数**落地（抖音必须 `partition` + `partitionType=4/1`）。⚠️ 目录渠道是独立订阅，不是发现页的临时目录 |
 | **网络风控 / governor / L9** | `bun packages/host/src/example/governor.check.ts` + `bun packages/core/src/example/lx-mode.check.ts` + `bun packages/crawler/src/example/bili-popular.check.ts`；真机：设置 →「网络与风控」把某渠道设为 L9 后手动刷新，未接被动采集的渠道应只读缓存（不产生主动请求） |
 | **xhs 登录 / 凭证 / 浏览器闸门 / 翻页**（2026-10-20） | `governor.check.ts`（含 browserGate）+ tsc + `bun run build:desktop`；真机八件事：① **未扫码时点「扫码登录」必须出二维码**（游客 `web_session` 不算登录）；②「清除凭证」后刷新应报「登录已失效」而不是继续用旧账号抓；③ 扫码期间点刷新，登录不应被导航抢页/abort 打断；④ **关掉二维码弹窗应立刻取消登录**（再点刷新不报「刷新超时」、重开弹窗马上出码）；⑤ 连续两次 xhs 浏览器操作间隔应 ≥600ms（L2/L3 更长）；⑥ **匿名 explore 滚动「加载更多」应增长**（纯被动，只读页面 state，不应出现 `/explore` HTML fetch）且**新内容在列表下方**（顶部首屏不被换掉）；⑦ **点开一条笔记后再点「加载更多」应继续推进**（共享 Edge 被导航走 → 页面重载；不得重复只返回已有条目、不得显示「已加载全部」）；⑧ 首屏 > 60 条时（explore 实测 89）列表尾部条目可见、footer 计数与头部总数一致 |
 | **改 `browser.rs` 窗口模式 / 浏览器抓取** | `cargo check --manifest-path apps/src-tauri/Cargo.toml`（必 0 错）+ **release 实例**验证（debug 窗口恒可见，模式切换是 no-op）：`ui-probe eval "__TAURI__.core.invoke('browser_set_mode',{mode:'interactive'})"` → xhs:user「加载更多」应增长；切回 `hidden` 后滚动不再加载。机制实测见 `docs/crawler-risk-control.md` §3.9 |
@@ -395,11 +397,12 @@ bun run rss fetch apple:podcast-search --kv q=故事 --json
     hls/flv/dashjs，加载即要 window，判据留那儿自检跑不了）。
     ⚠️ 顺带修 `ui-play-check` 的取样口径 —— 它原来会挑中 Apple 榜单的 **feed 条目**
     （audio 但无 stream），选进来必报「无法从 URL 解析视频流」，**假失败**。
-  - **Apple 榜单条目可播**：`isFeedItem` 的主操作从「订阅」改成「**展开单集列表**」
-    （`FeedPreviewModal`）—— 点开 → `previewChannel("rss:podcast", {url})`（复用播客渠道，
-    不另造解析器）→ 列单集 → 选一集直接播。⚠️ 预览单集**不落库/不建订阅**，只活在
-    store 的 `feedPreview`，**`PlayerPage` 的 item 查找必须回退查它**。
-    实测：榜单卡 → 弹窗「共 1058 集」→ 点第一集 → **真播**（`currentTime 6.47s`）。
+  - **Apple 榜单条目可播**：`isFeedItem` 的主操作从「订阅」改成「**在右侧列出单集**」
+    —— 点开 → URL 变 `?open=<itemId>` → `previewChannel("rss:podcast", {url})`（复用播客渠道，
+    不另造解析器）→ MediaMain **用正常网格**列出单集 → 选一集直接播。⚠️ 预览单集
+    **不落库/不建订阅**，只活在 store 的 `previewDetail`，**`PlayerPage` 的 item 查找必须
+    回退查它**（播放页返回也回 `?open=`，不丢单集列表）。
+    实测：榜单卡 → 右侧网格「单集 · 1060 条」→ 点第一集 → **真播**（`currentTime 4s`）→ 返回仍在预览。
   - **骨架宽度契约自检**：两份手写字面量（`boot-skeleton.css` vs `styles/10-tokens.css`
     + `90-responsive.css`）**故意改坏验证过会失败**（非空转）。
   - 回归：6 包 tsc 0 错；播放矩阵 3/3 起播；`ui-probe` tab:all / page:discover issueCount 0；
