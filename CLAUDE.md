@@ -143,10 +143,12 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
   **只允许 0~3**（L9 不能一刀切套到所有渠道）；`netLevels` 同时支持**平台覆盖**与
   **channelKey 覆盖**，解析顺序 `用户渠道覆盖 → 内置渠道默认 → 平台 → "*" → 全局`。
   内置渠道默认在 `core/types/settings.ts` 的 `BUILTIN_CHANNEL_LEVELS`：
-  **`xhs:user` = 9**（必须走浏览器导航读 SSR；页面内 fetch 属类别②，不算 LX）。
+  **`xhs:user` = 9**（必须走浏览器导航读 SSR；页面内 fetch 属类别②，不算 LX）、
+  **`xhs:explore` = 9**（正常路径本来就是导航 + 读页面 SSR，不构造 fetch；L9 的
+  `fetchPassive` 先走 Network 捕获，拿不到缓冲回退页面 SSR，仍属被动）。
   ⚠️ 该内置规则只在 `appHost.browser` 存在时生效（移动端无 browser，回落普通等级，
   否则会永远只剩缓存）。宿主 governor 只认平台名，channelKey 只影响 core 的抓取闸门。典型配置：
-  小红书平台 `9` 或仅 `xhs:user` `9`、B站/YouTube 保持 `1`。
+  小红书平台 `9` 或仅 `xhs:user`/`xhs:explore` `9`、B站/YouTube 保持 `1`。
   旧持久化里的 `netStrict` 已移除（忽略即可）；`netLevels` 里的旧字符串 `"lx"` 会归一化为
   `9`（全局默认位置则回落 `1`）。
 - **配额按等级缩放**：基准值是 `DEFAULT_NET_POLICY` 里的 L1；L2 = 并发/RPM ×0.5、
@@ -883,7 +885,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 **待实机验证（风控 / LX，没跑过不算完成）**：
 
 - release 实例：`browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
-- `xhs:explore` 设 L9 后手动刷新，确认命中 `passiveBuffer`。
+- `xhs:explore`（现默认 L9）手动刷新，确认命中 `passiveBuffer`；未命中时应走页面 SSR 兜底。
 - `xhs:user` L9：登录态导航能出条目；匿名应回退缓存。
 - 接入 LX 前用 `Network.requestWillBeSent` 逐平台确认风险文档 §3.11 标「推断/未确认」
   的页面请求。

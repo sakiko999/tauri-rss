@@ -173,6 +173,8 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
       match: (u) => u.pathname === "/explore",
       notLoggedInMsg: "小红书登录已失效或未登录，请到「账号与凭证」重新扫码",
       readState: (state) => flatXhsStateList(state, ["feed", "feeds"]),
+      // A 路线没拿到缓冲时回退页面 SSR(导航已完成 + state 已挂载,仍不构造请求)。
+      readPage: () => readXhsStateList(browser, ["feed", "feeds"]),
     })
     // 缓冲缺失 → null(core 回退缓存);缓冲有但 0 条 → 空 XML(与旧行为一致)。
     if (!feeds) return null

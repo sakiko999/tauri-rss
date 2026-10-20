@@ -120,7 +120,9 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 ```
 
 内置渠道默认见 `core/types/settings.ts` 的 `BUILTIN_CHANNEL_LEVELS`：
-**`xhs:user` = 9**（应用构造 HTTP 拿不到完整笔记，页面内 fetch 又属类别②）。
+**`xhs:user` = 9**（应用构造 HTTP 拿不到完整笔记，页面内 fetch 又属类别②）、
+**`xhs:explore` = 9**（正常路径就是导航 + 读页面 SSR，不构造 fetch；L9 的
+`fetchPassive` 先走 Network 捕获，缓冲缺失时回退页面 SSR，仍属被动）。
 该规则只在 `appHost.browser` 存在时生效 —— 移动端没有浏览器，回落平台/全局等级。
 设置页同时暴露「平台覆盖」与「渠道覆盖」两张表；渠道表列出已覆盖、内置默认与
 当前订阅实际用到的 channelKey。

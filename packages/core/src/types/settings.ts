@@ -36,11 +36,16 @@ export type GlobalNetLevel = 0 | 1 | 2 | 3
  * 未登录/登录失效时：L9 的 `fetchPassive` 返回 null → core 回退内容缓存；
  * 非 L9 的匿名访客走 fetch（匿名 SSR 抹空 noteId → `anon-*` 虚拟条目）。
  *
+ * `xhs:explore` 正常路径本来就是**纯被动**（导航 + 读页面 `feed.feeds`，
+ * 不构造 fetch），匿名也一样，所以也默认 L9；它的 `fetchPassive` 先走
+ * Network 捕获，拿不到缓冲时回退页面 SSR（仍是导航 + 读 state）。
+ *
  * ⚠️ 只在**有浏览器能力**(`appHost.browser`)时生效；移动端没有 browser，
  * 由 `netLevelFor` 回落到平台/全局等级(否则该渠道会永远只剩缓存)。
  */
 export const BUILTIN_CHANNEL_LEVELS: Readonly<Record<string, NetLevel>> = {
   "xhs:user": 9,
+  "xhs:explore": 9,
 }
 
 export interface AppSettings {

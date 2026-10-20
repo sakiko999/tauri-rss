@@ -29,6 +29,9 @@ for (const key of Object.keys(BUILTIN_CHANNEL_LEVELS)) {
   const c = getChannel(key)
   assert.equal(c?.supportsL9, true, `内置 L9 渠道 ${key} 必须声明 supportsL9`)
 }
+// explore 正常路径也是导航 + 读页面 SSR(匿名亦然),应与 user 一样默认 L9。
+assert.equal(BUILTIN_CHANNEL_LEVELS["xhs:user"], 9)
+assert.equal(BUILTIN_CHANNEL_LEVELS["xhs:explore"], 9)
 
 const dl = createDataLayer()
 const t = Date.now()

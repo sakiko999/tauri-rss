@@ -287,6 +287,11 @@ export interface XhsPassivePage<T> {
   notLoggedInMsg: string
   /** 从捕获到的 HTML 里解析真正要的数据(通常 flatXhsStateList)。 */
   readState(state: any): T
+  /**
+   * 缓冲缺失时的页面 SSR 兜底(仍属被动:导航 + 读页面 state,不构造请求)。
+   * 可选;不提供则返回 null 交给 core 回退缓存。
+   */
+  readPage?(): Promise<T>
 }
 
 /**
@@ -311,7 +316,7 @@ export async function fetchXhsPassivePage<T>(
       await ensureXhsPageReady(browser, page.path, page.notLoggedInMsg)
       await assertXhsNotBlocked(browser)
       const entry = passiveBuffer.getLatest("xhs", page.endpoint)
-      if (!entry) return null
+      if (!entry) return page.readPage ? page.readPage() : null
       return page.readState(extractInitialState(entry.body))
     },
     "xhs",
