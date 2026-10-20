@@ -13,6 +13,8 @@ import { bindFullscreen, type FullscreenApi, useVideoElement } from "./hooks/use
 import { useAutoHideControls } from "./hooks/useAutoHideControls.ts"
 import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"
 import { PlayerControls } from "./PlayerControls.tsx"
+import { PlayerStatsOverlay } from "./PlayerStatsOverlay.tsx"
+import type { EngineStats } from "./stats.ts"
 import type { DanmakuControl } from "./controls/index.ts"
 import { PlayIcon, SpinnerIcon } from "./icons.tsx"
 import { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
@@ -29,6 +31,7 @@ export function VideoShell({
   onMediaError,
   danmaku,
   danmakuControl,
+  stats,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   /** 是否由 useMediaStream(hls/flv/dash)驱动(决定直播判定)。 */
@@ -47,8 +50,13 @@ export function VideoShell({
   danmaku?: DanmakuStream
   /** 弹幕开关(仅当解析结果确实带弹幕时传入);按钮渲染在控件栏内。 */
   danmakuControl?: DanmakuControl
+  /** 引擎/档位(统计信息面板);右键菜单里打开。 */
+  stats?: EngineStats | null
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  /** 右键菜单坐标(viewport);null = 关闭。 */
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [showStats, setShowStats] = useState(false)
   const { state, ops } = useVideoElement(videoRef, isStreaming, onMediaError)
   const { showControls, showSpinner, poke, hide, hover, leave } = useAutoHideControls(state)
   const [fullscreenState, setFullscreenState] = useState<FullscreenApi>({
@@ -91,6 +99,11 @@ export function VideoShell({
       onMouseMove={poke}
       onMouseLeave={hide}
       onClick={handleClick}
+      onContextMenu={(e) => {
+        // 仿 YouTube:右键出菜单(统计信息),屏蔽浏览器默认菜单。
+        e.preventDefault()
+        setMenu({ x: e.clientX, y: e.clientY })
+      }}
       onDoubleClick={(e) => {
         e.preventDefault()
         fullscreenState.toggle()
@@ -152,6 +165,54 @@ export function VideoShell({
           <PlayIcon className="h-8 w-8 translate-x-0.5" />
         </button>
       )}
+
+      {/* 统计信息(右键菜单打开) */}
+      {showStats ? (
+        <PlayerStatsOverlay
+          videoRef={videoRef}
+          stats={stats}
+          quality={qualityOptions.find((q) => q.rate === activeQuality)?.quality}
+        />
+      ) : null}
+
+      {/* 右键菜单:只有「统计信息」一项(不自造完整菜单体系)。 */}
+      {menu ? (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={(e) => {
+              // 菜单在播放容器内:不拦冒泡会触发容器的单击播放/暂停。
+              e.stopPropagation()
+              setMenu(null)
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              setMenu(null)
+            }}
+          />
+          <div
+            className="fixed z-50 min-w-36 rounded-md border border-white/15 bg-black/95 py-1 text-xs text-white shadow-xl"
+            style={{
+              // 贴边时向内收,避免菜单出视口(YouTube 同款行为)。
+              left: Math.min(menu.x, window.innerWidth - 152),
+              top: Math.min(menu.y, window.innerHeight - 44),
+            }}
+          >
+            <button
+              type="button"
+              className="block w-full px-3 py-1.5 text-left hover:bg-white/15"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowStats((v) => !v)
+                setMenu(null)
+              }}
+            >
+              {showStats ? "隐藏统计信息" : "统计信息"}
+            </button>
+          </div>
+        </>
+      ) : null}
 
       {/* 控件层(自动隐藏) */}
       <div

@@ -17,6 +17,7 @@ import { HlsHostLoader } from "../engines/hlsHostLoader.ts"
 import { DashHostLoader } from "../engines/dashHostLoader.ts"
 import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
 import { log } from "../log/index.ts"
+import type { EngineStats } from "../stats.ts"
 
 // ⚠️ 判据在 `streamKind.ts`(纯函数、不 import 引擎)——本模块 import 了
 // hls.js/flv.js/dashjs,加载即要 window,判据留在这里会让 node 侧自检跑不了。
@@ -26,6 +27,7 @@ export function useMediaStream({
   stream,
   videoRef,
   onError,
+  onStats,
   autoPlay = true,
   retryKey = 0,
 }: {
@@ -33,6 +35,8 @@ export function useMediaStream({
   stream: MediaStream | null
   videoRef: React.RefObject<HTMLVideoElement | null>
   onError?: (err: unknown) => void
+  /** 引擎/档位上报(播放器「统计信息」面板);切流/重建时先报 null。 */
+  onStats?: (stats: EngineStats | null) => void
   /** 是否自动播放:true 带声起播(需 unlockAudioPlayback 已解锁),被拦降级静音。 */
   autoPlay?: boolean
   /** 变化时强制销毁旧实例重建(错误重试)。 */
@@ -46,12 +50,18 @@ export function useMediaStream({
   // (否则 hls.js/flv.js 反复 destroy/重建,直播流被中断)。
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
+  // 同款 ref:父组件每次渲染传新函数,不能因此重建播放实例。
+  const onStatsRef = useRef(onStats)
+  onStatsRef.current = onStats
 
   useEffect(() => {
     if (!stream) return
     const video = videoRef.current
     if (!video) return
     const report = onErrorRef.current
+    const reportStats = (s: EngineStats | null) => onStatsRef.current?.(s)
+    // 换流/重试:先清掉上一条流的档位,避免统计面板显示旧值。
+    reportStats(null)
     // ⚠️ 切流/切档(stream 变化 → effect 重跑)**保留用户当前静音态**。`video` 元素跨
     // effect 复用(useRef),cleaned 前 el.muted 反映用户偏好(点静音键 / 静音降级后)。
     // 无条件写 muted=!autoPlay(=false,因 autoPlay 恒 true)会把切档/下一条视频的声音
@@ -85,6 +95,7 @@ export function useMediaStream({
       // 再开 hls.js 的 lowLatencyMode 双重低延迟可能不兼容。
       const hls = new Hls()
       hlsRef.current = hls
+      reportStats({ engine: "hls" })
       // 档位策略:video/live 都锁最高档起播,不走 ABR 自动降档。
       // 原因:宿主隧道(Rust reqwest + base64)的固定开销让 ABR 带宽估算严重失真
       // ——1080p 4561kbps 的流测得仅 ~1Mbps,ABR 会骤降 144p 且永不回升。
@@ -128,6 +139,13 @@ export function useMediaStream({
         const key = `${d.level}:${lvl?.height ?? 0}:${lvl?.bitrate ?? 0}`
         if (key === lastLevelKey) return
         lastLevelKey = key
+        reportStats({
+          engine: "hls",
+          levelIndex: d.level,
+          levelCount: hls.levels.length,
+          height: lvl?.height,
+          bitrate: lvl?.bitrate,
+        })
         log.hlsLevelLoaded({
           live: !!d.details?.live,
           level: d.level,
@@ -165,6 +183,7 @@ export function useMediaStream({
         // flv.js 不直接支持自定义 header;referer 靠页面本身,UA 走默认。
       )
       flvRef.current = flv
+      reportStats({ engine: "flv" })
       flv.on(flvjs.Events.ERROR, (_t, _d, e) => {
         log.engineError({ engine: "flv", err: e })
         report?.(e)
@@ -199,6 +218,29 @@ export function useMediaStream({
       dashUrlRef.current = mpdUrl
       const player = dashjs.MediaPlayer().create()
       dashRef.current = player
+      reportStats({ engine: "dash" })
+      // 初始化完成后补档位/码率(单 Representation,锁最高档)。
+      player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
+        try {
+          // dashjs 的运行时 API 在类型包里没声明全(MediaPlayerClass 缺这两个方法)。
+          const p = player as unknown as {
+            getBitrateInfoListFor(type: "video"): Array<{ height?: number; bitrate?: number }>
+            getQualityFor(type: "video"): number
+          }
+          const infos = p.getBitrateInfoListFor("video")
+          const idx = p.getQualityFor("video")
+          const info = infos[idx]
+          reportStats({
+            engine: "dash",
+            levelIndex: idx,
+            levelCount: infos.length,
+            height: info?.height,
+            bitrate: info?.bitrate,
+          })
+        } catch {
+          // 无 video 轨/未初始化完:保留基础 engine 信息即可。
+        }
+      })
       player.on(dashjs.MediaPlayer.events.ERROR, (e: unknown) => {
         const msg = (e as { message?: string })?.message
         log.engineError({ engine: "dash", err: msg ?? e })

@@ -94,7 +94,12 @@ export function MediaMain() {
         {body}
       </div>
     )
-    if (!previewCurrent || previewCurrent.loading) return shell(<GridSkeleton />)
+    // 骨架与落地形态对齐:播客节目 → 单集行列表;分区目录 → 房间网格。
+    // (全局 GridSkeleton 默认网格,播客预览加载时会先闪一屏卡片再切成行。)
+    const previewSkeleton = container.kind === "audio" ? "list" : "grid"
+    if (!previewCurrent || previewCurrent.loading) {
+      return shell(<GridSkeleton mode={previewSkeleton} />)
+    }
     if (previewCurrent.error) {
       return shell(
         <StateBlock

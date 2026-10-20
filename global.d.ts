@@ -90,7 +90,13 @@ declare global {
      * ⚠️ 登录流程不应调用(冷却期仍需允许用户重新扫码)。
      */
     browserGate(platform: string): Promise<void>
-    governorStats(): { cooldowns: Record<string, number>; inFlight: number; queued: number }
+    governorStats(): {
+      cooldowns: Record<string, number>
+      inFlight: number
+      queued: number
+      /** 最近一次 HTTP 端到端耗时(ms)与所属平台;播放器统计面板用。 */
+      lastLatency: { ms: number; platform: string } | null
+    }
   }
 
   /** 一条可安装的更新。 */

@@ -359,6 +359,8 @@ const RISK_STATUSES = new Set([403, 412, 418, 429])
 
 let _queued = 0
 let _inFlight = 0
+/** 最近一次 HTTP(含媒体分片)的端到端耗时 —— 播放器「统计信息」用。 */
+let _lastLatency: { ms: number; platform: string } | null = null
 
 function nowMs(): number {
   try {
@@ -463,6 +465,8 @@ export function governorStats(): {
   cooldowns: Record<string, number>
   inFlight: number
   queued: number
+  /** 最近一次 HTTP 端到端耗时(ms)与所属平台;无请求过为 null。 */
+  lastLatency: { ms: number; platform: string } | null
 } {
   ensureLoaded()
   const now = nowMs()
@@ -472,7 +476,7 @@ export function governorStats(): {
     if (left > 0) cooldowns[platform] = left
     else _cooldowns.delete(platform)
   }
-  return { cooldowns, inFlight: _inFlight, queued: _queued }
+  return { cooldowns, inFlight: _inFlight, queued: _queued, lastLatency: _lastLatency }
 }
 
 // ── 冷却持久化(best-effort;进程内为准) ──────────────────────────────────────
@@ -654,29 +658,43 @@ function meteredRequest(
  * 所有经过 `appHost.http` 的请求都从这里过。
  */
 export function governedHttp(backend: HttpBackend): HttpBackend {
+  // 端到端耗时只记**最后一次**(播放器诊断用);所有分支都经过它,包括 L0 与媒体分片。
+  const timed: HttpBackend = {
+    async request(req) {
+      const t0 = nowMs()
+      try {
+        return await backend.request(req)
+      } finally {
+        _lastLatency = {
+          ms: Math.round(nowMs() - t0),
+          platform: classifyRequest(req.url, req.policy).platform,
+        }
+      }
+    },
+  }
   return {
     request(req) {
       ensureLoaded()
       const cls = classifyRequest(req.url, req.policy)
-      // 等级按**平台**解析(设置页可给单个平台单独设 lx / 0)。
+      // 等级按**平台**解析(设置页可给单个平台/渠道单独设档)。
       const level = levelFor(cls.platform)
 
       // L0:直通,不排队/不去重/不写冷却(仅调试)。
-      if (level === 0) return backend.request(req)
+      if (level === 0) return timed.request(req)
 
       // 媒体/图片/本地 CDP:不计量,但仍占全局并发(§2.2)。
       if (!cls.metered) {
         return runGlobal(async () => {
           _inFlight++
           try {
-            return await backend.request(req)
+            return await timed.request(req)
           } finally {
             _inFlight--
           }
         })
       }
 
-      return meteredRequest(backend, req, cls.platform)
+      return meteredRequest(timed, req, cls.platform)
     },
   }
 }

@@ -17,6 +17,7 @@
 import { useEffect, useRef, useState } from "react"
 import type { MediaStream, ResolvePlayback } from "@amoeba/core"
 import { useMediaStream } from "./hooks/useMediaStream.ts"
+import type { EngineStats } from "./stats.ts"
 import {
   isProgressiveAudio,
   isProgressiveVideo,
@@ -209,6 +210,9 @@ export function PlayableMedia({
   // 选流 + 档位。
   const { stream, qualityOptions, switchQuality } = useStreamSelection(playStreams)
 
+  // 引擎/档位(统计信息面板)。HLS/FLV/DASH 由 useMediaStream 上报;原生 mp4 在这里定。
+  const [engineStats, setEngineStats] = useState<EngineStats | null>(null)
+
   // 流媒体驱动(hls/flv/dash)→ useMediaStream 接管 video;原生 src 由 VideoShell 写。
   const needsStreamPlayer = !!stream && isStreamingStream(stream)
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -224,6 +228,7 @@ export function PlayableMedia({
     autoPlay,
     // retryKey 变化强制 useMediaStream 重建播放实例(错误重试)。
     retryKey,
+    onStats: setEngineStats,
     onError: (e) => {
       setPlayError(e)
       onError?.(e)
@@ -414,6 +419,7 @@ export function PlayableMedia({
         autoPlay={autoPlay}
         qualityOptions={qualityOptions}
         activeQuality={stream.rate}
+        stats={needsStreamPlayer ? engineStats : { engine: "native" }}
         onQuality={switchQuality}
         onMediaError={(code, msg) => {
           setPlayError(new Error(`原生媒体错误(code=${code ?? "?"}): ${msg}`))

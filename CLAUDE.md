@@ -257,6 +257,7 @@ bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射�
 bun apps/desktop/src/lib/rail-nav.check.ts              # 侧栏树方向键映射（→ 折叠态只展开 / ← 回父行 / 未分组不折叠）
 bun apps/desktop/src/lib/ime.check.ts                   # IME 组合态守卫（nativeEvent 取值 + 229 兜底 + 原生/合成两路径）
 bun packages/player/src/hooks/useStreamSelection.check.ts # 默认选流 = streams[0]（不被格式族抢走）
+bun packages/player/src/hooks/player-stats.check.ts      # 统计信息格式化（引擎/码率/档位/缓冲/丢帧）
 bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契约（两份手写字面量必须一致）
 
 # UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 已由 dev 配置开启）
@@ -663,6 +664,14 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   `align=end` 按 0 宽对齐。症状：侧栏底部行的菜单被压成 122px 带滚动条的矮条，且向右溢出。
   修法 = `.menu` 不写 `position`。**这是「弹窗里为什么有滚动条」的根因，别再改回去。**
 
+- **播放器「统计信息」**（2026-10-21，仿 YouTube 右键）：`VideoShell` 右键菜单 →
+  `PlayerStatsOverlay`（`packages/player/src/PlayerStatsOverlay.tsx`）。引擎/档位由
+  `useMediaStream` 的 `onStats` 上报（HLS 的 `LEVEL_LOADED`、DASH 的 `STREAM_INITIALIZED`）；
+  分辨率 / 缓冲余量 / 丢帧 / 音轨每 500ms 读 `<video>`（`getVideoPlaybackQuality`）；
+  **宿主隧道耗时**取 `appHost.net.governorStats().lastLatency` —— governor 在
+  `governedHttp` 入口统一计时（含 L0 与媒体分片，覆盖 Rust 隧道/浏览器 fetch），
+  只保留最近一次。纯格式化逻辑在 `packages/player/src/stats.ts`（node 自检）。
+
 ## 弹幕（细节见 `docs/danmaku-research.md`）
 
 - **弹幕开关在播放器控件栏**（`MediaDanmakuButton`），不在播放页 meta 的按钮组。
@@ -990,14 +999,6 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   的 tab 分支 `filter(kind==="live")`，方案 B，2026-10-13 落地）。若要「哔哩哔哩直播 /
   虎牙直播」这类**按平台**再分组，需在 core 编排层加二次聚合——问题定性与 A/B/C
   方案对比见 git 历史的 `docs/technical-plan.md`（2026-10-16 删）。
-- **播放器「流状态监控」**（stats for nerds，右键菜单）：仿 YouTube 右键「统计信息」，
-  展示当前引擎（hls / flv / dash / 原生）、实际档位与分辨率、码率/缓冲区、丢帧、
-  音轨、以及宿主隧道耗时。落点 `packages/player` 的控件层；数据源已在
-  `useMediaStream` / `PlayableMedia` 的引擎句柄上（`currentLevel`、`levels`、
-  `<video>` 的 `getVideoPlaybackQuality()`），不需要新依赖。
-- **二级订阅进入时的骨架屏形态**（UI 细节）：`MediaMain` 在 `?open=` 预览时复用了
-  全局 `GridSkeleton`，与内容形态（播客单集是行列表、分区房间是网格）不对应 ——
-  按容器 kind 给对应骨架（单集行 / 房间网格），别让骨架和落地内容差太多。
 
 **待实机验证（风控 / 被动采集，没跑过不算完成）**：
 
@@ -1013,7 +1014,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 阅读进度、OPML 导入导出、扫码登录 UI、文章正文补全（含 KV 持久缓存）、mobile 接入、
 抖音用户直播间（主页链接 → 抖音号 → 房间）与分区搜索（2026-10-18）、
 Numbered UI Overlay（dev-only，2026-10-18）、RSSHub 收口为 `rsshub:feed` +
-`bili:precious` 收编（2026-10-18）。
+`bili:precious` 收编（2026-10-18）、播放器统计信息与二级订阅骨架（2026-10-21）。
 
 **长期悬置**（收益不抵复杂度，暂不做）：
 - **CSP**：现 `csp: null`。要配最小 CSP 须放 `unsafe-eval`（抖音/斗鱼签名脚本靠 `eval`），
