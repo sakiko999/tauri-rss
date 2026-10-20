@@ -176,6 +176,10 @@ export async function cdpFetch(
  * ⚠️ 这里**不做导航重试**——click / scroll 这类有副作用的表达式不能自动重放。
  * 需要吞掉导航过渡期 `Execution context was destroyed` 的**读取**,用 cdpFetch
  * (内部 evalWithNavRetry) 或 waitUntil;不要给 cdpEvaluate 默认加重试。
+ *
+ * ⚠️ expression 在**页面里**执行,必须是纯 JS —— 不能写 TS 类型标注或 `as` 断言
+ * (`(n as HTMLElement).offsetParent` 在 tsc 下不报错,运行时才炸成
+ * `SyntaxError: Unexpected identifier 'as'`)。
  */
 export async function cdpEvaluate<T = unknown>(browser: BrowserBackend, expression: string): Promise<T> {
   return browser.evaluate<T>(expression, { awaitPromise: true, returnByValue: true })

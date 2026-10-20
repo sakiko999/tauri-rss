@@ -86,10 +86,10 @@ async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
     browser,
     `(() => {
       const el = [...document.querySelectorAll('button, a')].find(
-        (n) => n.textContent && n.textContent.trim() === '登录' && (n as HTMLElement).offsetParent !== null
+        (n) => n.textContent && n.textContent.trim() === '登录' && n.offsetParent !== null
       );
       if (!el) return false;
-      (el as HTMLElement).click();
+      el.click();
       return true;
     })()`,
   )

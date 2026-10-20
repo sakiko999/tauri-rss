@@ -592,6 +592,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   里持全局浏览器锁直到成功/超时，没有取消通道的话关窗后所有浏览器操作都被排队卡住。
   ⚠️ xhs 登录的**初始检测只用页面证据**（`user.loggedIn`/侧栏「我」，cookie 完全不参与）；
   轮询判据是 `user_id` **相对基线变化** —— 服务端 session 失效时残留的旧 user_id 不算登录。
+  ⚠️ `cdpEvaluate` 的表达式在**页面里**执行，必须是纯 JS：写 `(n as HTMLElement)` 这类
+  TS 断言 tsc 不报错，运行时炸 `SyntaxError: Unexpected identifier 'as'`（xhs 点「登录」
+  按钮曾因此出不了码）。
 
 ## 播放
 
