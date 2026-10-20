@@ -4,7 +4,16 @@
  * 判的是格式化/缓冲余量计算(node 侧,不碰 DOM 与引擎)。
  */
 import assert from "node:assert/strict"
-import { bufferedAhead, engineLabel, formatBitrate, formatDropped, formatLevel } from "../stats.ts"
+import {
+  bufferedAhead,
+  engineLabel,
+  formatBitrate,
+  formatBytes,
+  formatDropped,
+  formatFps,
+  formatLevel,
+  formatVolume,
+} from "../stats.ts"
 
 assert.equal(engineLabel("hls"), "hls.js")
 assert.equal(engineLabel("flv"), "flv.js")
@@ -39,4 +48,15 @@ assert.equal(bufferedAhead({ length: 0, start: () => 0, end: () => 0 }, 1), 0)
 assert.equal(formatDropped(3, 1200), "3 / 1200 (0.3%)")
 assert.equal(formatDropped(0, 0), "—")
 
-console.log("✔ 播放器统计信息自检通过(引擎标签 / 码率 / 档位 / 缓冲余量 / 丢帧)")
+assert.equal(formatBytes(0), "—")
+assert.equal(formatBytes(1536), "2 KB")
+assert.equal(formatBytes(3.2 * 1024 * 1024), "3.2 MB")
+
+assert.equal(formatFps(undefined), "—")
+assert.equal(formatFps(0), "—")
+assert.equal(formatFps(29.97), "29.97 fps")
+
+assert.equal(formatVolume(0.8, false), "80%")
+assert.equal(formatVolume(0.8, true), "80%（静音）")
+
+console.log("✔ 播放器统计信息自检通过(引擎标签 / 码率 / 档位 / 缓冲余量 / 丢帧 / 流量 / 帧率 / 音量)")

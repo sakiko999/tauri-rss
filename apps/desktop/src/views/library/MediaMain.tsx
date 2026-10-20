@@ -18,6 +18,7 @@ import { healthOf, matchesQuery } from "../../store/selectors.ts"
 import { sameInfo } from "../../store/lib.ts"
 import { isCategoryItem, isFeedItem, MediaCard, SocialCard } from "../../components/app/Cards.tsx"
 import { GridSkeleton } from "../../components/BootSkeleton.tsx"
+import { PreviewSkeleton } from "../../components/PreviewSkeleton.tsx"
 import { MasonryGrid } from "../../components/app/MasonryGrid.tsx"
 import { LoadMoreFooter } from "../../components/app/LoadMoreFooter.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
@@ -95,10 +96,11 @@ export function MediaMain() {
       </div>
     )
     // 骨架与落地形态对齐:播客节目 → 单集行列表;分区目录 → 房间网格。
-    // (全局 GridSkeleton 默认网格,播客预览加载时会先闪一屏卡片再切成行。)
+    // ⚠️ 用 PreviewSkeleton 而不是全局 GridSkeleton:后者的标题占位条会和
+    // PreviewHead(真实表头)重复,加载完成时内容整体跳一下。
     const previewSkeleton = container.kind === "audio" ? "list" : "grid"
     if (!previewCurrent || previewCurrent.loading) {
-      return shell(<GridSkeleton mode={previewSkeleton} />)
+      return shell(<PreviewSkeleton mode={previewSkeleton} />)
     }
     if (previewCurrent.error) {
       return shell(

@@ -145,6 +145,9 @@ export function useMediaStream({
           levelCount: hls.levels.length,
           height: lvl?.height,
           bitrate: lvl?.bitrate,
+          codecs: (lvl?.attrs as { CODECS?: string } | undefined)?.CODECS,
+          // hls.js 的实时延迟(仅直播有意义;点播接近 0 时也照实显示)。
+          liveLatency: (hls as unknown as { latency?: number }).latency,
         })
         log.hlsLevelLoaded({
           live: !!d.details?.live,
@@ -226,16 +229,24 @@ export function useMediaStream({
           const p = player as unknown as {
             getBitrateInfoListFor(type: "video"): Array<{ height?: number; bitrate?: number }>
             getQualityFor(type: "video"): number
+            getTracksFor(type: "video" | "audio"): Array<{ codec?: string }>
+            getCurrentLiveLatency(): number
           }
           const infos = p.getBitrateInfoListFor("video")
           const idx = p.getQualityFor("video")
           const info = infos[idx]
+          const codecs = (["video", "audio"] as const)
+            .flatMap((t) => p.getTracksFor(t).map((x) => x?.codec))
+            .filter(Boolean)
+            .join(" / ")
           reportStats({
             engine: "dash",
             levelIndex: idx,
             levelCount: infos.length,
             height: info?.height,
             bitrate: info?.bitrate,
+            codecs: codecs || undefined,
+            liveLatency: p.getCurrentLiveLatency?.() || undefined,
           })
         } catch {
           // 无 video 轨/未初始化完:保留基础 engine 信息即可。

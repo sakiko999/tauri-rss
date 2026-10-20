@@ -96,6 +96,8 @@ declare global {
       queued: number
       /** 最近一次 HTTP 端到端耗时(ms)与所属平台;播放器统计面板用。 */
       lastLatency: { ms: number; platform: string } | null
+      /** 进程内累计出站请求数与响应体大小(≈ 字节);播放器统计面板用。 */
+      network: { requests: number; bytes: number }
     }
   }
 

@@ -361,6 +361,17 @@ let _queued = 0
 let _inFlight = 0
 /** 最近一次 HTTP(含媒体分片)的端到端耗时 —— 播放器「统计信息」用。 */
 let _lastLatency: { ms: number; platform: string } | null = null
+/** 进程内累计出站请求数与响应体大小(≈ 字节;base64 字符串按字符数估)。 */
+let _netRequests = 0
+let _netBytes = 0
+
+/** 廉价估算响应体大小(媒体分片可达 MB 级,不能逐字节编码)。 */
+function bodySize(body: unknown): number {
+  if (typeof body === "string") return body.length
+  if (body instanceof ArrayBuffer) return body.byteLength
+  if (ArrayBuffer.isView(body)) return body.byteLength
+  return 0
+}
 
 function nowMs(): number {
   try {
@@ -467,6 +478,8 @@ export function governorStats(): {
   queued: number
   /** 最近一次 HTTP 端到端耗时(ms)与所属平台;无请求过为 null。 */
   lastLatency: { ms: number; platform: string } | null
+  /** 进程内累计出站请求数与响应体大小。 */
+  network: { requests: number; bytes: number }
 } {
   ensureLoaded()
   const now = nowMs()
@@ -476,7 +489,13 @@ export function governorStats(): {
     if (left > 0) cooldowns[platform] = left
     else _cooldowns.delete(platform)
   }
-  return { cooldowns, inFlight: _inFlight, queued: _queued, lastLatency: _lastLatency }
+  return {
+    cooldowns,
+    inFlight: _inFlight,
+    queued: _queued,
+    lastLatency: _lastLatency,
+    network: { requests: _netRequests, bytes: _netBytes },
+  }
 }
 
 // ── 冷却持久化(best-effort;进程内为准) ──────────────────────────────────────
@@ -663,8 +682,11 @@ export function governedHttp(backend: HttpBackend): HttpBackend {
     async request(req) {
       const t0 = nowMs()
       try {
-        return await backend.request(req)
+        const res = await backend.request(req)
+        _netBytes += bodySize(res.body)
+        return res
       } finally {
+        _netRequests++
         _lastLatency = {
           ms: Math.round(nowMs() - t0),
           platform: classifyRequest(req.url, req.policy).platform,

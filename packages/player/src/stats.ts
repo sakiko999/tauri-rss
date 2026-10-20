@@ -17,6 +17,10 @@ export interface EngineStats {
   /** 档位高度(px)与码率(bps)。 */
   height?: number
   bitrate?: number
+  /** 编解码器(如 `avc1.640028 / mp4a.40.2`);引擎拿不到时省略。 */
+  codecs?: string
+  /** 直播延迟(秒);点播 / 引擎不提供时省略。 */
+  liveLatency?: number
 }
 
 export function engineLabel(engine: EngineKind): string {
@@ -62,6 +66,27 @@ export function bufferedAhead(
     if (currentTime >= start && currentTime <= end) return Math.max(0, end - currentTime)
   }
   return 0
+}
+
+/** 字节数 → 人类可读(近似值,base64 字符串按字符数估)。 */
+export function formatBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return "—"
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${bytes} B`
+}
+
+/** 帧率摘要;无有效值返回 "—"。 */
+export function formatFps(fps: number | undefined): string {
+  if (!fps || !Number.isFinite(fps) || fps <= 0) return "—"
+  return `${fps.toFixed(2)} fps`
+}
+
+/** 音量摘要:「80%」/「80%（静音）」。 */
+export function formatVolume(volume: number, muted: boolean): string {
+  const pct = `${Math.round(Math.max(0, Math.min(1, volume)) * 100)}%`
+  return muted ? `${pct}（静音）` : pct
 }
 
 /** 丢帧摘要:「3 / 1200 (0.3%)」;无帧统计返回 "—"。 */

@@ -313,4 +313,12 @@ console.log("── 浏览器闸门:冷却拒绝 / 最小间隔 / L0 直通 ─�
 // 恢复默认等级,避免后续本进程内其它自检受影响。
 configureNetwork({ level: 1, levels: {} })
 
-console.log("✔ NetworkGovernor 自检通过(分类 / L0 直通 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限 / 浏览器闸门)")
+// 统计面板数据:最近一次耗时 + 累计流量/请求数(具体数值取决于请求体,只断言有记录)。
+{
+  const s = governorStats()
+  assert.ok(s.lastLatency && s.lastLatency.ms >= 0, "应记录最近一次 HTTP 耗时")
+  assert.ok(s.network.requests > 0, "应累计出站请求数")
+  assert.ok(s.network.bytes > 0, "应累计响应体大小")
+}
+
+console.log("✔ NetworkGovernor 自检通过(分类 / L0 直通 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限 / 浏览器闸门 / 统计)")

@@ -11,8 +11,8 @@
 | **任何** 改动 | 6 包 `tsc --noEmit`（见下）+ 相关 `.check.ts` |
 | crawler→core 字段 | `serialize-roundtrip.check.ts` + `serialize-contract.check.ts` |
 | player 选流/兜底/autoplay | `scripts/ui-play-check.ts`（真机播放矩阵）+ `packages/player/src/hooks/useStreamSelection.check.ts` |
-| player 统计信息（右键） | `bun packages/player/src/hooks/player-stats.check.ts`；真机：播放中右键 →「统计信息」，引擎/档位/分辨率/缓冲/丢帧/音轨/宿主隧道应有值（宿主隧道 = 最近一次 HTTP 耗时，媒体分片持续刷新）；再次右键可隐藏 |
-| 二级订阅骨架形态 | 真机：播客节目 `?open=` 加载时骨架是**行列表**（不是卡片网格）；分区目录 `?open=` 骨架是**网格** |
+| player 统计信息（右键） | `bun packages/player/src/hooks/player-stats.check.ts`；真机：播放中右键 →「统计信息」，引擎/档位/分辨率/帧率/丢帧/缓冲健康/编解码器/音量/宿主隧道/网络活动应有值（网络活动 = 进程累计出站流量与请求数，媒体分片持续增长）；直播另有「直播延迟」；再次右键可隐藏 |
+| 二级订阅骨架形态 | 真机：播客节目 `?open=` 加载时骨架是**行列表**（不是卡片网格）；分区目录 `?open=` 骨架是**网格**；两者都**不应再出现第二条标题占位条**（预览页已有真实表头，用 `PreviewSkeleton` 而非全局 `GridSkeleton`） |
 | 播放队列 / 播完下一条 | `packages/core/src/example/media-store.check.ts`；真机：入队 → 重载看仍在（localStorage `ui-queue`）→ 派发 `ended` 看是否跳下一条 |
 | **按 id 记/改/查任何东西** | ⚠️ `MediaItem.id` 只在**订阅内**唯一（实测 `bilibili:7734200` 同时在 `bili:live` 与 `bili:live:hot`）—— 必须带 `subscriptionId`；`repo-concurrency.check.ts` 有跨订阅隔离用例 |
 | 启动骨架 / 侧栏宽度 | `apps/desktop/src/lib/boot-skeleton.check.ts`（两份手写字面量必须一致，否则冷启动第一帧跳一下） |

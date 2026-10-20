@@ -33,7 +33,8 @@ apps/
                位置权威 = URL（/v/:nodeId、/play/:itemId）
                ⚠️ **组件按「功能件 / 业务件」分层**（2026-10-14 拆分）：
                  `src/components/*.tsx`        = 功能件，**纯 props、不碰 store**
-                   Icon · Modal(Menu/Switch/Select) · StateBlock · NavRow · QrImage · BootSkeleton
+                   Icon · Modal(Menu/Switch/Select) · StateBlock · NavRow · QrImage ·
+                   BootSkeleton · PreviewSkeleton（二级订阅预览骨架：无标题条，按 list/grid）
                  `src/components/app/*.tsx`    = 业务件，读 useDesktop/usePrefs 或吃 domain 类型
                    Rail(+RailGroupTree) · TitleBar · Toaster · SocialDetailModal ·
                    MasonryGrid · LoadMoreFooter · Cards · ListRow
@@ -665,12 +666,15 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   修法 = `.menu` 不写 `position`。**这是「弹窗里为什么有滚动条」的根因，别再改回去。**
 
 - **播放器「统计信息」**（2026-10-21，仿 YouTube 右键）：`VideoShell` 右键菜单 →
-  `PlayerStatsOverlay`（`packages/player/src/PlayerStatsOverlay.tsx`）。引擎/档位由
-  `useMediaStream` 的 `onStats` 上报（HLS 的 `LEVEL_LOADED`、DASH 的 `STREAM_INITIALIZED`）；
-  分辨率 / 缓冲余量 / 丢帧 / 音轨每 500ms 读 `<video>`（`getVideoPlaybackQuality`）；
-  **宿主隧道耗时**取 `appHost.net.governorStats().lastLatency` —— governor 在
-  `governedHttp` 入口统一计时（含 L0 与媒体分片，覆盖 Rust 隧道/浏览器 fetch），
-  只保留最近一次。纯格式化逻辑在 `packages/player/src/stats.ts`（node 自检）。
+  `PlayerStatsOverlay`（`packages/player/src/PlayerStatsOverlay.tsx`）。字段：
+  引擎 / 档位 / 清晰度 / 当前与源分辨率 / 帧率 / 丢帧 / 缓冲健康 / 直播延迟 /
+  编解码器 / 音轨 / 音量 / 播放速率 / 宿主隧道 / 网络活动。
+  引擎侧（档位、码率、`CODECS`、hls.js `latency`）由 `useMediaStream` 的 `onStats`
+  上报（HLS `LEVEL_LOADED`、DASH `STREAM_INITIALIZED`）；元素侧每 500ms 读 `<video>`
+  （`getVideoPlaybackQuality`，帧率用相邻采样的总帧差）；宿主侧取
+  `appHost.net.governorStats()` 的 `lastLatency` 与 `network` —— governor 在
+  `governedHttp` 入口统一计时/累计流量（含 L0 与媒体分片，覆盖 Rust 隧道/浏览器 fetch）。
+  纯格式化逻辑在 `packages/player/src/stats.ts`（node 自检）。
 
 ## 弹幕（细节见 `docs/danmaku-research.md`）
 
