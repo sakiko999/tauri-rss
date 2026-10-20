@@ -24,9 +24,10 @@ use windows_sys::Win32::System::Threading::{
     STARTUPINFOW, TerminateProcess, WaitForSingleObject,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect, GetWindowThreadProcessId,
-    IsWindowVisible, SetForegroundWindow, SetWindowLongPtrW, ShowWindow, GWL_EXSTYLE, SW_HIDE,
-    SW_SHOWNA, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    EnumWindows, GetClassNameW, GetForegroundWindow, GetWindowLongPtrW, GetWindowRect,
+    GetWindowTextLengthW, GetWindowThreadProcessId, IsIconic, IsWindowVisible, SetForegroundWindow,
+    SetWindowLongPtrW, ShowWindow, GWL_EXSTYLE, GWL_STYLE, SW_HIDE, SW_RESTORE, SW_SHOWNA,
+    WS_EX_APPWINDOW, WS_EX_TOOLWINDOW, WS_THICKFRAME,
 };
 
 /// 进程句柄包装(HANDLE 是裸指针默认 !Send;进程句柄无线程亲和,可跨线程用)。
@@ -294,11 +295,18 @@ fn restore_foreground(hwnd: HWND) {
 struct MainWinCtx {
     pids: *const std::collections::HashSet<u32>,
     best: HWND,
-    best_area: i64,
+    best_score: i64,
 }
 
-/// 找进程树里**面积最大**的顶层窗口（主框架；Chromium 的辅助/IPC 窗口面积很小或为 0，
-/// 用 10 万 px 下限排除——启动早期小窗可能先于主框架出现）。
+/// 找进程树里的**主框架窗口**。
+///
+/// ⚠️ 不能只按面积挑：Chromium 会有一个 `Chrome_WidgetWin_0` 的大尺寸辅助窗口
+/// （隐藏、无标题），主窗口最小化后面积会掉到几千 px，辅助窗口反而"更大"——按面积
+/// 会挑错窗口，`show_until_visible` 看起来成功、实际主窗口仍是 minimized（滚动 0 条），
+/// 或者辅助窗口 show 不出来直接报「窗口模式切换失败」。
+///
+/// 判据 = 类名 `Chrome_WidgetWin_1` + `WS_THICKFRAME`（真正的浏览器框架；`还原页面`
+/// 气泡虽然也是 `_1`，但 style 没有 thickframe）。带标题的优先，面积只做同档内排序。
 fn main_window_for_pids(pids: &std::collections::HashSet<u32>) -> Option<HWND> {
     unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
         let ctx = &mut *(lparam as *mut MainWinCtx);
@@ -313,12 +321,27 @@ fn main_window_for_pids(pids: &std::collections::HashSet<u32>) -> Option<HWND> {
                 return 1;
             }
             let area = (rect.right - rect.left).max(0) as i64 * (rect.bottom - rect.top).max(0) as i64;
-            // 排除 Chromium 的辅助/IPC 小窗：启动早期它们可能先于主框架出现。
-            if area < 100_000 {
+
+            let mut class = [0u16; 64];
+            let class_len = GetClassNameW(hwnd, class.as_mut_ptr(), class.len() as i32);
+            let is_main = class_len > 0
+                && String::from_utf16_lossy(&class[..class_len as usize]) == "Chrome_WidgetWin_1"
+                && (GetWindowLongPtrW(hwnd, GWL_STYLE) as u32 & WS_THICKFRAME) != 0;
+            let has_title = GetWindowTextLengthW(hwnd) > 0;
+            let tier = if is_main && has_title {
+                2
+            } else if is_main {
+                1
+            } else {
+                0
+            };
+            // 非主框架只接受足够大的窗口（启动早期的小辅助窗不应参与）。
+            if tier == 0 && area < 100_000 {
                 return 1;
             }
-            if area > ctx.best_area {
-                ctx.best_area = area;
+            let score = tier * 1_000_000_000 + area;
+            if score > ctx.best_score {
+                ctx.best_score = score;
                 ctx.best = hwnd;
             }
         }
@@ -327,7 +350,7 @@ fn main_window_for_pids(pids: &std::collections::HashSet<u32>) -> Option<HWND> {
     let mut ctx = MainWinCtx {
         pids,
         best: std::ptr::null_mut(),
-        best_area: 0,
+        best_score: 0,
     };
     unsafe {
         EnumWindows(Some(enum_cb), &mut ctx as *mut MainWinCtx as isize);
@@ -351,7 +374,13 @@ fn show_main_window(pids: &std::collections::HashSet<u32>) -> bool {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
         let ex = (ex & !WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW;
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex as isize);
-        ShowWindow(hwnd, SW_SHOWNA);
+        // ⚠️ SW_SHOWNA 不会还原最小化窗口（IsWindowVisible 仍为 true，但内容不渲染，
+        // 滚动/IO 全停）。主窗口可能被系统/用户最小化 → 必须 SW_RESTORE。
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        } else {
+            ShowWindow(hwnd, SW_SHOWNA);
+        }
         IsWindowVisible(hwnd) != 0
     }
 }
