@@ -67,6 +67,9 @@
   display: grid;
   gap: var(--grid-gap);
   grid-template-columns: repeat(auto-fill, minmax(276px, 1fr));
+  /* ⚠️ 自动行等分:能力行数随平台不同(YouTube 1 行、Twitch 3 行),默认每个 grid 行
+     各自按本行最高卡片定高 → 跨行卡片高低不一。1fr 让**所有行**等高于最高卡片。 */
+  grid-auto-rows: 1fr;
 }
 .platform-card {
   /* 能力行数随平台不同（YouTube 只有 1 行）；用 flex 列 + 操作行 margin-top:auto
