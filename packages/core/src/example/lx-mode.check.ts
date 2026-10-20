@@ -14,7 +14,7 @@
  * 最小断言(非框架):内存存储 + 假 channel,不触网 —— 判的是编排逻辑,不是抓取。
  */
 import assert from "node:assert/strict"
-import { injectNodeHost } from "@amoeba/host"
+import { injectNodeHost, levelFor } from "@amoeba/host"
 import { getChannel, registerAllChannels, registerChannel } from "@amoeba/crawler"
 import { serializeFeed } from "@amoeba/xml"
 import { createDataLayer } from "../index.ts"
@@ -197,6 +197,22 @@ await seed("chk-lx")
   assert.equal(unsupportedPassiveCalls, beforePassive, "未声明 L9 的渠道不得调 fetchPassive()")
   assert.equal(fetchCalls, beforeFetch, "未声明 L9 也不得回退 fetch()")
   await dl.settings.set({ netLevel: 1, netLevels: {} })
+}
+
+// ── 4.7 显式渠道覆盖投影到宿主 governor(HTTP 层只认平台) ──
+{
+  // 单渠道 L0 → 该平台直通:否则「渠道设 L0」在冷却/配额层完全不生效
+  // (全局 L1 + bili:live:hot = 0,刷新仍会被平台冷却拒绝)。
+  await dl.settings.set({ netLevel: 1, netLevels: { "bili:live:hot": 0 } })
+  assert.equal(levelFor("bili"), 0, "渠道 L0 应投影到平台并覆盖全局 L1")
+  // L9 是 core 的抓取策略,不投影 —— 投影成平台会连带封掉该平台的详情/播放解析。
+  await dl.settings.set({ netLevel: 1, netLevels: { "xhs:user": 9 } })
+  assert.equal(levelFor("xhs"), 1, "渠道 L9 不投影到平台")
+  // 1~3 取更严格者(安全侧:不因个别渠道收紧而误放同平台请求)。
+  await dl.settings.set({ netLevel: 1, netLevels: { "bili:live:hot": 3 } })
+  assert.equal(levelFor("bili"), 3, "渠道 L3 应投影到平台")
+  await dl.settings.set({ netLevel: 1, netLevels: {} })
+  assert.equal(levelFor("bili"), 1, "清空渠道覆盖后回落全局等级")
 }
 
 // ── 5. autoRefresh=false:非 force 不发网络(过期缓存照用),force 照抓 ──

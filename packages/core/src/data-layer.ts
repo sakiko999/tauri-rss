@@ -165,9 +165,27 @@ export function createDataLayer(): DataLayer {
    * host 未注入 `net`(浏览器/CLI/旧宿主)时静默跳过 —— doRefresh 内的等级闸门仍生效。
    */
   function syncNetPolicy(s: AppSettings): void {
+    // governor 按 URL host 只认**平台名**,看不到 channelKey。显式写的渠道覆盖必须
+    // 投影到平台,否则「单独把某渠道设成 L0」在 HTTP 层完全不生效 —— core 闸门放行
+    // fetch,但宿主仍按平台档执行冷却/配额(典型症状:全局 L1 下 bili:live:hot 设
+    // L0,刷新仍报「平台冷却中」)。
+    // 规则:
+    //   - L0 优先(显式调试直通,覆盖平台档);
+    //   - 其余取**更严格**者(安全侧:不因个别渠道收紧而误放);
+    //   - L9 不投影 —— 它是 core 的抓取策略,投影成平台会连带封掉该平台的详情/
+    //     播放解析,那不是 L9 的语义。
+    const levels: Record<string, NetLevel> = { ...s.netLevels }
+    for (const [key, level] of Object.entries(s.netLevels)) {
+      const platform = platformOfChannel(key)
+      if (!platform || level === 9) continue
+      const prev = levels[platform]
+      if (prev === undefined) levels[platform] = level
+      else if (prev === 0 || level === 0) levels[platform] = 0
+      else levels[platform] = prev >= level ? prev : level
+    }
     try {
       // levels 是**整表替换**语义(设置页的完整平台覆盖快照)。
-      globalThis.appHost?.net?.configure({ level: s.netLevel, levels: s.netLevels })
+      globalThis.appHost?.net?.configure({ level: s.netLevel, levels })
     } catch {
       /* net 未注入 / 旧宿主:沿用宿主默认策略 */
     }
@@ -842,7 +860,21 @@ export function createDataLayer(): DataLayer {
       },
     },
     reading,
-    settings,
+    // 改设置**立即**同步网络策略:doRefresh 每次都会同步,但 loadMore / 详情补全 /
+    // 播放解析不经过 doRefresh —— 改完等级后先点「加载更多」仍按旧档执行。
+    settings: {
+      get: () => settings.get(),
+      async set(patch) {
+        const s = await settings.set(patch)
+        syncNetPolicy(s)
+        return s
+      },
+      async reset() {
+        const s = await settings.reset()
+        syncNetPolicy(s)
+        return s
+      },
+    },
     store: {
       all: () => store.all(),
       query: (q) => store.query(q),

@@ -156,8 +156,11 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
   **`xhs:explore` = 9**（正常路径本来就是导航 + 读页面 SSR，不构造 fetch；L9 的
   `fetchPassive` 先走 Network 捕获，拿不到缓冲回退页面 SSR，仍属被动）。
   ⚠️ 该内置规则只在 `appHost.browser` 存在时生效（移动端无 browser，回落普通等级，
-  否则会永远只剩缓存）。宿主 governor 只认平台名，channelKey 只影响 core 的抓取闸门。典型配置：
-  小红书平台 `9` 或仅 `xhs:user`/`xhs:explore` `9`、B站/YouTube 保持 `1`。
+  否则会永远只剩缓存）。宿主 governor 只认平台名，所以 **core 同步策略时把用户显式写的
+  channelKey 覆盖投影到平台**（`syncNetPolicy`）：L0 优先（显式直通，也是绕过平台冷却的
+  唯一入口）；1~3 取更严格者；**L9 不投影**（它是 core 的抓取策略，投影会连带封掉该平台
+  的详情/播放解析）。改设置**立即同步**（loadMore/详情补全不经过 doRefresh 的同步点）。
+  典型配置：小红书平台 `9` 或仅 `xhs:user`/`xhs:explore` `9`、B站/YouTube 保持 `1`。
   旧持久化里的 `netStrict` 已移除（忽略即可）；`netLevels` 里的旧字符串 `"lx"` 会归一化为
   `9`（全局默认位置则回落 `1`）。
 - **配额按等级缩放**：基准值是 `DEFAULT_NET_POLICY` 里的 L1；L2 = 并发/RPM ×0.5、
@@ -245,6 +248,7 @@ bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL
 bun packages/crawler/src/example/passive-capture.check.ts # LX 采集编排（假后端回放 CDP 事件）
 bun packages/resolve/src/example/router.check.ts        # by-url 路由表（host 边界 + 各平台命中）
 bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
+bun packages/resolve/src/example/bili-buvid.check.ts    # bili 登录 cookie 缺 buvid3 时补匿名指纹（-352 回归）
 bun packages/resolve/src/example/danmaku-proto.check.ts # bili 弹幕 protobuf 解码（截断帧不死循环）
 bun packages/resolve/src/example/douyu-frame.check.ts   # 斗鱼弹幕帧（一帧多包全解）
 bun packages/resolve/src/example/twitch-playlist.check.ts # Twitch master 档位排序 + login/分类 slug 归一化
@@ -397,6 +401,12 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - **扫码登录**：纯 HTTP（`passport.bilibili.com` qrcode/generate + poll），不需
   `appHost.browser`。⚠️ 上游只给**二维码内容 URL**，编码在 UI 侧（`QrImage`）；
   `biliScanLogin` 必须复用已生成的码，否则它会自己再生成一个、轮询的 key 与你展示的不是同一个
+- ⚠️ **扫码登录的 cookie 不含 buvid3/buvid4**（passport 只 Set-Cookie `SESSDATA` /
+  `bili_jct` / `DedeUserID` / `DedeUserID__ckMd5` / `sid`，实测 5 项）→
+  `biliClient.getJson({ buvid: true })` **即使带了 cookie 也要补匿名 buvid**，
+  否则 `getListByArea`（直播热门）/ space 系接口直接 `-352`。曾写成「有 cookie 就跳过
+  buvid」，症状是**扫码登录后**直播热门与直播播放解析从可用变成 352（全局 L0 也照报
+  —— 那是平台返回码，不是冷却）。回归：`bili-buvid.check.ts`
 
 **斗鱼 / 虎牙 / 抖音**
 - **douyu `rate` 是档位 ID 不是清晰度** —— 按 rate 降序会把原画 2K60 排到末尾。

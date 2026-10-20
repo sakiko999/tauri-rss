@@ -124,11 +124,17 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 **`xhs:explore` = 9**（正常路径就是导航 + 读页面 SSR，不构造 fetch；L9 的
 `fetchPassive` 先走 Network 捕获，缓冲缺失时回退页面 SSR，仍属被动）。
 该规则只在 `appHost.browser` 存在时生效 —— 移动端没有浏览器，回落平台/全局等级。
-设置页同时暴露「平台覆盖」与「渠道覆盖」两张表；渠道表列出已覆盖、内置默认与
-当前订阅实际用到的 channelKey。
+设置页暴露「默认等级」与「渠道覆盖」表；渠道表列出已覆盖、内置默认与
+当前订阅实际用到的 channelKey（平台覆盖仍可写进 `netLevels`，UI 不再单列）。
 
-⚠️ 宿主 governor 只认**平台名**（它从 URL host 推导，不知道 channel）；channelKey
-覆盖只影响 core 的抓取闸门（配额仍按平台执行）。
+⚠️ 宿主 governor 只认**平台名**（它从 URL host 推导，不知道 channel）。为了让
+「单渠道设 L0」在 HTTP 层也生效，core 同步策略时把**用户显式写的** channelKey
+覆盖投影到平台（`data-layer.ts` 的 `syncNetPolicy`）：
+- **L0 优先**：显式直通覆盖平台/全局档（调试用，也是绕过平台冷却的唯一入口）；
+- 其余 1~3 取**更严格**者（安全侧：不因个别渠道收紧而误放同平台请求）；
+- **L9 不投影**：它是 core 的抓取策略，投影成平台会连带封掉该平台的详情/播放解析。
+改设置后**立即**同步，不等下一次 refresh —— `loadMore` / 详情补全 / 播放解析都不经过
+`doRefresh` 的同步点，否则会出现「改了等级但下一次翻页仍按旧档」。
 
 正交开关（不占等级）：
 
@@ -217,8 +223,9 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   并接受 `opts.signal` —— UI 关掉二维码弹窗即 abort，否则锁被占到 5 分钟 deadline。
   ⚠️ 窗口模式按平台选：xhs/weibo 的二维码是图片（hidden 即可），douyin 是 canvas 绘制，
   hidden 下渲染停摆画不出来，必须 interactive。
-- 平台等级由 `netLevels` 覆盖；channelKey（如 `xhs:user`）也能写进这张表，但只有 core
-  的抓取闸门识别，宿主 governor 仍按 URL 平台执行配额。
+- 平台等级由 `netLevels` 覆盖；channelKey（如 `xhs:user`）也能写进这张表：core 的
+  抓取闸门按 channelKey 精确解析，宿主 governor 按投影后的平台档执行（L0 优先、
+  1~3 取严格、L9 不投影，见 §2.4）。
 - L9（LX）收敛 `doRefresh` + **详情补全**（2026-10-19）：`doRefresh` 只调
   `fetchPassive`；`resolveDetail` 在等级 9 时传 `{ passive: true }`，渠道只能导航到
   详情 URL 读页面 `__INITIAL_STATE__`（不构造 fetch/API），不支持就返回 `null` →
