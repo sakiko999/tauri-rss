@@ -170,7 +170,13 @@ export async function cdpFetch(
   })
 }
 
-/** 页面内执行任意表达式(调试/取页面状态)。 */
+/**
+ * 页面内的生产求值统一入口(默认 awaitPromise + returnByValue)。
+ *
+ * ⚠️ 这里**不做导航重试**——click / scroll 这类有副作用的表达式不能自动重放。
+ * 需要吞掉导航过渡期 `Execution context was destroyed` 的**读取**,用 cdpFetch
+ * (内部 evalWithNavRetry) 或 waitUntil;不要给 cdpEvaluate 默认加重试。
+ */
 export async function cdpEvaluate<T = unknown>(browser: BrowserBackend, expression: string): Promise<T> {
   return browser.evaluate<T>(expression, { awaitPromise: true, returnByValue: true })
 }
