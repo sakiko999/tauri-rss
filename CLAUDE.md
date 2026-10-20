@@ -898,9 +898,12 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   生产 `rss.db` · 普通 dev `rss.dev.db` · release debug `rss.release-debug.db`
   （`scripts/tauri.ts` 在 `--release` 时给 Vite 注入 `VITE_AMOEBA_PROFILE`）。
   release debug 仍走 Vite dev server（DEV=true），会在自己的库里写种子
-- **一键按类型归组**（`store/index.ts` 的 `autoGroupByKind`）先把未分组订阅按
+- **按类型归组**（`store/actions/subs.ts`）：手动一键（`autoGroupByKind`）把未分组订阅按
   `channelKind` 分桶，**只为实际有成员的 kind 建组** —— 否则会留下 0 成员空分组
-  （用户看着像归类失败）；带撤销（分组本身留着）
+  （用户看着像归类失败）；带撤销（分组本身留着）。
+  **添加订阅时自动归组**（settings `autoGroupOnAdd`，默认开，2026-10-21）：新订阅直接
+  进「视频/直播/社交/播客/文章」（同名组复用，不存在就建）；调用方显式给了**非空**
+  `groupId`（手动选组）不覆盖；OPML 导入走 `dl` 直连、按 OPML 分组，不受此开关影响。
 - 内置 RSS 直链清单 `packages/crawler/src/channels/rss/builtin.ts`；可用性结论见
   `docs/domestic-feed-availability.md`。新源先 curl 验证再并入（注意新浪科技带
   `xml-stylesheet`，会误判 HTML，实为真 RSS）

@@ -8,6 +8,24 @@ import { exportOpml, pendingImports } from "../../lib/opml.ts"
 import { applyRuntimeSettings, navTo, now, sameInfo } from "../lib.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
 
+/** kind → 自动分类的组名(手动「一键归类」与「添加时自动归类」共用同一张表)。 */
+const KIND_GROUP: Record<string, string> = {
+  video: "视频",
+  live: "直播",
+  social: "社交",
+  audio: "播客",
+  article: "文章",
+}
+
+/** 取(或创建)某内容类型对应的分组;kind 未知返回 null。 */
+async function ensureKindGroup(ctx: StoreCtx, kind: string | undefined): Promise<string | null> {
+  if (!kind) return null
+  const name = KIND_GROUP[kind] ?? "其它"
+  const hit = ctx.get().groups.find((g) => g.title === name)
+  if (hit) return hit.id
+  return ctx.get().addGroup(name)
+}
+
 type SubsActions = Pick<
   DesktopState,
   | "addSubscription"
@@ -41,7 +59,15 @@ export function createSubsActions(ctx: StoreCtx): SubsActions {
         })
         return dup.id
       }
-      const id = await dl.addSubscription(channelKey, title, info, meta)
+      // 添加时自动归类(设置项 autoGroupOnAdd,默认开):只在调用方**没指定具体分组**
+      // 时生效 —— 手动选了分组(非空 groupId)以用户选择为准。组名与手动「一键按类型
+      // 归类」一致:同名复用,不存在才建。
+      let dest = meta
+      if (get().settings?.autoGroupOnAdd && !meta?.groupId) {
+        const gid = await ensureKindGroup(ctx, dl.channelKind(channelKey))
+        if (gid) dest = { ...meta, groupId: gid }
+      }
+      const id = await dl.addSubscription(channelKey, title, info, dest)
       await syncSubscriptions()
       get().toast("ok", `已订阅 ${title}`, `渠道 ${channelKey}`)
       return id
@@ -143,13 +169,6 @@ export function createSubsActions(ctx: StoreCtx): SubsActions {
         return 0
       }
       // kind → 组名(按用户的条目实际类型,不是渠道写死的)。
-      const KIND_GROUP: Record<string, string> = {
-        video: "视频",
-        live: "直播",
-        social: "社交",
-        audio: "播客",
-        article: "文章",
-      }
       // 1. 确保目标分组存在(按名字复用已有的,不重复建)。
       const groups = get().groups.slice()
       const groupIdOf = (name: string): string | null => {

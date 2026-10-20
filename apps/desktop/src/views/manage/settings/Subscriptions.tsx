@@ -4,7 +4,7 @@ import type { Subscription, SubscriptionGroup } from "@amoeba/core"
 import { useDesktop } from "../../../store/index.ts"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
 import { Icon } from "../../../components/Icon.tsx"
-import { Menu, MenuItem, MenuSeparator } from "../../../components/Modal.tsx"
+import { Menu, MenuItem, MenuSeparator, Switch } from "../../../components/Modal.tsx"
 import { useViewNavigate } from "../../../router.tsx"
 import { EditSubscriptionDialog } from "../EditSubscriptionDialog.tsx"
 import { exportOpmlFile, pickOpmlFile } from "../../../lib/opml-file.ts"
@@ -20,6 +20,8 @@ export function Subscriptions() {
   const renameGroup = useDesktop((s) => s.renameGroup)
   const removeGroup = useDesktop((s) => s.removeGroup)
   const autoGroupByKind = useDesktop((s) => s.autoGroupByKind)
+  const settings = useDesktop((s) => s.settings)
+  const setSetting = useDesktop((s) => s.setSetting)
   const doExportOpml = useDesktop((s) => s.exportOpml)
   const doImportOpml = useDesktop((s) => s.importOpml)
   const toast = useDesktop((s) => s.toast)
@@ -55,7 +57,19 @@ export function Subscriptions() {
       <SideCardOPML {...{ onImportOpml, importing, doExportOpml, shareable, toast }} />
 
       <SideCardGroups
-        {...{ groups, subscriptions, orphanCount, autoGroupByKind, renameGroup, removeGroup, addGroup, newGroup, setNewGroup }}
+        {...{
+          groups,
+          subscriptions,
+          orphanCount,
+          autoGroupByKind,
+          renameGroup,
+          removeGroup,
+          addGroup,
+          newGroup,
+          setNewGroup,
+          autoGroupOnAdd: settings?.autoGroupOnAdd ?? false,
+          setAutoGroupOnAdd: (v: boolean) => void setSetting("autoGroupOnAdd", v),
+        }}
       />
 
       <SubscriptionTable
@@ -118,6 +132,8 @@ function SideCardGroups({
   addGroup,
   newGroup,
   setNewGroup,
+  autoGroupOnAdd,
+  setAutoGroupOnAdd,
 }: {
   groups: SubscriptionGroup[]
   subscriptions: Subscription[]
@@ -128,9 +144,27 @@ function SideCardGroups({
   addGroup: Store["addGroup"]
   newGroup: string
   setNewGroup: (v: string) => void
+  autoGroupOnAdd: boolean
+  setAutoGroupOnAdd: (v: boolean) => void
 }) {
   return (
     <SideCard title="分组" icon="folder">
+      <div className="setting-row">
+        <span className="setting-text">
+          添加订阅时按类型自动归类
+          <span className="setting-help">
+            新建订阅自动放进「视频 / 直播 / 社交 / 播客 / 文章」分组（不存在则创建）；
+            手动选择分组时不覆盖。下面的「一键归类」仍可随时整理存量未分组订阅。
+          </span>
+        </span>
+        <span className="setting-control">
+          <Switch
+            checked={autoGroupOnAdd}
+            label="添加订阅时按类型自动归类"
+            onChange={setAutoGroupOnAdd}
+          />
+        </span>
+      </div>
       {/* 一键归组:未分组订阅多起来后,逐条改分组太慢。按内容类型归入
           「视频/直播/社交/播客/文章」,带撤销。 */}
       {orphanCount > 0 ? (

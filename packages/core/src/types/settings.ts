@@ -63,6 +63,11 @@ export interface AppSettings {
   netLevels: Record<string, NetLevel>
   /** 后台自动刷新。关闭后启动 / 新建订阅不自动抓取,只允许手动刷新。 */
   autoRefresh: boolean
+  /**
+   * 添加订阅时按类型自动归组(视频/直播/社交/播客/文章;组不存在就建)。
+   * 显式指定了非空 groupId(手动选组)时不覆盖;手动「一键按类型归类」不受此开关影响。
+   */
+  autoGroupOnAdd: boolean
   /** 打开文章即标已读。 */
   markReadOnOpen: boolean
   /**
@@ -108,6 +113,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   netLevel: 1,
   netLevels: {},
   autoRefresh: true,
+  autoGroupOnAdd: true,
   markReadOnOpen: true,
   defaultQuality: "highest",
   danmakuEnabled: true,
