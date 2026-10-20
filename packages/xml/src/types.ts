@@ -10,7 +10,7 @@
  * 视频附件 / 社交互动数 …),标准 RSS 阅读器忽略它,本项目自定义解析器读全。
  */
 
-export type Kind = "article" | "social" | "video" | "audio" | "live"
+export type Kind = "article" | "social" | "video" | "audio" | "live" | "category"
 
 export interface Author {
   name: string
@@ -143,4 +143,19 @@ export interface Live extends Base {
   quality?: string
 }
 
-export type Item = Article | Social | Video | Audio | Live
+/**
+ * 分类目录条目（分区列表订阅的内容）。
+ *
+ * 它本身**不可播/不可读**：`categoryChannel` + `categoryInfo` 指向一个渠道实例
+ * （如 `twitch:category` + `{category:"just-chatting"}`），UI 点开时用
+ * `previewChannel` 取该分区的真实内容，并可按同一份参数订阅。
+ */
+export interface Category extends Base {
+  kind: "category"
+  /** 点进去预览/订阅的目标渠道 key（如 twitch:category、live:douyin:category）。 */
+  categoryChannel: string
+  /** 直接传给目标渠道的完整参数（抖音必须同时带 partition + partitionType）。 */
+  categoryInfo: Record<string, string>
+}
+
+export type Item = Article | Social | Video | Audio | Live | Category

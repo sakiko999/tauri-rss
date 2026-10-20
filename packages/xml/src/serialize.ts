@@ -137,6 +137,10 @@ function itemToTree(item: Item): Record<string, unknown> {
     if (item.isLiked !== undefined) setTpl(tree, "isLiked", item.isLiked ? "1" : "0")
     // 小红书详情页开关(匿名 GET /explore/<id> 需带 xsec_token)。
     setTplN(tree, "xsecToken", item.xsecToken)
+  } else if (item.kind === "category") {
+    // 目录条目的「点进去」目标：渠道 key + 完整参数（JSON）。
+    setTpl(tree, "categoryChannel", item.categoryChannel)
+    setTpl(tree, "categoryInfo", JSON.stringify(item.categoryInfo ?? {}))
   }
 
   return tree

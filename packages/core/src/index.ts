@@ -45,6 +45,7 @@ export type {
   VideoItem,
   AudioItem,
   LiveItem,
+  CategoryItem,
   MediaAuthor,
   MediaStream,
   MediaAttachment,

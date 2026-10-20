@@ -44,6 +44,8 @@ export function deserializeFeedWithTotal(
         return parseAudio(it, ctx)
       case "live":
         return parseLive(it, ctx)
+      case "category":
+        return parseCategory(it, ctx)
       case "article":
       default:
         return parseArticle(it, ctx)
@@ -55,7 +57,15 @@ export function deserializeFeedWithTotal(
 /** kind 解析:最小 tpl:kind > enclosure/audio(mime)> ctx.kind > article。 */
 function resolveKind(raw: Record<string, unknown>, ctxKind: MediaKind | undefined): MediaKind {
   const tpl = str(raw["tpl:kind"])
-  if (tpl && (tpl === "article" || tpl === "video" || tpl === "audio" || tpl === "live" || tpl === "social")) {
+  if (
+    tpl &&
+    (tpl === "article" ||
+      tpl === "video" ||
+      tpl === "audio" ||
+      tpl === "live" ||
+      tpl === "social" ||
+      tpl === "category")
+  ) {
     return tpl
   }
   // enclosure 派生:audio 确定性跨 kind(视频不跨——video 直链也可能 enclosure)。
@@ -228,6 +238,41 @@ function parseLive(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     notice: str(raw["tpl:notice"]),
     showTime: str(raw["tpl:showTime"]),
     // 播放流/弹幕由 resolver by-url 解析,XML 不再带 playUrls。
+  }
+}
+
+/**
+ * 分类目录条目:本身不可播,`categoryChannel`/`categoryInfo` 指向点开后的目标渠道。
+ * tpl 缺失(外部 feed)时给空值,UI 会提示无法打开,而不是静默当成文章。
+ */
+function parseCategory(it: ParsedItem, ctx: DeserializeContext): MediaItem {
+  const b = baseFields(it, ctx)
+  const raw = it.raw ?? {}
+  return {
+    ...b,
+    kind: "category",
+    // ⚠️ 目录条目不是「内容」:点开只是进预览,没有 markRead 路径(baseFields 默认
+    // isUnread:true)。不置 false 的话,5 个目录订阅会让「未读」凭空多出上百条,
+    // 且点开也消不掉,只有「全部标为已读」能清。
+    isUnread: false,
+    categoryChannel: str(raw["tpl:categoryChannel"]) ?? "",
+    categoryInfo: parseStringRecord(str(raw["tpl:categoryInfo"])),
+  }
+}
+
+/** `tpl:categoryInfo` 的 JSON → Record<string,string>(坏值/非字符串值直接丢弃)。 */
+function parseStringRecord(json: string | undefined): Record<string, string> {
+  if (!json) return {}
+  try {
+    const parsed: unknown = JSON.parse(json)
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === "string") out[k] = v
+    }
+    return out
+  } catch {
+    return {}
   }
 }
 

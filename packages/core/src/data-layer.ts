@@ -534,16 +534,28 @@ export function createDataLayer(): DataLayer {
    * 视频播放:crawler/resolver 按 item.url 路由解析。info 用订阅的 sourceInfoFor
    * (cookie 注入;rsshub 源注入 baseUrl)。
    */
+  /**
+   * 预览条目（`preview:<channelKey>`）没有订阅记录：按渠道前缀补默认 info（cookie / baseUrl）。
+   * 二级订阅（播客单集 / 分区房间）的条目就来自 `previewChannel`。
+   */
+  async function previewInfoFor(subscriptionId: string): Promise<Record<string, string> | null> {
+    const prefix = "preview:"
+    if (!subscriptionId.startsWith(prefix)) return null
+    // 复用 sourceInfoFor 的同一套规则(别再写第二份:规则漂移会变成
+    // 「抓取能取到、播放解析拿不到凭证」,而错误文案还指向「链接不对」)。
+    return sourceInfoFor({ channelKey: subscriptionId.slice(prefix.length), info: {} })
+  }
+
   async function resolvePlayByUrl(itemId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) return null
     const url = findItemUrl(itemId, subscriptionId)
     if (!url) return null
     // ⚠️ resolver 抛错(平台风控/无流/限区/需登录)**不在此吞成 null** —— 交给外层
     // `resolvePlay` 的 catching 原样透出真实错误。null 只留给「无订阅/无 url」这两种
     // 真正「不可解析」的情形(外层映射为「该条目不指向可解析的视频链接」)。曾把 resolver
     // 错误也吞成 null → 风控失败被误报成「链接不对」,用户去重装/换源(查错方向)。
-    const info = await sourceInfoFor(sub)
+    const sub = await repo.get(subscriptionId)
+    const info = sub ? await sourceInfoFor(sub) : await previewInfoFor(subscriptionId)
+    if (!info) return null
     const { streams } = await resolveVideoByUrl(url, info)
     let danmaku
     try {
@@ -556,11 +568,11 @@ export function createDataLayer(): DataLayer {
 
   /** 直播播放:同上,但 kind=live 路由。 */
   async function resolveLivePlayByUrl(roomId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) return null
     const url = findItemUrl(roomId, subscriptionId)
     if (!url) return null
-    const info = await sourceInfoFor(sub)
+    const sub = await repo.get(subscriptionId)
+    const info = sub ? await sourceInfoFor(sub) : await previewInfoFor(subscriptionId)
+    if (!info) return null
     const { streams } = await resolveLiveByUrl(url, info)
     let danmaku
     try {
@@ -677,7 +689,7 @@ export function createDataLayer(): DataLayer {
       if (!isPageable(source)) return { addedCount: 0, hasMore: false }
       const cursor = pageCursors.get(subscriptionId)
       // existing:游标是页面下标时,首次翻页的起点必须是 store 已有条数(见 Pageable 注释)。
-      const { xml, cursor: nextCursor } = await source.fetchMore(cursor, {
+      const { xml, cursor: nextCursor, hasMore: channelHasMore } = await source.fetchMore(cursor, {
         existing: store.query({ subscriptionId }).length,
       })
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
@@ -700,8 +712,11 @@ export function createDataLayer(): DataLayer {
       // 被整页重载后 state 回到首屏）。继续 hasMore 会让 UI 反复「加载更多」拿到同一页。
       // 游标没动（或本轮是首次翻页，core 原本无游标，渠道返回的重试游标不算「前进」）
       // 则是「平台还在加载」的 retry 语义，保留 hasMore。
+      // ⚠️ 渠道**明确**说「还有下一页」时不要按 0 新增判到底 —— 过滤过条目的渠道
+      // (bili:favlist 跳过失效视频)会有整页被滤空的正常情况。
       const cursorMoved = cursor !== undefined && nextCursor !== undefined && nextCursor !== cursor
-      return { addedCount, hasMore: !!nextCursor && !(cursorMoved && addedCount === 0) }
+      const exhausted = cursorMoved && addedCount === 0 && channelHasMore !== true
+      return { addedCount, hasMore: !!nextCursor && !exhausted }
     })
   }
 

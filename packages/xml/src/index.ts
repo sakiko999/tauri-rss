@@ -25,6 +25,7 @@ export type {
   LiveStatus,
   LivePlatformId,
   Live,
+  Category,
   Item,
 } from "./types.ts"
 export { serializeFeed } from "./serialize.ts"

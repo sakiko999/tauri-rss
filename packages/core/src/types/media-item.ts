@@ -5,13 +5,14 @@
  * 叠加 app 层语义(subscriptionId / isUnread / isStarred)。判别联合 keyed on
  * `kind`,app 层按 kind 收窄渲染。
  *
- * Kind 集:`article | social | video | audio | live`,无独立 image kind——
- * 图片进 `ArticleItem.media[]` 作为附件。
+ * Kind 集:`article | social | video | audio | live | category`,无独立 image kind——
+ * 图片进 `ArticleItem.media[]` 作为附件。`category` 是「分区目录」条目:本身不可播,
+ * `categoryChannel`/`categoryInfo` 指向点开后的目标渠道实例。
  */
 import type { LivePlatformId, LiveStatus } from "./live.ts"
 
 /** 渲染层认识的媒体种类。 */
-export type MediaKind = "article" | "social" | "video" | "audio" | "live"
+export type MediaKind = "article" | "social" | "video" | "audio" | "live" | "category"
 
 /** 社交图片,带可选宽高(瀑布流 span 用)。宽高未知时省略,UI 退化默认比例。 */
 export interface SocialImage {
@@ -166,9 +167,21 @@ export interface LiveItem extends MediaItemBase {
   quality?: string
 }
 
+/**
+ * 分区目录条目(订阅的内容是「分类列表」,如 Twitch 分类榜)。
+ * 点开时用 `previewChannel(categoryChannel, categoryInfo)` 取该分区的真实内容,
+ * 并可把同一份参数交给 `addSubscription` 订阅该分区。
+ */
+export interface CategoryItem extends MediaItemBase {
+  kind: "category"
+  categoryChannel: string
+  categoryInfo: Record<string, string>
+}
+
 export type MediaItem =
   | ArticleItem
   | SocialItem
   | VideoItem
   | AudioItem
   | LiveItem
+  | CategoryItem

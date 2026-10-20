@@ -98,6 +98,24 @@ ok(Array.isArray(socialImgBack.images) && socialImgBack.images.length === 2, `�
 ok(socialImgBack.images?.some((i: any) => i?.url === "https://i/a.jpg" && i?.width === 5), "第一张 URL/宽高未丢")
 ok(socialImgBack.images?.some((i: any) => i?.url === "https://i/b.jpg"), "对象 URL 未丢")
 
+// 4c. Category(分区目录条目):categoryChannel + categoryInfo(JSON)必须完整往返
+const category: Item = {
+  id: "douyin-partition:101",
+  sourceId: "live:douyin:categories",
+  kind: "category",
+  title: "聊天",
+  summary: "顶层分区",
+  fetchedAt: 1,
+  categoryChannel: "live:douyin:category",
+  categoryInfo: { partition: "101", partitionType: "4" },
+}
+const categoryBack = deserializeFeed(serializeFeed([category]), ctx)[0] as any
+console.log("Category 往返:")
+ok(categoryBack.kind === "category", `kind(得 ${categoryBack.kind})`)
+ok(categoryBack.categoryChannel === "live:douyin:category", `categoryChannel(得 ${categoryBack.categoryChannel})`)
+ok(categoryBack.categoryInfo?.partition === "101", `categoryInfo.partition(得 ${categoryBack.categoryInfo?.partition})`)
+ok(categoryBack.categoryInfo?.partitionType === "4", `categoryInfo.partitionType(得 ${categoryBack.categoryInfo?.partitionType})`)
+
 // 5. XML 良构:文本/属性里的 & < 必须转义(否则严格解析器拒收,且往返丢数据)
 const tricky: Item = {
   id: "amp", sourceId: "s", kind: "article", title: "A & B <tag>",
