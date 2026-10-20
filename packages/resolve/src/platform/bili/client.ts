@@ -185,11 +185,17 @@ async function getJson<T = Record<string, any>>(
 ): Promise<T> {
   const extra: Record<string, string> = { ...opts.headers }
   // opts.cookie 显式覆盖;opts.buvid 时补匿名指纹(space/直播 API 需要)。
-  if (opts.cookie && !extra.cookie) {
-    extra.cookie = opts.cookie
-  } else if (opts.buvid && !extra.cookie) {
+  if (opts.cookie && !extra.cookie) extra.cookie = opts.cookie
+  // ⚠️ **有 cookie 也要补 buvid3**:扫码登录只回收 passport 的 Set-Cookie
+  // (SESSDATA/bili_jct/DedeUserID/sid),不含 buvid3/buvid4;而 getListByArea /
+  // space 系接口对无 buvid 的请求直接 -352。旧写法「有 cookie 就跳过 buvid」会让
+  // 「扫码登录后」从可用变成 352(实测登录 cookie 只有上述 5 个键)。
+  if (opts.buvid) {
     await ensureBuvid()
-    if (anonBuvid) extra.cookie = anonBuvid
+    const cur = extra.cookie ?? ""
+    if (anonBuvid && !/(?:^|;\s*)buvid3=/.test(cur)) {
+      extra.cookie = cur ? `${cur}; ${anonBuvid}` : anonBuvid
+    }
   }
   const data = await httpJson<Record<string, any>>(url, {
     "user-agent": BILIBILI_UA,
