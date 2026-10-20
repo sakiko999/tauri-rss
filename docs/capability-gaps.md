@@ -35,6 +35,23 @@
     （OAuth「我的关注」）需注册应用，不建议近期做。
   - **Helix 匿名 401**（`api.twitch.tv/helix/streams`），且不提供播放地址 → 不走 Helix；
     元数据与播放 token 都走公开 web GraphQL。
+  - **分类目录未做**：`games(first)` 匿名可用（slug/displayName/观看数/封面），应作为
+    `twitch:category` 的 `listCategories` 发现入口，不另造分类 feed（见
+    `docs/channel-expansion-research.md` §4）。
+- **YouTube 直播热门 / 分区 / 播放列表未做**（2026-10-20 调研）—— Live 页
+  `browseId=UC4R8DWoMoI7CAwX8_LjQHig` 匿名返回 `Live Now`（12 条）与
+  `Live Now - News/Gaming/Sports`（各 12 条），无翻页；播放列表可走官方 RSS（≤15 条）
+  或 `VL<playlistId>`（100/页 + continuation）。详见
+  `docs/channel-expansion-research.md` §1/§2。
+- **B站合集 / 视频列表 / 收藏夹未做**（2026-10-20 调研）—— 合集
+  `seasons_archives_list`（需 Referer，`mid` 可为 0）、视频列表 `x/series/archives`
+  （需正确 `mid`，固定 20/页）、公开收藏夹 `x/v3/fav/resource/list`（私有需登录）
+  均可匿名读取。详见 `docs/channel-expansion-research.md` §3。
+- **分区订阅的二级入口未做** —— 发现页当前需手填分区参数；内容预览与「订阅该分区」
+  已存在，缺的是分类目录。建议新增 channel 级 `listCategories` 能力（不造目录 feed）。
+  ⚠️ 现有 `PlatformBrowser` 只填 `sourceInfoTpl[0]`，抖音顶层分区会漏 `partitionType`
+  （默认成子分区的 `1`，顶层应为 `4`），目录化时一并修。详见
+  `docs/channel-expansion-research.md` §4。
 
 ## 二、条件触发的迁移（当前不做，等信号）
 

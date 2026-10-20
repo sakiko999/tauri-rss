@@ -890,6 +890,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/twitch-channel.md` | Twitch 渠道（匿名公开 GQL + PlaybackAccessToken + usher HLS；频道/热门/分区已做，VOD/clip/聊天/搜索未做） |
 | `docs/desktop-crawler-service.md` | desktop 爬虫服务化选型与切分边界 |
 | `docs/capability-gaps.md` | 各平台能力缺口（分区/搜索/主播） |
+| `docs/channel-expansion-research.md` | YouTube 直播热门/分区、YouTube/B站合集与播放列表、分区订阅二级化调研（2026-10-20） |
 | `docs/cli-plan.md` | apps/cli 调试工具计划 |
 | `docs/sqlite-storage-research.md` | 存储三态与迁移 |
 | `docs/domestic-feed-availability.md` | 国内 feed 可用性实测 |
