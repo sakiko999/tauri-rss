@@ -148,16 +148,17 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
 `appHost.http`，不在治理范围内。
 
 - **等级统一用数字**（设置页「网络与风控」）：`0` 直通（仅调试）· `1` 入门 ·
-  `2` 标准 · `3` 严格。全局默认 `AppSettings.netLevel` = 0~3；`netLevels` 支持
-  平台 / `"*"` / channelKey 覆盖。
+  `2` 标准 · `3` 严格。全局默认 `AppSettings.netLevel` = 0~3；`netLevels` 的键
+  **只有平台名与 `"*"`**（`"*"` 对未精确覆盖的平台同样生效）。设置页只提供平台行
+  （`Network.tsx` 的 `PLATFORM_ROWS`）—— 账号风控、冷却与并发/RPM 都是平台维度，
+  按订阅拆没有可执行语义。
   ⚠️ **原 L9（浏览器被动）已移除**（2026-10-21）：把「谁发起请求」做成等级会让该平台
   完全看不到内容，属于过度防御；它改为**渠道属性** `RssChannel.passive`（见下）。
   存量 `9` / `"lx"` 在 `settings-repo` 归一化为 `1`（被动渠道不受影响 —— 属性优先）。
-  宿主 governor 只认平台名，所以 **core 同步策略时把用户显式写的 channelKey 覆盖投影到
-  平台**（`syncNetPolicy`）：L0 优先（显式直通，也是绕过平台冷却的唯一入口）；1~3 取
-  更严格者；**被动渠道的覆盖不参与投影**（它不产生应用构造的请求）。改设置**立即同步**
-  （loadMore/详情补全不经过 doRefresh 的同步点）。
-  旧持久化里的 `netStrict` 已移除（忽略即可）。
+  存量 **channelKey 覆盖**（旧 UI 可写，如 `bili:live:hot`）在 DataLayer 启动时折叠到
+  平台（`foldChannelLevels`：L0 优先 / 1~3 取严格 / 被动渠道的键丢弃），之后只写平台键；
+  `syncNetPolicy` 仍兜底折叠未迁移的写入。改设置**立即同步**（loadMore/详情补全不经过
+  doRefresh 的同步点）。旧持久化里的 `netStrict` 已移除（忽略即可）。
 - **配额按等级缩放**：基准值是 `DEFAULT_NET_POLICY` 里的 L1；L2 = 并发/RPM ×0.5、
   最小间隔 ×2；L3 = ×0.25、×4。冷却时长不随等级变。
   L1 是**软限制**（bili/youtube 12 并发 / 600 RPM / 50ms；其它 8 / 300 / 50ms；

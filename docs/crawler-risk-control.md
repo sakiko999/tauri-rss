@@ -110,7 +110,7 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 `RssChannel.passive`。存量 `9` / `"lx"` 在 settings-repo 归一化为 `1`（被动渠道不受
 影响 —— 属性优先）。
 
-**等级是「全局默认 + 平台覆盖 + 渠道覆盖」**（`AppSettings.netLevel` + `netLevels`）。
+**等级是「全局默认 + 平台覆盖 + `"*"` 兜底」**（`AppSettings.netLevel` + `netLevels`）。
 现实里各平台不该用同一档：B站/YouTube 的匿名 API 稳定，保持 L1 更可靠。
 
 ⚠️ **被动采集是渠道自身属性**（`RssChannel.passive`，2026-10-21）：
@@ -123,18 +123,20 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 解析顺序（防御等级）：
 
 ```
-用户 channelKey 覆盖 → 平台覆盖 → "*"（未知 host / RSS 兜底）→ 全局默认
+平台覆盖 → "*"（兜底覆盖，对未精确列出的平台同样生效）→ 全局默认
 ```
 
-设置页暴露「默认等级」与「渠道覆盖」表；渠道表列出已覆盖与当前订阅实际用到的
-channelKey（平台覆盖仍可写进 `netLevels`，UI 不再单列）。
+设置页只暴露「默认等级」与「平台覆盖」表（`Network.tsx` 的 `PLATFORM_ROWS`：
+小红书 / B站 / 微博 / 抖音 / 斗鱼 / 虎牙 / YouTube / Twitch / Apple 播客 / `"*"`）。
+粒度停在平台：账号风控、冷却与并发/RPM 都是平台维度，按订阅拆没有可执行语义。
 
-⚠️ 宿主 governor 只认**平台名**（它从 URL host 推导，不知道 channel）。为了让
-「单渠道设 L0」在 HTTP 层也生效，core 同步策略时把**用户显式写的** channelKey
-覆盖投影到平台（`data-layer.ts` 的 `syncNetPolicy`）：
-- **L0 优先**：显式直通覆盖平台/全局档（调试用，也是绕过平台冷却的唯一入口）；
-- 其余 1~3 取**更严格**者（安全侧：不因个别渠道收紧而误放同平台请求）；
-- 被动渠道的覆盖不参与投影（它不产生应用构造的请求）。
+**RSS 直链怎么办**：`"*"` 是它们的等级档。宿主对未知 host 按 **host 各自**建平台桶
+（`platformOf` 返回 host 名），所以配额/冷却天然按 feed 互不干扰；等级统一吃 `"*"`
+（或全局）。不需要、也没有为每个 feed 单列一行 —— 订阅地址是任意的，逐 host 列只会是噪声。
+
+⚠️ 兼容：旧版允许 `netLevels[channelKey]`（旧 UI 的渠道覆盖）。DataLayer 启动时
+`foldChannelLevels` 把它们折叠成平台键（L0 优先 / 1~3 取严格 / 被动渠道的键丢弃），
+之后只写平台键；`syncNetPolicy` 仍会兜底折叠尚未迁移的写入。
 改设置后**立即**同步，不等下一次 refresh —— `loadMore` / 详情补全 / 播放解析都不经过
 `doRefresh` 的同步点，否则会出现「改了等级但下一次翻页仍按旧档」。
 
@@ -201,10 +203,10 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | 请求元数据 | `global.d.ts` 的 `HttpRequest.policy?: { platform?, metered?, dedupeKey? }` |
 | 播放分片 | `hlsHostLoader` / `dashHostLoader` 显式传 `policy: { metered: false }`，不靠 host/扩展名猜（原生 mp4/`<img>` 不经 `appHost.http`，仍在治理之外） |
 | 平台配额 | L1 软限制：bili/youtube 12/600/50ms，其它平台 8/300/50ms；未知 host 一 host 一桶 8/300/50。L2 = ×0.5 / 间隔 ×2，L3 = ×0.25 / 间隔 ×4。全局并发 32 |
-| 等级 | **全局默认 + 平台覆盖 + 渠道覆盖**：`AppSettings.netLevel` + `netLevels`（含 `"*"` 兜底，全部为 0~3）；core 同步时把显式渠道覆盖投影到平台（L0 优先 / 1~3 取严格 / 被动渠道跳过），host 的 `levelFor(platform)` 只认精确平台 → `"*"` → 全局 |
+| 等级 | **全局默认 + 平台覆盖 + `"*"` 兜底**：`AppSettings.netLevel` + `netLevels`；host 的 `levelFor(platform)` 只认精确平台 → `"*"` → 全局。旧 channelKey 键启动时折叠（`foldChannelLevels`） |
 | 冷却 | `reportRisk(platform, signal)`；计量请求返回 412/418/403/429 时自动写；`governor:cooldowns` best-effort 持久化 |
 | 浏览器闸门 | `net.browserGate(platform)`：CDP 操作入口的冷却 + 最小间隔 + 抖动（CDP 不经 `governedHttp`）；登录流程显式绕过冷却 |
-| 等级与开关 | `AppSettings.netLevel / netLevels / autoRefresh` + 设置页「网络与风控」（全局默认 + 渠道覆盖表） |
+| 等级与开关 | `AppSettings.netLevel / netLevels / autoRefresh` + 设置页「网络与风控」（全局默认 + 平台覆盖表） |
 | 被动属性 | `RssChannel.passive`（crawler channel 级，core 投影 `ChannelInfo.passive`；目前仅 `xhs:explore`）；有浏览器时只调 `fetchPassive`，无浏览器回落主动抓取 |
 | 被动闸门 | `packages/core/src/data-layer.ts` 的 `doRefresh`：`autoRefresh=false` 且非 force 只读缓存；渠道 `passive` 且有浏览器时只调 `fetchPassive()`，**绝不回退 `fetch()`** |
 | 风控信号 | bili 412/-352/-509、weibo 418/403/432/-100、douyin 4031/2483、youtube 429、xhs verify-box/300011 |
@@ -225,8 +227,8 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   并接受 `opts.signal` —— UI 关掉二维码弹窗即 abort，否则锁被占到 5 分钟 deadline。
   ⚠️ 窗口模式按平台选：xhs/weibo 的二维码是图片（hidden 即可），douyin 是 canvas 绘制，
   hidden 下渲染停摆画不出来，必须 interactive。
-- 平台等级由 `netLevels` 覆盖；channelKey（如 `xhs:user`）也能写进这张表：宿主
-  governor 按投影后的平台档执行（L0 优先、1~3 取严格、被动渠道跳过，见 §2.4）。
+- 平台等级由 `netLevels` 覆盖（平台名 / `"*"`）；旧 channelKey 键启动时折叠成平台档
+  （L0 优先、1~3 取严格、被动渠道跳过，见 §2.4）。
 - 被动采集收敛 `doRefresh` + **详情补全**（2026-10-19）：`doRefresh` 对 `passive`
   渠道只调 `fetchPassive`；`resolveDetail` 同样传 `{ passive: true }`，渠道只能导航到
   详情 URL 读页面 `__INITIAL_STATE__`（不构造 fetch/API），不支持就返回 `null` →

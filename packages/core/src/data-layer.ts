@@ -121,8 +121,20 @@ export function createDataLayer(): DataLayer {
   const bodyCache = createBodyCacheRepo(storage)
   const reading = createReadingRepository(storage, now)
   const settings = createSettingsRepository(storage)
-  // 启动时把网络策略同步给宿主 governor(best-effort;不阻塞 DataLayer 创建)。
-  void settings.get().then(syncNetPolicy).catch(() => {})
+  // 启动时把网络策略同步给宿主 governor,并把旧版 channelKey 覆盖折叠成平台键
+  // (best-effort;不阻塞 DataLayer 创建)。
+  void settings
+    .get()
+    .then(async (s) => {
+      const folded = foldChannelLevels(s.netLevels)
+      if (!folded) {
+        syncNetPolicy(s)
+        return
+      }
+      const next = await settings.set({ netLevels: folded })
+      syncNetPolicy(next)
+    })
+    .catch(() => {})
   const store = createMediaStore(now)
   /** 分页游标:订阅 → 当前翻到的位置(refresh 重置;UI 无感,由 loadMore 内部维护)。 */
   const pageCursors = new Map<string, string>()
@@ -165,31 +177,40 @@ export function createDataLayer(): DataLayer {
    * host 未注入 `net`(浏览器/CLI/旧宿主)时静默跳过 —— doRefresh 内的等级闸门仍生效。
    */
   function syncNetPolicy(s: AppSettings): void {
-    // governor 按 URL host 只认**平台名**,看不到 channelKey。显式写的渠道覆盖必须
-    // 投影到平台,否则「单独把某渠道设成 L0」在 HTTP 层完全不生效 —— core 闸门放行
-    // fetch,但宿主仍按平台档执行冷却/配额(典型症状:全局 L1 下 bili:live:hot 设
-    // L0,刷新仍报「平台冷却中」)。
-    // 规则:
-    //   - L0 优先(显式调试直通,覆盖平台档);
-    //   - 其余取**更严格**者(安全侧:不因个别渠道收紧而误放);
-    //   - 被动渠道不参与(它不产生应用构造的请求,等级对它没有意义)。
-    const levels: Record<string, NetLevel> = { ...s.netLevels }
-    for (const [key, level] of Object.entries(s.netLevels)) {
-      const platform = platformOfChannel(key)
-      if (!platform) continue
-      // 被动渠道不构造主动请求,它的等级（含存量值）不参与平台档投影。
-      if (getChannel(key)?.passive) continue
-      const prev = levels[platform]
-      if (prev === undefined) levels[platform] = level
-      else if (prev === 0 || level === 0) levels[platform] = 0
-      else levels[platform] = prev >= level ? prev : level
-    }
+    // governor 按 URL host 只认**平台名**;旧版 channelKey 覆盖先折叠成平台键(正常
+    // 启动时已迁移,这里兜底任何尚未迁移的写入)。
+    const levels = foldChannelLevels(s.netLevels) ?? s.netLevels
     try {
       // levels 是**整表替换**语义(设置页的完整平台覆盖快照)。
       globalThis.appHost?.net?.configure({ level: s.netLevel, levels })
     } catch {
       /* net 未注入 / 旧宿主:沿用宿主默认策略 */
     }
+  }
+
+  /**
+   * 旧版 channelKey 覆盖 → 平台键(2026-10-21 设置页改为只按平台)。
+   * 返回 null = 无需迁移(没有 channelKey 键)。
+   * 规则与旧运行时投影一致:
+   *   - **L0 优先**(显式调试直通,覆盖平台档);
+   *   - 其余取**更严格**者(不因个别渠道收紧而误放);
+   *   - 被动渠道的存量键**丢弃**(它不产生应用构造的请求,等级无意义)。
+   */
+  function foldChannelLevels(src: Record<string, NetLevel>): Record<string, NetLevel> | null {
+    let changed = false
+    const levels: Record<string, NetLevel> = { ...src }
+    for (const [key, level] of Object.entries(src)) {
+      const platform = platformOfChannel(key)
+      if (!platform) continue
+      delete levels[key]
+      changed = true
+      if (getChannel(key)?.passive) continue
+      const prev = levels[platform]
+      if (prev === undefined) levels[platform] = level
+      else if (prev === 0 || level === 0) levels[platform] = 0
+      else levels[platform] = prev >= level ? prev : level
+    }
+    return changed ? levels : null
   }
 
   /** channelKey → 平台名(与 host governor 的 URL 平台分类同名)。 */

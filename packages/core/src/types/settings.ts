@@ -54,10 +54,11 @@ export interface AppSettings {
   /** 网络请求风控**全局默认**等级。0 无限制 / 1 入门 / 2 标准 / 3 严格(不含 9)。 */
   netLevel: GlobalNetLevel
   /**
-   * 等级覆盖(平台名 / `"*"` / channelKey → 等级)。未列出的平台继承 `netLevel`。
-   * core 的抓取闸门按 channelKey 精确解析；宿主 governor 只认平台，所以
-   * `syncNetPolicy` 会把显式 channelKey 覆盖**投影到平台**（L0 优先、1~3 取严格、
-   * 被动渠道不参与）。
+   * 等级覆盖(**平台名** / `"*"` → 等级)。未列出的平台继承 `"*"` 或 `netLevel`。
+   * 设置页只提供平台行 —— 账号/冷却/配额都是平台维度，按订阅拆没有可执行语义。
+   *
+   * 兼容:旧版允许 channelKey 键(如 `bili:live:hot`)，启动时由 data-layer 折叠到
+   * 平台(L0 优先、1~3 取严格、被动渠道的存量键丢弃)，之后只写平台键。
    */
   netLevels: Record<string, NetLevel>
   /** 后台自动刷新。关闭后启动 / 新建订阅不自动抓取,只允许手动刷新。 */

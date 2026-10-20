@@ -214,7 +214,7 @@ await seed("chk-active")
   await dl.settings.set({ netLevel: 1, netLevels: {} })
 }
 
-// ── 4.7 显式渠道覆盖投影到宿主 governor(HTTP 层只认平台) ──
+// ── 4.7 旧版 channelKey 覆盖折叠到平台(设置页已只按平台;这里锁兼容路径) ──
 {
   // 单渠道 L0 → 该平台直通:否则「渠道设 L0」在冷却/配额层完全不生效
   // (全局 L1 + bili:live:hot = 0,刷新仍会被平台冷却拒绝)。
@@ -228,6 +228,26 @@ await seed("chk-active")
   assert.equal(levelFor("xhs"), 1, "被动渠道的覆盖不投影到平台")
   await dl.settings.set({ netLevel: 1, netLevels: {} })
   assert.equal(levelFor("bili"), 1, "清空渠道覆盖后回落全局等级")
+}
+
+// ── 4.8 旧版 channelKey 键在启动时折叠成平台键(设置页已只按平台) ──
+{
+  await dl.settings.set({
+    netLevel: 1,
+    netLevels: { "bili:live:hot": 0, "weibo:user": 2, "xhs:explore": 3 },
+  })
+  // 新 DataLayer 的启动同步会折叠并回写(memStorage 是同一个实例)。
+  const dl2 = createDataLayer()
+  let migrated = (await dl2.settings.get()).netLevels
+  for (let i = 0; i < 20 && migrated["bili:live:hot"] !== undefined; i++) {
+    await new Promise((r) => setTimeout(r, 10))
+    migrated = (await dl2.settings.get()).netLevels
+  }
+  assert.equal(migrated["bili:live:hot"], undefined, "渠道键应被折叠掉")
+  assert.equal(migrated["bili"], 0, "渠道 L0 折叠到平台")
+  assert.equal(migrated["weibo"], 2, "渠道 1~3 折叠到平台")
+  assert.equal(migrated["xhs"], undefined, "被动渠道的存量键丢弃")
+  assert.equal(levelFor("bili"), 0, "折叠结果应同步给 governor")
 }
 
 // ── 5. autoRefresh=false:非 force 不发网络(过期缓存照用),force 照抓 ──
@@ -276,5 +296,5 @@ for (const id of [
 }
 
 console.log(
-  "✔ 被动采集/等级自检通过(passive 属性只走 fetchPassive / 缺失回退缓存 / autoRefresh 开关 / 渠道覆盖优先级 / L0-L1 走 fetch / 覆盖投影)",
+  "✔ 被动采集/等级自检通过(passive 只走 fetchPassive / 不随等级 / 无浏览器回落 / 缓存回退 / autoRefresh / 旧渠道键折叠 / L0-L1 走 fetch)",
 )
