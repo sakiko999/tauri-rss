@@ -19,12 +19,48 @@ import {
   normalizeTwitchLogin,
   now,
   parseRoomIds,
+  type TwitchStreamNode,
   type TwitchUser,
 } from "@amoeba/resolve"
 
 /** 缩略图模板(Twitch 预览图;离线频道也返回占位图)。 */
 function thumbnailFor(login: string): string {
   return `https://static-cdn.jtvnw.net/previews-ttv/live_user_${login}-640x360.jpg`
+}
+
+/**
+ * 直播流列表条目(热门 / 分区)→ Live item(纯函数,供自检直接调用)。
+ * 列表里的流**必定在播**,故 liveStatus 恒 "live";没有 login 的脏数据直接丢
+ * (`id`/`url`/`roomId` 都依赖它,编不出来)。标题为空回落 displayName,
+ * displayName 也为空再回落 login;开播时间解析失败给 undefined(不污染排序)。
+ */
+export function twitchStreamToLive(
+  stream: TwitchStreamNode,
+  sourceId: string,
+  fetchedAt: number,
+): Live | null {
+  const login = String(stream.broadcaster?.login ?? "").trim().toLowerCase()
+  if (!login) return null
+  const displayName = String(stream.broadcaster?.displayName ?? "").trim() || login
+  const createdAt = stream.createdAt
+  const showTime =
+    createdAt && Number.isFinite(Date.parse(createdAt)) ? new Date(createdAt).toISOString() : undefined
+  const viewers = Number(stream.viewersCount)
+  return {
+    id: `twitch:${login}`,
+    sourceId,
+    kind: "live",
+    url: `https://www.twitch.tv/${login}`,
+    platform: "twitch",
+    roomId: login,
+    liveStatus: "live",
+    online: Number.isFinite(viewers) ? viewers : 0,
+    title: stream.title || displayName,
+    thumbnail: stream.previewImageURL || thumbnailFor(login),
+    author: { name: displayName },
+    showTime,
+    fetchedAt,
+  }
 }
 
 /**

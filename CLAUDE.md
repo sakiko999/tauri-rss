@@ -71,7 +71,8 @@ packages/
   crawler/     ★ 订阅源抓取层，**只输出订阅数据**。一切皆 RssChannel：channel 定义 +
                getSource → { fetch }，取数经 resolve 的平台 client。
                不绑定流/弹幕解析（归 resolve by-url）。输出标准 RSS + 最小 tpl:kind/total
-               twitch/（twitch:live 直播频道，一期见 docs/twitch-channel.md）
+               twitch/（twitch:live 频道 + twitch:hot 热门 + twitch:category 分区，
+               见 docs/twitch-channel.md）
   core/        订阅维护者。基于 crawler 输出维护订阅/分组/刷新编排/持久化；
                自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/      ★ 媒体播放器（video/audio/live 共用）。PlayableMedia = 唯一入口
@@ -200,6 +201,8 @@ bun run rss fetch bili:popular          # 单渠道抓取（--xml/--json）
 bun run rss fetch apple:podcast-chart   # Apple 播客热门榜（匿名；--kv genre=1318 换分类）
 bun run rss item <url>                  # by-url：路由 + streams 全档位 + 弹幕元信息
 bun run rss fetch twitch:live --kv roomIds=shroud,riotgames  # Twitch 直播频道（匿名；离线也返 item）
+bun run rss fetch twitch:hot            # Twitch 热门直播（观看数降序，游标翻页）
+bun run rss fetch twitch:category --kv category=just-chatting  # Twitch 分区（slug / 目录链接）
 bun run rss item https://www.twitch.tv/<login>  # Twitch 直播 HLS 档位（variant playlist，非 master）
 bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
 bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计
@@ -219,7 +222,7 @@ bun packages/host/src/example/host-check.ts             # 门面字段（openExt
 bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/LX/去重/冷却/strict/并发）
 bun packages/core/src/example/lx-mode.check.ts          # LX 闸门（只走 fetchPassive / autoRefresh）
 bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload → Item 字段映射
-bun packages/crawler/src/example/twitch-live.check.ts   # Twitch GQL → Live 映射（live/offline/标题回落/在线数）
+bun packages/crawler/src/example/twitch-live.check.ts   # Twitch GQL → Live 映射（频道 live/offline + 热门/分区流列表）
 bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录页/匿名/L9 路由矩阵 + origin 校验）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL 归一化 / TTL / 限额淘汰）
@@ -228,7 +231,7 @@ bun packages/resolve/src/example/router.check.ts        # by-url 路由表（hos
 bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
 bun packages/resolve/src/example/danmaku-proto.check.ts # bili 弹幕 protobuf 解码（截断帧不死循环）
 bun packages/resolve/src/example/douyu-frame.check.ts   # 斗鱼弹幕帧（一帧多包全解）
-bun packages/resolve/src/example/twitch-playlist.check.ts # Twitch master 档位排序 + login 归一化
+bun packages/resolve/src/example/twitch-playlist.check.ts # Twitch master 档位排序 + login/分类 slug 归一化
 bun packages/core/src/example/serialize-contract.check.ts # tpl: 契约完整性（serialize 写 vs deserialize 读）
 bun packages/core/src/example/body-cache.check.ts       # 文章正文持久缓存（索引/退订清除/容错）
 bun apps/mobile/src/html.check.ts                       # mobile 正文 HTML→纯文本（探测/分段/实体）
@@ -518,9 +521,21 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   `[a-z0-9_]{3,25}`，排除站内保留字；多段路径一期不认）。离线频道仍产 `offline` item
   （下播不空订阅），**全部频道失败才抛错**。token 的 `value` 是 JSON（`geoblock_reason` /
   `blackout_enabled` 等）——**不进日志/错误文案**；地区/版权受限直接报错不重试。
+- `twitch:hot`（无参数，`streams(sort: VIEWER_COUNT)`）与 `twitch:category`（参数
+  `category`，接受 slug 或 `twitch.tv/directory/category/<slug>`，走
+  `game(slug).streams`）共用 `twitchStreamToLive` 映射与 `channels/twitch/streams.ts` 的
+  游标 `fetchMore`。⚠️ **首次 `fetchMore` 要两次请求**：core 首次翻页不传首页游标，渠道
+  先取首页拿 `endCursor` 再取第二页（不能直接返回首页，会与首屏重复）；首页到底则返回
+  空 XML 且无 cursor（core 判「没有更多」）。⚠️ **流列表必须用 Android app 公开
+  Client-ID**（`TWITCH_MOBILE_CLIENT_ID`）：网页 ID 从第二页起（带 `after`）返回
+  `IntegrityCheckFailed` 且 `data.streams = null`。频道元数据/播放 token 仍走网页 ID。
+  `first` 上游硬上限 30（>30 报 400），`clampFirst` 统一 clamp；`throwOnErrors` 保留，
+  移动 ID 也失效时透出原因，别当成「字段缺失」。
+- `games(first)` 分类榜匿名可用，但**分类本身没有可播房间** → 暂不做 channel（订阅后
+  只会是空列表）；发现层若要做，走「点分类 → 订阅 `twitch:category`」。
 - **聊天弹幕属二期**：IRC（`wss://irc-ws.chat.twitch.tv:443`、`justinfan`）文本帧可用，
   但宿主 `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 二期先给宿主 ws 加 text 帧。
-  VOD / clip 路由（要排在频道名单段路径之前）与搜索/分区也未做。
+  VOD / clip 路由（要排在频道名单段路径之前）、关键词搜索、分类榜 channel、登录均未做。
 
 **cookie / 登录**
 - `packages/core/src/bilibili-cookie.ts` 四个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。
@@ -872,7 +887,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/danmaku-research.md` | 弹幕机制（VOD 分段 / 直播四平台 codec） |
 | `docs/youtube-stream-extraction.md` | YouTube 直链（ANDROID_VR / poToken / DASH 自拼） |
 | `docs/xhs-signature-research.md` | 小红书签名史与社区现状复核 |
-| `docs/twitch-channel.md` | Twitch 渠道一期（匿名公开 GQL + PlaybackAccessToken + usher HLS；VOD/clip/聊天/搜索二期） |
+| `docs/twitch-channel.md` | Twitch 渠道（匿名公开 GQL + PlaybackAccessToken + usher HLS；频道/热门/分区已做，VOD/clip/聊天/搜索未做） |
 | `docs/desktop-crawler-service.md` | desktop 爬虫服务化选型与切分边界 |
 | `docs/capability-gaps.md` | 各平台能力缺口（分区/搜索/主播） |
 | `docs/cli-plan.md` | apps/cli 调试工具计划 |

@@ -105,3 +105,40 @@ export function isTwitchLogin(value: string | null | undefined): boolean {
   const login = String(value ?? "").trim().toLowerCase()
   return LOGIN_RE.test(login) && !RESERVED.has(login)
 }
+
+/** 分类 slug 字符集与长度(`just-chatting` 这类)。 */
+const CATEGORY_RE = /^[a-z0-9-]{2,64}$/
+
+/** 目录页 URL → slug(只认频道域下的 `/directory/category/<slug>`)。 */
+function categoryFromUrl(input: string): string | null {
+  let url: URL
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(input) ? input : `https://${input}`)
+  } catch {
+    return null
+  }
+  if (!isTwitchChannelHost(url.hostname)) return null
+  const segments = url.pathname.split("/").filter(Boolean)
+  if (segments.length !== 3) return null
+  if (segments[0]!.toLowerCase() !== "directory" || segments[1]!.toLowerCase() !== "category") return null
+  let slug: string
+  try {
+    slug = decodeURIComponent(segments[2]!)
+  } catch {
+    return null
+  }
+  return slug.toLowerCase()
+}
+
+/**
+ * 归一化 Twitch 分类 slug。接受裸 slug(`just-chatting`)与目录页链接
+ * (`https://www.twitch.tv/directory/category/just-chatting`,带不带 scheme 都行);
+ * host 仅 `twitch.tv` 频道域,slug 只允许 `[a-z0-9-]{2,64}`,其它返回 null。
+ */
+export function normalizeTwitchCategory(input: string | null | undefined): string | null {
+  const raw = String(input ?? "").trim()
+  if (!raw) return null
+  const slug = raw.includes("/") || /twitch\.tv/i.test(raw) ? categoryFromUrl(raw) : raw.toLowerCase()
+  if (!slug || !CATEGORY_RE.test(slug)) return null
+  return slug
+}

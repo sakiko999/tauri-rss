@@ -21,14 +21,18 @@
   `weibo/user.ts:9-13`）。
 - **bili 账号服务**（参照 `bilibili_account_service.dart:191`）—— 未做：登录后拉昵称/uid
   展示（`/x/member/web/account`）。
-- **Twitch 一期只做直播频道**（2026-10-20）—— `twitch:live`（`roomIds` 多频道）+ by-url
-  直播 HLS 已落地；**VOD / clip / 聊天弹幕 / 搜索与分区 / 登录均未做**：
+- **Twitch 未做部分**（2026-10-20）—— 已落地：`twitch:live`（`roomIds` 多频道）、
+  `twitch:hot`（热门，观看数降序）、`twitch:category`（分区流列表，slug/目录链接，
+  游标翻页）+ by-url 直播 HLS 播放；**VOD / clip / 聊天弹幕 / 关键词搜索 / 登录均未做**：
   - VOD/clip 路由要排在频道名**单段路径之前**（`/videos/<id>`、`/<login>/clip/<slug>`），
-    二期再加；一期 `normalizeTwitchLogin` 对多段路径一律返回 null（避免误当频道）。
+    二期再加；`normalizeTwitchLogin` 现在对多段路径一律返回 null（避免误当频道）。
+  - **分类榜 `games(first)` 不做 channel**：匿名可用，但只给分类元数据（name/slug），
+    **分类本身没有可播房间**，订阅后只会是空列表。要做发现层应「点分类 → 订阅
+    `twitch:category`」，不另造分类 feed。
   - 聊天（IRC `wss://irc-ws.chat.twitch.tv:443` + `justinfan`）文本帧实测可用，但宿主
     `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 要先给宿主 ws 加 text 帧。
-  - 搜索/分区依赖 persisted query（结构不稳），二期再评估；登录（OAuth「我的关注」）需
-    注册应用，不建议近期做。
+  - 关键词搜索（搜频道/流）依赖 persisted query（结构不稳），二期再评估；登录
+    （OAuth「我的关注」）需注册应用，不建议近期做。
   - **Helix 匿名 401**（`api.twitch.tv/helix/streams`），且不提供播放地址 → 不走 Helix；
     元数据与播放 token 都走公开 web GraphQL。
 

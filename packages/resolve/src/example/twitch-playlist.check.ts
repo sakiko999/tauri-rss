@@ -2,15 +2,17 @@
  * Twitch master 解析 / login 归一化自检 ——
  * `bun packages/resolve/src/example/twitch-playlist.check.ts`
  *
- * 守护两个**静默错值**：
+ * 守护三个**静默错值**：
  *   1. `normalizeTwitchLogin` / router 把站内路由（`/videos/123`、clip 多段路径、
  *      `clips.twitch.tv/<slug>` 单段路径）或保留字当成频道名 —— 会产出永远离线的假频道；
- *   2. usher master 的档位顺序**不是高→低**（实测 audio_only 夹在中间、1080p 靠后），
+ *   2. `normalizeTwitchCategory` 把任意 URL/多段路径当成分类 slug，或漏掉目录页链接 ——
+ *      前者会拼出必然空结果的 `game(slug)`，后者让 `twitch:category` 永远报「分类无效」；
+ *   3. usher master 的档位顺序**不是高→低**（实测 audio_only 夹在中间、1080p 靠后），
  *      而播放器选流契约是「取 `streams[0]`」。排序错了不会报错，只会静默降画质。
  */
 import { parseTwitchMaster, twitchStreamsFromMaster } from "../platform/twitch/live.ts"
 import { resolveRoute } from "../resolver/router.ts"
-import { normalizeTwitchLogin } from "../utils/twitch.ts"
+import { normalizeTwitchCategory, normalizeTwitchLogin } from "../utils/twitch.ts"
 
 let fails = 0
 const ok = (c: unknown, label: string) => {
@@ -65,6 +67,41 @@ norm("shroud-name", null) // 连字符不在 login 字符集
 norm("sh rou", null)
 norm("https://example.com/shroud", null) // 非 twitch 域
 norm("https://nottwitch.tv/shroud", null)
+
+// ── 1b. 分类 slug 归一化（twitch:category 的 `category` 参数）────────────────
+console.log("分类 slug 归一化:")
+const cat = (input: string | null | undefined, expected: string | null) => {
+  const got = normalizeTwitchCategory(input)
+  ok(got === expected, `${JSON.stringify(input)} → ${JSON.stringify(expected)}（得 ${JSON.stringify(got)}）`)
+}
+
+cat("just-chatting", "just-chatting") // 裸 slug
+cat("JUST-CHATTING", "just-chatting") // 小写归一
+cat("  just-chatting  ", "just-chatting")
+cat("https://www.twitch.tv/directory/category/just-chatting", "just-chatting") // 目录页链接
+cat("https://www.twitch.tv/directory/category/Just-Chatting?foo=1", "just-chatting")
+cat("https://www.twitch.tv/directory/category/just-chatting/", "just-chatting") // 尾斜杠
+cat("https://m.twitch.tv/directory/category/just-chatting", "just-chatting")
+cat("twitch.tv/directory/category/just-chatting", "just-chatting") // 无 scheme
+cat("https://www.twitch.tv/directory/category/just%2Dchatting", "just-chatting") // 百分号编码
+
+console.log("分类非法输入:")
+cat("", null)
+cat("   ", null)
+cat(null, null)
+cat(undefined, null)
+cat("a", null) // 少于 2 位
+cat("a".repeat(65), null) // 超过 64 位
+cat("just_chatting", null) // 下划线不在 slug 字符集
+cat("just chatting", null)
+cat("https://www.twitch.tv/just-chatting", null) // 单段路径不是目录页
+cat("https://www.twitch.tv/directory", null)
+cat("https://www.twitch.tv/directory/category", null)
+cat("https://www.twitch.tv/directory/game/just-chatting", null) // 路径段不是 category
+cat("https://www.twitch.tv/directory/category/just-chatting/extra", null) // 多段
+cat("https://www.twitch.tv/directory/category/just%2Fchatting", null) // 解码后含斜杠
+cat("https://example.com/directory/category/just-chatting", null) // 非 twitch 域
+cat("https://clips.twitch.tv/directory/category/just-chatting", null) // 非频道域
 
 console.log("router 只认频道域:")
 ok(resolveRoute("https://www.twitch.tv/shroud")?.id === "shroud", "www 频道页命中")

@@ -1,12 +1,15 @@
 /**
  * twitch:live 映射自检 —— `bun packages/crawler/src/example/twitch-live.check.ts`
  *
- * 用最小 GQL 样本直接调 channel 导出的纯函数 `twitchLiveItem`，锁住字段映射：
- * live/offline 两态、标题回落、在线数、开播时间（坏 ISO 不污染排序）、平台字段。
+ * 用最小 GQL 样本直接调 channel 导出的纯函数，锁住字段映射：
+ *   - `twitchLiveItem`（twitch:live）：live/offline 两态、标题回落、在线数、
+ *     开播时间（坏 ISO 不污染排序）、平台字段；
+ *   - `twitchStreamToLive`（twitch:hot / twitch:category）：流列表 → Live、
+ *     缩略图回落模板、坏 login 丢弃、坏 createdAt。
  * 不需要网络 / 浏览器。
  */
-import type { TwitchUser } from "@amoeba/resolve"
-import { twitchLiveItem } from "../channels/twitch/live.ts"
+import type { TwitchStreamNode, TwitchUser } from "@amoeba/resolve"
+import { twitchLiveItem, twitchStreamToLive } from "../channels/twitch/live.ts"
 
 const FIXED = 1_700_000_000_000
 
@@ -102,6 +105,87 @@ const noName: TwitchUser = {
 }
 const nn = twitchLiveItem(noName, "no_name", FIXED)
 ok(nn.title === "no_name" && nn.author?.name === "no_name", "空 displayName 回落 login")
+
+// ── 4. 流列表 → Live（twitch:hot / twitch:category 共用映射）─────────────────
+console.log("流列表 → Live:")
+const streamNode: TwitchStreamNode = {
+  id: "4132001",
+  title: "Ranked grind",
+  viewersCount: 12_345,
+  createdAt: "2026-10-20T08:00:00.000Z",
+  broadcaster: { login: "Shroud", displayName: "Shroud" },
+  game: { name: "VALORANT", slug: "valorant" },
+  previewImageURL: "https://static-cdn.jtvnw.net/previews-ttv/live_user_shroud-640x360.jpg",
+}
+const hot = twitchStreamToLive(streamNode, "twitch:hot", FIXED)
+
+ok(hot !== null, "正常流产出 Live（不是 null）")
+ok(hot?.id === "twitch:shroud", `id 用 login，且小写归一（得 ${hot?.id}）`)
+ok(hot?.sourceId === "twitch:hot", `sourceId 透传（得 ${hot?.sourceId}）`)
+ok(hot?.kind === "live", `kind（得 ${hot?.kind}）`)
+ok(hot?.url === "https://www.twitch.tv/shroud", `url（得 ${hot?.url}）`)
+ok(hot?.platform === "twitch", `platform（得 ${hot?.platform}）`)
+ok(hot?.roomId === "shroud", `roomId = login（得 ${hot?.roomId}）`)
+ok(hot?.liveStatus === "live", "列表里的流必定在播 → liveStatus 恒 live")
+ok(hot?.online === 12_345, `online = viewersCount（得 ${hot?.online}）`)
+ok(hot?.title === "Ranked grind", `title（得 ${hot?.title}）`)
+ok(hot?.thumbnail === streamNode.previewImageURL, `thumbnail 用 previewImageURL（得 ${hot?.thumbnail}）`)
+ok(hot?.author?.name === "Shroud", `author.name = displayName（得 ${hot?.author?.name}）`)
+ok(hot?.showTime === "2026-10-20T08:00:00.000Z", `showTime = createdAt ISO（得 ${hot?.showTime}）`)
+ok(hot?.fetchedAt === FIXED, `fetchedAt 透传（得 ${hot?.fetchedAt}）`)
+
+const noPreview = twitchStreamToLive(
+  {
+    ...streamNode,
+    broadcaster: { login: "some_streamer", displayName: "SomeStreamer" },
+    previewImageURL: "",
+  },
+  "twitch:category",
+  FIXED,
+)
+ok(
+  noPreview?.thumbnail === "https://static-cdn.jtvnw.net/previews-ttv/live_user_some_streamer-640x360.jpg",
+  `previewImageURL 为空回落模板（得 ${noPreview?.thumbnail}）`,
+)
+ok(noPreview?.sourceId === "twitch:category", `sourceId 透传 category（得 ${noPreview?.sourceId}）`)
+ok(noPreview?.title === "Ranked grind", "空缩略图不影响标题")
+
+const nullPreview = twitchStreamToLive({ ...streamNode, previewImageURL: null }, "twitch:hot", FIXED)
+ok(
+  nullPreview?.thumbnail === "https://static-cdn.jtvnw.net/previews-ttv/live_user_shroud-640x360.jpg",
+  "previewImageURL = null 也回落模板",
+)
+
+// 没有 broadcaster.login 的脏数据编不出 id/url/roomId → 直接丢。
+const noLogin = twitchStreamToLive(
+  { ...streamNode, broadcaster: { login: "   ", displayName: "Ghost" } },
+  "twitch:hot",
+  FIXED,
+)
+ok(noLogin === null, `空 broadcaster.login → null（得 ${JSON.stringify(noLogin)}）`)
+const missingLogin = twitchStreamToLive(
+  { ...streamNode, broadcaster: { login: undefined as unknown as string, displayName: "Ghost" } },
+  "twitch:hot",
+  FIXED,
+)
+ok(missingLogin === null, "缺失 broadcaster.login 也 → null")
+
+const badStreamTime = twitchStreamToLive({ ...streamNode, createdAt: "not-a-date" }, "twitch:hot", FIXED)
+ok(badStreamTime?.showTime === undefined, `坏 createdAt → showTime undefined（得 ${badStreamTime?.showTime}）`)
+ok(badStreamTime?.liveStatus === "live", "坏 createdAt 不影响 liveStatus")
+
+const emptyStreamTitle = twitchStreamToLive(
+  { ...streamNode, title: "", broadcaster: { login: "empty_title", displayName: "EmptyTitle" } },
+  "twitch:hot",
+  FIXED,
+)
+ok(emptyStreamTitle?.title === "EmptyTitle", `空标题回落 displayName（得 ${emptyStreamTitle?.title}）`)
+const noStreamName = twitchStreamToLive(
+  { ...streamNode, title: "", broadcaster: { login: "no_name", displayName: "" } },
+  "twitch:hot",
+  FIXED,
+)
+ok(noStreamName?.title === "no_name" && noStreamName?.author?.name === "no_name", "空 displayName 回落 login")
 
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
 process.exit(fails === 0 ? 0 : 1)
