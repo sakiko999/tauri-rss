@@ -61,9 +61,13 @@ export function apiFetchItems(
  * api channel 的 fetchMore 装配:**数值游标**分页(起步 first、步进 step、本页为空即止)。
  * 镜像 apiFetch 的序列化/返回形状,把 4 个 hot channel 复制粘贴的翻页样板收敛到这。
  * 只做通用机制;游标语义(页码 page / 偏移 offset)由调用方以 first/step 表达。
+ *
+ * ⚠️ 默认「本页 0 条 ⇒ 没有更多」,但**过滤过条目的渠道**(如 `bili:favlist` 跳过
+ * `attr != 0` 的失效视频)不能靠它 —— 某一页恰好全是失效条目时会被误判成到底,
+ * 后面的页永远取不到。这类渠道返回 `{ items, hasMore }` 让上游字段说话。
  */
 export function apiFetchMore(
-  fetchPage: (n: number) => Promise<Item[]>,
+  fetchPage: (n: number) => Promise<Item[] | { items: Item[]; hasMore?: boolean }>,
   channelOptions: () => SerializeOptions,
   opts: { first: number; step: number },
 ): (cursor?: string) => Promise<{ xml: string; cursor?: string }> {
@@ -72,9 +76,16 @@ export function apiFetchMore(
     const o = channelOptions()
     // 翻页失败也要留痕(与 apiFetch 对等):否则 loadMore 静默失败,UI 只表现为「没有更多」。
     try {
-      const items = await fetchPage(n)
+      const r = await fetchPage(n)
+      const items = Array.isArray(r) ? r : r.items
+      const hasMore = Array.isArray(r) ? undefined : r.hasMore
       const xml = serializeFeed(items, o)
-      return { xml, ...(items.length ? { cursor: String(n + opts.step) } : {}) }
+      return {
+        xml,
+        ...((hasMore ?? items.length > 0) ? { cursor: String(n + opts.step) } : {}),
+        // 把上游的「还有下一页」透出去:本页被过滤空时 core 靠它才不会判成到底。
+        ...(hasMore !== undefined ? { hasMore } : {}),
+      }
     } catch (e) {
       log.crawler.fetchError({ source: o.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
       throw e

@@ -108,8 +108,11 @@ export interface Pageable {
    * `ctx.existing` = 该订阅当前在 store 里的条目数。游标是「页面 state 列表下标」的
    * 渠道(小红书)首次翻页必须用它,而不是页面当前长度:共享 Edge 页面可能已被
    * 上一次滚动养到几百条,而 store 只有首屏几十条 —— 用页面长度会跳过中间几百条。
+   *
+   * `hasMore` = 上游明确说「还有下一页」(可选)。**过滤过条目的渠道必须给**:
+   * core 默认「游标前进但 0 条新增 ⇒ 到底」,对「整页都是失效条目」会误判成没有更多。
    */
-  fetchMore(cursor?: string, ctx?: { existing: number }): Promise<{ xml: string; cursor?: string }>
+  fetchMore(cursor?: string, ctx?: { existing: number }): Promise<{ xml: string; cursor?: string; hasMore?: boolean }>
 }
 
 /**

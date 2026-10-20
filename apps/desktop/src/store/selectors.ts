@@ -139,6 +139,24 @@ export function bodyText(i: MediaItem): string {
   return text
 }
 
+/**
+ * 搜索匹配(标题 / 作者 / 摘要 / 正文)。正文 HTML 只留文本(去标签)后再匹配;
+ * 剥离结果按对象缓存,避免每次按键对整库重复剥离。
+ *
+ * 导出给**非视图查询**的列表复用(二级订阅预览 `?open=` 直接渲染 `previewDetail.items`,
+ * 不走 queryView —— 不共用这份判据的话顶栏搜索在预览里会静默失效)。
+ */
+export function matchesQuery(i: MediaItem, q: string): boolean {
+  const needle = q.trim().toLowerCase()
+  if (!needle) return true
+  return (
+    i.title.toLowerCase().includes(needle) ||
+    (i.author?.name ?? "").toLowerCase().includes(needle) ||
+    (i.summary ?? "").toLowerCase().includes(needle) ||
+    bodyText(i).includes(needle)
+  )
+}
+
 /** 完整视图查询:base → filter → 搜索 → sort → 窗口分页。 */
 export function queryView(s: StoreSlice, node: string | null, now: number): ViewResult {
   const n = node ?? "tab:all"
@@ -152,17 +170,7 @@ export function queryView(s: StoreSlice, node: string | null, now: number): View
     if (f.unreadOnly) list = list.filter((i) => i.isUnread)
   }
   const q = s.query.trim().toLowerCase()
-  if (q) {
-    list = list.filter(
-      (i) =>
-        i.title.toLowerCase().includes(q) ||
-        (i.author?.name ?? "").toLowerCase().includes(q) ||
-        (i.summary ?? "").toLowerCase().includes(q) ||
-        // 正文搜索(即「全文搜索」的本义)。正文 HTML 只留文本(去标签)后再匹配;
-        // 剥离结果按对象缓存,避免每次按键对整库重复剥离。
-        bodyText(i).includes(q),
-    )
-  }
+  if (q) list = list.filter((i) => matchesQuery(i, q))
   // 「继续」按最近观看时间排(lastReadAt,由 core 从 reading 回填),而非发布时间 ——
   // 否则「接着上次看」的语义丢失。缺 lastReadAt 的(理论上不该有)兜底 publishedAt。
   list =
