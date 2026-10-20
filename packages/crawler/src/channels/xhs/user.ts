@@ -54,7 +54,8 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
     const base = (browser
       ? {
           fetch,
-          fetchMore: (cursor?: string) => this.fetchMoreViaBrowser(browser, userId, cursor),
+          fetchMore: (cursor?: string, ctx?: { existing: number }) =>
+            this.fetchMoreViaBrowser(browser, userId, cursor, ctx?.existing),
           // LX:只导航 + 读页面 SSR(路线 B),不构造任何请求。
           fetchPassive: () => this.fetchPassive(browser, userId),
         }
@@ -144,6 +145,7 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
     browser: BrowserBackend,
     userId: string,
     cursor?: string,
+    existing?: number,
   ): Promise<{ xml: string; cursor?: string }> {
     // 滚动 + 读 state 原子(单 Edge 共享,防并发抢页)。
     // ⚠️ 滚动驱动必须 interactive：hidden（SW_HIDE）下渲染管线停摆，
@@ -168,11 +170,15 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
         }
 
         const initial = await this.readNotes(browser)
-        // 已返回条数(索引定位)。无 cursor:跳过当前已加载(含 fetch 首页 32 条,不重复返回)。
+        // 已返回条数(索引定位)。首次翻页用 store 已有条数(同 explore:共享页面可能
+        // 被养到几百条,页面长度 ≠ store 已返回数,用它会跳过中间几百条)。
         // ⚠️ 不能 clamp 到当前页面条数:页面被重载过时(点开笔记会把共享 Edge 导航走),
         // clamp 会把窗口压回**已返回过的前缀** —— 「加载更多点了没反应」。保持旧 cursor:
         // 滚动把页面养到超过它;这轮滚不到就返回空 + 原 cursor 让 core 重试(别标 ended)。
-        const startIdx = cursor ? Number(cursor) || 0 : initial.list.length
+        const startIdx =
+          cursor !== undefined
+            ? Number(cursor) || 0
+            : Math.min(existing ?? initial.list.length, initial.list.length)
 
         // state 缓存不足才滚动(平台自己签名加载,我们只触发);缓存够则零滚动直接取窗口(快)。
         let after = initial

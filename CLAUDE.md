@@ -629,7 +629,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   更多点了没反应」；正确做法是保持旧 cursor 滚到超过它，滚不到就返回空 + 原 cursor 重试。
   ② refresh/refreshAll 后要把本地窗口（desktop `page[id]`）抬到至少覆盖新首屏 —— 首屏
   可能超过 PAGE_SIZE（xhs:explore 实测 89 条），而渠道分页只按 `addedCount` 增长窗口，
-  首屏缺口永远补不上（尾部条目不可见、footer 却报「已加载全部」）。
+  首屏缺口永远补不上（尾部条目不可见、footer 却报「已加载全部」）；**种子用 `PAGE_SIZE`
+  不是 0**（停用订阅 refresh 返回 itemCount 0，用 0 当种子会把窗口压成 0 → 空视图）。
+  ③ 游标是「页面 state 下标」的渠道（xhs explore/user）**首次翻页的起点用 core 传入的
+  `ctx.existing`（`Pageable.fetchMore` 第二参，store 已有条数），不要用页面当前长度**
+  —— 共享 Edge 页面可能已被上次滚动养到几百条，用页面长度会跳过中间几百条。
 - ⚠️ **「回车提交」的输入框必须过 `lib/ime.ts` 的 `isImeComposing(e)`**：中文输入法候选
   未上屏时的回车是**选词**，不是提交。不拦的后果全是**静默错值** —— 会建出名叫 `fenzu` 的
   分组、搜索拿半截拼音发请求、订阅标题存成半截。曾散落 6 处、两种手写写法（`e.isComposing ||

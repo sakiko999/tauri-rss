@@ -281,6 +281,9 @@ export async function douyinScanLogin(
   try {
     return await douyinHttpScanLogin(emitQr, opts)
   } catch (e) {
+    // UI 取消必须原样抛出:回退 browser 路径会先拉起 interactive Edge,用户明明关掉了
+    // 弹窗却又弹出一个浏览器窗口(取消语义被吞)。
+    if (opts?.signal?.aborted) throw e
     const browser = globalThis.appHost?.browser
     if (!browser) throw e // 无 browser(如移动端)只能抛给 UI
     log.douyin.warn(`HTTP 路径失败,回退浏览器: ${(e as Error).message}`)

@@ -53,11 +53,11 @@ export class BiliPopularChannel implements RssChannel, Loginable {
    */
   async scanLogin(
     emitQr: (qr: string | null) => void,
-    opts?: { timeoutMs?: number },
+    opts?: { timeoutMs?: number; signal?: AbortSignal },
   ): Promise<LoginResult> {
     const qr = await biliQrGenerate()
     emitQr(qr.url)
-    const result = await biliScanLogin({ timeoutMs: opts?.timeoutMs, qr })
+    const result = await biliScanLogin({ timeoutMs: opts?.timeoutMs, signal: opts?.signal, qr })
     emitQr(null)
     return result
   }

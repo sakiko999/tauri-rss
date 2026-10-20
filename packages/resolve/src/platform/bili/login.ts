@@ -100,6 +100,8 @@ const POLL_INTERVAL_MS = 2000
 export interface BiliScanLoginOptions {
   /** 总超时,默认 3 分钟(二维码约 3 分钟内有效)。 */
   timeoutMs?: number
+  /** UI 关闭二维码弹窗时 abort(纯 HTTP 路径没有浏览器锁,但取消语义要一致)。 */
+  signal?: AbortSignal
   /** 轮询到「已扫待确认」时回调一次(供 UI 提示「请在手机上确认」)。 */
   onScanned?: () => void
   /**
@@ -119,6 +121,8 @@ export async function biliScanLogin(opts: BiliScanLoginOptions = {}): Promise<Lo
   const qr = opts.qr ?? (await biliQrGenerate())
   let scannedNotified = false
   for (;;) {
+    // 取消与超时同优先级:关掉弹窗后不该再打 poll 接口,也不该把结果写回 UI。
+    if (opts.signal?.aborted) throw new Error("扫码登录已取消")
     if (Date.now() > deadline) throw new Error("bili 扫码: 超时未完成")
     const r = await biliQrPoll(qr.key)
     if (r.status === BILI_QR_STATUS.SUCCESS) {

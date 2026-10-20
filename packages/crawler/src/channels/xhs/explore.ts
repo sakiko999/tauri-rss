@@ -58,7 +58,10 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
         }),
     }
     // 推荐流是无限滚动:滚到底由页面自己分页,我们只读增量(登录/匿名都适用)。
-    if (browser) source.fetchMore = (cursor?: string) => this.fetchMoreViaBrowser(browser, cursor)
+    if (browser) {
+      source.fetchMore = (cursor?: string, ctx?: { existing: number }) =>
+        this.fetchMoreViaBrowser(browser, cursor, ctx?.existing)
+    }
     return source
   }
 
@@ -109,6 +112,7 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
   private async fetchMoreViaBrowser(
     browser: BrowserBackend,
     cursor?: string,
+    existing?: number,
   ): Promise<{ xml: string; cursor?: string }> {
     return withBrowserMode(
       browser,
@@ -132,7 +136,14 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
         // xhs 订阅都会把共享 Edge 导航走),页面回到首屏,clamp 会把切片压回**已返回过的
         // 前缀** —— 表现为「加载更多点了没反应」。保持旧 cursor:滚动把页面养到超过它,
         // 这轮滚不到就返回空 + 原 cursor 让 core 重试(别标 ended)。
-        const returned = cursor ? Number(cursor) || 0 : initial.list.length
+        // 首次翻页的起点 = store 已有条数(不是页面当前长度):共享 Edge 页面可能被
+        // 上一次滚动/别的订阅养到几百条,而 store 只有首屏几十条 —— 用页面长度会
+        // 跳过中间几百条。页面比 store 还短(被重载回首屏)时只能从页面长度起,
+        // 靠后续滚动把页面养过游标。
+        const returned =
+          cursor !== undefined
+            ? Number(cursor) || 0
+            : Math.min(existing ?? initial.list.length, initial.list.length)
         const headBefore = feedKey(initial.list[0])
         let after = initial
         let platformActive = false

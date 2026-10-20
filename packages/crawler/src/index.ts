@@ -104,8 +104,12 @@ export interface Pageable {
   /**
    * 翻页:取下一页并返回新 XML + 下一页游标。
    * cursor 传上次返回的 cursor;首次翻页不传(取第 2 页)。返回的 cursor 省略 = 没有更多。
+   *
+   * `ctx.existing` = 该订阅当前在 store 里的条目数。游标是「页面 state 列表下标」的
+   * 渠道(小红书)首次翻页必须用它,而不是页面当前长度:共享 Edge 页面可能已被
+   * 上一次滚动养到几百条,而 store 只有首屏几十条 —— 用页面长度会跳过中间几百条。
    */
-  fetchMore(cursor?: string): Promise<{ xml: string; cursor?: string }>
+  fetchMore(cursor?: string, ctx?: { existing: number }): Promise<{ xml: string; cursor?: string }>
 }
 
 /**

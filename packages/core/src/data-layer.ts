@@ -294,6 +294,7 @@ export function createDataLayer(): DataLayer {
     // 网络请求照发(设置页那个开关的语义就落空了)。
     if (!sub.enabled) {
       const cached = await contentCache.get(subscriptionId).catch(() => null)
+      let itemCount = 0
       if (cached) {
         try {
           const { items, total } = deserializeFeedWithTotal(cached.xml, {
@@ -306,11 +307,13 @@ export function createDataLayer(): DataLayer {
           // page-2 游标会让下次 loadMore 追加「第 3 页」,第 2 页内容被静默跳过。
           pageCursors.delete(subscriptionId)
           replaceIfLive(subscriptionId, await applyReadingState(items))
+          itemCount = items.length
         } catch {
           /* 缓存坏了 → 保持现状,不报错(停用不是错误) */
         }
       }
-      return { subscriptionId, itemCount: 0, fetchedAt: now() }
+      // 停用只表示不抓取,缓存内容仍要如实报条数(否则前端把本地窗口压到 0 → 空视图)。
+      return { subscriptionId, itemCount, fetchedAt: now() }
     }
 
     // 未注册的 channelKey 是配置错误——throw 后由 catch 统一返回 error 结果。
@@ -519,8 +522,9 @@ export function createDataLayer(): DataLayer {
    *
    * 兜底:入参本身就是 URL(`://`)时直接用它(如条目已不在 store 里)。
    */
-  function findItemUrl(itemId: string): string | null {
-    const hit = store.all().find((it) => it.id === itemId)
+  function findItemUrl(itemId: string, subscriptionId: string): string | null {
+    // ⚠️ item.id 只在订阅内唯一(实测同 id 跨订阅撞),裸 id 查全表会拿到别的订阅的 url。
+    const hit = store.query({ subscriptionId }).find((it) => it.id === itemId)
     const url = hit?.url ?? (itemId.includes("://") ? itemId : null)
     return url || null
   }
@@ -532,7 +536,7 @@ export function createDataLayer(): DataLayer {
   async function resolvePlayByUrl(itemId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
     const sub = await repo.get(subscriptionId)
     if (!sub) return null
-    const url = findItemUrl(itemId)
+    const url = findItemUrl(itemId, subscriptionId)
     if (!url) return null
     // ⚠️ resolver 抛错(平台风控/无流/限区/需登录)**不在此吞成 null** —— 交给外层
     // `resolvePlay` 的 catching 原样透出真实错误。null 只留给「无订阅/无 url」这两种
@@ -553,7 +557,7 @@ export function createDataLayer(): DataLayer {
   async function resolveLivePlayByUrl(roomId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
     const sub = await repo.get(subscriptionId)
     if (!sub) return null
-    const url = findItemUrl(roomId)
+    const url = findItemUrl(roomId, subscriptionId)
     if (!url) return null
     const info = await sourceInfoFor(sub)
     const { streams } = await resolveLiveByUrl(url, info)
@@ -589,7 +593,9 @@ export function createDataLayer(): DataLayer {
   async function resolveDetail(subscriptionId: string, itemId: string): Promise<MediaItem | null> {
     const sub = await repo.get(subscriptionId)
     if (!sub) return null
-    const item = store.all().find((it) => it.id === itemId)
+    // ⚠️ 必须带 subscriptionId 查:item.id 只在订阅内唯一,裸 id 会命中别的订阅的同 id
+    // 条目(实测 bilibili:<mid> 同时存在于多个订阅),把别人的内容补到这条上。
+    const item = store.query({ subscriptionId }).find((it) => it.id === itemId)
     if (!item) return null
     const channel = getChannel(sub.channelKey)
     if (!channel) return item // channel 未知 → 返回原 item(至少给现有数据)
@@ -669,7 +675,10 @@ export function createDataLayer(): DataLayer {
       const source = channel.getSource(info)
       if (!isPageable(source)) return { addedCount: 0, hasMore: false }
       const cursor = pageCursors.get(subscriptionId)
-      const { xml, cursor: nextCursor } = await source.fetchMore(cursor)
+      // existing:游标是页面下标时,首次翻页的起点必须是 store 已有条数(见 Pageable 注释)。
+      const { xml, cursor: nextCursor } = await source.fetchMore(cursor, {
+        existing: store.query({ subscriptionId }).length,
+      })
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
       if (removedSubs.has(subscriptionId)) return { addedCount: 0, hasMore: false } // 已退订:丢弃
       // ⚠️ 分页条目的 fetchedAt 对齐到该订阅已有内容(首屏)的抓取时间。

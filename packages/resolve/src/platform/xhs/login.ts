@@ -70,10 +70,13 @@ async function loginState(
   // 页面已明确给出登录位时,DOM 探测是多余的 evaluate。
   const domLoggedIn = pageLoggedIn === null ? await xhsDomLoggedIn(browser) : false
   const userId = cookies["user_id"]
+  // 轮询时(非 preferPageState)user_id 相对基线变化即算登录 —— **不看 pageLoggedIn**:
+  // 扫码后页面可能停留在「未登录」渲染(user.loggedIn 滞后甚至为 false),先按它
+  // 短路会把真登录当成未登录,轮询永远等不到翻转。
   const loggedIn =
     pageLoggedIn === true ||
     domLoggedIn ||
-    (!opts?.preferPageState && pageLoggedIn !== false && !!userId && userId !== (opts?.baselineUserId ?? ""))
+    (!opts?.preferPageState && !!userId && userId !== (opts?.baselineUserId ?? ""))
   return { loggedIn, cookies, userId }
 }
 
@@ -97,9 +100,12 @@ async function waitForQr(
   browser: BrowserBackend,
   emitQr: (qrDataUrl: string | null) => void,
   deadline: number,
-  stepMs = 500,
+  opts?: { signal?: AbortSignal; stepMs?: number },
 ): Promise<string> {
+  const stepMs = opts?.stepMs ?? 500
   for (;;) {
+    // UI 关掉二维码弹窗必须立刻停:登录持全局浏览器锁,这里多转一圈,排队的抓取就多等 500ms。
+    if (opts?.signal?.aborted) throw new Error("扫码登录已取消")
     const src = await readQrSrc(browser)
     if (src) {
       emitQr(src)
@@ -167,7 +173,7 @@ async function runScanLogin(
     log.xhs.qrReady()
   } else {
     await clickLoginButton(browser)
-    await waitForQr(browser, emitQr, deadline)
+    await waitForQr(browser, emitQr, deadline, { signal: opts?.signal })
   }
 
   // 3. 用户扫码后 Edge 页面自身轮询确认登录。我们等**真正的登录态**翻转

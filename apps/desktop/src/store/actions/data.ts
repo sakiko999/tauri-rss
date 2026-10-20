@@ -88,9 +88,11 @@ export function createDataActions(ctx: StoreCtx): DataActions {
             // 而渠道分页只按 addedCount 增长窗口 —— 首屏就存在的缺口永远不会被补上
             // (尾部 29 条不可见、footer 却报「已加载全部」)。刷新拿到新首页后把窗口
             // 抬到至少覆盖它(用户翻过的更大窗口保留)。
+            // ⚠️ 默认窗口是 PAGE_SIZE,不是 0:停用订阅的 refresh 不抓取(停用路径返回
+            // itemCount 0),用 0 当种子会把 page[id] 写成 0 → slice(0,0) 清空整个视图。
             page: result.error
               ? s.page
-              : { ...s.page, [id]: Math.max(s.page[id] ?? 0, result.itemCount) },
+              : { ...s.page, [id]: Math.max(s.page[id] || PAGE_SIZE, result.itemCount) },
             refreshErrors: result.error
               ? { ...s.refreshErrors, [id]: result.error }
               : (() => {
@@ -104,7 +106,15 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           get().toast("error", `刷新失败：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
         } else if (!opts?.silent) {
           // 手动刷新是 force 的,必然走网络 —— 旧文案「未发起网络请求」与实际行为不符。
-          get().toast("ok", `已更新 ${title}`, `${result.itemCount} 条。已强制重新抓取,绕过内容缓存。`)
+          // 停用订阅例外:core 对 enabled=false 不抓取只回缓存,别宣称「已强制重新抓取」。
+          const disabled = get().subscriptions.find((s) => s.id === id)?.enabled === false
+          get().toast(
+            "ok",
+            `已更新 ${title}`,
+            disabled
+              ? `${result.itemCount} 条。订阅已停用,展示的是缓存内容。`
+              : `${result.itemCount} 条。已强制重新抓取,绕过内容缓存。`,
+          )
         }
       } catch (e) {
         const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
@@ -176,7 +186,8 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           const r = results[i]
           if (r?.status !== "fulfilled" || r.value.error) continue
           const id = subs[i]!.id
-          page[id] = Math.max(page[id] ?? 0, r.value.itemCount)
+          // 同上:停用/无缓存订阅返回 itemCount 0,不能把窗口压到 0。
+          page[id] = Math.max(page[id] || PAGE_SIZE, r.value.itemCount)
         }
         set({ loading: false, busy: {}, refreshErrors: errors, loadMoreEnded: clearedEnded, page })
       }
@@ -208,7 +219,7 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         // 渠道分页时不会走 localPaging(那是二选一),所以必须在这里同步放窗口。
         set((s) => ({
           loadingMore: false,
-          page: { ...s.page, [id]: (s.page[id] ?? PAGE_SIZE) + r.addedCount },
+          page: { ...s.page, [id]: (s.page[id] || PAGE_SIZE) + r.addedCount },
           ...(total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}),
           loadMoreEnded: r.hasMore ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: true },
         }))
