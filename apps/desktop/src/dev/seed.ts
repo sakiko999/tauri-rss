@@ -1,24 +1,21 @@
 /**
  * 开发环境种子订阅 —— **只被 dev 构建动态 import**,生产包不包含此文件。
  *
- * 覆盖不同 kind + 真实可播演示源。`store/index.ts` 在 `import.meta.env.DEV` 下
- * `await import("../dev/seed.ts")` 调 `seedIfEmpty`;生产构建里这段分支被摇掉。
+ * `store/index.ts` 在 `import.meta.env.DEV` 下 `await import("../dev/seed.ts")`
+ * 调 `seedIfEmpty`;生产构建里这段分支被摇掉。
  *
  * ⚠️ 不要把这些源写进应用默认数据:含需登录、下播、测试性质的房间。
  *
- * 数据供给(2026-08-26 反转后)**以内置 crawler 为主**:youtube/bili 视频、播客、
- * 直播全走 crawler 渠道(自解析,零外部依赖)。
- * RSSHub 仅作「可选外挂 HTTP 服务器」:留 1 条 `rsshub:feed` 示例(Hacker News,
- * 指向外挂实例路由),验证外挂通道可用;不内嵌 npm 包/sidecar 进程。
+ * **覆盖全部 channel**(一个 channel 一条),便于在本机逐项点测:
+ *   - 需登录的渠道(`bili:dynamic` / `weibo:user`)**跳过或停用** —— 默认 cookie 为空,
+ *     匿名请求必失败刷屏;
+ *   - 关键词搜索类渠道(`*:search` / `*:anchor` / `searchBiliUsers` 等)放进「搜索」组,
+ *     默认**停用**(它们是发现页入口,不该当常驻订阅;启用即测);
+ *   - 36 条内置 RSS 直链属**同一实现**(`rss:hn` 代表),不逐一建订阅,避免糊满列表;
+ *   - 旧渠道 `live:douyin:user` 保留给存量订阅,新入口用 `live:douyin`(主页链接),
+ *     种子不重复。
  *
- * 更新说明:
- *   - live:douyu 替换原 live:huya(当时 huya 未实现;现 huya 已走 HTTP-FLV,见
- *     packages/crawler/src/channels/huya/play.ts)
- *   - bili:live 补充直播演示(需直播中的房间)
- *   - live:huya / live:douyin 补充多平台直播演示(roomId 需在线,离线时无流)
- *
- * YouTube 直播订阅方式:**youtube:live channel**(kind 固定 live,零判定请求)——videoId
- * 声明即直播,如 `tRsQsTMvPNg`(Claude FM 常驻直播,hls.js 播放)。
+ * 数据供给以内置 crawler 为主:youtube/bili 视频、播客、直播、分区目录全走 crawler 渠道。
  *
  * 直播房间备选(当前房间下播/受限时换用):
  *   - douyu:   9999(yyfyyf)
@@ -26,29 +23,43 @@
  *   - huya:    60066(主播「骚男」,2026-08 实测在播,蓝光20M 起 5 档)
  *   - douyin:  217952067344(2026-08-08 实测在播,原画/蓝光 5 档;
  *              ⚠️ room.status==2 才是直播中,==4 是 roomId 一次性需换 webRid,见 dart)
- *   huya 在播房间可从 www.huya.com/l 页实时列表取(WebFetch 可见)。
+ *   - twitch:  shroud(离线也返 offline item,不会空订阅)
  */
 import type { DataLayer, Subscription, SubscriptionGroup } from "@amoeba/core"
 
 /** 分组种子(rail 的分组树)。只在**首次运行(空库)**写入,之后不覆盖。 */
 const SEED_GROUPS: SubscriptionGroup[] = [
+  { id: "g-article", title: "文章" },
   { id: "g-video", title: "视频" },
+  { id: "g-audio", title: "音频" },
   { id: "g-live", title: "直播" },
   { id: "g-social", title: "社交" },
+  { id: "g-category", title: "分区目录" },
+  { id: "g-search", title: "搜索" },
 ]
 
 const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
+  // ── 文章 ────────────────────────────────────────────────────────────────
   {
     id: "s-article",
     // ⚠️ 用**内置 rss:hn**,不用 `rsshub:feed` + `/hackernews`:
     // 公网 rsshub.app 常年 403(实测本网络下所有路由全 403),而内置直链零外部依赖。
-    // 「不依赖公共服务」应当用默认可用的源演示;RSSHub 外挂通道留给需要它的路由。
     channelKey: "rss:hn",
     title: "Hacker News",
     enabled: true,
-    groupId: null,
+    groupId: "g-article",
     info: {},
   },
+  {
+    id: "s-article-bili-square",
+    channelKey: "bili:square",
+    title: "B站热搜",
+    enabled: true,
+    groupId: "g-article",
+    info: {},
+  },
+
+  // ── 视频 ────────────────────────────────────────────────────────────────
   {
     id: "s-video-youtube",
     channelKey: "youtube",
@@ -56,6 +67,15 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     enabled: true,
     groupId: "g-video",
     info: { channelId: "UCYO_jab_esuFRV4b17AJtAw" },
+  },
+  {
+    id: "s-video-youtube-playlist",
+    channelKey: "youtube:playlist",
+    title: "YouTube 播放列表",
+    enabled: true,
+    groupId: "g-video",
+    // 探针实测 15 条(官方 RSS 上限)
+    info: { playlistId: "PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI" },
   },
   {
     id: "s-video-bili",
@@ -74,20 +94,82 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     info: {},
   },
   {
+    id: "s-video-bili-precious",
+    channelKey: "bili:precious",
+    title: "B站入站必刷",
+    enabled: true,
+    groupId: "g-video",
+    info: {},
+  },
+  {
+    id: "s-video-bili-ranking",
+    channelKey: "bili:ranking",
+    title: "B站排行榜",
+    enabled: true,
+    groupId: "g-video",
+    info: {}, // rid 省略 = all
+  },
+  {
+    id: "s-video-bili-user",
+    channelKey: "bili:user_video",
+    title: "B站 · 3Blue1Brown 投稿",
+    enabled: true,
+    groupId: "g-video",
+    info: { uid: "511068914" },
+  },
+  {
+    id: "s-video-bili-season",
+    channelKey: "bili:season",
+    title: "B站合集",
+    enabled: true,
+    groupId: "g-video",
+    info: { seasonId: "2974525" }, // 探针实测 61 条
+  },
+  {
+    id: "s-video-bili-series",
+    channelKey: "bili:series",
+    title: "B站视频列表",
+    enabled: true,
+    groupId: "g-video",
+    info: { seriesId: "358495" }, // 探针实测 54 条
+  },
+  {
+    id: "s-video-bili-favlist",
+    channelKey: "bili:favlist",
+    title: "B站公开收藏夹",
+    enabled: true,
+    groupId: "g-video",
+    info: { mediaId: "1052622027" }, // 公开收藏夹,探针实测 28 条
+  },
+
+  // ── 音频 ────────────────────────────────────────────────────────────────
+  {
+    id: "s-audio",
+    channelKey: "rss:podcast",
+    title: "Huberman Lab",
+    enabled: true,
+    groupId: "g-audio",
+    info: { url: "https://feeds.megaphone.fm/hubermanlab" },
+  },
+  {
+    // 榜单条目是「节目容器」(kind audio 无 stream):点开 = 右侧展开单集,
+    // 覆盖二级订阅预览链路。
+    id: "s-audio-apple-chart",
+    channelKey: "apple:podcast-chart",
+    title: "Apple 播客热门榜",
+    enabled: true,
+    groupId: "g-audio",
+    info: {},
+  },
+
+  // ── 直播 ────────────────────────────────────────────────────────────────
+  {
     id: "s-video-youtube-live",
     channelKey: "youtube:live",
     title: "Claude FM 直播",
     enabled: true,
     groupId: "g-live",
     info: { videoId: "tRsQsTMvPNg" },
-  },
-  {
-    id: "s-audio",
-    channelKey: "rss:podcast",
-    title: "Huberman Lab",
-    enabled: true,
-    groupId: null,
-    info: { url: "https://feeds.megaphone.fm/hubermanlab" },
   },
   {
     id: "s-live-douyu",
@@ -121,8 +203,15 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-live",
     info: { roomIds: "217952067344" },
   },
-  // 直播热门(开播房间发现源):无参订阅,列表即当前开播房间;
-  // source 委托同平台 live 的 resolveLivePlay/getDanmaku,点卡片即可播放+弹幕。
+  {
+    id: "s-live-twitch",
+    channelKey: "twitch:live",
+    title: "Twitch 直播 · shroud",
+    enabled: true,
+    groupId: "g-live",
+    info: { roomIds: "shroud" },
+  },
+  // 直播热门(开播房间发现源):无参订阅,列表即当前开播房间。
   {
     id: "s-live-hot-bili",
     channelKey: "bili:live:hot",
@@ -155,17 +244,107 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-live",
     info: {},
   },
-  // ⚠️ **需登录 cookie**:`DEFAULT_BILIBILI_COOKIE` 默认**为空**(纯匿名),匿名请求
-  // bili 动态接口 412(曾注释误写「开箱即用」)。故 **enabled:false** —— 填入 cookie
-  // (packages/core/src/bilibili-cookie.ts)后在 rail 里启用即可;否则每次刷新必失败刷屏。
   {
-    id: "s-social-bili-dyn",
-    channelKey: "bili:dynamic",
-    title: "B站动态 · 半佛仙人",
-    enabled: false,
-    groupId: "g-social",
-    info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)
+    id: "s-live-hot-youtube",
+    channelKey: "youtube:live-hot",
+    title: "YouTube 直播热门",
+    enabled: true,
+    groupId: "g-live",
+    info: {},
   },
+  {
+    id: "s-live-hot-twitch",
+    channelKey: "twitch:hot",
+    title: "Twitch 热门直播",
+    enabled: true,
+    groupId: "g-live",
+    info: {},
+  },
+  // 分区直播(单分区订阅)
+  {
+    id: "s-live-cat-youtube",
+    channelKey: "youtube:live-category",
+    title: "YouTube 直播 · Gaming",
+    enabled: true,
+    groupId: "g-live",
+    info: { category: "gaming" },
+  },
+  {
+    id: "s-live-cat-twitch",
+    channelKey: "twitch:category",
+    title: "Twitch 分区 · Just Chatting",
+    enabled: true,
+    groupId: "g-live",
+    info: { category: "just-chatting" },
+  },
+  {
+    id: "s-live-cat-douyu",
+    channelKey: "live:douyu:category",
+    title: "斗鱼分区 · 英雄联盟",
+    enabled: true,
+    groupId: "g-live",
+    info: { areaId: "1" },
+  },
+  {
+    id: "s-live-cat-huya",
+    channelKey: "live:huya:category",
+    title: "虎牙分区 · 英雄联盟",
+    enabled: true,
+    groupId: "g-live",
+    info: { gameId: "1" },
+  },
+  {
+    id: "s-live-cat-douyin",
+    channelKey: "live:douyin:category",
+    title: "抖音分区 · 聊天",
+    enabled: true,
+    groupId: "g-live",
+    info: { partition: "101", partitionType: "4" }, // 顶层分区:4 / 子分区:1
+  },
+
+  // ── 分区目录(内容 = kind:category 条目,点开 = 右侧预览该分区)──────────────
+  {
+    id: "s-cat-twitch",
+    channelKey: "twitch:categories",
+    title: "Twitch 分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-youtube",
+    channelKey: "youtube:live-categories",
+    title: "YouTube 直播栏目",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-douyu",
+    channelKey: "live:douyu:categories",
+    title: "斗鱼分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-huya",
+    channelKey: "live:huya:categories",
+    title: "虎牙分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-douyin",
+    channelKey: "live:douyin:categories",
+    title: "抖音分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+
+  // ── 社交 ────────────────────────────────────────────────────────────────
   // 微博热搜:列表匿名可用(词流需登录),保留启用。
   {
     id: "s-hot-weibo",
@@ -175,16 +354,14 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-social",
     info: {}, // 热搜三栏:中栏词条列表,点词条右栏该词微博流
   },
-  // ⚠️ **需登录**:`DEFAULT_WEIBO_COOKIE` 默认空,匿名 user 容器 432。enabled:false 同上。
   {
-    id: "s-user-weibo",
-    channelKey: "weibo:user",
-    title: "微博 · LPL",
-    enabled: false,
+    id: "s-social-douyin-trend",
+    channelKey: "douyin:trend",
+    title: "抖音热点榜",
+    enabled: true,
     groupId: "g-social",
-    info: { uid: "5756404150" },
+    info: {},
   },
-  // 小红书(核心 cookie 在 core 层 DEFAULT_XHS_COOKIE,纯 HTTP SSR)
   {
     id: "s-explore-xhs",
     channelKey: "xhs:explore",
@@ -201,11 +378,124 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-social",
     info: { user_id: "5c6d75a400000000100278fa" },
   },
+  // ⚠️ **需登录 cookie**:`DEFAULT_BILIBILI_COOKIE` 默认**为空**(纯匿名),匿名请求
+  // bili 动态接口 412。故 **enabled:false** —— 填入 cookie
+  // (packages/core/src/bilibili-cookie.ts)后在 rail 里启用即可;否则每次刷新必失败刷屏。
+  {
+    id: "s-social-bili-dyn",
+    channelKey: "bili:dynamic",
+    title: "B站动态 · 半佛仙人",
+    enabled: false,
+    groupId: "g-social",
+    info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)
+  },
+  // ⚠️ **需登录**:`DEFAULT_WEIBO_COOKIE` 默认空,匿名 user 容器 432。enabled:false 同上。
+  {
+    id: "s-user-weibo",
+    channelKey: "weibo:user",
+    title: "微博 · LPL",
+    enabled: false,
+    groupId: "g-social",
+    info: { uid: "5756404150" },
+  },
+
+  // ── 搜索(默认停用:关键词入口,启用即测)────────────────────────────────
+  {
+    id: "s-search-bili-keyword",
+    channelKey: "bili:search",
+    title: "B站搜索 · 英雄联盟",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "英雄联盟" },
+  },
+  {
+    id: "s-search-bili-anchor",
+    channelKey: "bili:anchor",
+    title: "B站搜主播 · 骚男",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "骚男" },
+  },
+  {
+    id: "s-search-bili-user",
+    channelKey: "bili:user",
+    title: "B站搜UP主 · 半佛仙人",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "半佛仙人" },
+  },
+  {
+    id: "s-search-youtube-user",
+    channelKey: "youtube:user",
+    title: "YouTube 搜频道 · MKBHD",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "MKBHD" },
+  },
+  {
+    id: "s-search-youtube-live",
+    channelKey: "youtube:live-search",
+    title: "YouTube 搜直播间 · lofi",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "lofi" },
+  },
+  {
+    id: "s-search-douyu",
+    channelKey: "live:douyu:search",
+    title: "斗鱼搜索 · 英雄联盟",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "英雄联盟" },
+  },
+  {
+    id: "s-search-douyu-anchor",
+    channelKey: "live:douyu:anchor",
+    title: "斗鱼搜主播 · yyf",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "yyf" },
+  },
+  {
+    id: "s-search-huya",
+    channelKey: "live:huya:search",
+    title: "虎牙搜索 · 英雄联盟",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "英雄联盟" },
+  },
+  {
+    id: "s-search-huya-anchor",
+    channelKey: "live:huya:anchor",
+    title: "虎牙搜主播 · 骚男",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "骚男" },
+  },
+  {
+    id: "s-search-douyin",
+    channelKey: "live:douyin:search",
+    title: "抖音分区搜索 · 音乐",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "音乐" },
+  },
+  {
+    id: "s-search-apple",
+    channelKey: "apple:podcast-search",
+    title: "Apple 播客搜索 · 科技",
+    enabled: false,
+    groupId: "g-search",
+    info: { q: "科技" },
+  },
 ]
 
 /**
  * 种子只写一次:写过后落 `dev:seeded` 标记。这样「完全重置数据」或用户手动删空订阅后,
  * 下次启动不会又把测试源塞回来(首次开发者想恢复种子:删掉该 key 或整个 dev DB)。
+ *
+ * ⚠️ 改了种子列表后,**存量 dev 库不会自动补**——需「设置 → 存储与诊断 → 完全重置数据」
+ * (或删 dev DB)再启动。
  */
 const SEEDED_KEY = "dev:seeded"
 
