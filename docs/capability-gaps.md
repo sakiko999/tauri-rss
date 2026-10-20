@@ -3,7 +3,7 @@
 > 背景：对照 `tmp/pure_live`（Flutter 直播聚合器，23 平台）逐平台比对。
 > **已落地的能力不在此登记**（代码与 CLAUDE.md 可查）；本文件只留**未做的缺口**与
 > **实测证伪的结论**（防止后人重走已证明走不通的路）。
-> 状态更新至 2026-10-18。
+> 状态更新至 2026-10-20。
 
 ## 一、未做的缺口
 
@@ -21,6 +21,16 @@
   `weibo/user.ts:9-13`）。
 - **bili 账号服务**（参照 `bilibili_account_service.dart:191`）—— 未做：登录后拉昵称/uid
   展示（`/x/member/web/account`）。
+- **Twitch 一期只做直播频道**（2026-10-20）—— `twitch:live`（`roomIds` 多频道）+ by-url
+  直播 HLS 已落地；**VOD / clip / 聊天弹幕 / 搜索与分区 / 登录均未做**：
+  - VOD/clip 路由要排在频道名**单段路径之前**（`/videos/<id>`、`/<login>/clip/<slug>`），
+    二期再加；一期 `normalizeTwitchLogin` 对多段路径一律返回 null（避免误当频道）。
+  - 聊天（IRC `wss://irc-ws.chat.twitch.tv:443` + `justinfan`）文本帧实测可用，但宿主
+    `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 要先给宿主 ws 加 text 帧。
+  - 搜索/分区依赖 persisted query（结构不稳），二期再评估；登录（OAuth「我的关注」）需
+    注册应用，不建议近期做。
+  - **Helix 匿名 401**（`api.twitch.tv/helix/streams`），且不提供播放地址 → 不走 Helix；
+    元数据与播放 token 都走公开 web GraphQL。
 
 ## 二、条件触发的迁移（当前不做，等信号）
 

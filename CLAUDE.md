@@ -63,13 +63,15 @@ packages/
                node/ 真实网络+内存存储 · browser/ fetch+localStorage · tauri/ Rust
                http_get+ws_connect+sqlite+opener。ws 统一走宿主隧道（可带自定义握手头）
                net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）
-  resolve/     ★ 平台解析层。platform/（各平台 client + 播放解析 + 弹幕 codec）、
+  resolve/     ★ 平台解析层。platform/（各平台 client + 播放解析 + 弹幕 codec；
+               twitch = 公开 GQL + usher HLS）、
                resolver/（by-url 路由 → 播放/弹幕）、danmaku/（createWsStream/
                deferredStream 原语）、utils/、browser/（CDP 模拟）。
                契约：按 item.url 懒解析 + 平台 client 供 crawler 取数。类型自持，不依赖 crawler
   crawler/     ★ 订阅源抓取层，**只输出订阅数据**。一切皆 RssChannel：channel 定义 +
                getSource → { fetch }，取数经 resolve 的平台 client。
                不绑定流/弹幕解析（归 resolve by-url）。输出标准 RSS + 最小 tpl:kind/total
+               twitch/（twitch:live 直播频道，一期见 docs/twitch-channel.md）
   core/        订阅维护者。基于 crawler 输出维护订阅/分组/刷新编排/持久化；
                自解析 XML 建 MediaItem（不依赖 crawler 类型）
   player/      ★ 媒体播放器（video/audio/live 共用）。PlayableMedia = 唯一入口
@@ -197,6 +199,8 @@ bun run rss channels                    # 渠道注册表（--kind/--json；播�
 bun run rss fetch bili:popular          # 单渠道抓取（--xml/--json）
 bun run rss fetch apple:podcast-chart   # Apple 播客热门榜（匿名；--kv genre=1318 换分类）
 bun run rss item <url>                  # by-url：路由 + streams 全档位 + 弹幕元信息
+bun run rss fetch twitch:live --kv roomIds=shroud,riotgames  # Twitch 直播频道（匿名；离线也返 item）
+bun run rss item https://www.twitch.tv/<login>  # Twitch 直播 HLS 档位（variant playlist，非 master）
 bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
 bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计
 bun run rss hot <词>                    # 热搜词下微博流（需登录 cookie）
@@ -215,6 +219,7 @@ bun packages/host/src/example/host-check.ts             # 门面字段（openExt
 bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/LX/去重/冷却/strict/并发）
 bun packages/core/src/example/lx-mode.check.ts          # LX 闸门（只走 fetchPassive / autoRefresh）
 bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload → Item 字段映射
+bun packages/crawler/src/example/twitch-live.check.ts   # Twitch GQL → Live 映射（live/offline/标题回落/在线数）
 bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录页/匿名/L9 路由矩阵 + origin 校验）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL 归一化 / TTL / 限额淘汰）
@@ -223,6 +228,7 @@ bun packages/resolve/src/example/router.check.ts        # by-url 路由表（hos
 bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
 bun packages/resolve/src/example/danmaku-proto.check.ts # bili 弹幕 protobuf 解码（截断帧不死循环）
 bun packages/resolve/src/example/douyu-frame.check.ts   # 斗鱼弹幕帧（一帧多包全解）
+bun packages/resolve/src/example/twitch-playlist.check.ts # Twitch master 档位排序 + login 归一化
 bun packages/core/src/example/serialize-contract.check.ts # tpl: 契约完整性（serialize 写 vs deserialize 读）
 bun packages/core/src/example/body-cache.check.ts       # 文章正文持久缓存（索引/退订清除/容错）
 bun apps/mobile/src/html.check.ts                       # mobile 正文 HTML→纯文本（探测/分段/实体）
@@ -495,6 +501,26 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
   **空对象是 truthy** → 写 `= {}` 会让需要 `q` 的渠道被误列进去（同 `bili:search`）
 - 端点：旧 `itunes.apple.com/{cc}/rss/toppodcasts` / `search?media=podcast`（**直接给 feedUrl**）/
   `lookup?id=` 全可用；新 `rss.applemarketingtools.com` **504**。均匿名，但要带 UA
+
+**Twitch**（`resolve/platform/twitch/` + `crawler/channels/twitch/`，一期方案 `docs/twitch-channel.md`）
+- 匿名链路可用：公开 web Client-ID 的 **GraphQL**（`gql.twitch.tv/gql`，`Client-Id` 头）
+  → `PlaybackAccessToken`（**persisted query**）→ `usher.ttvnw.net` HLS。不需要账号 /
+  `Client-Integrity` / 浏览器。官方 **Helix 匿名 401**（且不给播放地址），故不走 Helix。
+- ⚠️ **persisted query hash 会轮换**（2025-11 曾整体替换一次）—— 集中成
+  `TWITCH_PLAYBACK_TOKEN_HASH`（`platform/twitch/live.ts`），Twitch 改版只改这一处；
+  手写 `streamPlaybackAccessToken(login:...)` 已报 `argument: channelName is required`。
+- ⚠️ **master 没有 `Access-Control-Allow-Origin`** → hls.js 不能直接加载。resolver 必须经
+  `appHost.http` 拉 master、解析后把 **variant playlist URL** 作为 `Stream.url`
+  （variant 与分片是 `ACAO: *`）。**别把 master URL 交给播放器**。
+- ⚠️ master 的 variant 顺序**不是高→低**（实测 audio_only 排第二）→ `parseTwitchMaster`
+  显式按高度/带宽降序、audio_only 最后（选流契约取 `streams[0]`）。
+- `twitch:live` 的 `roomIds` 接受裸 login / `@login` / `twitch.tv/<login>`（小写，
+  `[a-z0-9_]{3,25}`，排除站内保留字；多段路径一期不认）。离线频道仍产 `offline` item
+  （下播不空订阅），**全部频道失败才抛错**。token 的 `value` 是 JSON（`geoblock_reason` /
+  `blackout_enabled` 等）——**不进日志/错误文案**；地区/版权受限直接报错不重试。
+- **聊天弹幕属二期**：IRC（`wss://irc-ws.chat.twitch.tv:443`、`justinfan`）文本帧可用，
+  但宿主 `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 二期先给宿主 ws 加 text 帧。
+  VOD / clip 路由（要排在频道名单段路径之前）与搜索/分区也未做。
 
 **cookie / 登录**
 - `packages/core/src/bilibili-cookie.ts` 四个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。
@@ -846,6 +872,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/danmaku-research.md` | 弹幕机制（VOD 分段 / 直播四平台 codec） |
 | `docs/youtube-stream-extraction.md` | YouTube 直链（ANDROID_VR / poToken / DASH 自拼） |
 | `docs/xhs-signature-research.md` | 小红书签名史与社区现状复核 |
+| `docs/twitch-channel.md` | Twitch 渠道一期（匿名公开 GQL + PlaybackAccessToken + usher HLS；VOD/clip/聊天/搜索二期） |
 | `docs/desktop-crawler-service.md` | desktop 爬虫服务化选型与切分边界 |
 | `docs/capability-gaps.md` | 各平台能力缺口（分区/搜索/主播） |
 | `docs/cli-plan.md` | apps/cli 调试工具计划 |

@@ -125,7 +125,7 @@ export interface Audio extends Base {
 }
 
 export type LiveStatus = "live" | "offline" | "unknown"
-export type LivePlatformId = "bilibili" | "douyu" | "huya" | "douyin" | "youtube"
+export type LivePlatformId = "bilibili" | "douyu" | "huya" | "douyin" | "youtube" | "twitch"
 
 export interface Live extends Base {
   kind: "live"

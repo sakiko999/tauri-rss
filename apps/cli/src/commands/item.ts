@@ -25,7 +25,7 @@ export interface ResolvedItem {
 export async function routeWithCookie(url: string): Promise<{ route: ResolveRoute; cookie?: string }> {
   const route = resolveRoute(url)
   if (!route) {
-    throw new Error(`url 未命中 resolver 路由(支持 bili 视频/直播、youtube、douyu/huya/douyin 直播): ${url}`)
+    throw new Error(`url 未命中 resolver 路由(支持 bili 视频/直播、youtube、douyu/huya/douyin/twitch 直播): ${url}`)
   }
   const settings = await loadSettings()
   return { route, cookie: cookieForUrl(url, settings) }
@@ -46,6 +46,7 @@ export async function resolveByUrl(url: string): Promise<ResolvedItem> {
 /** 弹幕能力一行注(平台 × kind;与 resolver/danmaku.ts 对齐)。 */
 export function danmakuNote(route: ResolveRoute): string {
   if (route.platform === "youtube") return route.kind === "live" ? "有(live chat 轮询)" : "无(VOD 无弹幕)"
+  if (route.platform === "twitch") return "无（Twitch 聊天二期）"
   return `有 · ${route.kind === "video" ? "vod" : "live"}(${route.platform})`
 }
 

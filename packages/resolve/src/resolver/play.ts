@@ -14,6 +14,7 @@ import { resolveBiliLivePlay, resolveBiliVideoPlay } from "../platform/bili"
 import { douyinResolveStreams } from "../platform/douyin"
 import { douyuResolveStreams } from "../platform/douyu"
 import { resolveHuyaLivePlay } from "../platform/huya"
+import { resolveTwitchLivePlay } from "../platform/twitch"
 import { resolveYoutubeStreams } from "../platform/youtube"
 
 /** resolver 解析参数:复用 SourceInfo(含 cookie),必要时扩展。 */
@@ -53,7 +54,7 @@ export async function resolveLivePlayByUrl(url: string, info?: ResolveInfo): Pro
   if (!route || route.kind !== "live") {
     throw new Error(`resolver: 无法从 URL 解析直播流(需直播路由): ${url}`)
   }
-  // kind==="live" ⇒ 平台仅在 bilibili|douyu|huya|douyin(路由表由 kind 判别保证)。
+  // kind==="live" ⇒ 平台仅在 bilibili|douyu|huya|douyin|twitch(路由表由 kind 判别保证)。
   const streams = await resolveLiveStreams(route.platform as LivePlatform, route.id, info)
   return { id: route.id, streams }
 }
@@ -72,7 +73,7 @@ export async function resolveVideoStreams(
 }
 
 /** 直播平台(live 路由可命中的平台)。 */
-type LivePlatform = Extract<ResolvePlatform, "bilibili" | "douyu" | "huya" | "douyin">
+type LivePlatform = Extract<ResolvePlatform, "bilibili" | "douyu" | "huya" | "douyin" | "twitch">
 
 /** 按直播平台 + roomId 解析可播流。 */
 export async function resolveLiveStreams(
@@ -89,6 +90,8 @@ export async function resolveLiveStreams(
       return resolveHuyaLivePlay(id)
     case "douyin":
       return douyinResolveStreams(id)
+    case "twitch":
+      return resolveTwitchLivePlay(id)
     default:
       throw new Error(`resolver: 平台 ${platform} 不支持直播解析`)
   }

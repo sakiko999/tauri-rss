@@ -47,6 +47,7 @@ import {
   DouyinUserLiveChannel,
   DouyinTrendChannel,
 } from "./channels/douyin/index.ts"
+import { TwitchLiveChannel } from "./channels/twitch/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
 import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
 import { ApplePodcastChartChannel, ApplePodcastSearchChannel } from "./channels/apple/index.ts"
@@ -89,6 +90,9 @@ export function registerBuiltinChannels(): void {
   registerChannel(new YoutubeLiveChannel())
   registerChannel(new YoutubeLiveSearchChannel())
   registerChannel(new YoutubeUserChannel())
+
+  // ── Twitch 直播(匿名 GraphQL;一期只做频道订阅 + 离线态)──
+  registerChannel(new TwitchLiveChannel())
 
   // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──
   registerChannel(new HuyaLiveChannel())

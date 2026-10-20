@@ -20,7 +20,8 @@ export interface DanmakuInfo {
 
 /** 按平台 + id 获取弹幕流(不依赖 url,已确定平台)。 */
 export function getDanmakuById(
-  platform: "bilibili" | "youtube" | "douyu" | "huya" | "douyin",
+  // twitch 一期无弹幕(聊天需宿主 ws text 帧,二期),落到 default 抛「无弹幕能力」。
+  platform: "bilibili" | "youtube" | "douyu" | "huya" | "douyin" | "twitch",
   id: string,
   opts?: DanmakuInfo,
 ): DanmakuStream {

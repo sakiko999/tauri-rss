@@ -22,6 +22,7 @@ export const PLATFORM_ICON: Record<string, string> = {
   douyu: "radio",
   huya: "radio",
   douyin: "radio",
+  twitch: "radio",
   youtube: "play",
   weibo: "message",
   xhs: "image",

@@ -9,10 +9,12 @@
  * 直接定位平台,由 crawler 的 resolver 调 platform/ 独立解析函数)。
  */
 
+import { isTwitchChannelHost, isTwitchLogin } from "../utils/twitch.ts"
+
 export type ResolveKind = "video" | "live"
 
 /** 平台标识(resolver 分发用;与 platform/ 目录一一对应)。 */
-export type ResolvePlatform = "bilibili" | "youtube" | "douyu" | "huya" | "douyin"
+export type ResolvePlatform = "bilibili" | "youtube" | "douyu" | "huya" | "douyin" | "twitch"
 
 export interface ResolveRouteSpec {
   /** 匹配 item.url。 */
@@ -59,6 +61,34 @@ const ROUTES: ResolveRouteSpec[] = [
       try {
         const last = new URL(u).pathname.replace(/\/+$/, "").split("/").pop()
         return last && last !== "-" ? last : null
+      } catch {
+        return null
+      }
+    },
+  },
+  // Twitch 直播(twitch.tv/<login>,单段路径)。一期只路由频道首页:
+  // `/videos/...`、`/<login>/clip/...` 留给二期(届时路由必须排在频道名之前),
+  // 否则 clip/VOD 页会被误当频道名。
+  {
+    test: /(?:^|[./])twitch\.tv\/\S*/i,
+    platform: "twitch",
+    kind: "live",
+    extractId: (u) => {
+      try {
+        const url = new URL(u)
+        // ⚠️ 只认频道域:clip 链接是 `clips.twitch.tv/<slug>`(单段路径),
+        // 不卡 host 就会把 clip slug 当频道名(见 utils/twitch.ts 的 CHANNEL_HOSTS)。
+        if (!isTwitchChannelHost(url.hostname)) return null
+        const segments = url.pathname.split("/").filter(Boolean)
+        if (segments.length !== 1) return null
+        // 与 normalizeTwitchLogin 同一套 URL 解析:百分号编码的 login 也要能路由。
+        let login: string
+        try {
+          login = decodeURIComponent(segments[0]!).toLowerCase()
+        } catch {
+          return null
+        }
+        return isTwitchLogin(login) ? login : null
       } catch {
         return null
       }

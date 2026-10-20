@@ -22,6 +22,8 @@ const douyinLog = createLogDomain("douyin", { color: "#22d3ee", ansi: 45 })
 const douyuLog = createLogDomain("douyu", { color: "#ff6a00", ansi: 208 })
 /** [huya] 档位/弹幕降级警告。 */
 const huyaLog = createLogDomain("huya", { color: "#ffa52a", ansi: 214 })
+/** [twitch] GraphQL 降级/档位告警(自由 warn;正常路径零日志)。 */
+const twitchLog = createLogDomain("twitch", { color: "#9146ff", ansi: 99 })
 /** [xhs] 扫码登录生命周期(导航/出码/等待/成功/超时)——重复性日志,模板事件。 */
 const xhsLog = createLogDomain("xhs", {
   color: "#ff2e4d", // 小红书红
@@ -111,6 +113,7 @@ export const log = {
   douyin: douyinLog,
   douyu: douyuLog,
   huya: huyaLog,
+  twitch: twitchLog,
   xhs: xhsLog,
   weibo: weiboLog,
   danmaku: danmakuLog,

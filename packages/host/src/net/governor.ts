@@ -86,6 +86,8 @@ export const DEFAULT_NET_POLICY: NetPolicy = {
     weibo: { maxConcurrent: 8, rpm: 300, minIntervalMs: 50, cooldownBaseMs: 1_800_000 },
     youtube: { maxConcurrent: 12, rpm: 600, minIntervalMs: 50, cooldownBaseMs: 600_000 },
     apple: { maxConcurrent: 8, rpm: 300, minIntervalMs: 50, cooldownBaseMs: 300_000 },
+    // Twitch 未公开 API,按 IP 限流且无公开阈值 —— 保守起步。
+    twitch: { maxConcurrent: 6, rpm: 120, minIntervalMs: 100, cooldownBaseMs: 600_000 },
   },
 }
 
@@ -189,6 +191,9 @@ const MEDIA_CDN_SUFFIXES: readonly string[] = [
   "weibocdn.com",
   // Apple 播客封面/预览
   "mzstatic.com",
+  // Twitch 播放 CDN(usher master / 分片 / 预览图)
+  "ttvnw.net",
+  "jtvnw.net",
   // 通用 CDN
   "akamaized.net",
   "akamaized.com",
@@ -257,6 +262,16 @@ function platformOf(host: string): string {
     return "youtube"
   }
   if (host === "itunes.apple.com" || host.endsWith(".itunes.apple.com")) return "apple"
+  if (
+    host === "twitch.tv" ||
+    host.endsWith(".twitch.tv") ||
+    host === "ttvnw.net" ||
+    host.endsWith(".ttvnw.net") ||
+    host === "jtvnw.net" ||
+    host.endsWith(".jtvnw.net")
+  ) {
+    return "twitch"
+  }
   return host.startsWith("www.") ? host.slice(4) : host
 }
 
@@ -364,6 +379,8 @@ const SIGNAL_COOLDOWNS: Record<string, Record<string, number>> = {
   weibo: { "418": 30 * MINUTE, "403": 30 * MINUTE, "-100": 30 * MINUTE, "432": 10 * MINUTE },
   douyin: { "4031": 30 * MINUTE, "2483": 30 * MINUTE },
   youtube: { "429": 15 * MINUTE },
+  // 429 = 限流,显式 10 分钟;403 多为地区/版权限制,未单列信号 → 走 cooldownBaseMs 兜底。
+  twitch: { "429": 10 * MINUTE },
 }
 
 /**

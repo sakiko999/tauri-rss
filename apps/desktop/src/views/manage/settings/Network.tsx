@@ -29,6 +29,7 @@ function platformOfChannel(key: string): string | undefined {
   if (key.startsWith("live:huya") || key.startsWith("huya:")) return "huya"
   if (key.startsWith("youtube:")) return "youtube"
   if (key.startsWith("apple:")) return "apple"
+  if (key.startsWith("twitch:")) return "twitch"
   return undefined
 }
 

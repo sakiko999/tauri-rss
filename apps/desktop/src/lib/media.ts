@@ -166,6 +166,7 @@ export const PLATFORM_LABEL: Record<string, string> = {
   huya: "虎牙",
   douyin: "抖音",
   youtube: "YouTube",
+  twitch: "Twitch",
 }
 
 /** 平台 id(直播条目用)。 */

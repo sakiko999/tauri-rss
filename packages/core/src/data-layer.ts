@@ -183,6 +183,7 @@ export function createDataLayer(): DataLayer {
     if (channelKey.startsWith("live:huya") || channelKey.startsWith("huya:")) return "huya"
     if (channelKey.startsWith("youtube:")) return "youtube"
     if (channelKey.startsWith("apple:")) return "apple"
+    if (channelKey.startsWith("twitch:")) return "twitch"
     return undefined
   }
 

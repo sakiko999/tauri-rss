@@ -102,6 +102,8 @@ export const LIVE_SUB_CHANNEL: Record<string, string> = {
   douyin: "live:douyin",
   // 搜索命中的 videoId 直接作为 youtube:live 的订阅参数。
   youtube: "youtube:live",
+  // 一期只做订阅(搜索/分区二期;故 SEARCH_CHANNEL 不登记)。
+  twitch: "twitch:live",
 }
 
 /** 平台 → 用户**搜索渠道**(搜 UP主/频道名 → 订阅目标候选;同 SEARCH_CHANNEL 的用户版)。 */

@@ -20,6 +20,7 @@ export function exampleInfo(key: string): Record<string, string> {
     case "live:huya": return { roomId: "116" } // 虎牙房间
     case "live:douyu": return { roomId: "9999" } // 斗鱼房间(yyfyyf,验证过 betard 可用)
     case "live:douyin": return { roomId: "1" } // 抖音房间
+    case "twitch:live": return { roomIds: "shroud" } // Twitch 频道登录名
     case "rss:podcast": return { url: "https://feeds.megaphone.fm/hubermanlab" } // Huberman Lab(desktop 测试源)
     default: return {}
   }
