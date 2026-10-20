@@ -158,6 +158,27 @@ export function getVisitorData(): Promise<string> {
   return visitorDataPromise
 }
 
+/**
+ * POST 一次 InnerTube browse(WEB client + visitorData),返回原始 JSON。
+ *
+ * crawler 的直播页(热门/栏目)用。固定 `hl:"en"`、`gl:"US"` —— 栏目名是解析依据
+ * (`Live Now - Gaming` 等),跟随系统语言会让栏目名变成「正在直播」。
+ */
+export async function youtubeBrowse(browseId: string): Promise<Record<string, any>> {
+  const visitorData = await getVisitorData()
+  const res = await postJson(
+    `${YOUTUBEI_V1}/browse?prettyPrint=false`,
+    {
+      context: {
+        client: { clientName: "WEB", clientVersion: WEB_CLIENT_VERSION, hl: "en", gl: "US", visitorData },
+      },
+      browseId,
+    },
+    { "user-agent": WEB_UA },
+  )
+  return res as Record<string, any>
+}
+
 /** 请求 player API(ANDROID_VR client——主力,免 poToken)。 */
 async function getAndroidPlayerResponse(videoId: string, visitorData: string): Promise<PlayerResponse> {
   const cpn = generateCpn()

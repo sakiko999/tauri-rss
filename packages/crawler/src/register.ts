@@ -18,17 +18,25 @@ import {
   BiliSearchChannel,
   BiliAnchorChannel,
   BiliUserChannel,
+  BiliSeasonChannel,
+  BiliSeriesChannel,
+  BiliFavlistChannel,
 } from "./channels/bili/index.ts"
 import {
   YoutubeChannel,
   YoutubeLiveChannel,
   YoutubeLiveSearchChannel,
   YoutubeUserChannel,
+  YoutubeLiveHotChannel,
+  YoutubeLiveCategoryChannel,
+  YoutubeLiveCategoriesChannel,
+  YoutubePlaylistChannel,
 } from "./channels/youtube/index.ts"
 import {
   HuyaLiveChannel,
   HuyaLiveHotChannel,
   HuyaCategoryChannel,
+  HuyaCategoriesChannel,
   HuyaSearchChannel,
   HuyaAnchorChannel,
 } from "./channels/huya/index.ts"
@@ -36,6 +44,7 @@ import {
   DouyuLiveChannel,
   DouyuLiveHotChannel,
   DouyuCategoryChannel,
+  DouyuCategoriesChannel,
   DouyuSearchChannel,
   DouyuAnchorChannel,
 } from "./channels/douyu/index.ts"
@@ -43,11 +52,17 @@ import {
   DouyinLiveChannel,
   DouyinLiveHotChannel,
   DouyinCategoryChannel,
+  DouyinCategoriesChannel,
   DouyinPartitionSearchChannel,
   DouyinUserLiveChannel,
   DouyinTrendChannel,
 } from "./channels/douyin/index.ts"
-import { TwitchCategoryChannel, TwitchHotChannel, TwitchLiveChannel } from "./channels/twitch/index.ts"
+import {
+  TwitchCategoryChannel,
+  TwitchCategoriesChannel,
+  TwitchHotChannel,
+  TwitchLiveChannel,
+} from "./channels/twitch/index.ts"
 import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
 import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
 import { ApplePodcastChartChannel, ApplePodcastSearchChannel } from "./channels/apple/index.ts"
@@ -80,6 +95,9 @@ export function registerBuiltinChannels(): void {
   registerChannel(new BiliUserVideoChannel())
   registerChannel(new BiliLiveChannel())
   registerChannel(new BiliLiveHotChannel())
+  registerChannel(new BiliSeasonChannel())
+  registerChannel(new BiliSeriesChannel())
+  registerChannel(new BiliFavlistChannel())
   registerChannel(new BiliDynamicChannel())
   registerChannel(new BiliSearchChannel())
   registerChannel(new BiliAnchorChannel())
@@ -87,7 +105,11 @@ export function registerBuiltinChannels(): void {
 
   // ── YouTube(官方 RSS 视频 + 直播订阅)──
   registerChannel(new YoutubeChannel())
+  registerChannel(new YoutubePlaylistChannel())
   registerChannel(new YoutubeLiveChannel())
+  registerChannel(new YoutubeLiveHotChannel())
+  registerChannel(new YoutubeLiveCategoryChannel())
+  registerChannel(new YoutubeLiveCategoriesChannel())
   registerChannel(new YoutubeLiveSearchChannel())
   registerChannel(new YoutubeUserChannel())
 
@@ -95,11 +117,13 @@ export function registerBuiltinChannels(): void {
   registerChannel(new TwitchLiveChannel())
   registerChannel(new TwitchHotChannel())
   registerChannel(new TwitchCategoryChannel())
+  registerChannel(new TwitchCategoriesChannel())
 
   // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──
   registerChannel(new HuyaLiveChannel())
   registerChannel(new HuyaLiveHotChannel())
   registerChannel(new HuyaCategoryChannel())
+  registerChannel(new HuyaCategoriesChannel())
   registerChannel(new HuyaSearchChannel())
   registerChannel(new HuyaAnchorChannel())
 
@@ -107,11 +131,13 @@ export function registerBuiltinChannels(): void {
   registerChannel(new DouyuLiveChannel())
   registerChannel(new DouyuLiveHotChannel())
   registerChannel(new DouyuCategoryChannel())
+  registerChannel(new DouyuCategoriesChannel())
   registerChannel(new DouyuSearchChannel())
   registerChannel(new DouyuAnchorChannel())
   registerChannel(new DouyinLiveChannel())
   registerChannel(new DouyinLiveHotChannel())
   registerChannel(new DouyinCategoryChannel())
+  registerChannel(new DouyinCategoriesChannel())
   registerChannel(new DouyinPartitionSearchChannel())
   registerChannel(new DouyinUserLiveChannel())
   registerChannel(new DouyinTrendChannel())

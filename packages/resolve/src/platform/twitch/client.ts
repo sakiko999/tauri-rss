@@ -188,6 +188,35 @@ export async function fetchTwitchTopStreams(first = 30, after?: string): Promise
   return mapStreamPage(data.streams, "twitch gql: 热门直播缺少 streams")
 }
 
+/** 分类目录条目(GraphQL `games` 的 node;只含元数据,不含房间)。 */
+export interface TwitchCategoryNode {
+  id: string
+  name: string
+  slug: string
+  viewersCount: number
+  boxArtURL: string | null
+}
+
+/**
+ * 分类榜(按观看数降序,匿名可用)。供目录订阅 `twitch:categories` 产 `kind:"category"`
+ * 条目 —— **分类本身没有可播房间**,条目只作为「点开预览 `twitch:category`」的入口。
+ * 实测 `first` 上限同样是 30;`games` 走移动端 Client-ID(与流列表一致)。
+ */
+export async function fetchTwitchTopCategories(first = 30): Promise<TwitchCategoryNode[]> {
+  const data = await twitchGql<{
+    games?: { edges?: Array<{ node?: TwitchCategoryNode | null } | null> | null } | null
+  }>(
+    {
+      query: `query { games(first: ${clampFirst(first)}) { edges { node { id name slug viewersCount boxArtURL(width: 240, height: 320) } } } }`,
+    },
+    { throwOnErrors: true, clientId: TWITCH_MOBILE_CLIENT_ID },
+  )
+  if (!data.games) throw new Error("twitch gql: 分类列表缺少 games")
+  return (data.games.edges ?? [])
+    .map((e) => e?.node)
+    .filter((n): n is TwitchCategoryNode => !!n && !!n.slug)
+}
+
 /**
  * 分区直播(`game(slug)` 下的流列表)。`slug` 由调用方归一(见 utils/twitch.ts 的
  * `normalizeTwitchCategory`),这里只做 JSON 转义,防止拼进查询串。

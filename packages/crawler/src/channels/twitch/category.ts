@@ -3,7 +3,8 @@
  *
  * 参数 `category` 接受裸 slug(`just-chatting`)或目录页链接;归一化见
  * resolve 的 `normalizeTwitchCategory`。支持游标翻页(fetchMore,见 streams.ts)。
- * 不实现 fetchPassive / Loginable / supportsL9;分类榜(games 查询)只留文档,不做 channel。
+ * 不实现 fetchPassive / Loginable / supportsL9。
+ * 分类目录另见 `categories.ts`(`twitch:categories`,产 kind:"category" 条目)。
  */
 import { type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"

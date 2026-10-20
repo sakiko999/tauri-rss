@@ -71,7 +71,8 @@ export class YoutubeChannel implements RssChannel {
   }
 }
 
-function entryToVideo(entry: ParsedItem, t: number): Video {
+/** YouTube Atom feed 条目 → Video(`youtube` 频道与 `youtube:playlist` 共用)。 */
+export function entryToVideo(entry: ParsedItem, t: number, sourceId = "youtube"): Video {
   const raw = entry.raw ?? {}
   const videoId = asString(raw["yt:videoId"]) ?? videoIdFromLink(entry.link)
   const watchUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : entry.link
@@ -81,7 +82,7 @@ function entryToVideo(entry: ParsedItem, t: number): Video {
   const duration = asString(content["@_duration"]) ? Number(asString(content["@_duration"])) : undefined
   return {
     id: videoId ?? entry.guid ?? entry.link ?? "",
-    sourceId: "youtube",
+    sourceId,
     kind: "video",
     title: entry.title ?? "(untitled)",
     url: watchUrl,

@@ -9,11 +9,12 @@
  * ⚠️ `liveStatus` 信任搜索过滤器给的 LIVE badge(不再逐条打 player API;
  * 预览也不需要精确在线数,`online` 取搜索结果里的 watching 数)。
  */
-import type { Item, Live } from "@amoeba/xml"
+import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 import { now, searchYouTubeLive } from "@amoeba/resolve"
+import { youtubeLiveHitToLive } from "./live-shelf.ts"
 
 export class YoutubeLiveSearchChannel implements RssChannel {
   readonly key = "youtube:live-search"
@@ -32,25 +33,7 @@ export class YoutubeLiveSearchChannel implements RssChannel {
     if (!kw) throw new Error("youtube:live-search 需要 keyword 参数")
     const hits = await searchYouTubeLive(kw)
     const t = now()
-    return hits.map((h): Live => {
-      // 稳定缩略图约定同 youtube:live(i.ytimg.com/vi/<id>/hqdefault.jpg)。
-      const thumb = h.thumb ?? `https://i.ytimg.com/vi/${h.videoId}/hqdefault.jpg`
-      return {
-        id: h.videoId,
-        sourceId: "youtube:live-search",
-        kind: "live",
-        title: h.title,
-        url: `https://www.youtube.com/watch?v=${h.videoId}`,
-        thumbnail: thumb,
-        poster: thumb,
-        author: h.channelTitle ? { name: h.channelTitle } : undefined,
-        fetchedAt: t,
-        platform: "youtube",
-        roomId: h.videoId,
-        liveStatus: "live",
-        online: h.viewers,
-      }
-    })
+    return hits.map((h) => youtubeLiveHitToLive("youtube:live-search", h, t))
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {

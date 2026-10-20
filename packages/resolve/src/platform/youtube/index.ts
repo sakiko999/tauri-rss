@@ -3,3 +3,4 @@
  * import 统一从 `../../platform/youtube` 进,不直连内部文件。
  */
 export * from "./client.ts"
+export * from "./discover.ts"
