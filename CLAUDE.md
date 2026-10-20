@@ -213,6 +213,7 @@ bun packages/host/src/example/host-check.ts             # 门面字段（openExt
 bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/LX/去重/冷却/strict/并发）
 bun packages/core/src/example/lx-mode.check.ts          # LX 闸门（只走 fetchPassive / autoRefresh）
 bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload → Item 字段映射
+bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录页/匿名/L9 路由矩阵 + origin 校验）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL 归一化 / TTL / 限额淘汰）
 bun packages/crawler/src/example/passive-capture.check.ts # LX 采集编排（假后端回放 CDP 事件）
@@ -446,6 +447,11 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
     `core.resolveDetail` 在等级 9 时传 `{ passive: true }`（禁止 fetch），匿名则直接
     回退列表 item。explore/user 的详情实现已收敛到 `channels/xhs/shared.ts`。
   - L9 的 `fetchPassive` 对未登录用户返回 null → core 回退内容缓存，不会偷偷改走 fetch。
+  - 策略层入口 = `shared.ts` 的 `fetchXhsList`：登录页优先判匿名，**登录页且没有 `parseHtml`
+    的渠道必须给 `loginError`**（explore），否则会读登录页的空 SSR 静默 0 条；SSR 列表读取
+    统一走 `readXhsStateList` / `flatXhsStateList`（逐层解 `_rawValue` + flat）；
+    `ensureXhsPath` 同址判据**同时校验 origin**（共享 Edge 可能停在别的域）。
+    回归：`bun packages/crawler/src/example/xhs-strategy.check.ts`。
 - ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——
   `extractInitialState` 用**平衡大括号截纯 JSON** + 空容器归一
 - ⚠️ **不要手拼 user_posted fetch**（页面内 `_webmsxyw` 只返回部分头 → 300011 风控）。

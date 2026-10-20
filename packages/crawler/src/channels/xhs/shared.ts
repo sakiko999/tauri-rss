@@ -17,41 +17,23 @@
  * **不是 `web_session`** —— 小红书对游客也会立即签发 web_session。
  */
 import type { Item, Social } from "@amoeba/xml"
-import type { LoginResult, Loginable } from "../../index.ts"
+import { capturePage } from "../../passive/capture.ts"
+import { passiveBuffer } from "../../passive/buffer.ts"
 import {
   XHS_BASE,
+  extractInitialState,
   extractNoteDetail,
   isXhsLoggedIn,
   isXhsOrigin,
   noteDetailStateExpr,
   noteDetailToSocial,
   now,
+  rawOf,
   reportXhsRisk,
   xhsClient,
   xhsFetchPage,
-  xhsScanLogin,
 } from "@amoeba/resolve"
 import { cdpEvaluate, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
-
-/**
- * xhs 渠道公共基类。
- *
- * 扫码登录是**平台级**操作(同一个 Edge profile),explore/user 只是两个入口;
- * 放在基类里,避免每个渠道复制「检查 browser → 委托 xhsScanLogin」的样板。
- */
-export class XhsChannelBase implements Loginable {
-  /** 两个 xhs 渠道都支持 L9(浏览器被动)。 */
-  readonly supportsL9 = true
-
-  scanLogin(
-    emitQr: (qrDataUrl: string | null) => void,
-    opts?: { timeoutMs?: number },
-  ): Promise<LoginResult> {
-    const browser = globalThis.appHost?.browser
-    if (!browser) throw new Error("扫码登录需 Tauri 桌面环境(未注入 appHost.browser)")
-    return xhsScanLogin(browser, emitQr, opts)
-  }
-}
 
 /** 滚动翻页每次返回的窗口大小(仅 `xhs:user`;explore 一次整批返回)。 */
 export const XHS_FETCH_MORE_WINDOW = 30
@@ -68,10 +50,12 @@ async function waitXhsSsr(browser: BrowserBackend, message: string): Promise<voi
   )
 }
 
-/** 当前页面是否被重定向到登录页。 */
+/** 当前页面是否被重定向到登录页(必须同时确认在 xhs origin,共享 page 可能停在别的域)。 */
 export async function isXhsLoginPage(browser: BrowserBackend): Promise<boolean> {
-  const path = await cdpEvaluate<string>(browser, `location.pathname`)
-  return typeof path === "string" && path.startsWith("/login")
+  return cdpEvaluate<boolean>(
+    browser,
+    `location.origin === ${JSON.stringify(XHS_BASE)} && location.pathname.startsWith('/login')`,
+  )
 }
 
 /**
@@ -146,7 +130,9 @@ export async function ensureXhsPath(browser: BrowserBackend, path: string): Prom
   } catch {
     // 导航过渡/context destroyed → 当作不同址,走正常导航。
   }
-  if (norm(current) === norm(path)) {
+  // ⚠️ 只比 pathname 不够:单 Edge page target 多平台共享,别的域也可能有同名路径。
+  // 不在 xhs origin 时必须重新导航,否则 waitXhsSsr 可能读到别的页面的 __INITIAL_STATE__。
+  if (norm(current) === norm(path) && (await isXhsOrigin(browser))) {
     // 不重载也要确认 SSR 还在(幂等:已挂载立即返回)。
     await waitXhsSsr(browser, "xhs SSR 状态未挂载")
     return
@@ -175,6 +161,66 @@ async function ensureXhsOrigin(browser: BrowserBackend): Promise<void> {
   await waitXhsSsr(browser, "xhs 页面未就绪")
 }
 
+/** 当前页面的登录路由(登录页优先于 cookie:失效会话的残留 user_id 不能当登录)。 */
+export type XhsRoute = "login-page" | "logged-in" | "anonymous"
+
+export async function resolveXhsRoute(browser: BrowserBackend): Promise<XhsRoute> {
+  if (await isXhsLoginPage(browser)) return "login-page"
+  return (await isXhsLoggedIn(browser)) ? "logged-in" : "anonymous"
+}
+
+/**
+ * 页面内读 SSR state 的某个列表路径(如 `["feed","feeds"]` / `["user","notes"]`)。
+ * 逐层解 `_rawValue` + flat —— explore/user 共用,避免各自手写解包表达式漂移。
+ */
+export async function readXhsStateList(
+  browser: BrowserBackend,
+  path: string[],
+): Promise<any[]> {
+  const p = JSON.stringify(path)
+  const list = await cdpEvaluate<any[]>(
+    browser,
+    `(() => {
+      const path = ${p};
+      let v = window.__INITIAL_STATE__;
+      for (let i = 0; i < path.length; i++) {
+        v = v?.[path[i]];
+        v = v?._rawValue ?? v;
+      }
+      return Array.isArray(v) ? v.flat() : [];
+    })()`,
+  )
+  return list ?? []
+}
+
+/** 只读列表长度(滚动轮询用:整棵 state 序列化只为判增长太贵)。 */
+export async function readXhsStateListCount(
+  browser: BrowserBackend,
+  path: string[],
+): Promise<number> {
+  const p = JSON.stringify(path)
+  const n = await cdpEvaluate<number>(
+    browser,
+    `(() => {
+      const path = ${p};
+      let v = window.__INITIAL_STATE__;
+      for (let i = 0; i < path.length; i++) {
+        v = v?.[path[i]];
+        v = v?._rawValue ?? v;
+      }
+      return Array.isArray(v) ? v.flat().length : 0;
+    })()`,
+  )
+  return n ?? 0
+}
+
+/** SSR HTML 里的 state → 同一路径的扁平列表(与 readXhsStateList 同一套解包规则)。 */
+export function flatXhsStateList(state: any, path: string[]): any[] {
+  let v: any = state
+  for (const key of path) v = rawOf(v?.[key])
+  return Array.isArray(v) ? v.flat() : []
+}
+
 /** 一个列表页(explore 推荐流 / user 笔记流)的抓取配方。 */
 export interface XhsListPage<T> {
   /** 列表页 URL(导航落点)。 */
@@ -187,6 +233,12 @@ export interface XhsListPage<T> {
    * `xhs:user` 必须提供:匿名 profile SSR 抹空 noteId,读 SSR 无意义)。
    */
   parseHtml?(html: string): T
+  /**
+   * 登录重定向且没有 `parseHtml` 时的可操作错误。
+   * `xhs:explore` 匿名本来读页面 SSR,若被重定向到 /login,再读 feed 只会静默 0 条;
+   * 有 `parseHtml` 的渠道(user)会走匿名 fetch,不需要这个字段。
+   */
+  loginError?: string
   /** L9 被动模式:匿名时不 fetch,返回 null 让 core 回退缓存。 */
   passiveOnly?: boolean
 }
@@ -207,13 +259,60 @@ export async function fetchXhsList<T>(
       await waitXhsSsr(browser, "xhs SSR 状态未挂载")
       await assertXhsNotBlocked(browser)
 
-      // 登录页优先判匿名:服务端 session 已失效时 user_id cookie 可能还在,
-      // 只靠 cookie 会被误判成已登录、随后读到空 SSR。
-      const onLogin = await isXhsLoginPage(browser)
-      if (!onLogin && (await isXhsLoggedIn(browser))) return page.readPage(browser)
+      // 登录路由统一由 resolveXhsRoute 判(登录页优先于 cookie:失效会话的残留
+      // user_id 不能当登录,否则会读到登录页的空 SSR)。
+      const route = await resolveXhsRoute(browser)
+      if (route === "logged-in") return page.readPage(browser)
+      // L9 匿名:不 fetch,交给 core 回退缓存。
       if (page.passiveOnly) return null
-      if (!page.parseHtml) return page.readPage(browser)
-      return page.parseHtml(await xhsFetchPage(browser, page.url, "omit"))
+      // 匿名(或登录重定向):有 HTML 解析器的渠道走页面内 fetch(Chrome 指纹);
+      // 没有解析器的渠道(explore)在登录页上再读 SSR 只会得 0 条,必须给可操作错误。
+      if (page.parseHtml) return page.parseHtml(await xhsFetchPage(browser, page.url, "omit"))
+      if (route === "login-page" && page.loginError) throw new Error(page.loginError)
+      return page.readPage(browser)
+    },
+    "xhs",
+  )
+}
+
+/** LX 路线 A(Network 捕获)的页面配方。 */
+export interface XhsPassivePage<T> {
+  /** 触发导航的 xhs 路径(如 `/explore`)。 */
+  path: string
+  /** passiveBuffer 的 endpoint key(与 capturePage 一致)。 */
+  endpoint: string
+  /** 只收哪些响应 URL(页面自然请求)。 */
+  match(url: URL): boolean
+  /** 被重定向到登录页时的可操作错误。 */
+  notLoggedInMsg: string
+  /** 从捕获到的 HTML 里解析真正要的数据(通常 flatXhsStateList)。 */
+  readState(state: any): T
+}
+
+/**
+ * LX 路线 A:导航触发页面自身文档请求 → CDP Network 缓冲取响应体 → 解析。
+ * 只观察、不构造请求;拿不到缓冲返回 null(core 会回退内容缓存,绝不回退主动 fetch)。
+ */
+export async function fetchXhsPassivePage<T>(
+  browser: BrowserBackend,
+  page: XhsPassivePage<T>,
+): Promise<T | null> {
+  return withBrowserMode(
+    browser,
+    "hidden",
+    async () => {
+      await capturePage(browser, {
+        platform: "xhs",
+        endpoint: page.endpoint,
+        match: page.match,
+        trigger: (b) => cdpNavigate(b, `${XHS_BASE}${page.path}`, true),
+      })
+      // 被动路径同样要识别风控/登录重定向,否则会被当成「无被动数据」静默回退缓存。
+      await ensureXhsPageReady(browser, page.path, page.notLoggedInMsg)
+      await assertXhsNotBlocked(browser)
+      const entry = passiveBuffer.getLatest("xhs", page.endpoint)
+      if (!entry) return null
+      return page.readState(extractInitialState(entry.body))
     },
     "xhs",
   )
@@ -258,9 +357,9 @@ export async function resolveXhsItemDetail(opts: XhsDetailOptions): Promise<Item
       await ensureXhsOrigin(browser)
       await assertXhsNotBlocked(browser)
 
-      // 登录页优先判匿名(同 fetchXhsList):失效会话的残留 user_id 不能当登录。
-      const onLogin = await isXhsLoginPage(browser)
-      if (passiveOnly || (!onLogin && (await isXhsLoggedIn(browser)))) {
+      // 登录路由与列表抓取共用同一判据(登录页优先,残留 user_id 不算登录)。
+      const route = await resolveXhsRoute(browser)
+      if (passiveOnly || route === "logged-in") {
         await cdpNavigate(browser, url, true)
         await waitXhsSsr(browser, "xhs 详情页未就绪")
         if (await isXhsLoginPage(browser)) {

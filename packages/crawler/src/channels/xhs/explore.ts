@@ -13,18 +13,20 @@ import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { capturePage } from "../../passive/capture.ts"
-import { passiveBuffer } from "../../passive/buffer.ts"
-import { XHS_BASE, extractInitialState, noteCardToSocial, now, rawOf, xhsClient } from "@amoeba/resolve"
-import { cdpEvaluate, cdpNavigate, withBrowserMode } from "@amoeba/resolve"
+import { XHS_BASE, extractInitialState, noteCardToSocial, now, xhsClient } from "@amoeba/resolve"
+import { withBrowserMode } from "@amoeba/resolve"
 import {
   assertXhsNotBlocked,
   ensureXhsPageReady,
   fetchXhsList,
+  fetchXhsPassivePage,
+  flatXhsStateList,
+  readXhsStateList,
+  readXhsStateListCount,
   resolveXhsItemDetail,
   scrollXhsUntilGrown,
-  XhsChannelBase,
 } from "./shared.ts"
+import { XhsChannelBase } from "./base.ts"
 
 /** 判断滚动前后 feed 头部是否变化的稳定 key(noteId 在展开项外层)。 */
 function feedKey(f: any): string {
@@ -69,37 +71,10 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
   private async fetchViaBrowser(browser: BrowserBackend): Promise<Item[]> {
     const items = await fetchXhsList(browser, {
       url: `${XHS_BASE}/explore`,
-      readPage: async (b) => this.toItems((await this.readFeeds(b)).list),
+      readPage: async (b) => this.toItems(await readXhsStateList(b, ["feed", "feeds"])),
+      loginError: "小红书登录已失效或未登录，请到「账号与凭证」重新扫码",
     })
     return items ?? []
-  }
-
-  /** 页面内读当前 explore feed(解 _rawValue + flat)。 */
-  private async readFeeds(browser: BrowserBackend): Promise<{ list: any[] }> {
-    const r = await cdpEvaluate<{ list: any[] }>(
-      browser,
-      `(() => {
-        const f = window.__INITIAL_STATE__?.feed;
-        const raw = f?._rawValue ?? f;
-        const feeds = raw?.feeds?._rawValue ?? raw?.feeds;
-        return { list: Array.isArray(feeds) ? feeds.flat() : [] };
-      })()`,
-    )
-    return r ?? { list: [] }
-  }
-
-  /** 只读 feed.feeds 数量(滚动轮询用;整棵序列化只为判增长太贵)。 */
-  private async readFeedsCount(browser: BrowserBackend): Promise<number> {
-    const n = await cdpEvaluate<number>(
-      browser,
-      `(() => {
-        const f = window.__INITIAL_STATE__?.feed;
-        const raw = f?._rawValue ?? f;
-        const feeds = raw?.feeds?._rawValue ?? raw?.feeds;
-        return Array.isArray(feeds) ? feeds.flat().length : 0;
-      })()`,
-    )
-    return n ?? 0
   }
 
   /**
@@ -127,7 +102,7 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
         )
         await assertXhsNotBlocked(browser)
 
-        const initial = await this.readFeeds(browser)
+        const initial = await readXhsStateList(browser, ["feed", "feeds"])
         // cursor = 已返回条数。⚠️ 不能假设新推荐一定追加在尾部:平台可能把新批次
         // **prepend 到 head**(表现为「第一页数据一直往下重复」)。用滚动前后的首条 id
         // 判断增长方向,再决定从头部还是尾部取增量。
@@ -143,18 +118,22 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
         const returned =
           cursor !== undefined
             ? Number(cursor) || 0
-            : Math.min(existing ?? initial.list.length, initial.list.length)
-        const headBefore = feedKey(initial.list[0])
+            : Math.min(existing ?? initial.length, initial.length)
+        const headBefore = feedKey(initial[0])
         let after = initial
         let platformActive = false
-        if (initial.list.length <= returned) {
-          const r = await scrollXhsUntilGrown(browser, () => this.readFeedsCount(browser), returned)
+        if (initial.length <= returned) {
+          const r = await scrollXhsUntilGrown(
+            browser,
+            () => readXhsStateListCount(browser, ["feed", "feeds"]),
+            returned,
+          )
           platformActive = r.platformActive
-          after = await this.readFeeds(browser)
+          after = await readXhsStateList(browser, ["feed", "feeds"])
         }
 
-        const total = after.list.length
-        const prepended = !!headBefore && feedKey(after.list[0]) !== headBefore
+        const total = after.length
+        const prepended = !!headBefore && feedKey(after[0]) !== headBefore
         // prepend:新旧边界在尾部(total - returned 条新内容在头部);
         // append:边界在 returned 处。两种方向都一次返回整批新内容 —— 分窗口切片在
         // prepend 下会把「已返回/未返回」混在头部,无法用一个索引表达。
@@ -165,8 +144,8 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
           total <= returned
             ? []
             : prepended
-              ? after.list.slice(0, total - returned)
-              : after.list.slice(returned)
+              ? after.slice(0, total - returned)
+              : after.slice(returned)
         const items = this.toItems(fresh)
         const xml = serializeFeed(items, this.channelOptions())
         if (!fresh.length) {
@@ -188,42 +167,21 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
   private async fetchPassive(): Promise<string | null> {
     const browser = globalThis.appHost?.browser
     if (!browser?.send || !browser.onEvent) return null
-    return withBrowserMode(
-      browser,
-      "hidden",
-      async () => {
-        await capturePage(browser, {
-          platform: "xhs",
-          endpoint: "explore",
-          match: (u) => u.pathname === "/explore",
-          trigger: (b) => cdpNavigate(b, `${XHS_BASE}/explore`, true),
-        })
-        // 被动路径同样要识别风控/登录重定向,否则会被当成「无被动数据」静默回退缓存。
-        await ensureXhsPageReady(
-          browser,
-          "/explore",
-          "小红书登录已失效或未登录，请到「账号与凭证」重新扫码",
-        )
-        await assertXhsNotBlocked(browser)
-        const entry = passiveBuffer.getLatest("xhs", "explore")
-        if (!entry) return null
-        const items = this.toItems(this.feedsFromState(extractInitialState(entry.body)))
-        return serializeFeed(items, this.channelOptions())
-      },
-      "xhs",
-    )
+    const feeds = await fetchXhsPassivePage(browser, {
+      path: "/explore",
+      endpoint: "explore",
+      match: (u) => u.pathname === "/explore",
+      notLoggedInMsg: "小红书登录已失效或未登录，请到「账号与凭证」重新扫码",
+      readState: (state) => flatXhsStateList(state, ["feed", "feeds"]),
+    })
+    // 缓冲缺失 → null(core 回退缓存);缓冲有但 0 条 → 空 XML(与旧行为一致)。
+    if (!feeds) return null
+    return serializeFeed(this.toItems(feeds), this.channelOptions())
   }
 
   private async fetchViaHttp(cookie?: string): Promise<Item[]> {
     const html = await xhsClient.getHtml(`${XHS_BASE}/explore`, { cookie })
-    return this.toItems(this.feedsFromState(extractInitialState(html)))
-  }
-
-  /** 解 `state.feed.feeds`(_rawValue 包装 + flat)。 */
-  private feedsFromState(state: any): any[] {
-    const feed = rawOf(state.feed)
-    const feeds = feed?.feeds?._rawValue ?? feed?.feeds
-    return Array.isArray(feeds) ? feeds.flat() : []
+    return this.toItems(flatXhsStateList(extractInitialState(html), ["feed", "feeds"]))
   }
 
   /** feeds[] → Item[](noteId 在展开项外层,noteCard 在内层,xsecToken 也在外层)。 */

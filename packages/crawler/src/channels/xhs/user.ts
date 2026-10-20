@@ -24,22 +24,19 @@ import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { XHS_BASE, extractInitialState, isXhsLoggedIn, log, noteCardToSocial, now, rawOf, xhsClient } from "@amoeba/resolve"
-import { cdpEvaluate, withBrowserMode } from "@amoeba/resolve"
+import { XHS_BASE, extractInitialState, isXhsLoggedIn, log, noteCardToSocial, now, xhsClient } from "@amoeba/resolve"
+import { withBrowserMode } from "@amoeba/resolve"
 import {
   ensureXhsPageReady,
   fetchXhsList,
+  flatXhsStateList,
+  readXhsStateList,
+  readXhsStateListCount,
   resolveXhsItemDetail,
   scrollXhsUntilGrown,
   XHS_FETCH_MORE_WINDOW,
-  XhsChannelBase,
 } from "./shared.ts"
-
-/** SSR `user.notes` → 扁平笔记数组(每项 { id, noteCard, xsecToken })。解 _rawValue 包装。 */
-function extractSsrNotes(state: any): any[] {
-  const notes = rawOf(state?.user?.notes)
-  return Array.isArray(notes) ? notes.flat() : []
-}
+import { XhsChannelBase } from "./base.ts"
 
 export class XhsUserChannel extends XhsChannelBase implements RssChannel {
   readonly key = "xhs:user"
@@ -81,7 +78,7 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
     const items = await fetchXhsList(browser, {
       url: `${XHS_BASE}/user/profile/${userId}`,
       passiveOnly: true,
-      readPage: async (b) => this.notesToItems((await this.readNotes(b)).list),
+      readPage: async (b) => this.notesToItems(await readXhsStateList(b, ["user", "notes"])),
     })
     if (!items?.length) return null
     return serializeFeed(items, this.channelOptions({ user_id: userId }))
@@ -101,13 +98,13 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
     const items = await fetchXhsList(browser, {
       url: `${XHS_BASE}/user/profile/${userId}`,
       readPage: async (b) => {
-        const { list } = await this.readNotes(b)
+        const list = await readXhsStateList(b, ["user", "notes"])
         if (!list.length) log.xhs.userEmpty({ body: "user.notes 空(已登录),profile 页 SSR" })
         return this.notesToItems(list)
       },
       parseHtml: (html) => {
         log.xhs.userEmpty({ body: "未登录,回退匿名 fetch" })
-        return this.notesToItems(extractSsrNotes(extractInitialState(html)))
+        return this.notesToItems(flatXhsStateList(extractInitialState(html), ["user", "notes"]))
       },
     })
     return items ?? []
@@ -116,7 +113,7 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
   /** HTTP 路径:带 cookie 请求 profile 页 HTML → 解析 SSR user.notes(RSSHub getUserWithCookie 同路径)。 */
   private async fetchViaHttp(userId: string, cookie: string): Promise<Item[]> {
     const html = await xhsClient.getHtml(`${XHS_BASE}/user/profile/${userId}`, { cookie: cookie || undefined })
-    return this.notesToItems(extractSsrNotes(extractInitialState(html)))
+    return this.notesToItems(flatXhsStateList(extractInitialState(html), ["user", "notes"]))
   }
 
   /** SSR 扁平笔记数组 → Item[](noteCard → Social,noteId 用外层 id,xsecToken 在外层)。 */
@@ -169,7 +166,7 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
           throw new Error("小红书用户主页翻页需要登录：请先到「账号与凭证」扫码登录")
         }
 
-        const initial = await this.readNotes(browser)
+        const initial = await readXhsStateList(browser, ["user", "notes"])
         // 已返回条数(索引定位)。首次翻页用 store 已有条数(同 explore:共享页面可能
         // 被养到几百条,页面长度 ≠ store 已返回数,用它会跳过中间几百条)。
         // ⚠️ 不能 clamp 到当前页面条数:页面被重载过时(点开笔记会把共享 Edge 导航走),
@@ -178,21 +175,25 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
         const startIdx =
           cursor !== undefined
             ? Number(cursor) || 0
-            : Math.min(existing ?? initial.list.length, initial.list.length)
+            : Math.min(existing ?? initial.length, initial.length)
 
         // state 缓存不足才滚动(平台自己签名加载,我们只触发);缓存够则零滚动直接取窗口(快)。
         let after = initial
         // 平台是否「还在追加内容」(滚动后 scrollHeight 增长)——0 条时据此区分「真到底」vs
         // 「加载慢/未触发」:前者 hasMore false(停),后者返回 cursor 让 core 重试(别标 ended)。
         let platformActive = false
-        if (initial.list.length <= startIdx) {
-          const r = await scrollXhsUntilGrown(browser, () => this.readNotesCount(browser), startIdx)
+        if (initial.length <= startIdx) {
+          const r = await scrollXhsUntilGrown(
+            browser,
+            () => readXhsStateListCount(browser, ["user", "notes"]),
+            startIdx,
+          )
           platformActive = r.platformActive
-          after = await this.readNotes(browser)
+          after = await readXhsStateList(browser, ["user", "notes"])
         }
 
         // 窗口化:只取 [startIdx, startIdx+WINDOW)——平台一次滚到底加载 120 条,每次只返回 30。
-        const page = after.list.slice(startIdx, startIdx + XHS_FETCH_MORE_WINDOW)
+        const page = after.slice(startIdx, startIdx + XHS_FETCH_MORE_WINDOW)
         const items = this.notesToItems(page)
         const xml = serializeFeed(items, this.channelOptions({ user_id: userId }))
         if (!page.length) {
@@ -206,32 +207,6 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
       },
       "xhs",
     )
-  }
-
-  /** 页面内读当前全部 notes(解 _rawValue + flat)。 */
-  private async readNotes(browser: BrowserBackend): Promise<{ list: any[] }> {
-    const r = await cdpEvaluate<{ list: any[] }>(
-      browser,
-      `(() => {
-        const u = window.__INITIAL_STATE__?.user;
-        const raw = u?.notes?._rawValue ?? u?.notes;
-        return { list: Array.isArray(raw) ? raw.flat() : [] };
-      })()`,
-    )
-    return r ?? { list: [] }
-  }
-
-  /** 只读 notes 数量(滚动轮询用——整棵 ~1MB 序列化只为判增长太贵,轻量 evaluate 只返回长度)。 */
-  private async readNotesCount(browser: BrowserBackend): Promise<number> {
-    const n = await cdpEvaluate<number>(
-      browser,
-      `(() => {
-        const u = window.__INITIAL_STATE__?.user;
-        const raw = u?.notes?._rawValue ?? u?.notes;
-        return Array.isArray(raw) ? raw.flat().length : 0;
-      })()`,
-    )
-    return n ?? 0
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
