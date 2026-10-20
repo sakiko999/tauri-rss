@@ -135,7 +135,7 @@ export function PlayerStatsOverlay({
       <Line label="帧率" value={live?.fps ?? "—"} />
       <Line label="丢帧" value={live?.dropped ?? "—"} />
       <Line label="缓冲健康" value={live ? `${live.bufferAhead.toFixed(1)} s` : "—"} />
-      {stats?.liveLatency !== undefined ? (
+      {stats?.liveLatency !== undefined && stats.liveLatency > 0 ? (
         <Line label="直播延迟" value={`${stats.liveLatency.toFixed(1)} s`} />
       ) : null}
       <Line label="编解码器" value={stats?.codecs || "—"} />
