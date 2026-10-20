@@ -1,7 +1,7 @@
 /**
  * xhs 策略层自检(假 BrowserBackend,不连真实 Edge)。
  *
- * 保护的是最容易静默漂移的矩阵:登录页优先 / 匿名 / L9 passiveOnly / 登录重定向。
+ * 保护的是最容易静默漂移的矩阵:登录页优先 / 匿名 / 被动 passiveOnly / 登录重定向。
  * 错误形态都是「静默 0 条」或「读错页面 state」,不会抛错,所以留断言。
  */
 import {
@@ -159,7 +159,7 @@ ok(flatXhsStateList(undefined, ["user", "notes"]).length === 0, "缺失 state �
   ok(got === "anonymous-html" && html === "<html>full</html>", "有 parseHtml 的渠道在登录页应走匿名 fetch")
 }
 
-// ── fetchXhsList:匿名 / L9 / 登录态 ─────────────────────────────────────────
+// ── fetchXhsList:匿名 / 被动 / 登录态 ───────────────────────────────────────
 {
   const { browser } = fakeBrowser(base())
   const got = await fetchXhsList<string>(browser, {
@@ -177,7 +177,7 @@ ok(flatXhsStateList(undefined, ["user", "notes"]).length === 0, "缺失 state �
     parseHtml: () => "should-not-parse",
     passiveOnly: true,
   })
-  ok(got === null, "L9 + 匿名应返回 null(交给 core 回退缓存)")
+  ok(got === null, "被动 + 匿名应返回 null(交给 core 回退缓存)")
 }
 {
   const { browser } = fakeBrowser(base({ pageLoggedIn: true }))
@@ -187,7 +187,7 @@ ok(flatXhsStateList(undefined, ["user", "notes"]).length === 0, "缺失 state �
     parseHtml: () => "should-not-parse",
     passiveOnly: true,
   })
-  ok(got === "logged-in-ssr", "L9 + 登录态仍允许读页面 SSR")
+  ok(got === "logged-in-ssr", "被动 + 登录态仍允许读页面 SSR")
 }
 
 // ── ensureXhsPath:同址只比 pathname,但必须同 origin ────────────────────────
@@ -214,4 +214,4 @@ if (failed) {
   console.error(`✘ xhs 策略层自检失败 ${failed} 条`)
   process.exit(1)
 }
-console.log("✔ xhs 策略层自检通过(路由矩阵 / 登录页策略 / L9 / origin 校验)")
+console.log("✔ xhs 策略层自检通过(路由矩阵 / 登录页策略 / 被动 / origin 校验)")

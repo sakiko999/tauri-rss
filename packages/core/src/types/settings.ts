@@ -19,34 +19,14 @@ export type QualityMode = "highest" | "auto"
  *   1 = 入门(L1,最宽松的受控档);
  *   2 = 标准(L2);
  *   3 = 严格(L3);
- *   9 = 浏览器被动(L9 / LX),禁止应用主动请求,只读被动采集缓冲 / 内容缓存。
  *
- * ⚠️ 全局默认只能是 0~3 —— L9 意味着"该平台完全不能主动抓取",不能一刀切
- * 套到所有渠道;它只出现在 `netLevels` 的平台覆盖里。
+ * ⚠️ 等级只描述「配额/冷却收多紧」。原 L9（浏览器被动）已移除(2026-10-21):
+ * 「谁发起请求」是渠道属性(`RssChannel.passive`),做成等级会让该平台看不到任何
+ * 内容,属于过度防御。存量 9/"lx" 在 settings-repo 归一化为 1。
  */
-export type NetLevel = 0 | 1 | 2 | 3 | 9
-/** 全局默认档(不含 L9)。 */
-export type GlobalNetLevel = 0 | 1 | 2 | 3
-
-/**
- * 内置的**渠道级**默认等级(可被 `netLevels[channelKey]` 覆盖)。
- *
- * `xhs:user` 必须走浏览器导航读 SSR —— 应用构造的 HTTP 请求拿不到完整数据，
- * 页面内自定义 fetch 又属于 LX 定义里的类别②，所以它默认就是 L9。
- * 未登录/登录失效时：L9 的 `fetchPassive` 返回 null → core 回退内容缓存；
- * 非 L9 的匿名访客走 fetch（匿名 SSR 抹空 noteId → `anon-*` 虚拟条目）。
- *
- * `xhs:explore` 正常路径本来就是**纯被动**（导航 + 读页面 `feed.feeds`，
- * 不构造 fetch），匿名也一样，所以也默认 L9；它的 `fetchPassive` 先走
- * Network 捕获，拿不到缓冲时回退页面 SSR（仍是导航 + 读 state）。
- *
- * ⚠️ 只在**有浏览器能力**(`appHost.browser`)时生效；移动端没有 browser，
- * 由 `netLevelFor` 回落到平台/全局等级(否则该渠道会永远只剩缓存)。
- */
-export const BUILTIN_CHANNEL_LEVELS: Readonly<Record<string, NetLevel>> = {
-  "xhs:user": 9,
-  "xhs:explore": 9,
-}
+export type NetLevel = 0 | 1 | 2 | 3
+/** 全局默认档(= NetLevel;保留别名避免语义漂移)。 */
+export type GlobalNetLevel = NetLevel
 
 export interface AppSettings {
   /**
@@ -74,9 +54,10 @@ export interface AppSettings {
   /** 网络请求风控**全局默认**等级。0 无限制 / 1 入门 / 2 标准 / 3 严格(不含 9)。 */
   netLevel: GlobalNetLevel
   /**
-   * 平台级等级覆盖(平台名 → 等级)。未列出的平台继承 `netLevel`。
-   * 键支持 `"*"`(未知 host / RSS 兜底)与 channelKey(如 `xhs:user`,仅 core 的
-   * 抓取闸门识别;宿主 governor 只认平台名)。
+   * 等级覆盖(平台名 / `"*"` / channelKey → 等级)。未列出的平台继承 `netLevel`。
+   * core 的抓取闸门按 channelKey 精确解析；宿主 governor 只认平台，所以
+   * `syncNetPolicy` 会把显式 channelKey 覆盖**投影到平台**（L0 优先、1~3 取严格、
+   * 被动渠道不参与）。
    */
   netLevels: Record<string, NetLevel>
   /** 后台自动刷新。关闭后启动 / 新建订阅不自动抓取,只允许手动刷新。 */

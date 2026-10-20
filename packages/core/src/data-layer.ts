@@ -20,7 +20,7 @@ import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import { findRecord } from "./types/reading.ts"
-import { BUILTIN_CHANNEL_LEVELS, type AppSettings, type NetLevel } from "./types/settings.ts"
+import { type AppSettings, type NetLevel } from "./types/settings.ts"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
@@ -172,12 +172,13 @@ export function createDataLayer(): DataLayer {
     // 规则:
     //   - L0 优先(显式调试直通,覆盖平台档);
     //   - 其余取**更严格**者(安全侧:不因个别渠道收紧而误放);
-    //   - L9 不投影 —— 它是 core 的抓取策略,投影成平台会连带封掉该平台的详情/
-    //     播放解析,那不是 L9 的语义。
+    //   - 被动渠道不参与(它不产生应用构造的请求,等级对它没有意义)。
     const levels: Record<string, NetLevel> = { ...s.netLevels }
     for (const [key, level] of Object.entries(s.netLevels)) {
       const platform = platformOfChannel(key)
-      if (!platform || level === 9) continue
+      if (!platform) continue
+      // 被动渠道不构造主动请求,它的等级（含存量值）不参与平台档投影。
+      if (getChannel(key)?.passive) continue
       const prev = levels[platform]
       if (prev === undefined) levels[platform] = level
       else if (prev === 0 || level === 0) levels[platform] = 0
@@ -205,24 +206,6 @@ export function createDataLayer(): DataLayer {
     return undefined
   }
 
-  /**
-   * 渠道生效等级:channelKey 精确覆盖 → 平台覆盖 → `"*"` → 全局默认。
-   * 这让「小红书 LX、其它平台 L1」可以共存;未知渠道(RSS 等)吃 `"*"` 或全局。
-   */
-  function netLevelFor(channelKey: string, s: AppSettings): NetLevel {
-    const platform = platformOfChannel(channelKey)
-    // 内置渠道默认(如 xhs:user = 9)先于平台覆盖 —— 它是"该渠道必须这样"，
-    // 不是"该平台通常这样"。⚠️ 只在**有浏览器能力**时生效：移动端没有
-    // appHost.browser，强制 L9 会让该渠道永远只剩缓存，故回落到普通等级。
-    const builtin = globalThis.appHost?.browser ? BUILTIN_CHANNEL_LEVELS[channelKey] : undefined
-    return (
-      s.netLevels[channelKey] ??
-      builtin ??
-      (platform ? s.netLevels[platform] : undefined) ??
-      s.netLevels["*"] ??
-      s.netLevel
-    )
-  }
 
   /** channelKey 前缀 → settings 里存的 cookie 字段(读 cookieFor / 写 scanLogin 共用一张表)。 */
   function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
@@ -295,8 +278,8 @@ export function createDataLayer(): DataLayer {
    *   - 抓取失败 → 回退旧缓存(即便过期)喂 store,error 字段保留(UI 可见失败不空窗)。
    *   - TTL = 订阅级 refreshIntervalSec 优先,否则全局 settings.refreshIntervalMin。
    *   - autoRefresh=false 且非 force → 不发网络,只复用缓存(即使过期);无缓存返回 0 条不报错。
-   *   - 该渠道等级 = 9(L9/LX) → 只调 source.fetchPassive(),读不到走缓存,**绝不回退 fetch()**
-   *     (风控 §2.4/§3.8:应用构造的平台 API 请求正是 LX 要禁的)。
+   *   - 渠道 `passive` 且有浏览器 → 只调 source.fetchPassive(),读不到走缓存,
+   *     **绝不回退 fetch()**(风控 §2.4/§3.8:应用构造的平台 API 请求正是被动模式要禁的)。
    */
   async function doRefresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
     const sub = await repo.get(subscriptionId)
@@ -383,27 +366,16 @@ export function createDataLayer(): DataLayer {
         }
       }
 
-      // ── 抓取:等级闸门(风控 §2.4 / §3.8) ──
+      // ── 抓取:被动属性(风控 §2.4 / §3.8) ──
       const source: FetchableSource = channel.getSource(info)
-      // 等级按渠道解析(平台覆盖,如小红书 9=L9 / B站 1)。
-      const level = netLevelFor(sub.channelKey, s)
+      // 被动采集是**渠道属性**(`RssChannel.passive`,如 xhs:user/explore):有浏览器时
+      // 只取页面自然产生的数据,不跟随防御等级 —— 需要它的渠道几乎不会主动降级。
+      // 无浏览器(移动端/CLI)回落主动抓取,否则该渠道永远只剩缓存。
+      const passiveMode = channel.passive === true && !!globalThis.appHost?.browser
       let xml: string
-      if (level === 9) {
-        // LX = 浏览器唯一发起请求:只取页面自然请求的响应体。**绝不回退 fetch()**
-        // —— 应用构造的平台 API 调用正是 LX 要禁的行为(否则等级形同虚设)。
-        //
-        // 先看 channel 的显式声明:没声明支持 L9 的渠道不尝试 fetchPassive
-        // (有的 source 可能内部还有主动请求),直接读缓存并给出明确原因。
-        if (!channel.supportsL9) {
-          const hit = await restoreFromCache(subscriptionId, kind)
-          if (hit) return hit
-          return {
-            subscriptionId,
-            itemCount: 0,
-            error: `L9(LX)：渠道 ${sub.channelKey} 未声明支持浏览器被动采集`,
-            fetchedAt: now(),
-          }
-        }
+      if (passiveMode) {
+        // 浏览器被动 = 只取页面自然请求的响应体。**绝不回退 fetch()**
+        // —— 应用构造的平台 API 调用正是被动模式要禁的行为。
         const passive = (await source.fetchPassive?.()) ?? null
         if (!passive) {
           // 无被动数据 → 复用内容缓存(即使过期);连缓存都没有才如实报错。
@@ -412,7 +384,7 @@ export function createDataLayer(): DataLayer {
           return {
             subscriptionId,
             itemCount: 0,
-            error: "L9(LX) 模式：没有可用的被动采集数据",
+            error: "被动采集：没有可用的数据，且无缓存可回退",
             fetchedAt: now(),
           }
         }
@@ -638,13 +610,11 @@ export function createDataLayer(): DataLayer {
       const hit = await bodyCache.get(subscriptionId, itemId).catch(() => null)
       if (hit) return { ...item, content: hit.content, contentFormat: hit.contentFormat }
     }
-    // 与 doRefresh 用同一份 settings 快照:详情补全也要遵守等级闸门。
-    // ⚠️ L9(LX)以前只拦 doRefresh,详情补全仍是应用构造的请求(行内 fetch / HTTP),
-    // 与「浏览器被动」的承诺不符。现在把 `{ passive: true }` 交给渠道:渠道只能走
-    // 「导航 + 读页面 SSR」,不支持时返回 null → 原样返回列表 item,**不发主动请求**。
+    // 被动渠道的详情补全同样要遵守「浏览器被动」的承诺(2026-10-19):
+    // 把 `{ passive: true }` 交给渠道 —— 只能走「导航 + 读页面 SSR」,不支持时返回
+    // null → 原样返回列表 item,**不发主动请求**。
     const s = await settings.get()
     const info = await sourceInfoFor(sub, s)
-    const level = netLevelFor(sub.channelKey, s)
     const source = channel.getSource(info)
     if (!isItemDetailSource(source)) return item // 无详情能力(bili/weibo 列表已完整)→ 原样返回
     // 传**完整 item**(不是仅 url/id):通用 RSS 的 resolveDetail 是增量补全(先 spread 原
@@ -653,8 +623,8 @@ export function createDataLayer(): DataLayer {
     // 详情页非 2xx 都从这里经过;静默吞掉会让用户以为「这条笔记本来只有摘要」。
     let detailItem: Awaited<ReturnType<typeof source.resolveDetail>> | null = null
     try {
-      // passive 由渠道自己决定怎么降级(L9 下不得构造 fetch/API);不支持的渠道返回 null。
-      detailItem = await source.resolveDetail(item as never, { passive: level === 9 })
+      // passive 由渠道自己决定怎么降级(被动模式下不得构造 fetch/API);不支持的渠道返回 null。
+      detailItem = await source.resolveDetail(item as never, { passive: channel.passive === true })
     } catch (e) {
       log.log("warn", "resolveDetail failed", {
         subscriptionId,
@@ -747,7 +717,7 @@ export function createDataLayer(): DataLayer {
       sourceInfoTpl: c.sourceInfoTpl,
       defaultInfo: c.defaultInfo,
       loginable: isLoginable(c),
-      supportsL9: c.supportsL9 === true,
+      passive: c.passive === true,
     }))
   }
 

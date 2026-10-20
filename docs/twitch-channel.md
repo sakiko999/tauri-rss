@@ -18,7 +18,7 @@ Twitch 匿名链路可用：公开 web Client-ID 的 GraphQL → `PlaybackAccess
   （`game(slug).streams`）。
 - 热门/分区共用 `fetchMore` 游标翻页（见 §3.1）。
 - resolver 支持 `https://www.twitch.tv/<login>` 的直播 HLS 解析。
-- 不做：登录、VOD、clip、聊天弹幕、关键词搜索、`supportsL9`、cookie 字段。
+- 不做：登录、VOD、clip、聊天弹幕、关键词搜索、`passive`（浏览器被动）、cookie 字段。
   （分类榜已做成独立目录订阅 `twitch:categories`，产 `kind:"category"` 条目。）
 
 二期再考虑 VOD/clip（路由要排在频道名之前）、关键词搜索、分类榜 channel、IRC 聊天
@@ -222,7 +222,7 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
 `twitchStreamToLive`）、`streams.ts`（热门/分区共用的 source 装配与游标翻页）、`hot.ts`、
 `category.ts`、`categories.ts`（分类目录订阅，`kind:"category"`）、`index.ts`；
 `register.ts` 登记四个渠道。不实现 `resolveDetail` /
-`fetchPassive` / `Loginable` / `supportsL9`。
+`fetchPassive` / `Loginable` / `passive`。
 
 ### 4.3 类型 / 平台标签 / 设置
 

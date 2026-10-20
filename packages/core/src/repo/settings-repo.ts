@@ -28,12 +28,14 @@ export function createSettingsRepository(storage: StorageBackend): SettingsRepos
   }
 
   /**
-   * 兼容旧草案:等级曾用字符串 "lx"。
-   *   - 平台覆盖里的 "lx" → 数字 9;
-   *   - 全局 "lx" 回退 1 —— 现在的全局档不允许 9(不是所有渠道都适合浏览器被动)。
+   * 兼容旧持久化:等级曾用字符串 "lx",且 9 = L9(浏览器被动)档。
+   * 2026-10-21 起 L9 已移除 —— 「谁发起请求」是渠道属性 `RssChannel.passive`,
+   * 做成等级会让该平台看不到任何内容(过度防御)。存量一律归一化为 1:
+   * 被动渠道仍按属性走 `fetchPassive`,其余渠道恢复普通主动抓取。
    */
   function normalizeLevels(s: AppSettings): AppSettings {
-    if ((s.netLevel as unknown) === "lx") s.netLevel = 1
+    const legacy = (v: unknown) => v === "lx" || Number(v) === 9
+    if (legacy(s.netLevel as unknown)) s.netLevel = 1
     const raw = s.netLevels as unknown
     if (!raw || typeof raw !== "object") {
       s.netLevels = {}
@@ -41,7 +43,7 @@ export function createSettingsRepository(storage: StorageBackend): SettingsRepos
     }
     const fixed: Record<string, NetLevel> = {}
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-      fixed[k] = (v === "lx" ? 9 : v) as NetLevel
+      fixed[k] = (legacy(v) ? 1 : v) as NetLevel
     }
     s.netLevels = fixed
     return s

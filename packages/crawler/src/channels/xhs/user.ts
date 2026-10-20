@@ -13,10 +13,9 @@
  * noteCardToSocial 按「无 noteId → null」全过滤 → 自然空结果。即 user 笔记流
  * **完整数据必须登录态**(explore 推荐流匿名可用)。
  *
- * 抓取策略统一在 `shared.ts`:
- *   - 登录态 → passive(导航后读页面 SSR);
- *   - 匿名访客 → fetch(页面内抓匿名 profile HTML,noteId 抹空 → 虚拟 ID 兜底);
- *   - L9 刷新 → `fetchPassive`(匿名不 fetch,返回 null 让 core 回退缓存)。
+ * 抓取策略统一在 `shared.ts`(⚠️ 本渠道**不声明** `passive`:匿名必须走页面内 fetch):
+ *   - 登录态 → 导航后读页面 SSR(不构造请求);
+ *   - 匿名访客 → 页面内抓匿名 profile HTML(noteId 抹空 → 虚拟 ID 兜底)。
  *
  * 翻页是**滚动驱动**(页面自己发 user_posted),属于被动;匿名无法翻页。
  */
@@ -53,8 +52,6 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
           fetch,
           fetchMore: (cursor?: string, ctx?: { existing: number }) =>
             this.fetchMoreViaBrowser(browser, userId, cursor, ctx?.existing),
-          // LX:只导航 + 读页面 SSR(路线 B),不构造任何请求。
-          fetchPassive: () => this.fetchPassive(browser, userId),
         }
       : { fetch }) as RssSource & Partial<Pageable> & ItemDetailSource
     // 详情与 explore 共用同一套策略;刻意不传 cookie —— reqwest 带账号 cookie 既拿不到
@@ -67,21 +64,6 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
         passiveOnly: opts?.passive,
       })
     return base
-  }
-
-  /**
-   * LX 被动采集:导航 profile 页 + 读页面 SSR(路线 B),不构造任何请求。
-   * 匿名访客在 L9 下**不 fetch** → 返回 null,让 core 回退内容缓存。
-   */
-  private async fetchPassive(browser: BrowserBackend, userId: string): Promise<string | null> {
-    if (!browser.send || !userId) return null
-    const items = await fetchXhsList(browser, {
-      url: `${XHS_BASE}/user/profile/${userId}`,
-      passiveOnly: true,
-      readPage: async (b) => this.notesToItems(await readXhsStateList(b, ["user", "notes"])),
-    })
-    if (!items?.length) return null
-    return serializeFeed(items, this.channelOptions({ user_id: userId }))
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

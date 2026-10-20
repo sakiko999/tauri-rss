@@ -138,7 +138,7 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
 （手动刷新 / CLI 默认）；抓取失败回退旧缓存不空窗；退订一并删缓存。
 `packages/core/src/repo/content-cache-repo.ts`。
 
-## 网络风控（L0 / L1 / L2 / L3 / L9）
+## 网络风控（L0 / L1 / L2 / L3）
 
 所有 `appHost.http` 出站都经 `packages/host/src/net/governor.ts` 的 `governedHttp`
 （`runtime.ts` 的 `setHostCaps` 统一包住）：分类 → 平台冷却 → in-flight 去重 → 平台
@@ -148,21 +148,16 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
 `appHost.http`，不在治理范围内。
 
 - **等级统一用数字**（设置页「网络与风控」）：`0` 直通（仅调试）· `1` 入门 ·
-  `2` 标准 · `3` 严格 · `9` 浏览器被动（L9 / LX）。全局默认 `AppSettings.netLevel`
-  **只允许 0~3**（L9 不能一刀切套到所有渠道）；`netLevels` 同时支持**平台覆盖**与
-  **channelKey 覆盖**，解析顺序 `用户渠道覆盖 → 内置渠道默认 → 平台 → "*" → 全局`。
-  内置渠道默认在 `core/types/settings.ts` 的 `BUILTIN_CHANNEL_LEVELS`：
-  **`xhs:user` = 9**（必须走浏览器导航读 SSR；页面内 fetch 属类别②，不算 LX）、
-  **`xhs:explore` = 9**（正常路径本来就是导航 + 读页面 SSR，不构造 fetch；L9 的
-  `fetchPassive` 先走 Network 捕获，拿不到缓冲回退页面 SSR，仍属被动）。
-  ⚠️ 该内置规则只在 `appHost.browser` 存在时生效（移动端无 browser，回落普通等级，
-  否则会永远只剩缓存）。宿主 governor 只认平台名，所以 **core 同步策略时把用户显式写的
-  channelKey 覆盖投影到平台**（`syncNetPolicy`）：L0 优先（显式直通，也是绕过平台冷却的
-  唯一入口）；1~3 取更严格者；**L9 不投影**（它是 core 的抓取策略，投影会连带封掉该平台
-  的详情/播放解析）。改设置**立即同步**（loadMore/详情补全不经过 doRefresh 的同步点）。
-  典型配置：小红书平台 `9` 或仅 `xhs:user`/`xhs:explore` `9`、B站/YouTube 保持 `1`。
-  旧持久化里的 `netStrict` 已移除（忽略即可）；`netLevels` 里的旧字符串 `"lx"` 会归一化为
-  `9`（全局默认位置则回落 `1`）。
+  `2` 标准 · `3` 严格。全局默认 `AppSettings.netLevel` = 0~3；`netLevels` 支持
+  平台 / `"*"` / channelKey 覆盖。
+  ⚠️ **原 L9（浏览器被动）已移除**（2026-10-21）：把「谁发起请求」做成等级会让该平台
+  完全看不到内容，属于过度防御；它改为**渠道属性** `RssChannel.passive`（见下）。
+  存量 `9` / `"lx"` 在 `settings-repo` 归一化为 `1`（被动渠道不受影响 —— 属性优先）。
+  宿主 governor 只认平台名，所以 **core 同步策略时把用户显式写的 channelKey 覆盖投影到
+  平台**（`syncNetPolicy`）：L0 优先（显式直通，也是绕过平台冷却的唯一入口）；1~3 取
+  更严格者；**被动渠道的覆盖不参与投影**（它不产生应用构造的请求）。改设置**立即同步**
+  （loadMore/详情补全不经过 doRefresh 的同步点）。
+  旧持久化里的 `netStrict` 已移除（忽略即可）。
 - **配额按等级缩放**：基准值是 `DEFAULT_NET_POLICY` 里的 L1；L2 = 并发/RPM ×0.5、
   最小间隔 ×2；L3 = ×0.25、×4。冷却时长不随等级变。
   L1 是**软限制**（bili/youtube 12 并发 / 600 RPM / 50ms；其它 8 / 300 / 50ms；
@@ -174,28 +169,28 @@ CLI `sqliteStorage`（bun:sqlite）· example 内存版。
   调 `net.browserGate(platform)`：平台冷却未到期直接拒绝，否则按「600ms~2.4s 基准 +
   0~400ms 抖动」放行（L2/L3 随等级放大）。**登录流程不传 platform** —— 冷却期仍需允许
   用户重新扫码自救。
-- **L9 闸门在 core**：`data-layer.ts` 的 `doRefresh` 按渠道解析等级，`level === 9` 时
-  只调 `source.fetchPassive?.()`；拿不到就回退内容缓存（即使过期），**绝不回退
-  `source.fetch()`**。⚠️ 详情补全同样过闸（2026-10-19）：`core.resolveDetail` 在等级 9
-  时给 `source.resolveDetail(item, { passive: true })` —— 渠道只能导航到详情页读页面 SSR，
-  不构造 fetch；不支持就返回 `null`（原样返回列表 item）。`loadMore` / `previewChannel` /
-  播放解析仍会主动请求。被动采集入口是 `crawler/passive/capture.ts`（只观察 CDP
-  Network，`trigger` 只能导航/滚动/点击）+ `passive/buffer.ts`（内存 TTL 30min）。
-  已接 `xhs:explore` / `xhs:user`（导航读 SSR，不用页面内 fetch）；
-  其余渠道在 L9 下只显示缓存。⚠️ L9 对该**平台**的所有主动请求生效 —— 抓取之外的
-  详情补全、播放解析也会被 governor 拒绝。⚠️ `bili:popular` **不接 L9**：B站匿名
-  API 稳定，页面也不保证自然发 `/x/web-interface/popular`，被动采集没有收益。
-- **渠道必须声明 L9 支持**：`RssChannel.supportsL9`（crawler，channel 级；core 投影为
-  `ChannelInfo.supportsL9`）。目前为 true 的只有 `xhs:explore` / `xhs:user`；
-  **未声明的渠道即使设成 9，core 也不会尝试 `fetchPassive`**，直接读缓存并如实报错。
-  设置页据此**禁用未声明渠道的 L9 选项**（存量值仍显示，行 help 注明「选 L9 只会读
-  缓存」）。新增被动渠道时：`supportsL9 = true` + `getSource` 提供 `fetchPassive`，
-  两者缺一不可。
+- **被动采集是渠道属性**（`RssChannel.passive`，2026-10-21；core 投影
+  `ChannelInfo.passive`）：有 `appHost.browser` 时 `doRefresh` 只调
+  `source.fetchPassive?.()`，拿不到就回退内容缓存（即使过期），**绝不回退
+  `source.fetch()`**；没有浏览器（移动端/CLI）回落主动抓取（否则该渠道永远只剩缓存）。
+  ⚠️ 详情补全同样走被动（2026-10-19）：`core.resolveDetail` 给被动渠道传
+  `{ passive: true }` —— 只能导航到详情页读页面 SSR，不构造 fetch；不支持就返回
+  `null`（原样返回列表 item）。`loadMore` / `previewChannel` / 播放解析仍会主动请求。
+  目前为 true 的只有 **`xhs:explore`**（登录/匿名都读页面 SSR）。⚠️ **`xhs:user`
+  刻意不声明**：匿名 profile SSR 会抹空 noteId，必须走页面内 fetch（产出 `anon-*`
+  虚拟条目）；它的 `fetch()` 在登录态内部仍是导航 + 读 SSR，不构造请求 —— 标成被动会让
+  桌面匿名订阅永远只剩缓存（设置页也不再有主动模式开关）。
+  被动采集入口是 `crawler/passive/capture.ts`（只观察 CDP Network，`trigger` 只能
+  导航/滚动/点击）+ `passive/buffer.ts`（内存 TTL 30min）。设置页对被动渠道只显示
+  「浏览器被动」标签、不提供等级选择（防御等级只约束应用构造的主动请求）。
+  新增被动渠道：`passive = true` + `getSource` 提供 `fetchPassive`，两者缺一不可。
+  ⚠️ `bili:popular` **不做被动**：B站匿名 API 稳定，页面也不保证自然发
+  `/x/web-interface/popular`，被动采集没有收益。
 - **风控信号**：平台 client 命中明确信号时调 `appHost.net.reportRisk(platform, signal)`
   （bili 412/-352/-509；weibo 418/403/432/-100；douyin 4031/2483；youtube 429；
   xhs verify-box/300011）。governor 对计量请求的 412/418/403/429 也会自动写冷却；
   冷却按平台整体生效，未到期直接 reject，持久化 KV `governor:cooldowns`。
-- 自检：`governor.check.ts` / `lx-mode.check.ts` / `bili-popular.check.ts`。
+- 自检：`governor.check.ts` / `passive-mode.check.ts` / `bili-popular.check.ts`。
 
 ## 关键命令
 
@@ -236,13 +231,13 @@ bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / read
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
 bun packages/core/src/reading-position.check.ts         # 续播落库判据（近片尾清除 / 5s 节流）
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
-bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/LX/去重/冷却/strict/并发）
-bun packages/core/src/example/lx-mode.check.ts          # LX 闸门（只走 fetchPassive / autoRefresh）
+bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/去重/冷却/分档/并发）
+bun packages/core/src/example/passive-mode.check.ts     # 被动采集（只走 fetchPassive / autoRefresh / 覆盖投影）
 bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload → Item 字段映射
 bun packages/crawler/src/example/twitch-live.check.ts   # Twitch GQL → Live 映射（频道 live/offline + 热门/分区流列表）
 bun packages/crawler/src/example/youtube-channels.check.ts # YouTube 直播页栏目解析 + playlistId 归一
 bun packages/crawler/src/example/bili-channels.check.ts    # B站合集/视频列表/收藏夹参数归一
-bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录页/匿名/L9 路由矩阵 + origin 校验）
+bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录页/匿名/被动路由矩阵 + origin 校验）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL 归一化 / TTL / 限额淘汰）
 bun packages/crawler/src/example/passive-capture.check.ts # LX 采集编排（假后端回放 CDP 事件）
@@ -488,7 +483,7 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
 - 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
   xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）
 - ⚠️ **xhs 渠道按登录态/渠道分流**（2026-10-20）：登录态 → **被动**（导航后读页面
-  `__INITIAL_STATE__`，或 L9 的 Network 捕获），不构造请求。匿名：
+  `__INITIAL_STATE__`，或被动模式的 Network 捕获），不构造请求。匿名：
   - `xhs:explore` **也走被动** —— 匿名推荐流 SSR 本身有 feeds，首屏与 `fetchMore`
     共用同一份页面 state，不再多抓一次 HTML；
   - `xhs:user` 走 **fetch** —— 匿名 profile SSR 会**抹空 noteId**，`noteCardToSocial`
@@ -502,9 +497,9 @@ CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不�
     每次都重载。⚠️ `feed.feeds` 是**扁平数组**（`flat()` 对它是 no-op），滚动加载的
     新条目**追加在尾部**（实测 862 → 915 → 968）；prepend 判断只是防御，不是常态。
   - 详情同理：登录态导航详情页读 `noteDetailMap`（被动）；匿名走页面内 fetch 详情 HTML。
-    `core.resolveDetail` 在等级 9 时传 `{ passive: true }`（禁止 fetch），匿名则直接
+    `core.resolveDetail` 对被动渠道传 `{ passive: true }`（禁止 fetch），匿名则直接
     回退列表 item。explore/user 的详情实现已收敛到 `channels/xhs/shared.ts`。
-  - L9 的 `fetchPassive` 对未登录用户返回 null → core 回退内容缓存，不会偷偷改走 fetch。
+  - 被动模式的 `fetchPassive` 对未登录用户返回 null → core 回退内容缓存，不会偷偷改走 fetch。
   - 策略层入口 = `shared.ts` 的 `fetchXhsList`：登录页优先判匿名，**登录页且没有 `parseHtml`
     的渠道必须给 `loginError`**（explore），否则会读登录页的空 SSR 静默 0 条；SSR 列表读取
     统一走 `readXhsStateList` / `flatXhsStateList`（逐层解 `_rawValue` + flat）；
@@ -659,7 +654,7 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
 - ⚠️ **吐司的 grid 项必须 `min-width:0`**（2026-10-19）：`.toast-root` 是 grid，`.toast` 是
   grid item；默认 `min-width:auto` 时，错误文案里的长 URL 会把 min-content 撑到 **592px**，
   无视 `max-width:360px` 直接出视口。`.toast-body` 也要 `min-width:0`，`.toast-text` 加
-  `overflow-wrap:anywhere`。governor 的冷却/L9 错误已去掉完整 URL（只留平台/剩余时间/信号）。
+  `overflow-wrap:anywhere`。governor 的冷却错误已去掉完整 URL（只留平台/剩余时间/信号）。
 - ⚠️ **`.menu` 必须是 Radix popper wrapper 的在流子元素**（2026-10-19）：Radix 的 floating
   元素是外层 `div[data-radix-popper-content-wrapper]`（`position:fixed; transform`），
   `.menu` 只是它的子节点。给 `.menu` 写 `position:fixed/absolute` 会脱离文档流 →
@@ -816,8 +811,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   同理 `Switch`/`Menu`/`Modal` 都在那个模块。原生 `<input>`/`<textarea>` 保留（可主题化）。
   ⚠️ **占位提示走 `placeholder`，不要塞进 `options`**（否则会渲染成可点击的
   `role=option`，选它只是空操作）；无空值选项时 Root 的 `value` 必须是 `""` 才显示
-  placeholder —— 内部哨兵 `__none` 会被 Radix 当成已选值。选项可带 `disabled`
-  （如未声明 L9 支持的渠道）。
+  placeholder —— 内部哨兵 `__none` 会被 Radix 当成已选值。选项可带 `disabled`。
 - ⚠️ **浮层必须处理视口**：共享 `Menu`（Radix DropdownMenu）已配 `collisionPadding`，
   `.menu` 用 `--radix-dropdown-menu-content-available-height` 限高并内部滚动；不要在
   业务组件里自造 absolute 菜单/提示层，否则窗口底部会贴边或顶出视口。
@@ -969,7 +963,7 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
 | `docs/rail-tree-accordion.md` | 侧栏树选型（为何用 Accordion 而非树组件 + 三个静默失败坑） |
 | `docs/audit-backlog.md` | 审计发现积压：故意不改的理由 + 误报证伪（已修不在此） |
 | `docs/compatibility-inventory.md` | 兼容补丁清单（持久化数据 / 输入归一化 / 脚手架 / 破坏性变更）+ 侧栏菜单视口审计 |
-| `docs/crawler-risk-control.md` | ★ 风控分级（L0 / L1 / L2 / L3 / L9）+ 集中式 governor + CDP 被动采集；窗口模式、governor、L9 闸门与 xhs:explore / xhs:user 被动采集已实现 |
+| `docs/crawler-risk-control.md` | ★ 风控分级（L0 / L1 / L2 / L3）+ 集中式 governor + CDP 被动采集；窗口模式、governor、渠道 `passive` 属性（xhs:explore 被动、xhs:user 登录态 SSR）已实现 |
 | `docs/release-updater.md` | 发布产物（NSIS）、签名密钥、自动更新链路与发版步骤 |
 | `docs/numbered-ui-overlay.md` | Numbered UI Overlay（dev-only，已实现）：编号语义/400 上限/AI 清单 |
 
@@ -1001,11 +995,11 @@ B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名�
   全局 `GridSkeleton`，与内容形态（播客单集是行列表、分区房间是网格）不对应 ——
   按容器 kind 给对应骨架（单集行 / 房间网格），别让骨架和落地内容差太多。
 
-**待实机验证（风控 / LX，没跑过不算完成）**：
+**待实机验证（风控 / 被动采集，没跑过不算完成）**：
 
 - release 实例：`browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
-- `xhs:explore`（现默认 L9）手动刷新，确认命中 `passiveBuffer`；未命中时应走页面 SSR 兜底。
-- `xhs:user` L9：登录态导航能出条目；匿名应回退缓存。
+- `xhs:explore`（现为渠道属性 `passive`）手动刷新，确认命中 `passiveBuffer`；未命中时应走页面 SSR 兜底。
+- `xhs:user` 刷新：登录态导航能出条目；匿名走页面内 fetch（产出 `anon-*` 虚拟条目，不再回退缓存）。
 - 接入 LX 前用 `Network.requestWillBeSent` 逐平台确认风险文档 §3.11 标「推断/未确认」
   的页面请求。
 - ⚠️ **governor 的 `rsshub` 平台配额是死键**：平台名按 host 推导，需改成 host 后缀

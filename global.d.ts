@@ -65,7 +65,7 @@ declare global {
 
   /**
    * 网络治理能力(NetworkGovernor 门面):
-   *   - configure: 切换等级(L0 / L1 / LX)与配额,局部字段合并;
+   *   - configure: 切换等级(L0 / L1 / L2 / L3)与配额,局部字段合并;
    *   - reportRisk: 显式上报平台风控信号,按信号写平台冷却;
    *   - browserGate: 浏览器(CDP)操作的准入(冷却 + 最小间隔 + 抖动);
    *   - governorStats: 自检/诊断(活跃冷却剩余毫秒 / 在途 / 排队)。
@@ -73,12 +73,13 @@ declare global {
   interface NetBackend {
     configure(input: {
       /** 全局默认等级(0 直通 / 1 入门 / 2 标准 / 3 严格)。 */
-      level?: 0 | 1 | 2 | 3 | 9
+      level?: 0 | 1 | 2 | 3
       /**
        * 平台级等级覆盖(整表替换)。`"*"` 是未知 host / RSS 的兜底覆盖;
-       * 优先顺序:精确平台 → `"*"` → `level`。9 = L9(LX 浏览器被动)。
+       * 优先顺序:精确平台 → `"*"` → `level`。
+       * ⚠️ 没有「浏览器被动」档:被动采集是渠道属性,不是等级。
        */
-      levels?: Record<string, 0 | 1 | 2 | 3 | 9>
+      levels?: Record<string, 0 | 1 | 2 | 3>
       globalMaxConcurrent?: number
       platforms?: Record<string, PlatformQuotaConfig>
     }): void

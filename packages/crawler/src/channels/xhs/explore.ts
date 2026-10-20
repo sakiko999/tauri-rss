@@ -7,7 +7,7 @@
  * 抓取策略统一在 `shared.ts`:
  *   - 登录/匿名都读页面 SSR(passive;匿名推荐流本身有 feeds,不再多抓 HTML);
  *   - 翻页 = 滚动驱动,读 `feed.feeds` 增量,登录/匿名共用;
- *   - L9 刷新 → `fetchPassive`(CDP Network 捕获页面自己的文档)。
+ *   - 被动刷新 → `fetchPassive`(CDP Network 捕获页面自己的文档)。
  */
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
@@ -37,6 +37,8 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
   readonly key = "xhs:explore"
   readonly name = "小红书发现页"
   readonly kind = "social" as const
+  /** 登录/匿名都读页面 SSR（匿名推荐流本身有 feeds），正常路径即被动。 */
+  readonly passive = true
   readonly defaultInfo: SourceInfo = {}
 
   getSource(info: SourceInfo): RssSource & Partial<Pageable> & ItemDetailSource {
@@ -49,7 +51,7 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
       ),
       // LX:导航是页面自然行为;响应体从 CDP Network 缓冲取,不构造主动请求。
       fetchPassive: () => this.fetchPassive(),
-      // 单条详情:登录态读详情页 SSR,匿名 fetch 详情 HTML;passive 来自 core 的 L9 闸门。
+      // 单条详情:登录态读详情页 SSR,匿名 fetch 详情 HTML;passive 来自渠道的 passive 属性。
       resolveDetail: (item, opts) =>
         resolveXhsItemDetail({
           item,

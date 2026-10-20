@@ -11,7 +11,7 @@
  *     fetchMore 用同一份页面 state,不再多抓一次 HTML;
  *   - `xhs:user` 匿名 → **fetch**:匿名 profile SSR 抹空 noteId,走页面内 fetch
  *     (Chrome TLS 指纹,reqwest 会被 WAF 判空壳),产出 `anon-*` 虚拟条目;
- *   - `passiveOnly`(core 的 L9 闸门)→ 匿名时不 fetch,返回 null 让 core 回退缓存。
+ *   - `passiveOnly`(core 的被动闸门)→ 匿名时不 fetch,返回 null 让 core 回退缓存。
  *
  * ⚠️ 登录判据是 `isXhsLoggedIn`(页面 loggedIn + 侧栏「我」+ user_id cookie),
  * **不是 `web_session`** —— 小红书对游客也会立即签发 web_session。
@@ -239,7 +239,7 @@ export interface XhsListPage<T> {
    * 有 `parseHtml` 的渠道(user)会走匿名 fetch,不需要这个字段。
    */
   loginError?: string
-  /** L9 被动模式:匿名时不 fetch,返回 null 让 core 回退缓存。 */
+  /** 被动模式:匿名时不 fetch,返回 null 让 core 回退缓存。 */
   passiveOnly?: boolean
 }
 
@@ -263,7 +263,7 @@ export async function fetchXhsList<T>(
       // user_id 不能当登录,否则会读到登录页的空 SSR)。
       const route = await resolveXhsRoute(browser)
       if (route === "logged-in") return page.readPage(browser)
-      // L9 匿名:不 fetch,交给 core 回退缓存。
+      // 被动模式匿名:不 fetch,交给 core 回退缓存。
       if (page.passiveOnly) return null
       // 匿名(或登录重定向):有 HTML 解析器的渠道走页面内 fetch(Chrome 指纹);
       // 没有解析器的渠道(explore)在登录页上再读 SSR 只会得 0 条,必须给可操作错误。
@@ -331,7 +331,7 @@ export interface XhsDetailOptions {
   browser?: BrowserBackend
   /** 无浏览器时的 HTTP 回落凭据;xhs:user 刻意不传(避免账号 cookie 走 reqwest)。 */
   cookie?: string
-  /** L9:禁止 fetch,只导航 + 读页面 SSR。 */
+  /** 被动:禁止 fetch,只导航 + 读页面 SSR。 */
   passiveOnly?: boolean
 }
 

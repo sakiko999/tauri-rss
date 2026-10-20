@@ -33,7 +33,7 @@ export type {
  * 取值域(如 Density 是 relaxed|standard|compact)。两边同名不同义,导出会变成陷阱。
  */
 export type { AppSettings, QualityMode } from "./types/settings.ts"
-export { BUILTIN_CHANNEL_LEVELS, DEFAULT_SETTINGS } from "./types/settings.ts"
+export { DEFAULT_SETTINGS } from "./types/settings.ts"
 
 export type {
   MediaItem,

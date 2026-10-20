@@ -8,7 +8,8 @@
  * 关键取舍(照文档):
  *   - 只对「会触发平台风控的计量请求」做 RPM/冷却;媒体/图片/本地 CDP 不计量,
  *     但**仍共享**全局并发(§2.2)。
- *   - L0 完全直通(调试用);L9(LX)下计量请求一律 reject(浏览器是唯一发起者)。
+ *   - L0 完全直通(调试用)。等级只描述「配额/冷却收多紧」—— 「谁发起请求」
+ *     (浏览器被动采集)是渠道属性,不是等级(2026-10-21)。
  *   - 冷却只由显式信号写入(412/418/403/429、平台风控码);超时/5xx 不写。
  *   - 冷却账本 best-effort 落 `appHost.storage` 的 `governor:cooldowns`,
  *     进程内为准(§2.3 简化版)。
@@ -23,9 +24,12 @@
  *   1 = 入门(L1,最宽松的受控档)
  *   2 = 标准(L2)
  *   3 = 严格(L3)
- *   9 = 浏览器被动(L9 / LX):该平台禁止应用构造的请求
+ *
+ * ⚠️ 没有「浏览器被动」档:被动采集是渠道属性(`RssChannel.passive`),由 core
+ * 决定谁来取数;把它做成等级会让该平台完全看不到内容,属于过度防御
+ * (2026-10-21 移除原 L9)。
  */
-export type NetLevel = 0 | 1 | 2 | 3 | 9
+export type NetLevel = 0 | 1 | 2 | 3
 
 /** 单平台配额。 */
 export interface PlatformPolicy {
@@ -73,7 +77,7 @@ const GENERIC_POLICY: PlatformPolicy = {
 
 export const DEFAULT_NET_POLICY: NetPolicy = {
   level: 1,
-  // 默认不做平台覆盖 —— 由用户在设置页按平台调整(如小红书设为 9=L9)。
+  // 默认不做平台覆盖 —— 由用户在设置页按平台/渠道调整。
   levels: {},
   // 媒体分片/图片也走这个计数器;宽松到不会卡住 DASH 多分片并发。
   globalMaxConcurrent: 32,
@@ -142,7 +146,7 @@ function tierOf(level: NetLevel): 1 | 2 | 3 {
 
 /**
  * 平台有效配额 = 基准配额 × 该平台等级的缩放系数。
- * 冷却基础值不随等级变(它描述平台本身);L0/L9 不排队,系数不影响实际行为。
+ * 冷却基础值不随等级变(它描述平台本身);L0 不排队,系数不影响实际行为。
  */
 export function effectivePlatformPolicy(platform: string): PlatformPolicy {
   const base = _policy.platforms[platform] ?? GENERIC_POLICY
@@ -659,13 +663,6 @@ export function governedHttp(backend: HttpBackend): HttpBackend {
 
       // L0:直通,不排队/不去重/不写冷却(仅调试)。
       if (level === 0) return backend.request(req)
-
-      // L9(LX):浏览器是唯一请求发起者,应用构造的计量请求直接拒绝。
-      if (cls.metered && level === 9) {
-        return Promise.reject(
-          new Error(`L9(LX) 等级禁止应用构造的计量请求（${cls.platform}）`),
-        )
-      }
 
       // 媒体/图片/本地 CDP:不计量,但仍占全局并发(§2.2)。
       if (!cls.metered) {

@@ -44,7 +44,7 @@ export class RawRssChannel implements RssChannel {
   getSource(info: SourceInfo): RssSource & ItemDetailSource {
     return {
       fetch: () => this.fetchXml(info),
-      // 通用 RSS 没有被动详情能力;L9 下不能构造 HTTP 提取正文。
+      // 通用 RSS 没有被动详情能力;被动模式下不能构造 HTTP 提取正文。
       resolveDetail: (item, opts) => (opts?.passive ? Promise.resolve(null) : this.resolveDetail(item)),
     }
   }

@@ -7,7 +7,7 @@
  * (对齐 bili/douyin「不能静默清空」护栏)。
  *
  * 一期只做 `fetch`:不实现 fetchMore / resolveDetail / fetchPassive / Loginable /
- * supportsL9。播放走 resolver by-url(见 docs/twitch-channel.md §4.1)。
+ * passive（浏览器被动）。播放走 resolver by-url(见 docs/twitch-channel.md §4.1)。
  */
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"

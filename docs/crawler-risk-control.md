@@ -2,13 +2,13 @@
 
 > 2026-10-19 调研。范围：crawler 请求治理的分级模型、集中式 governor、
 > LX 浏览器被动采集的可行性与 CDP 工具选型。
-> **状态**：窗口模式（§3.9）、governor（§2.7）、LX 闸门与 xhs/bili 被动采集
+> **状态**：窗口模式（§3.9）、governor（§2.7）、渠道 `passive` 属性与 xhs/bili 被动采集
 > （§3.7 / §3.8）已落地；平台等级支持「全局默认 + 平台覆盖」。
 
 ## 0. 结论
 
 1. **单点治理**：所有出站请求由一个 `NetworkGovernor` 统一准入；不按 API/媒体/图片/浏览器拆成多个管理器。
-2. **等级只保留一条轴**：`L0`（无限制）、`L1`（并发/RPM + 基础冷却）、`LX`（浏览器唯一发起请求）。缓存优先、浏览器优先不再作为等级，降级为正交开关。
+2. **等级只保留一条轴**：`L0`（无限制）、`L1`（并发/RPM + 基础冷却）、`L2` / `L3`（更紧配额）。缓存优先、浏览器优先不再作为等级；**浏览器被动采集是渠道属性 `passive`**，不是等级（原 L9，2026-10-21 移除）。
 3. **限流对象是“会触发平台风控的 API 调用”**，不是字节流。媒体分片与图片不按 RPM/冷却，只共享全局并发。
 4. **LX = 浏览器作为唯一请求发起者**：禁止应用构造的 API 调用与页面内自定义 `fetch()`；允许导航、滚动、点击等页面自然产生的请求。
 5. **不引入运行时 CDP 库**：沿用现有 Rust `ws` 隧道 + 手写 JSON-RPC，只补事件分发、session 与响应体生命周期；`devtools-protocol` 仅作 devDependency 类型。
@@ -104,35 +104,37 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 | L1（`1`） | 入门：并发 / RPM / 最小间隔的**基准配额** |
 | L2（`2`） | 标准：并发/RPM ×0.5、最小间隔 ×2 |
 | L3（`3`） | 严格：并发/RPM ×0.25、最小间隔 ×4 |
-| L9（`9`，即 LX） | 浏览器唯一发起请求；禁用应用构造的 API 调用与页面内自定义 fetch |
+
+⚠️ **没有「浏览器被动」等级**（原 L9，2026-10-21 移除）：把它做成平台/渠道等级会让
+该平台完全看不到内容（只读缓存），属于过度防御；「谁发起请求」改为渠道属性
+`RssChannel.passive`。存量 `9` / `"lx"` 在 settings-repo 归一化为 `1`（被动渠道不受
+影响 —— 属性优先）。
 
 **等级是「全局默认 + 平台覆盖 + 渠道覆盖」**（`AppSettings.netLevel` + `netLevels`）。
-全局默认**只允许 0~3** —— L9 意味着该平台完全不能主动抓取，不能一刀切套到所有
-渠道；L9 只出现在平台/渠道覆盖里。现实里各平台不该用同一档：小红书没有可用的应用
-构造 API（TLS 指纹/300011），天然需要 L9；B站/YouTube 的匿名 API 稳定，保持 L1 更可靠。
-⚠️ **L9 支持必须由渠道显式声明**：`RssChannel.supportsL9`（core 投影
-`ChannelInfo.supportsL9`）。未声明的渠道即使设为 9 也不会尝试 `fetchPassive`，
-直接读缓存并报错；设置页对该渠道禁用 L9 选项。
-解析顺序：
+现实里各平台不该用同一档：B站/YouTube 的匿名 API 稳定，保持 L1 更可靠。
+
+⚠️ **被动采集是渠道自身属性**（`RssChannel.passive`，2026-10-21）：
+`xhs:explore` 的登录/匿名正常路径都是导航 + 读页面 SSR（`fetchPassive`），所以声明
+`passive`。⚠️ `xhs:user` **刻意不声明**：匿名 profile SSR 会抹空 noteId，必须走页面内
+`fetch`（登录态 `fetch()` 内部仍是导航 + 读 SSR）。设置页对被动渠道只显示「浏览器被动」
+标签、不给下拉。有 `appHost.browser` 时只调 `fetchPassive`；没有浏览器（移动端/CLI）
+回落主动抓取（否则会永远只剩缓存）。
+
+解析顺序（防御等级）：
 
 ```
-用户 channelKey 覆盖 → 内置渠道默认 → 平台覆盖 → "*"（未知 host / RSS 兜底）→ 全局默认
+用户 channelKey 覆盖 → 平台覆盖 → "*"（未知 host / RSS 兜底）→ 全局默认
 ```
 
-内置渠道默认见 `core/types/settings.ts` 的 `BUILTIN_CHANNEL_LEVELS`：
-**`xhs:user` = 9**（应用构造 HTTP 拿不到完整笔记，页面内 fetch 又属类别②）、
-**`xhs:explore` = 9**（正常路径就是导航 + 读页面 SSR，不构造 fetch；L9 的
-`fetchPassive` 先走 Network 捕获，缓冲缺失时回退页面 SSR，仍属被动）。
-该规则只在 `appHost.browser` 存在时生效 —— 移动端没有浏览器，回落平台/全局等级。
-设置页暴露「默认等级」与「渠道覆盖」表；渠道表列出已覆盖、内置默认与
-当前订阅实际用到的 channelKey（平台覆盖仍可写进 `netLevels`，UI 不再单列）。
+设置页暴露「默认等级」与「渠道覆盖」表；渠道表列出已覆盖与当前订阅实际用到的
+channelKey（平台覆盖仍可写进 `netLevels`，UI 不再单列）。
 
 ⚠️ 宿主 governor 只认**平台名**（它从 URL host 推导，不知道 channel）。为了让
 「单渠道设 L0」在 HTTP 层也生效，core 同步策略时把**用户显式写的** channelKey
 覆盖投影到平台（`data-layer.ts` 的 `syncNetPolicy`）：
 - **L0 优先**：显式直通覆盖平台/全局档（调试用，也是绕过平台冷却的唯一入口）；
 - 其余 1~3 取**更严格**者（安全侧：不因个别渠道收紧而误放同平台请求）；
-- **L9 不投影**：它是 core 的抓取策略，投影成平台会连带封掉该平台的详情/播放解析。
+- 被动渠道的覆盖不参与投影（它不产生应用构造的请求）。
 改设置后**立即**同步，不等下一次 refresh —— `loadMore` / 详情补全 / 播放解析都不经过
 `doRefresh` 的同步点，否则会出现「改了等级但下一次翻页仍按旧档」。
 
@@ -148,7 +150,7 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 ```ts
 netPolicy: {
   level: 0 | 1 | 2 | 3,             // 全局默认(不含 9)
-  levels: { xhs: 9, "*": 1 },       // 平台覆盖(整表替换)
+  levels: { xhs: 3, "*": 1 },       // 平台覆盖(整表替换,0~3)
   global: { maxConcurrent: 32 },
   platforms: {                      // L1 基准;L2/L3 按等级缩放
     bili:   { maxConcurrent: 12, rpm: 600, minIntervalMs: 50, cooldownBaseMs: 600_000 },
@@ -189,7 +191,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 
 ### 2.7 落地状态（2026-10-19）
 
-已实现，自检 `bun packages/host/src/example/governor.check.ts`（分类 / L0 直通 / L9 拒绝 /
+已实现，自检 `bun packages/host/src/example/governor.check.ts`（分类 / L0 直通 /
 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限）：
 
 | 能力 | 位置 / 说明 |
@@ -199,12 +201,12 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | 请求元数据 | `global.d.ts` 的 `HttpRequest.policy?: { platform?, metered?, dedupeKey? }` |
 | 播放分片 | `hlsHostLoader` / `dashHostLoader` 显式传 `policy: { metered: false }`，不靠 host/扩展名猜（原生 mp4/`<img>` 不经 `appHost.http`，仍在治理之外） |
 | 平台配额 | L1 软限制：bili/youtube 12/600/50ms，其它平台 8/300/50ms；未知 host 一 host 一桶 8/300/50。L2 = ×0.5 / 间隔 ×2，L3 = ×0.25 / 间隔 ×4。全局并发 32 |
-| 等级 | **全局默认 + 平台覆盖 + 渠道覆盖**：`AppSettings.netLevel`（只允许 0~3）+ `netLevels`（含 `"*"` 兜底，9 = L9）；core 解析 `用户渠道 → 内置渠道 → 平台 → "*" → 全局`，内置 `xhs:user = 9`；host 的 `levelFor(platform)` 只认精确平台 → `"*"` → 全局 |
+| 等级 | **全局默认 + 平台覆盖 + 渠道覆盖**：`AppSettings.netLevel` + `netLevels`（含 `"*"` 兜底，全部为 0~3）；core 同步时把显式渠道覆盖投影到平台（L0 优先 / 1~3 取严格 / 被动渠道跳过），host 的 `levelFor(platform)` 只认精确平台 → `"*"` → 全局 |
 | 冷却 | `reportRisk(platform, signal)`；计量请求返回 412/418/403/429 时自动写；`governor:cooldowns` best-effort 持久化 |
 | 浏览器闸门 | `net.browserGate(platform)`：CDP 操作入口的冷却 + 最小间隔 + 抖动（CDP 不经 `governedHttp`）；登录流程显式绕过冷却 |
 | 等级与开关 | `AppSettings.netLevel / netLevels / autoRefresh` + 设置页「网络与风控」（全局默认 + 渠道覆盖表） |
-| L9 声明 | `RssChannel.supportsL9`（crawler channel 级，core 投影 `ChannelInfo.supportsL9`）；未声明 = L9 下不尝试 `fetchPassive`、只读缓存 |
-| 等级闸门 | `packages/core/src/data-layer.ts` 的 `doRefresh`：`autoRefresh=false` 且非 force 只读缓存；`level === 9` 且渠道声明支持时只调 `fetchPassive()`，**绝不回退 `fetch()`** |
+| 被动属性 | `RssChannel.passive`（crawler channel 级，core 投影 `ChannelInfo.passive`；目前仅 `xhs:explore`）；有浏览器时只调 `fetchPassive`，无浏览器回落主动抓取 |
+| 被动闸门 | `packages/core/src/data-layer.ts` 的 `doRefresh`：`autoRefresh=false` 且非 force 只读缓存；渠道 `passive` 且有浏览器时只调 `fetchPassive()`，**绝不回退 `fetch()`** |
 | 风控信号 | bili 412/-352/-509、weibo 418/403/432/-100、douyin 4031/2483、youtube 429、xhs verify-box/300011 |
 
 与设计稿的差异：
@@ -223,15 +225,13 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   并接受 `opts.signal` —— UI 关掉二维码弹窗即 abort，否则锁被占到 5 分钟 deadline。
   ⚠️ 窗口模式按平台选：xhs/weibo 的二维码是图片（hidden 即可），douyin 是 canvas 绘制，
   hidden 下渲染停摆画不出来，必须 interactive。
-- 平台等级由 `netLevels` 覆盖；channelKey（如 `xhs:user`）也能写进这张表：core 的
-  抓取闸门按 channelKey 精确解析，宿主 governor 按投影后的平台档执行（L0 优先、
-  1~3 取严格、L9 不投影，见 §2.4）。
-- L9（LX）收敛 `doRefresh` + **详情补全**（2026-10-19）：`doRefresh` 只调
-  `fetchPassive`；`resolveDetail` 在等级 9 时传 `{ passive: true }`，渠道只能导航到
+- 平台等级由 `netLevels` 覆盖；channelKey（如 `xhs:user`）也能写进这张表：宿主
+  governor 按投影后的平台档执行（L0 优先、1~3 取严格、被动渠道跳过，见 §2.4）。
+- 被动采集收敛 `doRefresh` + **详情补全**（2026-10-19）：`doRefresh` 对 `passive`
+  渠道只调 `fetchPassive`；`resolveDetail` 同样传 `{ passive: true }`，渠道只能导航到
   详情 URL 读页面 `__INITIAL_STATE__`（不构造 fetch/API），不支持就返回 `null` →
-  原样返回列表 item。`loadMore` / `previewChannel` / 播放解析仍走主动请求，L9 下会被
-  governor 拒绝并回退缓存/报错——这是等级语义，不是遗漏。
-- xhs 渠道按**登录态/渠道**分流（2026-10-20）：登录 → 被动（导航 + 读 SSR / L9 捕获）；
+  原样返回列表 item。`loadMore` / `previewChannel` / 播放解析仍走主动请求。
+- xhs 渠道按**登录态/渠道**分流（2026-10-20）：登录 → 被动（导航 + 读 SSR / 被动捕获）；
   匿名时 `xhs:explore` 也走被动（匿名推荐流 SSR 有 feeds），`xhs:user` 才回退 fetch
   （匿名 profile 的 noteId 被抹空）。登录判据 `isXhsLoggedIn` 不看 `web_session`（游客也有）。
   `xhs:explore` 的翻页也是被动：滚动驱动、读 `feed.feeds` 增量，登录/匿名共用。
@@ -348,7 +348,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   为空，但页面级请求有 body）。待办：用 `Network.requestWillBeSent` 逐平台确认 §3.11
   里标「推断/未确认」的页面请求；Edge 大版本升级后重跑两个探针。
 - **P1 ✅（2026-10-19）**：被动缓冲 + `fetchPassive?` 契约 + `send/onEvent` +
-  `capturePage` + `xhs:explore` / `xhs:user` 的 `fetchPassive`（§3.8）+ core 的 LX 闸门
+  `capturePage` + `xhs:explore` / `xhs:user` 的 `fetchPassive`（§3.8）+ core 的被动闸门
   （只读缓冲/缓存，绝不回退 `fetch()`）。**实机验证**仍需重启应用后用真实页面跑一次
   （页面是否发目标接口未实测）；假后端自检只覆盖事件编排。
   ⚠️ `bili:popular` 的被动采集已移除（2026-10-19）：B站匿名 API 稳定，页面也不保证
@@ -360,23 +360,25 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 - ✅ 已实现：`packages/crawler/src/passive/buffer.ts`（`PassiveBuffer`，单例 `passiveBuffer`）。
   键 = `(platform, endpoint, 规范化 URL)`；TTL 30 分钟、单条 4MB、总量 32MB，超限淘汰最旧。
   归一化剥掉 `wts/w_rid/msToken/a_bogus/x-s/xsec_token` 等易变参数，否则每次刷新都是新键。
-- ✅ `RssSource.fetchPassive?()` 已加入契约；channel 侧用 `supportsL9` 显式声明
-  （未声明 = UI 不给选、core 不尝试）；core 在 LX 下先读缓冲，读不到就走缓存，
+- ✅ `RssSource.fetchPassive?()` 已加入契约；channel 侧用 `passive = true` 声明
+  （未声明 = core 不尝试）；core 在被动路径下先读缓冲，读不到就走缓存，
   绝不回退到主动 `fetch()`。
 - ✅ 采集入口：`packages/crawler/src/passive/capture.ts` 的
   `capturePage(browser, { platform, endpoint, match, trigger })`：`Network.enable` →
   页面自然触发 → `loadingFinished` 立即取 body → 只收文本 MIME → 写缓冲。
   调用方必须用 `withBrowserMode` 持有独占权；`trigger` 里禁止构造自定义请求。
-- ✅ 首批接入：`xhs:explore.fetchPassive()`（导航 `/explore`，从 Document 响应体解析）·
-  `xhs:user.fetchPassive()`（导航 profile 页读 SSR；**不走**页面内 `fetch`，后者是类别②）。
-  `bili:popular` 不再声明 L9、也不再提供 `fetchPassive`（理由见 §3.7 P1）。
-- ✅ core 闸门：`packages/core/src/data-layer.ts` 的 `doRefresh` 在**该渠道生效等级为 9**
-  （全局默认只允许 0~3，9 来自 `netLevels` 平台/渠道覆盖）时先检查
-  `channel.supportsL9`；声明支持才调 `source.fetchPassive?.()`，否则直接回退缓存并
-  报「未声明支持」。null/缺失回退**内容缓存**（即使过期），无缓存才报错。
+- ✅ 首批接入：`xhs:explore.fetchPassive()`（导航 `/explore`，从 Document 响应体解析）。
+  ⚠️ `xhs:user` **刻意不声明 `passive`**：匿名 profile SSR 会抹空 noteId，必须走页面内
+  `fetch`（匿名产出 `anon-*` 虚拟条目）；它的 `fetch()` 在登录态内部仍是导航 + 读 SSR，
+  不构造请求 —— 标成被动会让桌面匿名订阅永远只剩缓存。
+  `bili:popular` 不声明 `passive`、也不提供 `fetchPassive`（理由见 §3.7 P1）。
+- ✅ core 闸门：`packages/core/src/data-layer.ts` 的 `doRefresh` 在
+  `channel.passive === true && appHost.browser` 时走被动路径，只调
+  `source.fetchPassive?.()`；null/缺失回退**内容缓存**（即使过期），无缓存才报
+  「被动采集：没有可用的数据，且无缓存可回退」。非 passive 渠道正常走 `source.fetch()`。
 - 自检：`bun packages/crawler/src/example/passive-capture.check.ts`（假后端回放事件）。
 - 自检：`bun packages/crawler/src/example/bili-popular.check.ts`（payload → Item 映射）。
-- 自检：`bun packages/core/src/example/lx-mode.check.ts`（LX 只走被动 / 开关 / 缓存回退）。
+- 自检：`bun packages/core/src/example/passive-mode.check.ts`（被动只走 fetchPassive / 开关 / 缓存回退 / 覆盖投影）。
 - 自检：`bun packages/crawler/src/example/passive-buffer.check.ts`（归一化 / 同键覆盖 / TTL / 限额淘汰）。
 - 只持久化解析后的条目（复用既有 `content:<subId>` 缓存）；原始响应体只在内存里活到 TTL 到期，见 §3.10。
 

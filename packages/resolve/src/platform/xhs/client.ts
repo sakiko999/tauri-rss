@@ -355,7 +355,7 @@ export function extractNoteDetail(html: string, noteId: string): any {
 }
 
 /**
- * 页面内读取详情状态的表达式(L9 被动详情用)。
+ * 页面内读取详情状态的表达式(被动详情用)。
  *
  * 与 `extractNoteDetail` 的区别:这里读的是**浏览器里已求值的** `__INITIAL_STATE__`,
  * 所以 `noteDetailMap` 可能是真正的 `Map`(登录态 SSR 里的 `new Map(...)`),不是普通对象;

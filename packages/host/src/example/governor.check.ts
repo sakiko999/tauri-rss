@@ -86,45 +86,23 @@ console.log("── L0:直通(不排队/不去重) ──")
   assert.ok(results.every((r) => r.status === 200))
 }
 
-console.log("── L9(LX):拒绝计量请求,非计量照常 ──")
-{
-  configureNetwork({ level: 9 })
-  calls = 0
-  const http = governedHttp(fakeBackend())
-  await assert.rejects(
-    () => http.request({ url: "https://api.bilibili.com/x/web-interface/nav" }),
-    /L9/,
-    "L9 下计量请求必须 reject",
-  )
-  assert.equal(calls, 0, "L9 拒绝的请求不应到达后端")
-
-  const media = await http.request({ url: "https://i0.hdslb.com/bfs/a.jpg" })
-  assert.equal(media.status, 200, "L9 下媒体请求照常")
-  const local = await http.request({ url: "http://localhost:9223/json/list" })
-  assert.equal(local.status, 200, "L9 下本地 CDP 照常")
-}
-
 console.log("── 平台覆盖:同一时刻各平台不同等级 ──")
 {
   configureNetwork({
     level: 1,
-    levels: { bili: 9, "loose.test": 0 },
+    levels: { bili: 3, "loose.test": 0 },
     platforms: {
       "default.test": { maxConcurrent: 2, rpm: 100, minIntervalMs: 0, cooldownBaseMs: 1000 },
     },
   })
-  assert.equal(levelFor("bili"), 9, "精确平台覆盖生效")
+  assert.equal(levelFor("bili"), 3, "精确平台覆盖生效")
   assert.equal(levelFor("loose.test"), 0)
   assert.equal(levelFor("default.test"), 1, "未覆盖平台继承全局")
 
   calls = 0
   const http = governedHttp(fakeBackend())
-  await assert.rejects(
-    () => http.request({ url: "https://api.bilibili.com/x/web-interface/nav" }),
-    /L9/,
-    "bili 设为 L9 后计量请求应拒绝",
-  )
-  assert.equal(calls, 0, "被拒绝的平台请求不应到达后端")
+  const strict = await http.request({ url: "https://api.bilibili.com/x/web-interface/nav" })
+  assert.equal(strict.status, 200, "覆盖为严格档仍应放行(只是配额更紧)")
 
   const loose = await http.request({ url: "https://loose.test/a" })
   assert.equal(loose.status, 200, "平台设 0 时应直通")
@@ -132,12 +110,9 @@ console.log("── 平台覆盖:同一时刻各平台不同等级 ──")
   assert.equal(normal.status, 200, "未覆盖平台仍按全局 L1 放行")
 
   // `"*"` 是未知 host / RSS 的兜底覆盖,精确平台优先于它。
-  configureNetwork({ levels: { "*": 9, bili: 1 } })
-  assert.equal(levelFor("other.test"), 9)
+  configureNetwork({ levels: { "*": 3, bili: 1 } })
+  assert.equal(levelFor("other.test"), 3)
   assert.equal(levelFor("bili"), 1)
-  await assert.rejects(() => http.request({ url: "https://other.test/x" }), /L9/)
-  const bili = await http.request({ url: "https://api.bilibili.com/y" })
-  assert.equal(bili.status, 200)
 
   // levels 是整表替换:清空后回到全局默认。
   configureNetwork({ levels: {} })
@@ -338,4 +313,4 @@ console.log("── 浏览器闸门:冷却拒绝 / 最小间隔 / L0 直通 ─�
 // 恢复默认等级,避免后续本进程内其它自检受影响。
 configureNetwork({ level: 1, levels: {} })
 
-console.log("✔ NetworkGovernor 自检通过(分类 / L0 直通 / L9 拒绝 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限 / 浏览器闸门)")
+console.log("✔ NetworkGovernor 自检通过(分类 / L0 直通 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限 / 浏览器闸门)")

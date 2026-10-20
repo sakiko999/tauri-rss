@@ -36,9 +36,10 @@ export interface RssSource {
   /** 抓取并返回 RSS 2.0 XML 字符串。 */
   fetch(): Promise<string>
   /**
-   * LX 被动采集：从 `passiveBuffer` 取最近一份页面响应并解析（见风控 §3.8/§3.10）。
-   * 无可用数据返回 null；**缺失 = 该渠道不支持 LX**。core 在 LX 下只调用它，
-   * 读不到就走内容缓存，绝不回退 `fetch()`（否则就变成主动请求了）。
+   * 被动采集（LX）：从 `passiveBuffer` / 页面 SSR 取最近一份页面数据并解析
+   * （见风控 §3.8/§3.10）。无可用数据返回 null；**缺失 = 该渠道不支持被动模式**。
+   * 渠道声明 `passive` 时 core 只调用它，读不到就走内容缓存，绝不回退 `fetch()`
+   * （否则就变成主动请求了）。
    */
   fetchPassive?(): Promise<string | null>
 }
@@ -58,8 +59,9 @@ export interface ItemDetailSource {
   /**
    * 单条 → 完整详情 Item(xhs 匿名 GET /explore/<id>?xsec_token= 补全文/多图/tag/video)。
    *
-   * `passive = true` 来自 core 的 L9 闸门:只允许**页面自然行为**(导航 + 读页面 SSR),
-   * 不得构造自定义 fetch / API。渠道不按 passive 降级时应返回 null(而不是偷偷发请求)。
+   * `passive = true` 来自 core 对渠道 `passive` 属性的判定:只允许**页面自然行为**
+   * (导航 + 读页面 SSR),不得构造自定义 fetch / API。渠道不按 passive 降级时应返回
+   * null(而不是偷偷发请求)。
    */
   resolveDetail(item: Item, opts?: { passive?: boolean }): Promise<Item | null>
 }
@@ -166,13 +168,17 @@ export interface RssChannel {
    */
   readonly defaultInfo?: SourceInfo
   /**
-   * 是否支持 L9（浏览器被动采集）。**channel 级显式声明**，UI/编排据此判断该渠道
-   * 能否走 L9；未声明 = 不支持（L9 下只读缓存）。
+   * 该渠道的**正常路径是浏览器被动采集**（导航 + 读页面 SSR / CDP Network 缓冲）。
    *
-   * ⚠️ 声明为 true 的渠道必须在 `getSource()` 返回的 source 上提供 `fetchPassive()`；
-   * core 在 L9 下只调它，绝不回退 `fetch()`。声明与实现不一致时 L9 会退化为缓存。
+   * 这是**渠道自身属性**，不是防御等级：有 `appHost.browser` 时 core 只调
+   * `fetchPassive()`（拿不到就回退内容缓存，绝不回退 `fetch()`）；没有浏览器
+   * （移动端 / CLI）时回落普通主动抓取。防御等级（0~3）表达的是「配额/冷却收多紧」，
+   * 与被谁发起请求无关 —— 需要被动的渠道几乎不会主动降级，所以不再让用户选 L9。
+   *
+   * ⚠️ 声明 true 的渠道必须在 `getSource()` 返回的 source 上提供 `fetchPassive()`；
+   * 声明与实现不一致时被动路径会退化为缓存。
    */
-  readonly supportsL9?: boolean
+  readonly passive?: boolean
   /** 按 info(url/uid/…)实例化一个可抓取的 source(行为载体);返回类型可按需收窄成 RssSource & VideoPlayable 等。 */
   getSource(info: SourceInfo): RssSource
 }
