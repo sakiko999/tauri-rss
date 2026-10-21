@@ -5,7 +5,9 @@
  * 这里把「URL → 可播流」解析统一收敛:crawler 自家来源与 rsshub 来源的条目
  * 都按 url 路由到各自平台解析函数,一起生效。
  *
- * info 透传 cookie(登录态档位):core 层经 sourceInfoFor/routedSourceInfo 注入。
+ * info 透传 cookie(登录态档位):core 层经 sourceInfoFor 注入(info.cookie);
+ * 未显式传的平台由各平台 client 经 credentials provider 回落 settings 登录态
+ * (douyin 的 stream/profile 解析内部 await douyinCookie(),已 provider 感知)。
  */
 import type { Stream } from "@amoeba/xml"
 import type { SourceInfo } from "../index.ts"

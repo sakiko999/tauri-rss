@@ -15,7 +15,10 @@
  */
 import { cac } from "cac"
 import pc from "picocolors"
+import { cookieFieldForPlatform } from "@amoeba/core"
+import { setPlatformCookieLookup } from "@amoeba/resolve"
 import { setupHost } from "./host/node-host.ts"
+import { loadSettings } from "./info.ts"
 import { runChannels } from "./commands/channels.ts"
 import { runFetch } from "./commands/fetch.ts"
 import { runItem } from "./commands/item.ts"
@@ -31,6 +34,18 @@ import { runBrowserReset } from "./commands/browser-reset.ts"
 
 // 先注入宿主(file storage / node http+js+ws / log shim)再进命令逻辑。
 setupHost()
+
+// CLI 探针不经 DataLayer,credentials provider 在入口注册(与 core DataLayer 同一
+// settings 源):渠道/client 未显式传 cookie 时回落本表登录态;`--kv cookie=` 的
+// 空串在 client 侧强制匿名,不受 provider 影响。进程短命,快照静态即可。
+{
+  const settings = await loadSettings()
+  setPlatformCookieLookup((platform) => {
+    const field = cookieFieldForPlatform(platform)
+    const v = field ? settings[field] : undefined
+    return typeof v === "string" && v ? v : undefined
+  })
+}
 
 /** 统一错误出口:消息一行 + 完整堆栈,exit 1。 */
 function onError(err: unknown): void {

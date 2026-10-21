@@ -16,7 +16,7 @@
  * 收敛内部:repo/media-store/xml 反序列化/parseFeed 均不对外(core 内部实现)。
  * apps 不直接 import crawler(渠道能力经 DataLayer.listChannels/channelKind)。
  */
-export { createDataLayer } from "./data-layer.ts"
+export { createDataLayer, cookieFieldFor, cookieFieldForPlatform } from "./data-layer.ts"
 export type { DataLayer } from "./data-layer.ts"
 export type { ChannelInfo } from "./types/channel-info.ts"
 export type { RefreshResult } from "./types/refresh-result.ts"

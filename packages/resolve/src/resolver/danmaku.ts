@@ -36,6 +36,7 @@ export function getDanmakuById(
     case "huya":
       return huyaClient.getDanmaku(id)
     case "douyin":
+      // cookie 未传时 douyinClient 内部走 douyinCookie()(provider 感知,登录态可用)。
       return douyinClient.getDanmaku(id)
     default:
       throw new Error(`resolver: 平台 ${platform} 无弹幕能力`)

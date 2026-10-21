@@ -9,7 +9,7 @@
  * refresh 时按 channelKey 前缀自动注入。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import type { ChannelInfo } from "@amoeba/core"
+import { cookieFieldFor, type ChannelInfo } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
@@ -311,10 +311,7 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
   )
 }
 
+// channelKey → settings cookie 字段:core 的单一权威表(勿再手抄前缀表)。
 function cookieFieldOf(channelKey: string): string {
-  if (channelKey.startsWith("bili:")) return "bilibiliCookie"
-  if (channelKey.startsWith("weibo:")) return "weiboCookie"
-  if (channelKey.startsWith("xhs:")) return "xhsCookie"
-  if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
-  return ""
+  return cookieFieldFor(channelKey) ?? ""
 }

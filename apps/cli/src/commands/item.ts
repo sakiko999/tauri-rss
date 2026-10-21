@@ -2,6 +2,9 @@
  * item — by-url 一站式探针(★ 高频)。
  * resolveRoute 命中 → streams 全档位表(format/quality/rate/headers/dashManifest)
  * → 弹幕元信息。play 命令共用 resolveByUrl/printStreams。
+ *
+ * cookie:平台登录态由 credentials provider(client 内部兜底)提供,这里不再按
+ * url 域手抄注入表(旧表缺 douyin;CLI 入口 main.ts 已注册同源 provider)。
  */
 import pc from "picocolors"
 import type { Stream } from "@amoeba/xml"
@@ -10,9 +13,7 @@ import {
   resolvePlayByUrl,
   resolveRoute,
   type ResolveRoute,
-  type SourceInfo,
 } from "@amoeba/resolve"
-import { cookieForUrl, loadSettings } from "../info.ts"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface ResolvedItem {
@@ -21,25 +22,21 @@ export interface ResolvedItem {
   tookMs: number
 }
 
-/** 路由 + 平台 cookie 的统一装载(item/dm 共用;settings 按 url 域注入 bili 登录 cookie)。 */
-export async function routeWithCookie(url: string): Promise<{ route: ResolveRoute; cookie?: string }> {
+/** 路由统一装载(item/dm 共用)。 */
+export function routeWithCookie(url: string): ResolveRoute {
   const route = resolveRoute(url)
   if (!route) {
     throw new Error(`url 未命中 resolver 路由(支持 bili 视频/直播、youtube、douyu/huya/douyin/twitch 直播): ${url}`)
   }
-  const settings = await loadSettings()
-  return { route, cookie: cookieForUrl(url, settings) }
+  return route
 }
 
-/** route → 解析(settings 按 url 域自动注入 bili 登录 cookie,解锁登录档位)。 */
+/** route → 解析(登录 cookie 由 client 内部 provider 兜底,解锁登录档位)。 */
 export async function resolveByUrl(url: string): Promise<ResolvedItem> {
-  const { route, cookie } = await routeWithCookie(url)
-  const info: SourceInfo = {}
-  if (cookie) info.cookie = cookie
-
+  const route = routeWithCookie(url)
   const elapsed = startTimer()
   const { streams } =
-    route.kind === "live" ? await resolveLivePlayByUrl(url, info) : await resolvePlayByUrl(url, info)
+    route.kind === "live" ? await resolveLivePlayByUrl(url) : await resolvePlayByUrl(url)
   return { route, streams, tookMs: elapsed() }
 }
 

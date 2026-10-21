@@ -11,6 +11,7 @@ import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { fillImageSizes } from "../../utils/img-size.ts"
 import { toInt } from "../../utils/number.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
+import { resolveCookie } from "../credentials.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 
 export const WB_BASE = "https://m.weibo.cn"
@@ -67,7 +68,8 @@ export async function wbJson(
  */
 export const weiboClient = {
   async getJson<T = any>(url: string, opts?: PlatformRequestOptions): Promise<T> {
-    const { status, body } = await wbJson(url, opts?.cookie, {
+    // cookie 三级(credentials):显式 > 空串强制匿名 > provider(settings)。
+    const { status, body } = await wbJson(url, resolveCookie(opts?.cookie, "weibo"), {
       ...opts?.headers,
       ...(opts?.referer ? { Referer: opts.referer } : {}),
     })

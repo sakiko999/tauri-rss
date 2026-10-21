@@ -82,9 +82,9 @@
   （douyin.com 点登录读弹窗 canvas 二维码，成功判据 = `sessionid` cookie）。两层
   都封装在 `douyinScanLogin`，channel 只做薄委托。⚠️ 社区实现靠 curl_cffi TLS
   指纹；宿主 reqwest 无伪装，纯 HTTP 层保留是为了协议变化时可能直连。
-- ⚠️ **抖音登录 cookie 目前没有任何抓取/播放路径消费**（2026-10-19 核对）：登录成功只写
-  `settings.douyinCookie`；`live:douyin` / `:hot` / `:category` / 用户主页 / 播放解析
-  仍用首页 warmup 的 `ttwid`（`info.cookie` 未被读取）。真正的关键词搜索
+- ~~抖音登录 cookie 没有任何抓取/播放路径消费~~ **已接通（2026-10-21）**：登录成功写
+  `settings.douyinCookie`，经 credentials provider 进入 `douyinCookie()`（抓取/播放/
+  弹幕共用），登录档位（原画）待真机验证。真正的关键词搜索
   `aweme/v1/web/live/search` / `general/search/stream` 匿名返回 2483，**需要登录但未做
   调研与开发**；现有 `live:douyin:search` 只是匿名分区搜索。不要直接把主账号 cookie
   接进自动化搜索（4031/限流/账号标记风险）；要做先在有登录态的 Edge 上用**专用小号**
@@ -248,13 +248,17 @@
 
 ## cookie / 登录
 
-- `packages/core/src/bilibili-cookie.ts` 四个 `DEFAULT_*_COOKIE` 默认**全空**（纯匿名）。
+- 登录态统一存 settings(`bilibiliCookie/weiboCookie/xhsCookie/douyinCookie`),消费经
+  **credentials provider**(`resolve/platform/credentials.ts`):core DataLayer 与 CLI 入口
+  注册同一 settings 快照,client 在调用点未显式传 cookie 时自动回落。显式**空串 = 强制
+  匿名**(xhs 详情、CLI `--kv cookie=` 依赖)。旧「bilibili-cookie.ts 本地手动占位 +
+  skip-worktree」机制已移除(2026-10-21)。
   匿名行为：bili 视频列表稳定、直播 250 超清封顶；weibo 热搜列表可用但 user/词流需登录；
   xhs explore/详情可用、user 需登录；douyin 直播可用、原画档位需登录
-- ⚠️ **抖音渠道前缀是 `live:douyin*`**：`cookieFieldFor` / AccountPage `cookieFieldOf`
-  的平台匹配都为它写了专门分支（裸 `split(":")[0]` 得 "live" 匹配不上）
-- 恢复登录：填真实 cookie → `git update-index --no-skip-worktree` 再改，**勿提交真实值**
-  （文件有 skip-worktree 保护 + 空占位模板 `.example`）
+- ⚠️ **抖音渠道前缀是 `live:douyin*`**：`cookieFieldFor`（core 单一权威表，CLI /
+  AccountPage 均复用）为它写了专门分支（裸 `split(":")[0]` 得 "live" 匹配不上）
+- 恢复登录：扫码（scanLogin 写 settings）或在「账号与凭证」里手填 cookie 字段；
+  **勿把真实 cookie 提交进仓库**（settings 落 SQLite，不进 git）
 - ⚠️ **`clearCookies` 的域匹配必须按标签边界**（2026-10-20）：裸 `endsWith("xiaohongshu.com")`
   会把 `notxiaohongshu.com` 这类第三方 cookie 一起删掉。判据 = `d === host || d.endsWith("." + host)`。
 - 扫码登录是 **channel 级能力 `Loginable`**（平台级操作，不依赖 info 实例化）。

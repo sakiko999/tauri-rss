@@ -351,7 +351,10 @@ export async function resolveXhsItemDetail(opts: XhsDetailOptions): Promise<Item
 
   if (!browser) {
     // 无浏览器门面(mobile/CLI):只能 HTTP。
-    return detailFromHtml(await xhsClient.getHtml(url, { cookie }), noteId, sourceKey)
+    // ⚠️ 渠道未传 cookie(xhs:user 刻意不让账号 cookie 走 reqwest)时必须显式传
+    // 空串——credentials 语义里 undefined 会回落 provider(settings 登录态),
+    // 与「凭据不出非浏览器栈」的决策冲突;"" = 强制匿名。
+    return detailFromHtml(await xhsClient.getHtml(url, { cookie: cookie ?? "" }), noteId, sourceKey)
   }
 
   return withBrowserMode(

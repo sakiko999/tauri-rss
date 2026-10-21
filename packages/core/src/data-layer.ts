@@ -10,6 +10,7 @@
  */
 import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
 import { getDanmakuByUrl, resolveLivePlayByUrl as resolveLiveByUrl, resolvePlayByUrl as resolveVideoByUrl } from "@amoeba/resolve"
+import { setPlatformCookieLookup } from "@amoeba/resolve"
 import { getChannel, listChannels as listAllChannels } from "./source/index.ts"
 import { serializeFeed } from "@amoeba/xml"
 import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
@@ -110,8 +111,49 @@ type FetchableSource = {
   fetchPassive?(): Promise<string | null>
 }
 
+/**
+ * channelKey 前缀 → settings 里存的 cookie 字段。
+ * **单一权威表**——sourceInfoFor 注入 / scanLogin 写回 / CLI 探针 / desktop 账号页
+ * 全部经此,禁止再手抄前缀表(曾漂移出三份:CLI 缺 douyin、AccountPage 各一份)。
+ */
+export function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
+  if (channelKey.startsWith("bili:")) return "bilibiliCookie"
+  if (channelKey.startsWith("weibo:")) return "weiboCookie"
+  if (channelKey.startsWith("xhs:")) return "xhsCookie"
+  // ⚠️ 抖音渠道前缀是 live:douyin*(不是 douyin:)——platformOf 同款规则。
+  if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
+  return undefined
+}
+
+/** 平台名(governor 分类语义:bili/weibo/xhs/douyin)→ settings cookie 字段。 */
+export function cookieFieldForPlatform(platform: string): keyof AppSettings | undefined {
+  switch (platform) {
+    case "bili":
+      return "bilibiliCookie"
+    case "weibo":
+      return "weiboCookie"
+    case "xhs":
+      return "xhsCookie"
+    case "douyin":
+      return "douyinCookie"
+    default:
+      return undefined
+  }
+}
+
 export function createDataLayer(): DataLayer {
   registerAllChannels()
+  // ── 平台 cookie provider 注册(credentials 收口)────────────────────────────
+  // cookie 链「渠道 → client 调用点」一跳靠人肉传参,曾三次漏传(user_video 412 /
+  // favlist 私有夹 / douyinCookie 死键)。注册后 client 在调用点未显式传 cookie 时
+  // 自动回落本表(settings 快照);显式空串 = 强制匿名(不回落)。
+  // ⚠️ provider 是进程级单钩子:多 DataLayer 实例(测试)后注册者生效。
+  let cookieSnapshot: AppSettings | null = null
+  setPlatformCookieLookup((platform) => {
+    const field = cookieFieldForPlatform(platform)
+    const v = field ? cookieSnapshot?.[field] : undefined
+    return typeof v === "string" && v ? v : undefined
+  })
   // 全局 appHost 门面(getter 校验未注入抛清晰错误;now/log 兜底)。
   const storage = globalThis.appHost.storage
   const now = globalThis.appHost.now!
@@ -122,10 +164,11 @@ export function createDataLayer(): DataLayer {
   const reading = createReadingRepository(storage, now)
   const settings = createSettingsRepository(storage)
   // 启动时把网络策略同步给宿主 governor,并把旧版 channelKey 覆盖折叠成平台键
-  // (best-effort;不阻塞 DataLayer 创建)。
+  // (best-effort;不阻塞 DataLayer 创建)。顺带初始化 cookie 快照(provider 读)。
   void settings
     .get()
     .then(async (s) => {
+      cookieSnapshot = s
       const folded = foldChannelLevels(s.netLevels)
       if (!folded) {
         syncNetPolicy(s)
@@ -228,17 +271,7 @@ export function createDataLayer(): DataLayer {
   }
 
 
-  /** channelKey 前缀 → settings 里存的 cookie 字段(读 cookieFor / 写 scanLogin 共用一张表)。 */
-  function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
-    if (channelKey.startsWith("bili:")) return "bilibiliCookie"
-    if (channelKey.startsWith("weibo:")) return "weiboCookie"
-    if (channelKey.startsWith("xhs:")) return "xhsCookie"
-    // ⚠️ 抖音渠道前缀是 live:douyin*(不是 douyin:)——platformOf 同款规则。
-    if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
-    return undefined
-  }
-
-  /** 按 channelKey 前缀匹配的 core 层默认 cookie(bili/weibo/xhs)。订阅显式 info.cookie 永远优先。 */
+  /** 按 channelKey 前缀取 settings 快照里的 cookie(订阅显式 info.cookie 永远优先)。 */
   function cookieFor(channelKey: string, s: AppSettings): string | undefined {
     const field = cookieFieldFor(channelKey)
     return field ? (s[field] as string | undefined) : undefined
@@ -246,9 +279,14 @@ export function createDataLayer(): DataLayer {
 
   /**
    * 合并 core 层默认 cookie 到订阅 info。
-   *   crawler 源:按平台前缀注入 cookie(bili/weibo/xhs)供抓取/解析。
+   *   crawler 源:按平台前缀注入 cookie(bili/weibo/xhs/douyin)供抓取/解析。
    *   rsshub 外挂源:只注入 baseUrl(供 fetch 请求外部实例),**不注入平台 cookie**
    *     ——外挂只做信息抓取,无需登录态;平台 cookie 也不应泄露给公网实例。
+   *
+   * ⚠️ 「键存在即尊重」(含空串 = 强制匿名):与 CLI `--kv cookie=` 的探针语义一致
+   * (同一语义在两条装配线上曾含义相反——CLI 空串强制匿名、core 空串回落默认)。
+   * 渠道没写 cookie 键时,client 侧还有 credentials provider 兜底(同一 settings 源),
+   * 所以「漏写键」不再等于「永远匿名」。
    */
   async function sourceInfoFor(
     sub: { channelKey: string; info: Record<string, string> },
@@ -261,7 +299,7 @@ export function createDataLayer(): DataLayer {
       return { ...sub.info, baseUrl: cfg.rsshubBaseUrl }
     }
     const cookie = cookieFor(sub.channelKey, cfg)
-    if (!cookie || sub.info["cookie"]) return sub.info
+    if (sub.info["cookie"] !== undefined || !cookie) return sub.info
     return { ...sub.info, cookie }
   }
 
@@ -347,6 +385,7 @@ export function createDataLayer(): DataLayer {
       kind = channel.kind
       // ⚠️ settings 只读一次:TTL / 自动刷新开关 / LX 闸门 / cookie 注入共用同一快照。
       const s = await settings.get()
+      cookieSnapshot = s // provider 快照同步(settings 可能被别的进程/路径改过)
       // 网络策略同步给宿主 governor(best-effort;未注入 net 时由下面的闸门兜底)。
       // 幂等,每次刷新同步一次 —— 设置页改等级后下一轮刷新即生效。
       syncNetPolicy(s)
@@ -801,14 +840,9 @@ export function createDataLayer(): DataLayer {
     const channel = getChannel(channelKey)
     if (!channel) throw new NoChannelError(channelKey)
     const s = await settings.get()
-    // 与 sourceInfoFor 同规则:rsshub 只补 baseUrl;其余按平台前缀补 cookie。
-    let merged = info
-    if (channelKey.startsWith("rsshub:")) {
-      if (!info["baseUrl"]) merged = { ...info, baseUrl: s.rsshubBaseUrl }
-    } else if (!info["cookie"]) {
-      const cookie = cookieFor(channelKey, s)
-      if (cookie) merged = { ...info, cookie }
-    }
+    // 与 sourceInfoFor 同一份规则(rsshub → baseUrl / 其余按前缀补 cookie)——
+    // 这里曾是手抄副本,规则漂移的现成温床,改为直接复用。
+    const merged = await sourceInfoFor({ channelKey, info }, s)
     const xml = await channel.getSource(merged).fetch()
     const { items, total } = deserializeFeedWithTotal(xml, {
       subscriptionId: `preview:${channelKey}`,
@@ -858,11 +892,13 @@ export function createDataLayer(): DataLayer {
       async set(patch) {
         const s = await settings.set(patch)
         syncNetPolicy(s)
+        cookieSnapshot = s // provider 快照同步(改 cookie 字段后下一跳立即生效)
         return s
       },
       async reset() {
         const s = await settings.reset()
         syncNetPolicy(s)
+        cookieSnapshot = s
         return s
       },
     },

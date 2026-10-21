@@ -65,6 +65,7 @@ bun packages/resolve/src/example/router.check.ts        # by-url 路由表（hos
 bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
 bun packages/resolve/src/example/bili-buvid.check.ts    # bili 登录 cookie 缺 buvid3 时补匿名指纹（-352 回归）
 bun packages/resolve/src/example/bili-space-sign.check.ts # bili space 系签名含 dm_* 指纹 + cookie 传递（412/-352 回归）
+bun packages/resolve/src/example/credentials.check.ts   # 平台 cookie provider（三级语义 / sign 同接 / douyin 兜底序 / xhs 空串退出）
 bun packages/resolve/src/example/youtube-clients.check.ts # YouTube client 请求体形状（VISIONOS）
 bun packages/resolve/src/example/danmaku-proto.check.ts # bili 弹幕 protobuf 解码（截断帧不死循环）
 bun packages/resolve/src/example/douyu-frame.check.ts   # 斗鱼弹幕帧（一帧多包全解）
@@ -141,8 +142,8 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
   example 脚本（CLI 排除该类渠道；2026-09-11 起零依赖：bun 内置 WebSocket 直连 CDP）。
 - ⛔ **不做播放**：只到「解析出 stream 清单」为止；hls.js/flv.js/dashjs 不进 CLI。
   验证直链用 `--open` 丢给系统播放器。
-- bili 登录档位不受影响：走 `core/bilibili-cookie.ts` 静态 cookie 合并（data-layer
-  `sourceInfoFor` 自动注入），与浏览器无关。
+- bili 登录档位不受影响：settings 登录态经 credentials provider（client 兜底）与
+  data-layer `sourceInfoFor` 注入双通道生效，与浏览器无关。
 
 ### 技术选型：Bun + cac，零构建
 

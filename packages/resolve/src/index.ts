@@ -30,6 +30,7 @@ export * from "./resolver/index.ts"
 // ── 平台能力(供 crawler channel 抓数据 + resolver 播放) ──
 export * from "./platform/apple/catalog.ts"
 export * from "./platform/bili/index.ts"
+export * from "./platform/credentials.ts"
 export * from "./platform/douyin/index.ts"
 export * from "./platform/douyu/index.ts"
 export * from "./platform/huya/index.ts"

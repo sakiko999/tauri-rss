@@ -7,7 +7,8 @@
  *   - 签名 API:`user_posted` 等需 x-s/x-s-common/x-t 签名 —— ⚠️ 已降级
  *     (签名库 xhshow 已移至 feat/xhs-rustpython 分支,见 signApiHeaders)→ user 暂不可用。
  *
- * cookie 由 core 层 DEFAULT_XHS_COOKIE 经 info.cookie 注入。
+ * cookie 由 core 层经 info.cookie / credentials provider(settings)注入;
+ * 「刻意匿名」的调用点必须显式传空串(见 xhs/user.ts resolveDetail 注释)。
  */
 import type { Social, SocialImage } from "@amoeba/xml"
 import { httpJson, httpText } from "../../host.ts"
@@ -15,6 +16,7 @@ import { cdpEvaluate, cdpFetch } from "../../browser/cdp.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"
 import { parseCount } from "../../utils/count.ts"
+import { resolveCookie } from "../credentials.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 
 export const XHS_BASE = "https://www.xiaohongshu.com"
@@ -57,12 +59,13 @@ export const xhsClient = {
     const u = new URL(url)
     const uri = u.pathname + u.search
     const params = Object.fromEntries(u.searchParams)
-    const cookie = opts?.cookie ?? ""
+    // cookie 三级(credentials):显式 > 空串强制匿名 > provider(settings)。
+    const cookie = resolveCookie(opts?.cookie, "xhs") ?? ""
     const headers = opts?.headers ?? signApiHeaders(cookie, uri, params)
     return apiJson<T>(url, cookie, headers)
   },
   async getHtml(url: string, opts?: PlatformRequestOptions): Promise<string> {
-    return fetchHtml(url, opts?.cookie)
+    return fetchHtml(url, resolveCookie(opts?.cookie, "xhs"))
   },
 } satisfies PlatformClient
 

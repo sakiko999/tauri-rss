@@ -65,6 +65,12 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 - **appHost 全局注入**：必填 `http`/`js`/`storage`，可选 `ws`/`browser` 未注入即降级；
   打开外链必须走 `openExternal`（WebView 拦 `window.open`）。见 `docs/architecture/host-abi.md`。
 - **存储 DDL 唯一权威 = core `db/schema.ts`**（插件自带 migration 不用，防漂移）。
+- **平台 cookie 三级语义**（`resolve/platform/credentials.ts`）：调用点显式非空 > 显式
+  **空串 = 强制匿名**（xhs 详情、CLI `--kv cookie=` 依赖）> provider（settings 登录态，
+  core DataLayer / CLI 入口注册同一张表）。**渠道层不许再手抄 channelKey→cookie 前缀表**
+  ——单一权威 = core `cookieFieldFor`；「同形渠道」优先用 crawler `makeApiChannel`
+  工厂（接线/channelOptions/翻页样板收敛处，cookie 在 fetchPage 闭包从 info 取一次）。
+  漏传案底：bili:user_video 412 / favlist 私有夹 / douyinCookie 死键。
 
 ## 环境与工具
 
@@ -114,7 +120,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 | 平台 | 一句话 |
 | --- | --- |
 | B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
-| 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；**登录 cookie 目前没有任何抓取路径消费**；真搜索需登录（未做） |
+| 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做） |
 | YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
 | 小红书 | 全 SSR；**`web_session` 不是登录标志**；`xhs:explore` 被动、`xhs:user` 主动 fetch |
 | Twitch | 公开 GQL + usher HLS，纯匿名；master 无 CORS 必须服务端拉；流列表翻页要用 Android Client-ID |

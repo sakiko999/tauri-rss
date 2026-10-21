@@ -1,9 +1,11 @@
 /**
  * info 组装 —— channel 实例化参数与登录 cookie 的统一入口(各探针共用)。
  *
- * cookie 策略与 desktop 对齐:core 层 settings 按平台前缀存默认 cookie
- * (DEFAULT_SETTINGS 内嵌占位,本地改 apps/cli/.data/rss.db 的 settings 键
- * 即可换真实值),订阅级 info.cookie 永远优先。
+ * cookie 策略(2026-10-21 credentials 收口后):
+ *   - settings 登录态由 resolve 的 credentials provider 兜底(main.ts 入口注册一次),
+ *     本文件不再手抄 channelKey→cookie 前缀表(旧表缺 douyin,已漂移);
+ *   - 订阅级 `--kv cookie=` 覆盖:键存在即尊重,**空串 = 强制匿名探针**
+ *     (渠道把 info.cookie 显式传给 client,client 侧空串不回落 provider)。
  */
 import { DEFAULT_SETTINGS, type AppSettings } from "@amoeba/core"
 import { getChannel, type SourceInfo } from "@amoeba/crawler"
@@ -43,34 +45,17 @@ export async function loadSettings(): Promise<AppSettings> {
   }
 }
 
-/** channelKey 前缀 → settings cookie 字段(与 core data-layer.cookieFieldFor 同表)。 */
-function cookieForChannel(channelKey: string, s: AppSettings): string | undefined {
-  if (channelKey.startsWith("bili:")) return s.bilibiliCookie || undefined
-  if (channelKey.startsWith("weibo:")) return s.weiboCookie || undefined
-  if (channelKey.startsWith("xhs:")) return s.xhsCookie || undefined
-  return undefined
-}
-
-/** item.url 域名 → 平台 cookie(item/dm 探针不经 channelKey,按 url 判平台)。 */
-export function cookieForUrl(url: string, s: AppSettings): string | undefined {
-  if (url.includes("bilibili.com")) return s.bilibiliCookie || undefined
-  if (url.includes("weibo.")) return s.weiboCookie || undefined
-  if (url.includes("xiaohongshu.com") || url.includes("xhslink.com")) return s.xhsCookie || undefined
-  return undefined
-}
-
 /**
  * 组装 channel 实例化 info:defaultInfo < exampleInfo < 用户 kv。
- * cookie 单独注入(fetch/item/dm 直连 source/resolver,不经 DataLayer 的
- * sourceInfoFor);overrides.cookie 可显式覆盖。
+ * cookie 不在此注入(settings 登录态走 credentials provider);kv 的 cookie 键
+ * 存在即尊重(空串 = 强制匿名,渠道显式传给 client 后不回落 provider)。
  */
 export async function buildInfo(channelKey: string, overrides: Record<string, string> = {}): Promise<SourceInfo> {
   const ch = getChannel(channelKey)
-  if (!ch) throw new Error(`unknown channel: ${channelKey}`)
-  const settings = await loadSettings()
+  if (!ch) throw new Error(`unknown channel: ${channelKey}(rss channels 查看全部)`)
   const base: Record<string, string> = { ...(ch.defaultInfo ?? {}), ...exampleInfo(channelKey), ...overrides }
-  const cookie = overrides.cookie ?? cookieForChannel(channelKey, settings)
-  return cookie ? { ...base, cookie } : base
+  if (overrides.cookie !== undefined) base.cookie = overrides.cookie
+  return base
 }
 
 /**

@@ -356,7 +356,10 @@ export function AddSubscriptionDialog({
         return
       }
       const ttlMin = Number(ttl)
-      const id = await addSubscription(channelKey, title.trim() || channel.name || channelKey, values, {
+      // 空字段不入 info:cookie 等可选字段留空串会被 sourceInfoFor 视为
+      // 「显式强制匿名」(键存在即尊重),把 settings 登录态屏蔽掉 —— 留空 = 未填。
+      const info = Object.fromEntries(Object.entries(values).filter(([, v]) => v.trim() !== ""))
+      const id = await addSubscription(channelKey, title.trim() || channel.name || channelKey, info, {
         groupId: groupId || null,
         refreshIntervalSec: ttlMin > 0 ? ttlMin * 60 : undefined,
       })

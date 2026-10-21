@@ -8,6 +8,7 @@
 import { httpJson } from "../../host.ts"
 import { deferredStream } from "../../danmaku"
 import { log } from "../../log.ts"
+import { platformCookie } from "../credentials.ts"
 import { UA_ENTER, DEFAULT_TTWID, signDouyinUrl, enterRoomParams } from "./abogus.ts"
 import { douyinDanmakuStream } from "./danmaku.ts"
 import type { DanmakuOptions } from "../../danmaku"
@@ -43,8 +44,16 @@ async function ensureCookie(): Promise<void> {
   await cookiePromise
 }
 
-/** 取当前 cookie(触发 warmup,返回 memoized 结果)。弹幕握手用(缺则 415)。 */
+/**
+ * 取当前 cookie:登录 cookie(credentials provider,settings.douyinCookie)优先,
+ * 否则匿名 ttwid warmup。弹幕握手/stream 解析用(缺 ttwid 会 415)。
+ *
+ * ⚠️ 2026-10-21 前 settings.douyinCookie 是**死键**(落库后零消费,扫码承诺的
+ * 「解锁原画」无代码兑现)——provider 接线后抓取/播放/弹幕三条链都经这里取登录态。
+ */
 export async function douyinCookie(): Promise<string> {
+  const login = platformCookie("douyin")
+  if (login) return login
   await ensureCookie()
   return cookieJar || DEFAULT_TTWID
 }
@@ -73,7 +82,9 @@ export const douyinClient = {
       "user-agent": UA_ENTER,
       referer: opts?.referer ?? LIVE,
       authority: "live.douyin.com",
-      cookie: opts?.cookie ?? (cookieJar || DEFAULT_TTWID),
+      // cookie 语义(credentials):显式非空 > **显式空串 = 匿名 ttwid**(douyin 缺
+      // ttwid 直接 415,不能真空头发) > douyinCookie()(登录 provider > 匿名 jar)。
+      cookie: opts?.cookie !== undefined ? opts.cookie || cookieJar || DEFAULT_TTWID : await douyinCookie(),
       ...opts?.headers,
     })
     if (json == null) throw new Error(`douyin empty body for ${url.slice(0, 80)}`)

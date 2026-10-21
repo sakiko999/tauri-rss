@@ -20,6 +20,7 @@ import { md5Hex } from "../../utils/md5.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 import { strOr } from "../../utils/str.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
+import { resolveCookie } from "../credentials.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 import type { DanmakuOptions, DanmakuStream } from "../../danmaku"
 import { biliLiveDanmakuStream } from "./danmaku-live.ts"
@@ -46,9 +47,9 @@ export interface BilibiliDanmakuOptions extends DanmakuOptions {
 }
 
 export interface BilibiliClient extends PlatformClient {
-  /** GET JSON,统一 UA/status/code 检查;opts.cookie 显式覆盖,opts.buvid 时补匿名指纹,opts.referer 覆盖默认。 */
+  /** GET JSON,统一 UA/status/code 检查;cookie 三级:opts.cookie 显式 > 空串强制匿名 > provider(credentials);opts.buvid 时补匿名指纹,opts.referer 覆盖默认。 */
   getJson<T = Record<string, any>>(url: string, opts?: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean }): Promise<T>
-  /** web 签名:`...&w_rid&wts`(wbi key 取自 cookie 对应 nav;匿名同 key)。 */
+  /** web 签名:`...&w_rid&wts`(wbi key 取自 cookie 对应 nav;cookie 未传时回落 provider)。 */
   signWeb(query: string, cookie?: string): Promise<string>
   /** space 系 wbi 签名:在 signWeb 基础上补 `dm_*` 客户端指纹参数(缺了 WAF 直接 412/-352)。 */
   signSpace(query: string, cookie?: string): Promise<string>
@@ -98,8 +99,8 @@ function getNavData(cookie?: string): Promise<Record<string, any>> {
 }
 
 /** 登录态 mid(nav 响应;未登录/无 cookie 返回 0)。直播弹幕认证用。 */
-async function navMid(cookie?: string): Promise<number> {
-  const data = await getNavData(cookie)
+async function navMid(cookieOpt?: string): Promise<number> {
+  const data = await getNavData(resolveCookie(cookieOpt, "bili"))
   return Number(data?.data?.mid ?? 0)
 }
 
@@ -151,8 +152,8 @@ async function anonBuvid3(): Promise<string> {
   return /buvid3=([^;]+)/.exec(anonBuvid)?.[1] ?? ""
 }
 
-async function signWeb(query: string, cookie?: string): Promise<string> {
-  const key = await getMixinKey(cookie)
+async function signWeb(query: string, cookieOpt?: string): Promise<string> {
+  const key = await getMixinKey(resolveCookie(cookieOpt, "bili"))
   const sp = new URLSearchParams(query)
   sp.sort()
   const wts = Math.floor(now() / 1000).toString()
@@ -184,12 +185,12 @@ function spaceFpQuery(): string {
   }).toString()
 }
 
-async function signSpace(query: string, cookie?: string): Promise<string> {
-  return signWeb(`${query}&${spaceFpQuery()}`, cookie)
+async function signSpace(query: string, cookieOpt?: string): Promise<string> {
+  return signWeb(`${query}&${spaceFpQuery()}`, resolveCookie(cookieOpt, "bili"))
 }
 
-async function signLiveParams(params: Record<string, string>, cookie?: string): Promise<string> {
-  const key = await getMixinKey(cookie)
+async function signLiveParams(params: Record<string, string>, cookieOpt?: string): Promise<string> {
+  const key = await getMixinKey(resolveCookie(cookieOpt, "bili"))
   const wts = Math.floor(now() / 1000).toString()
   const all: Record<string, string> = { ...params, wts }
   const sorted = Object.keys(all).sort()
@@ -214,8 +215,9 @@ async function getJson<T = Record<string, any>>(
   opts: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean } = {},
 ): Promise<T> {
   const extra: Record<string, string> = { ...opts.headers }
-  // opts.cookie 显式覆盖;opts.buvid 时补匿名指纹(space/直播 API 需要)。
-  if (opts.cookie && !extra.cookie) extra.cookie = opts.cookie
+  // cookie 三级语义(credentials):显式覆盖 > 显式空串(强制匿名) > provider(settings)。
+  const cookie = resolveCookie(opts.cookie, "bili")
+  if (cookie && !extra.cookie) extra.cookie = cookie
   // ⚠️ **有 cookie 也要补 buvid3**:扫码登录只回收 passport 的 Set-Cookie
   // (SESSDATA/bili_jct/DedeUserID/sid),不含 buvid3/buvid4;而 getListByArea /
   // space 系接口对无 buvid 的请求直接 -352。旧写法「有 cookie 就跳过 buvid」会让

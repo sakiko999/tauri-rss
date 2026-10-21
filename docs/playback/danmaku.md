@@ -20,7 +20,7 @@ bvid → GET /x/web-interface/view?bvid= → data.cid(匿名,复用 client.resol
 ```
 
 - 每段 **6 分钟**(360s),`segment_index` 从 1 起,段数 = `ceil(durationSec/360) + 1`。
-- **匿名 200,无需 cookie/wbi**。2023 后有 wbi 版 `/x/v2/dm/wbi/web/seg.so`(带 `pid={aid}`),实测无签名也放行(软风控),稳妥做法带 `DEFAULT_BILIBILI_COOKIE`。
+- **匿名 200,无需 cookie/wbi**。2023 后有 wbi 版 `/x/v2/dm/wbi/web/seg.so`(带 `pid={aid}`),实测无签名也放行(软风控),稳妥做法带登录 cookie(settings 登录态经 credentials provider 自动注入)。
 - 备选 XML:`comment.bilibili.com/{cid}.xml`(gzip,`inflateRawSync`,匿名,整包)。
 
 ### DanmakuElem proto 字段
@@ -337,7 +337,7 @@ DanmakuLayer (canvas 2D)
 | HTTP 隧道(POST 支持) | `packages/host/src/tauri/` | seg.so 无 CORS;**YouTube get_live_chat 轮询** |
 | **`extractInlineJson`** | `packages/resolve/src/utils/inline-json.ts` | 提取 ytcfg.set / ytInitialData(平衡括号,嵌套不截断) |
 | youtube channel(ANDROID_VR) | `packages/resolve/src/platform/youtube/` | 提供 liveId(直播弹幕 + live chat 共用) |
-| `DEFAULT_BILIBILI_COOKIE` | `packages/core/src/bilibili-cookie.ts` | 带登录态更稳(视频/直播弹幕) |
+| 登录 cookie | core `settings.bilibiliCookie`(credentials provider 注入) | 带登录态更稳(视频/直播弹幕) |
 | 懒解析范式 | `resolveBiliVideoPlay`(platform/bili/video-play.ts) | 弹幕懒解析照抄(YouTube live chat 轮询起始) |
 | 播放器时间 | `useVideoElement.state.currentTime` | 弹幕时间窗口(currentTime 秒 × 1000) |
 | 弹幕层挂载点 | `VideoShell.tsx` relative 容器 | 加 DanmakuLayer |

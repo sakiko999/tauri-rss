@@ -378,9 +378,9 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-social",
     info: { user_id: "5c6d75a400000000100278fa" },
   },
-  // ⚠️ **需登录 cookie**:`DEFAULT_BILIBILI_COOKIE` 默认**为空**(纯匿名),匿名请求
-  // bili 动态接口 412。故 **enabled:false** —— 填入 cookie
-  // (packages/core/src/bilibili-cookie.ts)后在 rail 里启用即可;否则每次刷新必失败刷屏。
+  // ⚠️ **需登录 cookie**:settings.bilibiliCookie 默认空(纯匿名),匿名请求
+  // bili 动态接口 412。故 **enabled:false** —— 扫码或手填 cookie(settings →
+  // 账号与凭证)后在 rail 里启用即可;否则每次刷新必失败刷屏。
   {
     id: "s-social-bili-dyn",
     channelKey: "bili:dynamic",
@@ -389,7 +389,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-social",
     info: { uid: "37663924" }, // 硬核的半佛仙人(实测 37883317 是 DILI念,勿用)
   },
-  // ⚠️ **需登录**:`DEFAULT_WEIBO_COOKIE` 默认空,匿名 user 容器 432。enabled:false 同上。
+  // ⚠️ **需登录**:settings.weiboCookie 默认空,匿名 user 容器 432。enabled:false 同上。
   {
     id: "s-user-weibo",
     channelKey: "weibo:user",

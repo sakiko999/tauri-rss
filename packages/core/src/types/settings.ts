@@ -1,13 +1,6 @@
 /**
  * App settings — user preferences, persisted via a `SettingsRepository`.
  */
-import {
-  DEFAULT_BILIBILI_COOKIE,
-  DEFAULT_WEIBO_COOKIE,
-  DEFAULT_XHS_COOKIE,
-  DEFAULT_DOUYIN_COOKIE,
-} from "../bilibili-cookie.ts"
-
 export type ViewMode = "reader" | "masonry" | "shortvideo"
 export type ThemeMode = "light" | "dark" | "system"
 export type Density = "comfortable" | "compact"
@@ -84,8 +77,10 @@ export interface AppSettings {
   imageProxy: boolean
   /**
    * bilibili 登录 cookie(浏览器复制的完整串,含 SESSDATA)。
-   * 作 core 层默认:所有 bili 订阅(live/video)未显式配 cookie 时自动带上,
+   * 登录态来源:扫码(scanLogin)写回或此处手填;消费经 resolve 的 credentials
+   * provider(sourceInfoFor 注入 + client 兜底双通道),bili 订阅/播放自动带上,
    * 解锁登录档位(非大会员 1080p/原画)。留空 = 零登录。
+   * ⚠️ 旧「bilibili-cookie.ts 本地手动占位」机制已移除(2026-10-21)——登录态统一走本字段。
    */
   bilibiliCookie: string
   /** 微博登录 cookie(浏览器复制完整串,含 SUB)。作 core 层默认:weibo:* 订阅自动带上。 */
@@ -119,9 +114,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   danmakuEnabled: true,
   autoPlayNext: true,
   imageProxy: true,
-  bilibiliCookie: DEFAULT_BILIBILI_COOKIE,
-  weiboCookie: DEFAULT_WEIBO_COOKIE,
-  xhsCookie: DEFAULT_XHS_COOKIE,
-  douyinCookie: DEFAULT_DOUYIN_COOKIE,
+  bilibiliCookie: "",
+  weiboCookie: "",
+  xhsCookie: "",
+  douyinCookie: "",
   rsshubBaseUrl: "https://rsshub.app",
 }
