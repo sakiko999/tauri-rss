@@ -588,6 +588,20 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 > capturePage 收尾 `Network.disable`。回归：`scheduler.check.ts`（并发 lane / 租约计数 /
 > gate 串行不占 lane / 异常释放 / abort 豁免登录）。未做：passiveBuffer 按 lane 过滤
 > （当前仅 xhs:explore 声明 passive，同 lane 串行无并发采集，见 §3.13.1 待办）。
+>
+> **审查修正（2026-10-22，48-agent 审查 43 候选 → 39 确认，去重后修 8 条）**：
+> ① tab.send 缺惰性建连（capturePage 首条命令直接 `CDP not connected`，被动渠道
+> 每轮回退缓存）；② withScanLoginLock 丢掉 lane 句柄（登录仍在默认页，douyin
+> interactive 还会把默认页挤成非激活 → canvas 二维码画不出）；③ xhs 被动兜底
+> readPage 读默认页（应读本 lane tab，否则 0 条写空缓存）；④ interactive 改为
+> **全局串行**（激活互斥 + 等首个 setMode 落地，防 hidden 下滚动）；⑤ setMode
+> 抛错不再泄漏租约计数；⑥ withBrowserGlobal 改为**读写锁独占**（不同 lane 键并不
+> 天然互斥，clearCookies/resetProfile 仍会与导航交错）；⑦ data.ts 超时恢复「仅
+> 浏览器订阅才 abortTabs」（非浏览器慢源超时不该掐别人的抓取）；⑧ bili 分区列房
+> 改为**登录预检**（匿名请求 -352 会写 30 分钟 bili 平台冷却并把整个平台打死），
+> 端点 -352 走 `riskSignal:false`（w_webid 过期可重取，不写冷却）。
+> cookie 字符串拼接专项全仓 9 处逐一核对：**产品代码无分隔符缺陷**（探针脚本的
+> `;` 缺失问题未进入产品代码）。
 
 #### 现状（代码事实）
 

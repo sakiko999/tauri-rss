@@ -24,6 +24,7 @@
 import {
   browserGateFor,
   withBrowserGlobal,
+  withBrowserOpSlot,
   withLane,
   withRenderLease,
 } from "./scheduler.ts"
@@ -63,20 +64,25 @@ export function withBrowserOp<T>(
   fn: (b: BrowserBackend) => Promise<T>,
 ): Promise<T> {
   const lane = opts.lane ?? "default"
+  // 共享通道:与 withBrowserGlobal(clearCookies/resetProfile)构成读写锁 ——
+  // 进程级操作等在途 op 全部退出且阻塞新 op(不同 lane 键并不天然互斥)。
   return browserGateFor(opts.platform).then(() =>
-    withLane(`op:${lane}`, async () => {
-      // lane → tab(宿主缺 tab 能力 → 单页语义,回默认 backend)。
-      const b: BrowserBackend = browser.tab?.(lane) ?? browser
-      if (opts.mode === "interactive") {
-        return withRenderLease(browser, async () => {
-          // 滚动驱动必须激活本 tab:hidden(非激活)下渲染管线停摆,scrollTo 只改
-          // scrollTop、不派发 scroll 事件(§3.9);activate 毫秒级、不触发重载。
-          await (b as BrowserTab).activate?.()
-          return fn(b)
-        })
-      }
-      return fn(b)
-    }),
+    withBrowserOpSlot(() =>
+      withLane(`op:${lane}`, async () => {
+        // lane → tab(宿主缺 tab 能力 → 单页语义,回默认 backend)。
+        const b: BrowserBackend = browser.tab?.(lane) ?? browser
+        if (opts.mode === "interactive") {
+          return withRenderLease(browser, async () => {
+            // 滚动驱动必须激活本 tab:hidden(非激活)下渲染管线停摆,scrollTo 只改
+            // scrollTop、不派发 scroll 事件(§3.9);activate 毫秒级、不触发重载。
+            // interactive 操作已被 withRenderLease 全局串行,不会两个 lane 互抢激活。
+            await (b as BrowserTab).activate?.()
+            return fn(b)
+          })
+        }
+        return fn(b)
+      }),
+    ),
   )
 }
 
@@ -108,10 +114,13 @@ export function withBrowserMode<T>(
 export function withScanLoginLock<T>(
   browser: BrowserBackend,
   mode: BrowserWindowMode,
-  run: () => Promise<T>,
+  run: (b: BrowserBackend) => Promise<T>,
   platform: string,
 ): Promise<T> {
-  return withBrowserOp(browser, { lane: `login:${platform}`, mode }, () => run())
+  // ⚠️ 必须把 lane 句柄交给登录流程:早先只加了 login lane 的锁却仍用默认页 —
+  // 登录根本没跑在专属 tab 上(douyin interactive 还会把默认页挤成非激活,canvas
+  // 二维码渲染停摆),abortTabs({keepLogin}) 豁免的也是个空壳(审查发现)。
+  return withBrowserOp(browser, { lane: `login:${platform}`, mode }, (b) => run(b))
 }
 
 /**

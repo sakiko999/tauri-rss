@@ -47,8 +47,8 @@ export interface BilibiliDanmakuOptions extends DanmakuOptions {
 }
 
 export interface BilibiliClient extends PlatformClient {
-  /** GET JSON,统一 UA/status/code 检查;cookie 三级:opts.cookie 显式 > 空串强制匿名 > provider(credentials);opts.buvid 时补匿名指纹,opts.referer 覆盖默认。 */
-  getJson<T = Record<string, any>>(url: string, opts?: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean }): Promise<T>
+  /** GET JSON,统一 UA/status/code 检查;cookie 三级:opts.cookie 显式 > 空串强制匿名 > provider(credentials);opts.buvid 时补匿名指纹,opts.referer 覆盖默认。`riskSignal:false` = 该端点的 -352 由调用方按语义处理(w_webid 过期可重取),不写平台冷却。 */
+  getJson<T = Record<string, any>>(url: string, opts?: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean; riskSignal?: boolean }): Promise<T>
   /** web 签名:`...&w_rid&wts`(wbi key 取自 cookie 对应 nav;cookie 未传时回落 provider)。 */
   signWeb(query: string, cookie?: string): Promise<string>
   /** space 系 wbi 签名:在 signWeb 基础上补 `dm_*` 客户端指纹参数(缺了 WAF 直接 412/-352)。 */
@@ -212,7 +212,7 @@ function reportRisk(signal: string): void {
 
 async function getJson<T = Record<string, any>>(
   url: string,
-  opts: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean } = {},
+  opts: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean; riskSignal?: boolean } = {},
 ): Promise<T> {
   const extra: Record<string, string> = { ...opts.headers }
   // cookie 三级语义(credentials):显式覆盖 > 显式空串(强制匿名) > provider(settings)。
@@ -238,8 +238,11 @@ async function getJson<T = Record<string, any>>(
     if ((e as Error)?.message?.includes("HTTP 412")) reportRisk("412")
     throw e
   })
-  // -352 是 B 站风控校验码,-509 是请求过于频繁(明确风控信号)
-  if (data?.code === -352 || data?.code === -509) reportRisk(String(data.code))
+  // -352 是 B 站风控校验码,-509 是请求过于频繁(明确风控信号)。
+  // riskSignal:false 用于「-352 另有语义」的端点(w_webid 过期可重取,见
+  // discover.fetchBiliAreaRooms)——写 30 分钟平台冷却会把可自愈的失败放大成
+  // 整个 bili 平台停摆,且冷却持久化、重试被自家 governor 拦死。
+  if ((data?.code === -352 || data?.code === -509) && opts.riskSignal !== false) reportRisk(String(data.code))
   if (data?.code !== undefined && data.code !== 0 && !opts.allowCodeError) {
     throw new Error(`bilibili API ${data.code}: ${data.message ?? "unknown error"}`)
   }

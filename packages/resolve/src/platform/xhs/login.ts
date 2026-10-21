@@ -129,7 +129,7 @@ export async function xhsScanLogin(
   // 登录弹窗导航走;手机确认后页面自身的 qrcode/status 轮询不受刷新影响。
   // ⚠️ 刻意**不传 platform**:冷却期正是用户需要重新扫码自救的时候,不能被 browserGate
   // 拦住。
-  return withScanLoginLock(browser, "hidden", () => runScanLogin(browser, emitQr, opts), "xhs")
+  return withScanLoginLock(browser, "hidden", (b) => runScanLogin(b, emitQr, opts), "xhs")
 }
 
 async function runScanLogin(

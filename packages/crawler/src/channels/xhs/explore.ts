@@ -173,7 +173,8 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
         notLoggedInMsg: "小红书登录已失效或未登录，请到「账号与凭证」重新扫码",
         readState: (state) => flatXhsStateList(state, ["feed", "feeds"]),
         // A 路线没拿到缓冲时回退页面 SSR(导航已完成 + state 已挂载,仍不构造请求)。
-        readPage: () => readXhsStateList(browser, ["feed", "feeds"]),
+        // ⚠️ 用传入的 lane 句柄 b 读(默认页是 about:blank,读了只会 0 条)。
+        readPage: (b) => readXhsStateList(b, ["feed", "feeds"]),
       },
       // 被动捕获与主动刷新同 lane:绑到本 lane 的 tab,事件/响应不串台(§3.13 坑 4)。
       "list:xhs:explore",

@@ -86,30 +86,28 @@ export async function fetchBiliAreaRooms(
   page: number,
   cookie?: string,
 ): Promise<BiliAreaRooms> {
-  const request = async (webId: string) => {
-    const signed = await biliClient.signWeb(
-      `platform=web&parent_area_id=${parentAreaId}&area_id=${areaId}&sort_type=online&page=${page}&w_webid=${webId}`,
-      cookie,
+  // ⚠️ **先判登录,再发请求**:匿名调这个端点必然 -352,而 -352 会写 30 分钟 bili
+  // 平台冷却(持久化)——一次「未登录」会把用户所有 bili 渠道一起打死(审查发现)。
+  // 没登录直接给可操作错误,一个请求都不发。
+  const ck = resolveCookie(cookie, "bili")
+  if (!ck) throw new Error("B站直播分区列房需要登录：请到「账号与凭证」扫码登录")
+
+  const request = async (webId: string) =>
+    biliClient.getJson<Record<string, any>>(
+      `https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?${await biliClient.signWeb(
+        `platform=web&parent_area_id=${parentAreaId}&area_id=${areaId}&sort_type=online&page=${page}&w_webid=${webId}`,
+        ck,
+      )}`,
+      // riskSignal:false —— 本端点的 -352 通常是 w_webid 过期(可自愈),不该写
+      // 平台冷却;真正的风控由重取后仍 -352 的最终错误暴露。
+      { referer: `${LIVE}/`, buvid: true, cookie: ck, allowCodeError: true, riskSignal: false },
     )
-    return biliClient.getJson<Record<string, any>>(
-      `https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?${signed}`,
-      { referer: `${LIVE}/`, buvid: true, cookie, allowCodeError: true },
-    )
-  }
-  let webId = await getWebId(cookie)
-  let res = await request(webId)
-  // w_webid 过期/被风控 → 逐出缓存重取一次。⚠️ 重试失败以**首个 -352** 为准:
-  // 首次 -352 已被 client reportRisk 写入平台冷却,重试的任何计量请求都会被自家
-  // 冷却本地拦下(「平台冷却中」)——那是噪音,真实原因始终是首个 -352。
+
+  let res = await request(await getWebId(ck))
   if (res?.code === -352) {
-    const first = res
-    try {
-      webIdCache = null
-      webId = await getWebId(cookie)
-      res = await request(webId)
-    } catch {
-      res = first
-    }
+    // w_webid 过期/被风控 → 逐出缓存重取一次(现在可达:首个 -352 不写冷却)。
+    webIdCache = null
+    res = await request(await getWebId(ck))
   }
   if (res?.code !== 0) {
     throw new Error(`bilibili API ${res?.code}: ${res?.message ?? "unknown error"}`)

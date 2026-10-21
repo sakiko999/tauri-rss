@@ -53,27 +53,47 @@ export function withLane<T>(lane: string, fn: () => Promise<T>): Promise<T> {
 
 // ── withRenderLease:interactive 的全局引用计数 ────────────────────────────────
 let renderLeases = 0
+/** 首个租约的 hidden→interactive 切换(后续租约必须等它落地才能开始)。 */
+let renderReady: Promise<void> | null = null
 
 /**
  * 持一个「真实渲染」租约执行 fn:租约数 0→1 时切 interactive,1→0 时切回 hidden。
- * 并行租约不反复切换(第二个租约进来时已是 interactive,无需动作)。
+ *
+ * 两层保护(审查修正,2026-10-22):
+ *   1. **租约计数在串行锁外**:重叠的租约不会把窗口反复 interactive/hidden 抖动
+ *      (每次 Rust 切换 ~350ms);只有 0→1 / 1→0 才切。
+ *   2. **fn 在 `browser:render` lane 上全局串行**:单窗口多 tab 下激活是排他的,
+ *      两个滚动 op 并发各自 activate 会互抢(后 activate 的赢,前者的 scroll
+ *      静默无效);且第二个租约若在首个 setMode 尚未落地时就跑 fn,窗口还是
+ *      hidden —— 滚动静默 0 条。所以 >1 的租约先 await 同一条 ready promise。
  * 首个租约切不过去会抛错(滚动会静默 0 条,必须失败而不是装成功);释放路径尽力而为。
  */
-export async function withRenderLease<T>(browser: BrowserBackend, fn: () => Promise<T>): Promise<T> {
+export function withRenderLease<T>(browser: BrowserBackend, fn: () => Promise<T>): Promise<T> {
   renderLeases++
-  if (renderLeases === 1) await browser.setMode?.("interactive")
-  try {
-    return await fn()
-  } finally {
-    renderLeases--
-    if (renderLeases === 0) {
-      try {
-        await browser.setMode?.("hidden")
-      } catch {
-        // 释放路径静默:切不回 hidden 只是多渲染开销,不能掩盖业务结果。
+  return (async () => {
+    try {
+      if (renderLeases === 1) {
+        // 包成 async IIFE:setMode 同步抛错也变成 rejected promise(计数在下方
+        // finally 归还,不会泄漏)。
+        renderReady = (async () => {
+          await browser.setMode?.("interactive")
+        })()
+      }
+      if (renderReady) await renderReady
+      // 串行执行:滚动/懒加载同一时刻只允许一个(激活互斥 + 渲染开销)。
+      return await withLane("browser:render", fn)
+    } finally {
+      renderLeases--
+      if (renderLeases === 0) {
+        try {
+          await browser.setMode?.("hidden")
+        } catch {
+          // 释放路径静默:切不回 hidden 只是多渲染开销,不能掩盖业务结果。
+        }
+        renderReady = null
       }
     }
-  }
+  })()
 }
 
 // ── browserGateFor:平台准入(governor.browserGate)按平台串行 ──────────────────
@@ -89,13 +109,74 @@ export async function browserGateFor(platform: string | undefined): Promise<void
   await withLane(`gate:${platform}`, () => Promise.resolve(globalThis.appHost?.net?.browserGate?.(platform)))
 }
 
-// ── withBrowserGlobal:浏览器进程级操作的全局互斥 ─────────────────────────────
+// ── 浏览器进程级互斥(读写锁):op 共享,global 独占 ──────────────────────────
+// ⚠️ 不能只给 global 一条 lane 键:不同 lane 键是**独立** promise 链,
+// `browser:global` 与 `op:*` 完全并发 —— 注释承诺的「与所有 lane 互斥」不成立
+// (审查发现:clearCookies 仍可与导航交错、resetProfile 仍可杀掉在抓的 Edge)。
+// 语义:op 是共享读者(彼此并发),global 是独占写者(等在途 op 全部退出,且阻塞新 op)。
+let activeOps = 0
+let globalBusy = false
+/** 写者等待数(写者优先:global 在排队时新 op 不得插队,否则独占可能被饿死)。 */
+let writerWaiting = 0
+let drainWaiters: Array<() => void> = []
+let globalWaiters: Array<() => void> = []
+
+async function acquireShared(): Promise<void> {
+  while (globalBusy || writerWaiting > 0) await new Promise<void>((r) => globalWaiters.push(r))
+  activeOps++
+}
+
+function releaseShared(): void {
+  activeOps--
+  if (activeOps === 0) {
+    const ws = drainWaiters
+    drainWaiters = []
+    for (const r of ws) r()
+  }
+}
+
+async function acquireExclusive(): Promise<void> {
+  writerWaiting++
+  try {
+    while (globalBusy || activeOps > 0) {
+      await new Promise<void>((r) => (activeOps > 0 ? drainWaiters : globalWaiters).push(r))
+    }
+    globalBusy = true
+  } finally {
+    writerWaiting--
+  }
+}
+
+function releaseExclusive(): void {
+  globalBusy = false
+  const ws = globalWaiters
+  globalWaiters = []
+  for (const r of ws) r()
+}
 
 /**
- * 浏览器进程级操作(clearCookies / resetProfile)的全局锁:与所有 lane 的导航/抓取
- * 互斥 —— 前者与导航交错会产生半删状态,后者直接杀掉正在抓取的 Edge。
- * lane 化前这些调用完全绕过浏览器锁(裸 invoke),是排队外的「野蛮操作」。
+ * 浏览器进程级操作(clearCookies / resetProfile)的**独占**锁:等待所有在途 op
+ * (所有 lane)退出,并阻塞其后新发起的 op —— 前者与导航交错会产生半删状态,
+ * 后者直接杀掉正在抓取的 Edge。lane 化前这些调用完全绕过浏览器锁(裸 invoke)。
  */
-export function withBrowserGlobal<T>(fn: () => Promise<T>): Promise<T> {
-  return withLane("browser:global", fn)
+export async function withBrowserGlobal<T>(fn: () => Promise<T>): Promise<T> {
+  await acquireExclusive()
+  try {
+    return await fn()
+  } finally {
+    releaseExclusive()
+  }
+}
+
+/**
+ * op 的共享通道(withBrowserOp 内部使用):等待任何在途 global 操作结束,
+ * 期间与其它 op 并发;释放时若有 global 在等,最后一个 op 退出会唤醒它。
+ */
+export async function withBrowserOpSlot<T>(fn: () => Promise<T>): Promise<T> {
+  await acquireShared()
+  try {
+    return await fn()
+  } finally {
+    releaseShared()
+  }
 }

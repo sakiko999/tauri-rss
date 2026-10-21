@@ -289,8 +289,10 @@ export interface XhsPassivePage<T> {
   /**
    * 缓冲缺失时的页面 SSR 兜底(仍属被动:导航 + 读页面 state,不构造请求)。
    * 可选;不提供则返回 null 交给 core 回退缓存。
+   * ⚠️ 必须用传入的 lane 句柄读(不是闭包外层的 appHost.browser —— 那是默认页,
+   * 而 capturePage 刚导航的是本 lane 的 tab;读默认页只会拿到 about:blank/旧页)。
    */
-  readPage?(): Promise<T>
+  readPage?(b: BrowserBackend): Promise<T>
 }
 
 /**
@@ -314,7 +316,7 @@ export async function fetchXhsPassivePage<T>(
     await ensureXhsPageReady(b, page.path, page.notLoggedInMsg)
     await assertXhsNotBlocked(b)
     const entry = passiveBuffer.getLatest("xhs", page.endpoint)
-    if (!entry) return page.readPage ? page.readPage() : null
+    if (!entry) return page.readPage ? page.readPage(b) : null
     return page.readState(extractInitialState(entry.body))
   })
 }
@@ -355,7 +357,7 @@ export async function resolveXhsItemDetail(opts: XhsDetailOptions): Promise<Item
 
   // 详情跑在专属 detail lane(`detail:xhs` 的独立 tab):打开详情不再把列表页
   // (explore/user lane 的 tab)导航走,xhs:user 的翻页 state 得以存活(§3.13)。
-  return withBrowserOp(browser, { lane: "detail:xhs" }, async (b) => {
+  return withBrowserOp(browser, { lane: "detail:xhs", platform: "xhs" }, async (b) => {
     // 页面内 fetch 需要同源;已在 xhs 域就不重复导航(专属 detail tab 常驻 xhs 域,
     // 这里基本是 no-op,首次 about:blank 才真导航)。
     await ensureXhsOrigin(b)

@@ -218,19 +218,30 @@ class TauriBrowserTab implements BrowserTab {
     return this.ensuring
   }
 
-  /** 本 tab 的 ws 端点(target 的 webSocketDebuggerUrl)。 */
+  /** 本 tab 的 ws 端点(target 的 webSocketDebuggerUrl)。target 丢失时自愈重建一次。 */
   private async openWs(): Promise<string> {
     await this.ensureTarget()
     const port = await this.getPort()
     // /json/list 里按 id 找本 target(拿最新 webSocketDebuggerUrl;重连安全)。
-    const res = await globalThis.appHost.http.request({
-      url: `http://127.0.0.1:${port}/json/list`,
-      method: "GET",
-      responseType: "text",
-      timeoutMs: 5_000,
-    })
-    const targets = JSON.parse(String(res.body)) as Array<{ id?: string; webSocketDebuggerUrl?: string }>
-    const t = targets.find((x) => x.id === this.targetId && x.webSocketDebuggerUrl)
+    const list = async () => {
+      const res = await globalThis.appHost.http.request({
+        url: `http://127.0.0.1:${port}/json/list`,
+        method: "GET",
+        responseType: "text",
+        timeoutMs: 5_000,
+      })
+      return JSON.parse(String(res.body)) as Array<{ id?: string; webSocketDebuggerUrl?: string }>
+    }
+    let targets = await list()
+    let t = targets.find((x) => x.id === this.targetId && x.webSocketDebuggerUrl)
+    if (!t?.webSocketDebuggerUrl) {
+      // target 随浏览器重启/profile 重置消失:清掉旧 id 重建一个(BrowserTab 契约
+      // 要求「可校验、可重建」,否则该 lane 会永久报 'target 已消失')。
+      this.targetId = null
+      await this.ensureTarget()
+      targets = await list()
+      t = targets.find((x) => x.id === this.targetId && x.webSocketDebuggerUrl)
+    }
     if (!t?.webSocketDebuggerUrl) throw new Error(`CDP: lane tab ${this.key} 的 target 已消失`)
     return t.webSocketDebuggerUrl
   }
@@ -269,7 +280,12 @@ class TauriBrowserTab implements BrowserTab {
     return out
   }
 
-  send(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<unknown> {
+  async send(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<unknown> {
+    // ⚠️ 必须惰性建连(与 backend.send 对齐):capturePage 的第一条命令就是
+    // send("Network.enable"),而 withBrowserOp 的 hidden 分支不会先 evaluate ——
+    // 缺这一行时新建的 lane tab 首条命令直接 "CDP not connected",被动渠道每次刷新
+    // 都回退缓存报错(审查发现,2026-10-22)。
+    await this.ensureConn()
     return this.channel.send(method, params, sessionId)
   }
 

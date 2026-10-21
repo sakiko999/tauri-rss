@@ -220,7 +220,7 @@ async function douyinBrowserScanLogin(
   return withScanLoginLock(
     browser,
     "interactive",
-    () => runDouyinBrowserScanLogin(browser, emitQr, opts),
+    (b) => runDouyinBrowserScanLogin(b, emitQr, opts),
     "douyin",
   )
 }

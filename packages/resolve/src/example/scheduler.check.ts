@@ -18,8 +18,9 @@ setPlatformCookieLookup(null)
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 /** 假 backend:记录 setMode 调用,tab(key) 产独立句柄并记录 activate/abort。 */
-function fakeBrowser() {
+function fakeBrowser(opts?: { modeDelayMs?: number }) {
   const modes: string[] = []
+  const modeResolvedAt: number[] = []
   const tabs = new Map<string, {
     activations: number
     aborted: string[]
@@ -34,6 +35,8 @@ function fakeBrowser() {
     },
     async setMode(mode) {
       modes.push(mode)
+      if (opts?.modeDelayMs) await sleep(opts.modeDelayMs)
+      modeResolvedAt.push(Date.now())
     },
     async close() {},
     tab(key: string) {
@@ -66,7 +69,7 @@ function fakeBrowser() {
       }
     },
   }
-  return { browser, modes, tabs }
+  return { browser, modes, modeResolvedAt, tabs }
 }
 
 // 1. hidden 下两 lane 并发:总耗时 ≈ 单次(而非串行两倍),且不触发 setMode。
@@ -104,14 +107,46 @@ function fakeBrowser() {
   assert.ok(tabs.has("list:a"), "宿主 tab(key) 按 lane 建句柄")
 }
 
-// 3. interactive 渲染租约:首个 interactive、并行租约不切换、最后释放才 hidden。
+// 3. interactive 渲染租约:首个 interactive、并行租约不反复切换、最后释放才 hidden;
+//    且两个滚动 op **串行**(单窗口激活互斥,后 activate 会抢前者的滚动)。
 {
   const { browser, modes } = fakeBrowser()
+  const order: string[] = []
   await Promise.all([
-    withBrowserOp(browser, { lane: "list:a", mode: "interactive" }, () => sleep(120)),
-    withBrowserOp(browser, { lane: "list:b", mode: "interactive" }, () => sleep(60)),
+    withBrowserOp(browser, { lane: "list:a", mode: "interactive" }, async () => {
+      order.push("a-start")
+      await sleep(120)
+      order.push("a-end")
+    }),
+    withBrowserOp(browser, { lane: "list:b", mode: "interactive" }, async () => {
+      order.push("b-start")
+      await sleep(10)
+      order.push("b-end")
+    }),
   ])
   assert.deepEqual(modes, ["interactive", "hidden"], `租约只该切换两次(得 ${JSON.stringify(modes)})`)
+  assert.deepEqual(order, ["a-start", "a-end", "b-start", "b-end"], `interactive 必须全局串行(得 ${order.join(",")})`)
+}
+
+// 3b. 第二个租约必须等首个 setMode(interactive) 落地后才开始滚动
+//     (否则窗口仍 hidden,scroll 静默 0 条)。
+{
+  const { browser, modeResolvedAt } = fakeBrowser({ modeDelayMs: 80 })
+  const fnStart: number[] = []
+  await Promise.all([
+    withBrowserOp(browser, { lane: "list:a", mode: "interactive" }, () => {
+      fnStart.push(Date.now())
+      return sleep(20)
+    }),
+    withBrowserOp(browser, { lane: "list:b", mode: "interactive" }, () => {
+      fnStart.push(Date.now())
+      return Promise.resolve()
+    }),
+  ])
+  assert.ok(
+    fnStart.every((t) => t >= (modeResolvedAt[0] ?? 0)),
+    `滚动不得早于 setMode(interactive) 落地(fnStart=${fnStart.join(",")}, modeAt=${modeResolvedAt.join(",")})`,
+  )
 }
 
 // 4. 租约异常路径必释放(后续租约仍能拿到 interactive)。
@@ -191,6 +226,36 @@ function fakeBrowser() {
     }),
   ])
   assert.deepEqual(order, ["g1-start", "g1-end", "g2-start"], "browser:global 必须互斥")
+}
+
+// 7b. withBrowserGlobal 与 op lane 是**读写锁**语义:global 等在途 op 退出,
+//     并阻塞其后新发起的 op(不同 lane 键并不天然互斥——审查发现的核心)。
+{
+  const { browser } = fakeBrowser()
+  const order: string[] = []
+  const opA = withBrowserOp(browser, { lane: "list:a" }, async () => {
+    order.push("opA-start")
+    await sleep(80)
+    order.push("opA-end")
+  })
+  await sleep(20) // 确保 opA 已在跑
+  const global = withBrowserGlobal(async () => {
+    order.push("global-start")
+    await sleep(20)
+    order.push("global-end")
+  })
+  const opB = withBrowserOp(browser, { lane: "list:b" }, async () => {
+    order.push("opB-start")
+  })
+  await Promise.all([opA, global, opB])
+  assert.ok(
+    order.indexOf("global-start") > order.indexOf("opA-end"),
+    `global 必须等在途 op 退出(${order.join(",")})`,
+  )
+  assert.ok(
+    order.indexOf("opB-start") > order.indexOf("global-end"),
+    `global 必须阻塞新 op(${order.join(",")})`,
+  )
 }
 
 // 8. withLane:前驱失败不传染,fn 异常原样抛出。

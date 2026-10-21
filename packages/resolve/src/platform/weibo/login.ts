@@ -87,7 +87,7 @@ export async function weiboScanLogin(
 ): Promise<LoginResult> {
   // 与 xhs 同构:专属 login lane(login:weibo);不传 platform —— 冷却期仍需允许用户
   // 重新扫码自救。
-  return withScanLoginLock(browser, "hidden", () => runWeiboScanLogin(browser, emitQr, opts), "weibo")
+  return withScanLoginLock(browser, "hidden", (b) => runWeiboScanLogin(b, emitQr, opts), "weibo")
 }
 
 async function runWeiboScanLogin(
