@@ -6,10 +6,11 @@
  *   2. POST youtubei/v1/player(ANDROID_VR client)→ playerResponse
  *   3. 解析 streamingData.formats/adaptiveFormats → 可播直链
  *
- * 策略:优先 ANDROID_VR client(Oculus Quest 3)的**渐进式 mp4(音视频合一)**——
- * 2026-08 起 ANDROID/IOS 标准 client 部分 IP 触发 poToken(LOGIN_REQUIRED),
- * ANDROID_VR 免 token 直链、直播自带 hlsManifestUrl。渐进式缺失时才考虑
- * 纯视频(DASH)或签名解密。若 VR 被拒(age/made-for-kids)fallback WEB。
+ * 策略:优先 **VISIONOS**(Apple Vision Pro;yt-dlp 2026-08 起的默认 client)——
+ * 免 POT、实测直链(avc1 带 initRange/indexRange、无 n/cipher)、直播自带 hlsManifestUrl。
+ * 失败再退 ANDROID_VR(Oculus Quest 3;退役中:2026-08-17 起 1.65.10 有全格式 403 记录),
+ * 最后 WEB(2026 起 SABR-only,基本接不住)。
+ * 2026-08 起 ANDROID/IOS 标准 client 部分 IP 触发 poToken(LOGIN_REQUIRED)。
  *
  * n 参数:HTML5 client 的 URL 带 `n=xxx`(节流混淆),不解 → 限速 50KB/s 或 403。
  * 本 client 在 resolve 后统一解 n(见 signature.ts 的 deobfuscateNParam)。
@@ -51,6 +52,27 @@ const IOS_CLIENT_VERSION = "21.03.2"
 const IOS_DEVICE_MODEL = "iPhone16,2"
 const IOS_UA_VERSION = "18_7_2"
 const IOS_UA = `com.google.ios.youtube/${IOS_CLIENT_VERSION}(${IOS_DEVICE_MODEL}; U; CPU iOS ${IOS_UA_VERSION} like Mac OS X; en)`
+
+/**
+ * VISIONOS(Apple Vision Pro)——**主力 client**(yt-dlp 2026-08 起的默认 client 之一)。
+ *
+ * 实测(2026-10-21,与 ANDROID_VR 同批对比 5 条视频):两者 status / 最高档完全一致
+ * (均 1080p),`VISIONOS` 多出 AV1/VP9 档(我们用不上),avc1 全带 initRange/indexRange、
+ * URL **无 `n` 参数、无 cipher**;直播返回 adaptive + `hlsManifestUrl`(iOS UA 取流实测 200)。
+ * yt-dlp 的 POT 政策表里没有该 client = 不需要 poToken。
+ *
+ * ⚠️ **机房 IP 上并不比 VR 强**:复测 VR 失败的那 6 条 VOD,`VISIONOS` 同样 6/6
+ * `LOGIN_REQUIRED`(只有极老牌的个别视频侥幸通过)——「机房 IP 救不了」是 IP 级结论,
+ * 换 client 无效。
+ *
+ * ⚠️ 设备字段(`deviceModel`/`osName`/`osVersion`)是判据的一部分,缺了会被上游改判
+ * playability(表现为「视频不可播」而不是报错)。
+ */
+export const VISIONOS_CLIENT_VERSION = "1.02"
+const VISIONOS_DEVICE_MODEL = "RealityDevice17,1"
+const VISIONOS_OS_VERSION = "26.5.23O471"
+const VISIONOS_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
 
 export interface PlayerFormat {
   itag: number
@@ -261,6 +283,41 @@ export async function getIosPlayerResponse(videoId: string, visitorData: string)
     `${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`,
     body,
     { "user-agent": IOS_UA, "X-Goog-Api-Format-Version": "2" },
+  )) as PlayerResponse
+  return res
+}
+
+/**
+ * VISIONOS player 请求体(导出供自检钉住形状:设备字段缺失会静默变成「不可播」)。
+ */
+export function visionosPlayerBody(videoId: string, visitorData: string, cpn = generateCpn()) {
+  return {
+    context: {
+      client: {
+        clientName: "VISIONOS",
+        clientVersion: VISIONOS_CLIENT_VERSION,
+        deviceMake: "Apple",
+        deviceModel: VISIONOS_DEVICE_MODEL,
+        osName: "visionOS",
+        osVersion: VISIONOS_OS_VERSION,
+        hl: "en",
+        gl: "US",
+        visitorData,
+      },
+    },
+    videoId,
+    cpn,
+    contentCheckOk: true,
+    racyCheckOk: true,
+  }
+}
+
+/** 请求 player API(VISIONOS client —— 免 POT 兜底,走 gapis + t/id 参数)。 */
+async function getVisionosPlayerResponse(videoId: string, visitorData: string): Promise<PlayerResponse> {
+  const res = (await postJson(
+    `${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`,
+    visionosPlayerBody(videoId, visitorData),
+    { "user-agent": VISIONOS_UA, "X-Goog-Api-Format-Version": "2" },
   )) as PlayerResponse
   return res
 }
@@ -598,15 +655,26 @@ export async function searchYouTubeLive(keyword: string): Promise<YoutubeLiveHit
 export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> {
   const visitorData = await getVisitorData()
 
-  // 1. ANDROID_VR client(免 poToken 直链,无签名,n 参数需解)。
-  let res: PlayerResponse
-  try {
-    res = await getAndroidPlayerResponse(videoId, visitorData)
-    checkPlayability(res, videoId)
-  } catch (e) {
-    // ANDROID_VR 失败(如 age-restricted / 地区 / made-for-kids)→ fallback WEB。
-    res = await getWebPlayerResponse(videoId, visitorData)
-    checkPlayability(res, videoId)
+  // 1. VISIONOS(主力,免 POT)→ 2. ANDROID_VR(退役中,仍可用)→ 3. WEB(最后兜底)。
+  // ⚠️ WEB 2026 起只给 SABR,`adaptiveFormats` 为空,放最后只是为了让错误信息更具体。
+  //    五条视频同批复测:VISIONOS 与 VR 的 status / 最高档完全一致,故按上游默认排 VISIONOS 先。
+  let lastErr: unknown
+  const attempt = async (fn: () => Promise<PlayerResponse>): Promise<PlayerResponse | null> => {
+    try {
+      const r = await fn()
+      checkPlayability(r, videoId)
+      return r
+    } catch (e) {
+      lastErr = e
+      return null
+    }
+  }
+  const res =
+    (await attempt(() => getVisionosPlayerResponse(videoId, visitorData))) ??
+    (await attempt(() => getAndroidPlayerResponse(videoId, visitorData))) ??
+    (await attempt(() => getWebPlayerResponse(videoId, visitorData)))
+  if (!res) {
+    throw lastErr instanceof Error ? lastErr : new Error(`YouTube 无法获取 playerResponse: ${videoId}`)
   }
 
   // 直播:ANDROID_VR 自带 hlsManifestUrl(实测确认)。若没有(部分直播形态),
