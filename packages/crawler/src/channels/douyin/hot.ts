@@ -7,10 +7,8 @@
  * 分页:**offset 游标制**(每页 COUNT 条,offset 递增),`isPageable` 探测 → fetchMore
  * 翻页(本页为空 = 没有更多)。
  */
-import type { Item, Live } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems, apiFetchMore } from "../factory.ts"
+import type { Live } from "@amoeba/xml"
+import { makeApiChannel } from "../factory.ts"
 import { now } from "@amoeba/resolve"
 import { douyinClient } from "@amoeba/resolve"
 import { douyinOnline } from "@amoeba/resolve"
@@ -18,25 +16,18 @@ import { douyinOnline } from "@amoeba/resolve"
 const LIVE = "https://live.douyin.com"
 const COUNT = 15
 
-export class DouyinLiveHotChannel implements RssChannel {
-  readonly key = "live:douyin:hot"
-  readonly name = "抖音直播热门"
-  readonly kind = "live" as const
-  readonly defaultInfo = {}
-  /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
-  getSource(info: SourceInfo): RssSource & Pageable {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 0), () => this.channelOptions(info)),
-      // offset 游标(首页 fetch 用 offset=0,翻页每页 COUNT 条递增;本页为空即止)。
-      fetchMore: apiFetchMore(
-        (offset) => this.fetchItems(info, offset),
-        () => this.channelOptions(info),
-        { first: COUNT, step: COUNT },
-      ),
-    }
-  }
-
-  private async fetchItems(_info: SourceInfo, offset: number): Promise<Item[]> {
+export const DouyinLiveHotChannel = makeApiChannel({
+  key: "live:douyin:hot",
+  name: "抖音直播热门",
+  kind: "live",
+  defaultInfo: {},
+  channelTitle: () => "抖音直播热门",
+  channelLink: LIVE,
+  // offset 游标(首页 offset=0,翻页每页 COUNT 条递增;本页为空即止)。
+  // 用 page 表达:offset = (page - 1) * COUNT。
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (_info, page) => {
+    const offset = (page - 1) * COUNT
     const base = `${LIVE}/webcast/web/partition/detail/room/v2/`
     const params = new URLSearchParams({
       aid: "6383",
@@ -86,9 +77,5 @@ export class DouyinLiveHotChannel implements RssChannel {
         online: douyinOnline(room),
       }
     })
-  }
-
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "抖音直播热门", channelLink: LIVE }
-  }
-}
+  },
+})

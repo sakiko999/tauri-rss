@@ -1,6 +1,9 @@
 /**
  * douyu 直播房间 channel —— HTTP + CryptoJS 签名(host.js)。
  *
+ * 不走 makeApiChannel:多房间聚合护栏(roomIds 逐房间 catch 隔离 + 全部失败即抛,
+ * 见 fetchItems),非「单端点 GET → 列表」同形。
+ *
  * 复刻 producer 的 DouyuSite.getRoomDetail:爬 `betard/{roomId}` 取房间信息,
  * `swf_api/homeH5Enc` 取签名 JS blob(crptext),用 host.js 执行
  * `CRYPTO_JS + crptext` 里的 `ub98484234(roomId, did, time)` 得到签名 body。

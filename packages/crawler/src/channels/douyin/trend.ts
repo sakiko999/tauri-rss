@@ -12,30 +12,23 @@
  * (kind:social)。两者不同,勿混。
  */
 import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchDouyinTrends, now } from "@amoeba/resolve"
 
-export class DouyinTrendChannel implements RssChannel {
-  readonly key = "douyin:trend"
-  readonly name = "抖音热点榜"
-  readonly kind = "social" as const
-  readonly defaultInfo: SourceInfo = {}
-
-  getSource(_info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()),
-    }
-  }
-
-  private async fetchItems(): Promise<Item[]> {
+export const DouyinTrendChannel = makeApiChannel({
+  key: "douyin:trend",
+  name: "抖音热点榜",
+  kind: "social",
+  defaultInfo: {},
+  channelTitle: () => "抖音热点榜",
+  channelLink: "https://www.douyin.com/hot",
+  fetchPage: async () => {
     const trends = await fetchDouyinTrends()
     const t = now()
     return trends.map((tr): Item => ({
       // id 用词而非下标(刷新后榜位会变,下标作 id 会让同一词反复进库)。
       id: `dy-trend-${tr.word}`,
-      sourceId: this.key,
+      sourceId: "douyin:trend",
       kind: "social",
       title: tr.word,
       url: `https://www.douyin.com/search/${encodeURIComponent(tr.word)}`,
@@ -44,9 +37,5 @@ export class DouyinTrendChannel implements RssChannel {
       fetchedAt: t,
       raw: { word: tr.word, hotValue: tr.hotValue, position: tr.position },
     }))
-  }
-
-  private channelOptions(): SerializeOptions {
-    return { channelTitle: "抖音热点榜", channelLink: "https://www.douyin.com/hot" }
-  }
-}
+  },
+})

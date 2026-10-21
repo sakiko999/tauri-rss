@@ -10,36 +10,22 @@
  * 预览也不需要精确在线数,`online` 取搜索结果里的 watching 数)。
  */
 import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { now, searchYouTubeLive } from "@amoeba/resolve"
 import { youtubeLiveHitToLive } from "./live-shelf.ts"
 
-export class YoutubeLiveSearchChannel implements RssChannel {
-  readonly key = "youtube:live-search"
-  readonly name = "YouTube 直播搜索"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "keyword", label: "搜索关键词", required: true }]
-
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+export const YoutubeLiveSearchChannel = makeApiChannel({
+  key: "youtube:live-search",
+  name: "YouTube 直播搜索",
+  kind: "live",
+  sourceInfoTpl: [{ key: "keyword", label: "搜索关键词", required: true }],
+  channelTitle: (info) => `YouTube 直播搜索 ${info.keyword ?? ""}`,
+  channelLink: "https://www.youtube.com/",
+  fetchPage: async (info): Promise<Item[]> => {
     const kw = String(info.keyword ?? "").trim()
     if (!kw) throw new Error("youtube:live-search 需要 keyword 参数")
     const hits = await searchYouTubeLive(kw)
     const t = now()
     return hits.map((h) => youtubeLiveHitToLive("youtube:live-search", h, t))
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return {
-      channelTitle: `YouTube 直播搜索 ${info.keyword ?? ""}`,
-      channelLink: "https://www.youtube.com/",
-    }
-  }
-}
+  },
+})

@@ -8,9 +8,7 @@
  * 只填第一个参数会把顶层分区当成子分区(1),上游取不到数据。
  */
 import type { Category, Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchDouyinCategories, now, type DouyinCategory } from "@amoeba/resolve"
 
 /** 分区树 → 目录条目(纯函数,便于自检)。 */
@@ -56,21 +54,12 @@ function categoryItem(
   }
 }
 
-export class DouyinCategoriesChannel implements RssChannel {
-  readonly key = "live:douyin:categories"
-  readonly name = "抖音分区列表"
-  readonly kind = "category" as const
-  readonly defaultInfo = {}
-
-  getSource(): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()) }
-  }
-
-  private async fetchItems(): Promise<Item[]> {
-    return douyinCategoryItems("live:douyin:categories", now(), await fetchDouyinCategories())
-  }
-
-  private channelOptions(): SerializeOptions {
-    return { channelTitle: "抖音分区列表", channelLink: "https://live.douyin.com" }
-  }
-}
+export const DouyinCategoriesChannel = makeApiChannel({
+  key: "live:douyin:categories",
+  name: "抖音分区列表",
+  kind: "category",
+  defaultInfo: {},
+  channelTitle: () => "抖音分区列表",
+  channelLink: "https://live.douyin.com",
+  fetchPage: async () => douyinCategoryItems("live:douyin:categories", now(), await fetchDouyinCategories()),
+})

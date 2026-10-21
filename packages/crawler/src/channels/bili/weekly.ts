@@ -1,29 +1,22 @@
 /**
  * bili:weekly —— B站每周必看(video channel)。
  *
- * app 接口拿 series 列表 + 期内容。implements VideoPlayable + DanmakuPlayable。
+ * app 接口拿 series 列表 + 期内容。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
+import { biliClient, now } from "@amoeba/resolve"
+import { makeApiChannel } from "../factory.ts"
 import { ugc } from "./video-common.ts"
 
-export class BiliWeeklyChannel implements RssChannel {
-  readonly key = "bili:weekly"
-  readonly name = "B站每周必看"
-  readonly kind = "video" as const
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-  private async fetchItems(_info: SourceInfo): Promise<Item[]> {
+export const BiliWeeklyChannel = makeApiChannel({
+  key: "bili:weekly",
+  name: "B站每周必看",
+  kind: "video",
+  channelTitle: () => "B站每周必看",
+  channelLink: "https://www.bilibili.com/h5/weekly-recommend",
+  fetchPage: async (info) => {
     const status = await biliClient.getJson<{ data?: Array<{ number: number; name: string }> }>(
       "https://app.bilibili.com/x/v2/show/popular/selected/series?type=weekly_selected",
-      { referer: "https://www.bilibili.com/h5/weekly-recommend" },
+      { referer: "https://www.bilibili.com/h5/weekly-recommend", cookie: info.cookie },
     )
     // app 版接口的 data 直接是 series 数组(不是 data.data 两层)。
     // ⚠️ 取**期号最大**的一期而非 series[0]:接口顺序无契约,直接取首个可能在接口
@@ -33,7 +26,10 @@ export class BiliWeeklyChannel implements RssChannel {
     if (!head) throw new Error("bilibili weekly: no series")
     const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `https://app.bilibili.com/x/v2/show/popular/selected?type=weekly_selected&number=${head.number}`,
-      { referer: `https://www.bilibili.com/h5/weekly-recommend?num=${head.number}&navhide=1` },
+      {
+        referer: `https://www.bilibili.com/h5/weekly-recommend?num=${head.number}&navhide=1`,
+        cookie: info.cookie,
+      },
     )
     const list = data?.data?.list ?? []
     const t = now()
@@ -49,8 +45,5 @@ export class BiliWeeklyChannel implements RssChannel {
         forceBvid: head.number > 60,
       }),
     )
-  }
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "B站每周必看", channelLink: "https://www.bilibili.com/h5/weekly-recommend" }
-  }
-}
+  },
+})

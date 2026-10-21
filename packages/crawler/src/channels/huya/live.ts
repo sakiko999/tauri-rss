@@ -43,6 +43,10 @@ async function fetchHuyaRoom(roomId: string): Promise<Live> {
   }
 }
 
+/**
+ * 保留类实现(不走 makeApiChannel):多房间聚合 —— roomIds 解析 + 并发抓取,单房间
+ * 失败 warn 后跳过,全部失败必须抛错(不能静默清空内容)。工厂只承接单端点同形渠道。
+ */
 export class HuyaLiveChannel implements RssChannel {
   readonly key = "live:huya"
   readonly name = "虎牙直播房间"

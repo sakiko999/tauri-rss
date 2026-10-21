@@ -20,35 +20,23 @@
  * **上游命中 ∪ 本地分区树 title 匹配**（见 `searchDouyinRooms`），无需登录、无需浏览器。
  * 残留：分区树只到「大类」粒度，`美食`（属「生活」）这类三级词仍返空。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { searchDouyinRooms } from "@amoeba/resolve"
 
 const PAGE_SIZE = 20
 
-export class DouyinPartitionSearchChannel implements RssChannel {
-  readonly key = "live:douyin:search"
-  readonly name = "抖音分区搜索"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [
+export const DouyinPartitionSearchChannel = makeApiChannel({
+  key: "live:douyin:search",
+  name: "抖音分区搜索",
+  kind: "live",
+  sourceInfoTpl: [
     { key: "keyword", label: "分区关键词", required: true, placeholder: "如 原神 / 舞蹈 / 音乐 / 游戏" },
-  ]
-
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+  ],
+  channelTitle: (info) => `抖音分区搜索 ${info.keyword ?? ""}`,
+  channelLink: "https://live.douyin.com",
+  fetchPage: async (info) => {
     const kw = String(info.keyword ?? "").trim()
     if (!kw) throw new Error("douyin:search 需要分区关键词")
     return searchDouyinRooms(kw, 1, PAGE_SIZE)
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `抖音分区搜索 ${info.keyword ?? ""}`, channelLink: "https://live.douyin.com" }
-  }
-}
+  },
+})

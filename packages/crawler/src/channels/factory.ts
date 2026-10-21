@@ -11,6 +11,7 @@
 import type { Item, SerializeOptions } from "@amoeba/xml"
 import { serializeFeed } from "@amoeba/xml"
 import { log } from "@amoeba/resolve"
+import type { Kind, Loginable, Pageable, RssChannel, RssSource, SourceInfo, SourceInfoField } from "../index.ts"
 
 /** serializeFeed + 可选 total(翻页渠道真实总数,经 tpl:total 带出)。apiFetch / fetchMore 共用。 */
 export function serializeWithTotal(items: Item[], opts: SerializeOptions, total?: number): string {
@@ -55,6 +56,69 @@ export function apiFetchItems(
   channelOptions: () => SerializeOptions,
 ): () => Promise<string> {
   return apiFetch(async () => ({ items: await fetchItems() }), channelOptions)
+}
+
+/**
+ * 「单端点 GET → 列表 → 映射」同形渠道的声明式规格。
+ * getSource 接线(fetch / fetchMore)与 channelOptions 样板由 makeApiChannel 收敛,
+ * 渠道文件只剩 key/name/kind/tpl + fetchPage 纯映射(cookie 等凭据在 fetchPage 闭包
+ * 里从 info 取一次,不再散落)。
+ */
+export interface ApiChannelSpec {
+  key: string
+  name: string
+  kind: Kind
+  /** 实例化参数表单(供 UI);无参渠道不声明。 */
+  sourceInfoTpl?: SourceInfoField[]
+  /** 无需用户输入即可订阅的默认参数;无参渠道不声明。 */
+  defaultInfo?: SourceInfo
+  /** 平台级扫码登录(popular 等 Loginable 渠道);结构兼容,isLoginable 据此探测。 */
+  scanLogin?: Loginable["scanLogin"]
+  /** 频道标题与链接(链接可为常量或按 info 生成)。 */
+  channelTitle: (info: SourceInfo) => string
+  channelLink: string | ((info: SourceInfo) => string)
+  /** 取第 page 页条目(页码从 1 起)。过滤空页的渠道返回 `{ items, hasMore }`(见下)。 */
+  fetchPage: (info: SourceInfo, page: number) => Promise<Item[] | { items: Item[]; hasMore?: boolean }>
+  /** 数值翻页(省略 = 单页无翻页)。first:首页之后的起始页;step:页步进。 */
+  pageable?: { first: number; step: number }
+}
+
+/**
+ * 声明式 api channel 装配。15+ 渠道曾各自手写同一套
+ * `getSource(info){ apiFetchItems(...); apiFetchMore(...) }` + `channelOptions`
+ * 样板,凭据传递靠每个调用点「记得」(bili:user_video / favlist / douyinCookie
+ * 三次漏传案底)——接线收敛到这一处后,渠道差异只剩 fetchPage 映射。
+ * 有真差异的渠道(多房间聚合、动态结构映射、搜索候选、输入→id 联网 memo)
+ * 保留类实现;xhs 的 base/shared 是另一极(浏览器策略层),不适用本工厂。
+ */
+export function makeApiChannel(spec: ApiChannelSpec): RssChannel {
+  const channelOptions = (info: SourceInfo): SerializeOptions => ({
+    channelTitle: spec.channelTitle(info),
+    channelLink: typeof spec.channelLink === "string" ? spec.channelLink : spec.channelLink(info),
+  })
+  const source = (info: SourceInfo): RssSource & Partial<Pageable> => {
+    // fetchPage 的联合返回(Item[] | {items,hasMore})归一到 FetchResult(apiFetch 的形状)。
+    const fetchResult = async () => {
+      const r = await spec.fetchPage(info, 1)
+      return Array.isArray(r) ? { items: r } : r
+    }
+    const fetch = apiFetch(fetchResult, () => channelOptions(info))
+    if (!spec.pageable) return { fetch }
+    return {
+      fetch,
+      fetchMore: apiFetchMore((page) => spec.fetchPage(info, page), () => channelOptions(info), spec.pageable),
+    }
+  }
+  // scanLogin 挂渠道级(isLoginable 按 "scanLogin" in c 探测);其余字段逐 spec 透传。
+  return {
+    key: spec.key,
+    name: spec.name,
+    kind: spec.kind,
+    ...(spec.sourceInfoTpl ? { sourceInfoTpl: spec.sourceInfoTpl } : {}),
+    ...(spec.defaultInfo ? { defaultInfo: spec.defaultInfo } : {}),
+    getSource: source,
+    ...(spec.scanLogin ? { scanLogin: spec.scanLogin } : {}),
+  } as RssChannel
 }
 
 /**

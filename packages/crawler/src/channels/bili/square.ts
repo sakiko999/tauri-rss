@@ -1,31 +1,29 @@
 /**
  * bili:square —— bilibili 热搜(article channel)。
  *
- * wbi 签名(signWeb)→ search/square 热搜榜。零登录可用。
+ * wbi 签名(signWeb)→ search/square 热搜榜。零登录可用;登录 cookie 经
+ * credentials provider 兜底(签名与请求同 cookie,见 bili client)。
  */
 import type { Article, Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
+import { biliClient, now } from "@amoeba/resolve"
+import { makeApiChannel } from "../factory.ts"
 import { API } from "./video-common.ts"
 
-export class BiliSquareChannel implements RssChannel {
-  readonly key = "bili:square"
-  readonly name = "B站热搜"
-  readonly kind = "article" as const
-  getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
-  }
-  private async fetchItems(_info: SourceInfo): Promise<Item[]> {
-    const signed = await biliClient.signWeb("limit=50&platform=web")
+export const BiliSquareChannel = makeApiChannel({
+  key: "bili:square",
+  name: "B站热搜",
+  kind: "article",
+  channelTitle: () => "B站热搜",
+  channelLink: "https://www.bilibili.com/",
+  fetchPage: async (info) => {
+    const signed = await biliClient.signWeb("limit=50&platform=web", info.cookie)
     const data = await biliClient.getJson<{ data?: { trending?: { list?: Array<Record<string, unknown>> } } }>(
       `${API}/x/web-interface/wbi/search/square?${signed}`,
+      { cookie: info.cookie },
     )
     const list = data?.data?.trending?.list ?? []
     const t = now()
-    return list.map((raw) => {
+    return list.map((raw): Item => {
       const keyword = String(raw.keyword ?? "")
       const link =
         String(raw.link ?? raw.goto ?? "") ||
@@ -45,8 +43,5 @@ export class BiliSquareChannel implements RssChannel {
         raw,
       } satisfies Article
     })
-  }
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "B站热搜", channelLink: "https://www.bilibili.com/" }
-  }
-}
+  },
+})

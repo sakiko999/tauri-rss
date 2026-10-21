@@ -8,32 +8,27 @@
  * 下游订阅走 `youtube` 渠道(channelId 参数):角色同 `bili:search` 之于 `bili:live`,
  * 只作「搜索添加」的取数源。
  */
-import type { Item, Video } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import type { Video } from "@amoeba/xml"
+import { makeApiChannel } from "../factory.ts"
 import { now, searchYouTubeChannels } from "@amoeba/resolve"
 
-export class YoutubeUserChannel implements RssChannel {
-  readonly key = "youtube:user"
-  readonly name = "YouTube 搜频道"
-  readonly kind = "video" as const
-  readonly sourceInfoTpl = [
+export const YoutubeUserChannel = makeApiChannel({
+  key: "youtube:user",
+  name: "YouTube 搜频道",
+  kind: "video",
+  sourceInfoTpl: [
     { key: "keyword", label: "频道关键词", placeholder: "如:MKBHD", required: true },
-  ]
-
-  getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+  ],
+  channelTitle: (info) => `YouTube 搜频道 ${info.keyword ?? ""}`,
+  channelLink: "https://www.youtube.com/",
+  fetchPage: async (info) => {
     const kw = String(info.keyword ?? "").trim()
     if (!kw) throw new Error("youtube:user 需要 keyword 参数")
     const channels = await searchYouTubeChannels(kw)
     const t = now()
     return channels.map((c): Video => ({
       id: `ch-${c.channelId}`,
-      sourceId: this.key,
+      sourceId: "youtube:user",
       kind: "video",
       title: c.title,
       url: `https://www.youtube.com/channel/${c.channelId}`,
@@ -42,12 +37,5 @@ export class YoutubeUserChannel implements RssChannel {
       summary: [c.subsText, c.videoCountText].filter(Boolean).join(" · ") || undefined,
       fetchedAt: t,
     }))
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return {
-      channelTitle: `YouTube 搜频道 ${info.keyword ?? ""}`,
-      channelLink: "https://www.youtube.com/",
-    }
-  }
-}
+  },
+})

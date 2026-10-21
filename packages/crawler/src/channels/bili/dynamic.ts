@@ -7,7 +7,7 @@
  *     返回 `data.items[]`,每条的 `modules.module_author.mid === host_mid` 即目标 UP 主本人
  *     (实测半佛仙人 uid=37883317 → 12 条全属本人,has_more + offset 翻页)。
  *   - 需 Referer(`space.bilibili.com/{uid}/`) + Cookie(SESSDATA)——未登录返回
- *     `code: -101`。core 层 `DEFAULT_BILIBILI_COOKIE` 经 info.cookie 注入。
+ *     `code: -101`。settings 登录态经 sourceInfoFor / credentials provider 注入。
  *
  * 动态类型(实测):
  *   - DYNAMIC_TYPE_FORWARD(转发):module_dynamic.desc.text + orig(被转内容)

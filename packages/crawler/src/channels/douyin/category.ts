@@ -8,41 +8,28 @@
  * type=4,子分区(射击游戏/竞技游戏…)type=1。传错取不到数据。分区树见
  * `resolve/platform/douyin/discover.ts`(`fetchDouyinCategories`)。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems, apiFetchMore } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchDouyinPartitionRooms } from "@amoeba/resolve"
 
 const COUNT = 15
 
-export class DouyinCategoryChannel implements RssChannel {
-  readonly key = "live:douyin:category"
-  readonly name = "抖音分区直播"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [
+export const DouyinCategoryChannel = makeApiChannel({
+  key: "live:douyin:category",
+  name: "抖音分区直播",
+  kind: "live",
+  sourceInfoTpl: [
     { key: "partition", label: "分区 ID(如 1=射击游戏、101=聊天)", required: true },
     { key: "partitionType", label: "分区类型(顶层 4 / 子分区 1)", required: true, placeholder: "1" },
-  ]
-
-  getSource(info: SourceInfo): RssSource & Pageable {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 0), () => this.channelOptions(info)),
-      fetchMore: apiFetchMore((offset) => this.fetchItems(info, offset), () => this.channelOptions(info), {
-        first: COUNT,
-        step: COUNT,
-      }),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo, offset: number): Promise<Item[]> {
+  ],
+  channelTitle: (info) => `抖音分区直播 ${info.partition ?? ""}`,
+  channelLink: "https://live.douyin.com",
+  // 上游是 offset 游标(首页 offset=0,翻页每页 COUNT 条递增);这里用 page 表达:
+  // offset = (page - 1) * COUNT。本页为空即止。
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (info, page) => {
     const partition = String(info.partition ?? "").trim()
     const partitionType = String(info.partitionType ?? "1").trim()
     if (!partition) throw new Error("douyin:category 需要 partition 参数")
-    return fetchDouyinPartitionRooms(partition, partitionType, offset, COUNT, "live:douyin:category")
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `抖音分区直播 ${info.partition ?? ""}`, channelLink: "https://live.douyin.com" }
-  }
-}
+    return fetchDouyinPartitionRooms(partition, partitionType, (page - 1) * COUNT, COUNT, "live:douyin:category")
+  },
+})

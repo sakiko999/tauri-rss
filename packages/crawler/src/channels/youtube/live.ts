@@ -10,26 +10,19 @@
  * 留未来增强)。播放走懒解析:resolveLivePlay(roomId=videoId)→ resolveYoutubeStreams
  * (iOS client hlsManifestUrl,失败降级 web 页)。
  */
-import type { Item, Live } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import type { Live } from "@amoeba/xml"
+import { makeApiChannel } from "../factory.ts"
 import { now, getYoutubeLiveMeta } from "@amoeba/resolve"
 
-export class YoutubeLiveChannel implements RssChannel {
-  readonly key = "youtube:live"
-  readonly name = "YouTube 直播"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "videoId", label: "直播 ID", required: true }]
-
-  // 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→watch?v=)。
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+// 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→watch?v=)。
+export const YoutubeLiveChannel = makeApiChannel({
+  key: "youtube:live",
+  name: "YouTube 直播",
+  kind: "live",
+  sourceInfoTpl: [{ key: "videoId", label: "直播 ID", required: true }],
+  channelTitle: (info) => `YouTube 直播 ${info.videoId ?? ""}`,
+  channelLink: (info) => `https://www.youtube.com/watch?v=${info.videoId ?? ""}`,
+  fetchPage: async (info) => {
     const videoId = info.videoId ?? ""
     if (!videoId) throw new Error("youtube:live 需要 videoId")
     const t = now()
@@ -54,9 +47,5 @@ export class YoutubeLiveChannel implements RssChannel {
       online: meta?.online,
     }
     return [live]
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `YouTube 直播 ${info.videoId ?? ""}`, channelLink: `https://www.youtube.com/watch?v=${info.videoId ?? ""}` }
-  }
-}
+  },
+})

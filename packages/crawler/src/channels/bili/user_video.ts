@@ -1,32 +1,27 @@
 /**
  * bili:user_video —— bilibili UP 主投稿(video channel)。
  *
- * wbi 签名 `space/wbi/arc/search`(需 buvid)。implements VideoPlayable + DanmakuPlayable。
+ * wbi 签名 `space/wbi/arc/search`(space 系 WAF 要求 dm_* 指纹,走 signSpace)。
+ *
+ * ⚠️ 必须带登录 cookie:早先这里漏传 info.cookie,登录用户也永远匿名,space 接口
+ * 对匿名请求间歇 412/-352(2026-10-21 修)。cookie 从 info 显式取(provider 是
+ * client 兜底,显式传让 CLI kv 覆盖可达)。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
+import { biliClient, now } from "@amoeba/resolve"
+import { makeApiChannel } from "../factory.ts"
 import { API, ugc } from "./video-common.ts"
 
-export class BiliUserVideoChannel implements RssChannel {
-  readonly key = "bili:user_video"
-  readonly name = "B站 UP 主投稿"
-  readonly kind = "video" as const
-  readonly sourceInfoTpl = [{ key: "uid", label: "UP 主 uid", required: true }]
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+export const BiliUserVideoChannel = makeApiChannel({
+  key: "bili:user_video",
+  name: "B站 UP 主投稿",
+  kind: "video",
+  sourceInfoTpl: [{ key: "uid", label: "UP 主 uid", required: true }],
+  channelTitle: (info) => `B站 UP 主 ${info.uid ?? ""}`,
+  channelLink: (info) => `https://space.bilibili.com/${info.uid ?? ""}`,
+  fetchPage: async (info) => {
     const uid = info.uid ?? ""
     if (!uid) throw new Error("bili:user_video 需要 uid")
-    // ⚠️ 必须带订阅/平台 cookie:早先这里漏传 `info.cookie`,登录用户也永远走匿名,
-    // space 接口对匿名请求会间歇 412/-352(桌面设了 cookie 也不生效)。
-    const cookie = (info.cookie as string) || undefined
+    const cookie = info.cookie || undefined
     const signed = await biliClient.signSpace(
       `mid=${uid}&ps=30&pn=1&platform=web&order=pubdate&keyword=&tid=0&web_location=1550101`,
       cookie,
@@ -48,9 +43,5 @@ export class BiliUserVideoChannel implements RssChannel {
         owner: v.author ? { name: String(v.author) } : undefined,
       }),
     )
-  }
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    const uid = info.uid ?? ""
-    return { channelTitle: `B站 UP 主 ${uid}`, channelLink: `https://space.bilibili.com/${uid}` }
-  }
-}
+  },
+})

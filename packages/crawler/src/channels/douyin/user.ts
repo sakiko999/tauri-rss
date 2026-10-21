@@ -24,6 +24,10 @@ import { apiFetchItems } from "../factory.ts"
 import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
 import { douyinLiveItem } from "./live.ts"
 
+/**
+ * 保留类实现(不走 makeApiChannel):输入(主页链接 / sec_uid)→ web_rid 的联网解析,
+ * 再二次请求 enter API 取房间 —— 不是「单端点 GET → 列表 → 映射」的同形面。
+ */
 export class DouyinUserLiveChannel implements RssChannel {
   readonly key = "live:douyin:user"
   readonly name = "抖音用户直播间"

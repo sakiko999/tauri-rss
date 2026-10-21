@@ -9,22 +9,17 @@
  * ⚠️ `games(first)` 匿名可用,实测 30 个分类(slug/name/观看数/封面)。
  */
 import type { Category, Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchTwitchTopCategories, now } from "@amoeba/resolve"
 
-export class TwitchCategoriesChannel implements RssChannel {
-  readonly key = "twitch:categories"
-  readonly name = "Twitch 分区列表"
-  readonly kind = "category" as const
-  readonly defaultInfo = {}
-
-  getSource(): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()) }
-  }
-
-  private async fetchItems(): Promise<Item[]> {
+export const TwitchCategoriesChannel = makeApiChannel({
+  key: "twitch:categories",
+  name: "Twitch 分区列表",
+  kind: "category",
+  defaultInfo: {},
+  channelTitle: () => "Twitch 分区列表",
+  channelLink: "https://www.twitch.tv/directory",
+  fetchPage: async (): Promise<Item[]> => {
     const games = await fetchTwitchTopCategories(30)
     const t = now()
     return games.map(
@@ -41,9 +36,5 @@ export class TwitchCategoriesChannel implements RssChannel {
         categoryInfo: { category: g.slug },
       }),
     )
-  }
-
-  private channelOptions(): SerializeOptions {
-    return { channelTitle: "Twitch 分区列表", channelLink: "https://www.twitch.tv/directory" }
-  }
-}
+  },
+})

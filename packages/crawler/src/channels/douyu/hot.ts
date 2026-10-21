@@ -8,30 +8,23 @@
  * 能力:对外是独立 channel(无参,热门发现);内部**委托同平台 DouyuLiveChannel**
  * 的 resolveLivePlay/getDanmaku(hot 是「特殊的 live channel」——外部区分开,机制复用)。
  */
-import type { Item, Live } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems, apiFetchMore } from "../factory.ts"
+import type { Live } from "@amoeba/xml"
+import { makeApiChannel } from "../factory.ts"
 import { httpJson, now, parseCount } from "@amoeba/resolve"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 
-export class DouyuLiveHotChannel implements RssChannel {
-  readonly key = "live:douyu:hot"
-  readonly name = "斗鱼直播热门"
-  readonly kind = "live" as const
-  readonly defaultInfo = {}
-  /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
-  getSource(info: SourceInfo): RssSource & Pageable {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
-      // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
-      fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), { first: 2, step: 1 }),
-    }
-  }
-
-  private async fetchItems(_info: SourceInfo, page: number): Promise<Item[]> {
+export const DouyuLiveHotChannel = makeApiChannel({
+  key: "live:douyu:hot",
+  name: "斗鱼直播热门",
+  kind: "live",
+  defaultInfo: {},
+  channelTitle: () => "斗鱼直播热门",
+  channelLink: "https://www.douyu.com/",
+  // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (_info, page) => {
     const res = await httpJson<{ data?: { rl?: Array<Record<string, any>> } }>(
       `https://www.douyu.com/japi/weblist/apinc/allpage/6/${page}`,
       { "user-agent": UA, referer: "https://www.douyu.com/" },
@@ -58,9 +51,5 @@ export class DouyuLiveHotChannel implements RssChannel {
           online: parseCount(item.ol),
         }
       })
-  }
-
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "斗鱼直播热门", channelLink: "https://www.douyu.com/" }
-  }
-}
+  },
+})

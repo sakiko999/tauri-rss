@@ -9,33 +9,27 @@
  * ⚠️ 能力抽离:只输出 Live item 基础信息(与 rsshub 一致)。流/弹幕解析统一走
  * crawler/resolver(按 item.url→live.bilibili.com/{roomId} 路由)。翻页(Pageable)保留。
  */
-import type { Item, Live } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems, apiFetchMore } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
+import type { Live } from "@amoeba/xml"
+import { biliClient, now } from "@amoeba/resolve"
+import { makeApiChannel } from "../factory.ts"
 
 const API_LIVE = "https://api.live.bilibili.com"
 const PAGE_SIZE = 30
 
-export class BiliLiveHotChannel implements RssChannel {
-  readonly key = "bili:live:hot"
-  readonly name = "B站直播热门"
-  readonly kind = "live" as const
-  readonly defaultInfo = {}
-  /** 纯输出 + 翻页;流/弹幕走 crawler/resolver。 */
-  getSource(info: SourceInfo): RssSource & Pageable {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
-      // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
-      fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), { first: 2, step: 1 }),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo, page: number): Promise<Item[]> {
+export const BiliLiveHotChannel = makeApiChannel({
+  key: "bili:live:hot",
+  name: "B站直播热门",
+  kind: "live",
+  channelTitle: () => "B站直播热门",
+  channelLink: "https://live.bilibili.com/",
+  // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (info, page) => {
     const base = `${API_LIVE}/xlive/web-interface/v1/second/getListByArea`
-    const signed = await biliClient.signWeb(`platform=web&sort=online&page_size=${PAGE_SIZE}&page=${page}`, info.cookie)
+    const signed = await biliClient.signWeb(
+      `platform=web&sort=online&page_size=${PAGE_SIZE}&page=${page}`,
+      info.cookie,
+    )
     const res = await biliClient.getJson<{ data?: { list?: Array<Record<string, any>> } }>(`${base}?${signed}`, {
       referer: "https://live.bilibili.com/",
       // ⚠️ 必须带 buvid3(匿名也可):getListByArea 对**无 buvid 的请求**直接返回
@@ -63,9 +57,5 @@ export class BiliLiveHotChannel implements RssChannel {
         online: Number(item.online ?? 0),
       }
     })
-  }
-
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "B站直播热门", channelLink: "https://live.bilibili.com/" }
-  }
-}
+  },
+})

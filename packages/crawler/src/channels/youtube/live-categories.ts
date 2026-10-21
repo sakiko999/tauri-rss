@@ -9,22 +9,17 @@
  * 被 LIVE badge 过滤成空栏目的(Recent/Upcoming)也不列入。
  */
 import type { Category, Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
 
-export class YoutubeLiveCategoriesChannel implements RssChannel {
-  readonly key = "youtube:live-categories"
-  readonly name = "YouTube 直播栏目"
-  readonly kind = "category" as const
-  readonly defaultInfo = {}
-
-  getSource(): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()) }
-  }
-
-  private async fetchItems(): Promise<Item[]> {
+export const YoutubeLiveCategoriesChannel = makeApiChannel({
+  key: "youtube:live-categories",
+  name: "YouTube 直播栏目",
+  kind: "category",
+  defaultInfo: {},
+  channelTitle: () => "YouTube 直播栏目",
+  channelLink: "https://www.youtube.com/live",
+  fetchPage: async (): Promise<Item[]> => {
     const shelves = await fetchYoutubeLiveShelves()
     const t = now()
     return shelves
@@ -43,9 +38,5 @@ export class YoutubeLiveCategoriesChannel implements RssChannel {
           categoryInfo: { category: s.slug },
         }),
       )
-  }
-
-  private channelOptions(): SerializeOptions {
-    return { channelTitle: "YouTube 直播栏目", channelLink: "https://www.youtube.com/live" }
-  }
-}
+  },
+})

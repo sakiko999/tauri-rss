@@ -9,27 +9,20 @@
  * `routes/bilibili/bilibili-recommend.ts`),2026-10-18 收编进 crawler,
  * 因此删除了 `rsshub:bili:precious` 具名渠道。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
+import { biliClient, now } from "@amoeba/resolve"
+import { makeApiChannel } from "../factory.ts"
 import { API, ugc } from "./video-common.ts"
 
-export class BiliPreciousChannel implements RssChannel {
-  readonly key = "bili:precious"
-  readonly name = "B站入站必刷"
-  readonly kind = "video" as const
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-  private async fetchItems(_info: SourceInfo): Promise<Item[]> {
+export const BiliPreciousChannel = makeApiChannel({
+  key: "bili:precious",
+  name: "B站入站必刷",
+  kind: "video",
+  channelTitle: () => "B站入站必刷",
+  channelLink: "https://www.bilibili.com/v/popular/history",
+  fetchPage: async (info) => {
     const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `${API}/x/web-interface/popular/precious`,
-      { referer: "https://www.bilibili.com/v/popular/history" },
+      { referer: "https://www.bilibili.com/v/popular/history", cookie: info.cookie },
     )
     const list = data?.data?.list ?? []
     const t = now()
@@ -50,8 +43,5 @@ export class BiliPreciousChannel implements RssChannel {
         owner: (raw.owner as { name?: string }) ?? undefined,
       }),
     )
-  }
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "B站入站必刷", channelLink: "https://www.bilibili.com/v/popular/history" }
-  }
-}
+  },
+})

@@ -5,27 +5,23 @@
  * enclosure + itunes 元数据,归一成 Audio Item 再 serializeFeed(带 tpl: 扩展),
  * 让 core 能按 tpl:kind=audio 正确解析。
  */
-import type { Audio, Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import type { Audio } from "@amoeba/xml"
+import { makeApiChannel } from "../factory.ts"
 import { httpText, now } from "@amoeba/resolve"
 import { parseFeed, type ParsedItem } from "@amoeba/xml"
 import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
 
 const UA = DESKTOP_CHROME_UA
 
-export class RssPodcastChannel implements RssChannel {
-  readonly key = "rss:podcast"
-  readonly name = "播客 RSS"
-  readonly kind = "audio" as const
-  readonly sourceInfoTpl = [{ key: "url", label: "Feed URL", required: true }]
-  // 无能力 source:只 { fetch }(audio enclosure 是直链,无需懒解析)。
-  getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+// 无能力 source:只 fetch(audio enclosure 是直链,无需懒解析)。
+export const RssPodcastChannel = makeApiChannel({
+  key: "rss:podcast",
+  name: "播客 RSS",
+  kind: "audio",
+  sourceInfoTpl: [{ key: "url", label: "Feed URL", required: true }],
+  channelTitle: () => "播客 RSS",
+  channelLink: "",
+  fetchPage: async (info): Promise<Audio[]> => {
     const url = info.url ?? ""
     if (!url) throw new Error("rss:podcast 需要 url")
     const xml = await httpText(url, { "user-agent": UA })
@@ -34,11 +30,8 @@ export class RssPodcastChannel implements RssChannel {
     return feed.channel.item
       .map((it) => itemToAudio(it, t))
       .filter((a): a is Audio => a !== undefined)
-  }
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: this.name, channelLink: "" }
-  }
-}
+  },
+})
 
 /** 标准播客 item → Audio。无 audio enclosure 的 item 跳过。 */
 function itemToAudio(it: ParsedItem, t: number): Audio | undefined {

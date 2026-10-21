@@ -27,6 +27,10 @@ export function huyaCategoryItems(sourceId: string, t: number, subs: HuyaSubCate
   )
 }
 
+/**
+ * 保留类实现(不走 makeApiChannel):N 个顶层分区聚合 —— 每区独立 try/catch 隔离、
+ * 全部为空才抛错;且 getSource 不依赖 info。属聚合护栏,非单端点同形。
+ */
 export class HuyaCategoriesChannel implements RssChannel {
   readonly key = "live:huya:categories"
   readonly name = "虎牙分区列表"

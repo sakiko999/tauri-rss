@@ -5,9 +5,7 @@
  * 点开用 `live:douyu:category` + `{areaId}` 预览该分区房间,并可按同一份参数订阅。
  */
 import type { Category, Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchDouyuCategories, now, type DouyuCategory } from "@amoeba/resolve"
 
 /** 分区树 → 目录条目(纯函数):只列二级分区。 */
@@ -28,21 +26,12 @@ export function douyuCategoryItems(sourceId: string, t: number, tree: DouyuCateg
   )
 }
 
-export class DouyuCategoriesChannel implements RssChannel {
-  readonly key = "live:douyu:categories"
-  readonly name = "斗鱼分区列表"
-  readonly kind = "category" as const
-  readonly defaultInfo = {}
-
-  getSource(): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()) }
-  }
-
-  private async fetchItems(): Promise<Item[]> {
-    return douyuCategoryItems("live:douyu:categories", now(), await fetchDouyuCategories())
-  }
-
-  private channelOptions(): SerializeOptions {
-    return { channelTitle: "斗鱼分区列表", channelLink: "https://www.douyu.com/" }
-  }
-}
+export const DouyuCategoriesChannel = makeApiChannel({
+  key: "live:douyu:categories",
+  name: "斗鱼分区列表",
+  kind: "category",
+  defaultInfo: {},
+  channelTitle: () => "斗鱼分区列表",
+  channelLink: "https://www.douyu.com/",
+  fetchPage: async () => douyuCategoryItems("live:douyu:categories", now(), await fetchDouyuCategories()),
+})

@@ -6,32 +6,22 @@
  *
  * 分页:页码制(page 递增),服务端每页固定 ~120 条(不接受 pageSize)。
  */
-import type { Item, Live } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems, apiFetchMore } from "../factory.ts"
+import type { Live } from "@amoeba/xml"
+import { makeApiChannel } from "../factory.ts"
 import { httpJson, now } from "@amoeba/resolve"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
 
-export class HuyaCategoryChannel implements RssChannel {
-  readonly key = "live:huya:category"
-  readonly name = "虎牙分区直播"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "gameId", label: "分区 ID(如 1=英雄联盟、862=CS2)", required: true }]
-
-  getSource(info: SourceInfo): RssSource & Pageable {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
-      fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), {
-        first: 2,
-        step: 1,
-      }),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo, page: number): Promise<Item[]> {
+export const HuyaCategoryChannel = makeApiChannel({
+  key: "live:huya:category",
+  name: "虎牙分区直播",
+  kind: "live",
+  sourceInfoTpl: [{ key: "gameId", label: "分区 ID(如 1=英雄联盟、862=CS2)", required: true }],
+  channelTitle: (info) => `虎牙分区直播 ${info.gameId ?? ""}`,
+  channelLink: "https://www.huya.com/",
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (info, page) => {
     const gameId = String(info.gameId ?? "").trim()
     if (!gameId) throw new Error("huya:category 需要 gameId 参数")
     const res = await httpJson<{ data?: { datas?: Array<Record<string, any>> } }>(
@@ -60,9 +50,5 @@ export class HuyaCategoryChannel implements RssChannel {
         online: Number(item.totalCount ?? 0),
       }
     })
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `虎牙分区直播 ${info.gameId ?? ""}`, channelLink: "https://www.huya.com/" }
-  }
-}
+  },
+})

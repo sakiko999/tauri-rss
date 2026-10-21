@@ -8,33 +8,21 @@
  * `start>=20` 一律返同一批 40 条(首条相同,与 start 值无关)。故只取首页、
  * 不声明 Pageable(避免下游翻页拿到重复结果)。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { searchHuyaRooms } from "@amoeba/resolve"
 
 const PAGE = 20
 
-export class HuyaSearchChannel implements RssChannel {
-  readonly key = "live:huya:search"
-  readonly name = "虎牙搜索"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "keyword", label: "搜索关键词", required: true }]
-
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo, page: number): Promise<Item[]> {
+export const HuyaSearchChannel = makeApiChannel({
+  key: "live:huya:search",
+  name: "虎牙搜索",
+  kind: "live",
+  sourceInfoTpl: [{ key: "keyword", label: "搜索关键词", required: true }],
+  channelTitle: (info) => `虎牙搜索 ${info.keyword ?? ""}`,
+  channelLink: "https://www.huya.com/",
+  fetchPage: async (info, page) => {
     const kw = String(info.keyword ?? "").trim()
     if (!kw) throw new Error("huya:search 需要 keyword 参数")
     return searchHuyaRooms(kw, page, PAGE)
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `虎牙搜索 ${info.keyword ?? ""}`, channelLink: "https://www.huya.com/" }
-  }
-}
+  },
+})

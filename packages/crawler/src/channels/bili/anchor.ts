@@ -5,35 +5,20 @@
  * 分页:页码制(page 从 1 起)。⚠️ 该接口**无 `page_size`**(与搜房间相异),
  * 服务端固定每页条数。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems, apiFetchMore } from "../factory.ts"
 import { searchBiliAnchors } from "@amoeba/resolve"
+import { makeApiChannel } from "../factory.ts"
 
-export class BiliAnchorChannel implements RssChannel {
-  readonly key = "bili:anchor"
-  readonly name = "B站搜主播"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "keyword", label: "主播关键词", required: true }]
-
-  getSource(info: SourceInfo): RssSource & Pageable {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
-      fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), {
-        first: 2,
-        step: 1,
-      }),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo, page: number): Promise<Item[]> {
+export const BiliAnchorChannel = makeApiChannel({
+  key: "bili:anchor",
+  name: "B站搜主播",
+  kind: "live",
+  sourceInfoTpl: [{ key: "keyword", label: "主播关键词", required: true }],
+  channelTitle: (info) => `B站主播 ${info.keyword ?? ""}`,
+  channelLink: "https://live.bilibili.com/",
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (info, page) => {
     const kw = String(info.keyword ?? "").trim()
     if (!kw) throw new Error("bili:anchor 需要 keyword 参数")
     return searchBiliAnchors(kw, page)
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `B站主播 ${info.keyword ?? ""}`, channelLink: "https://live.bilibili.com/" }
-  }
-}
+  },
+})

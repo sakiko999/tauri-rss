@@ -10,18 +10,16 @@
  * 点开走「打开原文」去 Apple 页 + RSS。后续真要进播放页,应做成**懒解析**
  * (像 by-url 那样点了才解析),而不是在 fetch 里批量拉。
  */
-import type { Audio, Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import type { Audio } from "@amoeba/xml"
+import { makeApiChannel } from "../factory.ts"
 import { APPLE_PODCAST_GENRES, fetchApplePodcastChart, now } from "@amoeba/resolve"
 
-export class ApplePodcastChartChannel implements RssChannel {
-  readonly key = "apple:podcast-chart"
-  readonly name = "Apple 播客热门榜"
-  readonly kind = "audio" as const
-  readonly defaultInfo: SourceInfo = { genre: "26" }
-  readonly sourceInfoTpl = [
+export const ApplePodcastChartChannel = makeApiChannel({
+  key: "apple:podcast-chart",
+  name: "Apple 播客热门榜",
+  kind: "audio",
+  defaultInfo: { genre: "26" },
+  sourceInfoTpl: [
     {
       key: "genre",
       label: `分类(${APPLE_PODCAST_GENRES.map((g) => `${g.id}=${g.label}`).join(" / ")})`,
@@ -29,13 +27,13 @@ export class ApplePodcastChartChannel implements RssChannel {
     },
     { key: "country", label: "国家区(如 cn / us),默认 cn", required: false },
     { key: "limit", label: "条数(默认 20,最多 100)", required: false },
-  ]
-
-  getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+  ],
+  channelTitle: (info) => {
+    const g = APPLE_PODCAST_GENRES.find((x) => String(x.id) === String(info.genre ?? 26))
+    return `Apple 播客热门榜${g && g.id !== 26 ? ` · ${g.label}` : ""}`
+  },
+  channelLink: "https://podcasts.apple.com/",
+  fetchPage: async (info): Promise<Audio[]> => {
     const genre = Number(info.genre ?? 26) || 26
     const country = String(info.country ?? "cn").trim() || "cn"
     // 上限 100:再大 Apple 也会截断,且 Lookup 的 URL 会过长。
@@ -47,7 +45,7 @@ export class ApplePodcastChartChannel implements RssChannel {
       // ⚠️ id 用 Apple 目录 id(稳定),不用榜位 —— 榜位每天都变,当下标会让同一节目
       // 反复以「新条目」进库。
       id: `apple-podcast-${p.id}`,
-      sourceId: this.key,
+      sourceId: "apple:podcast-chart",
       kind: "audio",
       title: p.title,
       // url = **节目的 RSS feed**:订阅它即走 rss:podcast,点开也能直接看到 feed。
@@ -60,13 +58,5 @@ export class ApplePodcastChartChannel implements RssChannel {
       // raw 里带榜位与 Apple 页,供 UI/调试;不参与 tpl: 契约。
       raw: { rank: i + 1, appleId: p.id, pageUrl: p.pageUrl, feedUrl: p.feedUrl },
     }))
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    const g = APPLE_PODCAST_GENRES.find((x) => String(x.id) === String(info.genre ?? 26))
-    return {
-      channelTitle: `${this.name}${g && g.id !== 26 ? ` · ${g.label}` : ""}`,
-      channelLink: "https://podcasts.apple.com/",
-    }
-  }
-}
+  },
+})

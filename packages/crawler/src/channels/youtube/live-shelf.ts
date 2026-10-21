@@ -11,10 +11,8 @@
  * ⚠️ 按观看数降序(契约:列表顺序由渠道负责,默认选流/展示不依赖上游顺序)。
  */
 import type { Item, Live } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import type { YoutubeLiveHit } from "@amoeba/resolve"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchYoutubeLiveShelves, normalizeYoutubeLiveCategory, now } from "@amoeba/resolve"
 
 /** 直播页条目 → Live item(`youtube:live-search` 也用它)。 */
@@ -45,45 +43,31 @@ function byViewers(hits: YoutubeLiveHit[]): YoutubeLiveHit[] {
 }
 
 /** `Live Now` 栏目订阅。无参数。 */
-export class YoutubeLiveHotChannel implements RssChannel {
-  readonly key = "youtube:live-hot"
-  readonly name = "YouTube 直播热门"
-  readonly kind = "live" as const
-  readonly defaultInfo = {}
-
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions(info)),
-    }
-  }
-
-  private async fetchItems(): Promise<Item[]> {
+export const YoutubeLiveHotChannel = makeApiChannel({
+  key: "youtube:live-hot",
+  name: "YouTube 直播热门",
+  kind: "live",
+  defaultInfo: {},
+  channelTitle: () => "YouTube 直播热门",
+  channelLink: "https://www.youtube.com/",
+  fetchPage: async (): Promise<Item[]> => {
     const shelves = await fetchYoutubeLiveShelves()
     const hot = shelves.find((s) => s.slug === "hot")
     if (!hot) throw new Error("youtube:live-hot 找不到 Live Now 栏目（直播页布局可能已变）")
     const t = now()
     return byViewers(hot.hits).map((hit) => youtubeLiveHitToLive("youtube:live-hot", hit, t))
-  }
-
-  private channelOptions(_info: SourceInfo): SerializeOptions {
-    return { channelTitle: "YouTube 直播热门", channelLink: "https://www.youtube.com/" }
-  }
-}
+  },
+})
 
 /** `Live Now - <栏目>` 订阅。参数 `category`(必填)。 */
-export class YoutubeLiveCategoryChannel implements RssChannel {
-  readonly key = "youtube:live-category"
-  readonly name = "YouTube 直播栏目"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "category", label: "栏目（news / gaming / sports）", required: true }]
-
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+export const YoutubeLiveCategoryChannel = makeApiChannel({
+  key: "youtube:live-category",
+  name: "YouTube 直播栏目",
+  kind: "live",
+  sourceInfoTpl: [{ key: "category", label: "栏目（news / gaming / sports）", required: true }],
+  channelTitle: (info) => `YouTube 直播 ${info.category ?? ""}`,
+  channelLink: "https://www.youtube.com/",
+  fetchPage: async (info): Promise<Item[]> => {
     const raw = info.category ?? ""
     const slug = normalizeYoutubeLiveCategory(raw)
     if (!slug) throw new Error("youtube:live-category 需要栏目（news / gaming / sports，或完整栏目名）")
@@ -98,9 +82,5 @@ export class YoutubeLiveCategoryChannel implements RssChannel {
     }
     const t = now()
     return byViewers(shelf.hits).map((hit) => youtubeLiveHitToLive("youtube:live-category", hit, t))
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `YouTube 直播 ${info.category ?? ""}`, channelLink: "https://www.youtube.com/" }
-  }
-}
+  },
+})

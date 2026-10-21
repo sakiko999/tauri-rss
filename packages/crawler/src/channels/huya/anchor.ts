@@ -6,33 +6,21 @@
  *
  * ⚠️ **不可分页**(接口 `start` 实测无效,同搜房间)。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { searchHuyaAnchors } from "@amoeba/resolve"
 
 const PAGE = 20
 
-export class HuyaAnchorChannel implements RssChannel {
-  readonly key = "live:huya:anchor"
-  readonly name = "虎牙搜主播"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "keyword", label: "主播关键词", required: true }]
-
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+export const HuyaAnchorChannel = makeApiChannel({
+  key: "live:huya:anchor",
+  name: "虎牙搜主播",
+  kind: "live",
+  sourceInfoTpl: [{ key: "keyword", label: "主播关键词", required: true }],
+  channelTitle: (info) => `虎牙主播 ${info.keyword ?? ""}`,
+  channelLink: "https://www.huya.com/",
+  fetchPage: async (info) => {
     const kw = String(info.keyword ?? "").trim()
     if (!kw) throw new Error("huya:anchor 需要 keyword 参数")
     return searchHuyaAnchors(kw, PAGE)
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `虎牙主播 ${info.keyword ?? ""}`, channelLink: "https://www.huya.com/" }
-  }
-}
+  },
+})

@@ -75,72 +75,72 @@ export function registerBuiltinChannels(): void {
   }
 
   // ── 播客 RSS(解析 enclosure/itunes → AudioItem)──
-  registerChannel(new RssPodcastChannel())
+  registerChannel(RssPodcastChannel)
   // Apple 播客目录(发现层):榜单 / 搜索。产出 kind:audio,url = 该节目的 RSS feed
   // (接进 rss:podcast 的同一条路)。⚠️ Apple 目录是**元数据源**,榜单不含 feedUrl,
   // 要两次请求(lookup);详见 resolve/platform/apple/catalog.ts 的文件头。
-  registerChannel(new ApplePodcastChartChannel())
-  registerChannel(new ApplePodcastSearchChannel())
+  registerChannel(ApplePodcastChartChannel)
+  registerChannel(ApplePodcastSearchChannel)
 
   // 通用 RSS 直链(任意 URL,透传上游 XML)——OPML 导入的外部 feed 与手工订阅
   // 「已知 URL 的 RSS」都用它。预置清单(key `rss:{id}`)是它的一批默认实例。
   registerChannel(new RawRssChannel("rss:url", "RSS 直链", "article"))
 
   // ── bilibili(wbi 签名 API,零登录)──
-  registerChannel(new BiliSquareChannel())
-  registerChannel(new BiliPopularChannel())
-  registerChannel(new BiliPreciousChannel())
-  registerChannel(new BiliRankingChannel())
-  registerChannel(new BiliWeeklyChannel())
-  registerChannel(new BiliUserVideoChannel())
+  registerChannel(BiliSquareChannel)
+  registerChannel(BiliPopularChannel)
+  registerChannel(BiliPreciousChannel)
+  registerChannel(BiliRankingChannel)
+  registerChannel(BiliWeeklyChannel)
+  registerChannel(BiliUserVideoChannel)
   registerChannel(new BiliLiveChannel())
-  registerChannel(new BiliLiveHotChannel())
+  registerChannel(BiliLiveHotChannel)
   registerChannel(new BiliSeasonChannel())
   registerChannel(new BiliSeriesChannel())
-  registerChannel(new BiliFavlistChannel())
+  registerChannel(BiliFavlistChannel)
   registerChannel(new BiliDynamicChannel())
-  registerChannel(new BiliSearchChannel())
-  registerChannel(new BiliAnchorChannel())
+  registerChannel(BiliSearchChannel)
+  registerChannel(BiliAnchorChannel)
   registerChannel(new BiliUserChannel())
 
   // ── YouTube(官方 RSS 视频 + 直播订阅)──
   registerChannel(new YoutubeChannel())
-  registerChannel(new YoutubePlaylistChannel())
-  registerChannel(new YoutubeLiveChannel())
-  registerChannel(new YoutubeLiveHotChannel())
-  registerChannel(new YoutubeLiveCategoryChannel())
-  registerChannel(new YoutubeLiveCategoriesChannel())
-  registerChannel(new YoutubeLiveSearchChannel())
-  registerChannel(new YoutubeUserChannel())
+  registerChannel(YoutubePlaylistChannel)
+  registerChannel(YoutubeLiveChannel)
+  registerChannel(YoutubeLiveHotChannel)
+  registerChannel(YoutubeLiveCategoryChannel)
+  registerChannel(YoutubeLiveCategoriesChannel)
+  registerChannel(YoutubeLiveSearchChannel)
+  registerChannel(YoutubeUserChannel)
 
   // ── Twitch 直播(匿名 GraphQL;频道订阅 + 热门/分区列表)──
   registerChannel(new TwitchLiveChannel())
   registerChannel(new TwitchHotChannel())
   registerChannel(new TwitchCategoryChannel())
-  registerChannel(new TwitchCategoriesChannel())
+  registerChannel(TwitchCategoriesChannel)
 
   // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──
   registerChannel(new HuyaLiveChannel())
-  registerChannel(new HuyaLiveHotChannel())
-  registerChannel(new HuyaCategoryChannel())
+  registerChannel(HuyaLiveHotChannel)
+  registerChannel(HuyaCategoryChannel)
   registerChannel(new HuyaCategoriesChannel())
-  registerChannel(new HuyaSearchChannel())
-  registerChannel(new HuyaAnchorChannel())
+  registerChannel(HuyaSearchChannel)
+  registerChannel(HuyaAnchorChannel)
 
   // ── douyu / douyin 直播(需 host.js 执行 cryptojs/abogus blob;单房间 + 热门列表)──
   registerChannel(new DouyuLiveChannel())
-  registerChannel(new DouyuLiveHotChannel())
-  registerChannel(new DouyuCategoryChannel())
-  registerChannel(new DouyuCategoriesChannel())
-  registerChannel(new DouyuSearchChannel())
-  registerChannel(new DouyuAnchorChannel())
+  registerChannel(DouyuLiveHotChannel)
+  registerChannel(DouyuCategoryChannel)
+  registerChannel(DouyuCategoriesChannel)
+  registerChannel(DouyuSearchChannel)
+  registerChannel(DouyuAnchorChannel)
   registerChannel(new DouyinLiveChannel())
-  registerChannel(new DouyinLiveHotChannel())
-  registerChannel(new DouyinCategoryChannel())
-  registerChannel(new DouyinCategoriesChannel())
-  registerChannel(new DouyinPartitionSearchChannel())
+  registerChannel(DouyinLiveHotChannel)
+  registerChannel(DouyinCategoryChannel)
+  registerChannel(DouyinCategoriesChannel)
+  registerChannel(DouyinPartitionSearchChannel)
   registerChannel(new DouyinUserLiveChannel())
-  registerChannel(new DouyinTrendChannel())
+  registerChannel(DouyinTrendChannel)
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──
   registerChannel(new WeiboUserChannel())

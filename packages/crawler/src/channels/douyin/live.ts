@@ -31,6 +31,11 @@ import { normalizeDouyinRoomId } from "@amoeba/resolve"
 
 const LIVE = "https://live.douyin.com"
 
+/**
+ * 保留类实现(不走 makeApiChannel):多房间聚合 + 逐房间失败隔离 + 「全部失败 ≠ 0 条」
+ * 护栏,且输入需先归一(抖音号/短 ID/直播间 URL/主页链接)才谈得上取数 ——
+ * 不是「单端点 GET → 列表 → 映射」的同形面。
+ */
 export class DouyinLiveChannel implements RssChannel, Loginable {
   readonly key = "live:douyin"
   readonly name = "抖音直播房间"

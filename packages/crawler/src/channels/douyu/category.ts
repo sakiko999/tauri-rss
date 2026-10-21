@@ -6,35 +6,20 @@
  *
  * 分页:页码制(page 在 path 里,从 1 起);服务端每页固定条数。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems, apiFetchMore } from "../factory.ts"
+import { makeApiChannel } from "../factory.ts"
 import { fetchDouyuCategoryRooms } from "@amoeba/resolve"
 
-export class DouyuCategoryChannel implements RssChannel {
-  readonly key = "live:douyu:category"
-  readonly name = "斗鱼分区直播"
-  readonly kind = "live" as const
-  readonly sourceInfoTpl = [{ key: "areaId", label: "分区 ID(如 1=英雄联盟、181=王者荣耀)", required: true }]
-
-  getSource(info: SourceInfo): RssSource & Pageable {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info, 1), () => this.channelOptions(info)),
-      fetchMore: apiFetchMore((page) => this.fetchItems(info, page), () => this.channelOptions(info), {
-        first: 2,
-        step: 1,
-      }),
-    }
-  }
-
-  private async fetchItems(info: SourceInfo, page: number): Promise<Item[]> {
+export const DouyuCategoryChannel = makeApiChannel({
+  key: "live:douyu:category",
+  name: "斗鱼分区直播",
+  kind: "live",
+  sourceInfoTpl: [{ key: "areaId", label: "分区 ID(如 1=英雄联盟、181=王者荣耀)", required: true }],
+  channelTitle: (info) => `斗鱼分区直播 ${info.areaId ?? ""}`,
+  channelLink: "https://www.douyu.com/",
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (info, page) => {
     const areaId = String(info.areaId ?? "").trim()
     if (!areaId) throw new Error("douyu:category 需要 areaId 参数")
     return fetchDouyuCategoryRooms(areaId, page)
-  }
-
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `斗鱼分区直播 ${info.areaId ?? ""}`, channelLink: "https://www.douyu.com/" }
-  }
-}
+  },
+})

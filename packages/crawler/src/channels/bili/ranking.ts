@@ -3,12 +3,8 @@
  *
  * `/x/web-interface/ranking/v2` 分区榜。rid 支持英文分区名(见 RID_TABLE)或数字。
  */
-import type { Item } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
+import { biliClient, now } from "@amoeba/resolve"
+import { makeApiChannel } from "../factory.ts"
 import { API, ugc } from "./video-common.ts"
 
 const RID_TABLE: Record<string, string> = {
@@ -18,22 +14,19 @@ const RID_TABLE: Record<string, string> = {
   sports: "1018", animal: "1024",
 }
 
-export class BiliRankingChannel implements RssChannel {
-  readonly key = "bili:ranking"
-  readonly name = "B站排行榜"
-  readonly kind = "video" as const
-  readonly sourceInfoTpl = [{ key: "rid", label: "分区(all/douga/…)", required: false }]
-  getSource(info: SourceInfo): RssSource {
-    return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
-    }
-  }
-  private async fetchItems(info: SourceInfo): Promise<Item[]> {
+export const BiliRankingChannel = makeApiChannel({
+  key: "bili:ranking",
+  name: "B站排行榜",
+  kind: "video",
+  sourceInfoTpl: [{ key: "rid", label: "分区(all/douga/…)", required: false }],
+  channelTitle: (info) => `B站排行榜·${info.rid ?? "all"}`,
+  channelLink: "https://www.bilibili.com/v/popular/rank/all",
+  fetchPage: async (info) => {
     const rid = info.rid ?? "all"
     const numericRid = /^\d+$/.test(rid) ? rid : (RID_TABLE[rid] ?? "0")
     const data = await biliClient.getJson<{ data?: { list?: Array<Record<string, unknown>> } }>(
       `${API}/x/web-interface/ranking/v2?rid=${numericRid}&type=all&web_location=333.934`,
-      { referer: `https://www.bilibili.com/v/popular/rank/${rid}` },
+      { referer: `https://www.bilibili.com/v/popular/rank/${rid}`, cookie: info.cookie },
     )
     const list = data?.data?.list ?? []
     const t = now()
@@ -49,8 +42,5 @@ export class BiliRankingChannel implements RssChannel {
         owner: (raw.owner as { name?: string }) ?? undefined,
       }),
     )
-  }
-  private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `B站排行榜·${info.rid ?? "all"}`, channelLink: "https://www.bilibili.com/v/popular/rank/all" }
-  }
-}
+  },
+})

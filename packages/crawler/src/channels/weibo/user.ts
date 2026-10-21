@@ -6,7 +6,7 @@
  *   2. `type=uid&value={uid}&containerid={containerid}` → cards(微博列表)。
  * cards 过滤按 `c.mblog` 存在性(不按 card_type——JSON 里是数字 9)。
  * 长文展开 + 图宽高兜底由 mblogCardsToItems 统一处理(与热搜词流一致)。
- * 需完整登录 cookie(SUB),core 层 DEFAULT_WEIBO_COOKIE 经 info.cookie 注入。
+ * 需完整登录 cookie(SUB),settings 登录态经 sourceInfoFor / credentials provider 注入。
  *
  * ⚠️ 浏览器路径(2026-08):Tauri 注入 appHost.browser(CDP 附加真实 Edge)时,
  * 用浏览器页面 fetch 打 m.weibo.cn——自动带 Edge profile 登录态,绕开冷 cookie
