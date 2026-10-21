@@ -9,53 +9,81 @@
  *   - cdpJson:   页面内 fetch JSON(weibo API);
  *   - cdpNavigate:导航到 URL 并等待就绪(默认同址不重载保留 SPA state;forceReload 强刷)。
  *
- * ⚠️ 单 Edge 实例单 page target 被多平台 channel(weibo/xhs)共享——「导航到目标域 +
- * 同域 fetch」必须用 withBrowserMode 包成原子单元（内部走 withBrowserLock）,
- * 否则并发刷新互相抢页面(页面停在别的域 fetch → 跨域 Failed to fetch / 匿名 406)。
+ * ⚠️ 单 Edge 实例被多平台 channel(weibo/xhs)以 **lane tab** 共享(风控 §3.13):
+ * 「导航到目标域 + 同域 fetch」必须用 `withBrowserOp` 包成原子单元(同 lane 串行,
+ * 列表/详情/登录各有独立 tab),否则并发刷新互相抢页面(页面停在别的域 fetch →
+ * 跨域 Failed to fetch / 匿名 406)。宿主缺 `browser.tab` 时各 lane 回落默认页,
+ * 语义等同旧全局锁。
  *
  * 不直接引用 appHost.browser 类型——经参数传入,channel 侧检测门面存在才调用。
  */
 
-// ── 浏览器操作互斥 ──────────────────────────────────────────────────────────────
-// 全局 promise 链:任何浏览器模拟操作(导航+同域抓取)串行执行,互不交错。
-let browserLock: Promise<void> = Promise.resolve()
-/**
- * 串行执行浏览器操作:持锁直到 fn 完成,期间其他浏览器操作排队。
- * ⚠️ 一般**不直接用**：用 `withBrowserMode` 一并处理窗口模式与释放。
- */
-function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
-  const prev = browserLock
-  let release!: () => void
-  browserLock = new Promise<void>((r) => (release = r))
-  return prev.then(() => fn()).finally(release)
+// ── 浏览器操作调度(lane 化,风控 §3.13/§3.13.1)────────────────────────────────
+// 互斥/窗口模式/平台准入/进程级操作四种粒度分别由 scheduler 的四个原语承担;
+// 本模块只提供 withBrowserOp 这一个组合入口(顺序:gate → op lane → renderLease)。
+import {
+  browserGateFor,
+  withBrowserGlobal,
+  withLane,
+  withRenderLease,
+} from "./scheduler.ts"
+
+/** withBrowserOp 的选项。 */
+export interface BrowserOpOptions {
+  /**
+   * lane 名(决定用哪个 tab):`list:<channelKey>`(列表,保住翻页 state)/
+   * `detail:<platform>`(详情,不再污染列表页)/ `login:<platform>`(扫码,不阻塞抓取)。
+   * 缺省 "default"(单页语义;宿主无 `browser.tab` 时所有 lane 共享默认页)。
+   */
+  lane?: string
+  /** "interactive" = 滚动/懒加载(renderLease + 滚动前 activate);缺省 hidden(无模式动作)。 */
+  mode?: BrowserWindowMode
+  /** 平台准入(browserGate)。登录流程**不传**(冷却期仍需允许重新扫码)。 */
+  platform?: string
 }
 
 /**
- * 尽力切到某窗口模式：失败不影响数据路径。
- * `hidden` 是默认态，切不过去（窗口未就绪等）也不该让抓取失败。
+ * 在指定 lane 上独占执行一次浏览器操作 —— lane 化后的唯一组合入口。
+ *
+ * 顺序与理由(§3.13.1):
+ *   1. **gate 在 op lane 锁外**:平台冷却/间隔的等待不占 op lane(不队头阻塞该 lane
+ *      已排队的其它操作);gate 自身在 `gate:<platform>` lane 串行(修 governor
+ *      「读 last → sleep → 写 last」的非原子);
+ *   2. **op lane 串行**:同 lane 的导航+fetch 原子(拿各自 tab,互不抢页面),
+ *      跨 lane 并发(列表/详情/登录各一个 tab);
+ *   3. **interactive 用 renderLease**:引用计数防「任一 hidden 收尾掐掉别人的滚动」;
+ *      滚动前 `activate` 本 lane 的 tab(非激活 tab 的 rAF/IO 停摆,§3.9 同机制)。
+ *
+ * fn 收到的 `b` 是本 lane 的操作句柄(BrowserBackend 或 BrowserTab —— 形状兼容):
+ * lane 内的 cdpFetch/cdpEvaluate/cdpNavigate 全部打在自己的 tab 上。
  */
-async function setBrowserModeQuiet(
+export function withBrowserOp<T>(
   browser: BrowserBackend,
-  mode: BrowserWindowMode,
-): Promise<void> {
-  try {
-    await browser.setMode?.(mode)
-  } catch {
-    // 静默降级：SSR/页面 fetch 在 interactive 下同样能跑，只是多渲染开销。
-  }
+  opts: BrowserOpOptions,
+  fn: (b: BrowserBackend) => Promise<T>,
+): Promise<T> {
+  const lane = opts.lane ?? "default"
+  return browserGateFor(opts.platform).then(() =>
+    withLane(`op:${lane}`, async () => {
+      // lane → tab(宿主缺 tab 能力 → 单页语义,回默认 backend)。
+      const b: BrowserBackend = browser.tab?.(lane) ?? browser
+      if (opts.mode === "interactive") {
+        return withRenderLease(browser, async () => {
+          // 滚动驱动必须激活本 tab:hidden(非激活)下渲染管线停摆,scrollTo 只改
+          // scrollTop、不派发 scroll 事件(§3.9);activate 毫秒级、不触发重载。
+          await (b as BrowserTab).activate?.()
+          return fn(b)
+        })
+      }
+      return fn(b)
+    }),
+  )
 }
 
 /**
- * 在指定窗口模式下**独占**浏览器执行操作（内部串行化，等价于旧的
- * `withBrowserLock(async () => { setMode(...); ... })`）。
- *
- * - `hidden`：SSR/DOM 读取、页面内 fetch；模式切不过去也不影响数据路径。
- * - `interactive`：滚动/懒加载页面；切不过去会抛错（否则滚动会静默 0 条），
- *   结束后自动切回 `hidden`（interactive 是真实渲染，常驻有 CPU/GPU 开销）。
- *
- * `platform` 传入时先过宿主的 `net.browserGate`（平台冷却 + 最小间隔 + 随机抖动）。
- * ⚠️ CDP 流量不经过 `appHost.http`，不过闸的话 governor 的配额/冷却对真实账号
- * 的主路径完全不生效。**登录流程不要传 platform**（冷却期仍需允许重新扫码）。
+ * ⚠️ **兼容壳**(lane 化前是唯一入口):等价 `withBrowserOp(browser, { lane: "default",
+ * mode, platform })`,所有 lane 共享默认 tab。存量调用点逐个迁到 withBrowserOp;
+ * 新代码一律用 withBrowserOp。
  */
 export function withBrowserMode<T>(
   browser: BrowserBackend,
@@ -63,48 +91,36 @@ export function withBrowserMode<T>(
   fn: () => Promise<T>,
   platform?: string,
 ): Promise<T> {
-  return withBrowserLock(async () => {
-    if (platform) await globalThis.appHost?.net?.browserGate?.(platform)
-    if (mode === "interactive") {
-      await browser.setMode?.("interactive")
-      try {
-        return await fn()
-      } finally {
-        await setBrowserModeQuiet(browser, "hidden")
-      }
-    }
-    await setBrowserModeQuiet(browser, mode)
-    return fn()
-  })
+  return withBrowserOp(browser, { lane: "default", mode, platform }, () => fn())
 }
 
 /**
  * 扫码登录的持锁包装(xhs / weibo / douyin 三平台同构)。
  *
- * 登录与抓取共享同一个 page target，必须持浏览器锁：否则刷新会把登录弹窗导航走，
- * 手机确认后页面自身的轮询已停止，登录永远等不到凭证。登录可能持锁数分钟（等用户
- * 扫码），期间排队中的刷新会先撞上 45s 超时，那个超时原本会 abortPending 掐断共享
- * 连接 —— `scanLoginActive` 让超时方跳过中止。
+ * 登录跑在**专属 login lane**(`login:<platform>` 的独立 tab):刷新在自己的 lane
+ * 上,导航不会再把登录弹窗带走;刷新超时经 `abortTabs({keepLogin:true})` 豁免本 lane
+ * —— 旧的 `scanLoginActive` 布尔与 45s 超时的平台前缀猜测一并退役。
  *
- * ⚠️ 刻意**不传 platform**：冷却期正是用户需要重新扫码自救的时候，不能被 browserGate
- * 拦住；登录仍然走锁串行。`mode` 由平台自选（xhs/weibo 的二维码是 img data URL，
- * hidden 即可；douyin 是 canvas 绘制，hidden 下渲染停摆画不出来，要 interactive）。
+ * ⚠️ 刻意**不传 platform**(不过 browserGate):冷却期正是用户需要重新扫码自救的时候。
+ * `mode` 由平台自选（xhs/weibo 的二维码是 img data URL，hidden 即可；douyin 是
+ * canvas 绘制，hidden 下渲染停摆画不出来，要 interactive）。
  */
 export function withScanLoginLock<T>(
   browser: BrowserBackend,
   mode: BrowserWindowMode,
   run: () => Promise<T>,
+  platform: string,
 ): Promise<T> {
-  return withBrowserMode(browser, mode, async () => {
-    // 只在真正持锁时置位：排队中的登录不能提前把标记打开，否则前一个登录结束时
-    // 会把标记清掉、让刷新超时误杀后一个登录。
-    browser.scanLoginActive = true
-    try {
-      return await run()
-    } finally {
-      browser.scanLoginActive = false
-    }
-  })
+  return withBrowserOp(browser, { lane: `login:${platform}`, mode }, () => run())
+}
+
+/**
+ * 浏览器进程级操作(clearCookies / resetProfile)的全局锁包装。
+ * 与所有 lane 互斥:清 cookie 与导航交错会产生半删状态;resetProfile 会杀掉正在
+ * 抓取的 Edge。lane 化前这些调用完全绕过浏览器锁。
+ */
+export function withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
+  return withBrowserGlobal(fn)
 }
 
 /** 页面内 fetch 的入参(JSON 序列化传进 expression)。 */

@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { cookieFieldFor, type ChannelInfo } from "@amoeba/core"
+import { withBrowserGlobal } from "@amoeba/resolve"
 import { useDesktop } from "../../store/index.ts"
 import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
@@ -195,10 +196,14 @@ function CredentialCard({
             setBusy(true)
             try {
               // 先清浏览器登录态，再清 settings：中途失败时不会出现「设置已清、账号还挂着」。
+              // withBrowserGlobal:与所有 lane 的导航/抓取互斥(清一半的 cookie 会被
+              // 正在跑的抓取立刻重新种回)。
               const browser = globalThis.appHost?.browser
-              for (const host of hosts) {
-                await browser?.clearCookies?.(host)
-              }
+              await withBrowserGlobal(async () => {
+                for (const host of hosts) {
+                  await browser?.clearCookies?.(host)
+                }
+              })
               await onSave("")
               onToast("warn", `${meta.label} 凭证已清除`)
             } catch (e) {

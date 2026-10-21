@@ -4,8 +4,8 @@
  * 约定：
  *   - **只观察，不构造请求**。`trigger` 只能做导航 / 滚动 / 点击这类页面自然行为；
  *     不要在 trigger 里发自定义 fetch。
- *   - 调用方必须已经持有浏览器独占权并设好窗口模式（一般用
- *     `withBrowserMode(browser, mode, () => capturePage(...))`）。
+ *   - 调用方必须已经持有 lane 独占权(`withBrowserOp(browser, {lane}, (b) => capturePage(b, ...))`);
+ *     传入的 browser 若是 lane tab 句柄,事件/响应体自动绑定本 tab 的连接(多 lane 不串台)。
  *   - 只收文本类 MIME；二进制/媒体直接跳过（不占缓冲）。
  *   - body 写入 `passiveBuffer`（内存，TTL/限额见 buffer.ts）。
  *
@@ -135,6 +135,8 @@ export async function capturePage(browser: BrowserBackend, opts: CaptureOptions)
     await Promise.allSettled(writes)
   } finally {
     off()
+    // Network.enable 从不关会泄漏监听(每个 tab 独立连接,量小但别攒):尽力关闭。
+    await send("Network.disable", {}).catch(() => {})
   }
   return writes.length
 }

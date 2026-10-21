@@ -1,5 +1,6 @@
 /** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile / 完全重置 + 最近抓取错误。 */
 import { useState } from "react"
+import { withBrowserGlobal } from "@amoeba/resolve"
 import { useDesktop } from "../../../store/index.ts"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
 import { Icon } from "../../../components/Icon.tsx"
@@ -59,8 +60,11 @@ export function Diagnostics() {
       return
     try {
       const browser = globalThis.appHost.browser
-      if (!browser?.resetProfile) throw new Error("当前环境不支持(仅桌面端可用)")
-      const r = await browser.resetProfile()
+      const reset = browser?.resetProfile?.bind(browser)
+      if (!reset) throw new Error("当前环境不支持(仅桌面端可用)")
+      // withBrowserGlobal:resetProfile 会杀掉整棵 Edge 树,必须与所有 lane 的
+      // 抓取互斥(否则正在跑的刷新被连根拔掉)。
+      const r = await withBrowserGlobal(() => reset())
       toast("ok", "浏览器数据已清理", r)
     } catch (e) {
       toast("error", "清理失败", String(e))

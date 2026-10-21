@@ -47,3 +47,4 @@ export * from "./utils/index.ts"
 
 // ── 浏览器模拟(weibo/xhs channel 抓取用,CDP 附加真实 Edge) ──
 export * from "./browser/cdp.ts"
+export * from "./browser/scheduler.ts"

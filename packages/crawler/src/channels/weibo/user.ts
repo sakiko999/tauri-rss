@@ -17,7 +17,7 @@ import type { SerializeOptions } from "@amoeba/xml"
 import type { LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
 import { WB_BASE, apiHeaders, mblogCardsToItems, weiboClient, weiboScanLogin } from "@amoeba/resolve"
-import { cdpJson, cdpNavigate, withBrowserMode } from "@amoeba/resolve"
+import { cdpJson, cdpNavigate, withBrowserOp } from "@amoeba/resolve"
 
 export class WeiboUserChannel implements RssChannel, Loginable {
   readonly key = "weibo:user"
@@ -72,25 +72,20 @@ export class WeiboUserChannel implements RssChannel, Loginable {
     const referer = `${WB_BASE}/u/${uid}`
     const browser = globalThis.appHost?.browser
 
-    // 浏览器路径:导航 + 两步 fetch 用 withBrowserMode 包成原子单元(单 Edge 共享,
-    // 并发刷新会互相抢页面 → 页面停在别的域 fetch 变跨域 Failed to fetch)。
+    // 浏览器路径:导航 + 两步 fetch 用 withBrowserOp 包成原子单元(weibo:user 专属
+    // lane tab,并发刷新/详情互不抢页面 → 页面不会停在别的域 fetch 变跨域 Failed to fetch)。
     if (browser) {
-      // 页面内 fetch 不需要渲染：hidden（SW_HIDE，CPU≈0）。
-      return withBrowserMode(
-        browser,
-        "hidden",
-        async () => {
-          // ① 先导航到 m.weibo.cn:页面 fetch 同源 API 无 CORS;②自动带 profile 登录态。
-          await cdpNavigate(browser, `${WB_BASE}/`)
-          // ⚠️ 必须带 apiHeaders(X-Requested-With / MWeibo-Pwa):翻页请求(带 page/since_id)
-          // 缺这两个头会被微博拦成网络层失败(实测 TypeError: Failed to fetch / 302 风控),
-          // 表现为「加载更多永远只有第一页」。HTTP 路径经 weiboClient 本就带(见 resolve
-          // weibo/client.ts),浏览器路径曾漏传。
-          const s2 = await this.getIndex(uid, sinceId, (url) => cdpJson(browser, url, { referer, headers: apiHeaders }))
-          return this.extractItems(s2, cookie)
-        },
-        "weibo",
-      )
+      // 页面内 fetch 不需要渲染:hidden 即可(无模式动作;渲染租约由滚动类操作持有)。
+      return withBrowserOp(browser, { lane: "list:weibo:user", platform: "weibo" }, async (b) => {
+        // ① 先导航到 m.weibo.cn:页面 fetch 同源 API 无 CORS;②自动带 profile 登录态。
+        await cdpNavigate(b, `${WB_BASE}/`)
+        // ⚠️ 必须带 apiHeaders(X-Requested-With / MWeibo-Pwa):翻页请求(带 page/since_id)
+        // 缺这两个头会被微博拦成网络层失败(实测 TypeError: Failed to fetch / 302 风控),
+        // 表现为「加载更多永远只有第一页」。HTTP 路径经 weiboClient 本就带(见 resolve
+        // weibo/client.ts),浏览器路径曾漏传。
+        const s2 = await this.getIndex(uid, sinceId, (url) => cdpJson(b, url, { referer, headers: apiHeaders }))
+        return this.extractItems(s2, cookie)
+      })
     }
 
     // HTTP 路径(无浏览器门面):两步 getIndex(仅传输不同,编排共用)。

@@ -153,14 +153,13 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         results = await Promise.allSettled(
           subs.map((s) =>
             withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id, () => {
-              // 超时中止在途调用,让持锁的 await 立刻返回错误,withBrowserLock 得以释放
-              // ⚠️ **只对浏览器路径的订阅中止**:abortPending 是**进程级全局**的,一个
-              // 非浏览器订阅(慢 HTTP 抓取)超时也会把别的订阅在途的浏览器操作一起杀掉。
-              // ⚠️ 扫码登录持锁期间不要中止:登录可能等用户 1~5 分钟,排队中的刷新超时
-              // 若掐断连接,会表现成「手机已确认但登录超时」。
-              if (/^(weibo|xhs):/.test(s.channelKey) && !globalThis.appHost.browser?.scanLoginActive) {
-                globalThis.appHost.browser?.abortPending?.(`刷新超时:${s.id}`)
-              }
+              // 超时中止在途调用,让持 lane 锁的 await 立刻返回错误,锁得以释放。
+              // ⚠️ lane 化后按 tab 断连:abortTabs 掐掉所有非登录 lane 的连接
+              // (登录 lane 在等用户扫码,掐了会表现成「手机已确认但登录超时」——
+              // 旧 scanLoginActive 布尔与 `/^(weibo|xhs):/` 前缀猜测一并退役)。
+              // 非浏览器订阅(慢 HTTP 抓取)超时也会走这里,但只断空闲/在途的
+              // CDP 连接,下一次浏览器操作自动重连,无损。
+              globalThis.appHost.browser?.abortTabs?.(`刷新超时:${s.id}`, { keepLogin: true })
             }),
           ),
         )

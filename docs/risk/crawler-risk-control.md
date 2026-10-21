@@ -572,11 +572,22 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 4. **冷却值不通过压测校准**：只按 §2.3 的显式信号累积观测；探测 412/verify-box 边界
    本身就是风控行为，不做。
 
-### 3.13 多 tab 与 lane 粒度（设计评估，2026-10-21，**未实现**）
+### 3.13 多 tab 与 lane 粒度（设计评估，2026-10-21；**已实现** 2026-10-22）
 
 > 触发：详情/登录会把列表页导航走，回头再抓只能整页重载；xhs 的翻页还依赖页面里
 > 累积的 `feed.feeds`，页面被导航走就只能重载 + cursor 重试。这里记录「要不要多 tab、
 > 按什么粒度分」的评估结论，后续实施照此执行。
+>
+> **实施注记（2026-10-22，阶段 1+2 一次落地）**：`resolve/browser/scheduler.ts` 四原语
+> （withLane / withRenderLease / browserGateFor / withBrowserGlobal）；宿主 `browser.tab(key)`
+> 每 lane 独立 target（`PUT /json/new`）+ 独立 CDP 连接（事件/abort 天然按 lane 隔离），
+> LRU 上限 8；组合入口 `withBrowserOp({lane, mode, platform})`（gate → op lane → 租约 →
+> activate）。lane 分配：`list:<channelKey>`（xhs:explore / xhs:user / weibo:user）、
+> `detail:xhs`、`login:<platform>`×3、`browser:global`（clearCookies/resetProfile）。
+> `abortTabs({keepLogin:true})` 取代 `scanLoginActive` 布尔与 45s 超时的平台前缀猜测；
+> capturePage 收尾 `Network.disable`。回归：`scheduler.check.ts`（并发 lane / 租约计数 /
+> gate 串行不占 lane / 异常释放 / abort 豁免登录）。未做：passiveBuffer 按 lane 过滤
+> （当前仅 xhs:explore 声明 passive，同 lane 串行无并发采集，见 §3.13.1 待办）。
 
 #### 现状（代码事实）
 

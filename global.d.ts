@@ -158,6 +158,36 @@ declare global {
   }
 
   /**
+   * 浏览器 lane(多 tab)句柄 —— 风控 §3.13 lane 化。
+   * 每个 lane 一条独立 CDP 连接(独立 target/pending/事件帧),互不串台;
+   * evaluate/send/onEvent/getCookies 形状对齐 BrowserBackend,cdp 层助手
+   * (cdpFetch/cdpEvaluate/cdpNavigate/capturePage)可直接吃 tab 句柄。
+   * cookie 是浏览器级共享的(登录完其它 lane 直接受益)。
+   */
+  interface BrowserTab {
+    readonly key: string
+    evaluate<T = unknown>(
+      expression: string,
+      opts?: { awaitPromise?: boolean; returnByValue?: boolean },
+    ): Promise<T>
+    /** 读 cookie(浏览器级;任何 tab 连接都能读)。 */
+    getCookies(url?: string): Promise<Record<string, string>>
+    /** 原始 CDP 命令(被动采集 capturePage 用;绑定本 tab 的连接)。 */
+    send?(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<unknown>
+    /** 订阅 CDP 事件帧(仅本 tab;多 lane 下不会收到别平台的事件)。 */
+    onEvent?(cb: (method: string, params: unknown, sessionId?: string) => void): () => void
+    /**
+     * 把该 tab 切为当前激活 tab(毫秒级、**不触发重载**)。滚动驱动前必须:
+     * 非激活 tab 的 visibilityState=hidden 下 rAF/IntersectionObserver 停摆(§3.9)。
+     */
+    activate?(): Promise<void>
+    /** 关闭该 tab(target 级;不影响浏览器进程与其它 lane)。 */
+    close(): Promise<void>
+    /** 中止本 tab 在途调用并断开连接(刷新超时用;不波及其它 lane)。 */
+    abortPending?(reason: string): void
+  }
+
+  /**
    * 浏览器模拟能力(Tauri spawn 系统 Edge + CDP)。微博/小红书反爬强,
    * 需真实浏览器提供登录态 + JS 签名 + 设备指纹:
    *   - evaluate: 页面上下文执行 JS(如 window._webmsxyw 取 x-s、页面内 fetch 数据),
@@ -208,10 +238,17 @@ declare global {
      */
     abortPending?(reason: string): void
     /**
-     * 长操作(扫码登录)进行中。刷新超时时不能 abortPending —— 否则会把登录正在用的
-     * CDP 连接一起掐断,表现为「手机已确认但登录超时」。由登录流程设置/清理。
+     * 取一个 lane 的 tab 句柄(lane 化 §3.13)。同 key 复用同一 target,异 key 各自
+     * 独立连接(独立 pending/事件帧,互不串台)。可选:非 Tauri 后端不提供 ——
+     * 调用方回落单 page 语义(所有 lane 共享默认页)。
      */
-    scanLoginActive?: boolean
+    tab?(key: string): BrowserTab
+    /**
+     * 中止所有 lane tab 的在途调用并断开其连接(整轮刷新超时兜底)。
+     * keepLogin=true 时跳过 login:* lane —— 登录在等用户扫码,掐了连接会表现成
+     * 「手机已确认但登录超时」。默认后端(default page)不在其列(abortPending 管)。
+     */
+    abortTabs?(reason: string, opts?: { keepLogin?: boolean }): void
   }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */

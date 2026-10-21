@@ -5,10 +5,14 @@
  * Rust `browser_ensure` spawn 系统 Edge(--remote-debugging-port + user-data-dir
  * 持久化登录态),本后端:
  *   1. invoke browser_ensure → 拿 CDP 端口;
- *   2. GET /json/list → 找第一个 page target 的 webSocketDebuggerUrl;
+ *   2. GET /json/list → 找第一个 page target 的 webSocketDebuggerUrl(默认 lane);
  *   3. invoke ws_connect(文本帧)——CDP 是 JSON 文本帧,不走弹幕二进制隧道,
  *      自己管理 connectionId + 消息 id 递增的 pending map;
  *   4. evaluate = Runtime.evaluate(awaitPromise + returnByValue)。
+ *
+ * lane 化(风控 §3.13):`tab(key)` 为每个 lane 建独立 target(`PUT /json/new`) +
+ * 独立 ws 连接(CdpChannel 各持 pending/事件),列表/详情/登录互不抢页面;
+ * cookie 是浏览器级共享的。tab 有 LRU 上限(超限关最久未用的 lane,下次用重建)。
  *
  * ⚠️ ws.rs 的 ws_send 已支持 text=true(CDP 用),弹幕二进制调用不受影响。
  */
@@ -37,29 +41,29 @@ function fromBase64(b64: string): string {
 
 /**
  * 单条 CDP 命令的硬超时。远大于页面内任何有意义的操作(导航 ~20s、轮询 15s),
- * 只在「回复永久丢失」时才触发——见 send() 里的注释。
+ * 只在「回复永久丢失」时才触发——见 rawSend() 里的注释。
  */
 const CDP_CMD_TIMEOUT_MS = 30_000
 
-export class TauriBrowserBackend implements BrowserBackend {
+type CdpEventListener = (method: string, params: unknown, sessionId?: string) => void
+
+/**
+ * 一条 CDP ws 连接的**连接级状态**(pending map / 消息 id / 在途 invoke / 事件订阅)。
+ * 默认 page 与每个 lane tab 各持一个实例 —— 这是 lane 互不串台的根本:
+ * 事件帧只来自本连接的 target,abortPending 只掐本连接。
+ */
+class CdpChannel {
   private connId: string | null = null
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
   private nextId = 1
-  /**
-   * 当前在途的 invoke promise(ensureConn / send / getCookies 都记在这里)。
-   *
-   * ⚠️ 这是「取消」的唯一抓手:Rust 侧的 invoke **没有超时**,一次不回话就永久挂起;
-   * 而抓取层是在 withBrowserLock 里 await 它。调用方(desktop refreshAll)对整条
-   * 刷新套了 45s 超时,但超时只 reject 了**外层** promise —— 这条被挂住的 invoke
-   * 仍持有浏览器锁,后续所有浏览器操作排队到天荒地老。
-   * abortPending() 至少让持锁的那个 await 立刻以错误返回,锁得以释放。
-   */
   private inflight = new Set<Promise<unknown>>()
-  /** CDP 事件订阅（无 id 的帧）；LX 被动采集用。 */
-  private eventListeners = new Set<(method: string, params: unknown, sessionId?: string) => void>()
+  private eventListeners = new Set<CdpEventListener>()
+  private connecting: Promise<void> | null = null
+
+  constructor(private readonly tag: string) {}
 
   /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。 */
-  private track<T>(p: Promise<T>): Promise<T> {
+  track<T>(p: Promise<T>): Promise<T> {
     this.inflight.add(p)
     const drop = () => this.inflight.delete(p)
     void p.then(drop, drop)
@@ -85,53 +89,35 @@ export class TauriBrowserBackend implements BrowserBackend {
     }
   }
 
-  /** 并发首连去重：两个 evaluate 同时触发时只能 spawn 一个 Edge。 */
-  private connecting: Promise<void> | null = null
-
-  /** 惰性建连(首次 evaluate 时)。返回的 ws 连到 page target 的 CDP 端点。 */
-  private async ensureConn(): Promise<void> {
+  /** 惰性建连(首次 send/evaluate 时)。openWs 由持有方提供(默认页 / tab target)。 */
+  async ensureConn(openWs: () => Promise<string>): Promise<void> {
     if (this.connId) return
     if (!this.connecting) {
-      this.connecting = this.connect().finally(() => {
+      this.connecting = (async () => {
+        const wsUrl = await openWs()
+        const onEvent = new Channel<CdpEventMsg>()
+        onEvent.onmessage = (ev) => this.handleEvent(ev)
+        const c = await this.track(
+          invoke<{ connectionId: string }>("ws_connect", {
+            req: { url: wsUrl, headers: {}, timeoutMs: 10_000 },
+            onEvent,
+          }),
+        )
+        this.connId = c.connectionId
+      })().finally(() => {
         this.connecting = null
       })
     }
     return this.connecting
   }
 
-  private async connect(): Promise<void> {
-    const port = await this.track(invoke<number>("browser_ensure"))
-    // 找第一个 page target 的 webSocketDebuggerUrl(/json/list 返回 page/background_page 等)。
-    const res = await globalThis.appHost.http.request({
-      url: `http://127.0.0.1:${port}/json/list`,
-      method: "GET",
-      responseType: "text",
-      timeoutMs: 5_000,
-    })
-    const targets = JSON.parse(String(res.body)) as Array<{ type?: string; webSocketDebuggerUrl?: string }>
-    const page = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl)
-    if (!page?.webSocketDebuggerUrl) throw new Error("CDP: 未找到可附加的页面 target")
-
-    const onEvent = new Channel<CdpEventMsg>()
-    onEvent.onmessage = (ev) => this.handleEvent(ev)
-
-    const c = await this.track(
-      invoke<{ connectionId: string }>("ws_connect", {
-        req: { url: page.webSocketDebuggerUrl, headers: {}, timeoutMs: 10_000 },
-        onEvent,
-      }),
-    )
-    this.connId = c.connectionId
-  }
-
-  /** 发一条 CDP 命令（公开入口；惰性建连）。 */
+  /** 发一条 CDP 命令(公开入口;惰性建连由持有方先做)。 */
   async send(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<unknown> {
-    await this.ensureConn()
     return this.rawSend(method, params, sessionId)
   }
 
   /** 订阅 CDP 事件（无 id 的帧），返回取消订阅函数。 */
-  onEvent(cb: (method: string, params: unknown, sessionId?: string) => void): () => void {
+  onEvent(cb: CdpEventListener): () => void {
     this.eventListeners.add(cb)
     return () => {
       this.eventListeners.delete(cb)
@@ -140,7 +126,7 @@ export class TauriBrowserBackend implements BrowserBackend {
 
   /** 发一条 CDP 命令(文本帧),等匹配 id 的响应。 */
   private rawSend(method: string, params: Record<string, unknown>, sessionId?: string): Promise<unknown> {
-    if (!this.connId) return Promise.reject(new Error("CDP not connected"))
+    if (!this.connId) return Promise.reject(new Error(`CDP not connected(${this.tag})`))
     const id = this.nextId++
     const msg = JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })
     const payload = toBase64(msg)
@@ -148,9 +134,8 @@ export class TauriBrowserBackend implements BrowserBackend {
       // ⚠️ 单条命令超时是必须的:页面在命令未回话时被导航/替换,该 id 的回复会
       // **永久丢失**,promise 就此永不 settle。后果不是「这一条卡住」而是全线卡死:
       // waitUntil 的 deadline 只在两次 evaluate 之间检查,单次 evaluate 挂住就轮不到
-      // 超时判断(它的 timeoutMs 形同虚设)→ withBrowserLock 永不释放 → 整轮
-      // refreshAll 不结束(顶栏「更新中」永久转圈)。超时把「无限等待」降级成
-      // 「这条命令报错」,waitUntil 得以走到自己的 deadline。
+      // 超时判断(它的 timeoutMs 形同虚设)→ lane 锁永不释放 → 整轮 refreshAll 不结束
+      // (顶栏「更新中」永久转圈)。超时把「无限等待」降级成「这条命令报错」。
       const timer = setTimeout(() => {
         if (this.pending.delete(id)) reject(new Error(`CDP 命令超时(${method}):页面可能已导航,回复丢失`))
       }, CDP_CMD_TIMEOUT_MS)
@@ -178,7 +163,7 @@ export class TauriBrowserBackend implements BrowserBackend {
       result?: unknown
     }
     if (msg.id === undefined) {
-      // 事件帧(无 id)：分发给 LX 订阅者（Network.* / Target.* 等）。
+      // 事件帧(无 id)：分发给订阅者（Network.* / Target.* 等）——仅本连接 target 的。
       if (msg.method) for (const cb of this.eventListeners) cb(msg.method, msg.params, msg.sessionId)
       return
     }
@@ -187,6 +172,224 @@ export class TauriBrowserBackend implements BrowserBackend {
     this.pending.delete(msg.id)
     if (msg.error) p.reject(new Error(`CDP ${JSON.stringify(msg.error)}`))
     else p.resolve(msg.result)
+  }
+
+  async closeWs(): Promise<void> {
+    if (this.connId) {
+      await this.track(invoke("ws_close", { connectionId: this.connId })).catch(() => {})
+      this.connId = null
+    }
+  }
+}
+
+/** lane tab 的 LRU 上限(每 tab ≈60–120MB,不设上限内存不可控)。 */
+const MAX_TABS = 8
+
+/** lane tab 句柄:独立 target(PUT /json/new)+ 独立 CdpChannel。 */
+class TauriBrowserTab implements BrowserTab {
+  private channel: CdpChannel
+  private targetId: string | null = null
+  private ensuring: Promise<void> | null = null
+
+  constructor(readonly key: string, private readonly getPort: () => Promise<number>) {
+    this.channel = new CdpChannel(`tab:${key}`)
+  }
+
+  /** 确保 target 存在(一次;PUT /json/new 建**同窗口 tab**,不开新窗口)。 */
+  private ensureTarget(): Promise<void> {
+    if (this.targetId) return Promise.resolve()
+    if (!this.ensuring) {
+      this.ensuring = (async () => {
+        const port = await this.getPort()
+        // Chromium ≥111 要求 PUT;about:blank 落点由 cdpNavigate 决定。
+        const res = await globalThis.appHost.http.request({
+          url: `http://127.0.0.1:${port}/json/new?about:blank`,
+          method: "PUT",
+          responseType: "text",
+          timeoutMs: 5_000,
+        })
+        const t = JSON.parse(String(res.body)) as { id?: string }
+        if (!t.id) throw new Error("CDP: /json/new 未返回 target id")
+        this.targetId = t.id
+      })().finally(() => {
+        this.ensuring = null
+      })
+    }
+    return this.ensuring
+  }
+
+  /** 本 tab 的 ws 端点(target 的 webSocketDebuggerUrl)。 */
+  private async openWs(): Promise<string> {
+    await this.ensureTarget()
+    const port = await this.getPort()
+    // /json/list 里按 id 找本 target(拿最新 webSocketDebuggerUrl;重连安全)。
+    const res = await globalThis.appHost.http.request({
+      url: `http://127.0.0.1:${port}/json/list`,
+      method: "GET",
+      responseType: "text",
+      timeoutMs: 5_000,
+    })
+    const targets = JSON.parse(String(res.body)) as Array<{ id?: string; webSocketDebuggerUrl?: string }>
+    const t = targets.find((x) => x.id === this.targetId && x.webSocketDebuggerUrl)
+    if (!t?.webSocketDebuggerUrl) throw new Error(`CDP: lane tab ${this.key} 的 target 已消失`)
+    return t.webSocketDebuggerUrl
+  }
+
+  private async ensureConn(): Promise<void> {
+    await this.channel.ensureConn(() => this.openWs())
+  }
+
+  async evaluate<T = unknown>(
+    expression: string,
+    opts?: { awaitPromise?: boolean; returnByValue?: boolean },
+  ): Promise<T> {
+    await this.ensureConn()
+    const r = (await this.channel.send("Runtime.evaluate", {
+      expression,
+      awaitPromise: opts?.awaitPromise ?? true,
+      returnByValue: opts?.returnByValue ?? true,
+    })) as { exceptionDetails?: unknown; result?: { value?: unknown } }
+    if (r.exceptionDetails) {
+      const d = (r.exceptionDetails as { text?: string; exception?: { description?: string } }).exception
+      const detail = d?.description ?? JSON.stringify(r.exceptionDetails)
+      browserLog.evalError({ expression, detail })
+      throw new Error(`CDP evaluate 异常: ${detail}`)
+    }
+    return r.result?.value as T
+  }
+
+  async getCookies(url?: string): Promise<Record<string, string>> {
+    await this.ensureConn()
+    const r = (url
+      ? await this.channel.send("Network.getCookies", { urls: [url] })
+      : await this.channel.send("Network.getAllCookies", {})
+    ) as { cookies?: Array<{ name: string; value: string }> }
+    const out: Record<string, string> = {}
+    for (const c of r.cookies ?? []) out[c.name] = c.value
+    return out
+  }
+
+  send(method: string, params?: Record<string, unknown>, sessionId?: string): Promise<unknown> {
+    return this.channel.send(method, params, sessionId)
+  }
+
+  onEvent(cb: CdpEventListener): () => void {
+    return this.channel.onEvent(cb)
+  }
+
+  /** 激活本 tab(毫秒级、不重载)——滚动驱动前必须(非激活 tab rAF/IO 停摆,§3.9)。 */
+  async activate(): Promise<void> {
+    await this.ensureTarget()
+    const port = await this.getPort()
+    await globalThis.appHost.http.request({
+      url: `http://127.0.0.1:${port}/json/activate/${this.targetId}`,
+      method: "GET",
+      responseType: "text",
+      timeoutMs: 5_000,
+    })
+  }
+
+  abortPending(reason: string): void {
+    this.channel.abortPending(reason)
+  }
+
+  async close(): Promise<void> {
+    await this.channel.closeWs()
+    if (this.targetId) {
+      const id = this.targetId
+      this.targetId = null
+      const port = await this.getPort().catch(() => null)
+      if (port !== null) {
+        await globalThis.appHost.http.request({
+          url: `http://127.0.0.1:${port}/json/close/${id}`,
+          method: "GET",
+          responseType: "text",
+          timeoutMs: 5_000,
+        }).catch(() => {})
+      }
+    }
+  }
+}
+
+export class TauriBrowserBackend implements BrowserBackend {
+  private channel = new CdpChannel("default")
+  /** lane → tab 句柄(同 key 复用;LRU 上限 MAX_TABS)。 */
+  private tabs = new Map<string, TauriBrowserTab>()
+  /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。host 级(browser_ensure)用。 */
+  private track<T>(p: Promise<T>): Promise<T> {
+    return this.channel.track(p)
+  }
+
+  /** 拿 CDP 端口(browser_ensure 幂等;tab/默认页共用)。 */
+  private async port(): Promise<number> {
+    return this.track(invoke<number>("browser_ensure"))
+  }
+
+  /** 并发首连去重：两个 evaluate 同时触发时只能 spawn 一个 Edge。 */
+  private connectingRef: Promise<void> | null = null
+
+  /** 惰性建连(首次 evaluate 时)。返回的 ws 连到默认 page target 的 CDP 端点。 */
+  private async ensureConn(): Promise<void> {
+    if (!this.connectingRef) {
+      this.connectingRef = this.channel
+        .ensureConn(async () => {
+          const port = await this.port()
+          // 找第一个 page target 的 webSocketDebuggerUrl(/json/list 返回 page/background_page 等)。
+          const res = await globalThis.appHost.http.request({
+            url: `http://127.0.0.1:${port}/json/list`,
+            method: "GET",
+            responseType: "text",
+            timeoutMs: 5_000,
+          })
+          const targets = JSON.parse(String(res.body)) as Array<{ type?: string; webSocketDebuggerUrl?: string }>
+          const page = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl)
+          if (!page?.webSocketDebuggerUrl) throw new Error("CDP: 未找到可附加的页面 target")
+          return page.webSocketDebuggerUrl
+        })
+        .finally(() => {
+          this.connectingRef = null
+        })
+    }
+    return this.connectingRef
+  }
+
+  tab(key: string): BrowserTab {
+    // LRU:重挂到 map 尾部(Map 迭代按插入序,最旧在首)。
+    const existing = this.tabs.get(key)
+    if (existing) {
+      this.tabs.delete(key)
+      this.tabs.set(key, existing)
+      return existing
+    }
+    // 超限:关最久未用的 lane(首个)。其句柄还在别的引用里也安全——close 后再 evaluate 会重建。
+    while (this.tabs.size >= MAX_TABS) {
+      const oldest = this.tabs.keys().next().value
+      if (oldest === undefined) break
+      const t = this.tabs.get(oldest)
+      this.tabs.delete(oldest)
+      void t?.close().catch(() => {})
+    }
+    const t = new TauriBrowserTab(key, () => this.port())
+    this.tabs.set(key, t)
+    return t
+  }
+
+  abortTabs(reason: string, opts?: { keepLogin?: boolean }): void {
+    for (const [key, t] of this.tabs) {
+      if (opts?.keepLogin && key.startsWith("login:")) continue
+      t.abortPending(reason)
+    }
+  }
+
+  /** 发一条 CDP 命令（公开入口；惰性建连）。 */
+  async send(method: string, params: Record<string, unknown> = {}, sessionId?: string): Promise<unknown> {
+    await this.ensureConn()
+    return this.channel.send(method, params, sessionId)
+  }
+
+  /** 订阅 CDP 事件（无 id 的帧），返回取消订阅函数。 */
+  onEvent(cb: CdpEventListener): () => void {
+    return this.channel.onEvent(cb)
   }
 
   /**
@@ -203,7 +406,7 @@ export class TauriBrowserBackend implements BrowserBackend {
     opts?: { awaitPromise?: boolean; returnByValue?: boolean },
   ): Promise<T> {
     await this.ensureConn()
-    const r = (await this.send("Runtime.evaluate", {
+    const r = (await this.channel.send("Runtime.evaluate", {
       expression,
       awaitPromise: opts?.awaitPromise ?? true,
       returnByValue: opts?.returnByValue ?? true,
@@ -223,8 +426,8 @@ export class TauriBrowserBackend implements BrowserBackend {
   async getCookies(url?: string): Promise<Record<string, string>> {
     await this.ensureConn()
     const r = (url
-      ? await this.send("Network.getCookies", { urls: [url] })
-      : await this.send("Network.getAllCookies", {})
+      ? await this.channel.send("Network.getCookies", { urls: [url] })
+      : await this.channel.send("Network.getAllCookies", {})
     ) as { cookies?: Array<{ name: string; value: string }> }
     const out: Record<string, string> = {}
     for (const c of r.cookies ?? []) out[c.name] = c.value
@@ -244,7 +447,7 @@ export class TauriBrowserBackend implements BrowserBackend {
   async clearCookies(domainSuffix: string): Promise<number> {
     await this.ensureConn()
     const suffix = domainSuffix.replace(/^\./, "")
-    const r = (await this.send("Network.getAllCookies", {})) as {
+    const r = (await this.channel.send("Network.getAllCookies", {})) as {
       cookies?: Array<{ name: string; domain?: string; path?: string }>
     }
     // 只认「自身或子域」:`notxiaohongshu.com`.endsWith(`xiaohongshu.com`) 也是 true,
@@ -255,7 +458,7 @@ export class TauriBrowserBackend implements BrowserBackend {
       return d === host || d.endsWith(`.${host}`)
     })
     for (const c of targets) {
-      await this.send("Network.deleteCookies", {
+      await this.channel.send("Network.deleteCookies", {
         name: c.name,
         domain: c.domain,
         path: c.path ?? "/",
@@ -265,17 +468,18 @@ export class TauriBrowserBackend implements BrowserBackend {
   }
 
   async close(): Promise<void> {
-    if (this.connId) {
-      await this.track(invoke("ws_close", { connectionId: this.connId })).catch(() => {})
-      this.connId = null
-    }
+    await this.channel.closeWs()
+    for (const [, t] of this.tabs) await t.close().catch(() => {})
+    this.tabs.clear()
     await this.track(invoke("browser_close")).catch(() => {})
   }
 
   /** 清空 profile(Rust 侧 browser_reset_profile:杀我们的 Edge 树 + 删目录)。 */
   async resetProfile(): Promise<string> {
     // 连接已随进程销毁失效,清掉本地引用,下次 evaluate 会重新 ensureConn。
-    this.connId = null
+    await this.channel.closeWs()
+    for (const [, t] of this.tabs) t.abortPending("浏览器 profile 已重置")
+    this.tabs.clear()
     return await invoke<string>("browser_reset_profile")
   }
 }

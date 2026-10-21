@@ -33,7 +33,7 @@ import {
   xhsClient,
   xhsFetchPage,
 } from "@amoeba/resolve"
-import { cdpEvaluate, cdpNavigate, waitUntil, withBrowserMode } from "@amoeba/resolve"
+import { cdpEvaluate, cdpNavigate, waitUntil, withBrowserOp } from "@amoeba/resolve"
 
 /** 滚动翻页每次返回的窗口大小(仅 `xhs:user`;explore 一次整批返回)。 */
 export const XHS_FETCH_MORE_WINDOW = 30
@@ -246,33 +246,32 @@ export interface XhsListPage<T> {
 /**
  * 按登录态抓一个 xhs 列表页。
  * 返回 null 只会在 `passiveOnly && 匿名` 时发生。
+ *
+ * `lane`:列表 lane 名(如 `list:xhs:explore`)——lane 化后按 channelKey 分 tab,
+ * 保住翻页累积 state(详情/登录在各自 lane,不再把列表页导航走)。
  */
 export async function fetchXhsList<T>(
   browser: BrowserBackend,
   page: XhsListPage<T>,
+  lane: string,
 ): Promise<T | null> {
-  return withBrowserMode(
-    browser,
-    "hidden",
-    async () => {
-      await cdpNavigate(browser, page.url, true)
-      await waitXhsSsr(browser, "xhs SSR 状态未挂载")
-      await assertXhsNotBlocked(browser)
+  return withBrowserOp(browser, { lane, platform: "xhs" }, async (b) => {
+    await cdpNavigate(b, page.url, true)
+    await waitXhsSsr(b, "xhs SSR 状态未挂载")
+    await assertXhsNotBlocked(b)
 
-      // 登录路由统一由 resolveXhsRoute 判(登录页优先于 cookie:失效会话的残留
-      // user_id 不能当登录,否则会读到登录页的空 SSR)。
-      const route = await resolveXhsRoute(browser)
-      if (route === "logged-in") return page.readPage(browser)
-      // 被动模式匿名:不 fetch,交给 core 回退缓存。
-      if (page.passiveOnly) return null
-      // 匿名(或登录重定向):有 HTML 解析器的渠道走页面内 fetch(Chrome 指纹);
-      // 没有解析器的渠道(explore)在登录页上再读 SSR 只会得 0 条,必须给可操作错误。
-      if (page.parseHtml) return page.parseHtml(await xhsFetchPage(browser, page.url, "omit"))
-      if (route === "login-page" && page.loginError) throw new Error(page.loginError)
-      return page.readPage(browser)
-    },
-    "xhs",
-  )
+    // 登录路由统一由 resolveXhsRoute 判(登录页优先于 cookie:失效会话的残留
+    // user_id 不能当登录,否则会读到登录页的空 SSR)。
+    const route = await resolveXhsRoute(b)
+    if (route === "logged-in") return page.readPage(b)
+    // 被动模式匿名:不 fetch,交给 core 回退缓存。
+    if (page.passiveOnly) return null
+    // 匿名(或登录重定向):有 HTML 解析器的渠道走页面内 fetch(Chrome 指纹);
+    // 没有解析器的渠道(explore)在登录页上再读 SSR 只会得 0 条,必须给可操作错误。
+    if (page.parseHtml) return page.parseHtml(await xhsFetchPage(b, page.url, "omit"))
+    if (route === "login-page" && page.loginError) throw new Error(page.loginError)
+    return page.readPage(b)
+  })
 }
 
 /** LX 路线 A(Network 捕获)的页面配方。 */
@@ -297,30 +296,27 @@ export interface XhsPassivePage<T> {
 /**
  * LX 路线 A:导航触发页面自身文档请求 → CDP Network 缓冲取响应体 → 解析。
  * 只观察、不构造请求;拿不到缓冲返回 null(core 会回退内容缓存,绝不回退主动 fetch)。
+ * `lane`:列表 lane 名(同 fetchXhsList;被动捕获绑到本 lane 的 tab,不串台)。
  */
 export async function fetchXhsPassivePage<T>(
   browser: BrowserBackend,
   page: XhsPassivePage<T>,
+  lane: string,
 ): Promise<T | null> {
-  return withBrowserMode(
-    browser,
-    "hidden",
-    async () => {
-      await capturePage(browser, {
-        platform: "xhs",
-        endpoint: page.endpoint,
-        match: page.match,
-        trigger: (b) => cdpNavigate(b, `${XHS_BASE}${page.path}`, true),
-      })
-      // 被动路径同样要识别风控/登录重定向,否则会被当成「无被动数据」静默回退缓存。
-      await ensureXhsPageReady(browser, page.path, page.notLoggedInMsg)
-      await assertXhsNotBlocked(browser)
-      const entry = passiveBuffer.getLatest("xhs", page.endpoint)
-      if (!entry) return page.readPage ? page.readPage() : null
-      return page.readState(extractInitialState(entry.body))
-    },
-    "xhs",
-  )
+  return withBrowserOp(browser, { lane, platform: "xhs" }, async (b) => {
+    await capturePage(b, {
+      platform: "xhs",
+      endpoint: page.endpoint,
+      match: page.match,
+      trigger: (x) => cdpNavigate(x, `${XHS_BASE}${page.path}`, true),
+    })
+    // 被动路径同样要识别风控/登录重定向,否则会被当成「无被动数据」静默回退缓存。
+    await ensureXhsPageReady(b, page.path, page.notLoggedInMsg)
+    await assertXhsNotBlocked(b)
+    const entry = passiveBuffer.getLatest("xhs", page.endpoint)
+    if (!entry) return page.readPage ? page.readPage() : null
+    return page.readState(extractInitialState(entry.body))
+  })
 }
 
 /** 单条笔记详情的抓取参数。 */
@@ -357,37 +353,35 @@ export async function resolveXhsItemDetail(opts: XhsDetailOptions): Promise<Item
     return detailFromHtml(await xhsClient.getHtml(url, { cookie: cookie ?? "" }), noteId, sourceKey)
   }
 
-  return withBrowserMode(
-    browser,
-    "hidden",
-    async () => {
-      // 页面内 fetch 需要同源;已在 xhs 域就不重复导航。
-      await ensureXhsOrigin(browser)
-      await assertXhsNotBlocked(browser)
+  // 详情跑在专属 detail lane(`detail:xhs` 的独立 tab):打开详情不再把列表页
+  // (explore/user lane 的 tab)导航走,xhs:user 的翻页 state 得以存活(§3.13)。
+  return withBrowserOp(browser, { lane: "detail:xhs" }, async (b) => {
+    // 页面内 fetch 需要同源;已在 xhs 域就不重复导航(专属 detail tab 常驻 xhs 域,
+    // 这里基本是 no-op,首次 about:blank 才真导航)。
+    await ensureXhsOrigin(b)
+    await assertXhsNotBlocked(b)
 
-      // 登录路由与列表抓取共用同一判据(登录页优先,残留 user_id 不算登录)。
-      const route = await resolveXhsRoute(browser)
-      if (passiveOnly || route === "logged-in") {
-        await cdpNavigate(browser, url, true)
-        await waitXhsSsr(browser, "xhs 详情页未就绪")
-        if (await isXhsLoginPage(browser)) {
-          throw new Error("小红书登录已失效或未登录，请到「账号与凭证」重新扫码")
-        }
-        await assertXhsNotBlocked(browser)
-        let note = await cdpEvaluate<any>(browser, noteDetailStateExpr(noteId)).catch(() => null)
-        // 兜底:页面状态被前端改写/不可序列化时,从当前 DOM 里的内联 state 重新解析。
-        if (!note) {
-          const html = await cdpEvaluate<string>(browser, `document.documentElement.outerHTML`)
-          note = extractNoteDetail(html, noteId)
-        }
-        return note ? noteDetailToSocial(note, sourceKey, now()) : null
+    // 登录路由与列表抓取共用同一判据(登录页优先,残留 user_id 不算登录)。
+    const route = await resolveXhsRoute(b)
+    if (passiveOnly || route === "logged-in") {
+      await cdpNavigate(b, url, true)
+      await waitXhsSsr(b, "xhs 详情页未就绪")
+      if (await isXhsLoginPage(b)) {
+        throw new Error("小红书登录已失效或未登录，请到「账号与凭证」重新扫码")
       }
+      await assertXhsNotBlocked(b)
+      let note = await cdpEvaluate<any>(b, noteDetailStateExpr(noteId)).catch(() => null)
+      // 兜底:页面状态被前端改写/不可序列化时,从当前 DOM 里的内联 state 重新解析。
+      if (!note) {
+        const html = await cdpEvaluate<string>(b, `document.documentElement.outerHTML`)
+        note = extractNoteDetail(html, noteId)
+      }
+      return note ? noteDetailToSocial(note, sourceKey, now()) : null
+    }
 
-      // 匿名访客:页面内抓详情 HTML。
-      return detailFromHtml(await xhsFetchPage(browser, url, "omit"), noteId, sourceKey)
-    },
-    "xhs",
-  )
+    // 匿名访客:页面内抓详情 HTML。
+    return detailFromHtml(await xhsFetchPage(b, url, "omit"), noteId, sourceKey)
+  })
 }
 
 function detailFromHtml(html: string, noteId: string, sourceKey: string): Item | null {

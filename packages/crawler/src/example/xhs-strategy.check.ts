@@ -134,11 +134,15 @@ ok(flatXhsStateList(undefined, ["user", "notes"]).length === 0, "缺失 state �
   const { browser } = fakeBrowser(base({ redirectToLogin: true }))
   let msg = ""
   try {
-    await fetchXhsList<string>(browser, {
-      url: `${XHS}/explore`,
-      readPage: async () => "ssr-on-login-page",
-      loginError: "LOGIN_REQUIRED",
-    })
+    await fetchXhsList<string>(
+      browser,
+      {
+        url: `${XHS}/explore`,
+        readPage: async () => "ssr-on-login-page",
+        loginError: "LOGIN_REQUIRED",
+      },
+      "list:test",
+    )
   } catch (e) {
     msg = String(e)
   }
@@ -147,46 +151,62 @@ ok(flatXhsStateList(undefined, ["user", "notes"]).length === 0, "缺失 state �
 {
   const { browser } = fakeBrowser(base({ redirectToLogin: true, fetchBody: "<html>full</html>" }))
   let html = ""
-  const got = await fetchXhsList<string>(browser, {
-    url: `${XHS}/user/profile/u1`,
-    readPage: async () => "ssr-on-login-page",
-    parseHtml: (h) => {
-      html = h
-      return "anonymous-html"
+  const got = await fetchXhsList<string>(
+    browser,
+    {
+      url: `${XHS}/user/profile/u1`,
+      readPage: async () => "ssr-on-login-page",
+      parseHtml: (h) => {
+        html = h
+        return "anonymous-html"
+      },
+      loginError: "LOGIN_REQUIRED",
     },
-    loginError: "LOGIN_REQUIRED",
-  })
+    "list:test",
+  )
   ok(got === "anonymous-html" && html === "<html>full</html>", "有 parseHtml 的渠道在登录页应走匿名 fetch")
 }
 
 // ── fetchXhsList:匿名 / 被动 / 登录态 ───────────────────────────────────────
 {
   const { browser } = fakeBrowser(base())
-  const got = await fetchXhsList<string>(browser, {
-    url: `${XHS}/explore`,
-    readPage: async () => "anonymous-ssr",
-    loginError: "LOGIN_REQUIRED",
-  })
+  const got = await fetchXhsList<string>(
+    browser,
+    {
+      url: `${XHS}/explore`,
+      readPage: async () => "anonymous-ssr",
+      loginError: "LOGIN_REQUIRED",
+    },
+    "list:test",
+  )
   ok(got === "anonymous-ssr", "explore 匿名应读页面 SSR")
 }
 {
   const { browser } = fakeBrowser(base())
-  const got = await fetchXhsList<string>(browser, {
-    url: `${XHS}/user/profile/u1`,
-    readPage: async () => "should-not-fetch",
-    parseHtml: () => "should-not-parse",
-    passiveOnly: true,
-  })
+  const got = await fetchXhsList<string>(
+    browser,
+    {
+      url: `${XHS}/user/profile/u1`,
+      readPage: async () => "should-not-fetch",
+      parseHtml: () => "should-not-parse",
+      passiveOnly: true,
+    },
+    "list:test",
+  )
   ok(got === null, "被动 + 匿名应返回 null(交给 core 回退缓存)")
 }
 {
   const { browser } = fakeBrowser(base({ pageLoggedIn: true }))
-  const got = await fetchXhsList<string>(browser, {
-    url: `${XHS}/user/profile/u1`,
-    readPage: async () => "logged-in-ssr",
-    parseHtml: () => "should-not-parse",
-    passiveOnly: true,
-  })
+  const got = await fetchXhsList<string>(
+    browser,
+    {
+      url: `${XHS}/user/profile/u1`,
+      readPage: async () => "logged-in-ssr",
+      parseHtml: () => "should-not-parse",
+      passiveOnly: true,
+    },
+    "list:test",
+  )
   ok(got === "logged-in-ssr", "被动 + 登录态仍允许读页面 SSR")
 }
 
