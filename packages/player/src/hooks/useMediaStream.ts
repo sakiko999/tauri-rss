@@ -106,10 +106,22 @@ export function useMediaStream({
         if (max < 0) return
         hls.currentLevel = max
       })
-      // YouTube HLS(googlevideo.com)无 CORS 头,hls.js 默认 XHR 被浏览器拦。
-      // 走 HlsHostLoader(appHost.http:Rust reqwest 隧道无 CORS / 浏览器 fetch)。
+      // 走 HlsHostLoader(appHost.http:Rust reqwest 隧道,不经过 WebView 的 CORS/Origin):
+      //   - `googlevideo.com`(YouTube):manifest/分片都无 `Access-Control-Allow-Origin`
+      //     → playlist 与分片**全部**走隧道;
+      //   - `playlist.ttvnw.net`(Twitch):该域对 `Origin: http://tauri.localhost` **直接回
+      //     403**(dev 的 `http://localhost:1420` 恰好放行),所以只有 release 下 Twitch
+      //     黑屏、错误是 `hls networkError manifestLoadError`。但 Twitch 的**分片域**
+      //     (`*.cloudfront.hls.ttvnw.net`)带 `ACAO:*`、直连 206 —— 只把 **playlist**
+      //     换成隧道(`pLoader`),分片仍走浏览器 XHR(更省,且大分片不必走 base64 隧道)。
+      // 判据别按「有没有 CORS」,按「WebView 里直接发会不会被拒」。
       if (/googlevideo\.com/i.test(stream.url)) {
         hls.config.loader = HlsHostLoader
+      } else if (/playlist\.ttvnw\.net/i.test(stream.url)) {
+        // hls.js 的 pLoader 要求 `Loader<PlaylistLoaderContext>`(比通用 LoaderContext
+        // 多 level/id 等字段),而 HlsHostLoader 只用 url/headers/range —— 运行时同一套,
+        // 这里只做类型收窄(改类签名会让 `config.loader` 那处反过来不兼容)。
+        hls.config.pLoader = HlsHostLoader as unknown as typeof hls.config.pLoader
       } else if (stream.headers) {
         hls.config.xhrSetup = (xhr) => {
           for (const [k, v] of Object.entries(stream.headers!)) {
@@ -127,7 +139,20 @@ export function useMediaStream({
       }
       hls.on(Hls.Events.ERROR, (_evt, data) => {
         log.engineError({ engine: "hls", err: data, fatal: !!data.fatal })
-        if (data.fatal) report?.(data)
+        // ⚠️ 上报**Error**而不是 hls.js 的 ErrorData 对象:后者 `String(obj)` 是
+        // `[object Object]`,PlayableMedia 的错误块会把「哪个 URL、哪个 HTTP 码」
+        // 全丢掉(曾因此只看到「播放失败 [object Object]」)。
+        if (data.fatal) {
+          const code = (data as { response?: { code?: number } }).response?.code
+          const where = (data as { context?: { url?: string } }).context?.url
+          report?.(
+            new Error(
+              `hls ${data.type}: ${data.details}` +
+                (code ? ` (HTTP ${code})` : "") +
+                (where ? ` — ${where.slice(0, 160)}` : ""),
+            ),
+          )
+        }
       })
       // 流信息:LEVEL_LOADED 打印实际播放档位(高度/码率),排查清晰度来源。
       // ⚠️ 直播 LL-HLS 持续重载 playlist,每次 LEVEL_LOADED 都打会刷屏;且 B站直播
