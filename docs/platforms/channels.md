@@ -225,9 +225,9 @@ Apple 播客的模型是：
 | 抖音 | `live:douyin:category` | `fetchDouyinCategories` 首页 SSR 的 `categoryData` | ✅（必须同时带 `partitionType`） |
 | Twitch | `twitch:category` | `games(first: 30)` 匿名返回 slug/displayName/viewersCount/boxArt | ✅ |
 | YouTube | `youtube:live-category` | Live 页的 `Live Now - <栏目>` | ✅（栏目级） |
-| B站直播 | 无分区订阅渠道 | `Area/getList` 只有分区树；`second/getList` 需登录且匿名 `-352` | ❌ 不做 |
+| B站直播 | `bili:live:area`（列房需登录） | `Area/getList` 匿名出全树；`second/getList` 登录态列房（匿名 `-352`） | ✅（2026-10-22 落地） |
 
-**结论：除 B站直播分区外，现有/计划中的分区渠道都能改成二级操作。**
+**结论：全部分区渠道都能改成二级操作。**
 
 #### 4.3 已落地架构：目录渠道 + `kind:"category"`
 
@@ -240,6 +240,7 @@ Apple 播客的模型是：
 | `live:douyin:categories` | 抖音顶层 + 子分区（16 条） | `live:douyin:category` |
 | `live:douyu:categories` | 斗鱼二级分区（530 条） | `live:douyu:category` |
 | `live:huya:categories` | 虎牙二级分区（389 条） | `live:huya:category` |
+| `bili:live:areas` | B站直播顶层 + 子分区（12 顶层 + 二级全量） | `bili:live:area`（列房需登录） |
 
 条目契约（xml `Category` / core `CategoryItem`）：
 
@@ -313,7 +314,8 @@ UI 流程（与播客榜单完全同构）：
 2. ✅ 右侧内容视图（`?open=`，复用正常网格）+ 「订阅该分区」（完整参数）。
 3. ✅ 抖音 `partitionType` 两参问题（目录与手输都带完整参数）。
 4. ✅ 五个平台目录渠道（Twitch / YouTube / 抖音 / 斗鱼 / 虎牙）。
-5. ⬜ **B站直播分区**：不做，除非登录态方案另行立项。
+5. ✅ **B站直播分区**（2026-10-22）：`bili:live:areas` 目录 + `bili:live:area` 列房
+   （`second/getList` 需登录态 + `w_webid`，见 `docs/platforms/platform-notes.md`）。
 
 ---
 
@@ -361,9 +363,10 @@ UI 流程（与播客榜单完全同构）：
 
 ## 二、未做的缺口
 
-- **bili 按分区列房** —— `second/getList` 需 wbi 签名 + access_id + cookie，且匿名实测
-  **仍 `-352` 风控**（带 buvid3/access_id/wbi 均无效），必须登录态。分区树
-  （`Area/getList`）匿名可用、已实现但未挂 channel（它并非 feed）。
+- ~~**bili 按分区列房**~~ ✅ 已落地（2026-10-22）：`bili:live:areas`（目录，匿名）+
+  `bili:live:area`（列房，**需登录态**——wbi + buvid + `w_webid`（live 页 HTML 的
+  `access_id`），匿名 `-352`，20 条/页 + `has_more`）。此前「匿名带 access_id 仍
+  -352」的结论系探针 cookie 拼接缺 `; ` 分隔导致 buvid3 失效所致，登录态实测可用。
 - **抖音分区搜索的词表局限** —— `live:douyin:search` 本质是分区搜索，只按分区名匹配；
   主播名（`旭旭宝宝`）与三级词（`美食`）返回 0。已知主播请用 `live:douyin` +
   抖音号/主页链接（见第五节）；`live:douyin:user` 仅保留给存量订阅。
@@ -396,10 +399,9 @@ UI 流程（与播客榜单完全同构）：
 - **B站合集 / 视频列表 / 收藏夹的分页深度**（2026-10-20）—— 剩余：
   私有收藏夹需登录；「稍后再看」不接；合集/系列条目没有作者名（archives 里只有
   `mid`，不回查用户资料）。详见 `docs/platforms/channels.md` §3。
-- **分区目录订阅的剩余项**（2026-10-20）—— 剩余：**B站直播分区**仍不做
-  （`second/getList` 需登录，匿名 `-352`）；
-  预览弹窗里的房间**只读**（预览条目无真实订阅，不能直接播）。详见
-  `docs/platforms/channels.md` §4。
+- **分区目录订阅的剩余项**（2026-10-22）—— B站直播分区已落地（`bili:live:areas` +
+  `bili:live:area`，列房需登录）；剩余：预览弹窗里的房间**只读**
+  （预览条目无真实订阅，不能直接播）。详见 `docs/platforms/channels.md` §4。
 
 ## 三、条件触发的迁移（当前不做，等信号）
 

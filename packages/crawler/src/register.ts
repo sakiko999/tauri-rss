@@ -15,6 +15,8 @@ import {
   BiliLiveChannel,
   BiliDynamicChannel,
   BiliLiveHotChannel,
+  BiliLiveAreasChannel,
+  BiliLiveAreaChannel,
   BiliSearchChannel,
   BiliAnchorChannel,
   BiliUserChannel,
@@ -95,6 +97,8 @@ export function registerBuiltinChannels(): void {
   registerChannel(BiliUserVideoChannel)
   registerChannel(new BiliLiveChannel())
   registerChannel(BiliLiveHotChannel)
+  registerChannel(BiliLiveAreasChannel)
+  registerChannel(BiliLiveAreaChannel)
   registerChannel(new BiliSeasonChannel())
   registerChannel(new BiliSeriesChannel())
   registerChannel(BiliFavlistChannel)

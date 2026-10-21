@@ -156,8 +156,6 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 
 - **自动保活**（仅 bili 可行）：已有 `refresh_token` 但无续期调度 —— 到期只能重扫。
 - **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）。
-- **多 tab / lane 化**：设计已定（`docs/risk/crawler-risk-control.md` §3.13），未实现。
-- **bili 按分区列房 / B站直播分区目录**：`second/getList` 需登录，匿名 `-352`。
 - **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行。
 - **抖音登录态搜索调研**：先专用小号 + CDP 被动探针，再决定是否实现。
 

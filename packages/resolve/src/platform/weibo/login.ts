@@ -85,9 +85,9 @@ export async function weiboScanLogin(
   emitQr: (qr: string | null) => void,
   opts?: WeiboScanLoginOptions,
 ): Promise<LoginResult> {
-  // 与 xhs 同构:持锁 + scanLoginActive(见 cdp.ts withScanLoginLock);不传 platform ——
-  // 冷却期仍需允许用户重新扫码自救。
-  return withScanLoginLock(browser, "hidden", () => runWeiboScanLogin(browser, emitQr, opts))
+  // 与 xhs 同构:专属 login lane(login:weibo);不传 platform —— 冷却期仍需允许用户
+  // 重新扫码自救。
+  return withScanLoginLock(browser, "hidden", () => runWeiboScanLogin(browser, emitQr, opts), "weibo")
 }
 
 async function runWeiboScanLogin(

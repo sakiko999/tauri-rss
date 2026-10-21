@@ -125,12 +125,11 @@ export async function xhsScanLogin(
   emitQr: (qrDataUrl: string | null) => void,
   opts?: XhsScanLoginOptions,
 ): Promise<LoginResult> {
-  // ⚠️ 登录与抓取共享同一个 page target，必须持浏览器锁：否则刷新会把登录弹窗导航走，
-  // 手机确认后页面自身的 qrcode/status 轮询已停止，web_session 不再产生，5 分钟后以
-  // 「二维码已失效」收场（刷新侧也可能因 execution context 被销毁而失败）。
-  // ⚠️ 刻意**不传 platform**：冷却期正是用户需要重新扫码自救的时候，不能被 browserGate
-  // 拦住；登录仍然走锁串行。
-  return withScanLoginLock(browser, "hidden", () => runScanLogin(browser, emitQr, opts))
+  // 登录跑在专属 login lane(login:xhs 的独立 tab):刷新在自己 lane 上,不会再把
+  // 登录弹窗导航走;手机确认后页面自身的 qrcode/status 轮询不受刷新影响。
+  // ⚠️ 刻意**不传 platform**:冷却期正是用户需要重新扫码自救的时候,不能被 browserGate
+  // 拦住。
+  return withScanLoginLock(browser, "hidden", () => runScanLogin(browser, emitQr, opts), "xhs")
 }
 
 async function runScanLogin(

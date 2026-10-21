@@ -19,8 +19,12 @@
   实测 uid：半佛仙人 37663924（⚠️ 37883317 是「DILI念」勿用）
 - **直播档位按实际值标注**：B 站对访客降档——匿名请求 `qn=10000`（原画）实测只给
   `current_qn=250`（超清），且多档请求会收敛到同一值。故读 `current_qn` 标注并按实际值去重
-- **按分区列房未做**：`second/getList` 需登录，匿名带 buvid3/wbi 实测仍 `-352`。
-  分区树走 `Area/getList`（匿名可用，已实现未挂 channel）
+- ✅ **按分区列房**（2026-10-22，渠道 `bili:live:areas` 目录 + `bili:live:area` 列房）：
+  `GET xlive/web-interface/v1/second/getList?platform=web&parent_area_id=&area_id=&sort_type=online&page=`
+  **需登录态**——wbi 签名 + buvid3 之外还**必带 `w_webid`**（任意 live 页 HTML 里的
+  `"access_id"`，短时效 token，`discover.ts` 模块级缓存 + -352 逐出重取）；
+  匿名实测一律 `-352`（渠道翻译成「需要登录」文案）。20 条/页 + `has_more` 翻页。
+  分区树 `Area/getList` 匿名可用（顶层条目 `areaId=0` 即整区列房）。
 - ✅ **搜UP主**（2026-10-16，`searchBiliUsers` / 渠道 `bili:user`）：
   `search_type=bili_user` + **匿名 buvid3/4**（`biliClient.getJson(..., {buvid:true})`，
   裸请求 412）。与 `bili:user_video`（uid 投稿订阅）配对，走「添加订阅 → UP主 / 频道」

@@ -1,17 +1,20 @@
 /**
- * bili 发现层 —— 分区列表 + 搜索(直播房间/主播)。
+ * bili 发现层 —— 分区列表 + 按分区列房 + 搜索(直播房间/主播)。
  *
  * 分区列表:`room/v1/Area/getList?parent_id=0&need_entrance=1` — **匿名可用**
  * (只需 buvid;一次返回全部一二级:一级 `id/name`,`list[]` 为二级)。
- * ⚠️ **按分区列房(`second/getList`)不在本文件**——它需 **wbi 签名 + access_id +
- * cookie**,且匿名实测仍 `-352` 风控(2026-09:带 buvid3/access_id/wbi 均无效),
- * 须登录态。见 `docs/capability-gaps.md`。
+ *
+ * 按分区列房:`xlive/web-interface/v1/second/getList` — **需登录态**,wbi 签名 +
+ * buvid3 之外还**必带 `w_webid`**(任意 live 页 HTML 里的 `access_id`,短时效 token,
+ * 见 getWebId 缓存)。2026-10-22 真机探针:登录态 code 0(20 条/页 + has_more);
+ * 匿名(带 buvid/w_webid 与否)一律 `-352`。cookie 经 credentials provider 兜底。
  *
  * 搜索:`api.bilibili.com/x/web-interface/search/type?search_type=live`(**匿名可用**,
  * 实测 40 条)。⚠️ 标题带 `<em class="keyword">` 高亮标签,须剥离。
  */
 import type { Item, Live } from "@amoeba/xml"
-import { now } from "../../host.ts"
+import { httpText, now } from "../../host.ts"
+import { resolveCookie } from "../credentials.ts"
 import { biliClient } from "./client.ts"
 
 const API_MAIN = "https://api.bilibili.com"
@@ -43,6 +46,76 @@ export async function fetchBiliCategories(): Promise<BiliCategory[]> {
       }
     })
     .filter((c) => c.id !== "")
+}
+
+/** second/getList 的房间行(字段原样透传,映射在 crawler channel 层)。 */
+export interface BiliAreaRooms {
+  list: Array<Record<string, any>>
+  /** 上游 `has_more`(1 = 还有下一页)。 */
+  hasMore: boolean
+}
+
+/**
+ * w_webid(access_id)缓存 —— second/getList 必带,取自任意 live 页面 HTML
+ * (用 /lol,最小页面)的 `"access_id":"..."`。短时效 token(实测几分钟内长度即变),
+ * 模块级 TTL 内复用;-352 时逐出重取一次。
+ */
+let webIdCache: { value: string; at: number } | null = null
+const WEB_ID_TTL = 10 * 60_000
+
+async function getWebId(cookie?: string): Promise<string> {
+  if (webIdCache && now() - webIdCache.at < WEB_ID_TTL) return webIdCache.value
+  const ck = resolveCookie(cookie, "bili")
+  const html = await httpText(`${LIVE}/lol`, { referer: `${LIVE}/`, ...(ck ? { cookie: ck } : {}) })
+  const id = /"access_id":"(.*?)"/.exec(html)?.[1]?.replaceAll("\\", "") ?? ""
+  if (!id) throw new Error("bilibili live page: no access_id (w_webid unavailable)")
+  webIdCache = { value: id, at: now() }
+  return id
+}
+
+/**
+ * 按分区列直播间(`xlive/web-interface/v1/second/getList`)。
+ *
+ * ⚠️ **必须登录态**:wbi 签名 + buvid3 之外还必带 `w_webid`(见 getWebId),匿名
+ * 实测一律 `-352`(2026-10-22 真机探针)。cookie 传 `undefined` 时经 credentials
+ * provider 兜底登录态。`areaId` 传 "0" = 该父分区全部;`sort_type=online` 按人气。
+ */
+export async function fetchBiliAreaRooms(
+  parentAreaId: string,
+  areaId: string,
+  page: number,
+  cookie?: string,
+): Promise<BiliAreaRooms> {
+  const request = async (webId: string) => {
+    const signed = await biliClient.signWeb(
+      `platform=web&parent_area_id=${parentAreaId}&area_id=${areaId}&sort_type=online&page=${page}&w_webid=${webId}`,
+      cookie,
+    )
+    return biliClient.getJson<Record<string, any>>(
+      `https://api.live.bilibili.com/xlive/web-interface/v1/second/getList?${signed}`,
+      { referer: `${LIVE}/`, buvid: true, cookie, allowCodeError: true },
+    )
+  }
+  let webId = await getWebId(cookie)
+  let res = await request(webId)
+  // w_webid 过期/被风控 → 逐出缓存重取一次。⚠️ 重试失败以**首个 -352** 为准:
+  // 首次 -352 已被 client reportRisk 写入平台冷却,重试的任何计量请求都会被自家
+  // 冷却本地拦下(「平台冷却中」)——那是噪音,真实原因始终是首个 -352。
+  if (res?.code === -352) {
+    const first = res
+    try {
+      webIdCache = null
+      webId = await getWebId(cookie)
+      res = await request(webId)
+    } catch {
+      res = first
+    }
+  }
+  if (res?.code !== 0) {
+    throw new Error(`bilibili API ${res?.code}: ${res?.message ?? "unknown error"}`)
+  }
+  const list = Array.isArray(res?.data?.list) ? res.data.list : []
+  return { list, hasMore: Number(res?.data?.has_more ?? 0) === 1 }
 }
 
 /** 剥离搜索标题里的 `<em class="keyword">` 高亮标签。

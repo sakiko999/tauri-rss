@@ -213,12 +213,15 @@ async function douyinBrowserScanLogin(
   emitQr: (qr: string | null) => void,
   opts?: { timeoutMs?: number; signal?: AbortSignal },
 ): Promise<LoginResult> {
-  // 与 xhs/weibo 同构持锁:登录与抓取共享同一个 page target,不持锁的话一次刷新就会把
-  // 登录页导航走(canvas 二维码与页面自身轮询一起消失),已扫码也等不到 sessionid。
+  // 与 xhs/weibo 同构:专属 login lane(login:douyin 的独立 tab),刷新不会再把登录页
+  // 导航走(canvas 二维码与页面自身轮询不再随刷新消失),已扫码也能等到 sessionid。
   // ⚠️ 模式必须 interactive:二维码是 canvas 绘制,hidden(SW_HIDE)下渲染管线停摆画
   // 不出来(xhs/weibo 是 img data URL/远程 src,读 DOM 即可,才能用 hidden)。
-  return withScanLoginLock(browser, "interactive", () =>
-    runDouyinBrowserScanLogin(browser, emitQr, opts),
+  return withScanLoginLock(
+    browser,
+    "interactive",
+    () => runDouyinBrowserScanLogin(browser, emitQr, opts),
+    "douyin",
   )
 }
 
