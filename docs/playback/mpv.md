@@ -4,7 +4,7 @@
 > 两类结构性包袱——① 自动播政策/canplay 时序的历史踩坑(见 CLAUDE.md 播放章节);
 > ② 分片必须走 base64 隧道,固定开销让 ABR 失真被迫锁最高档。外部 mpv 天然没有这两个
 > 问题:**无 CORS/无隧道(header 直接满足 Referer 校验)、无自动播策略、硬解画质更好**。
-> 与 cli-plan 的 `rss play --open` 是同一条链路,CLI 可先行验证。
+> 与 CLI（`docs/ops/commands.md`）的 `rss play --open` 是同一条链路,CLI 可先行验证。
 
 ## 一、方案选型
 

@@ -2,7 +2,7 @@
 
 > 状态：一期已实现（`twitch:live` / `twitch:hot` / `twitch:category`）；VOD / clip /
 > 聊天 / 搜索未做。调研依据见本文「实测结论」；二期/三期只做边界说明。
-> 相关：`docs/capability-gaps.md`、`docs/crawler-risk-control.md`、`docs/rsshub-vs-crawler.md`。
+> 相关：`docs/platforms/channels.md`、`docs/risk/crawler-risk-control.md`、`docs/platforms/channels.md`。
 
 ## 1. 结论与范围
 
@@ -268,6 +268,12 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
   灰色地带；若上游后续也要求 integrity，最小兜底是用现有 CDP 打开页面、被动捕获
   token，成本较高，先不做。
 - master CORS 是硬约束（必须服务端拉 master）；不要把 master URL 直接交给播放器。
+- ⚠️ **playlist 那一跳不能由 WebView 直接请求**（2026-10-21 实测）：`playlist.ttvnw.net`
+  对 `Origin: http://tauri.localhost` 回 **403**（dev 的 `http://localhost:1420` 放行），
+  所以「dev 能播、release 黑屏」，错误 `hls networkError manifestLoadError`。
+  **分片域 `*.cloudfront.hls.ttvnw.net` 反而带 `ACAO:*`、直连 206 正常**（把分片也塞进
+  隧道会 `fragParsingError`）。播放器里因此只给 Twitch 设 `config.pLoader = HlsHostLoader`，
+  `config.loader` 保持默认；YouTube（googlevideo）仍整条走隧道。改完**在 release 里复验**。
 - 待真机：不同地区是否要求 `Client-Integrity`、实际 429 阈值、WebView2 广告分片、
   variant 跨小时重载、地区限制错误码。
 

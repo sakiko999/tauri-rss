@@ -101,3 +101,25 @@ target/release/bundle/nsis/Amoeba_0.1.0_x64-setup.exe.sig
 - 本地验证只证明「能构建 + 能签名」；真正走 `check → 下载 → 安装` 需要至少一个带
   `latest.json` 的 Release。首次发布后，把版本号 +1 再发一版即可端到端验证。
 - `tauri.conf.json` 里的 `bundle.targets` 已是 `["nsis"]`，本地不会产出 MSI。
+
+---
+
+## 发布形态与更新链路（2026-10-21 从 `CLAUDE.md` 迁入）
+
+- **Windows 只发 NSIS `*-setup.exe`**（`bundle.targets: ["nsis"]`，按用户装到
+  `%LOCALAPPDATA%`，免管理员）。**不是 MSIX**（Tauri 没有该 target）、**不是 portable**
+  （无安装记录，updater 无法替换）。⚠️ **别再加回 MSI**：per-machine 与 NSIS 是两条安装记录，
+  `latest.json` 只能指向一种安装器，混发会断更新链。
+- **updater**：`tauri-plugin-updater` + `tauri-plugin-process`（Rust 侧 `#[cfg(desktop)]` 注册）；
+  前端经 appHost 可选能力 `updater`（`packages/host/src/tauri/updater-backend.ts`）。启动静默
+  检查（`apps/desktop/src/lib/update.ts`：4s 后、离线跳过、失败不打扰）+「设置 → 关于与更新」
+  手动检查/下载进度/重启。
+- **签名密钥**：私钥 `~/.tauri/amoeba.key`（不入库），公钥写 `plugins.updater.pubkey`，CI 用
+  secret `TAURI_SIGNING_PRIVATE_KEY`。⚠️ **私钥丢失或公钥更换 = 已安装用户永远收不到更新**
+  —— 备份私钥。
+- **发版**：同步三处版本号（`tauri.conf.json` / `Cargo.toml` / `package.json`）→ 提交 →
+  `git tag vX.Y.Z && git push origin vX.Y.Z`。`.github/workflows/release.yml` 在 windows-latest
+  构建、签名并发布 Release + `latest.json`。
+- **VSCode「Tauri Release (true production)」**：`vite build`（PROD）+ `tauri build --no-bundle`
+  后直接启动 `target/release/amoeba.exe` —— 无 dev server / 无 9222、用生产库 `rss.db`、无测试
+  种子，与用户装到的版本一致（release 无调试符号，断点不可用）。

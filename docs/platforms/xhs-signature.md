@@ -118,7 +118,7 @@ x-s, x-s-common, x-t, x-b3-traceid, x-xray-traceid, x-mns, xy-direction
 
 ## 运行时方案对比（原 sidecar-eval 文档结论，2026-09 并入）
 
-签名若要跑，有几种载体。**结论：服务进程直接跑 CPython**（`desktop-crawler-service.md`
+签名若要跑，有几种载体。**结论：服务进程直接跑 CPython**（`docs/architecture/crawler-topology.md`
 「签名恢复路径」）——原文档首推的 RustPython 嵌入，其**前提是移动端兼容**，而桌面
 服务化决策后该前提消解；移动端本就不做 xhs（channel 环境标记裁掉）。
 
@@ -170,7 +170,7 @@ CLAUDE.md 记「原 TS fork 过时（2026-07 升级签名后 461）」——**�
 ### 值得记录的架构参考：`aki66938/XHS_RS_TOOLS`（147 star）
 
 「**浏览器仅作登录/cookie 容器 + 日常请求纯算法**」的落地形态，与
-`docs/desktop-crawler-service.md` 的切分结论一致且有生产验证：
+`docs/architecture/crawler-topology.md` 的切分结论一致且有生产验证：
 
 1. 访客 Cookie：Docker 化 undetected-chromedriver（**极低频**）
 2. 登录：二维码 create/poll/confirm **全走官方 API**（无需浏览器子进程）
@@ -219,7 +219,7 @@ App 设置里切地区。**全程未披露技术实现**（评论区问「怎么
 - **按次计费**（仅 HTTP 2xx 扣费）；**也卖服务端源码**（一次性买断，可私有化部署，
   含「请求签名 + 设备注册 + **验证码自动识别** + 注册登录/发布/评论私信/账号批量管理」）
 
-**对我们的意义**：这印证了 `docs/desktop-crawler-service.md` 的切分方向（常驻服务 +
+**对我们的意义**：这印证了 `docs/architecture/crawler-topology.md` 的切分方向（常驻服务 +
 纯 HTTP 业务请求），但也暴露其**完整形态比我们设想的更重**——除签名外还需
 **账号池 + 验证码识别**才能长期稳定。我们当前「SSR 匿名 + 浏览器仅作登录容器」
 是**刻意选择更轻的路径**，代价是 `xhs:user` 分页受限。

@@ -28,7 +28,7 @@
 | desktop UI 布局/隐藏 | `scripts/ui-probe.ts goto <node>` + `ui-console.ts` |
 | **主区滚动（死区）** | ⚠️ 必须用**真实滚轮**：`Input.dispatchMouseEvent{type:"mouseWheel"}`。**合成 `WheelEvent` 在 Chromium 里不触发滚动**，`scrollTop` 恒为 0，会得出假结论。逐点测「表头 `.grid-head`、直播轨 `.rail-block`、网格」三处，应**都** > 0 |
 
-| 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/rail-tree-accordion.md` |
+| 侧栏分组树(展开态/键盘) | `apps/desktop/src/lib/rail-nav.check.ts` + `ui-probe.ts goto tab:all`;⚠️ 必验「焦点在树行按 ↑↓ **不**切文章」,见 `docs/ui/rail-tree-accordion.md` |
 | 组件拆分(移动/新建文件) | `tsc -p apps/desktop` + `ui-probe.ts goto page:settings` / `page:discover` 各走一遍;⚠️ tsc 查不出**循环 import 与渲染断链**,必须实机点 tab / 开弹窗 |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | **响应式断点** | 逐宽度量真实几何（`Emulation.setDeviceMetricsOverride` + 读 `getBoundingClientRect`）。⚠️ **别只看断点数字**：两个断点撞在同一个宽度会产生**反向跳变**（播放页单栏 1080 与侧栏折叠 1080 撞车，窗口越窄播放器越小、到 1040 反而暴涨 912）。基线见下方结论记录 |
@@ -37,11 +37,13 @@
 | 新增/改动 channel | `bun run rss channels --kind <kind>` + `bun run rss fetch <key> --json`；⚠️ 发现页「可一键订阅」判据是 `!!defaultInfo \|\| 无必填项` —— **空对象是 truthy**，给需要参数的渠道写 `defaultInfo = {}` 会让它被误列进去 |
 | **Twitch（直播频道 / 热门 / 分区 / HLS）**（2026-10-20） | `bun run rss fetch twitch:live --kv roomIds=shroud --json`（离线频道也返 `offline` item，非 bug）+ `bun run rss fetch twitch:hot --json`（观看数降序）+ `bun run rss fetch twitch:category --kv category=just-chatting --json`（slug 或 `twitch.tv/directory/category/<slug>`）+ `bun run rss item https://www.twitch.tv/<login>`（应出多档 `hls`，**首档最高、`audio_only` 最后**）+ `bun packages/resolve/src/example/twitch-playlist.check.ts` + `bun packages/crawler/src/example/twitch-live.check.ts` |
 | **YouTube 直播热门/栏目 / 播放列表 / B站合集·列表·收藏夹**（2026-10-20） | `bun packages/crawler/src/example/youtube-channels.check.ts` + `bun packages/crawler/src/example/bili-channels.check.ts` + 六个真机探针：`bun run rss fetch youtube:live-hot`、`youtube:live-category --kv category=gaming`、`youtube:playlist`、`bili:season`、`bili:series`、`bili:favlist`。⚠️ B站三个都要验**第二页有新增**（series 曾因 `page_num` 静默返回首页）；season 不带 Referer 会 `-352` |
+| **播放 loader / 流路由条件**（2026-10-21） | ⚠️ **必须用 true release 验**：dev 的 `http://localhost:1420` 与 release 的 `http://tauri.localhost` 对上游是不同 Origin（Twitch CloudFront 只放行前者，回 403）。判据：release 下播 Twitch 与 YouTube 各一条，控制台应有 `[host:http] GET https://apn*.playlist.ttvnw.net/...`（走隧道），无 `403`、无 `manifestLoadError`，画面真的动 |
+| **YouTube player client / fallback 链**（2026-10-21） | `bun packages/resolve/src/example/youtube-clients.check.ts` + `bun run rss item https://www.youtube.com/watch?v=dQw4w9WgXcQ`（6 档 DASH、首档 1080p）+ 直播同款（1 条 `hls`）。⚠️ 三个**静默失败**：clientVersion 过旧 → `UNPLAYABLE`；`VISIONOS` 设备字段缺失 → 静默「视频不可播」；`visitorData` 没透传 → `LOGIN_REQUIRED`（**与 IP 被风控同症状**，先别怀疑风控） |
 | **分区目录订阅（`kind:"category"`）**（2026-10-20） | `bun packages/crawler/src/example/category-directory.check.ts` + `bun packages/core/src/example/serialize-roundtrip.check.ts`（category 专项）+ `bun run rss fetch twitch:categories`（及 `youtube:live-categories` / `live:douyin:categories` / `live:douyu:categories` / `live:huya:categories`）+ tsc；真机：发现页「可订阅榜单」一键订阅目录 → 订阅内容是分类卡片（**无播放按钮**，foot = 分区）→ 点卡片右侧**用正常网格**列出该分区内容（URL `?open=<itemId>`）→ 表头「订阅该分区」用**完整参数**落地（抖音必须 `partition` + `partitionType=4/1`）。⚠️ 目录渠道是独立订阅，不是发现页的临时目录 |
 | **网络风控 / governor / 被动采集** | `bun packages/host/src/example/governor.check.ts` + `bun packages/core/src/example/passive-mode.check.ts` + `bun packages/crawler/src/example/bili-popular.check.ts`；真机：设置 →「网络与风控」里被动渠道（xhs:explore）显示「浏览器被动」标签且**没有等级下拉**，手动刷新不产生应用构造的请求；**平台 L0 必须能绕过平台冷却**（全局 L1 + B站平台设 L0，冷却期内刷新应放行）；`"*"` 行影响 RSS 直链（配额按 host 各自计数）；存量 `netLevels` 的 9/"lx" 启动后归一化为 1，旧 channelKey 键启动后折叠成平台键（风控 §2.4） |
 | **B站扫码登录后的抓取**（2026-10-20） | `bun packages/resolve/src/example/bili-buvid.check.ts`；真机：扫码登录 → `bili:live:hot` 手动刷新应无错误（登录 cookie 只有 passport 五项、无 buvid3，必须补匿名 buvid，否则 `-352`）→ 同一登录态下直播播放解析正常 |
 | **xhs 登录 / 凭证 / 浏览器闸门 / 翻页**（2026-10-20） | `governor.check.ts`（含 browserGate）+ tsc + `bun run build:desktop`；真机八件事：① **未扫码时点「扫码登录」必须出二维码**（游客 `web_session` 不算登录）；②「清除凭证」后刷新应报「登录已失效」而不是继续用旧账号抓；③ 扫码期间点刷新，登录不应被导航抢页/abort 打断；④ **关掉二维码弹窗应立刻取消登录**（再点刷新不报「刷新超时」、重开弹窗马上出码）；⑤ 连续两次 xhs 浏览器操作间隔应 ≥600ms（L2/L3 更长）；⑥ **匿名 explore 滚动「加载更多」应增长**（纯被动，只读页面 state，不应出现 `/explore` HTML fetch）且**新内容在列表下方**（顶部首屏不被换掉）；⑦ **点开一条笔记后再点「加载更多」应继续推进**（共享 Edge 被导航走 → 页面重载；不得重复只返回已有条目、不得显示「已加载全部」）；⑧ 首屏 > 60 条时（explore 实测 89）列表尾部条目可见、footer 计数与头部总数一致 |
-| **改 `browser.rs` 窗口模式 / 浏览器抓取** | `cargo check --manifest-path apps/src-tauri/Cargo.toml`（必 0 错）+ **release 实例**验证（debug 窗口恒可见，模式切换是 no-op）：`ui-probe eval "__TAURI__.core.invoke('browser_set_mode',{mode:'interactive'})"` → xhs:user「加载更多」应增长；切回 `hidden` 后滚动不再加载。机制实测见 `docs/crawler-risk-control.md` §3.9 |
+| **改 `browser.rs` 窗口模式 / 浏览器抓取** | `cargo check --manifest-path apps/src-tauri/Cargo.toml`（必 0 错）+ **release 实例**验证（debug 窗口恒可见，模式切换是 no-op）：`ui-probe eval "__TAURI__.core.invoke('browser_set_mode',{mode:'interactive'})"` → xhs:user「加载更多」应增长；切回 `hidden` 后滚动不再加载。机制实测见 `docs/risk/crawler-risk-control.md` §3.9 |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 | **时间戳单位 / 排序** | `bun packages/resolve/src/example/xhs-time.check.ts`；⚠️ **必须重新抓取**才生效 —— 坏值已落库，看旧数据会误判成「没修好」。判据：social 的 `publishedAt` 年份应在合理区间（修前是 58754） |
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
@@ -67,7 +69,7 @@ bun scripts/ui-probe.ts eval "__uiOverlay.json()"      # AI 可读清单（区�
 bun scripts/ui-probe.ts eval "__uiOverlay.list().filter(e => e.block).length"  # 区块数
 ```
 ⚠️ 400 是**同屏标签上限**，不是编号上限；区块优先保留。编号在同一路由内固定，路由变化重置。
-详见 `docs/numbered-ui-overlay.md`。
+详见 `docs/ui/numbered-ui-overlay.md`。
 
 ## 三、播放矩阵（必须 4/4 起播）
 
@@ -118,7 +120,7 @@ bun run rss fetch apple:podcast-search --kv q=故事 --json
   huya 搜主播 online 假 0 / bili:square id 含下标 / douyin 重复 enter）+ 2 条复核纠正为误报。
   新增 2 守卫（danmaku-proto / douyu-frame）→ 14 `.check` 全通过；8 包 0 类型错误；播放矩阵 4/4；
   八路搜索矩阵全绿；控制台 0 告警。
-- 2026-10-14 侧栏分组树改 Radix Accordion + 方向键导航（见 `docs/rail-tree-accordion.md`）：
+- 2026-10-14 侧栏分组树改 Radix Accordion + 方向键导航（见 `docs/ui/rail-tree-accordion.md`）：
   tsc 0 错；`rail-nav.check.ts` 全过；CDP 验「焦点在树行按 ↑↓ 不切文章」+ 焦点移出树后仍能切文章
   （反证）；折叠栏 64px 与窄窗 1024px 下方向键均可用；`ui-probe` 0 问题；无 React 告警；
   `ui-design-audit` contrastIssues 0、smallTargets 6 → 1。

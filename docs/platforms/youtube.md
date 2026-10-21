@@ -64,7 +64,9 @@ Referer: https://www.youtube.com/    (web client)
 
 **主力 ANDROID_VR(Oculus Quest 3)**——2026-08 起 ANDROID/IOS 标准 client 部分 IP 触发
 poToken(LOGIN_REQUIRED),VR 返回免 token 直链(详见「六、poToken 与 ANDROID_VR」)。`resolveYoutubeStreams`
-fallback 链 = **ANDROID_VR → WEB**(直播无 hls 再 fallback iOS)。
+fallback 链 = **VISIONOS → ANDROID_VR → WEB**(直播无 hls 再 fallback iOS)。⚠️ `WEB` 已
+SABR-only(拿不到 `adaptiveFormats`);`VISIONOS` 是主力(上游默认、免 POT),`ANDROID_VR`
+退役中仍作兜底(见 §6)。
 
 各 client 差异(溯源):
 - **ANDROID_VR**:`formats`(渐进式)只有 itag 18(360p);`adaptiveFormats` 有 1080p+
@@ -192,7 +194,8 @@ streamUrl = url + "&" + sp + "=" + deobfuscate(s)
 - ⚠️ **clientVersion 是最大坑**:用过时版本会 **400 `Precondition check failed` 或
   playability `UNPLAYABLE`**,即使视频可播。**版本过旧会静默表现为「视频不可播」,
   排查时优先怀疑它**。当前 ANDROID_VR 用 `1.65.10`(yt-dlp master 2026-08);>1.65 可能
-  返回 SABR-only,需随 yt-dlp 更新。
+  返回 SABR-only,需随 yt-dlp 更新。⚠️ **2026-08-17 起 1.65.10 的全格式被 403**
+  (yt-dlp 2026-08-18 已把它移出默认),VR 进入退役期 —— 详见 §6。
 - ✅ **渐进式分辨率实测修正**:ANDROID 21.03.36 与 ANDROID_VR 的 `formats`(渐进式)
   **都只有 itag 18(360p)**——**itag 22(720p 渐进式)两个 client 都不返回**。1080p 一直
   在 adaptiveFormats,旧代码只取 formats 所以 360p 封顶(现已 DASH 优先)。
@@ -206,7 +209,7 @@ streamUrl = url + "&" + sp + "=" + deobfuscate(s)
   **youtube 可播性断言:同一 IP 下 node / tauri / browser 结果一致,node 断言失败 ≠
   实现坏,先确认当前 IP 是否被控**。
 
-## 六、poToken 与 ANDROID_VR(2026-08 溯源与兜底)
+## 六、poToken 与 ANDROID_VR(2026-08 溯源 + 2026-10-21 判定实验)
 
 ### 根因:NewPipe 已移除 ANDROID/IOS client
 
@@ -251,22 +254,81 @@ streamUrl = url + "&" + sp + "=" + deobfuscate(s)
 
 ### 兜底链(ANDROID_VR 万一也被封锁时)
 
-| client | poToken | 现状(2026-08) | 备注 |
+| client | poToken | 现状(2026-10) | 备注 |
 |---|---|---|---|
-| `ANDROID_VR` | 传统 URL 免;non-HLS 选择性强制 | ⚠️ 2026-07 起 intermittent | 主力;不含 made-for-kids,需 visitorData |
+| `ANDROID_VR` | 传统 URL 免;non-HLS 选择性强制 | ⚠️ 退役中:2026-08-17 起 1.65.10 **全格式 403**,yt-dlp 已移出默认 | 现作兜底;不含 made-for-kids,需 visitorData |
 | `TVHTML5` / `tv` | 不需要 | ⚠️ 仍返回 URL 但格式 DRM'd | 无 cookie 全 DRM,需登录 |
-| `WEB_EMBEDDED_PLAYER` | 不需要 | ⚠️ 仅可嵌入视频有效 | 换 embed 端点 |
-| `WEB` / `MWEB` | 需要(GVS) | 🔒 2025-02 起锁 SABR-only | adaptiveFormats 被移除 |
+| `WEB_EMBEDDED_PLAYER` | **不需要** | ⚠️ 浏览器内可用;纯 HTTP 被 **embedder identity** 拦 | 需 `encryptedHostFlags`,实测仍 denied |
+| `VISIONOS` | **不需要** | ✅ **主力**(VOD 27 档、直播 hls) | 与 VR 同档;机房 IP 同样被拦 |
+| `WEB` | 需要(GVS) | 🔒 SABR-only | `adaptiveFormats` 为空,自拼 MPD 归零 |
+| `MWEB` | 需要(GVS) | ✅ 仍给直链 | yt-dlp 2026 的 TL;DR 推荐(mweb + POT) |
 | `ANDROID` / `IOS` | 必须(DroidGuard/iOSGuard) | ❌ NewPipe 已移除 | 无人能生成 |
 | `web_safari` | GVS 暂不需要 | ✅ HLS 免 token | HLS 直播兜底 |
 
-### 彻底方案:WebView2 内跑 BotGuard 生成 poToken(后续再议)
+### 判定实验(2026-10-21,真 Edge + 机房出口)
 
-Web 端 poToken 可**自托管生成**——yt-dlp 官方推荐 `bgutil-ytdlp-pot-provider`
-(= [LuanRT/BgUtils](https://github.com/LuanRT/BgUtils) 跑 BotGuard challenge),但需
-「良好 DOM 的 JS 引擎」——Tauri 就是真实 WebView2,天然满足。代价:poToken 现绑定
-videoId,每视频 mint;注入 `serviceIntegrityDimensions.poToken`。**工程量大,仅当
-ANDROID_VR 失效才考虑。**
+目的:验证「真浏览器取/铸 token」能否救机房 IP。做法:独立 profile 的 Edge
+(`--proxy-server` → VPS `107.174.100.175`,HostPapa AS36352),CDP 开 `Network` +
+`Target.setAutoAttach(flatten)` 连 OOPIF 一起抓;embed 页用本地壳页 iframe 包一层
+(**直接打开 embed 会 `Error 153`**,缺上级 origin)。
+
+| 场景 | 出口 | player 请求 | playability | 直链 |
+|---|---|---|---|---|
+| watch 页(直播) | 本地 | **0 条**(用内联 `ytInitialPlayerResponse`) | 正常播放 | 全 `sabr=1`,URL **无 `pot=`** |
+| watch 页(直播) | VPS | 0 条 | 页面直接「请登录,以便我们确认你不是聊天机器人」 | 0 条 googlevideo |
+| embed 页 | 本地 | 1 条,`200` | **OK** `adaptive=7` `hls=true` | 3 条,全 `sabr=1` |
+| embed 页 | VPS | 1 条,`200` | **`LOGIN_REQUIRED`**(Sign in to confirm you're not a bot) | **0 条** |
+| InnerTube 直打 `WEB_EMBEDDED_PLAYER` | VPS | — | `ERROR: This video is unavailable`(原因未定:IP 或请求形状) | — |
+
+三条硬结论:
+
+1. **机房 IP 上「真浏览器 + 游客会话」也是页面级拦截** —— 不是 token 问题,player
+   响应本身就是 `LOGIN_REQUIRED`,一条 googlevideo 都没发。要在机房 IP 工作,唯一前提是
+   **该 profile 登录着 Google 账号**(= 拿账号换可用性,与「不碰主账号 cookie」冲突)。
+2. **「抓包取 POT」的写法已死** —— watch 页根本不发 `/youtubei/v1/player`(数据内联在
+   HTML);流走 SABR,POT 在**二进制请求体**里(URL 上没有 `pot=`);embed 的 player 请求体
+   也是二进制(实测 ~2.5KB,开头是压缩字节),没有 JSON 的
+   `serviceIntegrityDimensions.poToken` 可读。
+3. **只剩「页面内铸 token」**(WPC 那种),成本 ≈ 路线 C,且页面被拦时同样铸不出来。
+
+### 三条路线的定论
+
+| 路线 | 能解什么 | 不能解什么 | 结论 |
+|---|---|---|---|
+| A 外挂 provider(bgutil) | 格式级 GVS POT(403 / web 家族强制) | **IP 级 `LOGIN_REQUIRED`**;跨 IP 无效(**必须与播放同出口**) | 仅在未来被迫迁 `mweb` 时有用 |
+| B 真浏览器 | 理论上带登录态可过机房 IP | 游客态机房 IP 页面级被拦;抓包变体已死 | **暂不投入**(除非接受登录账号) |
+| C 内嵌 BotGuard VM | 同 A | 同 A,且维护最贵(challenge 端点一年迁两次) | 不做 |
+
+### 落地:VISIONOS 主力(2026-10-21 已实现,VR 退居兜底)
+
+**目的**:VR 退役后保住「免 POT 的高清直链」。**不解决机房 IP 的直播**(那仍是
+`LOGIN_REQUIRED`),只解决「VR 一停就掉到 SABR 化的 `WEB` → 360p 渐进式或直接报错」。
+
+**为什么不是 `WEB_EMBEDDED_PLAYER`(原计划)**:纯 HTTP 复刻该 client 被 **embedder
+identity** 拦住——只带 `thirdParty.embedUrl` 报
+`PLAYABILITY_ERROR_CODE_EMBEDDER_IDENTITY_DENIED`;再补 embed 页 ytcfg 的
+`encryptedHostFlags` / `embeddedPlayerEncryptedContext`、页面 cookies(含
+`VISITOR_INFO1_LIVE`)、页面 clientVersion,四种组合**仍然 denied**。浏览器里能播,
+是因为页面发的是二进制(protobuf)player 请求、身份由页面自己带 —— 即「抓包/复刻」都不划算。
+
+改落 **VISIONOS**(Apple Vision Pro;yt-dlp 2026-08 起的默认 client 之一):
+
+| 实测(2026-10-21) | 本机 | 机房 IP |
+|---|---|---|
+| VOD | ✅ `OK`,27 条 adaptive,avc1 6 档全带 `initRange/indexRange` | ⚠️ **与 VR 同样被拦**(复测 VR 失败的那 6 条 → `VISIONOS` 也 6/6 `LOGIN_REQUIRED`) |
+| 直播 | ✅ `OK`,8 条 adaptive + `hlsManifestUrl`(iOS UA 取流实测 200) | ❌ `LOGIN_REQUIRED` |
+| URL | **无 `n` 参数、无 cipher**;分片 Range 实测 `206` | — |
+
+同批 5 条视频与 `ANDROID_VR` 对比:两者 status / 最高档**完全一致**(均 1080p),
+`VISIONOS` 只是多出 AV1/VP9 档(我们用不上)。即「换 client」既不会提升画质,也救不了
+被风控的 IP;排它在前面的理由只有**跟上上游默认(VR 已被 yt-dlp 移出默认)**。
+
+- POT 政策:yt-dlp 的 policy 表里没有该 client = **不需要 poToken**。
+- 实现:`client.ts` 的 `visionosPlayerBody` + `getVisionosPlayerResponse`(gapis + `t/id`);
+  fallback 链 = **VISIONOS → ANDROID_VR → WEB**(直播无 hls 再 fallback iOS)。
+- 回归:`bun packages/resolve/src/example/youtube-clients.check.ts` —— 钉住设备字段与
+  `visitorData` 透传(缺任何一个都表现为「视频不可播 / `LOGIN_REQUIRED`」,**与 IP 被风控同症状**)。
+- 限制:`VISIONOS` 与 VR 一样**不支持 made-for-kids**;直播在机房 IP 仍被拦。
 
 ## 七、实现位置(代码对照)
 

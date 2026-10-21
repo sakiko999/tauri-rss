@@ -342,3 +342,24 @@ DanmakuLayer (canvas 2D)
 | 播放器时间 | `useVideoElement.state.currentTime` | 弹幕时间窗口(currentTime 秒 × 1000) |
 | 弹幕层挂载点 | `VideoShell.tsx` relative 容器 | 加 DanmakuLayer |
 | **dart 统一消息模型** | `tmp/dart_simple_live/.../model/live_message.dart` | `DanmakuItem` 字段/颜色归一直接参考(LiveMessage + numberToColor) |
+
+## 播放器侧约定（2026-10-21 从 `CLAUDE.md` 迁入）
+
+- **弹幕开关在播放器控件栏**（`MediaDanmakuButton`），不在播放页 meta 的按钮组。
+  `PlayableMedia` 只在 `resolved.danmaku` 存在时把 control 传给 `VideoShell`；`enabled` 跟
+  `showDanmaku` 而不是渲染用的 `danmaku` —— 关闭后流被丢弃但按钮仍在，否则按钮会随流一起消失、
+  无法再打开。全局设置 `danmakuEnabled` 关闭时不渲染按钮。
+- 四平台直播弹幕已全通（bili 16B 大端头+zlib、douyu STT、huya Tars、douyin protobuf+gzip），
+  B站视频弹幕走 `bvid→cid→GET /x/v2/dm/web/seg.so`（protobuf，匿名可用）。
+- **统一走宿主隧道 `appHost.ws`**（Rust ws_connect）。⚠️ ws.rs 的 `ws_connect` **必须用
+  `req.url.as_str().into_client_request()` 从 URL 构造完整请求再插自定义头** —— 手动
+  `http::Request::builder()` 缺 `Sec-WebSocket-Key`，握手报 "Missing...sec-websocket-key"。
+- ⚠️ **bili 直播弹幕匿名可用**：uid=0 + 匿名 buvid3（`biliClient.anonBuvid3()`）即可。
+  **buvid3 = cookie 有则取 cookie、否则取 anon** —— 曾误判「匿名被 1006 拒」，真实原因是
+  匿名时 buvid3 为空。认证走 WS 帧 op=7（**不带 cookie header**，否则触发隧道握手被拒）；
+  host 的 `wss_port` 非标（常见 2245）**必须拼端口**。
+- ⚠️ **连接释放竞态**：`createWsStream` 的 onOpen **必须检查 `stopped`** —— 退订后握手才完成
+  时会泄漏连接（关闭直播间弹幕不释放）。「异步 setup → 建流」的拦截统一收敛进 `deferredStream`。
+- ⚠️ **douyin**：签名脚本须用 2024 修改版 webmssdk.js（`get_sign`；2023 版已失效→415），
+  执行环境须遮蔽 node 全局（否则走 node 分支指纹被拒）；enter 用 QQBrowser UA、WS 用
+  Chrome 150 UA。proto `progress` 是毫秒，XML 弹幕是秒。

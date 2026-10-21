@@ -128,7 +128,7 @@ POST https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket
 **关键**：⚠️ **此处原「签名不是障碍——`packages/xhshow` 已有签名」的结论已被推翻**
 （2026-10-16 更正）：`xhshow` 不在主分支，`signApiHeaders` 现直接抛错降级
 （`xhs/client.ts`）。**实际实现走的是 CDP 读页面 DOM**（`platform/xhs/login.ts`），
-不是复用签名门面。要恢复纯算法签名路径，参照 `docs/xhs-signature-research.md` 的
+不是复用签名门面。要恢复纯算法签名路径，参照 `docs/platforms/xhs-signature.md` 的
 Python xhshow 0.2.0。
 
 ### 保活
@@ -145,7 +145,7 @@ Python xhshow 0.2.0。
 | 凭证 | 过期后果 | 性质 | 续期调度 |
 |---|---|---|---|
 | **bili_ticket**（3 天） | 请求仍全通，仅**风控概率升高**（wbi 接口更易 -412、更易验证码）。非必需（bilibili-API-collect：「存在可降低风控概率」「没发现多少风控价值」）。 | 软性风控因子 | **宽松惰性**：请求路径查 `bili_ticket_expires`，临期/过期即刷。**匿名可刷、零失败成本，不需要定时任务**。 |
-| **SESSDATA**（180 天） | **登录态整体失效**：未登录 code:-101、bili:dynamic 返空、视频档位降级 720P。（直播弹幕匿名可用——2026-09 实测更正，详见 `danmaku-research.md`。） | 硬性登录凭证 | **严格闭环**：refresh_token 与 SESSDATA **同寿命**(~180 天)，`cookie/refresh` 续期成功**双双重置** → 每个 180 天窗口内成功续一次即**永久有效**。启动检查 + 定期(如每 60 天)主动续；续期失败(双双过期)→「待重登」态。 |
+| **SESSDATA**（180 天） | **登录态整体失效**：未登录 code:-101、bili:dynamic 返空、视频档位降级 720P。（直播弹幕匿名可用——2026-09 实测更正，详见 `docs/playback/danmaku.md`。） | 硬性登录凭证 | **严格闭环**：refresh_token 与 SESSDATA **同寿命**(~180 天)，`cookie/refresh` 续期成功**双双重置** → 每个 180 天窗口内成功续一次即**永久有效**。启动检查 + 定期(如每 60 天)主动续；续期失败(双双过期)→「待重登」态。 |
 
 **设计原则**：
 1. bili_ticket 不做定时任务——软性因子，随取随补最省。
@@ -191,7 +191,7 @@ core/src/settings.ts                   # 认证对象扩展: 平台登录凭证(
 ## 来源
 
 - B 站: `tmp/dart_simple_live/simple_live_app/lib/modules/mine/account/bilibili/qr_login_controller.dart`
-  + bilibili-API-collect `docs/misc/sign/bili_ticket.md`
+  + bilibili-API-collect 仓库的 `misc/sign/bili_ticket.md`
 - 微博: CSDN《Python扫码登录保存和验证cookies值——微博篇》、github ext2ed/sina-qrcode-login
 - 小红书: CSDN《小红书扫码登录协议分析》(2024-10)、知乎《python获取小红书web_session》(2023-07)、
   github submato/xhscrawl、apifox 二维码登录接口文档

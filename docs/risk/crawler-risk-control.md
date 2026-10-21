@@ -456,6 +456,14 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 | 语义 | `browser_ensure` **不带 mode = 只确保就绪、不改模式**（否则 `ensureConn` 会把刚切好的 interactive 打回 hidden） |
 
 - `--blink-settings=imagesEnabled=false` 保留：实测 interactive 下 rAF/IO/scroll 正常，仅图片不加载。
+- ⚠️ **隐藏判定必须看「可见性」**（2026-10-16 修）：`hide_windows_for_pids` 若对 PID 的**每个**
+  顶层窗口都计数，Chromium 那堆本来就 `vis=False` 的辅助/IPC 窗口会让 `hidden>0` 在**主框架
+  窗口创建之前**成立 —— 旧代码 `if cdp_alive && hidden>0 { return }` 于是提前返回，稍后自行
+  `ShowWindow(SW_SHOW)` 的主窗口漏藏（现象：release 下隐藏 Edge 仍**在任务栏出现图标**，
+  主进程只被 `--window-position=-32000` 挪到屏幕外）。正解两条缺一不可：① 只对
+  `IsWindowVisible` 的窗口计数；② 等「**曾见过可见窗口** + 连续数轮 0 命中」的稳定态才返回
+  （主框架比 CDP 就绪晚约 1s，不加 `seen` 门槛 0.3s 就误判藏净）。**只在 release 显现**
+  （debug 走可见分支不触发），改隐藏逻辑务必用 release 实例验证。
 - debug 构建窗口始终可见，模式切换为 no-op；`interactive` 的效果只能在 release 实例验证。
 - 健壮性：`tcp_listen_pids` **只认 LISTEN + 非 0 PID**（ALL 表里同端口的 TIME_WAIT 行
   Owner=0，拿它当根会让切换静默失效）；模式切换失败时状态置「未知」而非成功态，
@@ -563,6 +571,192 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
    先调 `maxConcurrent` 与 `minInterval`，最后才动 RPM。
 4. **冷却值不通过压测校准**：只按 §2.3 的显式信号累积观测；探测 412/verify-box 边界
    本身就是风控行为，不做。
+
+### 3.13 多 tab 与 lane 粒度（设计评估，2026-10-21，**未实现**）
+
+> 触发：详情/登录会把列表页导航走，回头再抓只能整页重载；xhs 的翻页还依赖页面里
+> 累积的 `feed.feeds`，页面被导航走就只能重载 + cursor 重试。这里记录「要不要多 tab、
+> 按什么粒度分」的评估结论，后续实施照此执行。
+
+#### 现状（代码事实）
+
+- **单 page target + 一把全局锁**：`host/tauri/browser-backend.ts` 连 `/json/list` 的
+  第一个 page；`resolve/browser/cdp.ts` 的 `browserLock` 是全局 promise 链。
+- `cdpNavigate` 只在 URL 完全相同时跳过，否则整页导航；refresh 的 `forceReload`
+  本来就要重载（这部分省不掉）。
+- **抢页面的四类操作**：xhs 详情（`xhs/shared.ts` 的 resolveDetail）、三平台扫码登录、
+  同平台不同渠道（xhs:explore ↔ xhs:user）、跨平台（xhs ↔ weibo）。
+- 登录还**持锁数分钟**（`withScanLoginLock`），期间所有浏览器抓取排队。
+- `browser.rs` 的 `edge_args` 已带 `--disable-background-timer-throttling` /
+  `--disable-renderer-backgrounding`，但那只救定时器：**非激活 tab** 的
+  `visibilityState=hidden` 下 rAF / IntersectionObserver 仍停摆（与 §3.9 同一机制）。
+
+#### 粒度对比
+
+| 粒度 | 稳态 tab 数 | 能省什么 | 代价 |
+|---|---|---|---|
+| 平台级 | 3 | 跨平台互抢 | 不解决同平台内 explore/user/detail 互抢 |
+| 渠道级（`channelKey`） | 3–4 | 渠道间互抢；**保住分页累积 state** | 每 tab ≈60–120MB；同渠道多 uid 仍互抢 |
+| 订阅级（+ info hash） | 随订阅数增长 | 最彻底 | 内存不可控、边际收益，不建议 |
+| 用途级（detail / login） | 2–3 | **收益最大**：详情不再污染列表、登录不再阻塞抓取 | 需在 cdp 层区分用途 |
+
+**推荐：混合 —— `list` 按 `channelKey`，`detail` / `login` 每平台各一个**：
+
+```
+xhs:explore   xhs:user   weibo:user      # list lanes
+xhs:detail    weibo:detail               # detail lanes
+xhs:login     weibo:login   douyin:login # login lanes（临时，用完可回收）
+```
+
+理由：reload 的两大来源是详情与登录，各平台一个辅助 tab 即可彻底隔离；list 按渠道
+分才能保住 xhs 翻页 state。订阅级不做（接口留 info hash 扩展位）。
+
+#### 实施要点（可行，改动集中在宿主 + cdp）
+
+- 建 tab 不需要改 Rust：`PUT /json/new?about:blank` → 拿 `webSocketDebuggerUrl` →
+  现有 `ws_connect` 连上；`/json/activate/<id>`、`/json/close/<id>` 管激活与关闭。
+- 宿主加 `browser.tab(key) → BrowserTab{ evaluate, send, onEvent, activate, close }`，
+  每 tab 一条 ws（独立 pending / abort）；现有 `send(sessionId)` / `onEvent(sessionId)`
+  已预留会话参数，默认 lane 保持向后兼容。
+- `browserLock` 拆成「每 lane 一把 + 一把全局模式锁」。
+
+#### 四个必须处理的坑
+
+1. **非激活 tab 没有 rAF/IO**：滚动驱动（xhs:user 翻页、懒加载）前要 `activate`
+   该 tab（毫秒级、**不触发 reload**），窗口保持 `interactive`。
+2. **`setMode` 是窗口级**：多 lane 并发只对 `hidden` 安全；`interactive` 仍要全局模式锁。
+3. **登录锁只锁自己的 lane**：这是「登录不再阻塞刷新」的关键，比多 tab 本身更重要。
+4. **被动采集按 lane 绑定**：`capturePage` 的 `onEvent` / `getResponseBody` 必须绑到该
+   lane 的 tab，否则会收到别平台的事件。
+
+cookie 是浏览器级共享的（登录完其它 lane 直接受益）；app 重启后 target 映射丢失，
+按 URL 前缀重新认领或直接新建。
+
+#### 分阶段
+
+- **阶段 1（低风险、收益最大）**：只加 detail / login 辅助 lane（每平台 1 个，LRU 2–3）。
+- **阶段 2（可选）**：list lane 按 `channelKey`（3 个）+ LRU（默认 4）+ 空闲回收（10min），
+  滚动前 `activate`。
+
+验收：多订阅同时刷新 + 打开详情 + 扫码登录的组合下，抓取日志不应再出现「登录页/详情页
+被当列表页读取」；xhs 翻页在穿插详情后仍从原 cursor 继续（不重载、不空页）。
+
+#### 3.13.1 锁与窗口模式的配套改造（设计，未实现）
+
+结论：`withBrowserLock` / `withBrowserMode` **必须一起改**，但不能整体换成「每 lane 一把锁」——
+它们现在把四件不同粒度的东西捆在一个函数里：
+
+| 关注点 | 现在的实现 | 正确粒度 |
+|---|---|---|
+| 互斥（导航 + fetch 必须原子） | `cdp.ts` 模块级 promise 链（全局、**非重入**） | **per-lane** |
+| 窗口模式 | Rust `mode: Mutex<Option<BrowserMode>>` 单槽 + 对整棵 Edge 进程树 `ShowWindow` | **全局**（引用计数） |
+| 平台准入 | `browserGate` 在**全局锁内**调用 | **per-platform**，挪到 lane 锁之外 |
+| 登录豁免 | `scanLoginActive` 布尔 | per-lane（Set/计数） |
+
+**目标 API**：
+
+```ts
+withLane(lane, fn)                       // 同一 tab 上的导航+fetch 原子
+withRenderLease(fn)                      // 全局引用计数：首个租约切 interactive，最后一个释放切回 hidden
+await browserGate(platform)              // 平台级（自带 per-platform 互斥）
+withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLease → activate → fn
+```
+
+**顺序与理由**：
+
+- **gate 放到 lane 锁之外**：现在它在全局锁内，某平台冷却会把**所有平台**的浏览器操作一起卡住
+  （队头阻塞），多 tab 也救不回来。
+- **gate 自身要 per-platform 串行**：`governor.browserGate` 是「读 last → sleep → 写」的非原子
+  序列，今天安全**只因**它在全局锁里；拆锁后两条 lane 会同读同放行，最小间隔/抖动失效。
+- **interactive 用引用计数**：`withBrowserMode` 的 finally **无条件** `setMode("hidden")`
+  （`cdp.ts:73`）；多 lane 下任一条 hidden 操作收尾都会把别人正在滚动的页面掐成 hidden
+  （滚动静默 0 条）。另外 Rust 每次切换都要 `restore_foreground` sleep 350ms，反复抖动很贵。
+- **滚动前 `activate` 该 tab**：非激活 tab 的 rAF/IO 停摆（§3.9 同机制），activate 毫秒级、不重载。
+- **只用 tab、不开新窗口**：`main_window_for_pids` 只挑一个主框架窗口显示，多窗口时其余窗口
+  仍隐藏（滚动同样是 0 条）；`PUT /json/new` 建**同窗口 tab** 可规避。禁图
+  `--blink-settings=imagesEnabled=false` 是启动参数，对全部 tab 生效，不能按 lane 开关。
+- **连接级状态全部下沉**：`connId / pending / nextId / eventListeners / abortPending` 要按 tab；
+  `connect()` 现在取 `/json/list` 的**第一个 page**（`browser-backend.ts:112`），超时重连会
+  悄悄换 tab —— lane→target 映射必须显式持有、可校验、可重建。
+- **登录**：`withScanLoginLock` 改为 login lane 锁；`scanLoginActive` 布尔改 Set/计数
+  （两个登录重叠会互相清标记，`cdp.ts:101`）；桌面 45s 超时（`data.ts:161`）改为只 abort
+  自己 lane 的连接，登录 lane 不再需要特判豁免。
+- **cdp 原语显式收 tab**：`cdpFetch / cdpEvaluate / cdpNavigate / capturePage` 现在既不持锁
+  也不校验，默认打「默认 page」；lane 化后由 tab 句柄承载，漏传一处就会静默打回默认页。
+- **被动采集**：`capturePage` 现在丢掉 `onEvent` 的第三参 `sessionId`（`capture.ts:55`）、
+  `getResponseBody` 也不带 sessionId（`:95`）、`Network.enable` 从不 `disable`；多 lane 下必须
+  绑到该 tab 的会话，否则事件/响应串台。`passiveBuffer` 的 key 只有 (platform, endpoint, url)，
+  且 `getLatest` 不比 URL/时间（`buffer.ts:121`）——两个 lane 同采会互相串，还会把 30 分钟内
+  的旧 body 当本轮结果；需要带 lane / captureId（或 since）过滤。
+- **共用函数要显式传 lane**：`fetchXhsList` / `fetchXhsPassivePage` 被 xhs:explore 与 xhs:user
+  共用，内部拿不到 channelKey，lane 必须由调用方传下去。
+
+**另外三处要顺手收口**：
+
+- **锁外的浏览器操作**：`AccountPage` 的 `clearCookies`、`Diagnostics` 的 `resetProfile` 现在
+  完全绕过浏览器锁（前者可与导航交错，后者直接杀掉正在抓取的 Edge）。lane 化时归为
+  `browser-global` 操作（独立全局锁，不占任何 lane）。
+- **45s 超时 < 登录 300s**：`REFRESH_TIMEOUT_MS = 45s`，而 xhs/weibo 登录持锁可达 300s、
+  douyin 180s —— 排队中的刷新必然先超时，现在全靠 `scanLoginActive` 豁免。lane 化后刷新超时
+  只 abort 自己 lane 的连接，这条启发式可以删掉（`data.ts:161` 那个 `/^(weibo|xhs):/` 正则也
+  一并去掉，lane 由订阅算出，而不是猜前缀）。
+- **detail lane 的额外收益**：`resolveXhsItemDetail` 里的 `ensureXhsOrigin` 整页导航
+  （`xhs/shared.ts:362` 附近）在专属 detail tab 常驻 xhs 域后可以直接删掉。
+
+**迁移**：保留 `withBrowserMode` 作为 `withBrowserOp({ lane: "default" })` 的兼容壳，逐个调用点
+迁移；补一个纯逻辑调度自检（假 backend）覆盖：hidden 下两 lane 可并发、interactive 租约串行
+且最后释放才隐藏、gate 等待不占 lane 锁、异常路径必释放、abort 不跨 lane。
+
+#### 3.13.2 要不要接 Effect（结论：不接，2026-10-21）
+
+「异步复杂度上来了」只有前两类能靠库消除，后四类是**外部状态机**，任何 TS 库都管不了：
+
+| 复杂度来源 | Effect 能解？ |
+|---|---|
+| 四件事四种粒度（lane / 全局租约 / per-platform gate / 登录豁免） | ✅ Scope + Semaphore + Ref |
+| 取消只打自己 lane | ✅ fiber interruption |
+| Rust `mode` 单槽 + `ShowWindow` 对整棵进程树 | ❌ |
+| Win32 副作用不可回滚（已 interactive / 已导航走） | ❌ 仍要手写反向 finalize |
+| CDP 连接级状态（`connId`/`pending`/`abortPending`） | ❌ 得改 backend |
+| `await invoke(...)` 不可中断 | ❌ Effect 中断也是协作式 |
+
+四个原语手写约 120 行（`packages/resolve/src/browser/scheduler.ts`）：
+
+- `withLane(lane, fn)` —— promise 链（`tails` Map）：同 lane 串行、跨 lane 并发、异常不卡死后续；
+- `withRenderLease(fn)` —— 全局引用计数：首个切 interactive，最后一个切回 hidden；
+- `browserGate(platform)` —— `withLane("gate:"+p)` 里「读 last → sleep → 写 last」，顺带修掉
+  §3.13.1 指出的非原子；
+- lane 级 `AbortController` —— `abortLane(lane)` 只打自己。
+
+接 Effect 的代价：调度器在 `resolve`，调用方遍布 `resolve`/`crawler`/`core`/`apps/desktop`，
+还要进 CLI(node) 与 mobile —— 要么全仓 Effect 化（不可能），要么每个边界
+`Effect.runPromise` 转换（净增噪音）；而真正需要它的能力（`Schedule` 重试矩阵、`Stream` 扇出、
+`Layer` 依赖注入）当前一个都没有。
+
+**重新评估的触发条件**（满足任意两条）：① 需要跨操作组合语义（多订阅竞速/取消、共享冷却
+令牌）；② 需要可组合且可测的退避策略；③ 需要流式扇出；④ 调度代码自身超 ~400 行且开始出现
+「这把锁到底护什么」的讨论。到那时上面四个函数就是移植边界，换库只动一个文件。
+
+### 3.14 Edge 实例配置与调试端口
+
+（2026-10-21 从 `CLAUDE.md` 迁入）
+
+- ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版开
+  无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用 `scripts/tauri.ts` 叠的
+  `tauri.conf.dev.json`（`bun run tauri` 自动带上）。
+- **release 下 CDP Edge 禁图**：只有可隐藏的 release 构建才拼
+  `--blink-settings=imagesEnabled=false` —— SSR/滚动抓取只读 DOM 文本，图片纯浪费内存/带宽。
+  实测该参数**不影响** `interactive` 模式的 rAF / IntersectionObserver / scroll 事件（只让
+  图片不加载），所以模式切换不需要重开浏览器。扫码不受影响：微博读远程 `img.src`（图另走
+  `appHost.http`）、小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制；debug 不禁图
+  便于观察。
+- **CDP Edge 干净度（对齐 edge-cdp 插件）**：`edge_args` 带
+  `--disable-sync --disable-extensions --disable-default-apps
+  --edge-redirect-feed-at-first-run-disabled=1`，避免把本机登录账号的同步设置/扩展带进抓取
+  实例。⚠️ `.msn/.bing` 账户 cookie 仍会被 Edge 账户层注入（flag 挡不住，不影响抓取）；
+  要真正清空 profile 用「存储与诊断 → 清理浏览器数据」（先杀我们的 Edge 再删目录）。
+  ⚠️ 不能像插件的 WSL 脚本那样 `taskkill /IM msedge.exe` 杀全部 Edge —— 那会关掉用户正在
+  用的浏览器。
 
 ## 4. 结论与剩余风险
 

@@ -112,7 +112,7 @@ w_rid    = MD5(sortedParams & wts & mixinKey)
   （**只在空库写入**，覆盖全部 kind 与平台）。⚠️ 这份清单会随开发调整，**以文件为准**，不在文档里
   再抄一份（曾抄过一版 19 条，很快失效）。
 
-> 平台能力（播放/弹幕）与发现层缺口（分区/搜索）见 `docs/capability-gaps.md`。
+> 平台能力（播放/弹幕）与发现层缺口（分区/搜索）见 `docs/platforms/channels.md`。
 
 ## 七、不建议碰的（反爬 / 无原生）
 
