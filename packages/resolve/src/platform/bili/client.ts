@@ -50,6 +50,8 @@ export interface BilibiliClient extends PlatformClient {
   getJson<T = Record<string, any>>(url: string, opts?: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean }): Promise<T>
   /** web 签名:`...&w_rid&wts`(wbi key 取自 cookie 对应 nav;匿名同 key)。 */
   signWeb(query: string, cookie?: string): Promise<string>
+  /** space 系 wbi 签名:在 signWeb 基础上补 `dm_*` 客户端指纹参数(缺了 WAF 直接 412/-352)。 */
+  signSpace(query: string, cookie?: string): Promise<string>
   /** 直播签名(无独立 wts=;wts 内联排序)。 */
   signLiveParams(params: Record<string, string>, cookie?: string): Promise<string>
   /** 确保匿名 buvid3/4 就绪(模块级一次,幂等)。 */
@@ -156,6 +158,34 @@ async function signWeb(query: string, cookie?: string): Promise<string> {
   const wts = Math.floor(now() / 1000).toString()
   const wRid = md5Hex(`${sp.toString()}&wts=${wts}${key}`)
   return `${query}${query ? "&" : ""}w_rid=${wRid}&wts=${wts}`
+}
+
+/**
+ * space 系 wbi 接口(`/x/space/wbi/*`)的客户端指纹参数。
+ *
+ * ⚠️ 2026-10 实测:只带 wbi 签名 + buvid 时 `arc/search` 大量返回 **HTTP 412**(WAF)
+ * 或 `-352`;补 `dm_*` 后恢复(对照参考 RSSHub `addDmVerifyInfo`)。这些值平台只校验
+ * 形态,不要求真实 WebGL:`dm_img_str`/`dm_cover_img_str` 用 base64("no webgl") 去掉
+ * 末两位,RSSHub 同款;`dm_img_list` 模拟一次鼠标/触摸采样点。
+ * 参数必须**参与签名**(拼在 query 里再算 w_rid),不是额外请求头。
+ */
+function spaceFpQuery(): string {
+  const x = 1000 + Math.floor(Math.random() * 500)
+  const y = 1000 + Math.floor(Math.random() * 500)
+  const list = JSON.stringify([
+    { x: 3 * x + 2 * y, y: 4 * x - 5 * y, z: 0, timestamp: 1 + Math.floor(Math.random() * 60), type: 0 },
+  ])
+  const inter = JSON.stringify({ ds: [], wh: [x, y, 0], of: [0, 0, 0] })
+  return new URLSearchParams({
+    dm_img_list: list,
+    dm_img_str: "bm8gd2ViZ2w",
+    dm_cover_img_str: "bm8gd2ViZ2w",
+    dm_img_inter: inter,
+  }).toString()
+}
+
+async function signSpace(query: string, cookie?: string): Promise<string> {
+  return signWeb(`${query}&${spaceFpQuery()}`, cookie)
 }
 
 async function signLiveParams(params: Record<string, string>, cookie?: string): Promise<string> {
@@ -300,6 +330,7 @@ function getDanmaku(id: string, opts?: BilibiliDanmakuOptions): DanmakuStream {
 export const biliClient: BilibiliClient = {
   getJson,
   signWeb,
+  signSpace,
   signLiveParams,
   ensureBuvid,
   anonBuvid3,

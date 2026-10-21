@@ -47,6 +47,13 @@
   否则 `getListByArea`（直播热门）/ space 系接口直接 `-352`。曾写成「有 cookie 就跳过
   buvid」，症状是**扫码登录后**直播热门与直播播放解析从可用变成 352（全局 L0 也照报
   —— 那是平台返回码，不是冷却）。回归：`bili-buvid.check.ts`
+- ⚠️ **space 系 wbi 接口（`/x/space/wbi/*`）2026-10 起收紧**：只带 wbi 签名 + buvid
+  会被 WAF 间歇 **HTTP 412** / `-352`。必须 `biliClient.signSpace()` —— 在 signWeb
+  基础上补 `dm_img_list` / `dm_img_str` / `dm_cover_img_str` / `dm_img_inter`
+  客户端指纹参数（**参与签名**；形态对即可，RSSHub `addDmVerifyInfo` 同款）。
+  且**必须带登录 cookie**：匿名 space 已基本不可用；`bili:user_video` 曾漏传
+  `info.cookie`，登录用户也永远匿名 → 刷新报 412（本条修复）。回归：
+  `bili-space-sign.check.ts`；真机验证登录态 `bili:user_video` 刷新。
 
 ## 斗鱼 / 虎牙 / 抖音
 

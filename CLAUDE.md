@@ -113,7 +113,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 
 | 平台 | 一句话 |
 | --- | --- |
-| B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352` |
+| B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
 | 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；**登录 cookie 目前没有任何抓取路径消费**；真搜索需登录（未做） |
 | YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
 | 小红书 | 全 SSR；**`web_session` 不是登录标志**；`xhs:explore` 被动、`xhs:user` 主动 fetch |

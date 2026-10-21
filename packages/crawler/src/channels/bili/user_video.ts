@@ -24,10 +24,16 @@ export class BiliUserVideoChannel implements RssChannel {
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const uid = info.uid ?? ""
     if (!uid) throw new Error("bili:user_video 需要 uid")
-    const signed = await biliClient.signWeb(`mid=${uid}&ps=30&pn=1&platform=web&order=pubdate`)
+    // ⚠️ 必须带订阅/平台 cookie:早先这里漏传 `info.cookie`,登录用户也永远走匿名,
+    // space 接口对匿名请求会间歇 412/-352(桌面设了 cookie 也不生效)。
+    const cookie = (info.cookie as string) || undefined
+    const signed = await biliClient.signSpace(
+      `mid=${uid}&ps=30&pn=1&platform=web&order=pubdate&keyword=&tid=0&web_location=1550101`,
+      cookie,
+    )
     const data = await biliClient.getJson<{ data?: { list?: { vlist?: Array<Record<string, unknown>> } } }>(
       `${API}/x/space/wbi/arc/search?${signed}`,
-      { referer: `https://space.bilibili.com/${uid}/video`, buvid: true },
+      { referer: `https://space.bilibili.com/${uid}/video`, cookie, buvid: true },
     )
     const vlist = data?.data?.list?.vlist ?? []
     const t = now()
