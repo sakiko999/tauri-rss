@@ -782,6 +782,58 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   要真正清空 profile 用「存储与诊断 → 清理浏览器数据」（先杀我们的 Edge 再删目录）。
   ⚠️ 不能像插件的 WSL 脚本那样 `taskkill /IM msedge.exe` 杀全部 Edge —— 那会关掉用户正在
   用的浏览器。
+- **冷启动必须干净（2026-10-22）**：`browser_close` 用 `TerminateProcess` 关 Edge，Chromium
+  把它记成崩溃（`Default/Preferences` 的 `profile.exit_type=Crashed`）→ 下次冷启动会从
+  `Default/Sessions/` 恢复上次的 tab，并弹崩溃还原气泡。恢复出来的窗口**晚于
+  `hide_until_stable` 返回**才创建，于是 release 下任务栏又冒出 Edge 图标。三件套兜住：
+  spawn 前 `purge_sessions()` 删 `Default/Sessions/*`（登录态在 `Network/Cookies`，不受影响）、
+  带 `--hide-crash-restore-bubble`、藏窗口时顺手把 `WS_EX_APPWINDOW` 换成
+  `WS_EX_TOOLWINDOW`（晚到的 `ShowWindow` 也不会长出任务栏按钮）。
+- **抓取实例的性能开关**（`edge_args`，都只影响浏览器自己，不动 UA/指纹）：
+  `--js-flags=--max-old-space-size=512`、`--disk-cache-size=67108864`、
+  `--disable-gpu-compositing`（合成器走软件：GPU 进程仍在、WebGL/光栅不变，只把合成搬回
+  CPU —— GPU 进程 private 约 270MB 是隐藏窗口里最大的固定开销之一）、
+  `--disable-background-networking --disable-component-update --no-pings --disable-breakpad
+  --metrics-recording-only`（profile 里那堆 `Edge*/Variations*` 就是它们下载的）。
+  ⚠️ **不要加 `--renderer-process-limit=1` / `--disable-site-isolation-trials`**：合并
+  renderer 只省进程数，内存上是负资产（见下面基线第 2 条），且单 tab 死循环会卡住其它 tab。
+  **不做**：`--single-process`（易崩且进程模型异常）、`--disable-gpu`（改 canvas/WebGL 指纹）；
+  缓存保持开启（关缓存 = 每次全量重下）。
+  ⚠️ **死参数别再加回来**（2026-10-22 在 Edge 155 的 `msedge.dll` 里搜不到，写了只被静默
+  忽略）：`--disable-session-crashed-bubble`、`--edge-redirect-feed-at-first-run-disabled=1`、
+  `--disable-client-side-phishing-detection`、`--safebrowsing-disable-auto-update`，
+  以及 `--disable-features=InterestFeedContentSuggestions`。
+- **字体/媒体/统计域名在 CDP 层拦**（`browser-backend.ts` 的 `armNetwork`：每次建连
+  `Network.enable` + `Network.setBlockedURLs`）。⚠️ **不拦 CSS** —— 布局一变，懒加载与
+  可见性判定（IntersectionObserver）可能跟着变。
+- **空闲 3 分钟自动关 Edge**（`TauriBrowserBackend.closeIfIdle`）：活跃实例约 0.9–1.0GB
+  private，而抓取是间歇性的 —— 一轮刷新结束后常驻那 1GB 对用户是实打实的代价。按「在途
+  CDP 命令数 = 0」判定，长登录/长轮询不会被打断；profile 留在磁盘上，下次用自动重启
+  （~1.5s），`tabs` 清空后 lane 句柄重建。
+- **实测基线（Edge 155，2026-10-22，release）**：12 进程 / WS 644MB / **private commit ~1.0GB**。
+  构成：1 browser 90MB · 1 GPU 101MB WS（253MB private）· 5 renderer（**1 个抓取共享** 291MB +
+  **4 个 Edge UI** 127MB WS / 204MB private，其中 Copilot iframe 自己 73MB JS heap）· 4 utility
+  31MB · crashpad 4.5MB。三条结论：
+  1. **任务管理器的「内存」列会低估隐藏进程**（页面被换出后 WS 掉到 12MB、private 仍 340MB）——
+     回归基线用 private bytes / PeakWorkingSet。
+  2. `--js-flags=--max-old-space-size=512` **不是内存杠杆**：抓取 renderer 291MB 里 JS heap 只
+     60MB，其余是 DOM/Blink/CC。⚠️ 那次测量用的 `--renderer-process-limit=1` 已被移除：
+     合并后多个 lane 共用一个 renderer，**关掉 target 也不释放**（实测关掉 xhs 页后该 renderer
+     仍占 320MB，Chromium 留着复用）；现在每 tab 独立 renderer，关 tab 就真释放。
+  3. profile 483MB 里 `ProvenanceData` 168MB + `Crashpad` 124MB 是纯垃圾（Crashpad 已改成
+     冷启动清）；`Default` 只 84MB，其中 Code Cache 57MB。
+- **Edge 自带界面基本删不掉**（`sweepEdgeUi`）：实测 `GET /json/close/<id>` 对
+  `edge://discover-chat-v2`（type=`browser_ui`）与 Copilot iframe 都返回 "Target is closing"，
+  但 2–3 秒后 target 原样回来 —— 那是 Edge 的常驻聊天面，CDP 关不掉，flags 也挡不住。
+  sweep 实际只清掉过 `edge://nurturing` 这类一次性页面（≈80MB）。**不要再指望它省 200MB**；
+  这块（Copilot 130MB + browser_ui 30MB + 它拉起的 VideoCaptureService 128MB）是使用 Edge
+  的固定成本。
+  ⚠️ 默认通道选 target 时**不能取「第一个 page」**（实测首项是 `edge://nurturing/`），
+  优先 `about:blank`，其次任一非 Edge 内置页。
+- **headless 不是省内存的答案**（2026-10-22 实测，详见 `docs/platforms/platform-notes.md`
+  小红书一节）：`--headless=new` + 匿名 profile 跑 xhs，private 943–1069MB，与 headed 隐藏
+  窗口的 992MB 持平；省掉的 Edge UI（130MB）被更大的主 renderer（414 vs 321MB）吃回去，
+  GPU 与 VideoCaptureService 照旧，UA 还暴露 `HeadlessChrome`。
 
 ## 4. 结论与剩余风险
 

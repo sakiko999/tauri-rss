@@ -149,6 +149,18 @@
   `/api/sns/web/v2/user/me` 的 `data.guest === false && data.user_id`。
 - 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
   xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）
+- ⚠️ **匿名滚动翻页：headless 被拦，WebView2 正常（2026-10-22 实测）**：匿名访客 `/explore`
+  首屏 SSR 两种形态都正常（26–34 条，约 0.7s，无 `.fe-verify-box`）。滚动翻页则分叉：
+  - **headless Edge**：跳到 `website-login/error`，`error_code=300012`「IP存在风险」、
+    `rejectUrl=…/api/sns/web/v1/login/activate`，随后 `.fe-verify-box` 出现、feed 归零；
+  - **Tauri WebView2（spike）**：同一滚动路径 34 → 53 → 72 → 88 条，无 verify、无登录跳转。
+  说明 300012 更像「无头被识别/会话要求登录」，**不是**「匿名不能翻页」；要用匿名翻页必须
+  按目标形态实测，别拿 headless 的结论外推。
+- **headless 无收益（同日实测）**：`--headless=new` + 全新匿名 profile 跑同一路径，首屏同样
+  26 条，但 UA 是 `HeadlessChrome/155.0.0.0 … Edg/155`；private 943–1069 MB，与 headed
+  隐藏窗口的 992 MB 持平（省掉 Edge UI 约 130 MB，主 renderer 反而 414 MB > 321 MB，
+  GPU 270 MB 与 VideoCaptureService 128 MB 照旧）。**结论：继续 headed + `SW_HIDE`**，
+  headless 既拿不到指纹一致性，也不省内存。
 - ⚠️ **xhs 渠道按登录态/渠道分流**（2026-10-20）：登录态 → **被动**（导航后读页面
   `__INITIAL_STATE__`，或被动模式的 Network 捕获），不构造请求。匿名：
   - `xhs:explore` **也走被动** —— 匿名推荐流 SSR 本身有 feeds，首屏与 `fetchMore`

@@ -65,5 +65,17 @@ export const browserLog = createLogDomain("host:browser", {
       text: (ctx: { expression: string; detail: string }) =>
         `CDP evaluate 异常\n  expression: ${ctx.expression}\n  detail: ${ctx.detail}`,
     },
+    armFailed: {
+      level: "warn",
+      text: (ctx: { detail: string }) => `资源拦截未挂上(只是少了优化,不影响抓取): ${ctx.detail}`,
+    },
+    idleClose: {
+      level: "info",
+      text: (ctx: { minutes: number }) => `浏览器空闲 ${ctx.minutes} 分钟,已关闭(下次使用自动重启)`,
+    },
+    uiSweep: {
+      level: "info",
+      text: (ctx: { count: number }) => `已关闭 ${ctx.count} 个 Edge 自带界面 target(省 ~200MB private)`,
+    },
   },
 })

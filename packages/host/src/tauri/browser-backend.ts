@@ -45,6 +45,65 @@ function fromBase64(b64: string): string {
  */
 const CDP_CMD_TIMEOUT_MS = 30_000
 
+/**
+ * 资源拦截:字体/媒体/统计域名对抓取零价值(页面内容走 SSR HTML + 签名脚本 + cookie)。
+ * **不拦 CSS** —— 布局一变,懒加载与可见性判定(IntersectionObserver)可能跟着变。
+ * 图片已在启动参数层关掉(`--blink-settings=imagesEnabled=false`)。
+ */
+const BLOCKED_URL_PATTERNS = [
+  "*.woff",
+  "*.woff2",
+  "*.ttf",
+  "*.otf",
+  "*.mp4",
+  "*.m3u8",
+  "*.webm",
+  "*.mp3",
+  "*.m4a",
+  "*doubleclick.net*",
+  "*google-analytics.com*",
+  "*googletagmanager.com*",
+  "*hm.baidu.com*",
+  "*cnzz.com*",
+  "*umeng.com*",
+  "*sentry.io*",
+]
+
+/**
+ * 空闲关闭:抓取实例活跃时约 0.9–1.0GB private(实测 2026-10-22),而抓取是间歇性的。
+ * 零在途操作满 3 分钟就关掉(profile/登录态留在磁盘上),下次用自动重启(~1.5s)。
+ * ⚠️ 10 分钟太长:一轮刷新结束后通常就没事了,而常驻的 1GB 对用户是实打实的。
+ */
+const IDLE_CLOSE_MS = 3 * 60_000
+
+/** 后台级「有浏览器操作在途」计数:空闲关闭只在零在途时执行。 */
+interface BrowserActivity {
+  begin: () => void
+  end: () => void
+}
+
+/** `/json/list` 的条目(只取用得到的字段)。 */
+interface TargetInfo {
+  id?: string
+  type?: string
+  url?: string
+  webSocketDebuggerUrl?: string
+}
+
+/**
+ * Edge 自带界面的 scheme。默认通道绝不挂上去，启动后也顺手关掉这些 target。
+ * ⚠️ `about:` 不在此列 —— 那是我们自己的空白页。
+ */
+const EDGE_UI_URL = /^(edge|chrome|chrome-untrusted|devtools|chrome-extension):/i
+
+/** Copilot 侧栏 iframe：实测独占一个 renderer、121MB private，抓取完全用不到。 */
+const EDGE_UI_HOST = /^https?:\/\/copilot\.microsoft\.com\//i
+
+function isEdgeUiTarget(t: TargetInfo): boolean {
+  const url = t.url ?? ""
+  return EDGE_UI_URL.test(url) || EDGE_UI_HOST.test(url)
+}
+
 type CdpEventListener = (method: string, params: unknown, sessionId?: string) => void
 
 /**
@@ -59,8 +118,10 @@ class CdpChannel {
   private inflight = new Set<Promise<unknown>>()
   private eventListeners = new Set<CdpEventListener>()
   private connecting: Promise<void> | null = null
+  /** 本连接是否已挂上资源拦截(重连后要重挂)。 */
+  private armed = false
 
-  constructor(private readonly tag: string) {}
+  constructor(private readonly tag: string, private readonly activity?: BrowserActivity) {}
 
   /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。 */
   track<T>(p: Promise<T>): Promise<T> {
@@ -85,6 +146,7 @@ class CdpChannel {
     if (this.connId) {
       const id = this.connId
       this.connId = null
+      this.armed = false // 新连接要重挂资源拦截
       void this.track(invoke("ws_close", { connectionId: id })).catch(() => {})
     }
   }
@@ -116,6 +178,22 @@ class CdpChannel {
     return this.rawSend(method, params, sessionId)
   }
 
+  /**
+   * 给本连接挂上资源拦截(每个 target / 每次重连各一次)。
+   * 失败不致命:只是少了这层优化,下次重连再试。
+   */
+  async armNetwork(): Promise<void> {
+    if (!this.connId || this.armed) return
+    this.armed = true
+    try {
+      await this.rawSend("Network.enable", {})
+      await this.rawSend("Network.setBlockedURLs", { urls: BLOCKED_URL_PATTERNS })
+    } catch (e) {
+      this.armed = false
+      browserLog.armFailed({ detail: e instanceof Error ? e.message : String(e) })
+    }
+  }
+
   /** 订阅 CDP 事件（无 id 的帧），返回取消订阅函数。 */
   onEvent(cb: CdpEventListener): () => void {
     this.eventListeners.add(cb)
@@ -130,6 +208,8 @@ class CdpChannel {
     const id = this.nextId++
     const msg = JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })
     const payload = toBase64(msg)
+    // 每条在途命令都算「有操作」:空闲关闭只会在零在途时触发(见 TauriBrowserBackend)。
+    this.activity?.begin()
     return new Promise((resolve, reject) => {
       // ⚠️ 单条命令超时是必须的:页面在命令未回话时被导航/替换,该 id 的回复会
       // **永久丢失**,promise 就此永不 settle。后果不是「这一条卡住」而是全线卡死:
@@ -137,16 +217,21 @@ class CdpChannel {
       // 超时判断(它的 timeoutMs 形同虚设)→ lane 锁永不释放 → 整轮 refreshAll 不结束
       // (顶栏「更新中」永久转圈)。超时把「无限等待」降级成「这条命令报错」。
       const timer = setTimeout(() => {
-        if (this.pending.delete(id)) reject(new Error(`CDP 命令超时(${method}):页面可能已导航,回复丢失`))
+        if (this.pending.delete(id)) {
+          this.activity?.end()
+          reject(new Error(`CDP 命令超时(${method}):页面可能已导航,回复丢失`))
+        }
       }, CDP_CMD_TIMEOUT_MS)
       const settle = <T>(fn: (v: T) => void) => (v: T) => {
         clearTimeout(timer)
+        this.activity?.end()
         fn(v)
       }
       this.pending.set(id, { resolve: settle(resolve), reject: settle(reject) })
       void this.track(invoke("ws_send", { connectionId: this.connId, payload, text: true })).catch((e) => {
         if (!this.pending.delete(id)) return
         clearTimeout(timer)
+        this.activity?.end()
         reject(e instanceof Error ? e : new Error(String(e)))
       })
     })
@@ -178,6 +263,7 @@ class CdpChannel {
     if (this.connId) {
       await this.track(invoke("ws_close", { connectionId: this.connId })).catch(() => {})
       this.connId = null
+      this.armed = false
     }
   }
 }
@@ -191,8 +277,12 @@ class TauriBrowserTab implements BrowserTab {
   private targetId: string | null = null
   private ensuring: Promise<void> | null = null
 
-  constructor(readonly key: string, private readonly getPort: () => Promise<number>) {
-    this.channel = new CdpChannel(`tab:${key}`)
+  constructor(
+    readonly key: string,
+    private readonly getPort: () => Promise<number>,
+    activity: BrowserActivity,
+  ) {
+    this.channel = new CdpChannel(`tab:${key}`, activity)
   }
 
   /** 确保 target 存在(一次;PUT /json/new 建**同窗口 tab**,不开新窗口)。 */
@@ -248,6 +338,7 @@ class TauriBrowserTab implements BrowserTab {
 
   private async ensureConn(): Promise<void> {
     await this.channel.ensureConn(() => this.openWs())
+    await this.channel.armNetwork()
   }
 
   async evaluate<T = unknown>(
@@ -328,9 +419,42 @@ class TauriBrowserTab implements BrowserTab {
 }
 
 export class TauriBrowserBackend implements BrowserBackend {
-  private channel = new CdpChannel("default")
+  private channel = new CdpChannel("default", { begin: () => this.begin(), end: () => this.end() })
   /** lane → tab 句柄(同 key 复用;LRU 上限 MAX_TABS)。 */
   private tabs = new Map<string, TauriBrowserTab>()
+  /** 在途 CDP 命令数(空闲关闭只在 0 时执行)。 */
+  private busy = 0
+  private idleTimer: ReturnType<typeof setTimeout> | null = null
+  /** 本实例是否已扫过 Edge 自带界面的 target(重开浏览器后要重扫)。 */
+  private junkSwept = false
+
+  /** 记一次操作在途;归零后重新开始计时。 */
+  private begin(): void {
+    this.busy++
+    this.touch()
+  }
+
+  private end(): void {
+    this.busy = Math.max(0, this.busy - 1)
+    this.touch()
+  }
+
+  /** 重置空闲计时(每次有操作就往后推)。 */
+  private touch(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer)
+    this.idleTimer = setTimeout(() => void this.closeIfIdle(), IDLE_CLOSE_MS)
+  }
+
+  /** 空闲到点:还有在途命令就再等一轮(长登录/长轮询不能被打断)。 */
+  private async closeIfIdle(): Promise<void> {
+    this.idleTimer = null
+    if (this.busy > 0) {
+      this.touch()
+      return
+    }
+    browserLog.idleClose({ minutes: IDLE_CLOSE_MS / 60_000 })
+    await this.close().catch(() => {})
+  }
   /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。host 级(browser_ensure)用。 */
   private track<T>(p: Promise<T>): Promise<T> {
     return this.channel.track(p)
@@ -357,16 +481,70 @@ export class TauriBrowserBackend implements BrowserBackend {
             responseType: "text",
             timeoutMs: 5_000,
           })
-          const targets = JSON.parse(String(res.body)) as Array<{ type?: string; webSocketDebuggerUrl?: string }>
-          const page = targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl)
-          if (!page?.webSocketDebuggerUrl) throw new Error("CDP: 未找到可附加的页面 target")
-          return page.webSocketDebuggerUrl
+          const targets = JSON.parse(String(res.body)) as TargetInfo[]
+          // ⚠️ 不能取「第一个 page」:实测 Edge 155 的 /json/list 首项是 `edge://nurturing/`,
+          // 不是启动参数里的 about:blank —— 挂上去等于在 Edge 内置页上跑 Runtime.evaluate。
+          // 顺序:启动参数那张 about:blank → 任一非 Edge 内置页 → 自己建一张。
+          const page =
+            targets.find((t) => t.type === "page" && t.url === "about:blank" && t.webSocketDebuggerUrl) ??
+            targets.find((t) => t.type === "page" && !isEdgeUiTarget(t) && t.webSocketDebuggerUrl)
+          if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl
+          const created = await globalThis.appHost.http.request({
+            url: `http://127.0.0.1:${port}/json/new?about:blank`,
+            method: "PUT",
+            responseType: "text",
+            timeoutMs: 5_000,
+          })
+          const fresh = JSON.parse(String(created.body)) as TargetInfo
+          if (!fresh.webSocketDebuggerUrl) throw new Error("CDP: 未找到可附加的页面 target")
+          return fresh.webSocketDebuggerUrl
         })
         .finally(() => {
           this.connectingRef = null
         })
     }
-    return this.connectingRef
+    await this.connectingRef
+    await this.channel.armNetwork()
+    await this.sweepEdgeUi()
+  }
+
+  /**
+   * 关掉 Edge 自带界面的 target(`edge://nurturing`、Copilot 侧栏 iframe 等)。
+   *
+   * 实测一个 release 实例 12 个进程里，4 个 renderer 全是 Edge UI：合计约 127MB WS /
+   * 204MB private，其中 Copilot iframe 自己 73MB JS heap，比抓取页面还大。这些既不
+   * 走我们的 CDP 连接，也拦不住（armNetwork 只作用于本连接的 target），只能关。
+   *
+   * ⚠️ 不关 `browser_ui` 类型：那可能是窗口自身的 UI target，关掉有连带风险。
+   * ⚠️ Edge 可能重开其中之一，扫一次就够（失败不重试，纯优化）。
+   */
+  private async sweepEdgeUi(): Promise<void> {
+    if (this.junkSwept) return
+    this.junkSwept = true
+    try {
+      const port = await this.port()
+      const list = await globalThis.appHost.http.request({
+        url: `http://127.0.0.1:${port}/json/list`,
+        method: "GET",
+        responseType: "text",
+        timeoutMs: 5_000,
+      })
+      const targets = JSON.parse(String(list.body)) as TargetInfo[]
+      const junk = targets.filter((t) => t.id && t.type !== "browser_ui" && isEdgeUiTarget(t))
+      for (const t of junk) {
+        await globalThis.appHost.http
+          .request({
+            url: `http://127.0.0.1:${port}/json/close/${t.id}`,
+            method: "GET",
+            responseType: "text",
+            timeoutMs: 3_000,
+          })
+          .catch(() => {})
+      }
+      if (junk.length > 0) browserLog.uiSweep({ count: junk.length })
+    } catch {
+      // 列不出来就算了：这只是省内存，不影响抓取。
+    }
   }
 
   tab(key: string): BrowserTab {
@@ -385,7 +563,7 @@ export class TauriBrowserBackend implements BrowserBackend {
       this.tabs.delete(oldest)
       void t?.close().catch(() => {})
     }
-    const t = new TauriBrowserTab(key, () => this.port())
+    const t = new TauriBrowserTab(key, () => this.port(), { begin: () => this.begin(), end: () => this.end() })
     this.tabs.set(key, t)
     return t
   }
@@ -484,18 +662,28 @@ export class TauriBrowserBackend implements BrowserBackend {
   }
 
   async close(): Promise<void> {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer)
+      this.idleTimer = null
+    }
     await this.channel.closeWs()
     for (const [, t] of this.tabs) await t.close().catch(() => {})
     this.tabs.clear()
+    this.junkSwept = false // 下次连的是新实例，要重扫 Edge UI
     await this.track(invoke("browser_close")).catch(() => {})
   }
 
   /** 清空 profile(Rust 侧 browser_reset_profile:杀我们的 Edge 树 + 删目录)。 */
   async resetProfile(): Promise<string> {
     // 连接已随进程销毁失效,清掉本地引用,下次 evaluate 会重新 ensureConn。
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer)
+      this.idleTimer = null
+    }
     await this.channel.closeWs()
     for (const [, t] of this.tabs) t.abortPending("浏览器 profile 已重置")
     this.tabs.clear()
+    this.junkSwept = false
     return await invoke<string>("browser_reset_profile")
   }
 }

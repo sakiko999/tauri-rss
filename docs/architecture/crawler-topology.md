@@ -175,3 +175,38 @@ channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fe
 - Tauri：v2.tauri.app（Android inspector 需 USB debugging + chrome://inspect）；github.com/tauri-apps/tauri/issues/12492（release 默认不开 WebView debugging）
 
 相关：[[edge-swhide-hidden-window]]、[[xhs-user-ssr-loggedin-notes]]
+
+## WebView2 当抓取浏览器：spike 结论（2026-10-22，待决策）
+
+**动机**：隐藏 Edge 实例活跃时 private 约 **0.99 GB**，其中约 0.29 GB 是 Edge 自带界面
+（Copilot 130MB + discover-chat browser_ui 30MB + 它拉起的 VideoCaptureService 128MB）——
+这层 CDP 关不掉、flags 也挡不住。Tauri 自己的 WebView2 没有这一层。
+
+**做法**（分支 `feat/webview2-browser`，`apps/src-tauri/src/spike.rs`）：
+`cfg(windows + debug_assertions)` + `SPIKE_WEBVIEW=1` 时用 `WebviewWindowBuilder` 建一个
+隐藏 webview，**独立 `data_directory`** + 独立 `--remote-debugging-port=9334`（Tauri 文档要求
+「参数不同的 webview 必须配不同 data dir」）。正式 `browser_ensure` 路径未改动。
+
+**实测**
+
+| 维度 | 结果 |
+| --- | --- |
+| CDP | ✅ `/json/list` + WS + `Runtime.evaluate` + `Page.navigate` 全通，TS 侧无需改动 |
+| xhs 首屏 | ✅ 34 条 / 约 0.8s |
+| xhs 匿名滚动 | ✅ 34 → 53 → 72 → 88 条，无 verify、无登录跳转（headless 同路径撞 `300012`） |
+| 内存（同一页面） | 7 进程 / WS 775MB / **private 472MB**（Edge 是 992MB） |
+| 合计（含应用自身 UI WebView2 375MB） | **约 850MB**（现在是 1.37GB） |
+
+**指纹（同页面安全上下文）**
+
+- `window.chrome.webview` **存在**（`window.chrome` keys: `loadTimes,csi,app,webview`）；
+- `navigator.userAgentData.brands` = `["Microsoft Edge WebView2/155", "Not(A:Brand/24",
+  "Microsoft Edge/155", "Chromium/155"]` —— **明文自报 WebView2**；
+- Tauri `.user_agent()` 只改 UA 字符串，**UA-CH 不变**；要抹掉只能在每个 target 上
+  CDP `Network.setUserAgentOverride` 覆盖 `userAgentMetadata`（= 伪装，方向与「用真实 Edge」
+  相悖）；
+- 其余正常：`webdriver=false`、plugins 5 个、WebGL 是真实 Intel Arc。
+
+**结论**：功能与内存都过（判据：CDP 可用、xhs 流程可用、private ≤750MB），**但指纹判据不过**。
+暂不迁移。待真实账号在分支上把 xhs/weibo 全流程（扫码登录、详情、被动捕获）跑一遍再决定；
+若迁移，必须显式决定是否接受 UA-CH 覆盖。

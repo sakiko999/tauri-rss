@@ -249,6 +249,11 @@ struct HideCtx {
 ///
 /// SW_HIDE 的窗口无任务栏图标——「含任务栏完全隐藏」。Chromium 首次显示主窗口
 /// **不遵守 STARTUPINFO 的 wShowWindow**(内部显式 ShowWindow(SW_SHOW)),故须主动隐藏。
+///
+/// ⚠️ 藏之前**顺手去掉 `WS_EX_APPWINDOW` 换上 `WS_EX_TOOLWINDOW`**:崩溃还原气泡/
+/// 会话恢复的窗口可能在 `hide_until_stable` 返回之后才 ShowWindow,那一下会重新长出
+/// 任务栏按钮(2026-10-22 真 release 实测)。工具窗口没有任务栏按钮,窗口又在
+/// `--window-position=-32000,-32000`,晚到的 show 也就无声无息。
 fn hide_windows_for_pids(pids: &std::collections::HashSet<u32>) -> usize {
     unsafe extern "system" fn enum_cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
         let ctx = &mut *(lparam as *mut HideCtx);
@@ -257,6 +262,9 @@ fn hide_windows_for_pids(pids: &std::collections::HashSet<u32>) -> usize {
             GetWindowThreadProcessId(hwnd, &mut wnd_pid);
             // 只藏「属于我们 + 当前可见」的窗口,且只对后者计数。
             if (*ctx.pids).contains(&wnd_pid) && IsWindowVisible(hwnd) != 0 {
+                let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+                let ex = (ex & !WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW;
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex as isize);
                 ShowWindow(hwnd, SW_HIDE);
                 ctx.hidden += 1;
             }
@@ -392,11 +400,15 @@ fn show_main_window(pids: &std::collections::HashSet<u32>) -> bool {
 ///     0 命中」才返回；否则会在主窗口创建前误判「藏净」。
 ///   - false（模式切换）：窗口本来就在，第一轮没东西可藏即可返回。
 ///
-/// `seen0`：预热循环已经藏过窗口时传 true（否则 seen 永远为 false，会白等 2s）。
+/// `seen0`：预热循环已经藏过窗口时传 true（否则 seen 永远为 false，会白等）。
+///
+/// ⚠️ 预算 60 轮（6s）而不是 20 轮：真 release 冷启动带一个几十 MB 的老 profile 时，
+/// 主框架窗口可能晚于 CDP 就绪 2s 才创建，旧预算下会「藏完辅助窗就返回」。
+/// 正常路径仍在最后一轮命中后 3×100ms 返回，不会变慢。
 fn hide_until_stable(root: u32, require_seen: bool, seen0: bool) -> bool {
     let mut seen = seen0;
     let mut quiet = 0u32;
-    for _ in 0..20 {
+    for _ in 0..60 {
         let pids = collect_process_descendants(root);
         let main_like = main_window_for_pids(&pids).is_some();
         let hidden = hide_windows_for_pids(&pids);
@@ -467,6 +479,12 @@ fn edge_args(port: u16, data_dir: &std::path::Path, hide_capable: bool) -> Vec<S
         "--remote-allow-origins=*".to_string(),
         "--no-first-run".to_string(),
         "--no-default-browser-check".to_string(),
+        // 上次是被 TerminateProcess 关的(见 browser_close)，Chromium 记为「崩溃」→
+        // 下次冷启动弹「还原页面」气泡。会话数据在 spawn 前已删(purge_sessions)，
+        // 这个 flag 负责把气泡本身也憋掉。
+        // ⚠️ Edge 155 的 msedge.dll 里搜不到 `--disable-session-crashed-bubble` /
+        // `--edge-redirect-feed-at-first-run-disabled`：写了只是被静默忽略，别再加回来。
+        "--hide-crash-restore-bubble".to_string(),
         // 关掉会「带出日常账号形态」的三个入口(对齐 edge-cdp 插件的干净实例做法):
         // Edge 账户层会把同步/扩展/默认应用挂到任何 profile 上,换 user-data-dir 挡不住。
         // ⚠️ .msn/.bing 的账户 cookie 仍会被注入(那是账户层行为,flag 挡不住),
@@ -474,12 +492,32 @@ fn edge_args(port: u16, data_dir: &std::path::Path, hide_capable: bool) -> Vec<S
         "--disable-sync".to_string(),
         "--disable-extensions".to_string(),
         "--disable-default-apps".to_string(),
-        "--edge-redirect-feed-at-first-run-disabled=1".to_string(),
         // 后台不被节流/降权：hidden 下定时器照常；切 interactive 后无需重启即可渲染。
         "--disable-background-timer-throttling".to_string(),
         "--disable-renderer-backgrounding".to_string(),
         "--disable-backgrounding-occluded-windows".to_string(),
-        "--disable-features=CalculateNativeWinOcclusion".to_string(),
+        "--disable-features=CalculateNativeWinOcclusion,Translate,BackForwardCache,OptimizationHints,MediaRouter".to_string(),
+        // ── 性能:砍后台噪音 ──────────────────────────────────────────────
+        // 组件下载、变体种子、崩溃上报、计费 ping 都是浏览器自己的后台行为,对抓取
+        // 零价值 —— profile 里那堆 Edge*/Variations* 目录就是产物。
+        // ⚠️ 这些只能减少后台活动，**去不掉 Edge 自带界面**（nurturing / Copilot 照开，
+        // 实测 2026-10-22）：那层要走 CDP 关 target（见 browser-backend 的 sweepEdgeUi）。
+        "--disable-background-networking".to_string(),
+        "--disable-component-update".to_string(),
+        "--no-pings".to_string(),
+        "--disable-breakpad".to_string(),
+        "--metrics-recording-only".to_string(),
+        // ⚠️ **不要加 --renderer-process-limit / --disable-site-isolation-trials**:
+        // 合并 renderer 只省进程数,内存上却是负资产 —— 实测(2026-10-22)关掉 lane 的
+        // target 后那个共享 renderer 仍占 320MB 纹丝不动(Chromium 留着复用);每 tab
+        // 独立 renderer 时,关 tab 就真释放。
+        // 单 renderer 堆封顶 512MB(默认按物理内存自适应,大内存机器会给到 GB 级)。
+        "--js-flags=--max-old-space-size=512".to_string(),
+        // 合成器走软件:GPU 进程仍负责 WebGL/光栅(canvas 指纹不变),只把合成搬回 CPU。
+        // 实测前 GPU 进程 private 约 270MB,是隐藏窗口里最大的一块固定开销。
+        "--disable-gpu-compositing".to_string(),
+        // 磁盘缓存 64MB 封顶:profile 不再无限膨胀,冷启动更快。
+        "--disk-cache-size=67108864".to_string(),
     ];
     if hide_capable {
         // 屏外启动：即使 Chromium 先 ShowWindow 也不会闪在用户屏幕上。
@@ -561,6 +599,46 @@ fn profile_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("edge-profile"))
+}
+
+/// 清掉上次会话的恢复数据，保证冷启动是干净的一张 `about:blank`。
+///
+/// 为什么每次都要删：本应用用 `TerminateProcess` 关 Edge（`browser_close`），
+/// Chromium 把它记为崩溃（`Default/Preferences` 的 `profile.exit_type=Crashed`），
+/// 下次冷启动就会从 `Default/Sessions/` 恢复上次的 tab —— 那些窗口**在
+/// `hide_until_stable` 返回之后**才创建，于是 hidden 模式的任务栏图标又冒出来。
+/// 登录态在 `Network/Cookies`，与本目录无关，删了不掉登录。
+///
+/// 只在 Edge 未运行时调用（spawn 前），否则文件被占用。
+fn purge_sessions(data_dir: &Path) {
+    let dir = data_dir.join("Default").join("Sessions");
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    let mut n = 0usize;
+    for e in entries.flatten() {
+        if std::fs::remove_file(e.path()).is_ok() {
+            n += 1;
+        }
+    }
+    if n > 0 {
+        eprintln!("[browser] purge sessions: {n} file(s)");
+    }
+}
+
+/// 清 crashpad 崩溃转储（同样只在 Edge 未运行时调用）。
+///
+/// 实测 profile 483MB 里 Crashpad 占 124MB —— 全是历史转储，对抓取零价值；Edge 会
+/// 自己重建该目录。失败只记日志：有残留 handler 占着文件时删不掉，不影响启动。
+fn purge_crashpad(data_dir: &Path) {
+    let dir = data_dir.join("Crashpad");
+    if !dir.exists() {
+        return;
+    }
+    match std::fs::remove_dir_all(&dir) {
+        Ok(()) => eprintln!("[browser] purge crashpad"),
+        Err(e) => eprintln!("[browser] purge crashpad skipped: {e}"),
+    }
 }
 
 /// 递归删目录(存在才删)。用于清理脏 profile。
@@ -661,6 +739,10 @@ pub fn browser_ensure(app: AppHandle, mode: Option<String>) -> Result<u16, Strin
     // **不**在每次启动时自动清——那会连带清掉扫码登录态。
     let data_dir = profile_dir(&app)?;
     std::fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    // 冷启动一律从一张 about:blank 开始（见 purge_sessions）：不清的话上次的 tab
+    // 会被恢复出来，晚于隐藏逻辑创建窗口 → 任务栏冒图标 + 多开渲染进程。
+    purge_sessions(&data_dir);
+    purge_crashpad(&data_dir);
 
     // debug 构建(dev)不隐藏窗口,便于开发观察 Edge 行为;release 构建可隐藏/切模式。
     let hide_capable = !cfg!(debug_assertions);
