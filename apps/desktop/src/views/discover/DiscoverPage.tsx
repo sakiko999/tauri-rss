@@ -91,15 +91,10 @@ export function DiscoverPage() {
       <div className="scroll-area page-scroll" {...overlayBlock("discover-scroll", "page:discover:scroll")}>
         <div className="page-wrap" {...overlayBlock("discover-wrap", "page:discover:wrap")}>
           <h1 className="page-title">发现</h1>
-          <p className="page-lead">
-            平台能力从已注册渠道推导:能看到的按钮就有对应实现。分区浏览与搜索直接取真实数据,
-            不需要先建订阅;找到想看的内容再一键订阅。
-          </p>
 
           <section className="section-first section" {...overlayBlock("discover-caps", "discover:caps")}>
             <div className="section-head">
               <h2 className="section-title">平台能力</h2>
-              <span className="section-desc">只显示该平台已实现的入口</span>
             </div>
             <div className="platform-grid">
               {PLATFORMS.map((p) => {
@@ -122,19 +117,8 @@ export function DiscoverPage() {
                       </span>
                       <span className="platform-title">
                         <span className="platform-name">{p.label}</span>
-                        <span className="t-micro t-dim">{p.id}</span>
                       </span>
                     </div>
-                    {supported.length > 0 ? (
-                      <div className="cap-list">
-                        {supported.map((k) => (
-                          <div className="cap-row" data-on="true" key={k}>
-                            <Icon name="checkCircle" size={13} />
-                            <span>{CAP_LABEL[k]}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
                     <div className="chip-row">
                       {c.category ? (
                         <button
@@ -193,28 +177,8 @@ export function DiscoverPage() {
           <section className="section" {...overlayBlock("discover-section", "discover:boards")}>
             <div className="section-head">
               <h2 className="section-title">可订阅榜单</h2>
-              <span className="section-desc">无参渠道，一键订阅即可持续收到内容</span>
             </div>
             <BoardList boards={boards} />
-          </section>
-
-          <section className="section" {...overlayBlock("discover-section", "discover:sources")}>
-            <div className="section-head">
-              <h2 className="section-title">数据源</h2>
-              <span className="section-desc">抓取在本机完成，内容与凭证只存本地，不经中转服务器</span>
-            </div>
-            <div className="stat-strip" {...overlayBlock("stat-strip", "discover:stats")}>
-              {[
-                { k: "可用渠道", v: channels.length },
-                { k: "平台能力", v: Object.values(caps).reduce((n, c) => n + Object.values(c).filter(Boolean).length, 0) },
-                { k: "可一键订阅", v: boards.length },
-              ].map((s) => (
-                <div className="stack" key={s.k} style={{ gap: 2 }}>
-                  <span className="t-micro t-dim">{s.k}</span>
-                  <span className="t-h2 num">{s.v}</span>
-                </div>
-              ))}
-            </div>
           </section>
         </div>
       </div>

@@ -48,7 +48,6 @@ export interface SearchPanelProps {
   searching: boolean
   searchItems: { length: number } | null
   cands: Candidate[]
-  shown: Candidate[]
   candidateValue: string
   onPickCandidate: (c: Candidate) => void
   subscribed: Set<string>
@@ -62,67 +61,58 @@ export interface SearchPanelProps {
 /** 候选列表的入参(SearchPanel 与发现页共用)。 */
 export interface CandidateListProps {
   cands: Candidate[]
-  shown: Candidate[]
   candidateValue: string
   onPick: (c: Candidate) => void
   subscribed: Set<string>
   platform: string
-  /** shown 为空时的提示(默认按「筛选无匹配」措辞)。 */
-  emptyText?: string
 }
 
 /**
  * 候选列表:缩略图 + label/sub/meta 一行看全,点击选中(再点取消)。
  * 发现页的搜索/分区/搜主播也用它 —— 与「添加订阅」保持同一套候选形态。
+ * 列表上方不再印「匹配 N / N 项」:没有筛选入口,两个数字恒等。
  */
 export function CandidateList(f: CandidateListProps) {
   if (f.cands.length === 0) return null
   return (
     <div className="field" {...overlayBlock("candidate-list", "add:candidates")}>
-      <span className="field-label">
-        匹配 <span className="num">{f.shown.length}</span> / {f.cands.length} 项
-      </span>
-      {f.shown.length > 0 ? (
-        <div className="cand-list" role="listbox" aria-label="候选项">
-          {f.shown.map((c) => (
-            <button
-              key={c.value}
-              className="cand"
-              role="option"
-              aria-selected={f.candidateValue === c.value}
-              onClick={() => f.onPick(c)}
-            >
-              {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
-              {c.thumb ? (
-                <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
-              ) : (
-                <span className="cand-thumb cand-thumb-plain">
-                  <Icon name={PLATFORM_ICON[f.platform] ?? "layers"} size={18} />
+      <div className="cand-list" role="listbox" aria-label="候选项">
+        {f.cands.map((c) => (
+          <button
+            key={c.value}
+            className="cand"
+            role="option"
+            aria-selected={f.candidateValue === c.value}
+            onClick={() => f.onPick(c)}
+          >
+            {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
+            {c.thumb ? (
+              <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
+            ) : (
+              <span className="cand-thumb cand-thumb-plain">
+                <Icon name={PLATFORM_ICON[f.platform] ?? "layers"} size={18} />
+              </span>
+            )}
+            <span className="cand-main">
+              <span className="cand-label od-truncate">{c.label}</span>
+              {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
+              {c.meta.length > 0 ? (
+                <span className="cand-meta">
+                  {c.meta.map((m) => (
+                    <span className="cand-chip" key={m}>
+                      {m}
+                    </span>
+                  ))}
                 </span>
-              )}
-              <span className="cand-main">
-                <span className="cand-label od-truncate">{c.label}</span>
-                {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
-                {c.meta.length > 0 ? (
-                  <span className="cand-meta">
-                    {c.meta.map((m) => (
-                      <span className="cand-chip" key={m}>
-                        {m}
-                      </span>
-                    ))}
-                  </span>
-                ) : null}
-              </span>
-              {f.subscribed.has(c.value) ? <span className="tag tag-warn chip-tag">已订阅</span> : null}
-              <span className="cand-check">
-                <Icon name="check" size={15} />
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <p className="t-small t-dim">{f.emptyText ?? "没有匹配的结果，换个关键词或清空筛选。"}</p>
-      )}
+              ) : null}
+            </span>
+            {f.subscribed.has(c.value) ? <span className="tag tag-warn chip-tag">已订阅</span> : null}
+            <span className="cand-check">
+              <Icon name="check" size={15} />
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -187,7 +177,6 @@ export function SearchPanel(f: SearchPanelProps) {
           <button className="btn btn-secondary btn-sm" disabled={f.searching || !f.keyword.trim()} onClick={f.onSearch}>
             {f.searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />} 搜索
           </button>
-          <span className="field-help">候选来自平台实时搜索接口，与是否已订阅无关。</span>
         </div>
       </div>
 
@@ -214,13 +203,12 @@ export function SearchPanel(f: SearchPanelProps) {
               </button>
             ))}
           </div>
-          <span className="field-help">选中房间后会并入该订阅的房间列表，原有房间保留。</span>
+          <span className="field-help">并入后原有房间保留。</span>
         </div>
       ) : null}
 
       <CandidateList
         cands={f.cands}
-        shown={f.shown}
         candidateValue={f.candidateValue}
         onPick={f.onPickCandidate}
         subscribed={f.subscribed}
@@ -305,9 +293,6 @@ export function ChannelPanel(f: ChannelPanelProps) {
               </div>
             ))}
         </div>
-        <span className="field-help">
-          带二维码标记的渠道支持扫码登录（同平台共用登录态）；未登录也能先订阅。
-        </span>
       </div>
 
       {f.rssFeeds.length > 0 ? (
@@ -332,9 +317,6 @@ export function ChannelPanel(f: ChannelPanelProps) {
               ...f.rssFeeds.map((c) => ({ value: c.key, label: c.name })),
             ]}
           />
-          <span className="field-help">
-            Hacker News、V2EX 等预置直链；选中后参数已填好，直接订阅即可。
-          </span>
         </div>
       ) : null}
 
@@ -358,7 +340,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
           ) : null}
           {f.channel.loginable ? (
             <Banner tone="info" icon="lock">
-              登录后可解锁部分内容或更高画质；需要时到「账号与凭证」扫码登录。未登录也能先订阅。
+              登录后可解锁部分内容或更高画质；未登录也能先订阅。
             </Banner>
           ) : null}
 
@@ -390,7 +372,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
                   </button>
                 ))}
               </div>
-              <span className="field-help">选中已有订阅后，本次填写的房间会并入它，原有房间保留。</span>
+              <span className="field-help">并入后原有房间保留。</span>
             </div>
           ) : null}
 
@@ -417,9 +399,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
                 ) : null}
               </div>
             ))
-          ) : (
-            <p className="t-small t-muted">该渠道不需要额外参数。</p>
-          )}
+          ) : null}
         </div>
       ) : null}
     </div>

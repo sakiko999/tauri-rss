@@ -24,7 +24,7 @@ export function Playback() {
             onChange={(v) => void setSetting("autoPlayNext", v)}
           />
         </Row>
-        <Row label="画质" help="一律选最高清晰度并锁定，不会自动降档。">
+        <Row label="画质">
           <span className="tag">锁最高档</span>
         </Row>
       </SideCard>

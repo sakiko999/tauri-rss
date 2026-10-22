@@ -94,15 +94,6 @@ export function AccountPage() {
               />
             ))}
           </div>
-
-          <SideCard title="不登录能用什么" icon="info">
-            <ul className="platform-notes" style={{ padding: "var(--sp-2) 0" }}>
-              <li>B站：热门 / 排行榜 / 视频 720P 与直播弹幕；动态与高清档位要登录。</li>
-              <li>微博：热搜列表；关注人时间线与热搜词流要登录。</li>
-              <li>小红书：推荐流；用户主页要登录。</li>
-              <li>斗鱼 / 虎牙 / YouTube 直播：全部可用；抖音直播可看，登录后解锁原画。</li>
-            </ul>
-          </SideCard>
         </div>
       </div>
 
@@ -143,7 +134,6 @@ function CredentialCard({
           {configured ? <span className="tag tag-ok">已配置</span> : <span className="tag">未配置（匿名）</span>}
         </InfoRow>
         <InfoRow k="用途">{meta.note}</InfoRow>
-        <InfoRow k="长度">{configured ? `${value.length} 字符` : "—"}</InfoRow>
       </div>
 
       <div className="field">
@@ -299,7 +289,6 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
           <>
             {/* 载荷可能是 data URL(xhs)或待编码文本(bili),QrImage 两者都吃。 */}
             <QrImage payload={qr} />
-            <p className="qr-status t-small t-muted">用 {label} App 扫码,并在手机上确认登录</p>
           </>
         ) : null}
         {phase === "success" ? (

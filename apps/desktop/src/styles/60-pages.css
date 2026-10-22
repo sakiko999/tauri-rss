@@ -114,42 +114,6 @@
   font-size: var(--fs-h3);
   font-weight: 600;
 }
-.cap-list {
-  display: grid;
-  gap: var(--sp-2);
-}
-.cap-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-size: var(--fs-small);
-  color: var(--text-muted);
-}
-.cap-row svg {
-  flex: none;
-}
-.cap-row[data-on="true"] svg {
-  color: var(--success);
-}
-.cap-row[data-on="false"] svg {
-  color: var(--text-dim);
-}
-.platform-notes {
-  display: grid;
-  gap: var(--sp-1);
-  font-size: var(--fs-micro);
-  line-height: 1.6;
-  color: var(--text-dim);
-}
-.platform-notes li {
-  display: flex;
-  gap: var(--sp-2);
-}
-.platform-notes li::before {
-  content: "—";
-  flex: none;
-}
-
 .channel-groups {
   display: grid;
   gap: var(--sp-4);

@@ -74,7 +74,6 @@ export function AddSubscriptionDialog({
   const [targetId, setTargetId] = useState("new")
   /** 手工模式同理：列表型参数(roomIds)可并入已有订阅。 */
   const [manualTargetId, setManualTargetId] = useState("new")
-  const [filter] = useState("")
   const [title, setTitle] = useState("")
   const [groupId, setGroupId] = useState("")
   const [ttl, setTtl] = useState("")
@@ -135,11 +134,6 @@ export function AddSubscriptionDialog({
         : [],
     [searchMode, searchKind, searchItems],
   )
-  const shown = useMemo(() => {
-    const q = filter.trim().toLowerCase()
-    return q ? cands.filter((c) => `${c.label} ${c.value} ${c.sub}`.toLowerCase().includes(q)) : cands
-  }, [cands, filter])
-
   /** 落地订阅的渠道(搜索模式 = 平台对应的 live 订阅渠道;手工模式 = 选中的渠道)。 */
   const landKey = searchMode ? subChKey : channelKey
   const landChannel = searchMode ? subCh : channel
@@ -444,7 +438,6 @@ export function AddSubscriptionDialog({
           searching={searching}
           searchItems={searchItems}
           cands={cands}
-          shown={shown}
           candidateValue={candidateValue}
           onPickCandidate={pickCandidate}
           subscribed={subscribed}

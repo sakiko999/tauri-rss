@@ -2,7 +2,6 @@
  * OnboardingModal —— 首次启动引导(仅首次,标记记在 usePrefs.onboarded)。
  */
 import { usePrefs } from "../../store/prefs.ts"
-import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../../components/Modal.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
@@ -10,8 +9,6 @@ import { overlayBlock } from "../../lib/uiOverlay.ts"
 export function OnboardingModal() {
   const onboarded = usePrefs((s) => s.onboarded)
   const setPrefs = usePrefs((s) => s.set)
-  const allItems = useDesktop((s) => s.allItems)
-  const subscriptions = useDesktop((s) => s.subscriptions)
 
   if (onboarded) return null
 
@@ -23,9 +20,7 @@ export function OnboardingModal() {
       desc="一个把 RSS、视频、直播、社交聚到一起的本地阅读器"
       footer={
         <>
-          <span className="t-micro t-dim flex-1">
-            当前 {subscriptions.length} 个订阅，{allItems.length} 条内容
-          </span>
+          <span className="spacer" />
           <button className="btn btn-primary" onClick={() => setPrefs({ onboarded: true })}>
             开始使用
           </button>

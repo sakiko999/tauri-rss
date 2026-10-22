@@ -38,7 +38,7 @@ export function Appearance() {
           <span className="range-value num">{p.fontSize}px</span>
         </div>
       </Row>
-      <Row label="阅读行宽" help="正文栏的最大宽度。">
+      <Row label="阅读行宽">
         <div className="segmented">
           {(["narrow", "comfortable", "wide"] as Measure[]).map((m) => (
             <button key={m} aria-pressed={p.measure === m} onClick={() => p.set({ measure: m })}>

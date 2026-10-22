@@ -418,9 +418,6 @@ kbd {
   background: var(--success-soft);
   color: var(--success);
 }
-.qr-status {
-  text-align: center;
-}
 .qr-success {
   display: grid;
   gap: var(--sp-4);

@@ -7,7 +7,7 @@
 import type { AudioItem, CategoryItem, MediaItem } from "@amoeba/core"
 import { MediaImage, fmtCount } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
-import { fmtAgo, fmtTime, httpsify, itemKey, mediaUrl, onlineOf, platformOf, socialRatio, PLATFORM_LABEL } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, httpsify, itemKey, mediaUrl, onlineOf, socialRatio } from "../../lib/media.ts"
 import { rememberSocialSource } from "../../lib/viewTransition.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
@@ -102,7 +102,6 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
   const isLiveNow = live && (item as { liveStatus?: string }).liveStatus !== "offline"
   const dur = (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
   const online = onlineOf(item)
-  const platform = platformOf(item)
   const b = badged(item, actions)
   // article 同 social:没有可播流,整卡点击应是「打开原文」而不是播放。
   // 播客 feed 条目(Apple 榜单)同理 —— 但它的主操作是「订阅」,见 isFeedItem。
@@ -183,19 +182,14 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
           )}
           <span className="card-time">{fmtAgo(item.publishedAt)}</span>
         </span>
-        <span className="card-foot">
-          {platform ? (
-            <>
-              <Icon name="radio" size={11} />
-              <span className="od-truncate">{PLATFORM_LABEL[platform] ?? platform}</span>
-            </>
-          ) : (
-            <span className="od-truncate">{kindLabel(item.kind)}</span>
-          )}
-          <span className="spacer" />
-          {/* 队列是播放特性:不可播的 kind(article/social)与无流的 feed 条目加进去也播不出。 */}
-          {actions.onQueue && playable && !feed ? <QueueButton item={item} onQueue={actions.onQueue} /> : null}
-        </span>
+        {/* 队列是播放特性:不可播的 kind(article/social)与无流的 feed 条目加进去也播不出。
+            平台/类型名不再印在卡脚 —— 同源列表里每张卡都重复同一个平台名,信息由侧栏与网格头承担。 */}
+        {actions.onQueue && playable && !feed ? (
+          <span className="card-foot">
+            <span className="spacer" />
+            <QueueButton item={item} onQueue={actions.onQueue} />
+          </span>
+        ) : null}
       </div>
     </article>
   )
@@ -295,8 +289,4 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
 /** 横向轨道的直播卡(比网格卡宽)。 */
 export function LiveRailCard({ item, actions }: { item: MediaItem; actions: CardActions }) {
   return <MediaCard item={item} actions={actions} />
-}
-
-function kindLabel(kind: string): string {
-  return { article: "文章", video: "视频", audio: "音频", live: "直播", social: "社交", category: "分区" }[kind] ?? kind
 }

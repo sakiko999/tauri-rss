@@ -354,9 +354,7 @@ function PreviewHead({ item, count }: { item: MediaItem; count: number }) {
         <Icon name="back" size={13} /> 返回
       </button>
       <span className="grid-title od-truncate">{item.title}</span>
-      <span className="grid-sub">
-        {kind === "feed" ? "单集" : "分区内容"} · {count} 条（预览，不写入订阅）
-      </span>
+      <span className="grid-sub">{count} 条（预览，不写入订阅）</span>
       <span className="spacer" />
       <button className="btn btn-secondary btn-sm" disabled={subscribing || alreadySubscribed} onClick={() => void subscribe()}>
         {subscribing ? (

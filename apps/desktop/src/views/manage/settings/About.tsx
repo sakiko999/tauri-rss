@@ -43,7 +43,7 @@ export function About() {
   return (
     <>
       <SideCard title="关于" icon="info">
-        <Row label="当前版本" help="本地安装的 Amoeba 版本。">
+        <Row label="当前版本">
           <span className="tag num">v{version}</span>
         </Row>
         <Row

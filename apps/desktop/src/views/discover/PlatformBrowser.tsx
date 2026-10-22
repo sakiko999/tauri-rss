@@ -170,7 +170,7 @@ export function PlatformBrowser({
     <section className="section" {...overlayBlock("platform-browser", "discover:browser")}>
       <div className="section-head">
         <h2 className="section-title">分区浏览与搜索</h2>
-        <span className="section-desc">取真实数据，不写进订阅列表；选中候选可直接订阅</span>
+        <span className="section-desc">预览，不写入订阅</span>
       </div>
 
       <div className="chip-row" style={{ marginBottom: "var(--sp-4)" }}>
@@ -279,7 +279,6 @@ export function PlatformBrowser({
           <>
             <CandidateList
               cands={cands}
-              shown={cands}
               candidateValue={selected}
               onPick={pickCandidate}
               subscribed={subscribed}
