@@ -25,6 +25,7 @@ import {
   readXhsStateListCount,
   resolveXhsItemDetail,
   scrollXhsUntilGrown,
+  waitXhsListNonEmpty,
 } from "./shared.ts"
 import { XhsChannelBase } from "./base.ts"
 
@@ -75,7 +76,10 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
       browser,
       {
         url: `${XHS_BASE}/explore`,
-        readPage: async (b) => this.toItems(await readXhsStateList(b, ["feed", "feeds"])),
+        readPage: async (b) => {
+          await waitXhsListNonEmpty(b, ["feed", "feeds"])
+          return this.toItems(await readXhsStateList(b, ["feed", "feeds"]))
+        },
         loginError: "小红书登录已失效或未登录，请到「账号与凭证」重新扫码",
       },
       // 列表 lane:explore 专属 tab,翻页 state 不被详情/登录导航走(§3.13)。
@@ -174,7 +178,11 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
         readState: (state) => flatXhsStateList(state, ["feed", "feeds"]),
         // A 路线没拿到缓冲时回退页面 SSR(导航已完成 + state 已挂载,仍不构造请求)。
         // ⚠️ 用传入的 lane 句柄 b 读(默认页是 about:blank,读了只会 0 条)。
-        readPage: (b) => readXhsStateList(b, ["feed", "feeds"]),
+        // ⚠️ 必须等列表非空:带 web_session 的会话 SSR 只给空壳,feed 由页面 XHR 填。
+        readPage: async (b) => {
+          await waitXhsListNonEmpty(b, ["feed", "feeds"])
+          return readXhsStateList(b, ["feed", "feeds"])
+        },
       },
       // 被动捕获与主动刷新同 lane:绑到本 lane 的 tab,事件/响应不串台(§3.13 坑 4)。
       "list:xhs:explore",

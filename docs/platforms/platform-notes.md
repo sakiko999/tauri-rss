@@ -149,6 +149,13 @@
   `/api/sns/web/v2/user/me` 的 `data.guest === false && data.user_id`。
 - 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
   xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）
+- ⚠️ **SSR 就绪 ≠ 列表就绪**（2026-10-22 实测）：带 `web_session` 的会话（含游客 session、
+  过期登录态）拿到的 `/explore` 文档是**空壳**——`feed.feeds` 为 `[]`，列表由页面自己的
+  XHR 在导航后约 0.4–1.1s 填回 `__INITIAL_STATE__`；干净匿名 profile 的 SSR 则有 31–35 条。
+  被动采集取的是**文档响应体**，于是永远拿到空壳、serialize 出 0 条 → core 报
+  「本次抓取解析出 0 条」（不抛异常、console 无日志，只在错误表里可见）。
+  修法 = `shared.ts` 的 `waitXhsListNonEmpty`：读 state 前先等列表非空；
+  `fetchXhsPassivePage` 在**捕获体解析为空时同样回退读页面 state**（原来只在缓冲缺失时回退）。
 - ⚠️ **匿名滚动翻页不可靠（2026-10-22 实测）**：匿名访客 `/explore` 首屏 SSR 在 headless
   Edge 与 Tauri WebView2 下都正常（26–34 条，约 0.7s，无 `.fe-verify-box`）。滚动翻页：
   - **headless Edge**：首轮就跳到 `website-login/error`，`error_code=300012`「IP存在风险」、
@@ -177,8 +184,14 @@
     每次都重载。⚠️ `feed.feeds` 是**扁平数组**（`flat()` 对它是 no-op），滚动加载的
     新条目**追加在尾部**（实测 862 → 915 → 968）；prepend 判断只是防御，不是常态。
   - 详情同理：登录态导航详情页读 `noteDetailMap`（被动）；匿名走页面内 fetch 详情 HTML。
-    `core.resolveDetail` 对被动渠道传 `{ passive: true }`（禁止 fetch），匿名则直接
-    回退列表 item。explore/user 的详情实现已收敛到 `channels/xhs/shared.ts`。
+    `core.resolveDetail` 对被动渠道传 `{ passive: true }`（禁止构造平台 API 请求）。
+    ⚠️ **游客/过期会话的登录墙只拦顶层导航**（2026-10-22 实测）：带 `web_session` 的
+    profile 导航详情页会被 302 到 `/login?redirectPath=…`，而**同一 URL、同一
+    `xsec_token`** 改成同源 `fetch(url, { credentials: "omit" })` 仍是 200 且
+    `noteDetailMap` 有条目；全新匿名 profile 顶层导航则正常（连开 30+ 条后也会被拦）。
+    故详情路径撞登录页时退回匿名文档读取，读不到才报「重新扫码」——
+    被动承诺约束的是列表采集，详情是用户主动打开。explore/user 的详情实现已收敛到
+    `channels/xhs/shared.ts`。
   - 被动模式的 `fetchPassive` 对未登录用户返回 null → core 回退内容缓存，不会偷偷改走 fetch。
   - 策略层入口 = `shared.ts` 的 `fetchXhsList`：登录页优先判匿名，**登录页且没有 `parseHtml`
     的渠道必须给 `loginError`**（explore），否则会读登录页的空 SSR 静默 0 条；SSR 列表读取

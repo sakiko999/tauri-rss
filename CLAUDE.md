@@ -135,7 +135,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 | B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
 | 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做） |
 | YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
-| 小红书 | 全 SSR；**`web_session` 不是登录标志**；`xhs:explore` 被动、`xhs:user` 主动 fetch；**匿名滚动翻页不可靠**（headless 首轮 300012 / WebView2 第二轮 300011，风控累积） |
+| 小红书 | 全 SSR；**`web_session` 不是登录标志**；`xhs:explore` 被动、`xhs:user` 主动 fetch；**匿名滚动翻页不可靠**（headless 首轮 300012 / WebView2 第二轮 300011，风控累积）；带 `web_session` 的会话 **SSR 只给空壳**（feed 由页面 XHR 填，读 state 前要等列表非空）；详情**顶层导航**会被游客登录墙拦（跳 /login），退回同源 `omit` fetch 可读 |
 | Twitch | 公开 GQL + usher HLS，纯匿名；master 无 CORS 必须服务端拉；流列表翻页要用 Android Client-ID |
 | 斗鱼/虎牙 | douyu `rate` 是档位 ID 不是清晰度；huya 低档只产 HLS |
 | Apple 播客 | 榜单条目 = 一个 feed（`stream` 空），主操作是「列出单集」不是播放 |
@@ -191,4 +191,5 @@ live 按平台二次聚合的 UI 侧。
 - [ ] release 验收：GPU 进程 private 是否因 --disable-gpu-compositing 下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
 - [ ] WebView2 分支（feat/webview2-browser）用真实账号跑完 xhs/weibo 全流程后再决定是否迁移
 - [ ] 实况图实机验收：xhs 直链是否 403（防盗链）、微博 .mov 在 WebView2 能否播、失败是否退回静态图
+- [ ] 实况按钮：等用户指一条带实况的条目后，用 CDP 复现并定位（release 无反应）
 <!-- cc-todo:end -->

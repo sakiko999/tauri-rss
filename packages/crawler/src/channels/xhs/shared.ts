@@ -193,6 +193,35 @@ export async function readXhsStateList(
   return list ?? []
 }
 
+/**
+ * 等首屏列表**真的**被页面填上,再读 state。
+ *
+ * ⚠️ `__INITIAL_STATE__` 挂载 ≠ 列表就绪:带 `web_session` 的会话(登录态或残留的
+ * 游客 session)拿到的 `/explore` SSR 文档只给空壳,`feed.feeds` 为 `[]`,列表由页面
+ * 自己的 XHR 在导航后约 0.4~1.1s 填回 state(实测 2026-10-22:匿名 SSR 有 31~35 条,
+ * 带 web_session 的 SSR 0 条)。不等就会把「空壳」当「0 条」。
+ *
+ * 尽力而为:超时不抛错(列表可能真的为空),由调用方按 0 条处理。
+ */
+export async function waitXhsListNonEmpty(
+  browser: BrowserBackend,
+  path: string[],
+  timeoutMs = 8_000,
+): Promise<void> {
+  const p = JSON.stringify(path)
+  await waitUntil(
+    browser,
+    `(() => {
+      const path = ${p};
+      let v = window.__INITIAL_STATE__;
+      for (const k of path) { v = v?.[k]; v = v?._rawValue ?? v; }
+      return Array.isArray(v) && v.flat().length > 0;
+    })()`,
+    timeoutMs,
+    "xhs 首屏列表未加载",
+  ).catch(() => {})
+}
+
 /** 只读列表长度(滚动轮询用:整棵 state 序列化只为判增长太贵)。 */
 export async function readXhsStateListCount(
   browser: BrowserBackend,
@@ -317,7 +346,13 @@ export async function fetchXhsPassivePage<T>(
     await assertXhsNotBlocked(b)
     const entry = passiveBuffer.getLatest("xhs", page.endpoint)
     if (!entry) return page.readPage ? page.readPage(b) : null
-    return page.readState(extractInitialState(entry.body))
+    const captured = page.readState(extractInitialState(entry.body))
+    // ⚠️ 缓冲有但列表为空(带 web_session 的会话 SSR 只给空壳)→ 同样回退页面 state:
+    //   页面自己的 XHR 已经把内容填好了,直接交空 XML 会让 core 当成「0 条」报错。
+    if (page.readPage && Array.isArray(captured) && captured.length === 0) {
+      return page.readPage(b)
+    }
+    return captured
   })
 }
 
@@ -369,7 +404,15 @@ export async function resolveXhsItemDetail(opts: XhsDetailOptions): Promise<Item
       await cdpNavigate(b, url, true)
       await waitXhsSsr(b, "xhs 详情页未就绪")
       if (await isXhsLoginPage(b)) {
-        throw new Error("小红书登录已失效或未登录，请到「账号与凭证」重新扫码")
+        // ⚠️ 游客/过期会话会被「登录墙」拦下,但拦的是**顶层导航**(带 cookie),
+        // 不是内容本身:同一 URL、同一 xsec_token,同源匿名 fetch(credentials:"omit")
+        // 仍返回 200 且 noteDetailMap 有条目(实测 2026-10-22,同一 profile 相邻两次)。
+        // 详情是用户主动打开、不是列表采集,退回匿名文档读取比让用户看到
+        // 「列表只有封面」更诚实;被动承诺约束的是列表,不受影响。
+        // 真的读不到(风控/404)时再抛可操作错误。
+        const html = await xhsFetchPage(b, url, "omit").catch(() => null)
+        if (!html) throw new Error("小红书登录已失效或未登录，请到「账号与凭证」重新扫码")
+        return detailFromHtml(html, noteId, sourceKey)
       }
       await assertXhsNotBlocked(b)
       let note = await cdpEvaluate<any>(b, noteDetailStateExpr(noteId)).catch(() => null)

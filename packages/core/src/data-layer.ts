@@ -671,8 +671,9 @@ export function createDataLayer(): DataLayer {
       if (hit) return { ...item, content: hit.content, contentFormat: hit.contentFormat }
     }
     // 被动渠道的详情补全同样要遵守「浏览器被动」的承诺(2026-10-19):
-    // 把 `{ passive: true }` 交给渠道 —— 只能走「导航 + 读页面 SSR」,不支持时返回
-    // null → 原样返回列表 item,**不发主动请求**。
+    // 把 `{ passive: true }` 交给渠道 —— 走「导航 + 读页面 SSR」,不碰平台 API,
+    // 不支持时返回 null → 原样返回列表 item。**唯一例外**是顶层导航撞上游客登录墙:
+    // 详情是用户主动打开,渠道退回同源匿名文档读取(见 crawler xhs/shared.ts)。
     const s = await settings.get()
     const info = await sourceInfoFor(sub, s)
     const source = channel.getSource(info)
