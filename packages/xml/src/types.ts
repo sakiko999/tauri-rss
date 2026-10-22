@@ -94,6 +94,13 @@ export interface SocialImage {
   url: string
   width?: number
   height?: number
+  /**
+   * 实况图（Live Photo）的短视频直链；静态图 `url` 就是它的 poster。
+   * 小红书：详情 `imageList[i].livePhoto === true` + `stream.<codec>[0].masterUrl`（实测 codec 是 EF4，
+   * 别写死 h264）；微博：`pics[].type === "livephoto"` + `videoSrc`（302 包装器，稳定）。
+   * 只存主址：小红书那条不落 XML（详情结果只给 UI），失效就重新解析详情。
+   */
+  liveVideo?: string
 }
 
 export interface Social extends Base {

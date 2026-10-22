@@ -301,9 +301,11 @@ function parseImagesFromMedia(raw: Record<string, unknown>): SocialImage[] | und
     if (!url) continue
     const w = num(attr(o, "width"))
     const h = num(attr(o, "height"))
+    const liveVideo = str(attr(o, "tpl:liveVideo"))
     const img: SocialImage = { url }
     if (w !== undefined) img.width = w
     if (h !== undefined) img.height = h
+    if (liveVideo) img.liveVideo = liveVideo
     imgs.push(img)
   }
   return imgs.length ? imgs : undefined

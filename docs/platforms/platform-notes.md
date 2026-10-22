@@ -193,6 +193,29 @@
   fork 与 `feat/xhs-rustpython` 分支**在本仓库已不存在**（纯算法处于上游失效期，故维持全 SSR）。
   若要重启签名移植，参照 `docs/platforms/xhs-signature.md` 的 Python xhshow 0.2.0
 
+## 实况图（Live Photo）：小红书 / 微博（2026-10-22 实测）
+
+两家都不是服务端下发的系统级 Live Photo 容器，而是「静态图 + 一段 2–3s 短视频」两份独立
+资源（iOS 那种 Live Photo 文件是客户端本地合成的）。**静态图就是 poster**，不要用视频首帧
+替代；小红书那条的静态图不一定比视频分辨率高（实测同一条里也有 1080×1440 对 1080×1440）。
+
+- **小红书**（只在**详情**里出现；`/explore` 的 noteCard 只有 cover，列表拿不到）：
+  `imageList[i].livePhoto === true`，视频在 `imageList[i].stream.<codec>[0].masterUrl`。
+  ⚠️ codec 键实测是 **`EF4`**（`EF5/EF6/EF7` 可能是空数组），**别写死 `h264`** —— 取第一个
+  非空数组。`masterUrl` 带 `sign&t`，`backupUrls[0]` 不带签名。mp4、约 3s、无音轨、右下角
+  有烧录 Logo（`WEB_LIVEPHOTO_19`）；非实况元素是 `livePhoto:false` + `stream:{}`，所以判定
+  只能看 `livePhoto`。Web 通道拿不到无水印原片（那要 App 签名）。
+- **微博**：`m.weibo.cn` 的 `pics[].type === "livephoto"` + `pics[].videoSrc`。
+  ⚠️ 顶层 `live_photo[]` 与 `pics[]` **下标不对应**，普通图与实况混排时不能用它配对。
+  桌面 `weibo.com/ajax/statuses/show` 是 `pic_infos.<pid>.type/video`，`video` 为
+  `video.weibo.com/media/play?livephoto=…` 的 302 包装器（去 token 会现场重签，适合落库）；
+  本体是 .mov（H.264/AAC、约 3s、几 MB），CDN 本次实测 `ACAO:*`、Range GET 不需要 Referer。
+- **契约**：`SocialImage.liveVideo`（单值；poster 即 `url`），XML 走
+  `media:content@tpl:liveVideo`。回归：`serialize-roundtrip.check.ts`（边界）+
+  `packages/resolve/src/example/live-photo.check.ts`（两家映射）。
+- **UI**：瀑布流封面加「实况」角标；详情里**点击才加载** `<video muted loop>`（不自动播，
+  省流量），失败退回静态图。
+
 ## 时间戳单位
 
 - ⚠️ **平台的 `time` 字段单位会变**，别无条件 `* 1000`。xhs 从**秒**改成**毫秒**后，

@@ -20,6 +20,9 @@ platform 被 URL 兜底误判为 bilibili）。✅ 修复后实测（2026-10-13�
 **加新字段务必同时改 serialize + deserialize 两侧**，回归守卫
 `serialize-roundtrip.check.ts` + `serialize-contract.check.ts`。
 
+最近的例子：`SocialImage.liveVideo`（实况图短视频）→ `media:content@tpl:liveVideo`，
+两侧同改并加了往返断言（2026-10-22）。
+
 ## `MediaItem.id` 只在订阅内唯一
 
 ⚠️ 实测 `bilibili:7734200` 同时在 `bili:live`（roomIds 解析成该房）与 `bili:live:hot`。

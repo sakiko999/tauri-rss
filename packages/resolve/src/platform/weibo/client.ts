@@ -10,6 +10,7 @@ import { httpGet, now } from "../../host.ts"
 import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { fillImageSizes } from "../../utils/img-size.ts"
 import { toInt } from "../../utils/number.ts"
+import { toHttps } from "../../utils/url.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 import { resolveCookie } from "../credentials.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
@@ -103,7 +104,14 @@ export function mblogToSocial(m: any, sourceId: string, t: number): Social {
   const htmlText = String(m?.text ?? "")
   const text = rawText || stripHtml(htmlText)
   const images = (m?.pics ?? [])
-    .map((p: any) => ({ url: String(p?.large?.url ?? p?.url ?? "") }))
+    .map((p: any) => {
+      const url = String(p?.large?.url ?? p?.url ?? "")
+      if (!url) return { url: "" }
+      // 实况图：m.weibo.cn 用 pics[].type + pics[].videoSrc（顶层 live_photo[] 与 pics
+      // 下标不对应，别拿它配对）。videoSrc 是 302 包装器，去掉 token 也会现场重签。
+      const video = p?.type === "livephoto" ? (typeof p?.videoSrc === "string" ? p.videoSrc : p?.videoSrc?.url) : undefined
+      return video ? { url, liveVideo: toHttps(String(video)) } : { url }
+    })
     .filter((img: { url: string }) => !!img.url)
   return {
     id: `wb-${id}`,

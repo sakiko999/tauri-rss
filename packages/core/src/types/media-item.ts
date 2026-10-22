@@ -19,6 +19,8 @@ export interface SocialImage {
   url: string
   width?: number
   height?: number
+  /** 实况图的短视频直链；静态图 `url` 即 poster。见 xml 包同名类型注释。 */
+  liveVideo?: string
 }
 
 /** 与条目关联的作者/账号(文章署名、视频频道等)。 */

@@ -16,7 +16,7 @@ import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../Modal.tsx"
 import { Icon } from "../Icon.tsx"
 import { MediaImage, fmtCount } from "@amoeba/ui"
-import { fmtAgo, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
+import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { looksLikeHtml } from "../../lib/html.ts"
@@ -29,6 +29,9 @@ export function SocialDetailModal() {
   const multi = imgs.length > 1
   /** 当前展示第几张(仅多图时有意义)。 */
   const [imgIndex, setImgIndex] = useState(0)
+  /** 实况图是否在播。切图/换条目要复位（否则上一张的视频状态带到下一张）。 */
+  const [livePlaying, setLivePlaying] = useState(false)
+  useEffect(() => setLivePlaying(false), [imgIndex, item?.id])
   /**
    * ⚠️ 所有 hook 必须在 `if (!detail) return null` **之前**调用。
    * 曾把 useState/useEffect 放在 early return 之后:detail 为 null 时提前返回(少调),
@@ -78,6 +81,8 @@ export function SocialDetailModal() {
   const text = (item as { content?: string }).content ?? item.summary ?? ""
   /** 媒体源兼容:SocialItem 走 images[0];article 类兜 thumbnail/poster。 */
   const cover = mediaUrl(item, imgIndex)
+  /** 当前图若是实况，取视频直链（统一 https：源站给的是 http，WebView 里会被混合内容拦）。 */
+  const liveVideo = httpsify((imgs[imgIndex] as { liveVideo?: string } | undefined)?.liveVideo)
   const stepImg = (d: number) => setImgIndex((i) => (i + d + imgs.length) % imgs.length)
   /** 当前图片真实比例。容器比例 === 图片比例时 contain 恰好填满,不留缝也不裁切。 */
   const imgRatio = (() => {
@@ -160,7 +165,33 @@ export function SocialDetailModal() {
                 ) : null}
                 {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
-                <MediaImage src={cover} alt={item.title} loading="eager" contain />
+                {liveVideo && livePlaying ? (
+                  // 实况图：直链 mp4/302 包装器，静音循环；点一下暂停/续播。
+                  // poster = 静态图（url），不另存首帧。
+                  <video
+                    className="social-detail-video"
+                    src={liveVideo}
+                    poster={cover}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    onClick={(e) => {
+                      const v = e.currentTarget
+                      if (v.paused) void v.play()
+                      else v.pause()
+                    }}
+                    // 防盗链/过期失败 → 退回静态图，不留一个碎播放器。
+                    onError={() => setLivePlaying(false)}
+                  />
+                ) : (
+                  <MediaImage src={cover} alt={item.title} loading="eager" contain />
+                )}
+                {liveVideo && !livePlaying ? (
+                  <button className="btn btn-secondary btn-sm social-detail-live" onClick={() => setLivePlaying(true)}>
+                    <Icon name="play" size={13} /> 实况
+                  </button>
+                ) : null}
               </span>
             ) : (
               <span className="cover-missing">

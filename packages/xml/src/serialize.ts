@@ -165,12 +165,14 @@ function itemMediaNodes(item: Item): Array<Record<string, unknown>> {
     nodes.push(node)
   }
   // social images → media:content(medium=image)。瀑布流图不丢(用户选标准 RSS,但图是社交核心)。
-  const images = (item as { images?: Array<{ url: string; width?: number; height?: number }> }).images ?? []
+  const images = (item as { images?: Array<{ url: string; width?: number; height?: number; liveVideo?: string }> }).images ?? []
   for (const img of images) {
     if (!img.url) continue
     const node: Record<string, unknown> = { "@_url": img.url, "@_medium": "image" }
     if (img.width !== undefined) node["@_width"] = String(img.width)
     if (img.height !== undefined) node["@_height"] = String(img.height)
+    // 实况图：静态图节点上挂视频直链（deserialize 对称读取）。漏写这边 = 实况信息静默丢。
+    if (img.liveVideo) node["@_tpl:liveVideo"] = img.liveVideo
     nodes.push(node)
   }
   return nodes

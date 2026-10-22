@@ -380,6 +380,22 @@ export function noteDetailStateExpr(noteId: string): string {
  * note 详情 → 完整 Social(覆盖列表 noteCard 的单图摘要,补全文/多图/标签/视频)。
  * 图片来自 imageList(每项 url/urlDefault),tagList 作 #标签# 并入正文,interactInfo 取赞/评。
  */
+/**
+ * 实况图的视频直链。
+ *
+ * ⚠️ `stream` 的 codec 键**不固定**：实测 Web 详情页是 `EF4`（另有空的 EF5/EF6/EF7），
+ * 不是网上常见的 `h264` —— 写死键名会静默拿不到。取第一个非空数组，masterUrl 优先
+ * （带 sign/t），失败再退 backupUrls[0]（不带签名，活得更久）。
+ */
+function firstStreamUrl(stream: any): string | undefined {
+  for (const arr of Object.values(stream ?? {})) {
+    const s = Array.isArray(arr) ? arr[0] : undefined
+    const url = s?.masterUrl ?? s?.backupUrls?.[0]
+    if (url) return String(url)
+  }
+  return undefined
+}
+
 export function noteDetailToSocial(note: any, sourceId: string, t: number): Social | null {
   const noteId = String(note?.noteId ?? "").trim()
   if (!noteId) return null
@@ -390,6 +406,11 @@ export function noteDetailToSocial(note: any, sourceId: string, t: number): Soci
       const out: SocialImage = { url: toHttps(url) }
       if (img.width) out.width = Number(img.width)
       if (img.height) out.height = Number(img.height)
+      // 实况图：静态图即 poster；非实况的 stream 是 `{}`，所以判定只能看 livePhoto。
+      if (img.livePhoto === true) {
+        const live = firstStreamUrl(img.stream)
+        if (live) out.liveVideo = toHttps(live)
+      }
       return out
     })
     .filter((x: SocialImage | null): x is SocialImage => !!x)

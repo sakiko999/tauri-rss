@@ -240,7 +240,7 @@ export function CardMini({ item, actions }: { item: MediaItem; actions: CardActi
 
 /** 社交瀑布流卡(图片按原始比例,不裁切)。 */
 export function SocialCard({ item, actions }: { item: MediaItem; actions: CardActions }) {
-  const imgs = (item as { images?: Array<{ url: string; width?: number; height?: number }> }).images ?? []
+  const imgs = (item as { images?: Array<{ url: string; width?: number; height?: number; liveVideo?: string }> }).images ?? []
   const cover = imgs[0]
   const text = (item as { content?: string }).content ?? item.summary ?? ""
   const likes = (item as { likes?: number }).likes
@@ -259,6 +259,12 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
       {cover ? (
         <span className="social-media" style={{ aspectRatio: socialRatio(cover) }}>
           <MediaImage src={httpsify(cover.url)} ratio={socialRatio(cover)} loading="eager" />
+          {/* 实况图角标：封面能播一小段视频。新浪列表自带 type，小红书要进详情才知道。 */}
+          {cover.liveVideo ? (
+            <span className="social-video-badge" title="实况图">
+              <Icon name="play" size={10} /> 实况
+            </span>
+          ) : null}
         </span>
       ) : null}
       <div className="social-body">

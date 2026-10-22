@@ -88,7 +88,7 @@ ok(socialBack.reposts === 3, `reposts(得 ${socialBack.reposts})`)
 const socialImg: Item = {
   id: "n2", sourceId: "xhs:explore", kind: "social", title: "带图", fetchedAt: 1, content: "正文",
   images: [
-    { url: "https://i/a.jpg", width: 5, height: 6 },
+    { url: "https://i/a.jpg", width: 5, height: 6, liveVideo: "https://v/a.mp4?sign=1&t=2" },
     { url: "https://i/b.jpg", width: 10, height: 20 },
   ],
 } as Item
@@ -97,6 +97,10 @@ console.log("Social.images 往返:")
 ok(Array.isArray(socialImgBack.images) && socialImgBack.images.length === 2, `两张图都在(得 ${JSON.stringify(socialImgBack.images)}）`)
 ok(socialImgBack.images?.some((i: any) => i?.url === "https://i/a.jpg" && i?.width === 5), "第一张 URL/宽高未丢")
 ok(socialImgBack.images?.some((i: any) => i?.url === "https://i/b.jpg"), "对象 URL 未丢")
+ok(
+  socialImgBack.images?.some((i: any) => i?.liveVideo === "https://v/a.mp4?sign=1&t=2"),
+  `实况视频直链未丢（得 ${JSON.stringify(socialImgBack.images?.map((i: any) => i?.liveVideo))}）`,
+)
 
 // 4c. Category(分区目录条目):categoryChannel + categoryInfo(JSON)必须完整往返
 const category: Item = {
