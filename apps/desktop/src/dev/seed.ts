@@ -362,11 +362,13 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-social",
     info: {},
   },
+  // ⚠️ **需登录**(匿名态已移除):先在「账号与凭证」扫码,再在 rail 里启用;
+  // 未登录时刷新会报可操作错误,故 enabled:false 免刷屏。
   {
     id: "s-explore-xhs",
     channelKey: "xhs:explore",
     title: "小红书发现页",
-    enabled: true,
+    enabled: false,
     groupId: "g-social",
     info: {}, // 推荐内容,无参
   },
@@ -374,7 +376,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     id: "s-user-xhs",
     channelKey: "xhs:user",
     title: "小红书 · 玛卡巴卡",
-    enabled: true,
+    enabled: false,
     groupId: "g-social",
     info: { user_id: "5c6d75a400000000100278fa" },
   },

@@ -57,7 +57,7 @@ export interface HotWordSource {
 /** 单条详情能力(可选能力):列表 item 缺全文/多图时(如 xhs 列表只有单图摘要),按需抓详情。 */
 export interface ItemDetailSource {
   /**
-   * 单条 → 完整详情 Item(xhs 匿名 GET /explore/<id>?xsec_token= 补全文/多图/tag/video)。
+   * 单条 → 完整详情 Item(xhs 登录态 GET /explore/<id>?xsec_token= 补全文/多图/tag/video)。
    *
    * `passive = true` 来自 core 对渠道 `passive` 属性的判定:只允许**页面自然行为**
    * (导航 + 读页面 SSR),不得构造自定义 fetch / API。渠道不按 passive 降级时应返回

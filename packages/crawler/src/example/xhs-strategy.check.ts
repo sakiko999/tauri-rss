@@ -1,14 +1,19 @@
 /**
- * xhs 策略层自检(假 BrowserBackend,不连真实 Edge)。
+ * xhs 策略层自检(假 BrowserBackend,不连真实浏览器)。
  *
- * 保护的是最容易静默漂移的矩阵:登录页优先 / 匿名 / 被动 passiveOnly / 登录重定向。
- * 错误形态都是「静默 0 条」或「读错页面 state」,不会抛错,所以留断言。
+ * 保护的是最容易静默漂移的矩阵:**登录闸门**(登录页优先 / 未登录 / 有效登录)与
+ * **HTTP 路径的 cookie 闸门**。错误形态都是「静默 0 条」或「读错页面 state」,
+ * 不会抛错,所以留断言。
+ *
+ * 2026-10-22 起 xhs 匿名态已移除:所有列表/详情都必须登录,自检也按这个矩阵。
  */
+import { setPlatformCookieLookup } from "@amoeba/resolve"
 import {
+  assertXhsLoggedIn,
   ensureXhsPath,
   fetchXhsList,
   flatXhsStateList,
-  resolveXhsRoute,
+  requireXhsCookie,
 } from "../channels/xhs/shared.ts"
 
 let failed = 0
@@ -16,6 +21,15 @@ const ok = (cond: boolean, msg: string): void => {
   if (!cond) {
     failed += 1
     console.error(`✘ ${msg}`)
+  }
+}
+
+const errMsg = async (p: Promise<unknown>): Promise<string> => {
+  try {
+    await p
+    return ""
+  } catch (e) {
+    return String(e)
   }
 }
 
@@ -27,8 +41,6 @@ interface FakeState {
   pageLoggedIn?: boolean | null
   domLoggedIn?: boolean
   cookies?: Record<string, string>
-  verifyBox?: boolean
-  fetchBody?: string
   /** 模拟服务端把目标页 302 到 /login。 */
   redirectToLogin?: boolean
 }
@@ -36,7 +48,7 @@ interface FakeState {
 /**
  * 假浏览器:按页面表达式返回状态。
  *
- * 只实现 cdpNavigate / waitUntil / 登录判据 / cdpFetch 需要的几种表达式;
+ * 只实现 cdpNavigate / waitUntil / 登录判据需要的几种表达式;
  * 新增策略分支时在这里补对应模式,别让自检悄悄变成空转。
  */
 function fakeBrowser(input: FakeState = {}): {
@@ -49,8 +61,6 @@ function fakeBrowser(input: FakeState = {}): {
     pageLoggedIn: input.pageLoggedIn ?? null,
     domLoggedIn: input.domLoggedIn ?? false,
     cookies: input.cookies ?? {},
-    verifyBox: input.verifyBox ?? false,
-    fetchBody: input.fetchBody ?? "<html>anon</html>",
     redirectToLogin: input.redirectToLogin ?? false,
   }
   const navs: string[] = []
@@ -79,11 +89,9 @@ function fakeBrowser(input: FakeState = {}): {
     if (expression.includes("location.origin ===")) return st.origin === XHS
     if (expression.includes("location.pathname")) return st.path
     if (expression.includes("location.origin")) return st.origin
-    if (expression.includes("fe-verify-box")) return st.verifyBox
+    if (expression.includes("fe-verify-box")) return false
     if (expression.includes('a[href*="/user/profile/"]')) return st.domLoggedIn
     if (expression.includes("loggedIn")) return st.pageLoggedIn
-    // cdpFetch 的页面内 fetch 表达式。
-    if (expression.includes("fetch(a.url")) return { status: 200, bodyText: st.fetchBody }
     return undefined
   }
 
@@ -111,113 +119,112 @@ ok(flatXhsStateList(feedState, ["feed", "feeds"]).length === 2, "feed.feeds 应�
 ok(flatXhsStateList({ user: { notes: [{ id: "n1" }] } }, ["user", "notes"]).length === 1, "user.notes 应扁平化")
 ok(flatXhsStateList(undefined, ["user", "notes"]).length === 0, "缺失 state 应返回空数组")
 
-// ── 路由矩阵 ─────────────────────────────────────────────────────────────────
+// ── 登录闸门:登录页优先 / 未登录 / 有效登录 ──────────────────────────────────
 {
   const { browser } = fakeBrowser(base({ path: "/login", pageLoggedIn: false }))
-  ok((await resolveXhsRoute(browser)) === "login-page", "登录页应优先判 login-page(即使有残留 cookie)")
+  ok((await errMsg(assertXhsLoggedIn(browser))).includes("需要登录"), "登录页应判未登录(即使有残留 cookie)")
+}
+{
+  // 失效会话的残留登录位:页面 loggedIn 仍是 true,但已被重定向到登录页。
+  // 这条用来钉住「登录页优先于登录位」——把两个判断对调时此断言必须失败。
+  const { browser } = fakeBrowser(base({ path: "/login", pageLoggedIn: true }))
+  ok(
+    (await errMsg(assertXhsLoggedIn(browser))).includes("需要登录"),
+    "登录页必须优先于残留 loggedIn=true(否则会把登录页空 SSR 当正常数据)",
+  )
+}
+{
+  // 失效会话:URL 还在内容页,页面登录位却是 false。
+  const { browser } = fakeBrowser(base({ pageLoggedIn: false, cookies: { web_session: "guest" } }))
+  ok((await errMsg(assertXhsLoggedIn(browser))).includes("需要登录"), "无登录证据应判未登录(web_session 不算登录)")
 }
 {
   const { browser } = fakeBrowser(base({ pageLoggedIn: true }))
-  ok((await resolveXhsRoute(browser)) === "logged-in", "页面 loggedIn=true 应判 logged-in")
-}
-{
-  const { browser } = fakeBrowser(base({ pageLoggedIn: false }))
-  ok((await resolveXhsRoute(browser)) === "anonymous", "无登录证据应判 anonymous")
+  ok((await errMsg(assertXhsLoggedIn(browser))) === "", "页面 loggedIn=true 应通过")
 }
 {
   const { browser } = fakeBrowser(base({ pageLoggedIn: null, cookies: { user_id: "u1" } }))
-  ok((await resolveXhsRoute(browser)) === "logged-in", "页面判据缺失时应回退 user_id cookie")
+  ok((await errMsg(assertXhsLoggedIn(browser))) === "", "页面判据缺失时应回退 user_id cookie")
 }
 
-// ── fetchXhsList:登录页策略 ────────────────────────────────────────────────
+// ── fetchXhsList:未登录一律抛可操作错误,绝不读匿名 SSR ───────────────────────
 {
   const { browser } = fakeBrowser(base({ redirectToLogin: true }))
-  let msg = ""
-  try {
-    await fetchXhsList<string>(
+  let called = false
+  const msg = await errMsg(
+    fetchXhsList<string>(
       browser,
       {
         url: `${XHS}/explore`,
-        readPage: async () => "ssr-on-login-page",
+        readPage: async () => {
+          called = true
+          return "ssr-on-login-page"
+        },
         loginError: "LOGIN_REQUIRED",
       },
       "list:test",
-    )
-  } catch (e) {
-    msg = String(e)
-  }
-  ok(msg.includes("LOGIN_REQUIRED"), "无 parseHtml 的 explore 在登录页应抛可操作错误,不能静默读空 SSR")
-}
-{
-  const { browser } = fakeBrowser(base({ redirectToLogin: true, fetchBody: "<html>full</html>" }))
-  let html = ""
-  const got = await fetchXhsList<string>(
-    browser,
-    {
-      url: `${XHS}/user/profile/u1`,
-      readPage: async () => "ssr-on-login-page",
-      parseHtml: (h) => {
-        html = h
-        return "anonymous-html"
-      },
-      loginError: "LOGIN_REQUIRED",
-    },
-    "list:test",
+    ),
   )
-  ok(got === "anonymous-html" && html === "<html>full</html>", "有 parseHtml 的渠道在登录页应走匿名 fetch")
+  ok(msg.includes("LOGIN_REQUIRED") && !called, "登录重定向应抛错且不得读页面 SSR")
 }
-
-// ── fetchXhsList:匿名 / 被动 / 登录态 ───────────────────────────────────────
 {
   const { browser } = fakeBrowser(base())
+  let called = false
+  const msg = await errMsg(
+    fetchXhsList<string>(
+      browser,
+      {
+        url: `${XHS}/user/profile/u1`,
+        readPage: async () => {
+          called = true
+          return "anonymous-ssr"
+        },
+        loginError: "LOGIN_REQUIRED",
+      },
+      "list:test",
+    ),
+  )
+  ok(msg.includes("LOGIN_REQUIRED") && !called, "未登录应抛错(匿名态已移除)")
+}
+{
+  const { browser } = fakeBrowser(base({ pageLoggedIn: true }))
   const got = await fetchXhsList<string>(
     browser,
     {
       url: `${XHS}/explore`,
-      readPage: async () => "anonymous-ssr",
+      readPage: async () => "logged-in-ssr",
       loginError: "LOGIN_REQUIRED",
     },
     "list:test",
   )
-  ok(got === "anonymous-ssr", "explore 匿名应读页面 SSR")
+  ok(got === "logged-in-ssr", "登录态应读页面 SSR")
 }
+
+// ── HTTP 路径(cookie 闸门):显式 > 空串(强制匿名 → 报错)> provider ───────────
 {
-  const { browser } = fakeBrowser(base())
-  const got = await fetchXhsList<string>(
-    browser,
-    {
-      url: `${XHS}/user/profile/u1`,
-      readPage: async () => "should-not-fetch",
-      parseHtml: () => "should-not-parse",
-      passiveOnly: true,
-    },
-    "list:test",
+  ok(requireXhsCookie("a=1") === "a=1", "显式 cookie 应原样使用")
+  ok((await errMsg(Promise.resolve().then(() => requireXhsCookie("")))).includes("需要登录"), "显式空串应报需要登录")
+  ok(
+    (await errMsg(Promise.resolve().then(() => requireXhsCookie(undefined)))).includes("需要登录"),
+    "无 cookie 且无 provider 应报需要登录",
   )
-  ok(got === null, "被动 + 匿名应返回 null(交给 core 回退缓存)")
-}
-{
-  const { browser } = fakeBrowser(base({ pageLoggedIn: true }))
-  const got = await fetchXhsList<string>(
-    browser,
-    {
-      url: `${XHS}/user/profile/u1`,
-      readPage: async () => "logged-in-ssr",
-      parseHtml: () => "should-not-parse",
-      passiveOnly: true,
-    },
-    "list:test",
+  setPlatformCookieLookup((p) => (p === "xhs" ? "session=1" : undefined))
+  ok(requireXhsCookie(undefined) === "session=1", "provider 有登录态时应使用它")
+  ok(
+    (await errMsg(Promise.resolve().then(() => requireXhsCookie("")))).includes("需要登录"),
+    "显式空串仍应强制匿名 → 报错(不回落 provider)",
   )
-  ok(got === "logged-in-ssr", "被动 + 登录态仍允许读页面 SSR")
+  setPlatformCookieLookup(null)
 }
 
 // ── ensureXhsPath:同址只比 pathname,但必须同 origin ────────────────────────
 {
-  const { browser, navs } = fakeBrowser(base({ path: "/explore" }))
+  const { browser, navs } = fakeBrowser(base({ path: "/explore", pageLoggedIn: true }))
   await ensureXhsPath(browser, "/explore")
   ok(navs.length === 0, "同 origin + 同 path(忽略 query)不应整页重载")
 }
 {
-  const { browser, navs } = fakeBrowser(base({ path: "/explore" }))
+  const { browser, navs } = fakeBrowser(base({ path: "/explore", pageLoggedIn: true }))
   await ensureXhsPath(browser, "/explore/")
   ok(navs.length === 0, "尾斜杠归一后不应重载")
 }
@@ -234,4 +241,4 @@ if (failed) {
   console.error(`✘ xhs 策略层自检失败 ${failed} 条`)
   process.exit(1)
 }
-console.log("✔ xhs 策略层自检通过(路由矩阵 / 登录页策略 / 被动 / origin 校验)")
+console.log("✔ xhs 策略层自检通过(登录闸门 / 无匿名 / cookie 闸门 / origin 校验)")

@@ -2,17 +2,17 @@
  * xhs 公共 —— UA / headers / SSR 状态提取 / 签名 API / note→Social 归一。
  *
  * 小红书数据双通道(2026-08 起拆分):
- *   - SSR 页面:`/explore` 等仍内嵌 `window.__INITIAL_STATE__`(推荐流 feeds),
- *     fetchHtml + extractInitialState,匿名可用 → explore 用;
+ *   - SSR 页面:`/explore` / `/user/profile/<id>` 内嵌 `window.__INITIAL_STATE__`,
+ *     fetchHtml + extractInitialState(2026-10-22 起**必须登录**,匿名态已移除);
  *   - 签名 API:`user_posted` 等需 x-s/x-s-common/x-t 签名 —— ⚠️ 已降级
  *     (签名库 xhshow 已移至 feat/xhs-rustpython 分支,见 signApiHeaders)→ user 暂不可用。
  *
  * cookie 由 core 层经 info.cookie / credentials provider(settings)注入;
- * 「刻意匿名」的调用点必须显式传空串(见 xhs/user.ts resolveDetail 注释)。
+ * 显式空串 = 强制匿名 —— 匿名态已移除,渠道层会直接报「需要登录」。
  */
 import type { Social, SocialImage } from "@amoeba/xml"
 import { httpJson, httpText } from "../../host.ts"
-import { cdpEvaluate, cdpFetch } from "../../browser/cdp.ts"
+import { cdpEvaluate } from "../../browser/cdp.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"
 import { parseCount } from "../../utils/count.ts"
@@ -33,7 +33,7 @@ export const XHS_UA =
  * 2026-07 底小红书升级签名算法,签名库 xhshow 已移至 feat/xhs-rustpython 分支
  * (Python 上游 + RustPython 兼容补丁,随 RustPython 签名 crate 在专门分支维护)。
  * 主分支不维护签名 API → 所有签名 API(user_posted 等)当前不可用;
- * explore(SSR 匿名)保留。若需恢复,合并 feat/xhs-rustpython 分支。
+ * explore/user 走 SSR(要求登录)。若需恢复签名,合并 feat/xhs-rustpython 分支。
  */
 export function signApiHeaders(
   _cookie: string,
@@ -153,25 +153,6 @@ export async function isXhsOrigin(browser: BrowserBackend): Promise<boolean> {
   }
 }
 
-/**
- * 匿名/普通 fetch:页面内取站点 HTML(Chrome TLS 指纹,绕开 WAF 对 reqwest 的空壳)。
- * `credentials:"omit"` 用于匿名放行(带 profile cookie 反而可能拿空壳)。
- */
-export async function xhsFetchPage(
-  browser: BrowserBackend,
-  url: string,
-  credentials: "omit" | "include" = "include",
-): Promise<string> {
-  const r = await cdpFetch(browser, url, { credentials })
-  if (r.status < 200 || r.status >= 300) throw new Error(`小红书 HTTP ${r.status}`)
-  // 页面内 fetch 也会返回 300011(账号风控码),HTTP 通路能检测,这里不能漏。
-  if (/"(?:code|result_code)"\s*:\s*300011\b/.test(r.bodyText)) {
-    reportXhsRisk("300011")
-    throw new Error("小红书接口返回 300011(账号风控)")
-  }
-  return r.bodyText
-}
-
 /** 抓页面 HTML(带 cookie)。复用 httpText(2xx 校验 + body 归一)。 */
 export async function fetchHtml(url: string, cookie?: string): Promise<string> {
   const html = await httpText(url, cookie ? { ...BROWSER_HEADERS, Cookie: cookie } : BROWSER_HEADERS)
@@ -241,7 +222,7 @@ interface NoteFields {
   authorAvatar?: string
   /** epoch ms(两适配器各自换算单位)。 */
   publishedAtMs?: number
-  /** 小红书笔记详情开关(匿名 get /explore/<id> 需带列表项 xsec_token)。 */
+  /** 小红书笔记详情开关(get /explore/<id> 需带列表项 xsec_token)。 */
   xsecToken?: string
 }
 
@@ -275,7 +256,10 @@ function noteToSocial(f: NoteFields, sourceId: string, t: number): Social | null
 /**
  * SSR noteCard → Social。
  * 封面用 cover.urlDefault(原图),SSR 自带宽高 → 无需 Range 预取。content 用标题+摘要。
- * xsecToken 是详情页开关(匿名 get /explore/<id> 的 xsec_token 参数),存进 Social 供详情弹窗用。
+ * xsecToken 是详情页开关(登录态 get /explore/<id> 的 xsec_token 参数),存进 Social 供详情弹窗用。
+ *
+ * ⚠️ 没有 noteId 的卡片直接丢弃(广告位/运营卡;匿名态的 `anon-*` 虚拟 ID 兜底
+ * 已随匿名支持一起移除 —— 匿名访问本来就拿不到稳定详情)。
  */
 export function noteCardToSocial(
   noteCard: any,
@@ -285,7 +269,8 @@ export function noteCardToSocial(
   xsecToken?: string,
 ): Social | null {
   // noteId 已从 noteCard 内移到外层(feeds[i].id / note.id)——小红书 SSR 结构变更(2026-08)。
-  const realId = String(noteIdFromOuter ?? noteCard?.noteId ?? "").trim()
+  const noteId = String(noteIdFromOuter ?? noteCard?.noteId ?? "").trim()
+  if (!noteId) return null
   const title = String(noteCard?.displayTitle ?? "").trim()
   const desc = noteCard?.desc ? String(noteCard.desc).trim() : ""
   const cover = noteCard?.cover ?? {}
@@ -297,17 +282,7 @@ export function noteCardToSocial(
   // 注意别用 `now` 做上限:那会把「发布了 1 条未来时间」误判成秒。
   const publishedAtMs = toEpochMs(noteCard?.time)
 
-  // ⚠️ 匿名访问时平台**抹空 noteId**,同时塞一个**整个列表共用的假 xsecToken**
-  // (实测 31 条 distinct token = 1)。假 token 不能用:拿它去详情页会串号。
-  // 但标题/封面/作者/点赞/时间这些**可见字段全是真的** —— 所以这里用虚拟 ID 兜底,
-  // 让列表能正常渲染,而不是整批条目被丢弃(旧行为 `if (!noteId) return null`)。
-  // 虚拟 ID 必须是**稳定且互不相同**的,按「源 + 作者 + 发表时间 + 标题」定身份;
-  // 全空时退化用封面 URL。
-  const isAnonymous = !realId
-  const vId = `anon-${hash32(`${sourceId}|${user.userId ?? user.nickname ?? ""}|${publishedAtMs ?? ""}|${title}|${String(cover.urlDefault || cover.url || "")}`)}`
-  const noteId = realId || vId
-
-  const raw = noteToSocial(
+  return noteToSocial(
     {
       noteId,
       title,
@@ -324,29 +299,13 @@ export function noteCardToSocial(
     sourceId,
     t,
   )
-  if (!raw) return null
-  // 匿名条目:URL 与 token 都不可信 → 清掉。
-  //   - 清 url:否则会拼出 /explore/anon-xxx 这种**看起来能打开、实为 404** 的假链接。
-  //   - 清 xsecToken:假 token 是全列表共用的,详情弹窗拿它去补全只会拿到别的笔记。
-  // 结果:条目有 id/title/cover/author/likes 可正常展示,但没有「打开原文/详情补全」。
-  return isAnonymous ? { ...raw, url: undefined, xsecToken: undefined } : raw
-}
-
-/** 32 位字符串 hash(稳定虚拟 ID 用;非加密)。 */
-function hash32(s: string): string {
-  let h = 2166136261
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 16777619)
-  }
-  return (h >>> 0).toString(36)
 }
 
 // ── 详情页(单条 note 完整内容):noteDetailMap 解析 ────────────────────────────
 
 /**
  * 从详情页 html 提取单条 note 完整内容。
- * 匿名 GET /explore/<noteId>?xsec_token=<列表项的>&xsec_source=pc_feed → SSR
+ * GET /explore/<noteId>?xsec_token=<列表项的>&xsec_source=pc_feed → SSR
  * `note.noteDetailMap[<noteId>].note`。**不带 xsec_token 则 noteDetailMap 为空 {}**。
  * 返回 note 对象(含 title/desc/imageList/tagList/interactInfo/user/video)。
  */

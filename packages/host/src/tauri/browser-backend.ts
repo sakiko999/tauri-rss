@@ -1,17 +1,17 @@
 /**
- * TauriBrowserBackend — BrowserBackend 实现,CDP 附加真实 Edge(生产浏览器模拟)。
+ * TauriBrowserBackend — BrowserBackend 实现,CDP 附加 Tauri 自己的 WebView2(生产浏览器模拟)。
  *
  * 微博/小红书反爬强,需真实浏览器提供登录态 + JS 签名(_webmsxyw)+ 设备指纹。
- * ⚠️ 本分支(feat/webview2-browser)用 Tauri 自己的 WebView2 当抓取浏览器:
  * Rust `webview_browser_open` 建一个隐藏 webview(独立 data_directory + CDP 9334),
- * 不再 spawn 系统 Edge。本后端只认端口,与浏览器是谁无关:
- *   1. invoke browser_ensure → 拿 CDP 端口;
+ * 不 spawn 系统 Edge。本后端只认端口,与浏览器是谁无关:
+ *   1. invoke webview_browser_open → 确保隐藏 webview 存在且 CDP 就绪,拿端口;
  *   2. GET /json/list → 找第一个 page target 的 webSocketDebuggerUrl(默认 lane);
  *   3. invoke ws_connect(文本帧)——CDP 是 JSON 文本帧,不走弹幕二进制隧道,
  *      自己管理 connectionId + 消息 id 递增的 pending map;
  *   4. evaluate = Runtime.evaluate(awaitPromise + returnByValue)。
  *
- * lane 化(风控 §3.13):`tab(key)` 为每个 lane 建独立 target(`PUT /json/new`) +
+ * lane 化(风控 §3.13):`tab(key)` 为每个 lane 建独立 target(`Target.createTarget`；
+ * WebView2 下 = 独立顶层窗口，屏外创建 + `webview_browser_tidy` 去任务栏) +
  * 独立 ws 连接(CdpChannel 各持 pending/事件),列表/详情/登录互不抢页面;
  * cookie 是浏览器级共享的。tab 有 LRU 上限(超限关最久未用的 lane,下次用重建)。
  *
@@ -239,6 +239,14 @@ class CdpChannel {
   }
 
   private handleEvent(ev: CdpEventMsg): void {
+    // ⚠️ ws 断开必须让连接失效：否则 connId 永远非空，`ensureConn` 直接早退，
+    // openWs 的 target 自愈链永远走不到。浏览器被空闲回收/崩溃后，每次 evaluate 都
+    // 在 ws_send 处失败（waitUntil 还会把错误当「页面未就绪」重试，烧满超时）。
+    // abortPending 会 reject 在途命令、清 connId、置 armed=false，下次调用重新建连。
+    if (ev.event === "Close" || ev.event === "Error") {
+      this.abortPending(`CDP 连接已断开(${ev.event})`)
+      return
+    }
     if (ev.event !== "Text") return
     const msg = JSON.parse(fromBase64(ev.data as string)) as {
       id?: number
@@ -277,31 +285,33 @@ class TauriBrowserTab implements BrowserTab {
   private channel: CdpChannel
   private targetId: string | null = null
   private ensuring: Promise<void> | null = null
+  /** 最近一次拿到的端口：close() 用它关 target，绝不重新 open（关闭路径反而拉起浏览器）。 */
+  private lastPort: number | null = null
 
   constructor(
     readonly key: string,
     private readonly getPort: () => Promise<number>,
     activity: BrowserActivity,
+    /** 建 target（WebView2 下 = 独立顶层窗口，必须屏外创建 + 立刻整理）。 */
+    private readonly createTarget: (port: number) => Promise<string>,
   ) {
     this.channel = new CdpChannel(`tab:${key}`, activity)
   }
 
-  /** 确保 target 存在(一次;PUT /json/new 建**同窗口 tab**,不开新窗口)。 */
+  /**
+   * 确保 target 存在（一次）。
+   *
+   * ⚠️ WebView2 没有 tab：每个 target 都是**独立顶层窗口**（`/json/new` 也会开新窗口），
+   * 所以改走浏览器级 `Target.createTarget`（可给屏外坐标 + background），创建后立刻
+   * 调 Rust `webview_browser_tidy` 去掉任务栏样式并按当前模式隐藏。
+   */
   private ensureTarget(): Promise<void> {
     if (this.targetId) return Promise.resolve()
     if (!this.ensuring) {
       this.ensuring = (async () => {
         const port = await this.getPort()
-        // Chromium ≥111 要求 PUT;about:blank 落点由 cdpNavigate 决定。
-        const res = await globalThis.appHost.http.request({
-          url: `http://127.0.0.1:${port}/json/new?about:blank`,
-          method: "PUT",
-          responseType: "text",
-          timeoutMs: 5_000,
-        })
-        const t = JSON.parse(String(res.body)) as { id?: string }
-        if (!t.id) throw new Error("CDP: /json/new 未返回 target id")
-        this.targetId = t.id
+        this.lastPort = port
+        this.targetId = await this.createTarget(port)
       })().finally(() => {
         this.ensuring = null
       })
@@ -313,6 +323,7 @@ class TauriBrowserTab implements BrowserTab {
   private async openWs(): Promise<string> {
     await this.ensureTarget()
     const port = await this.getPort()
+    this.lastPort = port
     // /json/list 里按 id 找本 target(拿最新 webSocketDebuggerUrl;重连安全)。
     const list = async () => {
       const res = await globalThis.appHost.http.request({
@@ -395,6 +406,8 @@ class TauriBrowserTab implements BrowserTab {
       responseType: "text",
       timeoutMs: 5_000,
     })
+    // activate 可能把窗口带到前台/恢复显示：重新按 interactive 模式摆回屏外。
+    await invoke("webview_browser_tidy").catch(() => {})
   }
 
   abortPending(reason: string): void {
@@ -406,7 +419,10 @@ class TauriBrowserTab implements BrowserTab {
     if (this.targetId) {
       const id = this.targetId
       this.targetId = null
-      const port = await this.getPort().catch(() => null)
+      // ⚠️ 用缓存端口，不调 getPort()（= webview_browser_open）：关闭路径不能反过来
+      // 创建/重建浏览器。浏览器已不在时 /json/close 失败即可。
+      const port = this.lastPort
+      this.lastPort = null
       if (port !== null) {
         await globalThis.appHost.http.request({
           url: `http://127.0.0.1:${port}/json/close/${id}`,
@@ -428,6 +444,9 @@ export class TauriBrowserBackend implements BrowserBackend {
   private idleTimer: ReturnType<typeof setTimeout> | null = null
   /** 本实例是否已扫过 Edge 自带界面的 target(重开浏览器后要重扫)。 */
   private junkSwept = false
+  /** 浏览器级 CDP 连接（`Target.createTarget` 用；HTTP `/json/new` 不能给窗口坐标）。 */
+  private browserChannel: CdpChannel | null = null
+  private browserConnecting: Promise<CdpChannel> | null = null
 
   /** 记一次操作在途;归零后重新开始计时。 */
   private begin(): void {
@@ -456,7 +475,7 @@ export class TauriBrowserBackend implements BrowserBackend {
     browserLog.idleClose({ minutes: IDLE_CLOSE_MS / 60_000 })
     await this.close().catch(() => {})
   }
-  /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。host 级(browser_ensure)用。 */
+  /** 记一次 invoke 并在 settle 后自清(失败不影响调用方)。host 级(webview_browser_*)用。 */
   private track<T>(p: Promise<T>): Promise<T> {
     return this.channel.track(p)
   }
@@ -464,14 +483,80 @@ export class TauriBrowserBackend implements BrowserBackend {
   /**
    * 拿 CDP 端口（幂等；tab/默认页共用）。
    *
-   * ⚠️ 本分支（feat/webview2-browser）的浏览器 = Tauri 自己的 WebView2（端口 9334），
-   * 不再 spawn 系统 Edge；CDP 客户端、target 选择、lane 逻辑全部不变。
+   * ⚠️ 浏览器 = Tauri 自己的 WebView2（端口 9334）；Rust 侧只在 CDP 真的可连时才返回，
+   * 所以拿到端口后 /json/list 不会连到半启动的实例。
    */
   private async port(): Promise<number> {
     return this.track(invoke<number>("webview_browser_open"))
   }
 
-  /** 并发首连去重：两个 evaluate 同时触发时只能 spawn 一个 Edge。 */
+  /** 浏览器级 CDP 连接（`/json/version` 的 webSocketDebuggerUrl）。 */
+  private async browserCmd(port?: number): Promise<CdpChannel> {
+    if (this.browserChannel) return this.browserChannel
+    if (!this.browserConnecting) {
+      this.browserConnecting = (async () => {
+        const p = port ?? (await this.port())
+        const res = await globalThis.appHost.http.request({
+          url: `http://127.0.0.1:${p}/json/version`,
+          method: "GET",
+          responseType: "text",
+          timeoutMs: 5_000,
+        })
+        const v = JSON.parse(String(res.body)) as { webSocketDebuggerUrl?: string }
+        const url = v.webSocketDebuggerUrl
+        if (!url) throw new Error("CDP: /json/version 未返回浏览器端点")
+        const channel = new CdpChannel("browser", {
+          begin: () => this.begin(),
+          end: () => this.end(),
+        })
+        await channel.ensureConn(async () => url)
+        this.browserChannel = channel
+        return channel
+      })().finally(() => {
+        this.browserConnecting = null
+      })
+    }
+    return this.browserConnecting
+  }
+
+  /**
+   * 建一个 lane target。
+   *
+   * ⚠️ WebView2 没有 tab：`Target.createTarget` 每个 target 都是独立顶层窗口。
+   * 必须显式给屏外坐标 + `background`（否则会在屏幕/任务栏闪一下），创建后立刻
+   * 调 Rust `webview_browser_tidy` 去掉任务栏样式并按当前 hidden/interactive 整理。
+   */
+  private async createTarget(port: number): Promise<string> {
+    let last: unknown
+    let current = port
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const channel = await this.browserCmd(current)
+        const r = (await channel.send("Target.createTarget", {
+          url: "about:blank",
+          newWindow: true,
+          left: -32000,
+          top: -32000,
+          width: 1280,
+          height: 800,
+          background: true,
+        })) as { targetId?: string }
+        if (!r.targetId) throw new Error("CDP: Target.createTarget 未返回 targetId")
+        await this.track(invoke("webview_browser_tidy")).catch(() => {})
+        return r.targetId
+      } catch (e) {
+        last = e
+        // 浏览器可能刚被空闲回收/崩溃：丢掉旧连接，并**重新 open** 后再试。
+        // ⚠️ 不能沿用入参端口：browserCmd(port) 只 GET /json/version，不会重建浏览器。
+        await this.browserChannel?.closeWs().catch(() => {})
+        this.browserChannel = null
+        current = await this.port().catch(() => current)
+      }
+    }
+    throw last instanceof Error ? last : new Error(String(last))
+  }
+
+  /** 并发首连去重：两个 evaluate 同时触发时只能建一个 webview。 */
   private connectingRef: Promise<void> | null = null
 
   /** 惰性建连(首次 evaluate 时)。返回的 ws 连到默认 page target 的 CDP 端点。 */
@@ -495,14 +580,16 @@ export class TauriBrowserBackend implements BrowserBackend {
             targets.find((t) => t.type === "page" && t.url === "about:blank" && t.webSocketDebuggerUrl) ??
             targets.find((t) => t.type === "page" && !isEdgeUiTarget(t) && t.webSocketDebuggerUrl)
           if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl
-          const created = await globalThis.appHost.http.request({
-            url: `http://127.0.0.1:${port}/json/new?about:blank`,
-            method: "PUT",
+          // 兜底也要走 createTarget：`/json/new` 会建一个未整理的可见顶层窗口。
+          const id = await this.createTarget(port)
+          const after = await globalThis.appHost.http.request({
+            url: `http://127.0.0.1:${port}/json/list`,
+            method: "GET",
             responseType: "text",
             timeoutMs: 5_000,
           })
-          const fresh = JSON.parse(String(created.body)) as TargetInfo
-          if (!fresh.webSocketDebuggerUrl) throw new Error("CDP: 未找到可附加的页面 target")
+          const fresh = (JSON.parse(String(after.body)) as TargetInfo[]).find((t) => t.id === id)
+          if (!fresh?.webSocketDebuggerUrl) throw new Error("CDP: 未找到可附加的页面 target")
           return fresh.webSocketDebuggerUrl
         })
         .finally(() => {
@@ -569,7 +656,12 @@ export class TauriBrowserBackend implements BrowserBackend {
       this.tabs.delete(oldest)
       void t?.close().catch(() => {})
     }
-    const t = new TauriBrowserTab(key, () => this.port(), { begin: () => this.begin(), end: () => this.end() })
+    const t = new TauriBrowserTab(
+      key,
+      () => this.port(),
+      { begin: () => this.begin(), end: () => this.end() },
+      (port) => this.createTarget(port),
+    )
     this.tabs.set(key, t)
     return t
   }
@@ -593,8 +685,8 @@ export class TauriBrowserBackend implements BrowserBackend {
   }
 
   /**
-   * 切换窗口模式（hidden = SW_HIDE，interactive = 屏外 shown + 渲染）。
-   * ⚠️ Rust 侧 `browser_ensure` 不带 mode 时只确保就绪、**不改模式**，
+   * 切换窗口模式（hidden = 隐藏，interactive = 屏外显示 + 正常渲染）。
+   * ⚠️ Rust 侧 `webview_browser_open` 只确保就绪、**不改模式**，
    * 所以这里切完不会被后续 `ensureConn` 打回 hidden。
    */
   async setMode(mode: BrowserWindowMode): Promise<void> {
@@ -674,6 +766,8 @@ export class TauriBrowserBackend implements BrowserBackend {
       this.idleTimer = null
     }
     await this.channel.closeWs()
+    await this.browserChannel?.closeWs().catch(() => {})
+    this.browserChannel = null
     for (const [, t] of this.tabs) await t.close().catch(() => {})
     this.tabs.clear()
     this.junkSwept = false // 下次连的是新实例，要重扫
@@ -688,6 +782,8 @@ export class TauriBrowserBackend implements BrowserBackend {
       this.idleTimer = null
     }
     await this.channel.closeWs()
+    await this.browserChannel?.closeWs().catch(() => {})
+    this.browserChannel = null
     for (const [, t] of this.tabs) t.abortPending("浏览器 profile 已重置")
     this.tabs.clear()
     this.junkSwept = false

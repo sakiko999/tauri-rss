@@ -44,8 +44,8 @@
 | **B站扫码登录后的抓取**（2026-10-20） | `bun packages/resolve/src/example/bili-buvid.check.ts`；真机：扫码登录 → `bili:live:hot` 手动刷新应无错误（登录 cookie 只有 passport 五项、无 buvid3，必须补匿名 buvid，否则 `-352`）→ 同一登录态下直播播放解析正常 |
 | **bili:user_video（UP 主投稿）刷新**（2026-10-21） | `bun packages/resolve/src/example/bili-space-sign.check.ts`；真机：登录态下 `bili:user_video` 手动刷新应成功（曾 412：漏传 cookie + space 接口缺 `dm_*` 指纹）；CLI 匿名对照 `bun run rss fetch bili:user_video --kv uid=<uid> --kv cookie=` 允许失败（匿名 space 已收紧），但登录态必须可用 |
 | **cookie provider / 渠道工厂**（2026-10-21） | `bun packages/resolve/src/example/credentials.check.ts`（三级语义 / bili sign 家族同接 / douyin 登录 cookie 兜底 / xhs 空串退出）；真机：douyin 扫码登录后 `live:douyin` 播放应能取到登录档位（原画，`douyinCookie` 死键已接通——扫码 jar 自含 ttwid；若仍 250 封顶属平台侧行为，记录即可）；`rss fetch bili:popular` / `rss channels` 走工厂装配应与转换前同形 |
-| **xhs 登录 / 凭证 / 浏览器闸门 / 翻页**（2026-10-20） | `governor.check.ts`（含 browserGate）+ tsc + `bun run build:desktop`；真机八件事：① **未扫码时点「扫码登录」必须出二维码**（游客 `web_session` 不算登录）；②「清除凭证」后刷新应报「登录已失效」而不是继续用旧账号抓；③ 扫码期间点刷新，登录不应被导航抢页/abort 打断；④ **关掉二维码弹窗应立刻取消登录**（再点刷新不报「刷新超时」、重开弹窗马上出码）；⑤ 连续两次 xhs 浏览器操作间隔应 ≥600ms（L2/L3 更长）；⑥ **匿名 explore 滚动「加载更多」应增长**（纯被动，只读页面 state，不应出现 `/explore` HTML fetch）且**新内容在列表下方**（顶部首屏不被换掉）；⑦ **点开一条笔记后再点「加载更多」应继续推进**（共享 Edge 被导航走 → 页面重载；不得重复只返回已有条目、不得显示「已加载全部」）；⑧ 首屏 > 60 条时（explore 实测 89）列表尾部条目可见、footer 计数与头部总数一致 |
-| **改 `browser.rs` 窗口模式 / 浏览器抓取** | `cargo check --manifest-path apps/src-tauri/Cargo.toml`（必 0 错）+ **release 实例**验证（debug 窗口恒可见，模式切换是 no-op）：`ui-probe eval "__TAURI__.core.invoke('browser_set_mode',{mode:'interactive'})"` → xhs:user「加载更多」应增长；切回 `hidden` 后滚动不再加载。机制实测见 `docs/risk/crawler-risk-control.md` §3.9 |
+| **xhs 登录 / 凭证 / 浏览器闸门 / 翻页**（2026-10-20） | `governor.check.ts`（含 browserGate）+ tsc + `bun run build:desktop`；真机八件事：① **未扫码时点「扫码登录」必须出二维码**（游客 `web_session` 不算登录）；②「清除凭证」后刷新应报「登录已失效」而不是继续用旧账号抓；③ 扫码期间点刷新，登录不应被导航抢页/abort 打断；④ **关掉二维码弹窗应立刻取消登录**（再点刷新不报「刷新超时」、重开弹窗马上出码）；⑤ 连续两次 xhs 浏览器操作间隔应 ≥600ms（L2/L3 更长）；⑥ **登录态 explore 滚动「加载更多」应增长**（纯被动，只读页面 state，不应出现 `/explore` HTML fetch）且**新内容在列表下方**（顶部首屏不被换掉）；⑦ **点开一条笔记后再点「加载更多」应继续推进**（共享抓取 webview 被导航走 → 页面重载；不得重复只返回已有条目、不得显示「已加载全部」）；⑧ 首屏 > 60 条时（explore 实测 89）列表尾部条目可见、footer 计数与头部总数一致；⑨ **未登录时刷新必须报「需要登录」**（匿名态已移除，不得静默 0 条 / 不得返回匿名内容） |
+| **改 `webview_browser.rs` 窗口模式 / 浏览器抓取** | `cargo check --manifest-path apps/src-tauri/Cargo.toml`（必 0 错）+ **release 实例**验证：`ui-probe eval "__TAURI__.core.invoke('webview_browser_set_mode',{mode:'interactive'})"` → xhs:user「加载更多」应增长；切回 `hidden` 后滚动不再加载。**生命周期**：① 关主窗口后进程必须退出（不得残留隐藏窗口）；② 空闲 3 分钟回收后，下一次抓取应自动重建（`webview_browser_open` 返回 9334 且 `/json/list` 可读）；③ 回收/重建循环 3 次不报 `user-data-dir` 占用；④ 建 lane 后**任务栏/Alt-Tab 不得出现 about:blank 窗口**（`webview_browser_tidy` 已去 `WS_EX_APPWINDOW`），hidden 模式下 lane 窗口不可见、interactive 下屏外可见且**不抢焦点**；⑤ `webview_browser_close` 后 9334 必须释放、WebView2 进程消失；⑥ `webview_browser_reset` 后 profile 目录删除、下次 open 重建；⑦ release 下反复 open/close 时**不得闪控制台黑框**（netstat/taskkill 已带 `CREATE_NO_WINDOW`）；⑧ 开第二个应用实例时，它的 xhs 操作必须报「9334 被另一个实例占用」，且**不能**杀掉第一个实例的浏览器。机制实测见 `docs/risk/crawler-risk-control.md` §3.9 |
 | **lane 化 / 多 tab 浏览器**（2026-10-22） | `bun packages/resolve/src/example/scheduler.check.ts`（并发 lane / 租约计数 / gate 串行不占 lane / 异常释放 / abort 豁免登录）；真机（release 实例）：① xhs:user 刷新 → **打开一条笔记详情**（`detail:xhs` lane）→ 回来点「加载更多」应**从原 cursor 继续**（不再整页重载空页）；② 扫码登录（`login:*` lane）进行中触发全量刷新，其它订阅应正常刷新且登录不被打断；③ devtools `/json/list` 应能看到多个 target（`list:xhs:*` / `detail:xhs` / `login:*` 按需创建，上限 8） |
 | 改 `ui-design-audit.ts` 本身 | 跑一遍看全视图 contrastIssues 是否 0（含半透明徽标卡片，如 `s-video-bili`） |
 | **时间戳单位 / 排序** | `bun packages/resolve/src/example/xhs-time.check.ts`；⚠️ **必须重新抓取**才生效 —— 坏值已落库，看旧数据会误判成「没修好」。判据：social 的 `publishedAt` 年份应在合理区间（修前是 58754） |
@@ -88,7 +88,8 @@ bun scripts/ui-play-check.ts
 ```bash
 bun run rss fetch bili:popular --json        # bili 视频列表
 bun run rss fetch bili:precious --json       # bili 入站必刷（匿名，~98 条）
-bun run rss fetch xhs:explore --json         # 小红书匿名流
+# ⚠️ xhs:explore 不能走 CLI：登录态 HTTP SSR 是空壳，列表由页面脚本回填 → 需要桌面抓取浏览器
+bun run rss fetch xhs:user --kv user_id=<id> --kv cookie=<ck> --json   # 小红书用户笔记（HTTP SSR）
 bun run rss fetch douyin:trend --json        # 抖音热点榜（匿名，含热度/榜位）
 bun run rss sug 王者                          # 抖音搜索联想词（匿名）
 bun run rss fetch live:douyin --kv roomIds=@<抖音号> --json       # 抖音号/短 ID/直播间链接归一
@@ -106,7 +107,7 @@ bun run rss fetch apple:podcast-search --kv q=故事 --json
 ## 五、已知「看似失败实为正常」
 
 - **离线直播**：`resolveLivePlay` 返回空 / flv 404 / 0 弹幕 —— 房间已下播（查 `liveStatus`）。
-- **xhs 详情裸 url**：`bun run rss detail <url>` 无 xsec_token 必失败（详情需列表项 token）；
+- **xhs 详情裸 url**：`bun run rss detail <url>` 无 xsec_token 必失败（详情需列表项 token）；CLI 不拉列表（`--latest` 已删），cookie 用 `--cookie <ck>` 或 CLI settings；
   经 app 的 `resolveDetail(sub, itemId)` 才带 token。
 - **浏览器路径（非 Tauri）**：`injectBrowserHost` 有 CORS 限制，平台抓取会失败，仅壳层可用。
 - **douyin 弹幕 0 条**：房间离线时正常。

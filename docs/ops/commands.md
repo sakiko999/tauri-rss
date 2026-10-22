@@ -37,7 +37,7 @@ bun run rss play <url> --open           # 解析直链，--open 丢系统播放�
 bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计
 bun run rss hot <词>                    # 热搜词下微博流（需登录 cookie）
 bun run rss sug <关键词>                # 抖音搜索联想词（匿名 appHost，输入补全）
-bun run rss detail [url|--latest]       # xhs 单条详情补全（匿名 noteDetail）
+bun run rss detail <url> --cookie <ck>  # xhs 单条详情补全（登录态 noteDetail；URL 需带 xsec_token）
 bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                       # crawler/rsshub 同构断言
@@ -57,7 +57,7 @@ bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload �
 bun packages/crawler/src/example/twitch-live.check.ts   # Twitch GQL → Live 映射（频道 live/offline + 热门/分区流列表）
 bun packages/crawler/src/example/youtube-channels.check.ts # YouTube 直播页栏目解析 + playlistId 归一
 bun packages/crawler/src/example/bili-channels.check.ts    # B站合集/视频列表/收藏夹参数归一
-bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录页/匿名/被动路由矩阵 + origin 校验）
+bun packages/crawler/src/example/xhs-strategy.check.ts  # xhs 策略层（登录闸门 / 无匿名 / cookie 闸门 + origin 校验）
 bun packages/crawler/src/example/extract.check.ts       # 文章正文提取（标签剥离/实体/SPA 空页）
 bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL 归一化 / TTL / 限额淘汰）
 bun packages/crawler/src/example/passive-capture.check.ts # LX 采集编排（假后端回放 CDP 事件）
@@ -137,7 +137,7 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
 
 - ⛔ **浏览器模拟渠道不在 CLI 内**：`weibo:user`、`xhs:*` 及扫码登录（`login`）整条线
   （依赖 `appHost.browser` = Edge spawn + CDP）。将来解锁时只需补一个 Bun 版 browser
-  backend（spawn Edge + CDP 走 ws 包），门面接口已留好（`appHost.browser` 可选、未注入
+  backend（拉起 WebView2/Edge + CDP 走 ws 包），门面接口已留好（`appHost.browser` 可选、未注入
   自动降级），CLI 其余部分零改动。`crawler/src/example/browser-sim.ts` 是唯一保留的
   example 脚本（CLI 排除该类渠道；2026-09-11 起零依赖：bun 内置 WebSocket 直连 CDP）。
 - ⛔ **不做播放**：只到「解析出 stream 清单」为止；hls.js/flv.js/dashjs 不进 CLI。
@@ -182,7 +182,7 @@ desktop 前端 grep `@tauri-apps` 零命中——所有 Rust 能力只经门面�
 | `ws_connect`（tungstenite+header） | `ws` 包（`node-ws.ts`） | ✅ test-danmaku 四平台通 |
 | js 签名执行（new Function） | Node new Function（`node-js.ts`） | ✅ douyin abogus/webmssdk 通 |
 | localStorage | storage backend（bun:sqlite） | ✅ |
-| browser_ensure/close | — | 已排除 |
+| webview_browser_* | — | 已排除（与宿主窗口绑定） |
 
 两个真实差异面：
 
@@ -208,7 +208,7 @@ rss align                           # 收编 verify-alignment：crawler XML 与 
 rss env                             # ★ appHost 各门面自检（http/ws/js/storage 可用性+caps）
 rss refresh [sub]                   # core createDataLayer 编排冒烟（SQLite 持久化）
 rss hot <词>                        # weibo:hot resolveHotWord 热搜词流（需登录 cookie；纯匿名失败）
-rss detail [url|--latest]           # xhs 单条详情补全（匿名 noteDetail，--latest 用当前列表首条）
+rss detail <url> --cookie <ck>      # xhs 单条详情补全（登录态 noteDetail；URL 需带 xsec_token）
 ```
 
 ★ = 使用频率最高的三条探针（`channels` / `fetch` / `item`），可观测性是一等公民：

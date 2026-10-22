@@ -11,7 +11,7 @@
  */
 import { initAppHost } from "./runtime.ts"
 export { initAppHost, setHostCaps } from "./runtime.ts"
-export { mediaReferrerFor } from "./media-referrer.ts"
+export { mediaReferrerFor, videoReferrerFor } from "./media-referrer.ts"
 export {
   configureNetwork,
   reportRisk,

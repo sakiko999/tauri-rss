@@ -69,14 +69,13 @@ Amoeba 调试脚本
   bun run tauri [desktop|mobile] --release 同上，但 **Rust 以 release 编译**（见下）
   bun run tauri [desktop|mobile] build     前端构建 + Tauri release 构建
 
-⚠️ --release 的用途：调试「**只在 release 下才走**」的行为。目前唯一的例子是
-**隐藏 Edge 窗口**（browser.rs 的 \`hide = !cfg!(debug_assertions)\` 是编译期判据）——
-普通 tauri dev 跑 debug profile，那条分支永远不走。--release 保留热重载但按
-release 编译，首次会全量编译数分钟。
+⚠️ --release 的用途：调试「**只在 release 下才走**」的行为（如 Windows 子系统的
+窗口形态）。普通 tauri dev 跑 debug profile，那些分支永远不走。--release 保留
+热重载但按 release 编译，首次会全量编译数分钟。
 
 ⚠️ --release **不叠 tauri.conf.dev.json**（即**不开 9222**）—— 那个文件唯一的作用
-就是开调试口，而 release 模式的意义是复现真实发布形态。要用 CDP 检查 release 窗口
-就用爬虫 Edge 自己的 9223，别指望应用的 9222。
+就是开调试口，而 release 模式的意义是复现真实发布形态。要用 CDP 检查抓取浏览器，
+用 WebView2 自己的 9334（webview_browser_open 返回的端口）。
 
 平台默认 desktop；移动端需先配置好 Android/iOS 工具链。
 `;

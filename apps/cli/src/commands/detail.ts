@@ -1,71 +1,64 @@
 /**
- * detail — social 内容单条详情探针(xhs 匿名 noteDetail 补全;bili/weibo 列表已完整)。
+ * detail — xhs 单条详情探针(登录态 noteDetail 补全;bili/weibo 列表已完整)。
  *
  * 独立 by-url(不依赖订阅 store——CLI 不持久化 MediaItem):
- *   - xhs:抓一个 xhs:explore 列表拿该 noteId 对应的 xsec_token(详情开关),
- *     再匿名 GET /explore/<id>?xsec_token= 拉 noteDetail 补全全文/多图/tag/video。
- *   - bili/weibo:列表已含完整图文,此命令仅提示(无独立详情接口需求)。
+ *   - 输入 **带 xsec_token 的列表项 URL**(详情页的开关,见 `tpl:xsecToken`);
+ *   - 用登录 cookie 直接 GET 详情页,`extractNoteDetail` 解析 `noteDetailMap[noteId].note`;
+ *   - cookie 来源: `--cookie <ck>` > CLI settings(`xhsCookie` provider)。
+ *
+ * ⚠️ 匿名态已移除,必须有登录 cookie。CLI **不拉列表**:`xhs:explore` 依赖桌面抓取浏览器
+ * (登录态 HTTP SSR 是空壳),所以旧的 `--latest` 已删除 —— URL 请从列表项复制。
  */
 import pc from "picocolors"
-import { getChannel } from "@amoeba/crawler"
-import { parseFeed } from "@amoeba/xml"
-import { XHS_BASE, noteDetailToSocial, extractNoteDetail, xhsClient } from "@amoeba/resolve"
+import { XHS_BASE, noteDetailToSocial, extractNoteDetail, resolveCookie, xhsClient } from "@amoeba/resolve"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface DetailOptions {
   json?: boolean
-  /** 用当前 explore 列表首条(不依赖用户 URL 匹配——推荐流每次刷新随机)。 */
-  latest?: boolean
-}
-
-/** 抓 explore 列表 → 匹配 noteId 的 item(带列表项 xsec_token)。 */
-async function fetchListItems(): Promise<Array<{ noteId: string; xsecToken?: string }>> {
-  const ch = getChannel("xhs:explore")
-  if (!ch) return []
-  const xml = await ch.getSource({}).fetch()
-  return parseFeed(xml).channel.item.map((it: any) => ({
-    noteId: String(it.link ?? "").match(/\/explore\/([^?/?#]+)/)?.[1] ?? "",
-    xsecToken: String(it.raw?.["tpl:xsecToken"] ?? ""),
-  }))
+  /** 显式登录 cookie(缺省回落 CLI settings 的 xhsCookie)。 */
+  cookie?: string
 }
 
 export async function runDetail(url: string, opts: DetailOptions): Promise<void> {
   const elapsed = startTimer()
-  // 平台判定:仅 xhs 需要补全详情(列表缺全文/图),其余平台列表即完整。--latest 免 URL。
-  const isXhs = opts.latest || url.includes("xiaohongshu.com/explore/")
-  if (!isXhs) {
-    console.error(pc.red(`✘ 仅小红书(explore)走详情补全;${pc.dim("bili/weibo 列表已含完整图文,无独立详情接口")}`))
+  if (!url) {
+    console.error(pc.red(`✘ 需要 URL(CLI 不拉列表;请从列表项复制带 xsec_token 的链接)`))
+    process.exit(1)
+  }
+  if (!url.includes("xiaohongshu.com/explore/")) {
+    console.error(pc.red(`✘ 仅小红书(explore)走详情补全;${pc.dim("bili/weibo 列表已含完整图文")}`))
     process.exit(1)
   }
 
-  // --latest:用当前 explore 列表首条(推荐流随机,用户 URL 的 noteId 可能不在最新列表)。
-  let noteId: string
-  let xsecToken: string
-  if (opts.latest) {
-    const list = await fetchListItems()
-    if (!list.length) {
-      console.error(pc.red(`✘ explore 列表空(可能需登录/风控)`))
-      process.exit(1)
-    }
-    noteId = list[0].noteId
-    xsecToken = list[0].xsecToken ?? ""
-  } else {
-    noteId = url.match(/\/explore\/([^?/?#]+)/)?.[1] ?? ""
-    if (!noteId) {
-      console.error(pc.red(`✘ 无法从 url 提取 noteId: ${url}`))
-      process.exit(1)
-    }
-    // 从列表找该 noteId 的 xsec_token(纯 URL 无 token → noteDetailMap 空)。
-    const list = await fetchListItems()
-    const hit = list.find((it) => it.noteId === noteId)
-    xsecToken = hit?.xsecToken ?? ""
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    console.error(pc.red(`✘ 无法解析 URL: ${url}`))
+    process.exit(1)
+  }
+  const noteId = parsed.pathname.match(/\/explore\/([^/?#]+)/)?.[1] ?? ""
+  if (!noteId) {
+    console.error(pc.red(`✘ 无法从 url 提取 noteId: ${url}`))
+    process.exit(1)
+  }
+  const xsecToken = parsed.searchParams.get("xsec_token") ?? ""
+  if (!xsecToken) {
+    console.error(
+      pc.red(`✘ URL 缺少 xsec_token:详情页 noteDetailMap 需要列表项的 token(从列表复制完整链接)`),
+    )
+    process.exit(1)
   }
 
-  // 匿名抓详情页(带列表项 xsec_token),extractNoteDetail 解析 noteDetailMap[noteId].note。
-  const detailUrl = xsecToken
-    ? `${XHS_BASE}/explore/${noteId}?xsec_token=${encodeURIComponent(xsecToken)}&xsec_source=pc_feed`
-    : `${XHS_BASE}/explore/${noteId}`
-  const html = await xhsClient.getHtml(detailUrl, {})
+  const cookie = resolveCookie(opts.cookie, "xhs")
+  if (!cookie) {
+    console.error(pc.red(`✘ 小红书需要登录:--cookie <ck>(或让 CLI settings 里有 xhsCookie)`))
+    process.exit(1)
+  }
+
+  // 登录态抓详情页(带列表项 xsec_token),extractNoteDetail 解析 noteDetailMap[noteId].note。
+  const detailUrl = `${XHS_BASE}/explore/${noteId}?xsec_token=${encodeURIComponent(xsecToken)}&xsec_source=pc_feed`
+  const html = await xhsClient.getHtml(detailUrl, { cookie })
   const note = extractNoteDetail(html, noteId)
   const ms = elapsed()
   if (!note) {

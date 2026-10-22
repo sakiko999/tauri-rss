@@ -4,19 +4,19 @@
  * `/explore` SSR 的 `__INITIAL_STATE__.feed`(可能有 _rawValue 包装)含
  * `feeds[]`,每张 noteCard 即一条推荐笔记(标题/封面带尺寸/点赞)。
  *
- * 抓取策略统一在 `shared.ts`:
- *   - 登录/匿名都读页面 SSR(passive;匿名推荐流本身有 feeds,不再多抓 HTML);
- *   - 翻页 = 滚动驱动,读 `feed.feeds` 增量,登录/匿名共用;
- *   - 被动刷新 → `fetchPassive`(CDP Network 捕获页面自己的文档)。
+ * 抓取策略统一在 `shared.ts`(**全渠道要求登录,匿名态已移除**):
+ *   - 读页面 SSR(passive;不构造请求);
+ *   - 翻页 = 滚动驱动,读 `feed.feeds` 增量;
+ *   - 被动刷新 → `fetchPassive`(CDP Network 捕获页面自己的文档);
+ *   - 无浏览器(mobile/CLI)→ **不支持**(登录态 HTTP SSR 是空壳,见 `XHS_EXPLORE_NEEDS_BROWSER`)。
  */
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { XHS_BASE, extractInitialState, noteCardToSocial, now, xhsClient } from "@amoeba/resolve"
+import { XHS_BASE, noteCardToSocial, now } from "@amoeba/resolve"
 import { withBrowserOp } from "@amoeba/resolve"
 import {
-  assertXhsNotBlocked,
   ensureXhsPageReady,
   fetchXhsList,
   fetchXhsPassivePage,
@@ -29,6 +29,16 @@ import {
 } from "./shared.ts"
 import { XhsChannelBase } from "./base.ts"
 
+/**
+ * 无浏览器(CLI / mobile)时 discover 页不可抓。
+ *
+ * ⚠️ 登录态 `/explore` 的 HTTP 文档是**空壳**:`feed.feeds` 为 `[]`,列表由页面自己的
+ * XHR 在导航后回填(见 `shared.ts` 的 `waitXhsListNonEmpty`)。纯 HTTP 宿主不执行脚本,
+ * 只会静默产出 0 条;匿名 HTTP 时代能拿到 feeds 的前提已随匿名态移除一起消失。
+ */
+const XHS_EXPLORE_NEEDS_BROWSER =
+  "小红书发现页需要桌面抓取浏览器：登录态 HTTP SSR 只给空壳，列表由页面脚本回填"
+
 /** 判断滚动前后 feed 头部是否变化的稳定 key(noteId 在展开项外层)。 */
 function feedKey(f: any): string {
   return String(f?.id ?? f?.noteCard?.noteId ?? "")
@@ -38,31 +48,29 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
   readonly key = "xhs:explore"
   readonly name = "小红书发现页"
   readonly kind = "social" as const
-  /** 登录/匿名都读页面 SSR（匿名推荐流本身有 feeds），正常路径即被动。 */
+  /** 只读页面 SSR + 页面自然请求,正常路径即被动。 */
   readonly passive = true
   readonly defaultInfo: SourceInfo = {}
 
   getSource(info: SourceInfo): RssSource & Partial<Pageable> & ItemDetailSource {
-    const cookie = (info.cookie as string) || undefined
+    // 保留显式空串语义(强制匿名 → 现在会报「需要登录」),不要用 `||` 抹成 undefined。
+    const cookie = info.cookie as string | undefined
     const browser = globalThis.appHost?.browser
     const source: RssSource & Partial<Pageable> & ItemDetailSource = {
       fetch: apiFetchItems(
-        () => (browser ? this.fetchViaBrowser(browser) : this.fetchViaHttp(cookie)),
+        () =>
+          browser
+            ? this.fetchViaBrowser(browser)
+            : Promise.reject(new Error(XHS_EXPLORE_NEEDS_BROWSER)),
         () => this.channelOptions(),
       ),
       // LX:导航是页面自然行为;响应体从 CDP Network 缓冲取,不构造主动请求。
       fetchPassive: () => this.fetchPassive(),
-      // 单条详情:登录态读详情页 SSR,匿名 fetch 详情 HTML;passive 来自渠道的 passive 属性。
-      resolveDetail: (item, opts) =>
-        resolveXhsItemDetail({
-          item,
-          sourceKey: this.key,
-          browser,
-          cookie,
-          passiveOnly: opts?.passive,
-        }),
+      // 单条详情:读详情页 SSR(登录态)。
+      resolveDetail: (item) =>
+        resolveXhsItemDetail({ item, sourceKey: this.key, browser, cookie }),
     }
-    // 推荐流是无限滚动:滚到底由页面自己分页,我们只读增量(登录/匿名都适用)。
+    // 推荐流是无限滚动:滚到底由页面自己分页,我们只读增量。
     if (browser) {
       source.fetchMore = (cursor?: string, ctx?: { existing: number }) =>
         this.fetchMoreViaBrowser(browser, cursor, ctx?.existing)
@@ -70,7 +78,7 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
     return source
   }
 
-  /** 正常刷新:登录/匿名都读页面 SSR。 */
+  /** 正常刷新:登录态读页面 SSR(未登录由 fetchXhsList 抛可操作错误)。 */
   private async fetchViaBrowser(browser: BrowserBackend): Promise<Item[]> {
     const items = await fetchXhsList(
       browser,
@@ -85,13 +93,12 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
       // 列表 lane:explore 专属 tab,翻页 state 不被详情/登录导航走(§3.13)。
       "list:xhs:explore",
     )
-    return items ?? []
+    return items
   }
 
   /**
    * 翻页(explore 滚动驱动)——推荐流是无限滚动:滚到底后页面自己发分页请求,
-   * 我们只读 `__INITIAL_STATE__.feed.feeds` 的增量。**登录/匿名都有效**:
-   * 匿名推荐流本身可读,区别只在首屏取法(登录读 SSR / 匿名 fetch HTML)。
+   * 我们只读 `__INITIAL_STATE__.feed.feeds` 的增量。
    *
    * cursor = 已返回条数。平台一次滚动通常追加/前插 ~120 条,一次整批返回。
    */
@@ -104,7 +111,6 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
       // 已在 /explore(忽略 query)就**不重载**:页面累计的 feed 与滚动位置是增量
       // 翻页的唯一依据,重载会让 state 回到首屏 → 每次都取到同一批。
       await ensureXhsPageReady(b, "/explore", "小红书登录已失效或未登录，请到「账号与凭证」重新扫码")
-      await assertXhsNotBlocked(b)
 
       const initial = await readXhsStateList(b, ["feed", "feeds"])
       // cursor = 已返回条数。⚠️ 不能假设新推荐一定追加在尾部:平台可能把新批次
@@ -190,11 +196,6 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
     // 缓冲缺失 → null(core 回退缓存);缓冲有但 0 条 → 空 XML(与旧行为一致)。
     if (!feeds) return null
     return serializeFeed(this.toItems(feeds), this.channelOptions())
-  }
-
-  private async fetchViaHttp(cookie?: string): Promise<Item[]> {
-    const html = await xhsClient.getHtml(`${XHS_BASE}/explore`, { cookie })
-    return this.toItems(flatXhsStateList(extractInitialState(html), ["feed", "feeds"]))
   }
 
   /** feeds[] → Item[](noteId 在展开项外层,noteCard 在内层,xsecToken 也在外层)。 */

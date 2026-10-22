@@ -20,3 +20,28 @@ export function mediaReferrerFor(url: string): string | undefined {
   if (!m) return undefined
   return HOTLINK_REFERRERS.find(([host]) => m[1].includes(host))?.[1]
 }
+
+/**
+ * 视频直链的防盗链 Referer（与图片**分开**）。
+ *
+ * ⚠️ 小红书视频 CDN 对页面源 Referer（dev 的 `http://localhost:1420`、生产的
+ * `tauri://localhost`）返回 **403 text/html**，浏览器再按 ORB 拦成
+ * `net::ERR_BLOCKED_BY_ORB` / `MEDIA_ELEMENT_ERROR: Format error`——媒体错误不进
+ * console，表现为「点了实况没反应且无报错」。`<video referrerPolicy>` 在 Chromium
+ * 里不存在，只能经宿主隧道（Rust reqwest）重取：站内 Referer 或空 Referer 都是 200。
+ *
+ * 不并进 `HOTLINK_REFERRERS`：那会让所有 xhs 图片也改走隧道（图片本来直连可用）。
+ */
+const HOTLINK_VIDEO_REFERRERS: Array<[string, string]> = [
+  ["xhscdn.com", "https://www.xiaohongshu.com/"],
+  // 微博实况视频（f.video.weibocdn.com）与图床同源策略。
+  ["weibocdn.com", "https://weibo.com/"],
+  ["sinaimg.cn", "https://weibo.com/"],
+]
+
+/** 视频直链所属域名命中规则 → 需要的站内 Referer;未命中返回 undefined（可空 Referer 拉取）。 */
+export function videoReferrerFor(url: string): string | undefined {
+  const m = url.match(/^https?:\/\/([^/]+)/)
+  if (!m) return undefined
+  return HOTLINK_VIDEO_REFERRERS.find(([host]) => m[1].includes(host))?.[1]
+}

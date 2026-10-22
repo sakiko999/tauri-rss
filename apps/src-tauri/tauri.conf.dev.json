@@ -3,6 +3,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Amoeba",
         "width": 1440,
         "height": 900,

@@ -313,7 +313,7 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 
 - ⚠️ **UI 自动化的 CDP target 必须按 URL 过滤**：DevTools 自己也是 `type: "page"`，取第一个
   会连到 DevTools 而不是应用页面（曾因此截了一堆 DevTools 的图当「应用截图」）。
-- ⭐ **抓取用 Edge 的 CDP 端口固定 9223，可从外部脚本直连**（`GET http://127.0.0.1:9223/json/list`
+- ⭐ **抓取浏览器（WebView2）的 CDP 端口固定 9334，可从外部脚本直连**（`GET http://127.0.0.1:9334/json/list`
   → page target → WebSocket `Runtime.evaluate`）。验证 browser 侧行为（页面 state / 滚动 /
   翻页方向）不必往产品代码加日志：前后两次读 `__INITIAL_STATE__` 对比即可（2026-10-20 用它
   定位了 explore 分页方向）。⚠️ 两个测量陷阱：① state 树里有**循环引用**

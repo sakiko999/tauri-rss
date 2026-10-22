@@ -5,25 +5,23 @@
  * SSR 完整渲染笔记**——`__INITIAL_STATE__.user.notes` 为分组数组,flat 后每项
  * `{ id, noteCard, xsecToken }`,noteCard 含标题/封面/点赞。**不走 `user_posted` API**
  * (需签名 + 参数 image_formats/xsec_token/xsec_source,触发 300011 账号风控;
- * 「Edge 内正常浏览无风控」的根因:SSR 导航 = 正常浏览,页面内 fetch API = 额外 XHR)。
+ * 「浏览器内正常浏览无风控」的根因:SSR 导航 = 正常浏览,页面内 fetch API = 额外 XHR)。
  *
- * ⚠️ 2026-08-28 匿名实测修正(此前误记「匿名时空分组」):匿名 SSR **渲染 32 条卡片**
- * (标题/封面/点赞/作者/xsecToken 全有),但平台把 noteId 定向抹空(外层 `id` 与
- * `noteCard.noteId` 全空串,DOM 亦零笔记链接)——无法构造笔记 URL、无稳定 id,
- * noteCardToSocial 按「无 noteId → null」全过滤 → 自然空结果。即 user 笔记流
- * **完整数据必须登录态**(explore 推荐流匿名可用)。
+ * 匿名态已移除(2026-10-22):匿名 profile SSR 虽然渲染卡片,但平台把 noteId 定向
+ * 抹空(外层 `id` 与 `noteCard.noteId` 全空串),既没有可打开的链接也没有稳定 id。
  *
- * 抓取策略统一在 `shared.ts`(⚠️ 本渠道**不声明** `passive`:匿名必须走页面内 fetch):
- *   - 登录态 → 导航后读页面 SSR(不构造请求);
- *   - 匿名访客 → 页面内抓匿名 profile HTML(noteId 抹空 → 虚拟 ID 兜底)。
+ * 抓取策略统一在 `shared.ts`:
+ *   - 导航后读页面 SSR(不构造请求),登录态由 `fetchXhsList` / `ensureXhsPageReady` 保证;
+ *   - 翻页是**滚动驱动**(页面自己发 user_posted),属于被动交互;
+ *   - 无浏览器(mobile/CLI)→ HTTP SSR,但必须带登录 cookie。
  *
- * 翻页是**滚动驱动**(页面自己发 user_posted),属于被动;匿名无法翻页。
+ * ⚠️ 本渠道**不声明** `passive`:翻页要 interactive 滚动,不是纯导航采集。
  */
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { ItemDetailSource, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { XHS_BASE, extractInitialState, isXhsLoggedIn, log, noteCardToSocial, now, xhsClient } from "@amoeba/resolve"
+import { XHS_BASE, extractInitialState, log, noteCardToSocial, now, xhsClient } from "@amoeba/resolve"
 import { withBrowserOp } from "@amoeba/resolve"
 import {
   ensureXhsPageReady,
@@ -31,6 +29,7 @@ import {
   flatXhsStateList,
   readXhsStateList,
   readXhsStateListCount,
+  requireXhsCookie,
   resolveXhsItemDetail,
   scrollXhsUntilGrown,
   XHS_FETCH_MORE_WINDOW,
@@ -54,28 +53,23 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
             this.fetchMoreViaBrowser(browser, userId, cursor, ctx?.existing),
         }
       : { fetch }) as RssSource & Partial<Pageable> & ItemDetailSource
-    // 详情与 explore 共用同一套策略;刻意不传 cookie —— reqwest 带账号 cookie 既拿不到
-    // 数据(xhs WAF 按客户端栈判定),又让会话凭据走非浏览器栈出站。
-    base.resolveDetail = (item, opts) =>
-      resolveXhsItemDetail({
-        item,
-        sourceKey: this.key,
-        browser,
-        passiveOnly: opts?.passive,
-      })
+    // 详情与 explore 共用同一套策略。刻意不传 info.cookie:桌面有浏览器时详情走浏览器栈
+    // (reqwest 带账号 cookie 既拿不到数据——xhs WAF 按客户端栈判定——又让凭据走非浏览器栈
+    // 出站);无浏览器门面(mobile/CLI)会回落 provider 登录态,这是登录态必需的。
+    base.resolveDetail = (item) => resolveXhsItemDetail({ item, sourceKey: this.key, browser })
     return base
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const userId = String(info.user_id ?? "").trim()
     if (!userId) throw new Error("xhs:user 需要 user_id")
-    const cookie = (info.cookie as string) || ""
+    const cookie = info.cookie as string | undefined
     const browser = globalThis.appHost?.browser
     if (browser) return this.fetchViaBrowser(browser, userId)
     return this.fetchViaHttp(userId, cookie)
   }
 
-  /** 正常刷新:登录态 passive(读页面 SSR),匿名 fetch(匿名 profile HTML → 虚拟 ID)。 */
+  /** 正常刷新:登录态读页面 SSR(未登录由 fetchXhsList 抛可操作错误)。 */
   private async fetchViaBrowser(browser: BrowserBackend, userId: string): Promise<Item[]> {
     const items = await fetchXhsList(
       browser,
@@ -86,20 +80,18 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
           if (!list.length) log.xhs.userEmpty({ body: "user.notes 空(已登录),profile 页 SSR" })
           return this.notesToItems(list)
         },
-        parseHtml: (html) => {
-          log.xhs.userEmpty({ body: "未登录,回退匿名 fetch" })
-          return this.notesToItems(flatXhsStateList(extractInitialState(html), ["user", "notes"]))
-        },
+        loginError: "小红书登录已失效或未登录：用户主页需要登录，请到「账号与凭证」重新扫码",
       },
       // 列表 lane:user 专属 tab——explore/详情在各自 lane,翻页累积的 notes 不被清(§3.13)。
       "list:xhs:user",
     )
-    return items ?? []
+    return items
   }
 
-  /** HTTP 路径:带 cookie 请求 profile 页 HTML → 解析 SSR user.notes(RSSHub getUserWithCookie 同路径)。 */
-  private async fetchViaHttp(userId: string, cookie: string): Promise<Item[]> {
-    const html = await xhsClient.getHtml(`${XHS_BASE}/user/profile/${userId}`, { cookie: cookie || undefined })
+  /** HTTP 路径:带登录 cookie 请求 profile 页 HTML → 解析 SSR user.notes(RSSHub getUserWithCookie 同路径)。 */
+  private async fetchViaHttp(userId: string, cookie?: string): Promise<Item[]> {
+    const ck = requireXhsCookie(cookie)
+    const html = await xhsClient.getHtml(`${XHS_BASE}/user/profile/${userId}`, { cookie: ck })
     return this.notesToItems(flatXhsStateList(extractInitialState(html), ["user", "notes"]))
   }
 
@@ -140,16 +132,12 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
     return withBrowserOp(browser, { lane: "list:xhs:user", mode: "interactive", platform: "xhs" }, async (b) => {
       // 已在 profile 页(忽略 query)就不重载:滚动驱动的增量依赖页面累计的 notes,
       // 重载会让 state 回到首屏,`slice(startIdx)` 又切到已返回过的条目。
+      // 未登录 / 登录失效在这里抛可操作错误(不再有匿名翻页)。
       await ensureXhsPageReady(
         b,
         `/user/profile/${userId}`,
         "小红书登录已失效或未登录：用户主页需要登录，请到「账号与凭证」重新扫码",
       )
-      // 匿名 SSR 的 noteId 全被抹空,滚动也加载不出更多 —— 直接给出可操作的错误,
-      // 不要静默滚到底再报「已加载全部」。
-      if (!(await isXhsLoggedIn(b))) {
-        throw new Error("小红书用户主页翻页需要登录：请先到「账号与凭证」扫码登录")
-      }
 
       const initial = await readXhsStateList(b, ["user", "notes"])
       // 已返回条数(索引定位)。首次翻页用 store 已有条数(同 explore:页面可能

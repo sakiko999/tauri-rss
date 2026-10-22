@@ -1,10 +1,10 @@
 /**
  * browser-sim —— 验证脚本:CDP 隧道 + 浏览器模拟抓取(weibo:user / xhs:user)。
  *
- * 生产路径:appHost.browser = Tauri spawn 系统 Edge + CDP(packages/host tauri/
- * browser-backend.ts)。本脚本用**同一个 edge-cdp skill** 在 WSL 侧拉起干净的
- * Windows Edge,再以 bun 内置 WebSocket 直连 CDP,模拟同形状的 BrowserBackend,
- * 验证 crawler 侧 cdp.ts + channel 浏览器路径。
+ * 生产路径:appHost.browser = Tauri WebView2 隐藏窗口 + CDP(packages/host tauri/
+ * browser-backend.ts)。本脚本用 edge-cdp skill 在 WSL 侧拉起干净的 Windows Edge,
+ * 再以 bun 内置 WebSocket 直连 CDP,模拟同形状的 BrowserBackend,验证 crawler 侧
+ * cdp.ts + channel 浏览器路径(不依赖 Tauri 宿主)。
  *
  * 用法(先起干净 Edge,再跑本脚本):
  *   bash <edge-cdp skill>/scripts/launch_clean_edge.sh      # 默认端口 9322

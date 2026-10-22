@@ -38,10 +38,17 @@
 
 ### 1.3 浏览器
 
-- Crawler 使用独立 Edge profile，端口固定 9223（`apps/src-tauri/src/commands/browser.rs:46`）。
-- release 下窗口隐藏、移屏外、禁图（`browser.rs:209-240,387`）。
-- `BrowserBackend` 只连 `/json/list` 的第一个 page；事件帧被丢弃（`packages/host/src/tauri/browser-backend.ts:87-152`）。
-- 现有浏览器抓取都是主动导航/页面内 fetch，属于 §3.1 的 ①②。
+> 2026-10-22 起抓取浏览器 = Tauri 自己的 WebView2（隐藏窗口），旧的 spawn-Edge 路径已删除。
+> 生命周期契约见 `docs/architecture/crawler-topology.md`「WebView2 当抓取浏览器」；
+> 本文 §3.9 / §3.14 中涉及 `SW_HIDE`、进程树、`edge_args` 的段落是测量的历史实现细节，
+> 行为结论（隐藏窗口不渲染）仍适用于 WebView2。
+
+- Crawler 使用独立 WebView2 profile（`%LOCALAPPDATA%/app.amoeba.desktop/webview-profile`），
+  调试端口固定 9334（`apps/src-tauri/src/webview_browser.rs`）。
+- 窗口 `visible(false)` + 屏外；启动参数禁图（`--blink-settings=imagesEnabled=false`）。
+- `BrowserBackend` 默认连 `/json/list` 的第一个非 Edge UI page；lane 各自 `Target.createTarget`
+  （WebView2 下每个 target = 独立顶层窗口，创建后 `webview_browser_tidy` 去任务栏/按模式隐藏）。
+- 现有浏览器抓取都是导航 / 读页面 state（被动），属于 §3.1 的 ①②。
 
 ## 2. 集中式 governor
 
@@ -114,11 +121,11 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 现实里各平台不该用同一档：B站/YouTube 的匿名 API 稳定，保持 L1 更可靠。
 
 ⚠️ **被动采集是渠道自身属性**（`RssChannel.passive`，2026-10-21）：
-`xhs:explore` 的登录/匿名正常路径都是导航 + 读页面 SSR（`fetchPassive`），所以声明
-`passive`。⚠️ `xhs:user` **刻意不声明**：匿名 profile SSR 会抹空 noteId，必须走页面内
-`fetch`（登录态 `fetch()` 内部仍是导航 + 读 SSR）。设置页对被动渠道只显示「浏览器被动」
-标签、不给下拉。有 `appHost.browser` 时只调 `fetchPassive`；没有浏览器（移动端/CLI）
-回落主动抓取（否则会永远只剩缓存）。
+`xhs:explore` 的正常路径是导航 + 读页面 SSR（`fetchPassive`），所以声明 `passive`。
+⚠️ `xhs:user` **刻意不声明**：翻页要 interactive 滚动，不是纯导航采集。
+设置页对被动渠道只显示「浏览器被动」标签、不给下拉。有 `appHost.browser` 时只调
+`fetchPassive`；没有浏览器（移动端/CLI）回落主动抓取——`xhs:explore` 会抛「需要桌面
+抓取浏览器」（2026-10-22 起匿名态移除，登录态 HTTP SSR 是空壳）。
 
 解析顺序（防御等级）：
 
@@ -233,10 +240,11 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   渠道只调 `fetchPassive`；`resolveDetail` 同样传 `{ passive: true }`，渠道只能导航到
   详情 URL 读页面 `__INITIAL_STATE__`（不构造 fetch/API），不支持就返回 `null` →
   原样返回列表 item。`loadMore` / `previewChannel` / 播放解析仍走主动请求。
-- xhs 渠道按**登录态/渠道**分流（2026-10-20）：登录 → 被动（导航 + 读 SSR / 被动捕获）；
-  匿名时 `xhs:explore` 也走被动（匿名推荐流 SSR 有 feeds），`xhs:user` 才回退 fetch
-  （匿名 profile 的 noteId 被抹空）。登录判据 `isXhsLoggedIn` 不看 `web_session`（游客也有）。
-  `xhs:explore` 的翻页也是被动：滚动驱动、读 `feed.feeds` 增量，登录/匿名共用。
+- xhs 渠道（2026-10-22 起**全渠道要求登录，匿名态已移除**）：列表/详情都走被动
+  （导航 + 读 SSR / 被动捕获），登录闸门 `assertXhsLoggedIn`（登录页优先于残留 loggedIn）；
+  不看 `web_session`（游客也有）。`xhs:explore` 的翻页是滚动驱动、读 `feed.feeds` 增量。
+  ⚠️ 无浏览器的 HTTP 路径：`xhs:user` 可用（profile SSR 服务端渲染），`xhs:explore`
+  **不可用**（登录态 SSR 空壳，列表由页面 XHR 回填）。
 - 计量请求的 in-flight 去重按 `method + url + body` 或 `policy.dedupeKey`；媒体/图片不参与。
 
 ## 3. LX 被动采集
@@ -265,7 +273,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 
 ### 3.3 需要补的能力
 
-1. ✅ 已实现：`browser_ensure(mode)` / `browser_set_mode`（hidden / interactive），实测依据与落点见 §3.9。
+1. ✅ 已实现：`webview_browser_open` / `webview_browser_set_mode`（hidden / interactive），实测依据与落点见 §3.9。
 2. `BrowserBackend`：
    - ✅ `send(method, params, sessionId?)`（公开原始 CDP 命令；当前走 page 连接，sessionId 预留给 P2 的 browser 连接）
    - ✅ `onEvent(cb)`（分发无 id 事件帧，带 `sessionId`）
@@ -368,11 +376,10 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 - ✅ 采集入口：`packages/crawler/src/passive/capture.ts` 的
   `capturePage(browser, { platform, endpoint, match, trigger })`：`Network.enable` →
   页面自然触发 → `loadingFinished` 立即取 body → 只收文本 MIME → 写缓冲。
-  调用方必须用 `withBrowserMode` 持有独占权；`trigger` 里禁止构造自定义请求。
+  调用方必须用 `withBrowserOp` 持有独占权；`trigger` 里禁止构造自定义请求。
 - ✅ 首批接入：`xhs:explore.fetchPassive()`（导航 `/explore`，从 Document 响应体解析）。
-  ⚠️ `xhs:user` **刻意不声明 `passive`**：匿名 profile SSR 会抹空 noteId，必须走页面内
-  `fetch`（匿名产出 `anon-*` 虚拟条目）；它的 `fetch()` 在登录态内部仍是导航 + 读 SSR，
-  不构造请求 —— 标成被动会让桌面匿名订阅永远只剩缓存。
+  ⚠️ `xhs:user` **刻意不声明 `passive`**：翻页要 interactive 滚动，不是纯导航采集；
+  数据仍只读页面 `__INITIAL_STATE__`（登录态，匿名态已于 2026-10-22 移除）。
   `bili:popular` 不声明 `passive`、也不提供 `fetchPassive`（理由见 §3.7 P1）。
 - ✅ core 闸门：`packages/core/src/data-layer.ts` 的 `doRefresh` 在
   `channel.passive === true && appHost.browser` 时走被动路径，只调
@@ -385,6 +392,13 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 - 只持久化解析后的条目（复用既有 `content:<subId>` 缓存）；原始响应体只在内存里活到 TTL 到期，见 §3.10。
 
 ### 3.9 窗口模式（2026-10-19 实测）
+
+> 2026-10-22 迁移到 WebView2 后：**宿主窗口**用 Tauri 的 `hide()` + Win32
+> `ShowWindow(SW_SHOWNA)`（`webview_browser_set_mode`，不激活）；**lane 窗口**是 CDP 建的
+> 独立顶层窗口，仍用 `SW_HIDE` / `SW_SHOWNA` + `WS_EX_TOOLWINDOW` 整理（`webview_browser_tidy`），
+> 关闭时按进程树收尾。**行为结论不变**：隐藏窗口下渲染管线停摆（rAF=0、IO 不回调、
+> scroll 不派发），滚动驱动页面必须 `interactive`（屏外显示 +
+> `--disable-features=CalculateNativeWinOcclusion`）。下表是 Edge 上的原始测量，保留作为依据。
 
 探针：`scripts/lx-visibility-probe.ts`（系统 Edge **155.0.4283.45**，Windows 11，本地测试页观察 6 秒）。
 每组都是一次独立 Edge（临时 profile），测量项：`document.visibilityState`、rAF 帧数、
@@ -446,14 +460,15 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 `interactive` **按需启用**——只在滚动/懒加载采集期间使用，其余时间维持 `hidden`，
 不要整个会话常驻（常驻渲染有 CPU/GPU 开销）。
 
-**实现落点（2026-10-19）**
+**实现落点（2026-10-19 起；2026-10-22 已迁移到 WebView2）**
 
 | 层 | 改动 |
 | --- | --- |
-| Rust `browser.rs` | `BrowserMode`；`browser_ensure(mode)` 与 `browser_set_mode`；遮挡/节流 flag 改为**启动时常驻**（否则切 interactive 唤不醒渲染）；`hide_until_stable(root, require_seen)`、`show_main_window`（`WS_EX_TOOLWINDOW` + `SW_SHOWNA`）、`foreground_hwnd`/`restore_foreground` |
-| 宿主 | `TauriBrowserBackend.setMode` → invoke `browser_set_mode`；`BrowserBackend.setMode?` 为可选能力 |
-| crawler | 统一用 `withBrowserMode(browser, mode, fn)` 包装：内部串行化 + 设模式，interactive 结束自动切回 hidden。滚动路径（`xhs:user` 翻页）传 `interactive`，SSR/页面 fetch 传 `hidden` |
-| 语义 | `browser_ensure` **不带 mode = 只确保就绪、不改模式**（否则 `ensureConn` 会把刚切好的 interactive 打回 hidden） |
+| Rust `webview_browser.rs`（当前） | `set_mode` = Tauri `win.show()/hide()`；遮挡/节流 flag 仍**启动时常驻**（否则切 interactive 唤不醒渲染）；`open/close/reset/set_mode` 由 OP 锁串行，`close` 等到窗口销毁 + 端口释放 |
+| Rust `browser.rs`（Edge 时代，已删除） | `BrowserMode`；`browser_ensure(mode)` / `browser_set_mode`；`hide_until_stable`、`show_main_window`、`foreground_hwnd`/`restore_foreground` |
+| 宿主 | `TauriBrowserBackend.setMode` → invoke `webview_browser_set_mode`；`BrowserBackend.setMode?` 为可选能力 |
+| crawler | 统一用 `withBrowserOp(..., { mode: "interactive" })` 包装（`withRenderLease` 引用计数 + 全局串行）。滚动路径（`xhs:user` 翻页）用 interactive，SSR 读取用默认 hidden |
+| 语义 | `webview_browser_open` **只确保就绪、不改模式**（否则 `ensureConn` 会把刚切好的 interactive 打回 hidden） |
 
 - `--blink-settings=imagesEnabled=false` 保留：实测 interactive 下 rAF/IO/scroll 正常，仅图片不加载。
 - ⚠️ **隐藏判定必须看「可见性」**（2026-10-16 修）：`hide_windows_for_pids` 若对 PID 的**每个**
@@ -573,6 +588,11 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
    本身就是风控行为，不做。
 
 ### 3.13 多 tab 与 lane 粒度（设计评估，2026-10-21；**已实现** 2026-10-22）
+
+> 2026-10-22 WebView2 迁移后：WebView2 **没有 tab**，每个 lane target 是独立顶层窗口
+> （`Target.createTarget`）。lane 的隔离语义不变（独立 CDP 连接 / 独立页面状态），
+> 但窗口必须由 `webview_browser_tidy` 摆到屏外并去掉任务栏样式；`close` 时杀整棵
+> WebView2 进程树。本节其余内容（lane 键、LRU、gate）仍适用。
 
 > 触发：详情/登录会把列表页导航走，回头再抓只能整页重载；xhs 的翻页还依赖页面里
 > 累积的 `feed.feeds`，页面被导航走就只能重载 + cursor 重试。这里记录「要不要多 tab、
@@ -762,34 +782,29 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
 令牌）；② 需要可组合且可测的退避策略；③ 需要流式扇出；④ 调度代码自身超 ~400 行且开始出现
 「这把锁到底护什么」的讨论。到那时上面四个函数就是移植边界，换库只动一个文件。
 
-### 3.14 Edge 实例配置与调试端口
+### 3.14 抓取浏览器实例配置与调试端口
 
-（2026-10-21 从 `CLAUDE.md` 迁入）
+（2026-10-21 从 `CLAUDE.md` 迁入；2026-10-22 起实例 = Tauri WebView2，以下 Edge 专属参数
+已随 `commands/browser.rs` 删除，`webview_browser.rs` 的 `browser_args()` 是当前权威）
 
 - ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版开
   无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用 `scripts/tauri.ts` 叠的
   `tauri.conf.dev.json`（`bun run tauri` 自动带上）。
-- **release 下 CDP Edge 禁图**：只有可隐藏的 release 构建才拼
+- **抓取 WebView2 禁图（常驻）**：`browser_args()` 固定带
   `--blink-settings=imagesEnabled=false` —— SSR/滚动抓取只读 DOM 文本，图片纯浪费内存/带宽。
   实测该参数**不影响** `interactive` 模式的 rAF / IntersectionObserver / scroll 事件（只让
   图片不加载），所以模式切换不需要重开浏览器。扫码不受影响：微博读远程 `img.src`（图另走
-  `appHost.http`）、小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制；debug 不禁图
-  便于观察。
-- **CDP Edge 干净度（对齐 edge-cdp 插件）**：`edge_args` 带
-  `--disable-sync --disable-extensions --disable-default-apps
-  --edge-redirect-feed-at-first-run-disabled=1`，避免把本机登录账号的同步设置/扩展带进抓取
-  实例。⚠️ `.msn/.bing` 账户 cookie 仍会被 Edge 账户层注入（flag 挡不住，不影响抓取）；
-  要真正清空 profile 用「存储与诊断 → 清理浏览器数据」（先杀我们的 Edge 再删目录）。
-  ⚠️ 不能像插件的 WSL 脚本那样 `taskkill /IM msedge.exe` 杀全部 Edge —— 那会关掉用户正在
-  用的浏览器。
-- **冷启动必须干净（2026-10-22）**：`browser_close` 用 `TerminateProcess` 关 Edge，Chromium
-  把它记成崩溃（`Default/Preferences` 的 `profile.exit_type=Crashed`）→ 下次冷启动会从
-  `Default/Sessions/` 恢复上次的 tab，并弹崩溃还原气泡。恢复出来的窗口**晚于
-  `hide_until_stable` 返回**才创建，于是 release 下任务栏又冒出 Edge 图标。三件套兜住：
-  spawn 前 `purge_sessions()` 删 `Default/Sessions/*`（登录态在 `Network/Cookies`，不受影响）、
-  带 `--hide-crash-restore-bubble`、藏窗口时顺手把 `WS_EX_APPWINDOW` 换成
-  `WS_EX_TOOLWINDOW`（晚到的 `ShowWindow` 也不会长出任务栏按钮）。
-- **抓取实例的性能开关**（`edge_args`，都只影响浏览器自己，不动 UA/指纹）：
+  `appHost.http`）、小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制。
+- **抓取 WebView2 干净度**：独立 `data_directory`（`%LOCALAPPDATA%/app.amoeba.desktop/
+  webview-profile`），启动参数带 `--disable-sync --disable-extensions --disable-default-apps`。
+  WebView2 没有 Edge 的账户上层（不会注入 `.msn/.bing` cookie）。要清空 profile 用
+  「存储与诊断 → 清理浏览器数据」（先关 webview 再删目录）；不要按镜像名 `taskkill`
+  杀用户正在用的 Edge。
+- **生命周期（2026-10-22 修正）**：懒创建（启动不建）；`close` 用 `destroy()` 并等到窗口
+  销毁 + 端口释放；`open` 以 CDP 端口可连为就绪判据，端口被孤儿进程占用时先 `taskkill /T`。
+  ⚠️ 抓取 webview 是**第二个窗口**：只关主窗口时 Tauri 不会自动退出（windows 集合非空），
+  `lib.rs` 在 `main` 窗口 `Destroyed` 时显式 `exit(0)`。
+- **抓取实例的性能开关**（`browser_args()`，都只影响浏览器自己，不动 UA/指纹）：
   `--js-flags=--max-old-space-size=512`、`--disk-cache-size=67108864`、
   `--disable-gpu-compositing`（合成器走软件：GPU 进程仍在、WebGL/光栅不变，只把合成搬回
   CPU —— GPU 进程 private 约 270MB 是隐藏窗口里最大的固定开销之一）、

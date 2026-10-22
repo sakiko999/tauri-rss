@@ -1,8 +1,8 @@
 //! 抓取浏览器（WebView2）的 Tauri 命令面。
 //!
-//! 本分支把浏览器后端从「spawn 系统 Edge」换成 Tauri 自己的 WebView2，
-//! 详见 `crate::webview_browser`。命令与旧 `browser_*` 一一对应，TS 侧
-//! `TauriBrowserBackend` 直接调用这里；CDP 客户端不变。
+//! 浏览器后端 = Tauri 自己的 WebView2（旧的 spawn 系统 Edge 路径已删除），
+//! 详见 `crate::webview_browser`。TS 侧 `TauriBrowserBackend` 直接调用这里；
+//! CDP 客户端与 lane 逻辑不变。
 use tauri::AppHandle;
 
 /// 确保抓取 webview 存在，返回 CDP 端口（幂等）。
@@ -28,4 +28,11 @@ pub fn webview_browser_close(app: AppHandle) -> Result<(), String> {
 #[tauri::command(async)]
 pub fn webview_browser_reset(app: AppHandle) -> Result<String, String> {
     crate::webview_browser::reset(&app)
+}
+
+/// 整理 CDP lane 窗口（去任务栏 / 屏外 / 按当前模式隐藏）。
+/// TS 侧每次 `Target.createTarget` 后调用（WebView2 每个 target 是独立顶层窗口）。
+#[tauri::command(async)]
+pub fn webview_browser_tidy(app: AppHandle) -> Result<(), String> {
+    crate::webview_browser::tidy_windows(&app)
 }

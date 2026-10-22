@@ -131,7 +131,7 @@ channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fe
 
 ## 移动端 CDP：不可行
 
-背景：桌面 `feat/browser-sim` 用 Tauri spawn 系统 Edge + CDP（`appHost.browser` 门面）抓微博/小红书。评估移动端（Android/iOS）能否做同样的事。
+背景：桌面早期实现用 spawn 系统 Edge + CDP（`appHost.browser` 门面）抓微博/小红书；2026-10-22 已换成 Tauri WebView2。评估移动端（Android/iOS）能否做同样的事。
 
 **结论**：移动端复制桌面的「spawn 系统浏览器 + CDP 附加」**不可行/不划算**。iOS 无标准 CDP；Android 可行但强依赖 PC（adb），App 内可连的 WebView CDP 驱动的是自家 WebView（release 默认关 + 指纹弱 + 安全洞）。**移动端走 HTTP/SSR + 登录 cookie 路径**，xhs:user 已 SSR 化恰好是这一步（2026-08-16 改造）。
 
@@ -176,17 +176,38 @@ channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fe
 
 相关：[[edge-swhide-hidden-window]]、[[xhs-user-ssr-loggedin-notes]]
 
-## WebView2 当抓取浏览器：spike 结论（2026-10-22，待决策）
+## WebView2 当抓取浏览器（2026-10-22 决策：已合入）
 
 **动机**：隐藏 Edge 实例活跃时 private 约 **0.99 GB**，其中约 0.29 GB 是 Edge 自带界面
 （Copilot 130MB + discover-chat browser_ui 30MB + 它拉起的 VideoCaptureService 128MB）——
 这层 CDP 关不掉、flags 也挡不住。Tauri 自己的 WebView2 没有这一层。
 
-**做法**（分支 `feat/webview2-browser`，`apps/src-tauri/src/webview_browser.rs`）：
-分支上已**默认启用**——启动时用 `WebviewWindowBuilder` 建一个隐藏 webview（独立
-`data_directory` + `--remote-debugging-port=9334`，Tauri 文档要求「参数不同的 webview 必须配
-不同 data dir」），TS 后端改调 `webview_browser_open/set_mode/close/reset`，不再 spawn Edge。
-master 上的 `commands/browser.rs`（Edge 路径）保留作对照/回退。
+**做法**（`apps/src-tauri/src/webview_browser.rs`）：用 `WebviewWindowBuilder` 建一个**隐藏**
+webview（独立 `data_directory` + `--remote-debugging-port=9334`，Tauri 文档要求「参数不同的
+webview 必须配不同 data dir」），TS 后端调 `webview_browser_open/set_mode/close/reset`。
+旧的 spawn-Edge 路径（`commands/browser.rs`）已随合并删除。
+
+**生命周期契约**（2026-10-22 修正，改这里前先读）：
+
+- **懒创建**：启动不建 webview，第一次抓取才建；空闲回收（3 分钟）关掉后不会被开机重新拉起。
+- `open` 的就绪判据是 **CDP 端口真的可连**，不是「窗口对象存在」；半启动 / 端口未就绪时
+  销毁重建，不会把假端口交给 TS。
+- `close` 用 `destroy()` 并**等到窗口销毁 + 端口释放**才返回（`open/close/reset/set_mode`
+  共用同一把 OP 锁）—— 否则紧接着的重建会撞上旧 WebView2 环境占着的 user-data-dir / 端口。
+- 没有窗口却有人监听 9334：**先校验归属（父进程链是否走到本进程）**。属于本进程树的
+  残留 → `taskkill /T`；不属于（另一个应用实例）→ 返回「端口被占用」，绝不误杀/误连。
+  外部控制台命令（netstat/taskkill）一律带 `CREATE_NO_WINDOW`（release 是 GUI 子系统）。
+- ⚠️ **抓取 webview 是第二个窗口**：只关主窗口时 Tauri 的 windows 集合非空，不会自动退出，
+  进程会变成不可见僵尸。`lib.rs` 在 `main` 窗口 `Destroyed` 时显式 `exit(0)`。
+- 不在 `RunEvent::Exit` 里做清理：该事件在 `Event::LoopDestroyed` 才回调，投递窗口消息
+  已无人处理。进程退出会带走 WebView2 子进程（带 lane 窗口关闭主窗口已实机验证）。
+- ⚠️ **lane target = 独立顶层窗口**（WebView2 没有 tab）：`Target.createTarget` 建的窗口
+  不归 Tauri 管，默认可见且进任务栏。TS 侧用 `newWindow + 屏外坐标 + background` 创建，
+  创建后立刻调 `webview_browser_tidy`（Win32：去 `WS_EX_APPWINDOW` 换 `WS_EX_TOOLWINDOW`，
+  hidden `SW_HIDE` / interactive 屏外 `SW_SHOWNA`）。`set_mode` 也会把已有 lane 窗口
+  一并切模式。
+- ⚠️ **仅销毁宿主窗口不够**：lane 窗口会让 WebView2 浏览器进程（和 9334）继续存活，
+  下次 `open` 会撞 user-data-dir。`close` 在宿主销毁后若端口仍活，直接杀整棵进程树。
 
 **实测**
 
@@ -209,5 +230,6 @@ master 上的 `commands/browser.rs`（Edge 路径）保留作对照/回退。
 - 其余正常：`webdriver=false`、plugins 5 个、WebGL 是真实 Intel Arc。
 
 **结论**：功能与内存都过（判据：CDP 可用、xhs 流程可用、private ≤750MB），**但指纹判据不过**。
-**分支上已默认切到 WebView2**（master 未合并）；待真实账号把 xhs/weibo 全流程（扫码登录、
-详情、被动捕获）跑一遍再决定是否合入。若合入，必须显式决定是否接受 UA-CH 覆盖。
+已合入 master 并作为唯一抓取浏览器：产品接受了 UA-CH 明示 `Microsoft Edge WebView2`
+（不做 `setUserAgentOverride` 伪装 —— 那与「用真实浏览器」的方向相悖）。
+xhs 匿名态移除后（2026-10-22），抓取路径统一走登录态，指纹差异的实际影响面进一步收窄。

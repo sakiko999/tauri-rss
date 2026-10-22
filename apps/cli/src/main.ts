@@ -123,13 +123,13 @@ cli
   .action(guard((kw: string, opts: { json?: boolean }) => runSug(kw, opts)))
 
 cli
-  .command("detail [url]", "social 单条详情补全(xhs noteDetail 匿名拉全文/多图/tag;--latest 用当前列表首条)")
+  .command("detail <url>", "xhs 单条详情补全(登录态 noteDetail;URL 需带 xsec_token)")
   .option("--json", "JSON 输出")
-  .option("--latest", "用当前 explore 列表首条(推荐流随机,用户 URL 的 noteId 可能不在最新列表)")
-  .action(guard((url: string | undefined, opts: { json?: boolean; latest?: boolean }) => runDetail(url ?? "", opts)))
+  .option("--cookie <ck>", "小红书登录 cookie(缺省回落 CLI settings 的 xhsCookie)")
+  .action(guard((url: string, opts: { json?: boolean; cookie?: string }) => runDetail(url, opts)))
 
 cli
-  .command("browser-reset", "清掉 Edge CDP 的浏览器 profile(扩展/账户态越养越脏时用;会掉微博/小红书登录态)")
+  .command("browser-reset", "清掉抓取浏览器(WebView2)profile(会掉微博/小红书登录态)")
   .action(guard(() => runBrowserReset()))
 
 cli

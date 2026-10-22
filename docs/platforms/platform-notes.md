@@ -147,57 +147,58 @@
   `settings.xhsCookie`。登录判据 = 页面 `__INITIAL_STATE__.user.loggedIn === true`
   / 侧栏「我」入口 / `user_id` cookie（后两者兜底）。权威接口是
   `/api/sns/web/v2/user/me` 的 `data.guest === false && data.user_id`。
-- 主分支**全 SSR**：`xhs:explore` 匿名稳定可用。**笔记详情页匿名可用**，但**必须带列表项的
-  xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）
-- ⚠️ **SSR 就绪 ≠ 列表就绪**（2026-10-22 实测）：带 `web_session` 的会话（含游客 session、
-  过期登录态）拿到的 `/explore` 文档是**空壳**——`feed.feeds` 为 `[]`，列表由页面自己的
-  XHR 在导航后约 0.4–1.1s 填回 `__INITIAL_STATE__`；干净匿名 profile 的 SSR 则有 31–35 条。
-  被动采集取的是**文档响应体**，于是永远拿到空壳、serialize 出 0 条 → core 报
-  「本次抓取解析出 0 条」（不抛异常、console 无日志，只在错误表里可见）。
+- 主分支**全 SSR，且 2026-10-22 起要求登录（匿名态已移除）**：所有 xhs 渠道先过
+  `assertXhsLoggedIn`（登录页优先 → 页面 `loggedIn` → 侧栏「我」→ `user_id` cookie），
+  未登录直接抛可操作错误，不再退回匿名 SSR / 匿名详情。**笔记详情必须带列表项的
+  xsec_token**（`tpl:xsecToken` → `SocialItem.xsecToken` → `resolveDetail`）。
+- 为什么移除匿名：匿名数据路径不可靠且形态各异 —— `xhs:user` 的 profile SSR 渲染卡片却把
+  noteId 定向抹空（无链接、无稳定 id，旧实现只能生成 `anon-<hash>` 虚拟条目）；`xhs:explore`
+  在带 `web_session` 的会话里 SSR 只给空壳；连续滚动还会累积风控（见下）。统一登录后
+  只剩一条可验证的数据路径。
+- ⚠️ **SSR 就绪 ≠ 列表就绪**（2026-10-22 实测）：登录态会话的 `/explore` 文档可能是
+  **空壳**——`feed.feeds` 为 `[]`，列表由页面自己的 XHR 在导航后约 0.4–1.1s 填回
+  `__INITIAL_STATE__`。被动采集取的是**文档响应体**，于是会拿到空壳、serialize 出 0 条 →
+  core 报「本次抓取解析出 0 条」（不抛异常、console 无日志，只在错误表里可见）。
   修法 = `shared.ts` 的 `waitXhsListNonEmpty`：读 state 前先等列表非空；
   `fetchXhsPassivePage` 在**捕获体解析为空时同样回退读页面 state**（原来只在缓冲缺失时回退）。
-- ⚠️ **匿名滚动翻页不可靠（2026-10-22 实测）**：匿名访客 `/explore` 首屏 SSR 在 headless
-  Edge 与 Tauri WebView2 下都正常（26–34 条，约 0.7s，无 `.fe-verify-box`）。滚动翻页：
-  - **headless Edge**：首轮就跳到 `website-login/error`，`error_code=300012`「IP存在风险」、
-    `rejectUrl=…/login/activate`，`.fe-verify-box` 出现、feed 归零；
-  - **WebView2**：首轮能滚到 34 → 53 → 72 → 88 条，但**同一 profile 连续第二轮**撞
+- **匿名滚动翻页不可靠（2026-10-22 实测，匿名态已移除的历史依据）**：匿名访客 `/explore`
+  首屏 SSR 在 headless 与 WebView2 下都正常（26–34 条）。滚动翻页：
+  - **headless Edge**：首轮就撞 `error_code=300012`「IP存在风险」、`.fe-verify-box`、feed 归零；
+  - **WebView2**：首轮能滚到 34 → 53 → 72 → 88 条，**同一 profile 连续第二轮**撞
     `error_code=300011`「账号异常」、`rejectUrl=…/api/sns/web/v1/homefeed` + verify。
-  结论：**风控是累积的，与浏览器形态无关** —— 匿名翻页最多撑一两轮，不能当稳定能力设计；
-  匿名只取首屏不需要登录，`fetchMore` 要按登录态规划。
-- **headless 无收益（同日实测）**：`--headless=new` + 全新匿名 profile 跑同一路径，首屏同样
-  26 条，但 UA 是 `HeadlessChrome/155.0.0.0 … Edg/155`；private 943–1069 MB，与 headed
-  隐藏窗口的 992 MB 持平（省掉 Edge UI 约 130 MB，主 renderer 反而 414 MB > 321 MB，
-  GPU 270 MB 与 VideoCaptureService 128 MB 照旧）。**结论：继续 headed + `SW_HIDE`**，
+  结论：**风控是累积的，与浏览器形态无关** —— 匿名翻页最多撑一两轮；这是移除匿名态的直接原因。
+- **headless 无收益（同日实测）**：`--headless=new` + 全新 profile 首屏同样 26 条，但 UA 是
+  `HeadlessChrome/155.0.0.0`；private 943–1069 MB，与 headed 隐藏窗口的 992 MB 持平。
+  **结论：继续 headed + 隐藏窗口**（现为 Tauri WebView2，窗口 `visible(false)` + 屏外），
   headless 既拿不到指纹一致性，也不省内存。
-- ⚠️ **xhs 渠道按登录态/渠道分流**（2026-10-20）：登录态 → **被动**（导航后读页面
-  `__INITIAL_STATE__`，或被动模式的 Network 捕获），不构造请求。匿名：
-  - `xhs:explore` **也走被动** —— 匿名推荐流 SSR 本身有 feeds，首屏与 `fetchMore`
-    共用同一份页面 state，不再多抓一次 HTML；
-  - `xhs:user` 走 **fetch** —— 匿名 profile SSR 会**抹空 noteId**，`noteCardToSocial`
-    只能生成 `anon-<hash>` 虚拟条目并清掉 url/xsecToken（预期降级）。
-  登录判据统一走 `isXhsLoggedIn`（页面 `loggedIn` + 侧栏「我」+ `user_id` cookie），
-  **不能看 `web_session`**（游客也有）。
-  - `xhs:explore` 也实现了被动 `fetchMore`（滚动驱动，登录/匿名共用）。⚠️ 翻页**不能整页
-    重载**：增量只能从页面累计的 `feed.feeds` 里切，重载会让 state 回到首屏。判据只比
-    `pathname`（`shared.ts` 的 `ensureXhsPath`，三处入口包成 `ensureXhsPageReady`）——
-    SPA 会往地址栏写 query，完整 `href` 永不相等，用 `cdpNavigate` 自带的同址判据会
-    每次都重载。⚠️ `feed.feeds` 是**扁平数组**（`flat()` 对它是 no-op），滚动加载的
-    新条目**追加在尾部**（实测 862 → 915 → 968）；prepend 判断只是防御，不是常态。
-  - 详情同理：登录态导航详情页读 `noteDetailMap`（被动）；匿名走页面内 fetch 详情 HTML。
-    `core.resolveDetail` 对被动渠道传 `{ passive: true }`（禁止构造平台 API 请求）。
-    ⚠️ **游客/过期会话的登录墙只拦顶层导航**（2026-10-22 实测）：带 `web_session` 的
-    profile 导航详情页会被 302 到 `/login?redirectPath=…`，而**同一 URL、同一
-    `xsec_token`** 改成同源 `fetch(url, { credentials: "omit" })` 仍是 200 且
-    `noteDetailMap` 有条目；全新匿名 profile 顶层导航则正常（连开 30+ 条后也会被拦）。
-    故详情路径撞登录页时退回匿名文档读取，读不到才报「重新扫码」——
-    被动承诺约束的是列表采集，详情是用户主动打开。explore/user 的详情实现已收敛到
-    `channels/xhs/shared.ts`。
-  - 被动模式的 `fetchPassive` 对未登录用户返回 null → core 回退内容缓存，不会偷偷改走 fetch。
-  - 策略层入口 = `shared.ts` 的 `fetchXhsList`：登录页优先判匿名，**登录页且没有 `parseHtml`
-    的渠道必须给 `loginError`**（explore），否则会读登录页的空 SSR 静默 0 条；SSR 列表读取
-    统一走 `readXhsStateList` / `flatXhsStateList`（逐层解 `_rawValue` + flat）；
-    `ensureXhsPath` 同址判据**同时校验 origin**（共享 Edge 可能停在别的域）。
+- **渠道策略（2026-10-22）**：列表 / 详情都是**被动**——导航后读页面 `__INITIAL_STATE__`
+  或 Network 捕获，不构造平台 API 请求。
+  - `xhs:explore` 声明 `passive`（导航 + 读 SSR + 页面自然请求）；`fetchMore` 为滚动驱动。
+  - `xhs:user` 刻意**不声明** `passive`：翻页要 interactive 滚动，不是纯导航采集；
+    数据仍只读页面 state。
+  - 登录判据统一走 `isXhsLoggedIn`（页面 `loggedIn` + 侧栏「我」+ `user_id` cookie），
+    **不能看 `web_session`**（游客也有）；**登录页优先于登录位**（失效会话跳登录页时
+    页面里的 `loggedIn` 可能是残留 true）。
+  - `xhs:explore` 的 `fetchMore`（滚动驱动）。⚠️ 翻页**不能整页重载**：增量只能从页面累计的
+    `feed.feeds` 里切，重载会让 state 回到首屏。判据只比 `pathname`（`shared.ts` 的
+    `ensureXhsPath`，入口包成 `ensureXhsPageReady`）—— SPA 会往地址栏写 query，完整 `href`
+    永不相等，用 `cdpNavigate` 自带的同址判据会每次都重载。⚠️ `feed.feeds` 是**扁平数组**
+    （`flat()` 对它是 no-op），滚动加载的新条目**追加在尾部**（实测 862 → 915 → 968）；
+    prepend 判断只是防御，不是常态。
+  - 详情：登录态导航详情页读 `noteDetailMap`；撞登录页 / 未登录统一报「重新扫码」。
+    补全失败（登录失效 / 风控 / `noteDetailMap` 空）**抛错并进入弹窗失败态**，不再
+    静默回退摘要（core `resolveDetail` 重新抛出，列表内容仍照常显示）。
+    ⚠️ **游客/过期会话的登录墙只拦顶层导航**（2026-10-22 实测）：同一 URL、同一
+    `xsec_token` 改成同源 `fetch(url, { credentials: "omit" })` 仍返回 200 且
+    `noteDetailMap` 有条目。该发现现在只用于解释「为什么匿名详情不能作为兜底」——
+    这层兜底已随匿名支持移除。explore/user 的详情实现收敛在 `channels/xhs/shared.ts`。
+  - 无浏览器（mobile / CLI）：HTTP SSR 必须带登录 cookie（`requireXhsCookie`）；
+    显式空串（强制匿名）直接报「需要登录」，不回落 provider。
+  - 策略层入口 = `shared.ts` 的 `fetchXhsList`：导航 → 等 SSR → 风控框 → **登录闸门** →
+    读列表；SSR 列表读取统一走 `readXhsStateList` / `flatXhsStateList`（逐层解 `_rawValue`
+    + flat）；`ensureXhsPath` 同址判据**同时校验 origin**（共享抓取 webview 可能停在别的域）。
     回归：`bun packages/crawler/src/example/xhs-strategy.check.ts`。
+- 被动模式的 `fetchPassive` 对未登录用户会抛「需要登录」，不再返回 null 静默回退缓存。
 - ⚠️ 登录态 SSR 的 JSON 混入 JS 表达式（`"noteDetailMap":new Map([])`）——
   `extractInitialState` 用**平衡大括号截纯 JSON** + 空容器归一
 - ⚠️ **不要手拼 user_posted fetch**（页面内 `_webmsxyw` 只返回部分头 → 300011 风控）。
@@ -304,10 +305,10 @@
 - 登录态统一存 settings(`bilibiliCookie/weiboCookie/xhsCookie/douyinCookie`),消费经
   **credentials provider**(`resolve/platform/credentials.ts`):core DataLayer 与 CLI 入口
   注册同一 settings 快照,client 在调用点未显式传 cookie 时自动回落。显式**空串 = 强制
-  匿名**(xhs 详情、CLI `--kv cookie=` 依赖)。旧「bilibili-cookie.ts 本地手动占位 +
-  skip-worktree」机制已移除(2026-10-21)。
+  匿名**(CLI `--kv cookie=` 依赖；xhs 会因此直接报「需要登录」)。旧「bilibili-cookie.ts
+  本地手动占位 + skip-worktree」机制已移除(2026-10-21)。
   匿名行为：bili 视频列表稳定、直播 250 超清封顶；weibo 热搜列表可用但 user/词流需登录；
-  xhs explore/详情可用、user 需登录；douyin 直播可用、原画档位需登录
+  **xhs 全渠道需登录（匿名态已移除）**；douyin 直播可用、原画档位需登录
 - ⚠️ **抖音渠道前缀是 `live:douyin*`**：`cookieFieldFor`（core 单一权威表，CLI /
   AccountPage 均复用）为它写了专门分支（裸 `split(":")[0]` 得 "live" 匹配不上）
 - 恢复登录：扫码（scanLogin 写 settings）或在「账号与凭证」里手填 cookie 字段；
@@ -325,6 +326,7 @@
   TS 断言 tsc 不报错，运行时炸 `SyntaxError: Unexpected identifier 'as'`（xhs 点「登录」
   按钮曾因此出不了码）。
 - **「清除凭证」会真正登出浏览器账号**（2026-10-19）：桌面 xhs/weibo/抖音抓取用的是
-  Edge profile 的登录态，只清 `settings.*Cookie` 等于没退。账号页的清除按钮先调
+  抓取浏览器（Tauri WebView2）profile 的登录态，只清 `settings.*Cookie` 等于没退。
+  账号页的清除按钮先调
   `browser.clearCookies(<域后缀>)`（按域精确删除，不连带其它平台），再清 settings；
   中途失败则 settings 保持不动。⚠️ 不要改成 `clearBrowserCookies`（会登出所有站点）。

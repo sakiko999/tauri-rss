@@ -79,8 +79,9 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   打开外链必须走 `openExternal`（WebView 拦 `window.open`）。见 `docs/architecture/host-abi.md`。
 - **存储 DDL 唯一权威 = core `db/schema.ts`**（插件自带 migration 不用，防漂移）。
 - **平台 cookie 三级语义**（`resolve/platform/credentials.ts`）：调用点显式非空 > 显式
-  **空串 = 强制匿名**（xhs 详情、CLI `--kv cookie=` 依赖）> provider（settings 登录态，
-  core DataLayer / CLI 入口注册同一张表）。**渠道层不许再手抄 channelKey→cookie 前缀表**
+  **空串 = 强制匿名**（CLI `--kv cookie=` 依赖；xhs 会因此报「需要登录」）> provider
+  （settings 登录态，core DataLayer / CLI 入口注册同一张表）。**渠道层不许再手抄
+  channelKey→cookie 前缀表**
   ——单一权威 = core `cookieFieldFor`；「同形渠道」优先用 crawler `makeApiChannel`
   工厂（接线/channelOptions/翻页样板收敛处，cookie 在 fetchPage 闭包从 info 取一次）。
   漏传案底：bili:user_video 412 / favlist 私有夹 / douyinCookie 死键。
@@ -97,7 +98,7 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   的产物**（`cargo clean` 只认当前包名哈希，旧 `.rmeta`/`build`/`.fingerprint` 会残留并让
   rust-analyzer 报 `cannot find module or crate *_lib`）。
 - ⭐ **`bun run tauri:release`（`tauri dev --release`）** 用来调「只在 release 才走」的分支
-  （`!cfg!(debug_assertions)` 是编译期判据，如隐藏 Edge）。保留 Vite dev server 与 Rust 热重载，
+  （`!cfg!(debug_assertions)` 是编译期判据，如 Windows 子系统）。保留 Vite dev server 与 Rust 热重载，
   但首次全量 release 编译（~4min），且**不叠 `tauri.conf.dev.json`**（不开 9222）。
   ⚠️ release 默认无调试符号：要断点用 `CARGO_PROFILE_RELEASE_DEBUG=true`（**环境变量**，写进
   Cargo.toml 会让发布安装包也白塞符号），只在**首次构建时**生效（已构建过需删 release 产物重建）。
@@ -135,7 +136,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 | B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
 | 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做） |
 | YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
-| 小红书 | 全 SSR；**`web_session` 不是登录标志**；`xhs:explore` 被动、`xhs:user` 主动 fetch；**匿名滚动翻页不可靠**（headless 首轮 300012 / WebView2 第二轮 300011，风控累积）；带 `web_session` 的会话 **SSR 只给空壳**（feed 由页面 XHR 填，读 state 前要等列表非空）；详情**顶层导航**会被游客登录墙拦（跳 /login），退回同源 `omit` fetch 可读 |
+| 小红书 | 全 SSR；**`web_session` 不是登录标志**；**2026-10-22 起全渠道要求登录（匿名态已移除）**，未登录直接报「需要登录」；`xhs:explore` 被动、`xhs:user` 滚动翻页；带 `web_session` 的会话 **SSR 只给空壳**（feed 由页面 XHR 填，读 state 前要等列表非空）；匿名滚动翻页不可靠（headless 300012 / WebView2 300011，风控累积）——这是移除匿名的依据 |
 | Twitch | 公开 GQL + usher HLS，纯匿名；master 无 CORS 必须服务端拉；流列表翻页要用 Android Client-ID |
 | 斗鱼/虎牙 | douyu `rate` 是档位 ID 不是清晰度；huya 低档只产 HLS |
 | Apple 播客 | 榜单条目 = 一个 feed（`stream` 空），主操作是「列出单集」不是播放 |
@@ -174,9 +175,10 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 
 **待实机验证**（没跑过不算完成）：
 
-- release 实例：`browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
+- release 实例：`webview_browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
+- WebView2 生命周期：关主窗口进程必须退出；空闲回收后自动重建；连续 3 次关/建不撞 profile 占用。
 - `xhs:explore` 手动刷新命中 `passiveBuffer`；未命中走页面 SSR 兜底。
-- `xhs:user` 刷新：登录态导航出条目；匿名走页面内 fetch（`anon-*` 虚拟条目）。
+- `xhs:user` 刷新：登录态导航出条目；**未登录必须报「需要登录」**（匿名态已移除）。
 - ⚠️ **governor 的 `rsshub` 平台配额是死键**：平台名按 host 推导，RSSHub 请求落到通用
   host 桶，需改成 host 后缀匹配或显式映射。
 
@@ -187,9 +189,9 @@ live 按平台二次聚合的 UI 侧。
 ## TODO / 重要信息（cc-todo 自动维护）
 
 - [ ] 界面文案清理尚未实机看一眼：发现页与添加订阅弹窗跑一次 `bun run dev` 确认布局没塌
-- [!] browser_close 用 TerminateProcess → Chromium 记 exit_type=Crashed，冷启动会恢复 tab 并弹气泡；已在 spawn 前 purge Default/Sessions 兜住
+- [ ] WebView2 生命周期实机验证：关主窗口退出、空闲回收后重建、`/json/new` lane tab 关得掉、`/json/close` 不残留窗口
 - [ ] release 验收：GPU 进程 private 是否因 --disable-gpu-compositing 下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
-- [ ] WebView2 分支（feat/webview2-browser）用真实账号跑完 xhs/weibo 全流程后再决定是否迁移
-- [ ] 实况图实机验收：xhs 直链是否 403（防盗链）、微博 .mov 在 WebView2 能否播、失败是否退回静态图
-- [ ] 实况按钮：等用户指一条带实况的条目后，用 CDP 复现并定位（release 无反应）
+- [ ] xhs 全渠道登录态实机回归：扫码 → explore 首屏 + 翻页、user 首屏 + 翻页、详情；未登录三处都必须报「需要登录」
+- [ ] 实况图实机验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图（xhs 403 已确认，改走隧道 + Blob）
+- [ ] release 实机验收实况播放（dev 已修：CDN 对页面源 Referer 403 + ORB 拦截；需确认 release WebView2 下 mp4 解码与暂停/续播）
 <!-- cc-todo:end -->

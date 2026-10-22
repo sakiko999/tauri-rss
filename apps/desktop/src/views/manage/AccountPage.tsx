@@ -22,7 +22,13 @@ import { platformOf } from "../../lib/subscriptions.ts"
 /** 平台前缀 → 展示名 + 对应的 settings cookie 字段。 */
 const PLATFORM_META: Record<
   string,
-  { label: string; field: "bilibiliCookie" | "weiboCookie" | "xhsCookie" | "douyinCookie"; note: string }
+  {
+    label: string
+    field: "bilibiliCookie" | "weiboCookie" | "xhsCookie" | "douyinCookie"
+    note: string
+    /** 未配置时渠道完全不可用（不是「降级为匿名」）。 */
+    needsLogin?: boolean
+  }
 > = {
   bili: {
     label: "B站",
@@ -30,14 +36,19 @@ const PLATFORM_META: Record<
     note: "解锁视频 1080P / 直播原画档位；弹幕与动态也依赖登录态。",
   },
   weibo: { label: "微博", field: "weiboCookie", note: "关注人时间线与热搜词流需要登录。" },
-  xhs: { label: "小红书", field: "xhsCookie", note: "用户主页需要登录；推荐流不登录也能看。" },
+  xhs: {
+    label: "小红书",
+    field: "xhsCookie",
+    note: "所有小红书渠道都需要登录；桌面抓取使用抓取浏览器的登录态，扫码登录才生效（手填 cookie 不会同步到浏览器）。",
+    needsLogin: true,
+  },
   douyin: { label: "抖音", field: "douyinCookie", note: "解锁直播原画档位；搜索类能力始终需要账号。" },
 }
 
 /**
- * 桌面抓取实际用的是 Edge profile 的登录态，不是 settings 里的 cookie 串。
+ * 桌面抓取实际用的是抓取浏览器（WebView2）profile 的登录态，不是 settings 里的 cookie 串。
  * 「清除凭证」必须同时登出这些站点，否则只是清掉 UI 显示，下一次刷新仍以真实账号导航。
- * 只列**浏览器登录路径**的平台：B站是纯 HTTP 扫码，清 settings 即可，不该为此拉起 Edge。
+ * 只列**浏览器登录路径**的平台：B站是纯 HTTP 扫码，清 settings 即可，不该为此拉起抓取浏览器。
  */
 const COOKIE_HOSTS: Record<string, string[]> = {
   xhs: ["xiaohongshu.com"],
@@ -131,7 +142,11 @@ function CredentialCard({
     <SideCard title={meta.label} icon={platform === "bili" ? "radio" : "message"}>
       <div style={{ padding: "var(--sp-3) 0" }}>
         <InfoRow k="状态">
-          {configured ? <span className="tag tag-ok">已配置</span> : <span className="tag">未配置（匿名）</span>}
+          {configured ? (
+            <span className="tag tag-ok">已配置</span>
+          ) : (
+            <span className="tag">{meta.needsLogin ? "未配置（不可用）" : "未配置（匿名）"}</span>
+          )}
         </InfoRow>
         <InfoRow k="用途">{meta.note}</InfoRow>
       </div>
@@ -182,7 +197,10 @@ function CredentialCard({
             const extra = hosts.length
               ? "会同时退出抓取浏览器里该平台的登录态（无法撤销）。\n\n"
               : ""
-            if (!window.confirm(`清除 ${meta.label} 凭证？\n\n${extra}相关订阅会退回匿名档位。`)) return
+            const after = meta.needsLogin
+              ? "相关订阅会因未登录而无法刷新。"
+              : "相关订阅会退回匿名档位。"
+            if (!window.confirm(`清除 ${meta.label} 凭证？\n\n${extra}${after}`)) return
             setBusy(true)
             try {
               // 先清浏览器登录态，再清 settings：中途失败时不会出现「设置已清、账号还挂着」。

@@ -482,7 +482,7 @@ kbd {
   border-radius: inherit;
   background: #000;
 }
-/* 「实况」播放按钮：压在静态图左下角（列表/详情都不自动播，点击才取视频）。 */
+/* 实况重试按钮：详情切到实况图即自动播，只有隧道失败时才压在静态图左下角。 */
 .social-detail-live {
   position: absolute;
   left: var(--sp-3);

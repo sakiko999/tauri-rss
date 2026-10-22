@@ -672,8 +672,8 @@ export function createDataLayer(): DataLayer {
     }
     // 被动渠道的详情补全同样要遵守「浏览器被动」的承诺(2026-10-19):
     // 把 `{ passive: true }` 交给渠道 —— 走「导航 + 读页面 SSR」,不碰平台 API,
-    // 不支持时返回 null → 原样返回列表 item。**唯一例外**是顶层导航撞上游客登录墙:
-    // 详情是用户主动打开,渠道退回同源匿名文档读取(见 crawler xhs/shared.ts)。
+    // 不支持时返回 null → 原样返回列表 item。渠道**抛错**(登录失效/风控)时不再
+    // 静默回退:调用方的失败态要能显示原因(见下方 catch)。
     const s = await settings.get()
     const info = await sourceInfoFor(sub, s)
     const source = channel.getSource(info)
@@ -693,8 +693,12 @@ export function createDataLayer(): DataLayer {
         channel: sub.channelKey,
         error: e instanceof Error ? e.message : String(e),
       })
+      // ⚠️ 不能吞掉:桌面 social 详情弹窗靠这个 reject 进入失败态。吞掉会让用户
+      // 把列表摘要误认为完整详情(尤其 xhs 登录失效/风控时)。article 调用方
+      // (ReaderMain / mobile)自己 catch 并保留摘要,不受影响。
+      throw e
     }
-    if (!detailItem) return item // 详情失败回退原 item(不空窗)
+    if (!detailItem) return item // 渠道明确不支持(返回 null)→ 原样返回列表 item
     // crawler Item(含完整图文)→ XML → core MediaItem(复用 XML 契约,不新增序列化面)。
     const xml = serializeFeed([detailItem], { channelTitle: channel.name })
     const [detail] = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })

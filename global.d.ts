@@ -188,7 +188,7 @@ declare global {
   }
 
   /**
-   * 浏览器模拟能力(Tauri spawn 系统 Edge + CDP)。微博/小红书反爬强,
+   * 浏览器模拟能力(Tauri WebView2 隐藏窗口 + CDP)。微博/小红书反爬强,
    * 需真实浏览器提供登录态 + JS 签名 + 设备指纹:
    *   - evaluate: 页面上下文执行 JS(如 window._webmsxyw 取 x-s、页面内 fetch 数据),
    *     returnByValue 返回序列化结果 —— CDP 语义(cdp.ts)收敛在 crawler 侧。
@@ -226,9 +226,9 @@ declare global {
     /** 关闭浏览器进程(应用退出)。 */
     close(): Promise<void>
     /**
-     * 清空浏览器 profile(扩展/账户态越养越脏时重置)。实现里会先结束我们的 Edge
-     * 再删目录,下次 browser_ensure 自建全新实例。可选:非 Tauri 后端不提供。
-     * ⚠️ 会掉微博/小红书等靠 Edge profile 的登录态。
+     * 清空浏览器 profile(登录态/缓存)。实现里会先关抓取 webview 再删目录,
+     * 下次 webview_browser_open 自建全新实例。可选:非 Tauri 后端不提供。
+     * ⚠️ 会掉微博/小红书等靠抓取浏览器 profile 的登录态。
      */
     resetProfile?(): Promise<string>
     /**

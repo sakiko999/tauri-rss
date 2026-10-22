@@ -10,9 +10,8 @@ import type { Loginable, LoginResult } from "../../index.ts"
 import { xhsScanLogin } from "@amoeba/resolve"
 
 export class XhsChannelBase implements Loginable {
-  // ⚠️ `passive` 不下放在基类：xhs:user 的匿名路径必须走页面内 fetch（匿名 profile
-  // SSR 抹空 noteId），标成被动会让桌面匿名订阅永远只剩缓存。只有 xhs:explore 是
-  // 登录/匿名都读页面 SSR，由它自己声明。
+  // ⚠️ `passive` 不下放在基类：xhs:user 的翻页要 interactive 滚动，不是纯导航
+  // 采集；只有 xhs:explore 由它自己声明。
 
   scanLogin(
     emitQr: (qrDataUrl: string | null) => void,

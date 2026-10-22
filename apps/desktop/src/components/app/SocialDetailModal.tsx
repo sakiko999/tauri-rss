@@ -16,10 +16,81 @@ import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../Modal.tsx"
 import { Icon } from "../Icon.tsx"
 import { MediaImage, fmtCount } from "@amoeba/ui"
+import { videoReferrerFor } from "@amoeba/host"
 import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { looksLikeHtml } from "../../lib/html.ts"
+
+/**
+ * 实况视频经宿主隧道拉成 Blob URL。
+ *
+ * 详情里**切到实况图即自动拉取并播放**（不再需要点按钮）；`attempt` 递增 = 失败重试。
+ *
+ * ⚠️ 不能直接 `<video src={直链}>`：CDN 对页面源 Referer（dev `localhost:1420` /
+ * 生产 `tauri://localhost`）返回 403 text/html，浏览器再按 ORB 拦成
+ * `MEDIA_ELEMENT_ERROR: Format error`。媒体错误**不进 console**，表现为「实况
+ * 不播且无报错」。`<video>` 上也没有 `referrerPolicy` 可用，只能走 Rust 隧道。
+ * Referer 规则归 host 层（videoReferrerFor），这里不写死域名。
+ */
+function useLiveVideoBlob(src: string | undefined, attempt: number) {
+  const [blobUrl, setBlobUrl] = useState<string | undefined>(undefined)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | undefined>(undefined)
+
+  useEffect(() => {
+    setBlobUrl(undefined)
+    setError(undefined)
+    if (!src) {
+      setLoading(false)
+      return
+    }
+    let cancelled = false
+    setLoading(true)
+    const referrer = videoReferrerFor(src)
+    void (async () => {
+      const res = await globalThis.appHost.http.request({
+        url: src,
+        method: "GET",
+        responseType: "arraybuffer",
+        timeoutMs: 20_000,
+        // 媒体直链不计入平台 RPM / 冷却（与图片隧道同一语义）。
+        policy: { metered: false },
+        ...(referrer ? { headers: { Referer: referrer } } : {}),
+      })
+      if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
+      const ct = (res.headers["content-type"] ?? res.headers["Content-Type"] ?? "video/mp4") as string
+      // arraybuffer 解码出的是独立 ArrayBuffer（无 byteOffset），直接取 buffer。
+      const buf = (res.body as Uint8Array).buffer as ArrayBuffer
+      const url = URL.createObjectURL(new Blob([buf], { type: ct }))
+      if (cancelled) {
+        URL.revokeObjectURL(url)
+        return
+      }
+      // 所有权交给下面的 blobUrl 清理 effect（取消时在上面已 revoke）。
+      setBlobUrl(url)
+    })()
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    // 取消后由上面创建处紧邻的 cancelled 分支 revoke（两步之间没有 await）。
+    return () => {
+      cancelled = true
+    }
+  }, [src, attempt])
+
+  // blobUrl 被替换 / 组件卸载时释放上一个 Blob（视频数据在内存里，不 revoke 会泄漏）。
+  useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [blobUrl])
+
+  return { blobUrl, loading, error }
+}
 
 export function SocialDetailModal() {
   const detail = useDesktop((s) => s.socialDetail)
@@ -29,9 +100,15 @@ export function SocialDetailModal() {
   const multi = imgs.length > 1
   /** 当前展示第几张(仅多图时有意义)。 */
   const [imgIndex, setImgIndex] = useState(0)
-  /** 实况图是否在播。切图/换条目要复位（否则上一张的视频状态带到下一张）。 */
-  const [livePlaying, setLivePlaying] = useState(false)
-  useEffect(() => setLivePlaying(false), [imgIndex, item?.id])
+  /** 实况重试计数：递增触发 hook 重新拉取。 */
+  const [liveRetry, setLiveRetry] = useState(0)
+  /** 视频解码失败（隧道成功但编码不支持等），与隧道错误分开记。 */
+  const [liveDecodeError, setLiveDecodeError] = useState<string | undefined>(undefined)
+  /** 当前图若是实况，取视频直链（统一 https：源站给的是 http，WebView 里会被混合内容拦）。 */
+  const liveVideo = httpsify((imgs[imgIndex] as { liveVideo?: string } | undefined)?.liveVideo)
+  const live = useLiveVideoBlob(liveVideo, liveRetry)
+  const liveFailure = live.error ?? liveDecodeError
+  useEffect(() => setLiveDecodeError(undefined), [imgIndex, item?.id])
   /**
    * ⚠️ 所有 hook 必须在 `if (!detail) return null` **之前**调用。
    * 曾把 useState/useEffect 放在 early return 之后:detail 为 null 时提前返回(少调),
@@ -81,8 +158,6 @@ export function SocialDetailModal() {
   const text = (item as { content?: string }).content ?? item.summary ?? ""
   /** 媒体源兼容:SocialItem 走 images[0];article 类兜 thumbnail/poster。 */
   const cover = mediaUrl(item, imgIndex)
-  /** 当前图若是实况，取视频直链（统一 https：源站给的是 http，WebView 里会被混合内容拦）。 */
-  const liveVideo = httpsify((imgs[imgIndex] as { liveVideo?: string } | undefined)?.liveVideo)
   const stepImg = (d: number) => setImgIndex((i) => (i + d + imgs.length) % imgs.length)
   /** 当前图片真实比例。容器比例 === 图片比例时 contain 恰好填满,不留缝也不裁切。 */
   const imgRatio = (() => {
@@ -165,12 +240,12 @@ export function SocialDetailModal() {
                 ) : null}
                 {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
-                {liveVideo && livePlaying ? (
-                  // 实况图：直链 mp4/302 包装器，静音循环；点一下暂停/续播。
-                  // poster = 静态图（url），不另存首帧。
+                {/* 实况图：切到即自动拉取并静音循环播；点一下暂停/续播。
+                    隧道完成前继续显示静态图（比黑屏/碎播放器可解释）。 */}
+                {liveVideo && live.blobUrl && !liveDecodeError ? (
                   <video
                     className="social-detail-video"
-                    src={liveVideo}
+                    src={live.blobUrl}
                     poster={cover}
                     autoPlay
                     muted
@@ -181,15 +256,19 @@ export function SocialDetailModal() {
                       if (v.paused) void v.play()
                       else v.pause()
                     }}
-                    // 防盗链/过期失败 → 退回静态图，不留一个碎播放器。
-                    onError={() => setLivePlaying(false)}
+                    // 解码失败（编码不支持等）→ 退回静态图，脚注说明原因。
+                    onError={() => setLiveDecodeError("视频无法解码")}
                   />
                 ) : (
                   <MediaImage src={cover} alt={item.title} loading="eager" contain />
                 )}
-                {liveVideo && !livePlaying ? (
-                  <button className="btn btn-secondary btn-sm social-detail-live" onClick={() => setLivePlaying(true)}>
-                    <Icon name="play" size={13} /> 实况
+                {/* 自动播失败时才出现的重试入口（隧道 403/超时/过期）。 */}
+                {liveVideo && live.error && !live.loading ? (
+                  <button
+                    className="btn btn-secondary btn-sm social-detail-live"
+                    onClick={() => setLiveRetry((n) => n + 1)}
+                  >
+                    <Icon name="refresh" size={13} /> 重试
                   </button>
                 ) : null}
               </span>
@@ -249,23 +328,26 @@ export function SocialDetailModal() {
                 ) : null}
               </div>
             ) : null}
-            {/* 源站补全说明:脚注形态,不与正文争权重。 */}
-            <p className="social-detail-note">
-              {resolving ? (
-                <Icon name="loader" size={13} className="animate-spin" />
-              ) : resolveFailed ? (
-                <Icon name="alert" size={13} />
-              ) : (
-                <Icon name="info" size={13} />
-              )}
-              <span>
-                {resolving
-                  ? "正在向源站补全详情…"
-                  : resolveFailed
-                    ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
-                    : "列表只带封面与标题；详情按需补全，不登录也能读全文与多图。"}
-              </span>
-            </p>
+            {/* 状态脚注:只在「补全中 / 补全失败 / 实况加载中 / 实况失败」时出现。
+                完整内容 + 正常播放不需要解释。 */}
+            {resolving || resolveFailed || (liveVideo && (live.loading || liveFailure)) ? (
+              <p className="social-detail-note">
+                {resolving || live.loading ? (
+                  <Icon name="loader" size={13} className="animate-spin" />
+                ) : (
+                  <Icon name="alert" size={13} />
+                )}
+                <span>
+                  {resolving
+                    ? "正在向源站补全详情…"
+                    : liveVideo && live.loading
+                      ? "正在加载实况视频…"
+                      : resolveFailed
+                        ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
+                        : `实况视频加载失败：${liveFailure}（已显示静态图）`}
+                </span>
+              </p>
+            ) : null}
           </div>
 
           {/* 多图缩略图条:直接点选,不必靠左右键一张张翻。放在 info 之后是刻意的

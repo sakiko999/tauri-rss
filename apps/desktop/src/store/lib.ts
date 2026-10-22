@@ -46,7 +46,7 @@ export function sameInfo(a: Record<string, string>, b: Record<string, string>): 
  * refreshAll 里单条订阅的硬超时。
  *
  * 大多数抓取路径已有自己的超时(Rust http_get 默认 20s;xhs 的 waitUntil 15s),
- * 但 browser 通道的 `invoke`(browser_ensure / ws_connect / ws_send)**没有超时**
+ * 但 browser 通道的 `invoke`(webview_browser_open / ws_connect / ws_send)**没有超时**
  * —— 一次不回话就永久占住 withBrowserLock,后面所有浏览器操作排队到天荒地老,
  * 整轮 refreshAll 也就永不完成。这里兜最后一层。
  */

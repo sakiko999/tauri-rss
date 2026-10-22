@@ -7,8 +7,9 @@
 ## 背景
 
 - `xhs:explore` 翻页（Pageable）：SSR `/explore` 的 feed **无游标**（实测
-  nextCursor/cursor/ssrRenderExtra 全空），滚动加载只能走
-  `POST /api/sns/web/v1/homefeed`（cursor_score 游标，需 x-s 签名 + 登录 cookie）。
+  nextCursor/cursor/ssrRenderExtra 全空），滚动加载的请求由**页面自己**发
+  `POST /api/sns/web/v1/homefeed`（平台签名）；我们只读滚动后的页面 state 增量，
+  不自行构造签名请求。
 - 既有签名实现：`packages/xhshow/`（**已从主分支移除**——当前仓库无此包；主分支
   `resolve/src/platform/xhs/client.ts` 的 `signApiHeaders` 已降级为直接抛错。相关签名分支
   在本仓库不存在，移植计划见文件末）。
@@ -100,7 +101,8 @@ x-s, x-s-common, x-t, x-b3-traceid, x-xray-traceid, x-mns, xy-direction
 社区动向：MediaCrawler 在 2025-10/11 连续签名失效后**整体转向 Playwright 浏览器自动化**（「无需 JS 逆向，通过 JS 表达式获取签名参数」），放弃纯算法维护——用脚投票。
 
 **维护决策（记录，暂缓执行）**：倾向**放弃 xhs 签名 API 维护，xhs 降级为「SSR 匿名刷新」**：
-1. `xhs:explore` 保持 SSR 匿名快照 + 刷新语义（与 weibo 同定位），**不做翻页**。
+1. `xhs:explore` 保持 SSR 路线（2026-10-22 起要求登录；翻页为滚动驱动、读页面 state 增量），
+   **不走我们自己的 homefeed 签名 API**。
 2. `xhs:user` 长期不可用（需签名 + b1 指纹，纯算法无解）。
 3. explore 的 Pageable / homefeed / POST 签名代码**已回滚清理**（2026-08-14 /simplify）。
 4. 若将来需要 xhs 深度数据，走**浏览器注入签名**（Playwright/WebView 取签名喂给 appHost）——另一个量级的架构投入，非当前目标。
@@ -181,9 +183,10 @@ CLAUDE.md 记「原 TS fork 过时（2026-07 升级签名后 461）」——**�
 
 ### 结论：**维持不重启签名方案**
 
-我们已选定「SSR 匿名 + 浏览器登录容器」，`xhs:explore` / 笔记详情匿名可用、
-`xhs:user` 走浏览器滚动——**够用**。重启纯算法的收益仅是 `xhs:user` 分页转 HTTP，
-代价是背上一份「1 月~1 季一失效、需跟上游」的依赖（且当前上游正失效中）。
+我们已选定「SSR + 浏览器登录容器」（2026-10-22 起**全渠道要求登录，匿名态已移除**），
+`xhs:explore` / 笔记详情读登录态 SSR、`xhs:user` 走浏览器滚动——**够用**。
+重启纯算法的收益仅是 `xhs:user` 分页转 HTTP，代价是背上一份「1 月~1 季一失效、需跟上游」
+的依赖（且当前上游正失效中）。
 
 **触发重启的条件**（满足其一再评估）：
 - 上游恢复维护且连续 2 个版本稳定；

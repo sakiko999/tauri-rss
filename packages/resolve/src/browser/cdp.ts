@@ -1,15 +1,15 @@
 /**
  * browser/cdp — 浏览器模拟抓取的 CDP 薄层。
  *
- * 微博/小红书反爬强,需真实浏览器提供登录态(Edge profile cookie)+ 设备指纹。
- * 生产宿主是 `appHost.browser`(Tauri spawn 系统 Edge + CDP,见 packages/host
+ * 微博/小红书反爬强,需真实浏览器提供登录态(抓取浏览器 profile cookie)+ 设备指纹。
+ * 生产宿主是 `appHost.browser`(Tauri WebView2 隐藏窗口 + CDP,见 packages/host
  * tauri/browser-backend.ts);本模块在其 `evaluate` 之上封装页面级操作:
- *   - cdpFetch:  页面上下文 fetch(自动带 Edge profile 登录态 cookie),返回
+ *   - cdpFetch:  页面上下文 fetch(自动带 profile 登录态 cookie),返回
  *                 { status, bodyText }(形状对齐 host.ts 的 httpGet);
  *   - cdpJson:   页面内 fetch JSON(weibo API);
  *   - cdpNavigate:导航到 URL 并等待就绪(默认同址不重载保留 SPA state;forceReload 强刷)。
  *
- * ⚠️ 单 Edge 实例被多平台 channel(weibo/xhs)以 **lane tab** 共享(风控 §3.13):
+ * ⚠️ 单浏览器实例被多平台 channel(weibo/xhs)以 **lane target** 共享(风控 §3.13):
  * 「导航到目标域 + 同域 fetch」必须用 `withBrowserOp` 包成原子单元(同 lane 串行,
  * 列表/详情/登录各有独立 tab),否则并发刷新互相抢页面(页面停在别的域 fetch →
  * 跨域 Failed to fetch / 匿名 406)。宿主缺 `browser.tab` 时各 lane 回落默认页,
