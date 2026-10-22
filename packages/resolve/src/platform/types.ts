@@ -16,6 +16,19 @@ export interface PlatformRequestOptions {
   headers?: Record<string, string>
 }
 
+/**
+ * 浏览器 profile 的登录 cookie 快照(应用启动时对齐 settings 用)。
+ * `null` = 浏览器里没有登录标记(不能当成「确定已登出」,见 core syncBrowserCookies)。
+ */
+export interface LoginCookieSnapshot {
+  /** `k=v; k2=v2`(含 HttpOnly;按 key 排序,便于比较)。 */
+  cookie: string
+  /**
+   * 平台侧可得的最佳身份线索,仅用于日志(weibo=SUBP,不是 uid;xhs=user_id,可能缺失)。
+   */
+  user_id?: string
+}
+
 /** 平台请求客户端统一接口 —— 带平台签名/UA/cookie 的请求 + 弹幕流能力。 */
 export interface PlatformClient {
   /** JSON 请求(有 JSON API 的平台实现;纯页面/专用协议平台如 huya/youtube 可省)。 */

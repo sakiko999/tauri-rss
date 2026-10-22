@@ -800,8 +800,10 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   WebView2 没有 Edge 的账户上层（不会注入 `.msn/.bing` cookie）。要清空 profile 用
   「存储与诊断 → 清理浏览器数据」（先关 webview 再删目录）；不要按镜像名 `taskkill`
   杀用户正在用的 Edge。
-- **生命周期（2026-10-22 修正）**：懒创建（启动不建）；`close` 用 `destroy()` 并等到窗口
-  销毁 + 端口释放；`open` 以 CDP 端口可连为就绪判据，端口被孤儿进程占用时先 `taskkill /T`。
+- **生命周期（2026-10-22 修正）**：懒创建（第一次抓取才建；例外：启动后 1.5s 的
+  cookie 快照同步会在有**启用的** weibo 订阅时拉起一次，只读 cookie、不导航）；`close` 用
+  `destroy()` 并等到窗口销毁 + 端口释放；`open` 以 CDP 端口可连为就绪判据，端口被
+  孤儿进程占用时先 `taskkill /T`。
   ⚠️ 抓取 webview 是**第二个窗口**：只关主窗口时 Tauri 不会自动退出（windows 集合非空），
   `lib.rs` 在 `main` 窗口 `Destroyed` 时显式 `exit(0)`。
 - **抓取实例的性能开关**（`browser_args()`，都只影响浏览器自己，不动 UA/指纹）：

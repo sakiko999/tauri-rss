@@ -26,6 +26,12 @@ export interface SourceInfoField {
 /** 订阅实例化参数(Record 形状,与 crawler SourceInfo 一致)。 */
 export type SourceInfo = Record<string, string>
 
+/** 浏览器 profile 登录 cookie 快照(结构兼容 crawler 的 LoginCookieSnapshot)。 */
+export interface LoginCookieSnapshot {
+  cookie: string
+  user_id?: string
+}
+
 /**
  * 一个渠道 —— 纯描述(kind 是 item 默认 kind);getSource 才承担抓取与懒解析能力。
  * 结构兼容 crawler 的 RssChannel;能力(VideoPlayable 等)照旧在 getSource 返回对象
@@ -44,6 +50,8 @@ export interface RssChannel {
   readonly defaultInfo?: SourceInfo
   /** 该渠道正常路径 = 浏览器被动采集（渠道属性;有浏览器时只调 fetchPassive）。 */
   readonly passive?: boolean
+  /** 启动快照(可选):只读浏览器 profile 的登录 cookie;未登录 null。 */
+  readLoginCookie?(browser: BrowserBackend): Promise<LoginCookieSnapshot | null>
   /** 按 info(url/uid/…)实例化一个可抓取的 source。 */
   getSource(info: SourceInfo): RssSource
 }

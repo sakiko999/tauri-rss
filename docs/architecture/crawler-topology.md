@@ -189,7 +189,11 @@ webview 必须配不同 data dir」），TS 后端调 `webview_browser_open/set_
 
 **生命周期契约**（2026-10-22 修正，改这里前先读）：
 
-- **懒创建**：启动不建 webview，第一次抓取才建；空闲回收（3 分钟）关掉后不会被开机重新拉起。
+- **懒创建**：第一次抓取才建；空闲回收（3 分钟）关掉后不会被开机重新拉起。
+  **唯一例外**：启动后 1.5s 的登录 cookie 快照同步（`DataLayer.syncBrowserCookies`）——
+  存在**启用的** weibo 订阅时主动拉起一次（weiboCookie 是桌面 HTTP 消费方），只读
+  `Network.getCookies`（不导航），读完交给空闲回收关闭；xhsCookie 无桌面消费方，
+  只在浏览器已因 weibo 被拉起时顺带读。停用/无订阅的平台不会拉起浏览器。
 - `open` 的就绪判据是 **CDP 端口真的可连**，不是「窗口对象存在」；半启动 / 端口未就绪时
   销毁重建，不会把假端口交给 TS。
 - `close` 用 `destroy()` 并**等到窗口销毁 + 端口释放**才返回（`open/close/reset/set_mode`

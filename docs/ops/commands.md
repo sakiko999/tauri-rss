@@ -53,6 +53,7 @@ bun packages/core/src/reading-position.check.ts         # 续播落库判据（�
 bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
 bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/去重/冷却/分档/并发）
 bun packages/core/src/example/passive-mode.check.ts     # 被动采集（只走 fetchPassive / autoRefresh / 覆盖投影）
+bun packages/core/src/example/cookie-sync.check.ts      # 启动 cookie 快照（标记/去重/不清空/compare-and-set/订阅门槛）
 bun packages/crawler/src/example/bili-popular.check.ts  # bili 热门 payload → Item 字段映射
 bun packages/crawler/src/example/twitch-live.check.ts   # Twitch GQL → Live 映射（频道 live/offline + 热门/分区流列表）
 bun packages/crawler/src/example/youtube-channels.check.ts # YouTube 直播页栏目解析 + playlistId 归一

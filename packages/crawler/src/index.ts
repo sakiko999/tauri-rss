@@ -101,6 +101,16 @@ export interface LoginResult {
   alreadyLoggedIn?: boolean
 }
 
+/**
+ * 浏览器 profile 的登录 cookie 快照(应用启动时 core 用它对齐 settings)。
+ * `null` = 浏览器里没有登录标记,**不等于确定登出**(见 core syncBrowserCookies)。
+ */
+export interface LoginCookieSnapshot {
+  /** `k=v; k2=v2`(含 HttpOnly;按 key 排序,便于稳定比较)。 */
+  cookie: string
+  user_id?: string
+}
+
 /** 翻页能力(可选能力):列表源(直播 hot 等)可翻页加载更多。 */
 export interface Pageable {
   /**
@@ -179,6 +189,12 @@ export interface RssChannel {
    * 声明与实现不一致时被动路径会退化为缓存。
    */
   readonly passive?: boolean
+  /**
+   * 启动快照能力(可选):从浏览器 profile **只读**当前登录 cookie,供 core 在
+   * 应用启动时把 settings 里的凭证快照对齐到浏览器。不得导航/发请求;未登录返回
+   * `null`。只有浏览器路径登录的渠道实现(bili 纯 HTTP、douyin HTTP 优先 → 不实现)。
+   */
+  readLoginCookie?(browser: BrowserBackend): Promise<LoginCookieSnapshot | null>
   /** 按 info(url/uid/…)实例化一个可抓取的 source(行为载体);返回类型可按需收窄成 RssSource & VideoPlayable 等。 */
   getSource(info: SourceInfo): RssSource
 }

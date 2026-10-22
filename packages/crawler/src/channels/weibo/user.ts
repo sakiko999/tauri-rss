@@ -14,9 +14,17 @@
  */
 import type { Item } from "@amoeba/xml"
 import type { SerializeOptions } from "@amoeba/xml"
-import type { LoginResult, Loginable, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type {
+  LoginCookieSnapshot,
+  LoginResult,
+  Loginable,
+  Pageable,
+  RssChannel,
+  RssSource,
+  SourceInfo,
+} from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
-import { WB_BASE, apiHeaders, mblogCardsToItems, weiboClient, weiboScanLogin } from "@amoeba/resolve"
+import { WB_BASE, apiHeaders, mblogCardsToItems, readWeiboLoginCookie, weiboClient, weiboScanLogin } from "@amoeba/resolve"
 import { cdpJson, cdpNavigate, withBrowserOp } from "@amoeba/resolve"
 
 export class WeiboUserChannel implements RssChannel, Loginable {
@@ -37,6 +45,11 @@ export class WeiboUserChannel implements RssChannel, Loginable {
     const browser = globalThis.appHost?.browser
     if (!browser) throw new Error("微博扫码登录需 Tauri 桌面环境(未注入 appHost.browser)")
     return weiboScanLogin(browser, emitQr, opts)
+  }
+
+  /** 启动快照:只读浏览器 profile 的登录 cookie(优先 m.weibo.cn,见 resolve snapshot.ts)。 */
+  readLoginCookie(browser: BrowserBackend): Promise<LoginCookieSnapshot | null> {
+    return readWeiboLoginCookie(browser)
   }
 
   getSource(info: SourceInfo): RssSource & Pageable {

@@ -9,9 +9,16 @@
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
 import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
-import { getDanmakuByUrl, resolveLivePlayByUrl as resolveLiveByUrl, resolvePlayByUrl as resolveVideoByUrl } from "@amoeba/resolve"
-import { setPlatformCookieLookup } from "@amoeba/resolve"
-import { getChannel, listChannels as listAllChannels } from "./source/index.ts"
+import {
+  getDanmakuByUrl,
+  parseCookieDict,
+  resolveLivePlayByUrl as resolveLiveByUrl,
+  resolvePlayByUrl as resolveVideoByUrl,
+  serializeCookieDict,
+  setPlatformCookieLookup,
+  withBrowserOpSlot,
+} from "@amoeba/resolve"
+import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { serializeFeed } from "@amoeba/xml"
 import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
@@ -99,6 +106,14 @@ export interface DataLayer {
     emitQr: (qrDataUrl: string | null) => void,
     opts?: { timeoutMs?: number; signal?: AbortSignal },
   ): Promise<LoginResult>
+  /**
+   * 启动时把 settings 里的浏览器登录 cookie 快照对齐到抓取浏览器 profile。
+   *
+   * 只处理**有启用订阅**的平台;桌面 HTTP 消费方(weiboCookie)优先,其余平台只在
+   * 浏览器已被拉起时顺带同步。浏览器无登录标记时**不清空**;compare-and-set 防住
+   * 与用户保存/扫码的并发覆盖。返回实际更新的 settings 字段。
+   */
+  syncBrowserCookies(): Promise<Array<keyof AppSettings>>
 }
 
 /**
@@ -123,6 +138,18 @@ export function cookieFieldFor(channelKey: string): keyof AppSettings | undefine
   // ⚠️ 抖音渠道前缀是 live:douyin*(不是 douyin:)——platformOf 同款规则。
   if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
   return undefined
+}
+
+/**
+ * settings cookie 字段的**桌面 HTTP 消费方** —— 只有它们值得为快照同步单独拉起
+ * 抓取浏览器(~1GB,空闲 3 分钟回收)。xhsCookie 在桌面没有数据消费方(xhs 全走
+ * 浏览器,settings 只剩账号页展示),只在浏览器已因其它字段被拉起时顺带同步。
+ */
+const DESKTOP_COOKIE_CONSUMER_FIELDS: ReadonlySet<keyof AppSettings> = new Set(["weiboCookie"])
+
+/** cookie 串 → 按 key 排序的规范形(比较用;快照落库的就是这个形)。 */
+function normalizeCookie(v: unknown): string {
+  return serializeCookieDict(parseCookieDict(typeof v === "string" ? v : ""))
 }
 
 /** 平台名(governor 分类语义:bili/weibo/xhs/douyin)→ settings cookie 字段。 */
@@ -168,7 +195,9 @@ export function createDataLayer(): DataLayer {
   void settings
     .get()
     .then(async (s) => {
-      cookieSnapshot = s
+      // ⚠️ 只在尚未被写入时填充:启动同步/扫码可能已先一步把更新的快照写进来,
+      // 这里的初始读取落地更晚时不能把它覆盖回旧值。
+      if (!cookieSnapshot) cookieSnapshot = s
       const folded = foldChannelLevels(s.netLevels)
       if (!folded) {
         syncNetPolicy(s)
@@ -786,6 +815,18 @@ export function createDataLayer(): DataLayer {
     }))
   }
 
+  /**
+   * 写 settings 并同步运行时投影。
+   * ⚠️ 内部写 cookie 也必须走这里:credentials provider 读的是 `cookieSnapshot`,
+   * 只写 repo 会让 HTTP 回落路径在下一轮 refresh 前继续用旧 cookie。
+   */
+  async function applySettings(patch: Partial<AppSettings>): Promise<AppSettings> {
+    const next = await settings.set(patch)
+    syncNetPolicy(next)
+    cookieSnapshot = next
+    return next
+  }
+
   /** 扫码登录:校验 Loginable → 委托 channel → 成功按平台前缀落 settings cookie。 */
   async function scanLogin(
     channelKey: string,
@@ -798,8 +839,91 @@ export function createDataLayer(): DataLayer {
     const result = await channel.scanLogin(emitQr, opts)
     // 按 channelKey 平台前缀落对应 cookie 字段(sourceInfoFor 自动注入后续订阅)。
     const field = cookieFieldFor(channelKey)
-    if (field) await settings.set({ [field]: result.cookie } as Partial<AppSettings>)
+    if (field) await applySettings({ [field]: result.cookie } as Partial<AppSettings>)
     return result
+  }
+
+  /**
+   * compare-and-set 版 applySettings(比对与写入在 repo 同一串行临界区内完成)。
+   * `expected` 与当前值不一致(期间用户保存/扫码写过)→ 返回 null,放弃本次写入。
+   */
+  async function applySettingsIfUnchanged(
+    expected: Partial<AppSettings>,
+    patch: Partial<AppSettings>,
+  ): Promise<AppSettings | null> {
+    const next = await settings.setIfUnchanged(expected, patch)
+    if (!next) return null
+    syncNetPolicy(next)
+    cookieSnapshot = next
+    return next
+  }
+
+  /**
+   * 应用启动时的浏览器登录 cookie 快照同步。
+   *
+   * 扫码只写一次 settings,而浏览器会随访问轮换 cookie;桌面抓取走 profile 不受影响,
+   * 但桌面 HTTP 回落路径(weibo 长文展开/热搜词)用的 settings 快照会变旧。
+   * 这里在启动后把自己的快照对齐到浏览器。
+   *
+   * 语义边界(避免静默写错 / 白付资源):
+   *   - 只处理**有启用订阅**的平台 —— 停用/无订阅都没有本轮消费方,不为一张残留
+   *     快照拉起 ~1GB 的隐藏 WebView2;
+   *   - 只有 `DESKTOP_COOKIE_CONSUMER_FIELDS`(weiboCookie)单独值得拉起浏览器;
+   *     其余平台(xhsCookie,桌面无数据消费方)只在浏览器已被拉起时**顺带**读一次;
+   *   - 浏览器里没有登录标记 → **保留**现有快照(无法区分「登出」与「profile 被重置」,
+   *     不能据此清掉用户手填/上次登录的凭证);
+   *   - 读浏览器与写 settings 经 `setIfUnchanged` 原子比对写入,并与「清除凭证 /
+   *     清理浏览器数据」的独占段互斥(`withBrowserOpSlot`);expected 用循环开始时的
+   *     不可变基线,期间用户对任何字段的改动都会让本次写入放弃。
+   */
+  async function syncBrowserCookies(): Promise<Array<keyof AppSettings>> {
+    const browser = globalThis.appHost?.browser
+    if (!browser) return []
+    const subs = await repo.list()
+    const baseline = await settings.get()
+    /** 同一字段只取第一个实现(同平台多渠道共享 cookie 字段)。 */
+    const candidates = new Map<keyof AppSettings, (b: BrowserBackend) => Promise<LoginCookieSnapshot | null>>()
+    for (const ch of listAllChannels()) {
+      const read = ch.readLoginCookie?.bind(ch)
+      if (!read) continue
+      const field = cookieFieldFor(ch.key)
+      if (!field || candidates.has(field)) continue
+      if (!subs.some((s) => s.enabled && cookieFieldFor(s.channelKey) === field)) continue
+      candidates.set(field, read)
+    }
+    // 桌面消费方排前面(它们单独值得拉起浏览器);其余按「浏览器已开着」顺带。
+    const rank = (f: keyof AppSettings) => (DESKTOP_COOKIE_CONSUMER_FIELDS.has(f) ? 0 : 1)
+    const ordered = [...candidates.entries()].sort((a, b) => rank(a[0]) - rank(b[0]))
+
+    const updated: Array<keyof AppSettings> = []
+    let browserOpened = false
+    for (const [field, read] of ordered) {
+      if (!DESKTOP_COOKIE_CONSUMER_FIELDS.has(field) && !browserOpened) continue
+      try {
+        // 与 clearCookies/resetProfile 的独占段互斥:读到的 cookie 与写回 settings 必须原子。
+        await withBrowserOpSlot(async () => {
+          const snap = await read(browser)
+          browserOpened = true
+          if (!snap) return
+          // 启动以来快照相同 → 不写;用户已改过该字段 → setIfUnchanged 返回 null 放弃。
+          if (normalizeCookie(baseline[field]) === normalizeCookie(snap.cookie)) return
+          const next = await applySettingsIfUnchanged(
+            { [field]: baseline[field] } as Partial<AppSettings>,
+            { [field]: snap.cookie } as Partial<AppSettings>,
+          )
+          if (!next) return
+          updated.push(field)
+          log.log("info", "browser cookie snapshot synced", { field, user_id: snap.user_id })
+        })
+      } catch (e) {
+        // 浏览器起不来 / CDP 被回收 / 端口被占:只记录,不影响启动与其它平台。
+        log.log("warn", "browser cookie snapshot failed", {
+          field,
+          error: e instanceof Error ? e.message : String(e),
+        })
+      }
+    }
+    return updated
   }
 
   function channelKind(channelKey: string): MediaKind | undefined {
@@ -894,12 +1018,8 @@ export function createDataLayer(): DataLayer {
     // 播放解析不经过 doRefresh —— 改完等级后先点「加载更多」仍按旧档执行。
     settings: {
       get: () => settings.get(),
-      async set(patch) {
-        const s = await settings.set(patch)
-        syncNetPolicy(s)
-        cookieSnapshot = s // provider 快照同步(改 cookie 字段后下一跳立即生效)
-        return s
-      },
+      set: applySettings,
+      setIfUnchanged: applySettingsIfUnchanged,
       async reset() {
         const s = await settings.reset()
         syncNetPolicy(s)
@@ -922,5 +1042,6 @@ export function createDataLayer(): DataLayer {
     loadMore,
     totalOf: (id) => pageTotals.get(id),
     scanLogin,
+    syncBrowserCookies,
   }
 }

@@ -9,6 +9,12 @@ const STORAGE_KEY = "settings"
 export interface SettingsRepository {
   get(): Promise<AppSettings>
   set(patch: Partial<AppSettings>): Promise<AppSettings>
+  /**
+   * compare-and-set:`expected` 的每个 key 与当前值一致才写入,否则返回 null。
+   * 比对与写入在同一个串行临界区内完成 —— 并发 set 不可能插进两者之间
+   * (get() 不进串行链,「先 get 比对再 set」防不住 last-write-wins)。
+   */
+  setIfUnchanged(expected: Partial<AppSettings>, patch: Partial<AppSettings>): Promise<AppSettings | null>
   reset(): Promise<AppSettings>
 }
 
@@ -74,6 +80,17 @@ export function createSettingsRepository(storage: StorageBackend): SettingsRepos
     async set(patch) {
       return run(async () => {
         const next: AppSettings = { ...(await load()), ...patch }
+        await storage.set(STORAGE_KEY, JSON.stringify(next))
+        return next
+      })
+    },
+    async setIfUnchanged(expected, patch) {
+      return run(async () => {
+        const cur = await load()
+        for (const k of Object.keys(expected) as Array<keyof AppSettings>) {
+          if (cur[k] !== expected[k]) return null
+        }
+        const next: AppSettings = { ...cur, ...patch }
         await storage.set(STORAGE_KEY, JSON.stringify(next))
         return next
       })

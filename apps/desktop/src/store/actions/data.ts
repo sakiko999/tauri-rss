@@ -8,7 +8,7 @@ import { PAGE_SIZE } from "../selectors.ts"
 import { applyRuntimeSettings, REFRESH_TIMEOUT_MS, withTimeout } from "../lib.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
 
-type DataActions = Pick<DesktopState, "init" | "refresh" | "refreshAll" | "loadMore">
+type DataActions = Pick<DesktopState, "init" | "syncBrowserCookies" | "refresh" | "refreshAll" | "loadMore">
 
 /** init 幂等(StrictMode 双 effect 用同一个 promise 去重)。 */
 let initPromise: Promise<void> | null = null
@@ -58,8 +58,30 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           // ready 也要给出去:失败页是真内容,再压在骨架下面用户就看不到错误了。
           set({ initError: e instanceof Error ? e.message : String(e), ready: true })
         }
+        // 首屏落稳后把 settings 的登录 cookie 快照对齐到抓取浏览器(扫码只写一次,
+        // 浏览器会随访问轮换)。⚠️ 不 await、不放进 try:冷启动 WebView2 失败不能把
+        // 可用的应用变成 initError 错误页;延迟 1.5s 避免与首屏渲染/首轮刷新抢主线程。
+        if (!get().initError) {
+          setTimeout(() => {
+            if (!get().initError) void get().syncBrowserCookies()
+          }, 1_500)
+        }
       })()
       return initPromise
+    },
+
+    async syncBrowserCookies() {
+      const dl = get().dl
+      // 离线模式不拉起浏览器;init 失败(dl 为空)也跳过。
+      if (!dl || get().offline) return
+      try {
+        const fields = await dl.syncBrowserCookies()
+        // 有写入才重读整份 settings:不要用「同步结果」当 patch 覆盖用户刚保存的凭证。
+        if (fields.length) set({ settings: await dl.settings.get() })
+      } catch (e) {
+        // 后台任务:浏览器/CDP 起不来不能影响应用,也不弹 toast。
+        console.warn("[cookie-sync]", e)
+      }
     },
 
     async refresh(id, opts) {

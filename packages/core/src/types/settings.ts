@@ -83,9 +83,16 @@ export interface AppSettings {
    * ⚠️ 旧「bilibili-cookie.ts 本地手动占位」机制已移除(2026-10-21)——登录态统一走本字段。
    */
   bilibiliCookie: string
-  /** 微博登录 cookie(浏览器复制完整串,含 SUB)。作 core 层默认:weibo:* 订阅自动带上。 */
+  /**
+   * 微博登录 cookie(浏览器复制完整串,含 SUB)。作 core 层默认:weibo:* 订阅自动带上。
+   * 桌面有浏览器时,启动会按 profile 的 m.weibo.cn 登录态刷新本字段(见
+   * DataLayer.syncBrowserCookies);无登录标记时保留原值。
+   */
   weiboCookie: string
-  /** 小红书登录 cookie(浏览器复制完整串)。作 core 层默认:xhs:* 订阅自动带上。 */
+  /**
+   * 小红书登录 cookie(浏览器复制完整串)。桌面 xhs 抓取全走浏览器、不读本字段;
+   * 启动同步只在浏览器已因 weibo 被拉起时顺带刷新(同上),无登录标记保留原值。
+   */
   xhsCookie: string
   /** 抖音登录 cookie(扫码或浏览器复制)。作 core 层默认:live:douyin* 订阅自动带上,解锁原画档位。 */
   douyinCookie: string

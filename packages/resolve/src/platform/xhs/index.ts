@@ -4,3 +4,4 @@
  */
 export * from "./client.ts"
 export * from "./login.ts"
+export * from "./snapshot.ts"

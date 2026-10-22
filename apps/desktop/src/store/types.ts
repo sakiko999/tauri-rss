@@ -136,6 +136,8 @@ export interface DesktopState {
   toasts: Toast[]
 
   init(): Promise<void>
+  /** 启动后台对齐浏览器登录 cookie 快照(不阻塞首屏;失败只记录)。 */
+  syncBrowserCookies(): Promise<void>
   select(nodeId: string | null): void
   loadHotWord(word: string): Promise<void>
   setQuery(q: string): void

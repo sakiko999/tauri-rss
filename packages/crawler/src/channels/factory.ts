@@ -74,6 +74,8 @@ export interface ApiChannelSpec {
   defaultInfo?: SourceInfo
   /** 平台级扫码登录(popular 等 Loginable 渠道);结构兼容,isLoginable 据此探测。 */
   scanLogin?: Loginable["scanLogin"]
+  /** 启动快照(浏览器登录的渠道);结构兼容,core 按方法存在性探测。 */
+  readLoginCookie?: RssChannel["readLoginCookie"]
   /** 频道标题与链接(链接可为常量或按 info 生成)。 */
   channelTitle: (info: SourceInfo) => string
   channelLink: string | ((info: SourceInfo) => string)
@@ -118,6 +120,7 @@ export function makeApiChannel(spec: ApiChannelSpec): RssChannel {
     ...(spec.defaultInfo ? { defaultInfo: spec.defaultInfo } : {}),
     getSource: source,
     ...(spec.scanLogin ? { scanLogin: spec.scanLogin } : {}),
+    ...(spec.readLoginCookie ? { readLoginCookie: spec.readLoginCookie } : {}),
   } as RssChannel
 }
 

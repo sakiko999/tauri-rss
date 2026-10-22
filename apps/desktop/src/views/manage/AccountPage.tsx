@@ -131,11 +131,15 @@ function CredentialCard({
   const meta = PLATFORM_META[platform]!
   const [draft, setDraft] = useState(value)
   const [busy, setBusy] = useState(false)
-
-  // 外部(扫码成功写库)改了值 → 同步进输入框。
-  useEffect(() => setDraft(value), [value])
-
   const dirty = draft !== value
+
+  // 外部(扫码成功写库 / 启动时的浏览器快照同步)改了值 → 同步进输入框。
+  // ⚠️ 只在**未编辑**时跟随:启动 1.5s 后的后台同步可能落在用户粘贴到一半的瞬间,
+  // 无条件 setDraft 会把未保存的输入静默覆盖掉(保存按钮还因 dirty 复位而置灰)。
+  useEffect(() => {
+    if (!dirty) setDraft(value)
+  }, [value, dirty])
+
   const configured = !!value
 
   return (

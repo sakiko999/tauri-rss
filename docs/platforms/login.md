@@ -177,6 +177,30 @@ core/src/settings.ts                   # 认证对象扩展: 平台登录凭证(
 - **凭证安全**：cookie + refresh_token 属敏感凭证，存 localStorage/settings 前需
   评估（桌面本地应用可接受，但避免进 git）。
 
+### 启动 cookie 快照同步（2026-10-23 已落地）
+
+扫码只在成功时把 cookie 写一次 settings；浏览器 profile 会随访问轮换 cookie，而桌面
+HTTP 路径（weibo 长文展开 `/statuses/extend`、热搜词搜索）读的是 settings 快照。桌面
+启动时 `DataLayer.syncBrowserCookies()` 后台对齐一次（`init` 落定后 1.5s，不阻塞首屏）：
+
+- **只读**：`browser.getCookies`（含 HttpOnly），不导航、不发平台请求。
+- **xhs 标记 = `id_token`**：`web_session` 对游客也签发；`user_id` 可能残留/短信登录不种。
+  实测匿名 Edge 会话没有 `id_token`，扫码登录的 profile 有。
+- **weibo 优先 `https://m.weibo.cn`**（`WB_BASE` 消费域），缺失才回落 `weibo.com`；
+  不合并两域（扁平 Record 会丢同名 SUB/SUBP 的域信息）。
+- **消费方门槛**：只处理**有启用订阅**的平台；只有 `weiboCookie` 是桌面 HTTP 消费方、
+  单独值得拉起浏览器。`xhsCookie` 在桌面没有数据消费方（xhs 全走浏览器，settings 只剩
+  账号页展示）→ 只在浏览器已因 weibo 被拉起时**顺带**同步，不为它单独启动。
+  bili / douyin 不参与（bili 纯 HTTP；douyin 登录 HTTP 优先，浏览器会话可能更旧）。
+- **只读不改坏**：浏览器无登录标记时**不清空** settings（无法区分登出与 profile 重置）；
+  读+写在 `withBrowserOpSlot` 内与「清除凭证/清理浏览器数据」互斥；写经
+  `setIfUnchanged` 原子比对（比对与写入同一串行临界区），期间用户保存/扫码写过就放弃。
+- **存储边界**：mobile / CLI 各持独立 settings，桌面这次写入到不了它们；mobile 若要
+  同等快照需在自己的启动流程里自行调用。
+- 代价：有启用的 xhs/weibo 订阅时，启动会拉起一次隐藏 WebView2（约 1GB，空闲 3 分钟
+  回收）；只有停用/无订阅的平台不会拉起。
+- 自检：`bun packages/core/src/example/cookie-sync.check.ts`。
+
 ---
 
 ## 7. 待实测确认项

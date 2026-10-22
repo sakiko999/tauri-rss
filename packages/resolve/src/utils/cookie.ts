@@ -18,3 +18,16 @@ export function parseCookieDict(str: string): Record<string, string> {
 export function extractCookie(cookie: string, key: string): string {
   return parseCookieDict(cookie)[key] ?? ""
 }
+
+/**
+ * 字典 → cookie 串(按 key 排序)。
+ *
+ * 只给**快照落库/比较**用:顺序稳定,才能判断「启动时浏览器 cookie 是否变化」。
+ * 登录流程返回给用户的串仍用各自的原序序列化,不改成这个(避免无谓的字节变化)。
+ */
+export function serializeCookieDict(cookies: Record<string, string>): string {
+  return Object.keys(cookies)
+    .sort()
+    .map((k) => `${k}=${cookies[k]}`)
+    .join("; ")
+}

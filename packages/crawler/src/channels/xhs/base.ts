@@ -6,8 +6,8 @@
  * 可能在 shared 求值完成前 `extends XhsChannelBase` → TDZ。基类不依赖 shared,
  * 拆出来后 user/explore 可以安全地先拿基类、再用 shared 的函数。
  */
-import type { Loginable, LoginResult } from "../../index.ts"
-import { xhsScanLogin } from "@amoeba/resolve"
+import type { Loginable, LoginCookieSnapshot, LoginResult } from "../../index.ts"
+import { readXhsLoginCookie, xhsScanLogin } from "@amoeba/resolve"
 
 export class XhsChannelBase implements Loginable {
   // ⚠️ `passive` 不下放在基类：xhs:user 的翻页要 interactive 滚动，不是纯导航
@@ -20,5 +20,10 @@ export class XhsChannelBase implements Loginable {
     const browser = globalThis.appHost?.browser
     if (!browser) throw new Error("扫码登录需 Tauri 桌面环境(未注入 appHost.browser)")
     return xhsScanLogin(browser, emitQr, opts)
+  }
+
+  /** 启动快照:只读浏览器 profile 的登录 cookie(不导航;标记与判据见 resolve snapshot.ts)。 */
+  readLoginCookie(browser: BrowserBackend): Promise<LoginCookieSnapshot | null> {
+    return readXhsLoginCookie(browser)
   }
 }
