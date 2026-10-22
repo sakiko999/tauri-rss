@@ -182,10 +182,11 @@ channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fe
 （Copilot 130MB + discover-chat browser_ui 30MB + 它拉起的 VideoCaptureService 128MB）——
 这层 CDP 关不掉、flags 也挡不住。Tauri 自己的 WebView2 没有这一层。
 
-**做法**（分支 `feat/webview2-browser`，`apps/src-tauri/src/spike.rs`）：
-`cfg(windows + debug_assertions)` + `SPIKE_WEBVIEW=1` 时用 `WebviewWindowBuilder` 建一个
-隐藏 webview，**独立 `data_directory`** + 独立 `--remote-debugging-port=9334`（Tauri 文档要求
-「参数不同的 webview 必须配不同 data dir」）。正式 `browser_ensure` 路径未改动。
+**做法**（分支 `feat/webview2-browser`，`apps/src-tauri/src/webview_browser.rs`）：
+分支上已**默认启用**——启动时用 `WebviewWindowBuilder` 建一个隐藏 webview（独立
+`data_directory` + `--remote-debugging-port=9334`，Tauri 文档要求「参数不同的 webview 必须配
+不同 data dir」），TS 后端改调 `webview_browser_open/set_mode/close/reset`，不再 spawn Edge。
+master 上的 `commands/browser.rs`（Edge 路径）保留作对照/回退。
 
 **实测**
 
@@ -193,7 +194,7 @@ channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fe
 | --- | --- |
 | CDP | ✅ `/json/list` + WS + `Runtime.evaluate` + `Page.navigate` 全通，TS 侧无需改动 |
 | xhs 首屏 | ✅ 34 条 / 约 0.8s |
-| xhs 匿名滚动 | ✅ 34 → 53 → 72 → 88 条，无 verify、无登录跳转（headless 同路径撞 `300012`） |
+| xhs 匿名滚动 | 首轮 ✅ 34 → 53 → 72 → 88 条，无 verify（headless 同路径撞 `300012`）；⚠️ **同一 profile 连续第二轮**撞 `300011`「账号异常」+ verify —— 风控是累积的，与浏览器形态无关 |
 | 内存（同一页面） | 7 进程 / WS 775MB / **private 472MB**（Edge 是 992MB） |
 | 合计（含应用自身 UI WebView2 375MB） | **约 850MB**（现在是 1.37GB） |
 
@@ -208,5 +209,5 @@ channel 环境标记与 mobile 裁剪、HTTP 端点设计（与 crawler fetch/fe
 - 其余正常：`webdriver=false`、plugins 5 个、WebGL 是真实 Intel Arc。
 
 **结论**：功能与内存都过（判据：CDP 可用、xhs 流程可用、private ≤750MB），**但指纹判据不过**。
-暂不迁移。待真实账号在分支上把 xhs/weibo 全流程（扫码登录、详情、被动捕获）跑一遍再决定；
-若迁移，必须显式决定是否接受 UA-CH 覆盖。
+**分支上已默认切到 WebView2**（master 未合并）；待真实账号把 xhs/weibo 全流程（扫码登录、
+详情、被动捕获）跑一遍再决定是否合入。若合入，必须显式决定是否接受 UA-CH 覆盖。

@@ -2,8 +2,9 @@
  * TauriBrowserBackend — BrowserBackend 实现,CDP 附加真实 Edge(生产浏览器模拟)。
  *
  * 微博/小红书反爬强,需真实浏览器提供登录态 + JS 签名(_webmsxyw)+ 设备指纹。
- * Rust `browser_ensure` spawn 系统 Edge(--remote-debugging-port + user-data-dir
- * 持久化登录态),本后端:
+ * ⚠️ 本分支(feat/webview2-browser)用 Tauri 自己的 WebView2 当抓取浏览器:
+ * Rust `webview_browser_open` 建一个隐藏 webview(独立 data_directory + CDP 9334),
+ * 不再 spawn 系统 Edge。本后端只认端口,与浏览器是谁无关:
  *   1. invoke browser_ensure → 拿 CDP 端口;
  *   2. GET /json/list → 找第一个 page target 的 webSocketDebuggerUrl(默认 lane);
  *   3. invoke ws_connect(文本帧)——CDP 是 JSON 文本帧,不走弹幕二进制隧道,
@@ -460,9 +461,14 @@ export class TauriBrowserBackend implements BrowserBackend {
     return this.channel.track(p)
   }
 
-  /** 拿 CDP 端口(browser_ensure 幂等;tab/默认页共用)。 */
+  /**
+   * 拿 CDP 端口（幂等；tab/默认页共用）。
+   *
+   * ⚠️ 本分支（feat/webview2-browser）的浏览器 = Tauri 自己的 WebView2（端口 9334），
+   * 不再 spawn 系统 Edge；CDP 客户端、target 选择、lane 逻辑全部不变。
+   */
   private async port(): Promise<number> {
-    return this.track(invoke<number>("browser_ensure"))
+    return this.track(invoke<number>("webview_browser_open"))
   }
 
   /** 并发首连去重：两个 evaluate 同时触发时只能 spawn 一个 Edge。 */
@@ -592,7 +598,8 @@ export class TauriBrowserBackend implements BrowserBackend {
    * 所以这里切完不会被后续 `ensureConn` 打回 hidden。
    */
   async setMode(mode: BrowserWindowMode): Promise<void> {
-    await this.track(invoke("browser_set_mode", { mode }))
+    // WebView2 用窗口 show/hide 表达：interactive = 屏外显示，hidden = 藏窗口。
+    await this.track(invoke("webview_browser_set_mode", { mode }))
   }
 
   async evaluate<T = unknown>(
@@ -669,11 +676,11 @@ export class TauriBrowserBackend implements BrowserBackend {
     await this.channel.closeWs()
     for (const [, t] of this.tabs) await t.close().catch(() => {})
     this.tabs.clear()
-    this.junkSwept = false // 下次连的是新实例，要重扫 Edge UI
-    await this.track(invoke("browser_close")).catch(() => {})
+    this.junkSwept = false // 下次连的是新实例，要重扫
+    await this.track(invoke("webview_browser_close")).catch(() => {})
   }
 
-  /** 清空 profile(Rust 侧 browser_reset_profile:杀我们的 Edge 树 + 删目录)。 */
+  /** 清空抓取 profile（Rust 侧关 webview + 删目录）。 */
   async resetProfile(): Promise<string> {
     // 连接已随进程销毁失效,清掉本地引用,下次 evaluate 会重新 ensureConn。
     if (this.idleTimer) {
@@ -684,6 +691,6 @@ export class TauriBrowserBackend implements BrowserBackend {
     for (const [, t] of this.tabs) t.abortPending("浏览器 profile 已重置")
     this.tabs.clear()
     this.junkSwept = false
-    return await invoke<string>("browser_reset_profile")
+    return await invoke<string>("webview_browser_reset")
   }
 }
