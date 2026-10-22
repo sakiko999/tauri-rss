@@ -51,6 +51,19 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 **必须先修 `selectedNodeId` 再调**；8 处调用，**不要**用于 `toggleSubEnabled` —— 启停不改
 内容集）· `lib/useLatestOnly.ts`（请求世代守卫，只能丢弃不能取消）。
 
+## 界面守则：布局负责解释，文案只补布局说不出的
+
+- **一个事实只说一次**。标题 + 副标题 + 帮助文 + toast 重复同一句 = 三份迟早不一致的副本。
+- **删「是什么」，留「会怎样」**。「阅读行宽 / 正文栏的最大宽度」是废话；
+  「间隔内刷新复用缓存，不会重复访问源站」才改变用户的选择。
+- 说明文字只留四类：**不可见的后果**（退订会删缓存）、**反直觉行为**（锁最高档不自动降清晰度）、
+  **跨平台差异**、**隐私/安全承诺**。其余一律删。
+- **优先改布局，不加提示**：同一信息两处出现 → 合并分组、用选中态/图标表达；
+  信息缺失 → 补结构，不补小字。
+- 每加一行小字先自问「删掉它，用户会做错哪一步」；答不上来就删。
+- UI 里**不出现技术标识**（channelKey、内部 id、字符数、能力计数），它们只进「存储与诊断」。
+- 例外：**空态/错误态**必须写清真实失败模式与下一步动作（`components/StateBlock.tsx`）。
+
 ## 硬契约（违反即静默错）
 
 - **crawler → core 的唯一通道是 XML**：channel 设的每个字段要到达 UI，serialize 必须写、
@@ -122,7 +135,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 | B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
 | 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做） |
 | YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
-| 小红书 | 全 SSR；**`web_session` 不是登录标志**；`xhs:explore` 被动、`xhs:user` 主动 fetch |
+| 小红书 | 全 SSR；**`web_session` 不是登录标志**；`xhs:explore` 被动、`xhs:user` 主动 fetch；匿名滚动翻页 **headless 被拦（300012）、WebView2 正常** |
 | Twitch | 公开 GQL + usher HLS，纯匿名；master 无 CORS 必须服务端拉；流列表翻页要用 Android Client-ID |
 | 斗鱼/虎牙 | douyu `rate` 是档位 ID 不是清晰度；huya 低档只产 HLS |
 | Apple 播客 | 榜单条目 = 一个 feed（`stream` 空），主操作是「列出单集」不是播放 |
@@ -169,3 +182,12 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 
 **长期悬置**（收益不抵复杂度）：CSP（现 `csp: null`，抖音/斗鱼签名脚本靠 `eval`）；
 live 按平台二次聚合的 UI 侧。
+
+<!-- cc-todo:start -->
+## TODO / 重要信息（cc-todo 自动维护）
+
+- [ ] 界面文案清理尚未实机看一眼：发现页与添加订阅弹窗跑一次 `bun run dev` 确认布局没塌
+- [!] browser_close 用 TerminateProcess → Chromium 记 exit_type=Crashed，冷启动会恢复 tab 并弹气泡；已在 spawn 前 purge Default/Sessions 兜住
+- [ ] release 验收：GPU 进程 private 是否因 --disable-gpu-compositing 下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
+- [ ] WebView2 分支（feat/webview2-browser）用真实账号跑完 xhs/weibo 全流程后再决定是否迁移
+<!-- cc-todo:end -->
