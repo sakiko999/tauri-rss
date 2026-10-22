@@ -1,5 +1,8 @@
 pub mod commands;
 pub mod plugins;
+/// 一次性 spike：WebView2 当抓取浏览器（仅 Windows + debug，`SPIKE_WEBVIEW=1` 触发）。
+#[cfg(all(windows, debug_assertions))]
+pub mod spike;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -8,6 +11,16 @@ pub fn run() {
         // Arc 包裹供 reader task clone 持引用(跨 command 共享)。
         .manage(std::sync::Arc::new(commands::ws::WsManager::default()))
         .manage(commands::browser::BrowserManager::default())
+        .setup(|app| {
+            #[cfg(all(windows, debug_assertions))]
+            if std::env::var_os("SPIKE_WEBVIEW").is_some() {
+                match spike::open(app.handle()) {
+                    Ok(port) => eprintln!("[spike] webview cdp on {port}"),
+                    Err(e) => eprintln!("[spike] open failed: {e}"),
+                }
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::http_get,
             commands::ws::ws_connect,
