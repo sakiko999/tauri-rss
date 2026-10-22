@@ -1,8 +1,7 @@
 pub mod commands;
 pub mod plugins;
-/// 一次性 spike：WebView2 当抓取浏览器（仅 Windows + debug，`SPIKE_WEBVIEW=1` 触发）。
-#[cfg(all(windows, debug_assertions))]
-pub mod spike;
+/// 抓取浏览器 = Tauri 自己的 WebView2（本分支已替换 spawn 系统 Edge 的方案）。
+pub mod webview_browser;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -10,14 +9,13 @@ pub fn run() {
         // WS 隧道连接管理(state):弹幕长连接按 connectionId 定位发/关。
         // Arc 包裹供 reader task clone 持引用(跨 command 共享)。
         .manage(std::sync::Arc::new(commands::ws::WsManager::default()))
-        .manage(commands::browser::BrowserManager::default())
         .setup(|app| {
-            #[cfg(all(windows, debug_assertions))]
-            if std::env::var_os("SPIKE_WEBVIEW").is_some() {
-                match spike::open(app.handle()) {
-                    Ok(port) => eprintln!("[spike] webview cdp on {port}"),
-                    Err(e) => eprintln!("[spike] open failed: {e}"),
-                }
+            // 本分支默认就用 WebView2 当抓取浏览器：启动时先建好（隐藏），免得第一次
+            // 抓取才付创建成本；空闲回收关掉后由 webview_browser_open 重建。
+            #[cfg(windows)]
+            match webview_browser::open_at_setup(app.handle()) {
+                Ok(port) => eprintln!("[browser] webview cdp on {port}"),
+                Err(e) => eprintln!("[browser] webview open failed: {e}"),
             }
             Ok(())
         })
@@ -26,10 +24,10 @@ pub fn run() {
             commands::ws::ws_connect,
             commands::ws::ws_send,
             commands::ws::ws_close,
-            commands::browser::browser_ensure,
-            commands::browser::browser_set_mode,
-            commands::browser::browser_close,
-            commands::browser::browser_reset_profile,
+            commands::webview_browser::webview_browser_open,
+            commands::webview_browser::webview_browser_set_mode,
+            commands::webview_browser::webview_browser_close,
+            commands::webview_browser::webview_browser_reset,
         ]);
 
     #[cfg(mobile)]
@@ -43,11 +41,11 @@ pub fn run() {
             .build(tauri::generate_context!())
             .expect("error while running tauri application");
         app.run(|app_handle, event| {
-            // 应用退出时清理浏览器模拟 Edge(RunEvent::Exit 在进程退出前确定触发,
-            // 不依赖 WebView JS 存活)。终止主进程 → Chromium Job Object 连带杀子进程。
+            // 应用退出时关掉抓取 webview（RunEvent::Exit 在进程退出前确定触发）。
             if let tauri::RunEvent::Exit = event {
-                eprintln!("[tauri] Exit event → browser_close");
-                let _ = commands::browser::browser_close(app_handle.clone());
+                eprintln!("[tauri] Exit event → webview close");
+                #[cfg(windows)]
+                let _ = webview_browser::close(app_handle);
             }
         });
     }
