@@ -190,4 +190,5 @@ live 按平台二次聚合的 UI 侧。
 - [!] browser_close 用 TerminateProcess → Chromium 记 exit_type=Crashed，冷启动会恢复 tab 并弹气泡；已在 spawn 前 purge Default/Sessions 兜住
 - [ ] release 验收：GPU 进程 private 是否因 --disable-gpu-compositing 下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
 - [ ] WebView2 分支（feat/webview2-browser）用真实账号跑完 xhs/weibo 全流程后再决定是否迁移
+- [ ] 实况图实机验收：xhs 直链是否 403（防盗链）、微博 .mov 在 WebView2 能否播、失败是否退回静态图
 <!-- cc-todo:end -->
