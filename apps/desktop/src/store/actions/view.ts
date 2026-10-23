@@ -7,6 +7,7 @@
 import type { AudioItem, CategoryItem } from "@amoeba/core"
 import { PAGE_SIZE } from "../selectors.ts"
 import { now } from "../lib.ts"
+import { itemKey } from "../../lib/media.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
 
 /** 二级预览的复用窗口：进出切换不重复拉；过期后再点开会重抓。 */
@@ -34,7 +35,7 @@ export function createViewActions(ctx: StoreCtx): ViewActions {
     select(nodeId) {
       // ⚠️ 切换节点要清搜索词:否则上一个源的搜索会静默继续过滤新源,用户看到空列表
       // 却以为新源没内容(搜索框里的词可能已经被滚出视线)。
-      set({ selectedNodeId: nodeId, selectedArticleId: null, hotWord: null, query: "" })
+      set({ selectedNodeId: nodeId, selectedArticleKey: null, hotWord: null, query: "" })
       const dl = get().dl
       if (!dl) return
       refreshView()
@@ -88,8 +89,8 @@ export function createViewActions(ctx: StoreCtx): ViewActions {
       set((s) => ({ openGroups: { ...s.openGroups, [gid]: !s.openGroups[gid] } }))
     },
 
-    selectArticle(id) {
-      set({ selectedArticleId: id })
+    selectArticle(item) {
+      set({ selectedArticleKey: item ? itemKey(item) : null })
     },
 
     openSocialDetail(item) {
@@ -100,12 +101,20 @@ export function createViewActions(ctx: StoreCtx): ViewActions {
       void dl
         .resolveDetail(item.subscriptionId, item.id)
         .then((full) =>
-          set((s) => (s.socialDetail?.item.id === item.id ? { socialDetail: { ...s.socialDetail, full } } : s)),
+          set((s) =>
+            s.socialDetail?.item.id === item.id && s.socialDetail?.item.subscriptionId === item.subscriptionId
+              ? { socialDetail: { ...s.socialDetail, full } }
+              : s,
+          ),
         )
         .catch((e) => {
           // 补全失败必须落进 error 态:否则弹窗永久停在骨架屏 +「正在向源站补全」。
           const msg = e instanceof Error ? e.message : String(e)
-          set((s) => (s.socialDetail?.item.id === item.id ? { socialDetail: { ...s.socialDetail, error: msg } } : s))
+          set((s) =>
+            s.socialDetail?.item.id === item.id && s.socialDetail?.item.subscriptionId === item.subscriptionId
+              ? { socialDetail: { ...s.socialDetail, error: msg } }
+              : s,
+          )
         })
     },
 

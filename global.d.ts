@@ -251,6 +251,17 @@ declare global {
     abortTabs?(reason: string, opts?: { keepLogin?: boolean }): void
   }
 
+  /**
+   * SQL 型存储后端的建表契约。**DDL 唯一权威在 core `db/schema.ts`**，
+   * 由 core 在 createDataLayer 时注入；host 只执行，不 import core。
+   */
+  interface StorageSchema {
+    table: string
+    ddl: string
+    /** 幂等 SQL,按序全量执行(无版本表;非幂等迁移需先加版本表)。 */
+    migrations: ReadonlyArray<string>
+  }
+
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */
   interface StorageBackend {
     get(key: string): Promise<string | null>
@@ -258,6 +269,11 @@ declare global {
     delete(key: string): Promise<void>
     /** 全部 key,可选前缀过滤(命名空间)。 */
     keys(prefix?: string): Promise<string[]>
+    /**
+     * SQL 型后端注入 schema（KV/localStorage/内存后端不需要实现）。
+     * core 在 `createDataLayer()` 首次读写前调用；实现方应在此之前完成建表。
+     */
+    setSchema?(schema: StorageSchema): void
   }
 
   /** 日志输出。缺失时消费方用 console 兜底。 */

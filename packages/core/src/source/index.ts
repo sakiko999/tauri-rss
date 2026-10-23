@@ -5,61 +5,18 @@
  * provider(包 crawler 注册表),RSSHub 是运行时注册的外部 provider(import 副作用
  * 自注册,见 rsshub.ts)。新源零改 core 接入——实现 SourceProvider + 注册即可。
  *
- * 渠道契约复用 crawler 的 RssChannel 形状(鸭子类型,core 不 import crawler 类型
- * ——与 LoginResult 同款「结构兼容」边界;RssChannel/SourceInfoField 在此镜像声明)。
+ * 渠道契约直接复用 crawler 的 RssChannel 类型。core 本来就运行时依赖 crawler
+ * 注册表，镜像 + `as unknown as` 只会让字段漂移在运行时才暴露；直接 import type
+ * 让 tsc 在编译期兜底，零运行时成本。
  * 数据层(data-layer.ts)只经本模块取渠道,不直接碰 crawler 注册表。
  */
 import {
   listChannels as listCrawlerChannels,
   getChannel as getCrawlerChannel,
 } from "@amoeba/crawler"
-import type { MediaKind } from "../types/media-item.ts"
+import type { RssChannel } from "@amoeba/crawler"
 
-/** 订阅参数字段描述(供 UI 生成表单)。结构兼容 crawler 的 SourceInfoField。 */
-export interface SourceInfoField {
-  key: string
-  label: string
-  required?: boolean
-  placeholder?: string
-}
-
-/** 订阅实例化参数(Record 形状,与 crawler SourceInfo 一致)。 */
-export type SourceInfo = Record<string, string>
-
-/** 浏览器 profile 登录 cookie 快照(结构兼容 crawler 的 LoginCookieSnapshot)。 */
-export interface LoginCookieSnapshot {
-  cookie: string
-  user_id?: string
-}
-
-/**
- * 一个渠道 —— 纯描述(kind 是 item 默认 kind);getSource 才承担抓取与懒解析能力。
- * 结构兼容 crawler 的 RssChannel;能力(VideoPlayable 等)照旧在 getSource 返回对象
- * 上以 `in` 谓词探测(数据层已有 isRssVideoSource 等)。
- */
-export interface RssChannel {
-  /** 渠道唯一 key(源内唯一;建议带源前缀如 "rsshub:*" 防跨源冲突)。 */
-  readonly key: string
-  /** 人类可读名称。 */
-  readonly name: string
-  /** 该 channel 产出的 item 默认 kind。 */
-  readonly kind: MediaKind
-  /** 实例化 source 需要的参数字段。无参 channel 不声明。 */
-  readonly sourceInfoTpl?: SourceInfoField[]
-  /** 带默认参数的实例(可选;存在 = 无需输入即可订阅)。 */
-  readonly defaultInfo?: SourceInfo
-  /** 该渠道正常路径 = 浏览器被动采集（渠道属性;有浏览器时只调 fetchPassive）。 */
-  readonly passive?: boolean
-  /** 启动快照(可选):只读浏览器 profile 的登录 cookie;未登录 null。 */
-  readLoginCookie?(browser: BrowserBackend): Promise<LoginCookieSnapshot | null>
-  /** 按 info(url/uid/…)实例化一个可抓取的 source。 */
-  getSource(info: SourceInfo): RssSource
-}
-
-/** source 最小契约:fetch 直出 RSS 2.0 XML 字符串。 */
-export interface RssSource {
-  fetch(): Promise<string>
-}
+export type { LoginCookieSnapshot, RssChannel, RssSource, SourceInfo, SourceInfoField } from "@amoeba/crawler"
 
 /**
  * 源插件 —— 每源一个 provider,对外只声明渠道。
@@ -78,8 +35,8 @@ export interface SourceProvider {
 /** 内置 provider:包 crawler 注册表(其自身有惰性内置注册)。 */
 const crawlerProvider: SourceProvider = {
   id: "crawler",
-  listChannels: () => listCrawlerChannels() as unknown as RssChannel[],
-  getChannel: (key) => getCrawlerChannel(key) as unknown as RssChannel | undefined,
+  listChannels: () => listCrawlerChannels(),
+  getChannel: (key) => getCrawlerChannel(key),
 }
 
 // ── 聚合注册表 ───────────────────────────────────────────────────────────────

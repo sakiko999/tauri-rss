@@ -95,10 +95,10 @@ export const useMobile = create<MobileState>((set, get) => ({
       (s) => s.channelKey === "rss:url" && (s.info?.url ?? "").trim() === u,
     )
     if (dup) return
-    // ⚠️ addSubscription 内部**已 refresh 一次**(data-layer.ts:578;新订阅无缓存 → 走网络)。
+    // ⚠️ addSubscription 内部**已 refresh 一次**(新订阅无缓存 → 走网络)。
     // 不再额外 refresh:曾补一次 `force:true` 会用同一 id 再抓一遍(同订阅串行执行两次网络),
-    // 对反爬源是双倍请求。首次抓取失败会静默(返回 {error} 被 core 吞)—— 单条订阅的
-    // 失败状态由列表「无内容」体现;移动端「极简看内容」不做失败徽标(那属工作台)。
+    // 对反爬源是双倍请求。core 现在会把首刷结果作为 `refresh.error` 返回；移动端
+    // 「极简看内容」刻意不做失败徽标（那属工作台），但结果已可被上层消费。
     await dl.addSubscription("rss:url", title?.trim() || u, { url: u }, {})
     set({ subs: await dl.subscriptions.list() })
   },
@@ -143,4 +143,10 @@ export const useMobile = create<MobileState>((set, get) => ({
   },
 }))
 
-export const isPlayable = (i: MediaItem) => i.kind === "video" || i.kind === "audio" || i.kind === "live"
+/**
+ * 可播判定与 desktop 的 `isFeedItem` 对齐：audio 且无 stream = 播客 feed，
+ * 主操作是「列出单集」而不是播放（移动端没有 feed 预览，至少不要送进播放页必碎）。
+ */
+export const isPlayable = (i: MediaItem) =>
+  (i.kind === "video" || i.kind === "audio" || i.kind === "live") &&
+  !(i.kind === "audio" && !(i as { stream?: unknown }).stream)

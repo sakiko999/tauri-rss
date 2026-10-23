@@ -15,12 +15,12 @@
  * 防盗链图床(sinaimg.cn 等)对空 Referer / 非站内 Referer 返回 403——`<img>`
  * 原生加载必带页面源 Referer(tauri://localhost),无解。命中图床的 src 经
  * appHost.http(Rust reqwest 可设任意 header)带站内 Referer 拉取 → Blob URL 显示。
- * 图床 → Referer 规则在 host 层(mediaReferrerFor),本组件只调宿主、不写死域名。
+ * 图床 → Referer 规则在 resolve(mediaReferrerFor),本组件只调宿主、不写死域名。
  *
  * 不做 Folo 的 proxy/blurhash/fitContent —— 无代理部署场景下是死代码。
  */
 import { useEffect, useState } from "react"
-import { mediaReferrerFor } from "@amoeba/host"
+import { mediaReferrerFor } from "@amoeba/resolve/media-referrer"
 import { Skeleton } from "./Skeleton.tsx"
 import { ImageOffIcon } from "./Icons.tsx"
 

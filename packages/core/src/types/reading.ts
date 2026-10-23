@@ -33,6 +33,17 @@ export function readingKey(subscriptionId: string, itemId: string): string {
   return `${subscriptionId}\u0000${itemId}`
 }
 
+/**
+ * 视图/队列用的复合键（可读形式，分隔符 `:`）。
+ *
+ * 与 `readingKey` 分开：readingKey 要可逆、且 itemId 常含 `:`，所以用 `\u0000`；
+ * 这个键只用于 React key / 队列元素 / 选中态，不反解，沿用历史 `subId:itemId` 格式。
+ * 凡「按 id 记/改/查」的入口都应先经过它，禁止裸 id。
+ */
+export function itemRefKey(subscriptionId: string, itemId: string): string {
+  return `${subscriptionId}:${itemId}`
+}
+
 /** 查记录：键必须带订阅维度（见 readingKey）。 */
 export function findRecord(
   map: ReadingMap,

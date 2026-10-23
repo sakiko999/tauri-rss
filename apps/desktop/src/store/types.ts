@@ -8,6 +8,7 @@ import type { StoreApi } from "zustand"
 import type {
   AppSettings,
   DataLayer,
+  ErrorKind,
   MediaItem,
   ResolvePlayback,
   Subscription,
@@ -56,7 +57,11 @@ export interface DesktopState {
   settings: AppSettings | null
 
   selectedNodeId: string | null
-  selectedArticleId: string | null
+  /**
+   * 阅读栏选中项。**复合键**（`itemKey(subscriptionId, id)`）—— 聚合视图里同一 id
+   * 会跨订阅出现，裸 id 会选中另一订阅的文章。仅会话态，不进 URL。
+   */
+  selectedArticleKey: string | null
   socialDetail: SocialDetail | null
   hotWord: HotWordState | null
   /** DataLayer 初始化失败(库损坏/宿主未注入)→ 整页错误,不让应用白屏。 */
@@ -84,6 +89,8 @@ export interface DesktopState {
   loading: boolean
   busy: Record<string, boolean>
   refreshErrors: Record<string, string>
+  /** 与 refreshErrors 同键的失败分类（登录/风控/网络/…），供 UI 选文案。 */
+  refreshErrorKinds: Record<string, ErrorKind>
   /** 订阅是否支持分页(懒查缓存)。 */
   canLoadMore: Record<string, boolean>
   loadMoreEnded: Record<string, boolean>
@@ -145,7 +152,7 @@ export interface DesktopState {
   setSort(node: string, mode: SortMode): void
   growPage(node: string): void
   toggleGroup(gid: string): void
-  selectArticle(id: string | null): void
+  selectArticle(item: MediaItem | null): void
   openSocialDetail(item: MediaItem): void
   closeSocialDetail(): void
   /**

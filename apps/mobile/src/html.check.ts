@@ -25,5 +25,7 @@ ok(htmlToText("<p>a &amp; b &lt;tag&gt;</p>") === "a & b <tag>", "实体解码")
 ok(displayBody("纯文本 x < y") === "纯文本 x < y", "纯文本原样(不剥)")
 ok(!displayBody("<p>正文</p>").includes("<"), "HTML 剥标签")
 
-console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
-process.exit(fails === 0 ? 0 : 1)
+// 不用 process.exit:mobile 的 tsconfig 只有 vite/client 类型(浏览器环境),
+// 未定义 process;bun 对未捕获异常返回非零,足够作为 CI/自检判据。
+if (fails !== 0) throw new Error(`${fails} 项失败`)
+console.log("\n全部通过")

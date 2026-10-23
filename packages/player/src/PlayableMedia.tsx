@@ -16,6 +16,7 @@
  */
 import { useEffect, useRef, useState } from "react"
 import type { MediaStream, ResolvePlayback } from "@amoeba/core"
+import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
 import { useMediaStream } from "./hooks/useMediaStream.ts"
 import type { EngineStats } from "./stats.ts"
 import {
@@ -321,17 +322,21 @@ export function PlayableMedia({
   // 解析失败展示。
   if (error) {
     const msg = error instanceof Error ? error.message : String(error)
-    // 需要登录是最常见的一类失败(weibo:user / xhs 匿名拿不到),单独成一个态 ——
-    // 把原始英文报错直接甩给用户,他不知道下一步该去「账号与凭证」。
-    const needLogin = /登录|cookie|未授权|login|401|403/i.test(msg)
+    // 失败分类由 resolve 统一给出（auth / risk / rate-limit / network / …），
+    // 不再用正则把 403 一律误判成「需要登录」。
+    const kind = errorKindOf(error)
+    const needLogin = kind === "auth"
+    const title = needLogin ? "需要登录" : kind === "unknown" ? "解析失败" : ERROR_KIND_LABEL[kind]
     return (
       <MediaState
         tone="error"
-        title={needLogin ? "需要登录" : "解析失败"}
+        title={title}
         detail={
           needLogin
             ? "这个源需要登录态。到「账号与凭证」扫码或粘贴 cookie 后重试。"
-            : msg
+            : kind === "rate-limit"
+              ? `平台正在限流/冷却，稍后重试。\n${msg}`
+              : msg
         }
         action={
           <button type="button" className={MS_BTN} onClick={retryResolve}>
@@ -469,6 +474,10 @@ export function PlayableMedia({
         controls
         autoPlay={autoPlay}
         className="absolute inset-0 h-full w-full object-contain"
+        onError={() => {
+          // 兜底分支也必须报错：否则未知格式/失效直链表现为「永久黑框、无提示、无重试」。
+          onError?.(new Error(`媒体加载失败：${stream.url || "DASH manifest"}`))
+        }}
         onLoadedMetadata={(e) => {
           // 兜底分支(未知流类型)的原生 <video>:续播跳转在这里做(duration 已知)。
           const el = e.currentTarget

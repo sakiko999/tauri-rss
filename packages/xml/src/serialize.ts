@@ -10,7 +10,7 @@
  * media:content、author→author、summary→description。
  */
 import { XMLBuilder } from "fast-xml-parser"
-import type { Item, Stream } from "./types.ts"
+import type { Attachment, Item, Stream } from "./types.ts"
 
 export interface SerializeOptions {
   channelTitle?: string
@@ -89,6 +89,14 @@ function itemToTree(item: Item): Record<string, unknown> {
   // tpl: kind(deserialize kind 判别核心)+ 各 kind 的扩展字段。
   setTpl(tree, "kind", item.kind)
 
+  // stream 的完整形状（headers/quality/rate/dashManifest）。标准 enclosure 只能装
+  // url + MIME，非 MIME 的 format 还会退化成 octet-stream；用一条 JSON 扩展保真。
+  // 保留 enclosure 作为标准 RSS 兼容出口，读取侧优先 streamJson、再回退 enclosure。
+  if (item.kind === "video" || item.kind === "audio") {
+    const stream = (item as { stream?: Stream }).stream
+    if (stream) setTpl(tree, "streamJson", JSON.stringify(stream))
+  }
+
   // ── 公共字段(deserialize baseFields 读)──
   // ⚠️ 这些是 crawler→core 的**唯一通道**:core 用「自解析 XML 建 MediaItem」,
   // 不经 crawler 类型。此前只写 tpl:kind,导致 Live 的 liveStatus/online/platform、
@@ -119,7 +127,6 @@ function itemToTree(item: Item): Record<string, unknown> {
     setTplN(tree, "online", item.online)
     if (item.isRecord !== undefined) setTpl(tree, "isRecord", item.isRecord ? "1" : "0")
     setTplN(tree, "introduction", item.introduction)
-    setTplN(tree, "notice", item.notice)
     setTplN(tree, "showTime", item.showTime)
   } else if (item.kind === "video") {
     // video 时长走 tpl:duration(与 audio 同字段名,deserialize 的 parseVideo 读它)。
@@ -150,7 +157,7 @@ function itemToTree(item: Item): Record<string, unknown> {
 function itemMediaNodes(item: Item): Array<Record<string, unknown>> {
   const nodes: Array<Record<string, unknown>> = []
   // article/audio/video 的 media[]
-  const media = (item as { media?: Array<{ kind?: string; url?: string; mimeType?: string; title?: string; width?: number; height?: number; durationSec?: number }> }).media ?? []
+  const media = (item as { media?: Attachment[] }).media ?? []
   for (const m of media) {
     if (!m.url) continue
     const node: Record<string, unknown> = { "@_url": m.url }
@@ -158,10 +165,19 @@ function itemMediaNodes(item: Item): Array<Record<string, unknown>> {
     if (m.width !== undefined) node["@_width"] = String(m.width)
     if (m.height !== undefined) node["@_height"] = String(m.height)
     if (m.durationSec !== undefined) node["@_duration"] = String(m.durationSec)
+    // `@_medium` 是标准字段；`@_tpl:kind` 是精确回读依据（audio/live 无法由 medium
+    // 唯一表达）。两者都写，外部阅读器忽略 tpl 即可。
     if (m.kind) {
       node["@_medium"] = m.kind === "image" ? "image" : m.kind === "video" ? "video" : m.kind === "audio" ? "audio" : "video"
+      node["@_tpl:kind"] = m.kind
     }
     if (m.title) node["@_title"] = m.title
+    if (m.poster) node["@_tpl:poster"] = m.poster
+    if (m.aspectRatio !== undefined) node["@_tpl:aspectRatio"] = String(m.aspectRatio)
+    if (m.bitrate !== undefined) node["@_bitrate"] = String(m.bitrate)
+    if (m.streamingFormat) node["@_tpl:streamingFormat"] = m.streamingFormat
+    if (m.isLiveNow !== undefined) node["@_tpl:isLiveNow"] = m.isLiveNow ? "1" : "0"
+    if (m.lang) node["@_lang"] = m.lang
     nodes.push(node)
   }
   // social images → media:content(medium=image)。瀑布流图不丢(用户选标准 RSS,但图是社交核心)。

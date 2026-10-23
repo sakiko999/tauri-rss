@@ -7,8 +7,9 @@
  *   - media:thumbnail(缩略图)
  *   - 最小 `tpl:` 扩展(crawler 自产):`tpl:kind`(kind 判别)、`tpl:total`(翻页总数)
  *
- * kind 判别:`tpl:kind` > ctx.kind(channel 声明) > enclosure(mime 推断 audio) > article。
- * live 的 platform/roomId 从 item.url 推导(复刻 resolver 路由语义,不依赖 crawler)。
+ * kind 判别（实际执行顺序）：`tpl:kind` > enclosure 的 audio MIME > ctx.kind >
+ * article。`ctx.kind` 在 enclosure 之后，别按旧注释改回去。
+ * live 的 platform/roomId 来自 `tpl:*`（外部 feed 缺失时给静态默认）。
  * app 层语义由 core 注入:subscriptionId 来自 ctx,isUnread 默认 true、isStarred 默认 false。
  */
 import type { MediaAttachment, MediaAuthor, MediaItem, MediaKind, MediaStream, SocialImage, StreamingFormat } from "../types/media-item.ts"
@@ -235,7 +236,6 @@ function parseLive(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     online: num(raw["tpl:online"]),
     isRecord: boolTpl(raw["tpl:isRecord"], undefined),
     introduction: str(raw["tpl:introduction"]),
-    notice: str(raw["tpl:notice"]),
     showTime: str(raw["tpl:showTime"]),
     // 播放流/弹幕由 resolver by-url 解析,XML 不再带 playUrls。
   }
@@ -278,8 +278,35 @@ function parseStringRecord(json: string | undefined): Record<string, string> {
 
 // ── nested parsers(标准字段优先 + 最小 tpl 兜底)───────────────────────────
 
-/** audio/video enclosure → MediaStream(直链)。 */
+/**
+ * audio/video 直链 → MediaStream。
+ *
+ * 优先读 `tpl:streamJson`（serialize 写出的完整 Stream），回退标准 enclosure。
+ * enclosure 只能表达 url+type；headers/quality/rate/dashManifest 与 hls/flv/dash
+ * 这类非 MIME 的 format 只能走 JSON 扩展。
+ */
 function parseStreamFromEnclosure(raw: Record<string, unknown>): MediaStream | undefined {
+  const json = str(raw["tpl:streamJson"])
+  if (json) {
+    try {
+      const s = JSON.parse(json) as Record<string, unknown>
+      const url = typeof s.url === "string" ? s.url : ""
+      const dashManifest = typeof s.dashManifest === "string" ? s.dashManifest : undefined
+      if (url || dashManifest) {
+        const out: MediaStream = { url }
+        if (typeof s.format === "string") out.format = s.format
+        if (s.headers && typeof s.headers === "object" && !Array.isArray(s.headers)) {
+          out.headers = s.headers as Record<string, string>
+        }
+        if (typeof s.quality === "string") out.quality = s.quality
+        if (typeof s.rate === "number" && Number.isFinite(s.rate)) out.rate = s.rate
+        if (dashManifest) out.dashManifest = dashManifest
+        return out
+      }
+    } catch {
+      /* 坏 JSON 回退 enclosure，不因单个字段丢整条流 */
+    }
+  }
   const enc = enclosureVal(raw["enclosure"])
   if (!enc) return undefined
   const url = str(attr(obj(enc as Record<string, unknown>), "url"))
@@ -437,43 +464,77 @@ function rsshubThumbnail(raw: Record<string, unknown>): string | undefined {
   return undefined
 }
 
-/** RSSHub article 附件:enclosure(非 audio)+ media:content 的非 image 媒体 → Article media[]。 */
+/**
+ * RSSHub / crawler article 附件：enclosure + media:content → Article media[]。
+ *
+ * 两侧必须对称：serialize 会写 kind/url/mime/title/width/height/duration/poster/
+ * aspectRatio/bitrate/streamingFormat/isLiveNow/lang；这里全部回读。旧实现只重建
+ * video 的 url+type，audio/image 附件整条丢、宽高时长也丢。
+ */
 function rsshubArticleMedia(raw: Record<string, unknown>): MediaAttachment[] | undefined {
-  const out: MediaAttachment[] = []
-  // ⚠️ 同一媒体常在 enclosure 与 media:content 各出现一次(同 URL)→ 不去重会出现
-  // 两份相同附件。按 URL 去重。
-  const seen = new Set<string>()
+  // ⚠️ 同一媒体常在 enclosure 与 media:content 各出现一次(同 URL)→ 去重。
+  // 不能简单丢弃后来的：enclosure 只有 url+type，media:content 才带 width/duration。
+  // 合并同 URL 的字段（先到者缺的字段由后者补），并优先读 media:content。
+  const byUrl = new Map<string, MediaAttachment>()
   const push = (m: MediaAttachment) => {
-    if (seen.has(m.url)) return
-    seen.add(m.url)
-    out.push(m)
+    const prev = byUrl.get(m.url)
+    if (!prev) {
+      byUrl.set(m.url, m)
+      return
+    }
+    const target = prev as unknown as Record<string, unknown>
+    for (const [k, v] of Object.entries(m)) {
+      if (v !== undefined && target[k] === undefined) target[k] = v
+    }
   }
-  const enc = enclosureVal(raw["enclosure"])
-  if (enc) {
-    const o = obj(enc as Record<string, unknown>)
+
+  const kindOf = (o: Record<string, unknown>): MediaAttachment["kind"] | undefined => {
+    const explicit = str(attr(o, "tpl:kind"))
+    if (explicit === "image" || explicit === "video" || explicit === "audio" || explicit === "live") return explicit
+    const medium = String(attr(o, "medium") ?? "")
+    if (medium === "image" || medium === "video" || medium === "audio") return medium
+    const type = String(attr(o, "type") ?? "")
+    if (type.startsWith("image/")) return "image"
+    if (type.startsWith("video/")) return "video"
+    if (type.startsWith("audio/")) return "audio"
+    return undefined
+  }
+
+  const read = (o: Record<string, unknown>) => {
     const url = str(attr(o, "url"))
+    const kind = kindOf(o)
+    if (!url || !kind) return
+    const m: MediaAttachment = { kind, url }
     const type = str(attr(o, "type"))
-    if (url && type && !type.startsWith("audio/")) {
-      push({
-        kind: type.startsWith("video/") ? "video" : type.startsWith("image/") ? "image" : "video",
-        url,
-        mimeType: type,
-      })
-    }
+    const title = str(attr(o, "title"))
+    const poster = str(attr(o, "tpl:poster"))
+    const width = num(attr(o, "width"))
+    const height = num(attr(o, "height"))
+    const aspectRatio = num(attr(o, "tpl:aspectRatio"))
+    const durationSec = num(attr(o, "duration"))
+    const bitrate = num(attr(o, "bitrate"))
+    const streamingFormat = asStreamingFormat(attr(o, "tpl:streamingFormat"))
+    const isLiveNow = boolTpl(attr(o, "tpl:isLiveNow"), undefined)
+    const lang = str(attr(o, "lang"))
+    if (type) m.mimeType = type
+    if (title) m.title = title
+    if (poster) m.poster = poster
+    if (width !== undefined) m.width = width
+    if (height !== undefined) m.height = height
+    if (aspectRatio !== undefined) m.aspectRatio = aspectRatio
+    if (durationSec !== undefined) m.durationSec = durationSec
+    if (bitrate !== undefined) m.bitrate = bitrate
+    if (streamingFormat) m.streamingFormat = streamingFormat
+    if (isLiveNow !== undefined) m.isLiveNow = isLiveNow
+    if (lang) m.lang = lang
+    push(m)
   }
-  const mc = raw["media:content"]
-  if (mc) {
-    for (const m of asList(mc)) {
-      const o = obj(m as Record<string, unknown>)
-      const url = str(attr(o, "url"))
-      const medium = String(attr(o, "medium") ?? "")
-      const type = String(attr(o, "type") ?? "")
-      if (!url) continue
-      if (medium === "video" || type.startsWith("video/")) {
-        push({ kind: "video", url, mimeType: type || undefined })
-      }
-    }
-  }
+
+  // media:content 优先（字段更全）；enclosure 只补缺失字段。
+  for (const m of asList(raw["media:content"])) read(obj(m as Record<string, unknown>))
+  const enc = enclosureVal(raw["enclosure"])
+  if (enc) read(obj(enc as Record<string, unknown>))
+  const out = [...byUrl.values()]
   return out.length ? out : undefined
 }
 

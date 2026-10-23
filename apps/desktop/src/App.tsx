@@ -54,7 +54,7 @@ export default function App() {
   const init = useDesktop((s) => s.init)
   const initError = useDesktop((s) => s.initError)
   const toast = useDesktop((s) => s.toast)
-  const selectedArticleId = useDesktop((s) => s.selectedArticleId)
+  const selectedArticleKey = useDesktop((s) => s.selectedArticleKey)
   const booting = useDesktop(showSkeleton)
   const meta = useNodeMeta(nodeId)
   const railCollapsed = usePrefs((s) => s.railCollapsed)
@@ -105,7 +105,7 @@ export default function App() {
   }
 
   // data-sel 供窄屏在「列表 ⇄ 正文」间切换(见 styles.css 的 900px 断点)。
-  const sel = viewType === "reader" ? !!selectedArticleId : false
+  const sel = viewType === "reader" ? !!selectedArticleKey : false
 
   return (
     <div className="app-shell">

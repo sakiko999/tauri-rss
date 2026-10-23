@@ -60,7 +60,9 @@ function rsshubChannel(spec: RsshubChannelSpec): RssChannel {
           const route = renderRoute(spec.routeTpl, info)
           const base = (info.baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, "")
           const path = route.startsWith("/") ? route : `/${route}`
-          return httpText(`${base}${path}`, { "user-agent": UA })
+          // 自建实例的 host 是用户配置的域名,governor 只能按 host 分桶;显式声明
+          // platform 让所有 RSSHub 请求共用同一个配额/冷却桶(公网 rsshub.app 也归一)。
+          return httpText(`${base}${path}`, { "user-agent": UA }, { policy: { platform: "rsshub" } })
         },
       }
     },

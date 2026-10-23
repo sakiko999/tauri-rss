@@ -41,7 +41,7 @@ export function usePlayerNav(): CardActions {
    * 的 openArticle 同此逻辑。)
    *
    * ⚠️ 跳转后**把「选中」排到 loader 之后**:`/v` 的 loader 会调 `select()` 清掉
-   * `selectedArticleId`,而 loader 是同步的(在微任务里跑完),故用 setTimeout(0)
+   * `selectedArticleKey`,而 loader 是同步的(在微任务里跑完),故用 setTimeout(0)
    * 走在它后面。zustand 的 useSyncExternalStore 是同步提交,不受 /v 的低优先级
    * transition 影响,选中一定能落上。
    */
@@ -52,10 +52,10 @@ export function usePlayerNav(): CardActions {
       if (item.isUnread && (useDesktop.getState().settings?.markReadOnOpen ?? true)) markRead(item)
       if (nodeTypeOf(useDesktop.getState().selectedNodeId) !== "reader") {
         navigate(viewPath("tab:article"))
-        setTimeout(() => selectArticle(item.id), 0)
+        setTimeout(() => selectArticle(item), 0)
         return
       }
-      selectArticle(item.id)
+      selectArticle(item)
     },
     [navigate, markRead, selectArticle],
   )
@@ -121,7 +121,7 @@ export function usePlayerNav(): CardActions {
         return
       }
       unlockAudioPlayback()
-      navigateToPlay(item.id)
+      navigateToPlay(item)
     },
     [navigateToPlay, openSocialDetail, openArticle, onOpenFeed, onOpenCategory],
   )

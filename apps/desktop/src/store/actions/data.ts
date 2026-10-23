@@ -3,7 +3,7 @@
  *
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 DataLayer。
  */
-import { createDataLayer } from "@amoeba/core"
+import { createDataLayer, ERROR_KIND_LABEL, errorKindOf, type ErrorKind } from "@amoeba/core"
 import { PAGE_SIZE } from "../selectors.ts"
 import { applyRuntimeSettings, REFRESH_TIMEOUT_MS, withTimeout } from "../lib.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
@@ -122,10 +122,19 @@ export function createDataActions(ctx: StoreCtx): DataActions {
                   delete next[id]
                   return next
                 })(),
+            refreshErrorKinds: result.error
+              ? { ...s.refreshErrorKinds, [id]: result.errorKind ?? errorKindOf(result.error) }
+              : (() => {
+                  const next = { ...s.refreshErrorKinds }
+                  delete next[id]
+                  return next
+                })(),
           }
         })
         if (result.error) {
-          get().toast("error", `刷新失败：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
+          const kind = result.errorKind ?? errorKindOf(result.error)
+          const label = kind === "unknown" ? "刷新失败" : ERROR_KIND_LABEL[kind]
+          get().toast("error", `${label}：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
         } else if (!opts?.silent) {
           // 手动刷新是 force 的,必然走网络 —— 旧文案「未发起网络请求」与实际行为不符。
           // 停用订阅例外:core 对 enabled=false 不抓取只回缓存,别宣称「已强制重新抓取」。
@@ -140,7 +149,9 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         }
       } catch (e) {
         const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
-        get().toast("error", `刷新失败：${title}`, e instanceof Error ? e.message : String(e))
+        const kind = errorKindOf(e)
+        const label = kind === "unknown" ? "刷新失败" : ERROR_KIND_LABEL[kind]
+        get().toast("error", `${label}：${title}`, e instanceof Error ? e.message : String(e))
       } finally {
         set((s) => {
           const busy = { ...s.busy }
@@ -164,6 +175,7 @@ export function createDataActions(ctx: StoreCtx): DataActions {
       const subs = await dl.subscriptions.list()
       set({ loading: true, busy: Object.fromEntries(subs.map((s) => [s.id, true])) })
       const errors: Record<string, string> = {}
+      const kinds: Record<string, ErrorKind> = {}
       type RefreshOutcome = Awaited<ReturnType<typeof dl.refresh>>
       let results: PromiseSettledResult<RefreshOutcome>[] = []
       try {
@@ -190,9 +202,13 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         results.forEach((r, i) => {
           const id = subs[i]!.id
           if (r.status === "fulfilled") {
-            if (r.value.error) errors[id] = r.value.error
+            if (r.value.error) {
+              errors[id] = r.value.error
+              kinds[id] = r.value.errorKind ?? errorKindOf(r.value.error)
+            }
           } else {
             errors[id] = r.reason instanceof Error ? r.reason.message : String(r.reason)
+            kinds[id] = errorKindOf(r.reason)
           }
         })
       } finally {
@@ -212,16 +228,24 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           // 同上:停用/无缓存订阅返回 itemCount 0,不能把窗口压到 0。
           page[id] = Math.max(page[id] || PAGE_SIZE, r.value.itemCount)
         }
-        set({ loading: false, busy: {}, refreshErrors: errors, loadMoreEnded: clearedEnded, page })
+        set({
+          loading: false,
+          busy: {},
+          refreshErrors: errors,
+          refreshErrorKinds: kinds,
+          loadMoreEnded: clearedEnded,
+          page,
+        })
       }
       const failed = Object.keys(errors).length
+      const authCount = Object.values(kinds).filter((k) => k === "auth").length
       get().toast(
         failed ? "warn" : "ok",
         failed ? `刷新完成，${failed} 条失败` : "刷新完成",
         failed
           ? `失败的订阅:${Object.keys(errors)
               .map((id) => subs.find((s) => s.id === id)?.title ?? id)
-              .join("、")}。已保留旧缓存,rail 上有告警标记。`
+              .join("、")}。${authCount ? `其中 ${authCount} 条需要登录。` : ""}已保留旧缓存,rail 上有告警标记。`
           : `${subs.length} 条订阅已更新。`,
       )
       refreshView()

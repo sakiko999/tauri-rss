@@ -23,7 +23,7 @@ export function ArticlePane() {
   const nodeId = useDesktop((s) => s.selectedNodeId)
   const view = useDesktop((s) => s.view)
   const hotWord = useDesktop((s) => s.hotWord)
-  const selectedArticleId = useDesktop((s) => s.selectedArticleId)
+  const selectedArticleKey = useDesktop((s) => s.selectedArticleKey)
   const selectArticle = useDesktop((s) => s.selectArticle)
   const markRead = useDesktop((s) => s.markRead)
   const toggleStar = useDesktop((s) => s.toggleStar)
@@ -57,7 +57,7 @@ export function ArticlePane() {
   const health = meta.sub ? healthOf(meta.sub, refreshErrors, busy) : "ok"
 
   const openItem = (it: MediaItem) => {
-    selectArticle(it.id)
+    selectArticle(it)
     // 「打开即标已读」是可关的设置;关掉后只选中不改阅读态(键盘 j/k 同理)。
     if (it.isUnread && (settings?.markReadOnOpen ?? true)) markRead(it)
   }
@@ -144,7 +144,7 @@ export function ArticlePane() {
           itemContent={(_, it) => (
             <ListRow
               item={it}
-              active={selectedArticleId === it.id}
+              active={selectedArticleKey === itemKey(it)}
               onOpen={openItem}
               onToggleRead={markRead}
               onToggleStar={toggleStar}

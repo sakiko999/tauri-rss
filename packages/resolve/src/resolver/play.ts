@@ -11,6 +11,7 @@
  */
 import type { Stream } from "@amoeba/xml"
 import type { SourceInfo } from "../index.ts"
+import { ResolveError } from "../errors.ts"
 import { resolveRoute, type ResolvePlatform } from "./router.ts"
 import { resolveBiliLivePlay, resolveBiliVideoPlay } from "../platform/bili"
 import { douyinResolveStreams } from "../platform/douyin"
@@ -35,7 +36,7 @@ export interface ResolveResult {
 export async function resolvePlayByUrl(url: string, info?: ResolveInfo): Promise<ResolveResult> {
   const route = resolveRoute(url)
   if (!route || route.kind !== "video") {
-    throw new Error(`resolver: 无法从 URL 解析视频流(仅支持 bilibili 视频/YouTube): ${url}`)
+    throw new ResolveError("unsupported", `resolver: 无法从 URL 解析视频流(仅支持 bilibili 视频/YouTube): ${url}`)
   }
   // kind==="video" ⇒ 平台仅在 bilibili|youtube(路由表由 kind 判别保证)。
   const streams = await resolveVideoStreams(route.platform as VideoPlatform, route.id, info)
@@ -54,7 +55,7 @@ export async function resolveLivePlayByUrl(url: string, info?: ResolveInfo): Pro
     return resolveVideoStreams("youtube", route.id, info).then((streams) => ({ id: route.id, streams }))
   }
   if (!route || route.kind !== "live") {
-    throw new Error(`resolver: 无法从 URL 解析直播流(需直播路由): ${url}`)
+    throw new ResolveError("unsupported", `resolver: 无法从 URL 解析直播流(需直播路由): ${url}`)
   }
   // kind==="live" ⇒ 平台仅在 bilibili|douyu|huya|douyin|twitch(路由表由 kind 判别保证)。
   const streams = await resolveLiveStreams(route.platform as LivePlatform, route.id, info)

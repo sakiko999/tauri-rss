@@ -27,39 +27,7 @@ export interface BodyCacheRepo {
 }
 
 export function createBodyCacheRepo(storage: StorageBackend, prefix = "body:"): BodyCacheRepo {
-  // 订阅退订时按前缀清:itemId 未知,故记一份「该订阅已缓存过哪些 item」的索引。
-  const indexKey = (subscriptionId: string): string => `${prefix}idx:${subscriptionId}`
   const key = (subscriptionId: string, itemId: string): string => `${prefix}${subscriptionId}:${itemId}`
-
-  /**
-   * ⚠️ 索引是**读-改-写**,必须串行化:并发 set(如一次 refresh 后多篇续点开)会各自
-   * 读到同一旧索引、后写者覆盖,丢掉先写者刚加的 itemId → 退订时那条 KV **永不清理**
-   * (泄漏)。按订阅分组的串行链(与 reading-repo 同款;不同订阅互不阻塞)。
-   */
-  const serial = new Map<string, Promise<unknown>>()
-  function serialize<T>(subscriptionId: string, fn: () => Promise<T>): Promise<T> {
-    const prev = serial.get(subscriptionId) ?? Promise.resolve()
-    const next = prev.then(fn, fn)
-    serial.set(
-      subscriptionId,
-      next.then(
-        () => {},
-        () => {},
-      ),
-    )
-    return next
-  }
-
-  async function readIndex(subscriptionId: string): Promise<string[]> {
-    const raw = await storage.get(indexKey(subscriptionId))
-    if (!raw) return []
-    try {
-      const arr = JSON.parse(raw) as unknown
-      return Array.isArray(arr) ? (arr as string[]) : []
-    } catch {
-      return []
-    }
-  }
 
   return {
     async get(subscriptionId, itemId) {
@@ -72,22 +40,13 @@ export function createBodyCacheRepo(storage: StorageBackend, prefix = "body:"): 
       }
     },
     async set(subscriptionId, itemId, entry) {
-      // 值写入无需串行(不同 key);仅索引读-改-写串行。但两者放同一条链更简单且无副作用。
-      return serialize(subscriptionId, async () => {
-        await storage.set(key(subscriptionId, itemId), JSON.stringify(entry))
-        const idx = await readIndex(subscriptionId)
-        if (!idx.includes(itemId)) {
-          idx.push(itemId)
-          await storage.set(indexKey(subscriptionId), JSON.stringify(idx))
-        }
-      })
+      await storage.set(key(subscriptionId, itemId), JSON.stringify(entry))
     },
     async deleteAll(subscriptionId) {
-      return serialize(subscriptionId, async () => {
-        const idx = await readIndex(subscriptionId)
-        await Promise.all(idx.map((id) => storage.delete(key(subscriptionId, id))))
-        await storage.delete(indexKey(subscriptionId))
-      })
+      // 按前缀扫描,不再维护「已缓存 item」索引:索引是读-改-写,并发写会丢项 →
+      // 退订时漏删;前缀带分隔符,不会误伤 `s1` 与 `s10`。代价是一次列表查询。
+      const keys = await storage.keys(`${prefix}${subscriptionId}:`)
+      await Promise.all(keys.map((k) => storage.delete(k)))
     },
   }
 }

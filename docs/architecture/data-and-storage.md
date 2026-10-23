@@ -129,7 +129,12 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 
 **storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db）·
 CLI `sqliteStorage`（bun:sqlite）· example 内存版。
-**DDL 唯一权威 = core `db/schema.ts`**（两端共用，插件自带的 migration 机制不用，防漂移）。
+**DDL 唯一权威 = core `db/schema.ts`**（插件自带的 migration 机制不用，防漂移）。
+**执行方式（2026-10-23 起）**：core 在 `createDataLayer()` 首行调用
+`appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；
+`SqliteStorageBackend` 只保存并执行注入的 schema（首次读写前未注入即抛），不再 import `@amoeba/core`。
+KV/localStorage/内存后端不实现 `setSchema`，调用是 no-op。CLI 的 `sqliteStorage` 是 app 层、
+仍直接 import core 并在构造时执行 `MIGRATIONS`（未接 `setSchema`，不构成包依赖环）。
 
 ⚠️ **DB 按运行形态隔离**（`packages/host/src/tauri/sqlite-storage-backend.ts`）：
 生产 `rss.db` · 普通 dev `rss.dev.db` · release debug `rss.release-debug.db`
@@ -160,10 +165,11 @@ release debug 仍走 Vite dev server（DEV=true），会在自己的库里写种
 
 **关键取舍：migration 不用插件的（Rust 侧 `add_migrations`）**。插件的 migration 定义
 落在 Rust，CLI（bun:sqlite）就得复制一份 SQL——正是 `docs/ops/commands.md` §六禁止的
-「各写各的 SQL 导致漂移」。改为：DDL 归 **core（`packages/core/src/db/schema.ts`）**，
-两端启动时各跑同一份幂等 DDL（`CREATE TABLE IF NOT EXISTS`）。P1 schema 极简（KV 一张表），
-不需要版本化框架；`MIGRATIONS` 数组已就位，引入非幂等迁移时补版本表、两端复用同一
-执行逻辑。
+「各写各的 SQL 导致漂移」。改为：DDL 归 **core（`packages/core/src/db/schema.ts`）**；
+desktop 由 core 在 `createDataLayer()` 里经 `storage.setSchema()` 注入后再执行，
+CLI 作为 core 的直接消费者仍在启动时执行同一份幂等 DDL（`CREATE TABLE IF NOT EXISTS`）。
+P1 schema 极简（KV 一张表），不需要版本化框架；`MIGRATIONS` 数组已就位，引入非幂等迁移时
+补版本表、两端复用同一执行逻辑。
 
 ### 二、落地形态：KV-over-SQLite（repo 零改动）
 
@@ -174,20 +180,24 @@ release debug 仍走 Vite dev server（DEV=true），会在自己的库里写种
 desktop:  injectTauriHost → SqliteStorageBackend(tauri-plugin-sql, appData/rss.db)
 CLI:      setupHost       → sqliteStorage(bun:sqlite, apps/cli/.data/rss.db)
 共用:     core db/schema.ts 的 KV_TABLE/KV_DDL/MIGRATIONS（唯一 DDL 权威）
+注入:     core createDataLayer → appHost.storage.setSchema?()（SQL 后端只执行）
 不动:     三 repo / DataLayer / 命令层 / UI
 ```
 
 将来需要结构化查询（阅读状态批量操作、缓存索引、全文搜索）时按 repo 逐个拆表——
 repo 接口不变，只是 KV 实现换成 SQL 实现。
 
-### 三、localStorage → SQLite 迁移（desktop）
+### 三、localStorage → SQLite 迁移（desktop，历史设计）
 
-`SqliteStorageBackend` 首次访问时惰性执行（进程内一次）：
+⚠️ **现行代码没有搬迁逻辑**（`03-flows.md` §1 已按代码修正）：`SqliteStorageBackend` 首次访问时
+只惰性建连并执行 core 注入的 `schema.migrations`（进程内一次），不再遍历/删除 localStorage key。
+下面保留的是最初设计记录，不要据此推断运行时行为：
 
 1. 建 KV 表（幂等 DDL）
 2. 遍历 `subscriptions/reading/settings` 三个 localStorage key（`tauri-rss:` 前缀）：
    sqlite 该 key **为空才写入**；随后**删除 local key**——无论哪种情况都移除，
    杜绝双源漂移（旧 local 值不是权威，sqlite 已有值优先）
+   （未确认该设计是否曾以正式版本发布；当前 master 无对应代码）
 
 ### 四、验证状态
 

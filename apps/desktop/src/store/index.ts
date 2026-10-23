@@ -42,7 +42,7 @@ export const useDesktop = create<DesktopState>()((set, get) => {
     settings: null,
 
     selectedNodeId: "tab:all",
-    selectedArticleId: null,
+    selectedArticleKey: null,
     socialDetail: null,
     hotWord: null,
     initError: null,
@@ -57,6 +57,7 @@ export const useDesktop = create<DesktopState>()((set, get) => {
     loading: false,
     busy: {},
     refreshErrors: {},
+    refreshErrorKinds: {},
     canLoadMore: {},
     loadMoreEnded: {},
     totals: {},

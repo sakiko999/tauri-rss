@@ -1,5 +1,6 @@
 /** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile / 完全重置 + 最近抓取错误。 */
 import { useState } from "react"
+import { ERROR_KIND_LABEL } from "@amoeba/core"
 import { withBrowserGlobal } from "@amoeba/resolve"
 import { useDesktop } from "../../../store/index.ts"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
@@ -9,6 +10,7 @@ export function Diagnostics() {
   const allItems = useDesktop((s) => s.allItems)
   const subscriptions = useDesktop((s) => s.subscriptions)
   const refreshErrors = useDesktop((s) => s.refreshErrors)
+  const refreshErrorKinds = useDesktop((s) => s.refreshErrorKinds)
   const toast = useDesktop((s) => s.toast)
   const [cacheSize, setCacheSize] = useState<number | null>(null)
 
@@ -164,7 +166,12 @@ export function Diagnostics() {
                   <td style={{ width: 200 }} className="od-truncate">
                     {subscriptions.find((s) => s.id === id)?.title ?? id}
                   </td>
-                  <td className="t-small t-muted">{msg}</td>
+                  <td className="t-small t-muted">
+                    <span className="tag" style={{ marginRight: 6 }}>
+                      {ERROR_KIND_LABEL[refreshErrorKinds[id] ?? "unknown"]}
+                    </span>
+                    {msg}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -42,6 +42,7 @@ const PLATFORM_ROWS: Array<{ key: string; name: string; hint?: string }> = [
   { key: "youtube", name: "YouTube" },
   { key: "twitch", name: "Twitch" },
   { key: "apple", name: "Apple 播客" },
+  { key: "rsshub", name: "RSSHub" },
   {
     key: "*",
     name: "其它（RSS 直链 / 未知 host）",

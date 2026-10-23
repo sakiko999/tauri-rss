@@ -23,7 +23,7 @@ export function sqliteStorage(): StorageBackend {
   // 直接抛 "unable to open database file"(且堆栈里看不出该建目录)。先建。
   mkdirSync(DATA_DIR, { recursive: true })
   const db = new Database(sqliteFilePath(), { create: true })
-  for (const m of MIGRATIONS) db.exec(m.sql)
+  for (const sql of MIGRATIONS) db.exec(sql)
 
   const getStmt = db.prepare(`SELECT value FROM ${KV_TABLE} WHERE key = ?`)
   const keysStmt = db.prepare(`SELECT key FROM ${KV_TABLE} WHERE key LIKE ? || '%'`)

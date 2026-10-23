@@ -5,6 +5,7 @@
  * `poster`、或 `images[0].url`(social)。视图只关心「给我一个 src」,
  * 归一化收在这里,避免每个卡片各写一遍分支。
  */
+import { itemRefKey } from "@amoeba/core"
 import type { MediaItem } from "@amoeba/core"
 
 /**
@@ -68,7 +69,7 @@ export function socialRatio(img?: { width?: number; height?: number }): number {
 export function itemKey(item: MediaItem | undefined | null, index = 0): string {
   // 非 item(测量阶段的下标入参 / 越界 undefined)→ 用下标,保证唯一且稳定。
   if (!item || typeof item !== "object" || !("id" in item)) return `#${index}`
-  return `${item.subscriptionId}:${item.id}`
+  return itemRefKey(item.subscriptionId, item.id)
 }
 
 /**

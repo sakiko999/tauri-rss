@@ -178,7 +178,7 @@ n/tva/ws1.sinaimg.cn 等子域全部 403/404）。
 命中防盗链图床的 src 经 `appHost.http`（Tauri 生产走 Rust `http_get`，node/browser 后端
 同接口）带站内 Referer 拉取 `arraybuffer` → Blob URL → `<img>` 显示。
 
-- 规则表 `mediaReferrerFor(url)` 收敛在 **host 层**（`packages/host/src/media-referrer.ts`，
+- 规则表 `mediaReferrerFor(url)` 收敛在 **resolve 层**（`packages/resolve/src/media-referrer.ts`，
   `sinaimg.cn → https://weibo.com/`）—— 唯一权威，ui 不写死任何域名，加图床只改这一处；
 - 消费方 `MediaImage`（`packages/ui/src/renderers/atoms/MediaImage.tsx`）内联
   `useProxiedImage`：命中未就绪返回 undefined（不挂原 src，避免先发必 403 的请求）；
@@ -195,7 +195,7 @@ n/tva/ws1.sinaimg.cn 等子域全部 403/404）。
 
 Rust 侧维护「host → Referer」表，请求进来自动带。代价小，但**前端仍需判断「这张图要不要
 走隧道」** —— 判断依据和 Referer 规则是同一份知识，会在 TS（判断）与 Rust（补头）**分裂成
-两份**，比现在的 `mediaReferrerFor`（host 层一份）更分散。**不值**。
+两份**，比现在的 `mediaReferrerFor`（resolve 层一份）更分散。**不值**。
 
 #### 方案 B：自定义协议 `media://` 代理图片（彻底 Rust 化）
 
@@ -237,7 +237,7 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 
 ### 决策
 
-- **维持 blob 隧道**。理由：规则已收敛（host 层一份）、跨平台统一、后端已跨平台
+- **维持 blob 隧道**。理由：规则已收敛（resolve 层一份）、跨平台统一、后端已跨平台
   （`http_get`）、无安全洞；自定义协议在桌面是小优化，在 Android 踩伪 scheme + 安全
   advisory + 跨平台 URL 分支三连坑，远超「Rust 层加个 Referer」的收益。
 - **方案 B 列为未来独立优化**：当 mobile 真正接入 appHost/crawler、瀑布流多图成为性能瓶颈

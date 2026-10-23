@@ -122,14 +122,17 @@ const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd
  * argv[3]=--release；而 `bun run tauri --release` 里 argv[2]=`--release`。
  * 按位置硬取会把 `--release` 当成平台名。故先摊平再按语义挑。
  */
-function parseArgs(argv: string[]): { command?: string; platform?: Platform; release: boolean; help: boolean } {
+function parseArgs(argv: string[]): { command?: string; platform?: Platform; release: boolean; build: boolean; help: boolean } {
   const rest = argv.slice(2)
   const help = rest.some((a) => a === "--help" || a === "-h" || a === "help")
   const release = rest.includes("--release")
   // ⚠️ `command` 要排除 `--help`/`help`，否则 `bun run tauri help` 会被当成未知命令。
   const command = rest.find((a) => !a.startsWith("-") && a !== "help")
+  // `bun run tauri [desktop|mobile] build` 的 `build` 是**第二段意图**，不是命令名；
+  // 旧解析只取第一个非 flag 词，于是 `tauri:build` 静默落进 dev 计划（不产安装包）。
+  const build = rest.includes("build")
   const platform = rest.find((a) => PLATFORMS.includes(a as Platform)) as Platform | undefined
-  return { command, platform, release, help }
+  return { command, platform, release, build, help }
 }
 
 /** 命令意图 → 执行计划。纯函数（只描述，不执行）。 */
@@ -243,7 +246,9 @@ async function main(): Promise<void> {
     console.log(HELP);
     process.exit(1);
   }
-  const plan = planFor(args.command ?? "", platform, { release: args.release });
+  // `tauri ... build` = 前端构建 + Tauri release 构建；`build` 单独出现仍是只构建前端。
+  const command = args.command === "tauri" && args.build ? "build-release" : (args.command ?? "");
+  const plan = planFor(command, platform, { release: args.release });
   await execute(plan);
 }
 

@@ -53,9 +53,10 @@ export function isStreamingStream(stream: MediaStream): boolean {
 /**
  * 默认选流 —— **取 `streams[0]`**。
  *
- * crawler 契约:各 channel 产流处保证数组**最高清晰度排最前**(bili/youtube/douyin/
- * huya 显式按 rate 降序;douyu 保留服务端 multirates 顺序 —— 它的 rate 是档位 ID
- * 不是清晰度等级)。player 因此**不做二次排序**,取首档即可。
+ * crawler 契约:各 channel 产流处保证数组**最高清晰度排最前**(bili/youtube/douyin
+ * 显式降序;huya 依赖 API 原序 —— 最高档 iBitRate=0，按 rate 降序反而会把它排到最后;
+ * douyu 保留服务端 multirates 顺序 —— 它的 rate 是档位 ID 不是清晰度等级)。
+ * player 因此**不做二次排序**,取首档即可。
  *
  * ⚠️ 曾经按**格式族**挑(`find(isProgressiveVideo) ?? find(hls) ?? find(flv) ?? [0]`),
  * 以为「原生可播的最稳」。那会在首档不是渐进式、后面却有的时候**静默降画质**:

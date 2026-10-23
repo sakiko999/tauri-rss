@@ -118,6 +118,9 @@ export function initAppHost(): void {
 
 /** 注入实现值(由各环境 inject 函数调用)。 */
 export function setHostCaps(caps: {
+  // 注入前先确保门面存在:调用方可能只 import 了 `@amoeba/host/runtime`
+  // (没有根入口的历史副作用),或像 CLI 一样自行组装后端。
+
   http: HttpBackend
   js: JsBackend
   storage: StorageBackend
@@ -128,6 +131,7 @@ export function setHostCaps(caps: {
   openExternal?: (url: string) => Promise<void>
   updater?: UpdaterBackend
 }): void {
+  initAppHost()
   // 所有出站 HTTP 统一过 governor(分类/去重/配额/冷却),见 net/governor.ts。
   _http = governedHttp(caps.http)
   _js = caps.js

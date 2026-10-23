@@ -3,8 +3,10 @@
 > 从 `CLAUDE.md` 迁出（2026-10-21）。`CLAUDE.md` 只留「全局注入 + 必填/可选」三行。
 > 存储三态与 DDL 权威见 `docs/architecture/data-and-storage.md`；governor 见 `docs/risk/crawler-risk-control.md`。
 
-宿主能力经全局 `globalThis.appHost` 注入，门面在 `packages/host/src/runtime.ts`
-（import 即初始化）。类型声明在根 `global.d.ts`，经 `tsconfig.app.json` 的 `files` 传递。
+宿主能力经全局 `globalThis.appHost` 注入，门面在 `packages/host/src/runtime.ts`。
+`setHostCaps` / 各 `inject*Host` 内部幂等调用 `initAppHost()`；**根入口 import 不再有副作用**。
+应用按环境取子路径（`@amoeba/host/{node,tauri,browser,runtime,governor}`），避免三套后端全进模块图。
+类型声明在根 `global.d.ts`，经 `tsconfig.app.json` 的 `files` 传递。
 
 - **注入**：desktop `injectTauriHost()`（main.tsx）· example/测试 `injectNodeHost()` ·
   纯前端调试 `injectBrowserHost()`（CORS 受限）
@@ -20,7 +22,13 @@
 
 **storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db）·
 CLI `sqliteStorage`（bun:sqlite）· example 内存版。
-**DDL 唯一权威 = core `db/schema.ts`**（两端共用，插件自带的 migration 机制不用，防漂移）。
+**DDL 唯一权威 = core `db/schema.ts`**（插件自带的 migration 机制不用，防漂移）。
+**注入方式**：`StorageBackend` 新增可选 `setSchema?(schema: StorageSchema)`（`StorageSchema = { table, ddl, migrations }`，
+类型在根 `global.d.ts`）。core 在 `createDataLayer()` 首行调用
+`appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；
+SQL 后端（`SqliteStorageBackend`）只保存并执行，首次读写前未注入即抛错；建连后只接受同一份 schema，换 schema 会被拒绝。
+KV/localStorage/内存后端不实现，调用方用 `?.` 保持 no-op。CLI 的 `sqliteStorage` 仍是 app 层直接 import core
+并执行 `MIGRATIONS`（未接 `setSchema`）。
 
 **内容缓存**：refresh 走 TTL 缓存（KV key `content:<subId>`，value = `{fetchedAt, xml}`）。
 细则见 `docs/architecture/data-and-storage.md`。

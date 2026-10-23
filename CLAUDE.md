@@ -23,7 +23,8 @@ apps/
 packages/
   xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。node/browser/tauri 三态；
-               net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）
+               net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）。
+               应用走子路径 `./node|tauri|browser|runtime|governor`；根入口无 import 副作用
   resolve/     ★ 平台解析层：platform/（各平台 client + 播放解析 + 弹幕 codec）、
                resolver/（by-url 路由）、browser/（CDP 模拟）、utils/、danmaku/ 原语。
                契约：按 item.url 懒解析 + 平台 client 供 crawler 取数。类型自持，不依赖 crawler
@@ -39,7 +40,9 @@ packages/
 ```
 
 依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`；`log` 是零依赖叶子；
-`host` **依赖 core**（sqlite backend 复用其 `db/schema.ts`，core 把 host 放 devDep）。
+`host` **不依赖 core**（DDL 仍归 core，由 `createDataLayer()` 经
+`appHost.storage.setSchema?.()` 注入 SQL 后端），`resolve` **不依赖 host**
+（防盗链 Referer 规则在 `resolve/media-referrer.ts`）。
 读取端（crawler/core）直接访问 `globalThis.appHost.*`，不各自包装；新直引前先问
 「能否经 core 门面」。
 
@@ -77,7 +80,8 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   新增「播放」入口一律经 `usePlayerNav` 收口。见 `docs/ui/ui-conventions.md`。
 - **appHost 全局注入**：必填 `http`/`js`/`storage`，可选 `ws`/`browser` 未注入即降级；
   打开外链必须走 `openExternal`（WebView 拦 `window.open`）。见 `docs/architecture/host-abi.md`。
-- **存储 DDL 唯一权威 = core `db/schema.ts`**（插件自带 migration 不用，防漂移）。
+- **存储 DDL 唯一权威 = core `db/schema.ts`**（插件自带 migration 不用，防漂移）；
+  由 `createDataLayer()` 首行经 `appHost.storage.setSchema?.()` 注入 SQL 后端，host 不 import core。
 - **平台 cookie 三级语义**（`resolve/platform/credentials.ts`）：调用点显式非空 > 显式
   **空串 = 强制匿名**（CLI `--kv cookie=` 依赖；xhs 会因此报「需要登录」）> provider
   （settings 登录态，core DataLayer / CLI 入口注册同一张表）。**渠道层不许再手抄
@@ -146,6 +150,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 等级 `0` 直通 / `1` 入门 / `2` 标准 / `3` 严格（`netLevels` 键只有平台名与 `"*"`）；
 所有 `appHost.http` 出站经 `host/src/net/governor.ts`（分类 → 冷却 → 去重 → 平台并发/RPM →
 全局并发），CDP 操作另经 `net.browserGate(platform)`（登录流程不传 platform）。
+RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建实例也归同一桶，不靠域名猜）。
 被动采集是**渠道属性** `RssChannel.passive`（`xhs:explore` 声明、`xhs:user` 刻意不声明）。
 窗口模式 `hidden` / `interactive` **是整实例级**，滚动驱动页面用
 `withBrowserMode(browser, "interactive", fn)`（内部串行 + 结束切回 hidden），不要手写
@@ -156,7 +161,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 
 | 分类 | 文档 |
 | --- | --- |
-| 架构与契约 | `docs/architecture/host-abi.md` · `docs/architecture/data-and-storage.md` · `docs/architecture/crawler-topology.md` |
+| 架构与契约 | ★ `docs/architecture/system/README.md`（全仓系统架构：包职责/契约/流程/扩展/风险） · `docs/architecture/host-abi.md` · `docs/architecture/data-and-storage.md` · `docs/architecture/crawler-topology.md` |
 | 平台 | ★ `docs/platforms/platform-notes.md` · `docs/platforms/channels.md`（渠道与缺口）· `docs/platforms/youtube.md` · `docs/platforms/twitch.md` · `docs/platforms/xhs-signature.md` · `docs/platforms/login.md` · `docs/platforms/domestic-feeds.md` |
 | UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` |
 | 播放与弹幕 | ★ `docs/playback/playback.md` · `docs/playback/danmaku.md` · `docs/playback/mpv.md`（未做） |
@@ -179,8 +184,6 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 - WebView2 生命周期：关主窗口进程必须退出；空闲回收后自动重建；连续 3 次关/建不撞 profile 占用。
 - `xhs:explore` 手动刷新命中 `passiveBuffer`；未命中走页面 SSR 兜底。
 - `xhs:user` 刷新：登录态导航出条目；**未登录必须报「需要登录」**（匿名态已移除）。
-- ⚠️ **governor 的 `rsshub` 平台配额是死键**：平台名按 host 推导，RSSHub 请求落到通用
-  host 桶，需改成 host 后缀匹配或显式映射。
 
 **长期悬置**（收益不抵复杂度）：CSP（现 `csp: null`，抖音/斗鱼签名脚本靠 `eval`）；
 live 按平台二次聚合的 UI 侧。
@@ -194,4 +197,6 @@ live 按平台二次聚合的 UI 侧。
 - [ ] xhs 全渠道登录态实机回归：扫码 → explore 首屏 + 翻页、user 首屏 + 翻页、详情；未登录三处都必须报「需要登录」
 - [ ] 实况图实机验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图（xhs 403 已确认，改走隧道 + Blob）
 - [ ] release 实机验收实况播放（dev 已修：CDN 对页面源 Referer 403 + ORB 拦截；需确认 release WebView2 下 mp4 解码与暂停/续播）
+- [ ] 下一轮候选：R5（refreshAll 超时仍全局 `abortTabs`，需 lane 化中止）；R9 剩余（平台名表收到一处）
+- [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
 <!-- cc-todo:end -->

@@ -17,6 +17,7 @@
 | `architecture/host-abi.md` | 全局 `appHost` 门面：注入方式、必填/可选能力、storage 三态 |
 | `architecture/data-and-storage.md` | 数据契约（XML 唯一通道 / id 唯一性 / 分页 / 正文补全 / 种子）+ SQLite 选型与迁移 |
 | `architecture/crawler-topology.md` | desktop 爬虫服务化决策与切分边界 + 移动端为何不能复用 CDP |
+| `architecture/system/README.md` | ★ 全仓系统架构文档集：系统总览、包职责与依赖、跨包契约、核心流程、扩展指南、风险与演进 |
 
 ## 平台
 

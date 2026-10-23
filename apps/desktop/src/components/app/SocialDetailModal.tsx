@@ -16,7 +16,7 @@ import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../Modal.tsx"
 import { Icon } from "../Icon.tsx"
 import { MediaImage, fmtCount } from "@amoeba/ui"
-import { videoReferrerFor } from "@amoeba/host"
+import { videoReferrerFor } from "@amoeba/resolve/media-referrer"
 import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
@@ -31,7 +31,7 @@ import { looksLikeHtml } from "../../lib/html.ts"
  * 生产 `tauri://localhost`）返回 403 text/html，浏览器再按 ORB 拦成
  * `MEDIA_ELEMENT_ERROR: Format error`。媒体错误**不进 console**，表现为「实况
  * 不播且无报错」。`<video>` 上也没有 `referrerPolicy` 可用，只能走 Rust 隧道。
- * Referer 规则归 host 层（videoReferrerFor），这里不写死域名。
+ * Referer 规则归 resolve（videoReferrerFor），这里不写死域名。
  */
 function useLiveVideoBlob(src: string | undefined, attempt: number) {
   const [blobUrl, setBlobUrl] = useState<string | undefined>(undefined)

@@ -3,6 +3,7 @@
  *
  * 从 store/index.ts 拆出;依赖 StoreCtx + lib 的参数比较/导航桥。
  */
+import { ERROR_KIND_LABEL } from "@amoeba/core"
 import { parseOpml } from "@amoeba/xml"
 import { exportOpml, pendingImports } from "../../lib/opml.ts"
 import { applyRuntimeSettings, navTo, now, sameInfo } from "../lib.ts"
@@ -67,9 +68,14 @@ export function createSubsActions(ctx: StoreCtx): SubsActions {
         const gid = await ensureKindGroup(ctx, dl.channelKind(channelKey))
         if (gid) dest = { ...meta, groupId: gid }
       }
-      const id = await dl.addSubscription(channelKey, title, info, dest)
+      const { id, refresh } = await dl.addSubscription(channelKey, title, info, dest)
       await syncSubscriptions()
-      get().toast("ok", `已订阅 ${title}`, `渠道 ${channelKey}`)
+      // ⚠️ 首刷失败不能吞：订阅已落盘，但列表为空。用 warn 明确「已订阅、抓取失败」，
+      // 而不是成功 toast 掩盖失败（旧实现只返回 id，RefreshResult.error 被丢弃）。
+      if (refresh.error) {
+        const label = refresh.errorKind ? ERROR_KIND_LABEL[refresh.errorKind] : "首次抓取失败"
+        get().toast("warn", `已订阅 ${title}，但${label}`, refresh.error)
+      } else get().toast("ok", `已订阅 ${title}`, `渠道 ${channelKey}`)
       return id
     },
 

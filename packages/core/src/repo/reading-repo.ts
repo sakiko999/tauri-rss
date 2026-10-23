@@ -20,6 +20,8 @@ export interface ReadingRepository {
   setScrollRatio(subscriptionId: string, itemId: string, scrollRatio: number): Promise<void>
   /** 批量标已读:一次读改写落盘。逐条 markRead 并发会互相覆盖(见 serial 注释)。 */
   markManyRead(keys: string[], read?: boolean): Promise<void>
+  /** 退订时清理该订阅的全部阅读态（复合键前缀 `subscriptionId\0`）。 */
+  deleteBySubscription(subscriptionId: string): Promise<void>
 }
 
 export function createReadingRepository(storage: StorageBackend, now: () => number): ReadingRepository {
@@ -109,6 +111,19 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
     async markManyRead(keys, read = true) {
       if (!keys.length) return
       await run(() => patchMany(keys, { read }))
+    },
+    async deleteBySubscription(subscriptionId) {
+      await run(async () => {
+        const map = await load()
+        const prefix = `${subscriptionId}\u0000`
+        let changed = false
+        for (const key of Object.keys(map)) {
+          if (!key.startsWith(prefix)) continue
+          delete map[key]
+          changed = true
+        }
+        if (changed) await save(map)
+      })
     },
   }
 }

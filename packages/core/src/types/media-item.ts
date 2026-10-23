@@ -163,10 +163,9 @@ export interface LiveItem extends MediaItemBase {
   online?: number
   isRecord?: boolean
   introduction?: string
-  notice?: string
   showTime?: string
-  /** 当前档位名(展示用)。⚠️ 曾有 playUrls/playHeaders/playUrlsExpiresAt,零读写已删。 */
-  quality?: string
+  /** ⚠️ 可播流/档位字段不在刷新模型里:playUrls/playHeaders/quality 零读写已删,
+   *  可播流统一由 `resolveLivePlay` 按 url 懒解析。 */
 }
 
 /**

@@ -14,7 +14,8 @@
  * 最小断言(非框架):内存存储 + 假 channel,不触网 —— 判的是编排逻辑,不是抓取。
  */
 import assert from "node:assert/strict"
-import { injectNodeHost, levelFor } from "@amoeba/host"
+import { injectNodeHost } from "@amoeba/host/node"
+import { levelFor } from "@amoeba/host/governor"
 import { getChannel, registerAllChannels, registerChannel } from "@amoeba/crawler"
 import { serializeFeed } from "@amoeba/xml"
 import { createDataLayer } from "../index.ts"
@@ -191,8 +192,27 @@ await seed("chk-active")
   const beforeFetch = fetchCalls
   const r = await dl.refresh("chk-passive-empty", { force: true })
   assert.equal(r.error, "被动采集：没有可用的数据，且无缓存可回退")
+  assert.equal(r.errorKind, "no-data")
   assert.equal(r.itemCount, 0)
   assert.equal(fetchCalls, beforeFetch, "被动渠道无缓存也不得回退 fetch()")
+}
+
+// ── 2.9 预览与刷新同一条被动承诺：有浏览器时只调 fetchPassive，无数据报 no-data ──
+{
+  passiveXml = feed("preview-1", "预览内容")
+  const beforeFetch = fetchCalls
+  const beforePassive = passiveCalls
+  const p = await dl.previewChannel("chk:passive", {})
+  assert.equal(p.items[0]?.id, "preview-1", "预览应使用被动数据")
+  assert.equal(passiveCalls, beforePassive + 1, "预览被动渠道应调 fetchPassive()")
+  assert.equal(fetchCalls, beforeFetch, "预览被动渠道不得回退 fetch()")
+
+  passiveXml = null
+  await assert.rejects(
+    () => dl.previewChannel("chk:passive", {}),
+    (e: any) => e?.kind === "no-data",
+    "预览无被动数据应报 no-data",
+  )
 }
 
 // ── 3. 渠道覆盖优先于平台/全局 ──

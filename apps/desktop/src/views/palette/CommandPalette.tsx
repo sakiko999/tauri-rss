@@ -75,7 +75,8 @@ export function CommandPalette() {
       })),
     ]
     const items: Entry[] = allItems.slice(0, 400).map((it) => ({
-      id: `item:${it.id}`,
+      // 复合键：聚合视图里同一 id 会跨订阅出现，裸 id 会让 cmdk/React key 撞车。
+      id: `item:${it.subscriptionId}:${it.id}`,
       group: "条目",
       title: it.title,
       sub: it.author?.name,

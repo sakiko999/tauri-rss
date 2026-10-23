@@ -11,11 +11,18 @@
     "paths": {
       "@amoeba/xml": ["./packages/xml/src/index.ts"],
       "@amoeba/host": ["./packages/host/src/index.ts"],
+      "@amoeba/host/runtime": ["./packages/host/src/runtime.ts"],
+      "@amoeba/host/governor": ["./packages/host/src/net/governor.ts"],
+      "@amoeba/host/node": ["./packages/host/src/node/index.ts"],
+      "@amoeba/host/tauri": ["./packages/host/src/tauri/index.ts"],
+      "@amoeba/host/browser": ["./packages/host/src/browser/index.ts"],
       "@amoeba/log": ["./packages/log/src/index.ts"],
       "@amoeba/crawler": ["./packages/crawler/src/index.ts"],
       "@amoeba/core": ["./packages/core/src/index.ts"],
       "@amoeba/core/source/rsshub": ["./packages/core/src/source/rsshub.ts"],
       "@amoeba/resolve": ["./packages/resolve/src/index.ts"],
+      "@amoeba/resolve/errors": ["./packages/resolve/src/errors.ts"],
+      "@amoeba/resolve/media-referrer": ["./packages/resolve/src/media-referrer.ts"],
       "@amoeba/player": ["./packages/player/src/index.ts"],
       "@amoeba/ui": ["./packages/ui/src/index.ts"]
     },

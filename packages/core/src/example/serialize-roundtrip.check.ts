@@ -62,6 +62,29 @@ ok(videoBack.duration === 459, `duration(得 ${videoBack.duration})`)
 ok(videoBack.poster === "http://x/p.jpg", `poster(得 ${videoBack.poster})`)
 ok(videoBack.channel?.name === "UP主", `channel.name(得 ${videoBack.channel?.name})`)
 
+// 2b. Stream 全字段：enclosure 只能装 url+type，headers/quality/rate/dashManifest
+// 必须走 tpl:streamJson，否则 hls/dash 直链过边界即静默丢。
+const streamVideo: Item = {
+  id: "BV-stream", sourceId: "bili:popular", kind: "video", title: "带流视频",
+  url: "https://www.bilibili.com/video/BV-stream", fetchedAt: 1,
+  stream: {
+    url: "https://cdn.example/v.m3u8",
+    format: "hls",
+    headers: { Referer: "https://www.bilibili.com/", Origin: "https://www.bilibili.com" },
+    quality: "1080P",
+    rate: 80,
+    dashManifest: '<MPD><Period id="p0"/></MPD>',
+  },
+}
+const streamBack = deserializeFeed(serializeFeed([streamVideo]), ctx)[0] as any
+console.log("Stream 往返:")
+ok(streamBack.stream?.url === "https://cdn.example/v.m3u8", `url(得 ${streamBack.stream?.url})`)
+ok(streamBack.stream?.format === "hls", `format(得 ${streamBack.stream?.format})`)
+ok(streamBack.stream?.headers?.Referer === "https://www.bilibili.com/", `headers.Referer(得 ${JSON.stringify(streamBack.stream?.headers)})`)
+ok(streamBack.stream?.quality === "1080P", `quality(得 ${streamBack.stream?.quality})`)
+ok(streamBack.stream?.rate === 80, `rate(得 ${streamBack.stream?.rate})`)
+ok(streamBack.stream?.dashManifest === '<MPD><Period id="p0"/></MPD>', `dashManifest(得 ${streamBack.stream?.dashManifest})`)
+
 // 3. Audio:artist + album
 const audio: Item = {
   id: "ep1", sourceId: "rss:podcast", kind: "audio", title: "播客",
@@ -144,6 +167,23 @@ ok(artBack.fetchedAt === 1699999999123, `fetchedAt 透传(得 ${artBack.fetchedA
 ok(artBack.contentFormat === "html", `contentFormat(得 ${artBack.contentFormat})`)
 ok(artBack.author?.avatar === "http://x/av.jpg", `author.avatar(得 ${artBack.author?.avatar})`)
 ok(artBack.author?.handle === "@handle", `author.handle(得 ${artBack.author?.handle})`)
+
+// 6b. Article.media[]：image/video/audio 三种附件 + 宽高时长必须全保真
+const artMedia: Item = {
+  id: "a2", sourceId: "rss:x", kind: "article", title: "带附件文章",
+  url: "https://x/y", fetchedAt: 1, content: "<p>正文</p>", contentFormat: "html",
+  media: [
+    { kind: "image", url: "https://x/i.jpg", mimeType: "image/jpeg", title: "图", width: 800, height: 600 },
+    { kind: "video", url: "https://x/v.mp4", mimeType: "video/mp4", durationSec: 42, width: 1920, height: 1080 },
+    { kind: "audio", url: "https://x/a.mp3", mimeType: "audio/mpeg", durationSec: 300 },
+  ],
+} as Item
+const artMediaBack = deserializeFeed(serializeFeed([artMedia]), ctx)[0] as any
+console.log("Article.media 往返:")
+ok(artMediaBack.media?.length === 3, `三个附件都在(得 ${artMediaBack.media?.length})`)
+ok(artMediaBack.media?.some((m: any) => m.kind === "image" && m.url === "https://x/i.jpg" && m.width === 800 && m.height === 600 && m.title === "图"), "image 附件 URL/宽高/标题未丢")
+ok(artMediaBack.media?.some((m: any) => m.kind === "video" && m.durationSec === 42 && m.width === 1920), "video 附件时长/宽高未丢")
+ok(artMediaBack.media?.some((m: any) => m.kind === "audio" && m.url === "https://x/a.mp3" && m.durationSec === 300), "audio 附件未丢")
 
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
 process.exit(fails === 0 ? 0 : 1)

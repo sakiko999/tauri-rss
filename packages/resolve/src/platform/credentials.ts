@@ -16,8 +16,8 @@
  *
  * 语义(必须保序,各 client 经 resolveCookie 统一):
  *   1. 调用点显式非空串 → 原样使用(订阅/CLI kv 覆盖);
- *   2. 显式空串 "" → **强制匿名**,不回落 provider(xhs 详情刻意匿名、
- *      CLI `--kv cookie=` 探针依赖此语义);
+ *   2. 显式空串 "" → **强制匿名**,不回落 provider(CLI `--kv cookie=` 探针依赖
+ *      此语义;xhs 未登录会因此直接报「需要登录」);
  *   3. undefined → provider(platform);宿主未注册/无值 → client 原兜底(douyin 的
  *      匿名 ttwid jar / bili-weibo-xhs 的无 cookie)。
  */

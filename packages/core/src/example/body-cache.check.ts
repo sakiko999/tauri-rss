@@ -1,6 +1,6 @@
 /**
  * BodyCacheRepo 自检 —— `bun packages/core/src/example/body-cache.check.ts`
- * 覆盖:写读往返 / 索引去重 / 按订阅清空(退订)/ 损坏值容错 / 不同订阅隔离。
+ * 覆盖:写读往返 / 覆盖写 / 按订阅前缀清空(退订)/ 并发写 / 损坏值容错 / 不同订阅隔离。
  */
 import { createBodyCacheRepo } from "../repo/body-cache-repo.ts"
 
@@ -11,7 +11,7 @@ function memStorage(): StorageBackend {
     get: async (k) => m.get(k) ?? null,
     set: async (k, v) => void m.set(k, v),
     delete: async (k) => void m.delete(k),
-    keys: async () => [...m.keys()],
+    keys: async (prefix = "") => [...m.keys()].filter((k) => k.startsWith(prefix)),
   } as StorageBackend
 }
 
@@ -35,7 +35,7 @@ ok(a?.content === "正文A" && a?.contentFormat === "text", "写读往返")
 ok((await repo.get("s1", "nope")) === null, "未命中返回 null")
 ok((await repo.get("s2", "item-a")) === null, "跨订阅隔离(不串)")
 
-// 覆盖写 + 索引不重复膨胀
+// 覆盖写
 await repo.set("s1", "item-a", { content: "正文A2", contentFormat: "text", fetchedAt: 2 })
 ok((await repo.get("s1", "item-a"))?.content === "正文A2", "覆盖写生效")
 
@@ -49,11 +49,11 @@ ok((await repo.get("s1", "item-a")) === null, "deleteAll 清 item-a")
 ok((await repo.get("s1", "item-b")) === null, "deleteAll 清 item-b")
 ok((await repo.get("s2", "item-x"))?.content === "正文X", "deleteAll 不误伤其他订阅")
 
-// 再写 s1(索引应已重置,能正常重建)
+// 再写 s1
 await repo.set("s1", "item-c", { content: "正文C", contentFormat: "text", fetchedAt: 5 })
-ok((await repo.get("s1", "item-c"))?.content === "正文C", "清空后可重建索引")
+ok((await repo.get("s1", "item-c"))?.content === "正文C", "清空后可重新写入")
 
-// 并发写同订阅:索引读-改-写必须串行(否则丢索引项 → 退订漏清)
+// 并发写同订阅:无共享索引,deleteAll 前缀扫描应全清
 {
   const st = memStorage()
   const r = createBodyCacheRepo(st)
@@ -64,7 +64,7 @@ ok((await repo.get("s1", "item-c"))?.content === "正文C", "清空后可重建�
   )
   await r.deleteAll("sc")
   const left = await r.get("sc", "item-7")
-  ok(left === null, "并发写后 deleteAll 全清(索引未丢项)")
+  ok(left === null, "并发写后 deleteAll 全清")
   ok((await r.get("sc", "item-19")) === null, "并发写后 deleteAll 清末项")
 }
 

@@ -8,7 +8,7 @@
  * 不触网 —— 判的是编排逻辑,不是抓取。
  */
 import assert from "node:assert/strict"
-import { injectNodeHost } from "@amoeba/host"
+import { injectNodeHost } from "@amoeba/host/node"
 import { registerAllChannels } from "@amoeba/crawler"
 import { createDataLayer } from "../index.ts"
 import type { Subscription } from "../types/subscription.ts"

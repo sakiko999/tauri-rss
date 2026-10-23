@@ -1,13 +1,17 @@
 /**
- * mediaReferrerFor — 媒体(图片)防盗链 Referer 规则(唯一权威)。
+ * mediaReferrerFor — 媒体(图片/视频)防盗链 Referer 规则(唯一权威)。
  *
  * 部分图床(sinaimg.cn 等)对空 Referer / 非站内 Referer 返回 403,而 `<img>` 原生
  * 加载必带页面源 Referer(tauri://localhost),无解。此类媒体需经宿主隧道带站内
- * Referer 拉取。规则表收在宿主层,消费方(ui MediaImage 隧道)只调用不写死域名,
- * 加图床只改这里——与 crawler 各 channel 抓取带 Referer 的哲学同层。
+ * Referer 拉取。规则表收在 resolve(平台/媒体知识层),消费方只调用、不写死域名,
+ * 加图床只改这里。
+ *
+ * ⚠️ 2026-10-23 从 host 下沉到 resolve:host 只为这张表把整包拖进 resolve 的模块图。
+ * 现在 resolve 自己的 `utils/img-size.ts`、ui 的 MediaImage 隧道与 desktop 的实况
+ * 播放都从这里取规则,host 不再持有它。
  *
  * 注:crawler channel 的 Referer 是**抓取请求**的业务头;这里管**媒体加载**的
- * 防盗链 Referer,两者都归宿主能力,互不越界。
+ * 防盗链 Referer,两者用途不同、互不越界。
  */
 const HOTLINK_REFERRERS: Array<[string, string]> = [
   // 新浪图床:weibo.com 系 Referer 放行,空/其它 403。

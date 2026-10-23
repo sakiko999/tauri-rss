@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router"
 import { PlayableMedia } from "@amoeba/player"
-import type { MediaItem, MediaStream } from "@amoeba/core"
+import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
 import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
 import { Icon } from "../../components/Icon.tsx"
@@ -22,7 +22,7 @@ import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function PlayerPage() {
-  const { itemId, from } = usePlayParams()
+  const { itemId, from, sub } = usePlayParams()
   const allItems = useDesktop((s) => s.allItems)
   const previewDetail = useDesktop((s) => s.previewDetail)
   const queue = useDesktop((s) => s.queue)
@@ -48,16 +48,21 @@ export function PlayerPage() {
     [allItems, previewDetail],
   )
   // ⚠️ `id` 只在订阅内唯一,必须带订阅定位:
-  //   ① 预览条目(`preview:*`)是刚抓的快照,比库里同一房间的旧快照新 —— 从该节点进来时优先;
-  //   ② 否则按 `?from=` 的订阅精确匹配;
-  //   ③ 最后才退回裸 id(理论上只剩「订阅已被删」的兜底)。
+  //   ① `?sub=` 是导航时写入的**条目真实 subscriptionId**（聚合节点下 `from` 只是节点 id）;
+  //   ② 预览条目(`preview:*`)是刚抓的快照,比库里同一房间的旧快照新 —— 从该节点进来时优先;
+  //   ③ 兼容旧链接：`from` 若恰好是真实订阅 id，也按它精确匹配;
+  //   ④ 最后才退回裸 id(理论上只剩「订阅已被删」的兜底)。
   const item = useMemo(() => {
     if (!itemId) return null
     const inPreview =
       previewDetail?.nodeId === from ? previewDetail.items.find((i) => i.id === itemId) : undefined
-    const bySub = from ? known.find((i) => i.id === itemId && i.subscriptionId === from) : undefined
-    return inPreview ?? bySub ?? known.find((i) => i.id === itemId) ?? null
-  }, [known, itemId, from, previewDetail])
+    const bySub = sub ? known.find((i) => i.id === itemId && i.subscriptionId === sub) : undefined
+    const byFrom = from ? known.find((i) => i.id === itemId && i.subscriptionId === from) : undefined
+    // 有 sub 时**不再**退回裸 id：那会命中另一订阅的同 id 条目，正是本次要消除的行为。
+    // 只有旧链接（无 sub）才保留裸 id 兜底。
+    const bare = sub ? undefined : known.find((i) => i.id === itemId)
+    return inPreview ?? bySub ?? byFrom ?? bare ?? null
+  }, [known, itemId, from, sub, previewDetail])
   // 预览条目不在库里(订阅 id 是 `preview:*`),播放解析要改走 url 兜底(见下方 resolve)。
   const inStore = useMemo(
     () => !!item && allItems.some((i) => i.subscriptionId === item.subscriptionId && i.id === item.id),
@@ -172,9 +177,9 @@ export function PlayerPage() {
                   ⚠️ **播放器无圆角**(常见播放器都是满幅方角设计)——player 包方角,
                   这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。 */}
               <PlayableMedia
-                key={item.id}
-                // 统一传 item.id:core 的 findItemUrl 按 id 或 roomId 都能命中条目
-                // (直播条目两者不同——`bilibili:6` vs `6`),再取 item.url 去路由。
+                key={itemKey(item)}
+                // 统一传 item.id：core 的 findItemUrl 按 (subscriptionId, id) 命中并取
+                // item.url（预览条目不在库内时传 url 走兜底）。
                 // ⚠️ refresh 已带直链时(feed enclosure,如播客)直接给 streams —— 这类
                 // item.url 是**网页**(不可 by-url 路由),靠 resolve 必失败。
                 streams={(item as { stream?: MediaStream }).stream ? [(item as { stream: MediaStream }).stream] : undefined}
@@ -199,9 +204,14 @@ export function PlayerPage() {
                 onEnded={() => {
                   if (!(settings?.autoPlayNext ?? true)) return
                   removeFromQueue(item)
-                  if (nextInQueue) playTo(nextInQueue.id, from)
+                  if (nextInQueue) playTo(nextInQueue, from)
                 }}
-                onError={(err) => useDesktop.getState().toast("error", "播放失败", String(err))}
+                onError={(err) => {
+                  const kind = errorKindOf(err)
+                  useDesktop
+                    .getState()
+                    .toast("error", kind === "unknown" ? "播放失败" : ERROR_KIND_LABEL[kind], String(err))
+                }}
               />
             </div>
 
@@ -238,7 +248,7 @@ export function PlayerPage() {
                   <Icon name="queue" size={14} /> 加入队列
                 </button>
                 {nextInQueue ? (
-                  <button className="btn btn-quiet" onClick={() => playTo(nextInQueue.id, from)}>
+                  <button className="btn btn-quiet" onClick={() => playTo(nextInQueue, from)}>
                     <Icon name="skipForward" size={14} /> 下一条：{nextInQueue.title.slice(0, 16)}
                   </button>
                 ) : null}
@@ -269,10 +279,10 @@ export function PlayerPage() {
                 <>
                   {queueItems.map((it, i) => (
                     <button
-                      key={it.id}
+                      key={itemKey(it)}
                       className="queue-row"
-                      aria-current={it.id === item.id ? "true" : undefined}
-                      onClick={() => playTo(it.id, from)}
+                      aria-current={itemKey(it) === itemKey(item) ? "true" : undefined}
+                      onClick={() => playTo(it, from)}
                     >
                       <span className="queue-rank num">{i + 1}</span>
                       <span className="queue-thumb">
@@ -282,7 +292,7 @@ export function PlayerPage() {
                         <span className="queue-title od-truncate">{it.title}</span>
                         <span className="queue-sub">{it.author?.name ?? kindName(it.kind)}</span>
                       </span>
-                      {it.id === item.id ? (
+                      {itemKey(it) === itemKey(item) ? (
                         <span className="queue-flag">
                           <Icon name="play" size={12} />
                         </span>
@@ -303,7 +313,7 @@ export function PlayerPage() {
                 <p className="rail-empty">该订阅下暂无其它条目。</p>
               ) : (
                 related.map((it) => (
-                  <button key={it.id} className="queue-row" onClick={() => playTo(it.id, from)}>
+                  <button key={itemKey(it)} className="queue-row" onClick={() => playTo(it, from)}>
                     <span className="queue-thumb">
                       <MediaImage src={mediaUrl(it)} ratio={16 / 9} fill />
                     </span>

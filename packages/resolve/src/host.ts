@@ -11,18 +11,37 @@
  * httpGet,不各自重写 request/归一。
  */
 
+/**
+ * 请求级治理覆盖(与 global.d.ts 的 `HttpRequest.policy` 同形)。
+ * 只在「URL host 推导不出平台」时用:例如自建 RSSHub 实例(host 是用户自定义域名)。
+ */
+export interface HttpOptions {
+  policy?: { platform?: string; metered?: boolean; dedupeKey?: string }
+}
+
 /** 底层 GET:任意状态码,body 归一为 text。非 2xx 不抛(调用方决定诊断/抛出)。 */
 export async function httpGet(
   url: string,
   headers?: Record<string, string>,
+  opts?: HttpOptions,
 ): Promise<{ status: number; bodyText: string }> {
-  const res = await globalThis.appHost.http.request({ url, method: "GET", responseType: "text", headers })
+  const res = await globalThis.appHost.http.request({
+    url,
+    method: "GET",
+    responseType: "text",
+    headers,
+    ...(opts?.policy ? { policy: opts.policy } : {}),
+  })
   return { status: res.status, bodyText: typeof res.body === "string" ? res.body : String(res.body) }
 }
 
 /** 便捷 GET:text 响应,非 2xx 抛错。 */
-export async function httpText(url: string, headers?: Record<string, string>): Promise<string> {
-  const res = await httpGet(url, headers)
+export async function httpText(
+  url: string,
+  headers?: Record<string, string>,
+  opts?: HttpOptions,
+): Promise<string> {
+  const res = await httpGet(url, headers, opts)
   if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}: ${url}`)
   return res.bodyText
 }
@@ -32,8 +51,12 @@ export async function httpText(url: string, headers?: Record<string, string>): P
  * `== null` 判断,不做运行时 string 收窄。统一走 text + 手动 parse(原 responseType
  * "json" 三后端 parse 行为略异,此处收敛到一处)。
  */
-export async function httpJson<T = unknown>(url: string, headers?: Record<string, string>): Promise<T> {
-  const res = await httpGet(url, headers)
+export async function httpJson<T = unknown>(
+  url: string,
+  headers?: Record<string, string>,
+  opts?: HttpOptions,
+): Promise<T> {
+  const res = await httpGet(url, headers, opts)
   if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}: ${url}`)
   const text = res.bodyText
   if (text.trim() === "") return null as unknown as T

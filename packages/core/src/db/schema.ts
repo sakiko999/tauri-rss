@@ -18,9 +18,10 @@ export const KV_DDL = `CREATE TABLE IF NOT EXISTS ${KV_TABLE} (
 )`
 
 /**
- * 版本化迁移(表结构演进时追加;version 递增,两端按序执行已记录版本之后的条目)。
- * P1 只有 KV_DDL 一条,无需版本表——幂等 DDL 直接跑。引入非幂等迁移(如拆表搬数据)
- * 时,再补 `_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER)` 版本表,
- * 两个后端复用同一执行逻辑。
+ * 幂等迁移(表结构演进时追加,两端按序全量执行)。
+ * P1 只有 KV_DDL 一条:全部带 `IF NOT EXISTS`,重跑无副作用,所以没有版本表,
+ * 也就不保留无消费者的 `version` 字段。引入**非幂等**迁移(如拆表搬数据)时,
+ * 先补 `_migrations(version INTEGER PRIMARY KEY, applied_at INTEGER)` 版本表,
+ * 再把条目改成 `{ version, sql }`,两个后端复用同一执行逻辑。
  */
-export const MIGRATIONS: ReadonlyArray<{ version: number; sql: string }> = [{ version: 1, sql: KV_DDL }]
+export const MIGRATIONS: readonly string[] = [KV_DDL]

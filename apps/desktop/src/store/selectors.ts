@@ -218,8 +218,5 @@ export function lastFetchedOf(sub: Subscription): number {
   return sub.updatedAt
 }
 
-export function itemsById(s: StoreSlice, id: string | null): MediaItem | null {
-  if (!id) return null
-  return s.allItems.find((i) => i.id === id) ?? null
-}
+// itemsById 已删：裸 id 定位会跨订阅串条目，统一走 itemKey/复合键。
 

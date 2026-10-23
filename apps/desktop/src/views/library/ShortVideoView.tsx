@@ -41,7 +41,7 @@ function Slide({ item, index, active, onClose }: { item: MediaItem; index: numbe
     >
       {playable && active ? (
         <PlayableMedia
-          key={item.id}
+          key={itemKey(item)}
           className="sv-media"
           streams={(item as { stream?: import("@amoeba/core").MediaStream }).stream ? [(item as { stream: import("@amoeba/core").MediaStream }).stream] : undefined}
           resolve={() =>

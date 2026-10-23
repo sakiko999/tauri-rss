@@ -49,6 +49,20 @@ console.log("── 分类:平台 / 计量 ──")
   assert.equal(classifyRequest("https://www.huya.com/cache.php").platform, "huya")
   assert.equal(classifyRequest("https://youtubei.googleapis.com/youtubei/v1").platform, "youtube")
   assert.equal(classifyRequest("https://itunes.apple.com/search").platform, "apple")
+  // RSSHub:公网实例按域名归桶;自建实例(任意域名)由调用方显式声明。
+  assert.equal(classifyRequest("https://rsshub.app/weibo/user/1").platform, "rsshub")
+  assert.equal(classifyRequest("https://rsshub.app/").platform, "rsshub")
+  assert.equal(
+    classifyRequest("https://hub.example.org/feed/1", { platform: "rsshub" }).platform,
+    "rsshub",
+    "自建 RSSHub 实例应能显式归入 rsshub 桶",
+  )
+  // 请求级 platform 也决定配额桶(与 host 推导同一条路):rsshub 不再落进通用桶。
+  assert.notEqual(
+    effectivePlatformPolicy("rsshub").rpm,
+    effectivePlatformPolicy("rss.example.org").rpm,
+    "rsshub 应有独立配额",
+  )
   // 未知 host:去掉 www 后原样作平台(每站一个桶)。
   assert.equal(classifyRequest("https://www.rss.example.org/feed").platform, "rss.example.org")
 

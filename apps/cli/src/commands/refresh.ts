@@ -5,7 +5,7 @@
  * settings 更新,不固化),这是与 fetch/item 探针直连 source 的关键差异。
  */
 import pc from "picocolors"
-import { createDataLayer } from "@amoeba/core"
+import { createDataLayer, ERROR_KIND_LABEL, errorKindOf, type ErrorKind, type RefreshResult } from "@amoeba/core"
 import { getChannel } from "@amoeba/crawler"
 import { exampleInfo, parseKvPairs } from "../info.ts"
 import { fail, fmtMs, ok, printJson, startTimer, trunc } from "../ui/render.ts"
@@ -31,6 +31,7 @@ export async function runRefresh(keysInput: string[] | string, opts: RefreshOpti
     itemCount?: number
     tookMs?: number
     error?: string
+    errorKind?: ErrorKind
     sample?: string[]
   }> = []
 
@@ -45,23 +46,28 @@ export async function runRefresh(keysInput: string[] | string, opts: RefreshOpti
 
     const elapsed = startTimer()
     let id: string
+    let firstRefresh: RefreshResult | null = null
     if (existing) {
       await dl.subscriptions.update(existing.id, { info })
       id = existing.id
     } else {
-      id = await dl.addSubscription(key, ch.name, info) // 内部已 refresh
+      const created = await dl.addSubscription(key, ch.name, info) // 内部已 refresh
+      id = created.id
+      firstRefresh = created.refresh
     }
-    const result = existing ? await dl.refresh(id, { force }) : null
+    const result = existing ? await dl.refresh(id, { force }) : firstRefresh
     const ms = elapsed()
 
     const items = dl.store.all().filter((it) => it.subscriptionId === id)
     const error = result?.error
+    const errorKind = error ? (result?.errorKind ?? errorKindOf(error)) : undefined
     results.push({
       key,
       id,
       itemCount: error ? 0 : items.length,
       tookMs: Math.round(ms),
       error,
+      errorKind,
       sample: items.slice(0, 3).map((it) => trunc(it.title, 48)),
     })
   }
@@ -72,7 +78,8 @@ export async function runRefresh(keysInput: string[] | string, opts: RefreshOpti
   }
   for (const r of results) {
     if (r.error) {
-      console.log(`${r.key} — ${fail(r.error)}`)
+      const label = r.errorKind ? `${ERROR_KIND_LABEL[r.errorKind]} — ` : ""
+      console.log(`${r.key} — ${fail(label + r.error)}`)
       continue
     }
     console.log(`${r.key} — ${ok(`${r.itemCount} 条`)} ${fmtMs(r.tookMs ?? 0)}${pc.dim(`  (${r.id})`)}`)

@@ -10,7 +10,9 @@
  */
 import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
 import {
+  errorKindOf,
   getDanmakuByUrl,
+  ResolveError,
   parseCookieDict,
   resolveLivePlayByUrl as resolveLiveByUrl,
   resolvePlayByUrl as resolveVideoByUrl,
@@ -22,6 +24,7 @@ import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot }
 import { serializeFeed } from "@amoeba/xml"
 import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
+import { KV_DDL, KV_TABLE, MIGRATIONS } from "./db/schema.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
 import type { ResolvePlayback } from "./types/playback.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
@@ -55,13 +58,18 @@ export interface DataLayer {
   listChannels(): ChannelInfo[]
   /** 订阅的 channel kind(UI 按 kind 分发用;channelKey 来自 Subscription)。 */
   channelKind(channelKey: string): MediaKind | undefined
-  /** 创建订阅(channelKey + info)并刷新,返回新订阅 id。 */
+  /**
+   * 创建订阅(channelKey + info)并立即刷新。
+   *
+   * 返回 `{ id, refresh }`：`refresh.error` 是首刷的真实结果，调用方据此提示
+   * 「已订阅但首次抓取失败」，而不是用成功 toast 掩盖空列表。
+   */
   addSubscription(
     channelKey: string,
     title: string,
     info: Record<string, string>,
     meta?: { groupId?: string | null; refreshIntervalSec?: number },
-  ): Promise<string>
+  ): Promise<{ id: string; refresh: RefreshResult }>
   /** 预览一次渠道(不建订阅、不落 store、不写缓存):发现页的分区浏览/搜索据此取真实数据。
    *  info 里没给 cookie/baseUrl 时按 channelKey 前缀补 core 层默认值。 */
   previewChannel(channelKey: string, info: Record<string, string>): Promise<{ items: MediaItem[]; total?: number }>
@@ -169,6 +177,9 @@ export function cookieFieldForPlatform(platform: string): keyof AppSettings | un
 }
 
 export function createDataLayer(): DataLayer {
+  // DDL 唯一权威仍在 core：把 schema 注入 SQL 型后端。host 因此不需要反向 import
+  // core（旧的 `host → core` 是包级运行时环的一边，见 docs/architecture/system/05-risks.md R2）。
+  globalThis.appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })
   registerAllChannels()
   // ── 平台 cookie provider 注册(credentials 收口)────────────────────────────
   // cookie 链「渠道 → client 调用点」一跳靠人肉传参,曾三次漏传(user_video 412 /
@@ -296,6 +307,8 @@ export function createDataLayer(): DataLayer {
     if (channelKey.startsWith("youtube:")) return "youtube"
     if (channelKey.startsWith("apple:")) return "apple"
     if (channelKey.startsWith("twitch:")) return "twitch"
+    // rsshub 外挂实例自成一桶(请求侧显式声明 platform,见 source/rsshub.ts)。
+    if (channelKey.startsWith("rsshub:")) return "rsshub"
     return undefined
   }
 
@@ -474,6 +487,7 @@ export function createDataLayer(): DataLayer {
             subscriptionId,
             itemCount: 0,
             error: "被动采集：没有可用的数据，且无缓存可回退",
+            errorKind: "no-data",
             fetchedAt: now(),
           }
         }
@@ -533,6 +547,7 @@ export function createDataLayer(): DataLayer {
         subscriptionId,
         itemCount: 0,
         error: err instanceof Error ? err.message : String(err),
+        errorKind: errorKindOf(err),
         fetchedAt: now(),
       }
     }
@@ -936,7 +951,7 @@ export function createDataLayer(): DataLayer {
     title: string,
     info: Record<string, string>,
     meta?: { groupId?: string | null; refreshIntervalSec?: number },
-  ): Promise<string> {
+  ): Promise<{ id: string; refresh: RefreshResult }> {
     const id = `s-${now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
     // ⚠️ 清退订墓碑:id 是 ms + 4 随机,极短时间退订再订阅有概率撞同一 id;若不清,
     // replaceIfLive 会永久丢弃这条新订阅的每次刷新(stale 墓碑),重启才恢复。
@@ -953,8 +968,8 @@ export function createDataLayer(): DataLayer {
       ...(meta?.groupId ? { groupId: meta.groupId } : {}),
       ...(meta?.refreshIntervalSec ? { refreshIntervalSec: meta.refreshIntervalSec } : {}),
     })
-    await refresh(id)
-    return id
+    const result = await refresh(id)
+    return { id, refresh: result }
   }
 
   /**
@@ -972,7 +987,16 @@ export function createDataLayer(): DataLayer {
     // 与 sourceInfoFor 同一份规则(rsshub → baseUrl / 其余按前缀补 cookie)——
     // 这里曾是手抄副本,规则漂移的现成温床,改为直接复用。
     const merged = await sourceInfoFor({ channelKey, info }, s)
-    const xml = await channel.getSource(merged).fetch()
+    const source = channel.getSource(merged)
+    // 预览与刷新遵守同一条被动承诺：有浏览器时 passive 渠道只读页面自然产生的数据，
+    // 绝不构造主动请求；没有被动数据就明确报错（预览没有订阅缓存可回退）。
+    const passiveMode = channel.passive === true && !!globalThis.appHost?.browser
+    const xml = passiveMode
+      ? ((await source.fetchPassive?.()) ?? null)
+      : await source.fetch()
+    if (!xml) {
+      throw new ResolveError("no-data", `被动采集：${channelKey} 预览没有可用数据（页面未产生可读响应）`)
+    }
     const { items, total } = deserializeFeedWithTotal(xml, {
       subscriptionId: `preview:${channelKey}`,
       kind: channel.kind,
@@ -1011,6 +1035,8 @@ export function createDataLayer(): DataLayer {
         pageTotals.delete(id)
         await contentCache.delete(id).catch(() => {})
         await bodyCache.deleteAll(id).catch(() => {})
+        // 阅读态也按订阅清：否则退订后 reading blob 永久残留孤儿记录。
+        await reading.deleteBySubscription(id).catch(() => {})
       },
     },
     reading,

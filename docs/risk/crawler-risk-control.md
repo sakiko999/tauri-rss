@@ -134,8 +134,11 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 ```
 
 设置页只暴露「默认等级」与「平台覆盖」表（`Network.tsx` 的 `PLATFORM_ROWS`：
-小红书 / B站 / 微博 / 抖音 / 斗鱼 / 虎牙 / YouTube / Twitch / Apple 播客 / `"*"`）。
+小红书 / B站 / 微博 / 抖音 / 斗鱼 / 虎牙 / YouTube / Twitch / Apple 播客 / RSSHub / `"*"`）。
 粒度停在平台：账号风控、冷却与并发/RPM 都是平台维度，按订阅拆没有可执行语义。
+
+RSSHub 外挂实例单独成桶：core 的 rsshub source 在请求上显式声明 `policy.platform="rsshub"`
+（自建域名也归同一桶，不靠域名猜），公网 `rsshub.app` 另有 host 兜底。
 
 **RSS 直链怎么办**：`"*"` 是它们的等级档。宿主对未知 host 按 **host 各自**建平台桶
 （`platformOf` 返回 host 名），所以配额/冷却天然按 feed 互不干扰；等级统一吃 `"*"`

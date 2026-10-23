@@ -8,19 +8,22 @@
  * 做法:静态扫两侧源码,对比「serialize 写的 tpl: 键」与「deserialize 读的 tpl: 键」。
  * 差异必须在 ALLOWLIST 里有解释,否则红 —— 新加字段忘透传时立刻发现。
  *
- * 局限:正则只认 `setTpl(tree, "key", …)` / `setTplN(tree, "key", …)` 单行调用
- * (当前 serialize.ts 全为单行,足够);前提是仓库布局不变。
+ * 扫描面（两种写法都要覆盖）:
+ *   - `setTpl(tree, "key", …)` / `setTplN(tree, "key", …)` 单行调用；
+ *   - XML 属性直写 `node["@_tpl:key"] = …`（如 social 图的 liveVideo）。
+ * 旧实现只扫前者，`tpl:liveVideo` 因此被误报为「读不写」——守卫常红会让真正的
+ * 漏写失去信号，所以属性形式必须纳入。
  */
 import { readFileSync } from "node:fs"
 
 const SER = "packages/xml/src/serialize.ts"
 const DE = "packages/core/src/processing/deserialize.ts"
 
-/** 已知且**有意**的差异(两侧都要有解释)。 */
-const READ_ONLY_OK = new Set([
-  "image", // 社交图:serialize 走 media:content,deserialize 从它重建(parseImagesFromMedia)
-  "images",
-])
+/**
+ * 已知且**有意**的差异（每条都要在这里解释）。
+ * 当前没有：旧的 image/images 是 media:content 路径的误报，已随属性扫描修正而移除。
+ */
+const READ_ONLY_OK = new Set<string>()
 
 let fails = 0
 const ok = (cond: unknown, label: string) => {
@@ -36,6 +39,7 @@ const de = readFileSync(DE, "utf8")
 
 const wrote = new Set<string>()
 for (const m of ser.matchAll(/setTplN?\([^,]+,\s*"([^"]+)"/g)) wrote.add(m[1]!)
+for (const m of ser.matchAll(/\["@_tpl:([A-Za-z0-9_]+)"\]/g)) wrote.add(m[1]!)
 const read = new Set<string>()
 for (const m of de.matchAll(/tpl:([A-Za-z0-9_]+)/g)) read.add(m[1]!)
 

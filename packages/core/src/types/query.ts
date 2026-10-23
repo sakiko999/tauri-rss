@@ -7,5 +7,5 @@ export interface MediaQuery {
   today?: boolean
   unreadOnly?: boolean
   starredOnly?: boolean
-  /** 排序:publishedAt 降序(新在前);平局按 id。 */
+  /** 排序:publishedAt 降序(新在前);同刻按插入序(稳定排序,无 id tie-break)。 */
 }

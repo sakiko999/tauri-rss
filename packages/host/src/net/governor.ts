@@ -92,6 +92,9 @@ export const DEFAULT_NET_POLICY: NetPolicy = {
     apple: { maxConcurrent: 8, rpm: 300, minIntervalMs: 50, cooldownBaseMs: 300_000 },
     // Twitch 未公开 API,按 IP 限流且无公开阈值 —— 保守起步。
     twitch: { maxConcurrent: 6, rpm: 120, minIntervalMs: 100, cooldownBaseMs: 600_000 },
+    // RSSHub 外挂实例:公共实例慢且共享配额,自成一桶,不与通用 feed 抢。
+    // 自建实例由 core 的 rsshub source 显式声明 platform="rsshub"(不靠域名猜)。
+    rsshub: { maxConcurrent: 4, rpm: 120, minIntervalMs: 100, cooldownBaseMs: 300_000 },
   },
 }
 
@@ -266,6 +269,8 @@ function platformOf(host: string): string {
     return "youtube"
   }
   if (host === "itunes.apple.com" || host.endsWith(".itunes.apple.com")) return "apple"
+  // 公网 RSSHub 兜底归类;自建实例靠 core 的 rsshub source 显式传 policy.platform。
+  if (host === "rsshub.app" || host.endsWith(".rsshub.app")) return "rsshub"
   if (
     host === "twitch.tv" ||
     host.endsWith(".twitch.tv") ||

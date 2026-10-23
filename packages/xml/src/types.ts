@@ -60,6 +60,7 @@ export interface Attachment {
 /** 公共字段(channel 产出时填写;不带 app 层语义)。 */
 export interface Base {
   id: string
+  /** crawler 内部溯源(哪个 channel 产出);不过 XML(core 的 guid 用 `id`)。 */
   sourceId: string
   kind: Kind
   title: string
@@ -69,6 +70,7 @@ export interface Base {
   author?: Author
   publishedAt?: number
   fetchedAt: number
+  /** channel 原始 payload(crawler 内部再解析/诊断用);不过 XML,core 不消费。 */
   raw?: unknown
   mimeType?: string
   poster?: string
@@ -98,7 +100,8 @@ export interface SocialImage {
    * 实况图（Live Photo）的短视频直链；静态图 `url` 就是它的 poster。
    * 小红书：详情 `imageList[i].livePhoto === true` + `stream.<codec>[0].masterUrl`（实测 codec 是 EF4，
    * 别写死 h264）；微博：`pics[].type === "livephoto"` + `videoSrc`（302 包装器，稳定）。
-   * 只存主址：小红书那条不落 XML（详情结果只给 UI），失效就重新解析详情。
+   * 只存主址。serialize 会写到 media:content 的 `@tpl:liveVideo`，deserialize 对称读回；
+   * 小红书详情结果也会直接给 UI。失效就重新解析详情。
    */
   liveVideo?: string
 }
@@ -142,12 +145,9 @@ export interface Live extends Base {
   online?: number
   isRecord?: boolean
   introduction?: string
-  notice?: string
   showTime?: string
-  /** 当前档位名(展示用;可播流走 resolver by-url 懒解析,不在此)。
-   *  ⚠️ 曾有 `playUrls`/`playHeaders`/`playUrlsExpiresAt` 三个字段——全仓零读写
-   *  (直播间可播流统一由 `resolveLivePlay` 懒解析),已删,勿再引入。 */
-  quality?: string
+  /** ⚠️ 可播流/档位字段一律不在此:`playUrls`/`playHeaders`/`quality` 曾全仓零读
+   *  写已删,直播间可播流统一由 `resolveLivePlay` 按 url 懒解析。勿再引入。 */
 }
 
 /**

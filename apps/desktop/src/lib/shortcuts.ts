@@ -14,11 +14,12 @@ import { useEffect, useRef } from "react"
 import { useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
 import { useViewNavigate } from "../router.tsx"
+import { itemKey } from "./media.ts"
 
 export function useGlobalShortcuts(): void {
   const go = useViewNavigate()
   /**
-   * ⚠️ 记住「上次读到第几条」而不是只靠 selectedArticleId 在当前列表里找。
+   * ⚠️ 记住「上次读到第几条」而不是只靠 selectedArticleKey 在当前列表里找。
    *
    * 开着「仅未读」时,打开一条即标已读 → 该条当场从 view.list 移除。此时
    * findIndex 返回 -1,旧实现直接取 list[0] —— 用户按 j 会跳回**列表最顶端**,
@@ -52,7 +53,7 @@ export function useGlobalShortcuts(): void {
       if (!mod && !inField && (e.key === "j" || e.key === "k" || e.key === "ArrowDown" || e.key === "ArrowUp")) {
         // ⚠️ 播放器容器对同款按键(空格/k/↑↓/←→/m/f…)已 preventDefault(不 stopPropagation),
         // 事件冒泡到这里时 defaultPrevented=true → 不再劫持。否则在播放页按 k 会在切播放/
-        // 暂停的同时把 selectedArticleId 静默挪到相邻文章(返回列表选中项已跳走)。
+        // 暂停的同时把 selectedArticleKey 静默挪到相邻文章(返回列表选中项已跳走)。
         if (e.defaultPrevented) return
         // ⚠️ 播放页整页都是播放器:j 未被播放器容器接管(容器只处理 k/空格/方向键/m/f/Home/End/数字),
         // 但也不该在此切换文章(不可见)。**不能靠 selectedNodeId 判**:/play/:itemId 的 loader
@@ -64,10 +65,10 @@ export function useGlobalShortcuts(): void {
         const list = s.view.list.filter((i) => i.kind === "article")
         if (!list.length) return
         const down = e.key === "j" || e.key === "ArrowDown"
-        const found = list.findIndex((i) => i.id === s.selectedArticleId)
+        const found = list.findIndex((i) => itemKey(i) === s.selectedArticleKey)
         // 目标索引 = 当前索引 + 方向步长。⚠️ 上一条(k/↑)必须是 **-1** —— 旧实现用
         // `+ (found>=0 && down ? 1 : 0)`(up 时加 0)会落回当前项,再被下面的
-        // `next.id === selectedArticleId` 挡掉 → 「上一条」键整个失效(只有选中项
+        // `itemKey(next) === selectedArticleKey` 挡掉 → 「上一条」键整个失效(只有选中项
         // 已因标已读离场时才偶然可用)。j/k 与 ↑/↓ 对称。
         const step = down ? 1 : -1
         let target: number
@@ -81,10 +82,10 @@ export function useGlobalShortcuts(): void {
           target = down ? lastIndexRef.current : lastIndexRef.current - 1
         }
         const next = list[Math.max(0, Math.min(list.length - 1, target))]
-        if (!next || next.id === s.selectedArticleId) return
+        if (!next || itemKey(next) === s.selectedArticleKey) return
         e.preventDefault()
         lastIndexRef.current = list.indexOf(next)
-        s.selectArticle(next.id)
+        s.selectArticle(next)
         if (next.isUnread && (s.settings?.markReadOnOpen ?? true)) s.markRead(next)
         // 让列表滚动到选中项。
         document.querySelector('[aria-current="true"].list-row')?.scrollIntoView({ block: "nearest" })

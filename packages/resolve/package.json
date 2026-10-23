@@ -5,10 +5,11 @@
   "type": "module",
   "main": "src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./errors": "./src/errors.ts",
+    "./media-referrer": "./src/media-referrer.ts"
   },
   "dependencies": {
-    "@amoeba/host": "workspace:*",
     "@amoeba/log": "workspace:*",
     "@amoeba/xml": "workspace:*",
     "ramda": "^0.32.0"

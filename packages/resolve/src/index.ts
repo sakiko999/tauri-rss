@@ -25,6 +25,7 @@ export interface LoginResult {
 export type { DanmakuItem, DanmakuOptions, DanmakuStream } from "./danmaku/index.ts"
 
 export * from "./danmaku/index.ts"
+export * from "./errors.ts"
 export * from "./resolver/index.ts"
 
 // ── 平台能力(供 crawler channel 抓数据 + resolver 播放) ──
@@ -43,6 +44,7 @@ export type * from "./platform/types.ts"
 // ── 公共工具(crawler channel 也用:httpText/now/log/utils) ──
 export * from "./host.ts"
 export * from "./log.ts"
+export * from "./media-referrer.ts"
 export * from "./utils/index.ts"
 
 // ── 浏览器模拟(weibo/xhs channel 抓取用,CDP 附加真实 Edge) ──

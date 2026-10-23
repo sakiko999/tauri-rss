@@ -7,11 +7,9 @@
  * 环境:
  *   - node:    injectNodeHost(真实网络 + 内存存储,example/测试)
  *   - browser: injectBrowserHost(浏览器 fetch + localStorage,纯前端调试)
- *   - tauri:   injectTauriHost(桌面生产,Rust http_get + localStorage)
+ *   - tauri:   injectTauriHost(桌面生产,Rust http_get + SqliteStorageBackend)
  */
-import { initAppHost } from "./runtime.ts"
 export { initAppHost, setHostCaps } from "./runtime.ts"
-export { mediaReferrerFor, videoReferrerFor } from "./media-referrer.ts"
 export {
   configureNetwork,
   reportRisk,
@@ -21,9 +19,10 @@ export {
   DEFAULT_NET_POLICY,
 } from "./net/governor.ts"
 
-// 副作用:import 本包即初始化全局 appHost 门面。之后 inject 只填闭包值。
-// 应用 / example 都经本包的 inject 函数注入,因此门面在 crawler/core 访问前已就位。
-initAppHost()
+// ⚠️ 本包**不再在 import 时初始化门面**(2026-10-23):`setHostCaps` / `inject*Host`
+// 自己调 `initAppHost()`。这样只取工具函数(governor/后端单件)的模块不会隐式建全局门面。
+// 新代码优先用子路径(`@amoeba/host/node|tauri|browser|runtime|governor`),避免把三套
+// 后端全部拉进模块图;根入口保留为兼容聚合。
 
 export { injectNodeHost } from "./node/inject-node.ts"
 export { nodeBackend } from "./node/node-backend.ts"

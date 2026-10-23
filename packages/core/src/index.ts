@@ -57,12 +57,15 @@ export type { MediaQuery } from "./types/query.ts"
 export type { ResolvePlayback } from "./types/playback.ts"
 
 export { NoChannelError } from "./errors.ts"
+/** 错误分类契约（resolve 定义，core 透出给 apps；UI 不再按字符串猜登录/风控）。 */
+export { ERROR_KIND_LABEL, ResolveError, errorKindOf } from "@amoeba/resolve"
+export type { ErrorKind } from "@amoeba/resolve"
 
 /** 续播位置落库决策(近片尾清除 / 5s 节流)——desktop/mobile 两个 store 共用。 */
 export { positionDecision, type PositionDecision } from "./reading-position.ts"
 
-/** 条目/阅读态的身份语义:复合键(带订阅维度)、旧键回退、按 (订阅, id) 定位。 */
-export { findItem, findRecord, readingKey } from "./types/reading.ts"
+/** 条目/阅读态的身份语义:复合键(带订阅维度)、按 (订阅, id) 定位。 */
+export { findItem, findRecord, itemRefKey, readingKey } from "./types/reading.ts"
 
 /** SQLite schema(两端共用 DDL:desktop tauri-plugin-sql / CLI bun:sqlite)。 */
 export { KV_TABLE, KV_DDL, MIGRATIONS } from "./db/schema.ts"

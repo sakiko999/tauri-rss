@@ -13,7 +13,7 @@ bun install
 
 bun run dev              # 只起 Vite dev（纯前端，宿主能力缺失）
 bun run tauri            # Vite dev + Tauri dev 并行（完整应用，热重载）
-bun run tauri:build      # 前端构建 + release 构建
+bun run tauri:build      # 前端构建 + Tauri release 构建
 ```
 
 > ⚠️ **必须从 "x64 Native Tools Command Prompt for VS 2022" 启动终端**，否则 Rust 链接失败。
@@ -56,7 +56,7 @@ packages/
   log/           域注册语义化日志
 ```
 
-依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`；`log`/`host` 是零依赖叶子。
+依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`；`log` 是零依赖叶子，`host` 依赖 core（复用 `db/schema.ts` 的 DDL）与 log。
 
 内部包统一用 **`@amoeba/*`** scope（Bun workspace）。⚠️ 与官方 `@tauri-apps/*` 是两个不同的
 scope，前者的包名是 `@amoeba/core`、后者是 `@tauri-apps/api`，改一处别误伤另一处。
@@ -94,11 +94,9 @@ bun packages/host/src/example/host-check.ts             # 宿主门面字段
 
 | 文档 | 内容 |
 | --- | --- |
-| `docs/platform-login-research.md` | 三平台扫码登录 + 保活 |
-| `docs/danmaku-research.md` | 弹幕机制（VOD 分段 / 直播四平台 codec） |
-| `docs/youtube-stream-extraction.md` | YouTube 直链（ANDROID_VR / poToken / DASH） |
-| `docs/capability-gaps.md` | 各平台能力缺口 |
-| `docs/cli-plan.md` | 调试探针设计 |
+| `docs/architecture/system/README.md` | ★ 全仓系统架构文档集（总览 / 包职责 / 契约 / 流程 / 扩展 / 风险） |
+| `docs/README.md` | 全部文档索引（平台 / UI / 播放 / 风控 / 运维 / 审计） |
+| `CLAUDE.md` | 高频硬契约、环境与工具、平台速查 |
 
 `tmp/` 是 gitignore 的参考项目（RSSHub / MediaCrawler / dart_simple_live 等），**不要对它跑构建**。
 

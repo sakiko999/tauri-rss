@@ -62,7 +62,7 @@ export function App() {
       {tab === "feed" ? (
         <ul className="feed">
           {list.map((it) => (
-            <FeedRow key={it.id} item={it} />
+            <FeedRow key={`${it.subscriptionId}:${it.id}`} item={it} />
           ))}
           {list.length === 0 ? (
             <li className="empty">

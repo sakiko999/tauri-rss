@@ -12,7 +12,7 @@
  * 预取——fetchImageSize 单张,fillImageSizes 批量(瀑布流 channel 共用)。
  */
 import type { SocialImage } from "@amoeba/xml"
-import { mediaReferrerFor } from "@amoeba/host"
+import { mediaReferrerFor } from "../media-referrer.ts"
 
 /** 图片二进制尺寸,宽高像素。 */
 export interface ImageSize {

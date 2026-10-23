@@ -112,7 +112,6 @@
       "name": "@amoeba/host",
       "version": "0.1.0",
       "dependencies": {
-        "@amoeba/core": "workspace:*",
         "@amoeba/log": "workspace:*",
         "@tauri-apps/api": "^2",
         "@tauri-apps/plugin-opener": "^2.7.1",
@@ -150,7 +149,6 @@
       "name": "@amoeba/resolve",
       "version": "0.1.0",
       "dependencies": {
-        "@amoeba/host": "workspace:*",
         "@amoeba/log": "workspace:*",
         "@amoeba/xml": "workspace:*",
         "ramda": "^0.32.0",
@@ -164,8 +162,8 @@
       "version": "0.1.0",
       "dependencies": {
         "@amoeba/core": "workspace:*",
-        "@amoeba/host": "workspace:*",
         "@amoeba/player": "workspace:*",
+        "@amoeba/resolve": "workspace:*",
         "react": "^19.2.8",
       },
       "devDependencies": {

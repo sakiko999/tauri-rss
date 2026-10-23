@@ -27,10 +27,18 @@ export function previewPath(nodeId: string, itemId: string): string {
   return `/v/${encodeURIComponent(nodeId)}?open=${encodeURIComponent(itemId)}`
 }
 
-/** `/play/{itemId}?from={nodeId}`。 */
-export function playPath(itemId: string, from?: string | null): string {
-  const q = from ? `?from=${encodeURIComponent(from)}` : ""
-  return `/play/${encodeURIComponent(itemId)}${q}`
+/**
+ * `/play/{itemId}?from={nodeId}&sub={subscriptionId}`。
+ *
+ * `from` 只负责「返回位置」，`sub` 才是条目的订阅身份：聚合节点（tab:all 等）下
+ * `from` 是节点 id，不是 subscriptionId，不能拿它当身份用。
+ */
+export function playPath(itemId: string, from?: string | null, sub?: string | null): string {
+  const q = new URLSearchParams()
+  if (from) q.set("from", from)
+  if (sub) q.set("sub", sub)
+  const qs = q.toString()
+  return `/play/${encodeURIComponent(itemId)}${qs ? `?${qs}` : ""}`
 }
 
 /** 导航到库节点(侧栏 / 热搜词条共用)。 */
@@ -45,18 +53,21 @@ export function useSettingsNavigate(): (tab: string) => void {
   return (tab) => navigate(`${viewPath("page:settings")}?tab=${encodeURIComponent(tab)}`)
 }
 
-/** 导航到播放页。 */
-export function usePlayNavigate(): (itemId: string, from?: string | null) => void {
+/**
+ * 导航到播放页。收**条目**而非裸 id：播放页必须同时拿到 `subscriptionId`，
+ * 否则跨订阅同 id 时会定位到另一订阅的条目。
+ */
+export function usePlayNavigate(): (item: { id: string; subscriptionId: string }, from?: string | null) => void {
   const navigate = useNavigate()
   const nodeId = useDesktop((s) => s.selectedNodeId)
-  return (itemId, from) => navigate(playPath(itemId, from ?? nodeId))
+  return (item, from) => navigate(playPath(item.id, from ?? nodeId, item.subscriptionId))
 }
 
 /** 当前播放页参数。 */
-export function usePlayParams(): { itemId: string | null; from: string | null } {
+export function usePlayParams(): { itemId: string | null; from: string | null; sub: string | null } {
   const params = useParams()
   const [sp] = useSearchParams()
-  return { itemId: params.itemId ?? null, from: sp.get("from") }
+  return { itemId: params.itemId ?? null, from: sp.get("from"), sub: sp.get("sub") }
 }
 
 export const router = createBrowserRouter([
@@ -76,7 +87,7 @@ export const router = createBrowserRouter([
   {
     path: "/play/:itemId",
     Component: App,
-    // 播放页**不改选中节点**(返回位置由 ?from= 承载),也不碰 selectedArticleId
+    // 播放页**不改选中节点**(返回位置由 ?from= 承载),也不碰 selectedArticleKey
     // (那是阅读栏的选择态,塞进播放条目会让返回后正文显示错内容)。
     // 条目 id 由 PlayerPage 自己从路由参数读。
     loader: () => null,

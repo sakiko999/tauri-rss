@@ -21,7 +21,8 @@ export interface HotOptions {
 async function ensureHotSubscription(dl: ReturnType<typeof createDataLayer>): Promise<string> {
   const existing = (await dl.subscriptions.list()).find((s) => s.channelKey === "weibo:hot")
   if (existing) return existing.id
-  return dl.addSubscription("weibo:hot", "微博实时热搜", {})
+  const { id } = await dl.addSubscription("weibo:hot", "微博实时热搜", {})
+  return id
 }
 
 export async function runHot(word: string, opts: HotOptions): Promise<void> {

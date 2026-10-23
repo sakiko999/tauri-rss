@@ -28,9 +28,9 @@ export interface AppSettings {
    */
   viewMode: ViewMode
   /**
-   * ⚠️ 表现型偏好(主题/密度/字号/动效/行宽)**不在 core settings 里** —— 桌面端
-   * 放在 localStorage 的 `ui-prefs`,因为首帧脚本必须**同步**读到主题,而这里走
-   * 异步 SQLite 读不到。下同:只保留功能型设置。
+   * ⚠️ 表现型偏好(主题/密度/字号)实际由 desktop 的 localStorage `ui-prefs` 消费
+   * (首帧脚本必须**同步**读到主题,异步 SQLite 读不到)。下面三个字段是历史遗留、
+   * 无消费者,保留只为 schema 兼容;新增表现型设置不要再加到这里。
    */
   theme: ThemeMode
   fontSize: number
