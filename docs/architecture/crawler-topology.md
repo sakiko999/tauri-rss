@@ -97,6 +97,10 @@ board 大概率仍坏（等不到选择器）。另注意：RSSHub 已从 playwr
 > 术语：本节的 sidecar = **爬虫取数服务**（Bun/HTTP）。CLI 的 `amoeba-browser` 是
 > **浏览器宿主**（无 Tauri 的 WebView2 + CDP），两者不是同一个东西；后者已在
 > `apps/browser-sidecar/` 落地（`rss --browser`）。
+>
+> 2026-10-26 决策升级：取数服务与 core/storage 合并为 `rss --service` 单写者数据服务，
+> desktop/CLI 都做客户端；本节的形态 A 只是它的子集。计划见
+> `docs/architecture/system/06-data-service.md`。
 
 ## 切分边界（规划期细化）
 

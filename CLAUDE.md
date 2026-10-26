@@ -216,5 +216,13 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 下一步：node-chromium driver（spawn 系统 Chrome/Edge，`--remote-debugging-port=0` + `DevToolsActivePort`）+ CLI 懒注入 browser，先跑通 `xhs:explore` 被动采集。
 - [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
 - [ ] CLI 暂不编译为二进制；先把 DATA_DIR 与 sidecar 路径改成 env/同目录可覆盖，保留 `rss:build` 作为后续打包出口。
-- [!] 服务化边界只切取数层（crawler + browser），core/storage 留在 UI；API 用 XML 契约，避免分布式存储。
+- [!] 服务化已升级为「数据层服务」（2026-10-26）：`rss --service` 单写者独占 SQLite/crawler/browser；desktop/CLI 只做客户端，mobile 不参与。计划见 `docs/architecture/system/06-data-service.md`。
+- [ ] 下一步：`rss login xhs`（终端二维码 / cookie 预热）→ release 构建 sidecar → desktop+CLI 并发与退出回归。
+- [!] CLI 浏览器必须显式 `--browser`；默认注入会让 xhs/weibo 忽略 `--kv cookie=`，静默改变现有探针行为。
+- [ ] 重写评估结论待拍板：先做 P0（TS/Bun feed 92-key XML parity），再决定是否进 P1 Rust spike；全量重写需同时满足“可分发/常驻产品 + 有反爬 owner + 接受 12–18 人月”。
+- [!] 若走原生数据层只选 Rust；单二进制形态 = 一个 exe 两种模式（数据服务 + `--browser-host` 自派生），不要合并 tokio 与 COM STA 生命周期。
+- [!] 共享数据源只能单写者：服务独占 SQLite 与全部写操作；任何第二写者（Diagnostics 直连、dev seed、旧 desktop、CLI 直开 DB）都会造成静默丢数据。
+- [ ] 待拍板：CLI 只读还是读写、浏览器 profile 归属、mobile/后台刷新是否纳入；先做阶段 0 的 3–5 天实测再决定是否进入 A/B。
+- [!] 服务化后客户端绝不能写 KV blob 或直开 DB；reading/subscriptions/settings 只能发语义命令。第二写者是数据丢失的唯一根因。
+- [ ] 阶段 0 先测：bootstrap 投影体积、Tauri externalBin 打包 `rss --service`、profile 迁移（复用 webview-profile vs 新目录）、WebView2 loopback 访问。
 <!-- cc-todo:end -->
