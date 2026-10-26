@@ -8,7 +8,10 @@
  * 事件只保留排障必须的：失败/降级（refresh/cache/detail/cookie 同步）。
  * 正常刷新/条数/耗时属于数据路径，观测走 CLI 探针（docs/ops/commands.md）。
  */
-import { createLogDomain } from "@amoeba/log"
+import { createLogDomain, formatError } from "@amoeba/log"
+
+/** 异常 → 日志文本（非 Error reject 不会退化成 `[object Object]`）。 */
+export { formatError }
 
 export const coreLog = createLogDomain("core", {
   color: "#94a3b8", // slate-400：中性色，不抢平台域
@@ -46,6 +49,11 @@ export const coreLog = createLogDomain("core", {
       level: "warn",
       text: (ctx: { subscriptionId: string; channel: string }) =>
         `被动采集无数据且无缓存可回退 ${ctx.channel}/${ctx.subscriptionId}`,
+    },
+    unsubscribeCleanupFailed: {
+      level: "warn",
+      text: (ctx: { subscriptionId: string; error: string }) =>
+        `退订清理残留内容失败 ${ctx.subscriptionId}: ${ctx.error}`,
     },
   },
 })

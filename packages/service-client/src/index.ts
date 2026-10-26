@@ -459,6 +459,9 @@ export async function createRemoteDataLayer(
         if (ws === socket) ws = null
         done()
         if (closed) return
+        // ⚠️ 握手反复失败（token 失效 / 4001）时也要退避：只在快照失败分支翻倍的话，
+        // 每次 onclose 都以 500ms 重连，且每轮都先拉一遍全量快照。hello 到达时重置。
+        reconnectBackoff = Math.min(Math.max(reconnectBackoff, 500) * 2, 10_000)
         setStatus({ online: true, events: false, error: "事件通道断开，正在重连" })
         scheduleReconnect(reconnectBackoff)
       }

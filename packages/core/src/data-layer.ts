@@ -43,7 +43,7 @@ import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createMediaStore } from "./store/media-store.ts"
-import { coreLog } from "./log.ts"
+import { coreLog, formatError } from "./log.ts"
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
@@ -565,14 +565,14 @@ export function createDataLayer(): DataLayer {
       try {
         await contentCache.set(subscriptionId, { fetchedAt: now(), xml })
       } catch (e) {
-        coreLog.cacheWriteFailed({ subscriptionId, error: String(e) })
+        coreLog.cacheWriteFailed({ subscriptionId, error: formatError(e) })
       }
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
     } catch (err) {
       // 取消不是失败：不回退旧缓存（否则取消会把「已加载更多页」的 store 重置回首页）、
       // 不打 error 日志（取消是正常路径，别把日志刷成红色）。
       if (signal?.aborted) return cancelledResult(subscriptionId)
-      coreLog.refreshFailed({ subscriptionId, error: String(err) })
+      coreLog.refreshFailed({ subscriptionId, error: formatError(err) })
       // 失败后总数字段已不可信(是上一次成功抓取的残留),清掉免得 UI 计数与内容不符。
       pageTotals.delete(subscriptionId)
       // 抓取失败回退旧缓存(即便过期):不空窗,error 保留供 UI 提示。
@@ -798,7 +798,7 @@ export function createDataLayer(): DataLayer {
         subscriptionId,
         itemId,
         channel: sub.channelKey,
-        error: e instanceof Error ? e.message : String(e),
+        error: formatError(e),
       })
       // ⚠️ 不能吞掉:桌面 social 详情弹窗靠这个 reject 进入失败态。吞掉会让用户
       // 把列表摘要误认为完整详情(尤其 xhs 登录失效/风控时)。article 调用方
@@ -857,7 +857,7 @@ export function createDataLayer(): DataLayer {
         coreLog.loadMoreFailed({
           subscriptionId,
           channel: sub.channelKey,
-          error: e instanceof Error ? e.message : String(e),
+          error: formatError(e),
         })
         throw e
       }
@@ -1001,13 +1001,13 @@ export function createDataLayer(): DataLayer {
           )
           if (!next) return
           updated.push(field)
-          coreLog.cookieSnapshotSynced({ field, ...(snap.user_id ? { user_id: snap.user_id } : {}) })
+          coreLog.cookieSnapshotSynced({ field, user_id: snap.user_id })
         })
       } catch (e) {
         // 浏览器起不来 / CDP 被回收 / 端口被占:只记录,不影响启动与其它平台。
         coreLog.cookieSnapshotFailed({
           field,
-          error: e instanceof Error ? e.message : String(e),
+          error: formatError(e),
         })
       }
     }
@@ -1155,8 +1155,14 @@ export function createDataLayer(): DataLayer {
         const keys = [...contentKeys, ...bodyKeys]
         if (keys.length) {
           const ops: StorageOp[] = keys.map((key) => ({ type: "delete", key }))
-          if (storage.batch) await storage.batch(ops)
-          else for (const op of ops) await storage.delete(op.key)
+          // 订阅行/内存/索引都已清:这里失败不能再把退订整体抛出去(镜像会留下
+          // 幽灵订阅,点开为空)。只记日志,残留键由同 id 重新订阅覆盖或诊断清理。
+          try {
+            if (storage.batch) await storage.batch(ops)
+            else for (const op of ops) await storage.delete(op.key)
+          } catch (e) {
+            coreLog.unsubscribeCleanupFailed({ subscriptionId: id, error: formatError(e) })
+          }
         }
         // 阅读态也按订阅清：否则退订后 reading blob 永久残留孤儿记录。
         await reading.deleteBySubscription(id).catch(() => {})

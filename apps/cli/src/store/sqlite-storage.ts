@@ -30,13 +30,18 @@ function applyPragmas(db: Database): void {
 
 function applySchema(db: Database, schema: StorageSchema): void {
   db.exec(schema.ddl)
-  for (const sql of schema.migrations) db.exec(sql)
-  if (!schema.versioned) return
+  if (!schema.versioned) {
+    // 无版本表的后端只能要求迁移全部幂等（旧行为）。
+    for (const sql of schema.migrations) db.exec(sql)
+    return
+  }
   db.exec(schema.versioned.ddl)
   const select = db.prepare(`SELECT checksum FROM ${schema.versioned.table} WHERE version = ?`)
   const insert = db.prepare(
     `INSERT INTO ${schema.versioned.table} (version, name, applied_at, checksum) VALUES (?, ?, ?, ?)`,
   )
+  // 第一遍只校验：已发布迁移被改过就拒绝启动，且**不执行任何 SQL** —— 否则错的 SQL
+  // 会先落到旧库上再报错，守卫没防住它唯一要防的漂移。
   for (const migration of schema.versioned.migrations) {
     const row = select.get(migration.version) as { checksum: string } | undefined
     if (row && row.checksum !== migration.checksum) {
@@ -45,7 +50,12 @@ function applySchema(db: Database, schema: StorageSchema): void {
           `已发布迁移不可修改，请追加新版本`,
       )
     }
-    if (!row) insert.run(migration.version, migration.name, Date.now(), migration.checksum)
+  }
+  // 第二遍只执行**未应用**的版本：非幂等迁移（ALTER/搬数据）不会每次开库重跑。
+  for (const migration of schema.versioned.migrations) {
+    if (select.get(migration.version)) continue
+    db.exec(migration.sql)
+    insert.run(migration.version, migration.name, Date.now(), migration.checksum)
   }
 }
 

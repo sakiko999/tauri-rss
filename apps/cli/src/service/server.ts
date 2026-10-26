@@ -31,6 +31,7 @@ import {
   type SubscriptionGroup,
 } from "@amoeba/core"
 import { getChannel as crawlerGetChannel } from "@amoeba/crawler"
+import { formatError } from "@amoeba/log"
 import {
   getDanmakuByUrl,
   resolveLivePlayByUrl as resolveLiveByUrl,
@@ -211,6 +212,8 @@ function pidAlive(pid: number): boolean {
 }
 
 function tokenEquals(a: string, b: string): boolean {
+  // ⚠️ token 来自 JSON,可能是 number/object;Buffer.from(1) 会抛 TypeError。
+  if (typeof a !== "string" || typeof b !== "string") return false
   const ba = Buffer.from(a)
   const bb = Buffer.from(b)
   return ba.length === bb.length && timingSafeEqual(ba, bb)
@@ -1095,6 +1098,9 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         }, AUTH_TIMEOUT_MS)
       },
       message(ws, raw) {
+        // ⚠️ 回调抛错会逃出 Bun.serve 的 try(发生在另一个 tick),本机任意进程一帧
+        // 畸形 JSON 就能打死整个数据服务。协议错误只该断这条连接。
+        try {
         let msg: WsClientMessage = { type: "ping" }
         try {
           msg = JSON.parse(String(raw)) as WsClientMessage
@@ -1102,7 +1108,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
           return
         }
         if (!ws.data.authed) {
-          if (msg.type !== "auth" || !msg.token) {
+          if (msg.type !== "auth" || typeof msg.token !== "string" || !msg.token) {
             ws.close(4001, "unauthorized")
             return
           }
@@ -1136,18 +1142,30 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         if (msg.type === "subscribe") {
           ws.data.subscribed = true
           const since = typeof msg.sinceRev === "number" ? msg.sinceRev : undefined
-          if (since === undefined || since === rev) return
+          if (since === undefined) return
           const first = eventLog[0]?.rev
-          if (since > rev || first === undefined || first > since + 1) {
+          // 日志起点晚于 since → 中间事件已丢，只能让客户端全量快照收敛。
+          if (since > rev || (first !== undefined && first > since)) {
             ws.send(JSON.stringify({ type: "resync", reason: "event gap" } satisfies WsServerMessage))
             return
           }
+          // ⚠️ 用 `>=` ：一次 commit 的多条事件共享同一个 rev，而客户端只能记住
+          // 「已应用到哪个 rev」。断线时若只应用了该 rev 的一部分，`>` 会把剩余事件
+          // 永久丢掉（gap 检测也发现不了）。事件应用本身是幂等的，重放安全。
           for (const event of eventLog) {
-            if (event.rev > since) ws.send(JSON.stringify({ type: "event", event } satisfies WsServerMessage))
+            if (event.rev >= since) ws.send(JSON.stringify({ type: "event", event } satisfies WsServerMessage))
           }
           return
         }
         if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" } satisfies WsServerMessage))
+        } catch (e) {
+          console.error(`[service] ws message failed: ${formatError(e)}`)
+          try {
+            ws.close(1011, "internal-error")
+          } catch {
+            /* 连接已断 */
+          }
+        }
       },
       close(ws) {
         sockets.delete(ws)

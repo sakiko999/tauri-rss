@@ -329,7 +329,7 @@ async function main(): Promise<void> {
     ).text()
     add("退订后快照无条目", !emptyState.includes('"type":"items"'))
 
-    // 一次提交可含多条事件（同 rev）；下一个提交必须恰好 +1，且首条 = 快照 rev + 1。
+    // 一次提交可含多条事件（同 rev）；下一个提交必须恰好 +1。
     const revs = events
       .filter((e) => "rev" in e && typeof e.rev === "number")
       .map((e) => (e as { rev: number }).rev)
@@ -337,7 +337,13 @@ async function main(): Promise<void> {
       (r, i) => i === 0 || r === revs[i - 1]! || r === revs[i - 1]! + 1,
     )
     add("事件 rev 连续（同提交可多条）", contiguous, revs.join(","))
-    add("首条事件 = 快照 rev + 1", revs[0] === (meta?.rev ?? 0) + 1, `first=${revs[0]} snapshot=${meta?.rev}`)
+    // 回放用 `>=`（同 rev 的多条事件可能只应用了一部分，重放是补齐且幂等），
+    // 所以首条可能等于快照 rev；唯一不能接受的是**小于**（说明漏了事件）。
+    add(
+      "首条事件 rev >= 快照 rev（同 rev 重放补齐）",
+      revs[0] !== undefined && revs[0] >= (meta?.rev ?? 0),
+      `first=${revs[0]} snapshot=${meta?.rev}`,
+    )
 
     const shutdown = await fetch(`http://127.0.0.1:${port}/v1/shutdown`, {
       method: "POST",

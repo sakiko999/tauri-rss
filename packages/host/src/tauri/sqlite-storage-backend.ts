@@ -69,28 +69,38 @@ export class SqliteStorageBackend implements StorageBackend {
       // 用 catch 清回 null 让下次调用重跑。
       this.readyPromise = (async () => {
         const db = await this.dbPromise!
-        for (const sql of schema.migrations) await db.execute(sql)
-        if (schema.versioned) {
-          const { table, ddl, migrations } = schema.versioned
-          await db.execute(ddl)
-          for (const migration of migrations) {
-            const rows = await db.select<Array<{ checksum: string }>>(
-              `SELECT checksum FROM ${table} WHERE version = $1`,
-              [migration.version],
+        if (!schema.versioned) {
+          // 无版本表的后端只能要求迁移全部幂等（旧行为）。
+          for (const sql of schema.migrations) await db.execute(sql)
+          return
+        }
+        const { table, ddl, migrations } = schema.versioned
+        await db.execute(ddl)
+        // 第一遍只校验 checksum（不执行 SQL）；第二遍只执行未应用的版本。
+        // 见 apps/cli/src/store/sqlite-storage.ts 同款注释。
+        for (const migration of migrations) {
+          const rows = await db.select<Array<{ checksum: string }>>(
+            `SELECT checksum FROM ${table} WHERE version = $1`,
+            [migration.version],
+          )
+          if (rows[0] && rows[0].checksum !== migration.checksum) {
+            throw new Error(
+              `迁移 checksum 不匹配：version ${migration.version}（${migration.name}）；` +
+                `已发布迁移不可修改，请追加新版本`,
             )
-            if (rows[0] && rows[0].checksum !== migration.checksum) {
-              throw new Error(
-                `迁移 checksum 不匹配：version ${migration.version}（${migration.name}）；` +
-                  `已发布迁移不可修改，请追加新版本`,
-              )
-            }
-            if (!rows[0]) {
-              await db.execute(
-                `INSERT INTO ${table} (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)`,
-                [migration.version, migration.name, Date.now(), migration.checksum],
-              )
-            }
           }
+        }
+        for (const migration of migrations) {
+          const rows = await db.select<Array<{ checksum: string }>>(
+            `SELECT checksum FROM ${table} WHERE version = $1`,
+            [migration.version],
+          )
+          if (rows[0]) continue
+          await db.execute(migration.sql)
+          await db.execute(
+            `INSERT INTO ${table} (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)`,
+            [migration.version, migration.name, Date.now(), migration.checksum],
+          )
         }
       })().catch((e) => {
         this.readyPromise = null
