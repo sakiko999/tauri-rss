@@ -203,13 +203,10 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 
 ## 下一步
 
-**已完成（2026-10-26）**：`rss login <platform>`（终端渲染二维码，只走服务 RPC `scanLogin`；
-profile/cookie 只归服务，不做本地 sidecar 回退）+ xhs 显式匿名闸门（`--kv cookie=` 在浏览器
-路径也强制匿名，三处统一报「需要登录」）。
-
-**待实机**：xhs 三处登录态回归（扫码 / 已登录短路 + 首屏 / 翻页 / `rss detail`）——需要数据
-服务持有 `webview-profile`。当前安装版是服务前版本（进程内直连 DB），回归前先升级，或手动
-`rss --service --db <桌面库> --profile-dir <webview-profile>`。
+**登录（2026-10-26 收口）**：`rss login <platform>` 已落地（终端二维码，只走服务 RPC
+`scanLogin`）；登录态回归已实测——已登录短路、`xhs:explore` / `xhs:user` 首屏 + 翻页、
+`rss detail` 全过。唯一未验的是**扫码出码本身**（现有 profile 已登录，走的是短路）：
+用未登录 profile 起临时服务（`rss --service --profile-dir <空目录>`）再验。
 
 **未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
 
@@ -226,7 +223,6 @@ live 按平台二次聚合的 UI 侧。
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）
 
-- [x] `rss login <platform>`（终端二维码）+ xhs 显式匿名闸门（2026-10-26）；登录态回归待实机
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
 - [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
@@ -235,14 +231,14 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 实况播放 release 验收：mp4 解码与暂停/续播（dev 已修 Referer 403 + ORB）
 - [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
 - [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
-- [x] 架构债：R9（`packages/platform` 单一权威）/ R15（CLI 复用 core settings 仓库）/ R10（退订多键 batch）
 - [ ] Referer 改造：共享 reqwest Client → WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 改 `unsafe-url` 保留 blob 回退
-- [ ] 系统文档正文细化（02 契约表 / 03 时序图 / 01 依赖矩阵按服务模式重写）
+- [ ] 系统文档正文细化（03 时序图 / 02 契约正文；01 依赖矩阵与 02 字段表已随 R9 / membersOnly 更新）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
 - [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
 - [!] 桌面只走 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；进程内 DataLayer 回退已删（非 Tauri 的浏览器 dev 仍走进程内）。
 - [!] `tauri-plugin-sql` 保留：mobile 的进程内 DataLayer 仍用它（mobile 冻结但保留）。
-- [!] CLI 浏览器必须显式 `--browser`；默认注入会让 xhs/weibo 忽略 `--kv cookie=`，静默改变现有探针行为。
+- [!] 视频会员标记 = `Video.membersOnly`（`tpl:membersOnly`）：B站取 `rights.pay/arc_pay/ugc_pay`；YouTube 频道走 InnerTube（官方 RSS 无标记），**匿名首屏可能不含会员视频**，回退 RSS 时标记缺失。
+- [!] CLI 浏览器必须显式 `--browser`；显式空串 `--kv cookie=` 在浏览器路径也强制匿名（xhs 直接报「需要登录」），不传 cookie 键时浏览器路径才用 profile 登录态。
 - [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
 - [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。
 - [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
