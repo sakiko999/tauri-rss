@@ -3,6 +3,13 @@
 > 基于 2026-10-23 master 快照（v0.6.5）。本文只回答「谁定义、谁生产、谁消费、失效会怎样」；包职责与依赖全貌见 `01-packages.md`，端到端时序见 `03-flows.md`，怎么扩展见 `04-extension.md`。
 >
 > 行号是阅读锚点，重构后会漂移；**文件与符号名优先**。文中所有断言均在本次会话打开过源码；契约守卫的实跑状态单独标注。
+>
+> **2026-10-26 数据服务增量（先读这条）**：desktop 默认不再直接持有 `createDataLayer()`，
+> 而是 `RemoteDataLayer`（`@amoeba/service-client`，**与 `DataLayer` 同形**，读本地镜像、
+> 写 HTTP RPC、事件走 WS）；`DataLayer` 新增 `hydrate()` / `diagnostics` / `store.clear` /
+> `refresh(id,{signal})`。跨进程契约（RPC 方法表、快照 NDJSON、事件/`rev`/`epoch`）
+> 唯一权威 = `@amoeba/service-protocol`，以 `06-data-service.md` 为准；本文的描述对这种
+> 「同形替换」仍然成立，但「desktop 直连 SQLite/写 store」的字面表述按服务模式理解。
 
 ---
 

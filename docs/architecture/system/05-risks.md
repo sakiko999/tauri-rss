@@ -14,7 +14,7 @@
 | R2 | 包级运行时环 / 隐式宿主加载 **已修（2026-10-23）** | — | — | host 不再 import core（schema 注入）；`resolve/media-referrer.ts` 取代 `resolve → host` 值导入；host `./runtime|governor|node|tauri|browser` 子路径 + 根入口无 import 副作用；`setHostCaps` 自建门面 | 新跨包值导入先查 `01-packages.md` 矩阵；应用走 host 子路径 |
 | R3 | 视图层裸 id 寻址，跨订阅同 id 串条目 **已修（2026-10-23）** | — | — | `router.tsx:36,60,67` 写 `?sub=`；`store/types.ts:59-63` 的 `selectedArticleKey`；队列存复合键（`store/actions/ui.ts:45-51`）；正文缓存带订阅（`ReaderMain.tsx:79-120`） | 新增「按 id 记/改/查」入口先过 `itemRefKey`/`readingKey` |
 | R4 | 新建订阅的首抓失败被丢弃，成功提示 + 空视图 **已修（2026-10-23）** | — | — | `data-layer.ts:64,939-962` 返回 `{ id, refresh }`；desktop 失败弹 warn（`subs.ts:70-76`）；CLI 复用首刷结果（`refresh.ts:47-57`） | 调用方不要只取 `id` 忽略 `refresh.error` |
-| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 | 中 | 中 | `apps/desktop/src/store/actions/data.ts:177-197`；`packages/host/src/browser/backend.ts`（`abortTabs`） | 按订阅 lane 中止 + 独立 reason |
+| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 **已消解（2026-10-26）** | — | — | desktop 不再持有抓取浏览器（`injectTauriHost({browser:false})`，全局 `abortTabs` 退场）；超时改走 job 取消：`/v1/jobs/:id/cancel` → `AbortSignal` → core `refresh(…,{signal})`（`apps/desktop/src/store/actions/data.ts` 的 `withTimeout(..., onTimeout)`） | 新增长任务沿用 jobId + `cancel(jobId)`，不要在客户端只 abort 本地 fetch |
 | R6 | 失败只有字符串，登录/风控/403 不可区分 **已修（2026-10-23，启发式兜底）** | — | — | `RefreshResult.errorKind?`（`packages/core/src/types/refresh-result.ts`）；`packages/resolve/src/errors.ts`；desktop `refreshErrorKinds` / 诊断表 / 首刷 toast；player `errorKindOf` | 平台 client 逐步从普通 `Error` 换成 `ResolveError(kind)`，启发式兜底随之退场 |
 | R7 | mobile 能力模型不一致（注入 browser、可播缺 `isFeedItem`） **已修（2026-10-23）** | — | — | `inject-tauri.ts:31` 新增 `browser?: boolean`；mobile 显式 `browser:false`（`apps/mobile/src/main.tsx:16`）；`isPlayable` 排除无 stream 的 audio（`apps/mobile/src/store.ts:146-152`） | 新增可选宿主能力时同步两端的注入开关 |
 | R8 | `previewChannel` 绕过被动采集承诺 **已修（2026-10-23）** | — | — | `previewChannel` 与刷新共用被动门：`channel.passive && appHost.browser` 时只调 `fetchPassive`，无数据抛 `ResolveError("no-data")`（`packages/core/src/data-layer.ts`）；`passive-mode.check.ts` 新增预览用例 | 无 |
@@ -250,7 +250,7 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 | --- | --- | --- | --- | --- |
 | 1 | 存储收口：清理/写入的 `batch`/事务（R10 剩余）；出现非幂等迁移时再补版本表（R11 未来） | 多键写入不再有中间态 | 1 天 | 需确认已有库的兼容 |
 | 2 | 平台/配额表单一权威（R9 剩余） | 新增平台只改一处，去掉漏配一类问题 | 半天 | 与 host 平台推导同一改动 |
-| 3 | WebView2 边界显式化：登录续期、长等待豁免、`refreshAll` 按订阅 lane 中止（R5/R16） | 降低扫码/刷新失败率与错误归因 | 1 天 | 需真机 |
+| 3 | WebView2 边界显式化：登录续期、长等待豁免（R16） | 降低扫码/刷新失败率 | 1 天 | 需真机；R5 的取消部分已由 job 取消解决（2026-10-26），仅 lane 化未做 |
 | 4 | 文档漂移持续收尾（R19） | 类型/注释不再承诺不存在的东西 | 随时 | `tsc` + grep；新漂移登记到 §7.3 |
 
 一个判断依据：依赖/加载层（R2）已在本轮完成，剩下的存储收口与平台表改动小、消除的是静默错误；WebView2 边界需要真机验收（见 [../../ops/smoke-check.md](../../ops/smoke-check.md)）。在当前无测试基建的状态下，优先做能被 `*.check.ts` 守住的部分。错误分类（R6）、预览被动（R8）、RSSHub 归桶（R9）、正文索引与 `MIGRATIONS.version`（R10/R11）、死字段（R18）与 R2 也已在本轮完成，后续只需平台 client 逐步换 `ResolveError`，以及把平台名表收到一处。

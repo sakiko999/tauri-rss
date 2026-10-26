@@ -22,6 +22,9 @@
   单写者独占 SQLite/crawler/浏览器；desktop 默认 `RemoteDataLayer`，
   `VITE_DATA_SERVICE=0` 才回进程内 `createDataLayer()`。见 `06-data-service.md`。
 - **mobile 不做工作台**：不做频道发现、完整播放器控件、扫码登录、cookie 快照对齐（`apps/mobile/src/store.ts:1-8` 自述；代码无对应 UI 与调用）。
+- **mobile 已冻结（2026-10-26）**：除非主动开启，后续改动**不再为 mobile 做适配/回归**
+  （不跑 mobile tsc/Vite build，不为其加注入开关、UI 或平台分支）。它仍是进程内
+  `createDataLayer()` 的只读参考实现；core/契约的新增成员保持**可选**即可，不要求移动端同步。
 - **不发布公共库**：所有包 `private: true`、`exports` 直指 `src/*.ts`，没有构建产物，也没有版本化 API。
 - **XML 只承诺承载列表快照，不承诺播放解析结果**：`Stream` 走 `tpl:streamJson` 完整往返（`url/format/headers/quality/rate/dashManifest`），标准 `enclosure` 在有 `url` 时仍保留作兼容出口；`Article.media[]` 的 image/video/audio 附件与宽高、时长等属性双向保真。`sourceId` / `raw` 是 crawler 内部字段，刻意不过 XML（见 [02-contracts.md](02-contracts.md) §2.5）。播放解析结果本身仍不进 XML（见 §7 决策 1、4）。
 - **播放器不做平台判断与二次选流**：不接收 `item.kind`，不重排 `streams`（`packages/player/src/PlayableMedia.tsx:1-16`）。

@@ -307,5 +307,6 @@ bun:sqlite (CLI，apps/cli/.data/rss.db)  /  tauri-plugin-sql (desktop，appData
 
 - **迭代速度**：免 vite/tauri 的毫秒级反馈循环，crawler/resolve/core 改动即测
 - **回归测试入口**：`fetch`/`item`/`dm` 天然是各平台解析的可脚本化回归（配 `--json` 出断言）
-- **未来 sidecar 地基**（desktop 爬虫服务化，见 `docs/architecture/crawler-topology.md`）：
-  node-host 基建外套 HTTP 层（hono/fastify）即是 sidecar，CLI 先行是该里程碑的第一块
+- **服务化地基（已落地 2026-10-26）**：CLI 先行正是数据服务的第一块 —— node-host 基建
+  + `Bun.serve` HTTP/WS 即 `rss --service`，desktop 经 `service_endpoint` 复用同一进程。
+  见 `docs/architecture/system/06-data-service.md`

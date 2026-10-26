@@ -114,6 +114,20 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 
 ## 存储层
 
+### 单写者与迁移/备份（2026-10-26）
+
+- **唯一写者 = 数据服务**（`rss --service`，bun:sqlite）。desktop 默认 `injectTauriHost({storage:false})`
+  注入拒绝后端，Diagnostics/seed 都走 RPC；CLI 作为客户端不直开桌面库。任何第二写者
+  （desktop 直连、dev seed、CLI 直开 `rss.db`、旧构建）都会静默丢数据。
+- **迁移表**：`_migrations(version, name, applied_at, checksum)`，checksum = FNV-1a(DDL)。
+  已发布条目**只能追加，不能改 SQL**；checksum 不符直接拒绝启动（防两套后端漂移）。
+  权威仍是 `packages/core/src/db/schema.ts`，服务与两个 SQL 后端都执行同一份。
+- **每日备份**：服务启动时（距上次 ≥24h）`VACUUM INTO <dataDir>/backups/rss-<date>.db`，保留 7 份。
+  回滚 = 停服 → 删 `-wal`/`-shm` → 备份覆盖 `rss.db` → 重启（`settings` 回到备份时点，
+  `_migrations` 完好）。演练见 `scripts/service-data-check.ts`（§6.5）。
+- **WAL/PRAGMA**：WAL + `busy_timeout=5000` + `synchronous=NORMAL` + `foreign_keys=ON`。
+- 详见 `system/06-data-service.md` §6。
+
 ### 内容缓存与存储形态
 
 **内容缓存**：refresh 走 TTL 缓存（KV key `content:<subId>`，value = `{fetchedAt, xml}`）
@@ -127,8 +141,9 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 就是同一 KV 表里 `content:<subId>` 的记录（`core/repo/content-cache-repo.ts`）。
 单条 value 是一条 feed 的 XML，量级可接受；真要拆表时改 repo 实现即可，接口不变。
 
-**storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db）·
-CLI `sqliteStorage`（bun:sqlite）· example 内存版。
+**storage 三态**：数据服务 `sqliteStorage`（bun:sqlite，默认路径）· desktop
+`SqliteStorageBackend`（tauri-plugin-sql，仅 `VITE_DATA_SERVICE=0` 调试回退注入）·
+CLI 本地探针 / example（bun:sqlite / 内存版）。
 **DDL 唯一权威 = core `db/schema.ts`**（插件自带的 migration 机制不用，防漂移）。
 **执行方式（2026-10-23 起）**：core 在 `createDataLayer()` 首行调用
 `appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；

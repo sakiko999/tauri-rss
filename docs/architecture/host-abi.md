@@ -10,8 +10,12 @@
 
 - **注入**：desktop `injectTauriHost()`（main.tsx）· example/测试 `injectNodeHost()` ·
   纯前端调试 `injectBrowserHost()`（CORS 受限）
-- **必填**：`http` / `js`（签名脚本执行）/ `storage`。未注入时访问抛清晰错误
-- **可选**（未注入返回 undefined，消费侧据此降级）：`ws`（弹幕隧道）、`browser`（CDP 模拟）
+- **desktop 默认（数据服务模式）**：`injectTauriHost({nativeMediaReferer:true, storage:false, browser:false})`
+  —— `storage:false` 注入「读写即抛错」的拒绝后端，`browser:false` 不构造 CDP 后端；
+  两者都是**能力探测可见的关闭**（不是「注入了但命令失败」），保证 desktop 不再是第二写者。
+  `VITE_DATA_SERVICE=0` 时才退回 `injectTauriHost({nativeMediaReferer:true})`（进程内 DataLayer 调试）。
+- **必填**：`http` / `js`（签名脚本执行）/ `storage`（数据服务模式下是拒绝后端）。未注入时访问抛清晰错误
+- **可选**（未注入返回 undefined，消费侧据此降级）：`ws`（弹幕隧道）、`browser`（CDP 模拟）、`updater`
 - **兜底**：`log`（console）、`now`（Date.now）
 - **`openExternal(url)`**：打开外链。⚠️ 桌面必须走它（Tauri opener 插件）—— WebView 会拦掉
   `window.open`，表现为「点了没反应」
@@ -24,15 +28,17 @@
   实况视频）据此直连原 URL；`false` 或直连失败仍走 blob 隧道。见
   `apps/src-tauri/src/media_referer.rs` 与 `docs/ui/ui-conventions.md`
 
-**storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db）·
-CLI `sqliteStorage`（bun:sqlite）· example 内存版。
+**storage 四态（2026-10-26）**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）·
+desktop 拒绝后端（`injectTauriHost({storage:false})`，读写即抛）· desktop `SqliteStorageBackend`
+（tauri-plugin-sql，仅 `VITE_DATA_SERVICE=0` 回退）· example 内存版。
 **DDL 唯一权威 = core `db/schema.ts`**（插件自带的 migration 机制不用，防漂移）。
 **注入方式**：`StorageBackend` 新增可选 `setSchema?(schema: StorageSchema)`（`StorageSchema = { table, ddl, migrations }`，
 类型在根 `global.d.ts`）。core 在 `createDataLayer()` 首行调用
 `appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；
-SQL 后端（`SqliteStorageBackend`）只保存并执行，首次读写前未注入即抛错；建连后只接受同一份 schema，换 schema 会被拒绝。
-KV/localStorage/内存后端不实现，调用方用 `?.` 保持 no-op。CLI 的 `sqliteStorage` 仍是 app 层直接 import core
-并执行 `MIGRATIONS`（未接 `setSchema`）。
+SQL 后端（`SqliteStorageBackend` / CLI `sqliteStorage`）只保存并执行，首次读写前未注入即抛错；
+建连后只接受同一份 schema，换 schema 会被拒绝。迁移表 `_migrations` 记录 version/name/checksum，
+checksum 不符拒绝启动（见 `data-and-storage.md`「单写者与迁移/备份」）。
+KV/localStorage/内存后端不实现，调用方用 `?.` 保持 no-op。
 
 **内容缓存**：refresh 走 TTL 缓存（KV key `content:<subId>`，value = `{fetchedAt, xml}`）。
 细则见 `docs/architecture/data-and-storage.md`。

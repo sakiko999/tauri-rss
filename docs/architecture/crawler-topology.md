@@ -5,6 +5,11 @@
 > （本机 sidecar 或自部署服务，承载重反爬平台）；mobile 保持**内置 crawler**，
 > 仅支持有限平台。下文记录决策依据（RSSHub / MediaCrawler 对照调研）与形态选型空间，
 > 以及移动端不能复用 CDP 的实测依据。
+>
+> **落地状态（2026-10-26）**：已按本文实现——`rss --service` 单写者 + `amoeba-runtime`
+> 启动器 + WebView2 sidecar，desktop 默认走 `service_endpoint`。形态选型以
+> `system/06-data-service.md` 为准（本文的「候选形态」章节仅为历史依据）。
+> **mobile 于同日冻结**，不再随改动维护。
 
 ## 决策背景与动机
 
