@@ -32,7 +32,7 @@ futures-util = "0.3"
 # 抓取 webview 的 lane 窗口整理(去任务栏 / 屏外 / 隐藏):CDP `Target.createTarget`
 # 在 WebView2 下会建独立顶层窗口，必须用 Win32 样式修正。
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_WindowsAndMessaging"] }
 # WebView2 防盗链 Referer 注入。版本必须与 tauri 锁定的 webview2-com/windows 一致
 # (当前 tauri 2.12.4 → webview2-com 0.39.1 / windows 0.62.2)，否则 PlatformWebview
 # 返回的 COM 类型与本地依赖不是同一个 crate 版本，编译期直接类型不匹配。

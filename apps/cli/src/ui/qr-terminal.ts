@@ -198,8 +198,27 @@ export function matrixOf(content: string): QrMatrix {
   return { size: qr.modules.size, data: qr.modules.data }
 }
 
-/** emitQr 载荷 → 模块矩阵（两种语义统一）。 */
+/** 图片站回退载荷（服务端拉图失败时 weibo login 会把原图 URL 交给 emitQr）。 */
+const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|bmp)([?#]|$)/i
+
+/**
+ * emitQr 载荷 → 模块矩阵。
+ *
+ * 两种正常载荷：`data:image/png;base64,…`（图片）与二维码**内容**（bili 给 URL）。
+ * ⚠️ 不能把「http(s) 开头」一律当图片 —— bili 的二维码内容本身就是链接。
+ * 只在两种确定无法渲染的情况下报错，避免把图片地址当成内容编码出一个假二维码：
+ *   - 图片扩展名的 URL（weibo 取码失败的回退）；
+ *   - 非 PNG 的 data URL（微博图床可能是 jpeg）。
+ */
 export function matrixFromEmit(payload: string): QrMatrix {
+  if (IMAGE_URL_RE.test(payload)) {
+    throw new Error(
+      `二维码是远程图片而非二维码内容，终端无法渲染；请用桌面端扫码或手动打开：${payload}`,
+    )
+  }
+  if (/^data:image\//i.test(payload) && !/^data:image\/png[;,]/i.test(payload)) {
+    throw new Error(`二维码图片格式不支持（仅 PNG）：${payload.slice(0, 24)}…`)
+  }
   return matrixOf(payload.startsWith("data:image/") ? contentFromDataUrl(payload) : payload)
 }
 

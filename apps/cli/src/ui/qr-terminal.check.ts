@@ -118,5 +118,22 @@ try {
   ok(e instanceof Error && /PNG/.test(e.message), "非 PNG data URL 报错")
 }
 
+// 5) emitQr 的两种「确定无法渲染」载荷：明确报错，别把图片地址编码成一个假二维码
+try {
+  matrixFromEmit("https://v2.qr.weibo.cn/api/qrcode.png?size=180")
+  ok(false, "图片扩展名 URL 应报错")
+} catch (e) {
+  ok(e instanceof Error && /远程图片/.test(e.message), "图片 URL 载荷报错（weibo 取码失败回退）")
+}
+try {
+  matrixFromEmit("data:image/jpeg;base64,AAAA")
+  ok(false, "非 PNG data URL 应报错")
+} catch (e) {
+  ok(e instanceof Error && /仅 PNG/.test(e.message), "非 PNG data URL 载荷报错")
+}
+// 内容本身就是链接（bili）必须照常编码 —— 不能把 http(s) 一律当图片。
+ok(matrixFromEmit("https://passport.bilibili.com/x/passport-login/web/qrcode?qrcode_key=abc").size > 0,
+  "链接型二维码内容照常编码")
+
 console.log(failed ? `\n${failed} 项失败` : "\n全部通过")
 process.exit(failed ? 1 : 0)

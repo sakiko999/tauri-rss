@@ -20,6 +20,7 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 };
 use webview2_com::WebResourceRequestedEventHandler;
 use windows::core::{HSTRING, PWSTR};
+use windows_sys::Win32::System::Com::CoTaskMemFree;
 
 /// 图片防盗链规则(host 后缀 → 站内 Referer)。与 TS `MEDIA_REFERRERS` 同步。
 const IMAGE_REFERRERS: &[(&str, &str)] = &[("sinaimg.cn", "https://weibo.com/")];
@@ -59,7 +60,15 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
             let request = args.Request()?;
             let mut uri = PWSTR::null();
             request.Uri(&mut uri)?;
+            // ⚠️ COM 出参由调用方释放（CoTaskMemAlloc）。不释放则每个命中规则的
+            // 图片/媒体请求泄漏一段原生内存 —— 微博图文流一次滚动就是上百次。
+            let uri_ptr = uri.0 as *const core::ffi::c_void;
             let uri = uri.to_string().unwrap_or_default();
+            if !uri_ptr.is_null() {
+                // SAFETY: 指针来自上面的 Uri() 出参，所有权已随出参转移给本作用域，
+                // 且 to_string() 只读、不再持有它。
+                unsafe { CoTaskMemFree(uri_ptr) };
+            }
             let host = reqwest::Url::parse(&uri)
                 .ok()
                 .and_then(|u| u.host_str().map(|h| h.to_ascii_lowercase()));
