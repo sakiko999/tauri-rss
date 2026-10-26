@@ -38,6 +38,8 @@ https://github.com/sakiko999/tauri-rss/releases/latest/download/latest.json
 - 私钥：`~/.tauri/amoeba.key`（**不入库**）；公钥：`~/.tauri/amoeba.key.pub`，
   内容写在 `tauri.conf.json` 的 `plugins.updater.pubkey`。
 - CI 使用仓库 secret `TAURI_SIGNING_PRIVATE_KEY`（当前私钥无密码）。
+- 2026-10-26：公钥**已轮换**（旧 `55477786…` → 新 `397EFB52…`），`tauri.conf.json` 与
+  GitHub secret 已同步；本机新增 `.sig` 验证通过。⚠️ 轮换前发布的安装包无法用新签名升级。
 - ⚠️ **私钥丢失 = 所有已安装用户永远收不到更新**（公钥无法更换）。备份私钥文件。
 - ✅ 已开启 `plugins.updater.requireSignedVersion`：Tauri CLI 2.12+ 会把应用版本写进
   签名的 trusted comment（实测 `.sig` 内含 `version:0.1.0`）。这样即使 `latest.json`

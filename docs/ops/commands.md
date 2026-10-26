@@ -55,8 +55,9 @@ bun run rss attach refresh <id|channel> # 经服务刷新（--all 全部；--no-
 bun run rss attach rpc <method> @params.json  # 通用 RPC（Windows 传 JSON 用 @file）
 bun scripts/service-phase0.ts           # 阶段 0 测量：bootstrap/双写者/markMany 5k
 bun scripts/service-skeleton-check.ts   # 握手/state/WS/单实例/shutdown（13 项）
-bun scripts/service-data-check.ts       # 数据链路 42 项：快照/事件/阅读/备份/迁移/退订/回滚
-bun scripts/remote-data-layer-check.ts  # 远端镜像 29 项：读/写 RPC/事件/诊断
+bun scripts/service-data-check.ts       # 数据链路 48 项：快照/事件/阅读/备份/迁移/退订/回滚/取消/并发
+bun scripts/remote-data-layer-check.ts  # 远端镜像 38 项：读/写 RPC/事件/诊断/取消/崩溃收敛
+bun scripts/service-snapshot-size.ts    # 快照体积：原始 NDJSON vs gzip（默认桌面 dev 库副本；--db/--max-kb）
 bun scripts/service-runtime-check.ts    # 启动器解析 Bun → 拉起服务 → stdout 只有 READY
 bun run service:build                   # 打包独立服务入口 → dist/service/service.js（约 1.2MB）
 SERVICE_ENTRY=dist/service/service.js bun scripts/service-runtime-check.ts  # 验证打包产物

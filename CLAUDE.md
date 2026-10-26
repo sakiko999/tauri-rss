@@ -149,8 +149,9 @@ bun run rss channels | fetch <key> | item <url> | play <url>   # CLI 调试探�
 bun run rss fetch <key> --via-service           # 探针走数据服务（同 cookie/被动/配额）
 bun run rss attach status | list | refresh <id>  # CLI 作为桌面数据服务客户端
 bun run service:build                       # 打包独立服务入口 → dist/service/service.js
-bun scripts/service-data-check.ts           # 服务数据链路 42 项自检
-bun scripts/remote-data-layer-check.ts      # 远端镜像 29 项自检
+bun scripts/service-data-check.ts           # 服务数据链路 48 项自检（含 job 取消/并发写/回滚）
+bun scripts/remote-data-layer-check.ts      # 远端镜像 38 项自检（含取消/崩溃 fail-closed/重启收敛）
+bun scripts/service-snapshot-size.ts        # 快照体积实测（原始 vs gzip，默认桌面 dev 库副本）
 cargo build -p amoeba-browser        # CLI 浏览器 sidecar（--browser 才用；需 VS2022 环境）
 cargo build -p amoeba-runtime        # Bun 运行时启动器（全局优先/缺失下载）
 bun scripts/ui-probe.ts goto tab:all        # UI 巡检（需 dev 实例，9222 已开）
@@ -202,15 +203,14 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 **未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
 
 - **自动保活**（仅 bili 可行）：已有 `refresh_token` 但无续期调度 —— 到期只能重扫。
-- **desktop 数据/爬虫服务化**：已落地（`amoeba-runtime` + Bun 服务 + WebView2 sidecar）；
-  release 仅剩 clean VM/签名/回滚演练。
+- **desktop 数据/爬虫服务化**：已完成（`amoeba-runtime` + Bun 服务 + WebView2 sidecar；
+  签名/安装卸载/回滚演练均验，仅剩干净 VM 复核）。
 - **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行。
 - **抖音登录态搜索调研**：先专用小号 + CDP 被动探针，再决定是否实现。
 
 **待实机验证**（没跑过不算完成）：
 
-- 安装包 clean VM：安装/卸载、断网首启（Bun 缓存命中）、`TAURI_SIGNING_PRIVATE_KEY` 签名；
-  本机 NSIS 已产出（7.14MiB），但 updater 签名前失败。
+- 安装包：本机静默安装/启动/关窗/卸载/签名已验（7.12MiB + `.sig`）；剩余**干净 VM** 与断网首启（Bun 缓存命中）。
 - release 实例：`webview_browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
 - WebView2 生命周期：关主窗口进程必须退出；空闲回收后自动重建；连续 3 次关/建不撞 profile 占用。
 - `xhs:explore` 手动刷新命中 `passiveBuffer`；未命中走页面 SSR 兜底。
@@ -223,12 +223,14 @@ live 按平台二次聚合的 UI 侧。
 ## TODO / 重要信息（cc-todo 自动维护）
 
 - [ ] 界面文案清理尚未实机看一眼：发现页与添加订阅弹窗跑一次 `bun run dev` 确认布局没塌
-- [ ] WebView2 生命周期实机验证：关主窗口退出、空闲回收后重建、`/json/new` lane tab 关得掉、`/json/close` 不残留窗口
+- [x] 关主窗口退出已验（安装版：关「Amoeba」主窗口 → app/runtime/browser 全退 + endpoint/lock 清理；硬杀主进程也无孤儿）
+- [ ] WebView2 生命周期剩余：空闲回收后重建、`/json/new` lane tab 关得掉、`/json/close` 不残留窗口
 - [ ] release 验收：GPU 进程 private 是否因 --disable-gpu-compositing 下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
 - [ ] xhs 全渠道登录态实机回归：扫码 → explore 首屏 + 翻页、user 首屏 + 翻页、详情；未登录三处都必须报「需要登录」
 - [ ] 实况图实机验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图（xhs 403 已确认，改走隧道 + Blob）
 - [ ] release 实机验收实况播放（dev 已修：CDN 对页面源 Referer 403 + ORB 拦截；需确认 release WebView2 下 mp4 解码与暂停/续播）
-- [ ] 下一轮候选：R5（服务 refresh job 无取消：core DataLayer 不接 AbortSignal；desktop 已不再调 abortTabs）；R9 剩余（平台名表收到一处）
+- [x] R5 桌面部分已消解：job 级取消已通（`/v1/jobs/:id/cancel` → core `refresh(…,{signal})`，超时即 cancel）
+- [ ] 下一轮候选：R9 剩余（平台名表收到一处）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
 - [ ] 下一轮：R15（CLI settings 复用 core 归一化）；R10（退订多键清理幂等化/事务）；R9（平台名表收口）
 - [ ] Referer 改造：优先验证 WebView2 WebResourceRequested 注入（桌面），同时把 http_get 的 reqwest Client 改为共享单例
@@ -242,7 +244,7 @@ live 按平台二次聚合的 UI 侧。
 - [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS
 - [!] 服务化已升级为「数据层服务」（2026-10-26）：`rss --service` 单写者独占 SQLite/crawler/browser；desktop/CLI 只做客户端，mobile 不参与。计划见 `docs/architecture/system/06-data-service.md`。
 - [x] `rss attach` 客户端 + desktop 事件双向验证；release sidecar 构建/安装包资源已验证（NSIS 7.14MiB）。
-- [ ] 下一步：`rss login xhs`（终端二维码 / cookie 预热）；release clean VM + updater 签名 + 回滚演练。
+- [ ] 下一步：`rss login xhs`（终端二维码 / cookie 预热）；干净 VM 复核安装/卸载与断网首启。
 - [!] CLI 浏览器必须显式 `--browser`；默认注入会让 xhs/weibo 忽略 `--kv cookie=`，静默改变现有探针行为。
 - [x] 重写评估结论：不重写数据层（TS/Bun 继续）；收益不抵 12–18 人月与双实现风险。若未来重启，只选 Rust，且数据服务与 `--browser-host` 分开进程，不合并 tokio 与 COM STA 生命周期。
 - [!] 共享数据源只能单写者：服务独占 SQLite 与全部写操作；任何第二写者（Diagnostics 直连、dev seed、旧 desktop、CLI 直开 DB）都会造成静默丢数据。
@@ -253,6 +255,8 @@ live 按平台二次聚合的 UI 侧。
 - [x] 阶段 0 剩余已完成：Tauri resources（release 配置）、WebView2 loopback 实机、desktop profile 直接复用；阶段 1 数据服务/远端层/CLI attach 全部落地。
 - [!] 桌面默认 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；`VITE_DATA_SERVICE=0` 仅调试回退。
 - [x] 回滚演练已验：备份覆盖（删 -wal/-shm）→ settings 回到备份时点、`_migrations` 完好。
-- [ ] 阶段 2 剩余：clean VM 安装/卸载、`TAURI_SIGNING_PRIVATE_KEY` updater 签名；`tauri-plugin-sql` 暂留（mobile/本地回退）。
-- [ ] 未做：refresh job 级取消（core 无 signal）、`queryView` memo、快照 >10k 窗口化、updater 签名、clean VM。
+- [x] refresh job 级取消已通：`/v1/jobs/:id/cancel` → `AbortSignal` 到 core，取消不写 store/缓存；desktop 45s 超时改走 cancel。
+- [x] `queryView` 单槽 memo（按引用比对输入；「今天」用日桶）；快照 gzip 已开：2,521 条 2.42MB → 616KB。
+- [x] updater 签名已通（新密钥对 2026-10-26；pubkey 与 GH secret 同步），本机安装→关窗→卸载无残留；阶段 2 完成。
+- [ ] 干净 VM 复核（断网首启、生产 WebView2 Origin）；`tauri-plugin-sql` 暂留（mobile/本地回退）。
 <!-- cc-todo:end -->
