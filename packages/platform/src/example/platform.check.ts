@@ -29,6 +29,13 @@ eq(platformOfChannelKey("bili:popular"), "bili", "bili 渠道")
 eq(platformOfChannelKey("xhs:user"), "xhs", "xhs 渠道")
 eq(platformOfChannelKey("live:douyin:live"), "douyin", "抖音直播渠道（多段前缀）")
 eq(platformOfChannelKey("douyin:trend"), "douyin", "抖音非 live 渠道")
+// 回归（2026-10-26）：前缀加尾冒号曾让「本身即完整 key」的直播渠道全部匹配失败 ——
+// 后果是 cookie 不注入 / netLevels 不折叠 / rss login douyin 报无可登录渠道。
+eq(platformOfChannelKey("live:douyin"), "douyin", "抖音直播（key 即前缀，无尾段）")
+eq(platformOfChannelKey("live:douyu"), "douyu", "斗鱼直播（key 即前缀）")
+eq(platformOfChannelKey("live:huya"), "huya", "虎牙直播（key 即前缀）")
+eq(cookieFieldForChannelKey("live:douyin"), "douyinCookie", "抖音直播单渠道能取到 cookie 字段")
+eq(platformOfChannelKey("douyinlike:trend"), undefined, "前缀必须按段边界匹配")
 eq(platformOfChannelKey("live:douyu:hot"), "douyu", "斗鱼渠道")
 eq(platformOfChannelKey("youtube:live"), "youtube", "YouTube 渠道")
 eq(platformOfChannelKey("rsshub:github"), "rsshub", "RSSHub 渠道")

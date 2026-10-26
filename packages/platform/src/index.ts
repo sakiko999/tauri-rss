@@ -110,14 +110,19 @@ export function platformDef(id: string): PlatformDef | undefined {
   return PLATFORMS.find((p) => p.id === id)
 }
 
-/** 长前缀优先，避免 `douyin` 抢在 `live:douyin` 前面（当前不冲突，防未来加前缀）。 */
+/**
+ * 长前缀优先，避免 `douyin` 抢在 `live:douyin` 前面。
+ * ⚠️ 不能给前缀强加尾冒号再 `startsWith`：`live:douyin` 这类前缀**本身就是完整 key**
+ * （抖音直播渠道），`live:douyin:` 永远匹配不到它 —— 那样 cookie 注入、netLevels 折叠、
+ * `rss login douyin`、账号页扫码入口会一起静默失灵。
+ */
 const PREFIX_ENTRIES = PLATFORMS.flatMap((p) =>
-  p.prefixes.map((prefix) => ({ prefix: `${prefix}:`, platform: p.id })),
+  p.prefixes.map((prefix) => ({ prefix, platform: p.id })),
 ).sort((a, b) => b.prefix.length - a.prefix.length)
 
 /** channelKey → 平台名；未登记的前缀返回 undefined（rss: 直链等）。 */
 export function platformOfChannelKey(channelKey: string): string | undefined {
-  return PREFIX_ENTRIES.find((e) => channelKey.startsWith(e.prefix))?.platform
+  return PREFIX_ENTRIES.find((e) => channelKey === e.prefix || channelKey.startsWith(`${e.prefix}:`))?.platform
 }
 
 const HOST_ENTRIES = PLATFORMS.flatMap((p) => p.hosts.map((host) => ({ host, platform: p.id })))
