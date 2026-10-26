@@ -214,7 +214,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | 播放分片 | `hlsHostLoader` / `dashHostLoader` 显式传 `policy: { metered: false }`，不靠 host/扩展名猜（原生 mp4/`<img>` 不经 `appHost.http`，仍在治理之外） |
 | 平台配额 | L1 软限制：bili/youtube 12/600/50ms，其它平台 8/300/50ms；未知 host 一 host 一桶 8/300/50。L2 = ×0.5 / 间隔 ×2，L3 = ×0.25 / 间隔 ×4。全局并发 32 |
 | 等级 | **全局默认 + 平台覆盖 + `"*"` 兜底**：`AppSettings.netLevel` + `netLevels`；host 的 `levelFor(platform)` 只认精确平台 → `"*"` → 全局。旧 channelKey 键启动时折叠（`foldChannelLevels`） |
-| 冷却 | `reportRisk(platform, signal)`；计量请求返回 412/418/403/429 时自动写；`governor:cooldowns` best-effort 持久化 |
+| 冷却 | `reportRisk(platform, signal)`；计量请求返回 412/418/403/429 时自动写；`governor:cooldowns` best-effort 持久化；**新建冷却打一条 `[host:net]` warn**（平台/信号/时长，冷却期内重复信号不重打） |
 | 浏览器闸门 | `net.browserGate(platform)`：CDP 操作入口的冷却 + 最小间隔 + 抖动（CDP 不经 `governedHttp`）；登录流程显式绕过冷却 |
 | 等级与开关 | `AppSettings.netLevel / netLevels / autoRefresh` + 设置页「网络与风控」（全局默认 + 平台覆盖表） |
 | 被动属性 | `RssChannel.passive`（crawler channel 级，core 投影 `ChannelInfo.passive`；目前仅 `xhs:explore`）；有浏览器时只调 `fetchPassive`，无浏览器回落主动抓取 |

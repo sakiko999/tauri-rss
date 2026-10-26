@@ -5,6 +5,7 @@
  * 用假后端 + 短 minInterval(20~40ms),不碰真实网络。
  */
 import assert from "node:assert/strict"
+import { setLogSink } from "@amoeba/log"
 import { injectNodeHost } from "../index.ts"
 import {
   browserGate,
@@ -19,6 +20,9 @@ import {
 
 // 注入内存 storage:冷却持久化路径能跑通(读不到内容也应当静默)。
 injectNodeHost()
+// 本自检会故意触发多次冷却:warn 收集起来断言,别让它们混进断言输出。
+const logLines: string[] = []
+setLogSink((_level, text) => logLines.push(text))
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
@@ -177,6 +181,13 @@ console.log("── 冷却:未到期 reject,到期自动恢复 ──")
   assert.equal(governorStats().cooldowns["cool.test"], undefined)
   reportRisk("cool.test", "unknown-signal") // 未知信号 → cooldownBaseMs(60ms)
   assert.ok((governorStats().cooldowns["cool.test"] ?? 0) > 0, "显式信号应写冷却")
+  assert.ok(
+    logLines.some((l) => l.includes("平台进入冷却 cool.test") && l.includes("unknown-signal")),
+    "新冷却应打一条 host:net warn(否则刷新变慢时无法定位)",
+  )
+  const logCount = logLines.length
+  reportRisk("cool.test", "another-signal")
+  assert.equal(logLines.length, logCount, "冷却期内的重复信号不应再打日志(只刷新原因)")
 
   await assert.rejects(() => http.request({ url: "https://cool.test/api" }), /冷却/)
   assert.equal(calls, 0, "冷却期内不应发出请求")

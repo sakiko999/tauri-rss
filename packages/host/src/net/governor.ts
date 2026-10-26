@@ -18,6 +18,7 @@
  * 不要假设它能限住全部媒体流量。
  */
 import { platformOfHost } from "@amoeba/platform"
+import { netLog } from "../log.ts"
 
 /**
  * 防御等级(数字统一):
@@ -407,6 +408,7 @@ export function reportRisk(platform: string, signal: string): void {
     return
   }
   _cooldowns.set(platform, { until: now + ms, signal: sig })
+  netLog.cooldownSet({ platform, signal: sig, ms })
   persistCooldowns()
 }
 

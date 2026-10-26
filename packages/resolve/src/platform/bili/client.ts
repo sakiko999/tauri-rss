@@ -310,7 +310,8 @@ async function resolvePlayUrl(bvidOrAid: string, cid: string, cookie?: string): 
       if (first?.url) durlStreams.push({ url: first.url, format: "mp4", headers, quality: q.name, rate: q.qn })
     } catch (e) {
       if (idx === 0) throw e
-      log.bili.warn(`视频档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, (e as Error)?.message)
+      // 非首档失败=少一个可选档位,不是故障(首档失败上面已 throw)。
+      log.bili.debug(`视频档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, (e as Error)?.message)
     }
   }
   if (!durlStreams.length) {
