@@ -76,6 +76,18 @@ git push origin v0.2.0
    `*-setup.exe`、`*.sig`、`latest.json`。
 4. 已安装用户下次启动（或手动「设置 → 关于与更新」）即可检测到新版本。
 
+## 待补：发布门禁（2026-10-26 事故后记）
+
+v0.7.0 发了一个启动即「应用数据初始化失败」的包：CI 既没构建服务三件，也没叠加
+`tauri.conf.release.json`（`bundle.resources` 只写在那里）。已修 release.yml（见
+`0ecb1a2`），但**还没有自动门禁**，靠人记得。补齐项（处理 CI 时一并做）：
+
+1. 构建后断言安装包内容含 `service/service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe`
+   （`7z l *-setup.exe` 三条 grep，缺一即 fail）。
+2. 断言 `tauri build` 真的加载了 release 配置（漏 `--config` 时 resources 静默为空，
+   与 0.7.0 同症状）。
+3. 打 tag 前的本地验收清单加一条：「解包安装包确认三件」，不再只看体积。
+
 ## 本地验证（打 tag 前）
 
 VSCode 的 **「Tauri Release (true production)」** 调试入口等价于下面两步 + 直接运行
