@@ -94,6 +94,10 @@ board 大概率仍坏（等不到选择器）。另注意：RSSHub 已从 playwr
 
 **初步倾向 A**（代码全复用 + 反爬资产自持），RSSHub 可随时作为 C 叠加。**最终结论待用户选型**。
 
+> 术语：本节的 sidecar = **爬虫取数服务**（Bun/HTTP）。CLI 的 `amoeba-browser` 是
+> **浏览器宿主**（无 Tauri 的 WebView2 + CDP），两者不是同一个东西；后者已在
+> `apps/browser-sidecar/` 落地（`rss --browser`）。
+
 ## 切分边界（规划期细化）
 
 - **服务化范围**：feed 层（fetch/fetchMore + 扫码登录）。`resolvePlay`/`getDanmaku`

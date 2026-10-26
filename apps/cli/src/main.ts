@@ -17,7 +17,7 @@ import { cac } from "cac"
 import pc from "picocolors"
 import { cookieFieldForPlatform } from "@amoeba/core"
 import { setPlatformCookieLookup } from "@amoeba/resolve"
-import { setupHost } from "./host/node-host.ts"
+import { closeBrowser, setupHost } from "./host/node-host.ts"
 import { loadSettings } from "./info.ts"
 import { runChannels } from "./commands/channels.ts"
 import { runFetch } from "./commands/fetch.ts"
@@ -49,26 +49,57 @@ setupHost()
 
 /** 统一错误出口:消息一行 + 完整堆栈,exit 1。 */
 function onError(err: unknown): void {
-  console.error(`${pc.red("✘")} ${err instanceof Error ? err.message : String(err)}`)
+  const message = err instanceof Error ? err.message : String(err)
+  console.error(`${pc.red("✘")} ${message}`)
+  // xhs 已强制登录；CLI 的 sidecar profile 与桌面独立，暂时没有扫码入口。
+  if (message.includes("登录") && globalThis.appHost?.browser) {
+    console.error(
+      pc.dim(
+        "提示：CLI 的抓取浏览器 profile 与桌面独立，当前版本未提供 CLI 扫码登录；" +
+          "xhs 需要登录态，可先用 --no-browser 走 HTTP cookie 路径，或等 `rss login`。",
+      ),
+    )
+  }
   if (err instanceof Error && err.stack) {
     console.error(pc.dim(err.stack.split("\n").slice(1).join("\n")))
   }
   process.exit(1)
 }
 
-/** action 包装:同步/异步错误统一走 onError(cac 不 await 异步 action)。 */
+/**
+ * action 包装:同步/异步错误统一走 onError(cac 不 await 异步 action)。
+ * 结束时关浏览器：sidecar 是子进程，不关句柄 Bun 不会退出。
+ */
 function guard<A extends unknown[]>(fn: (...args: A) => Promise<void> | void): (...args: A) => void {
   return (...args: A) => {
+    const finish = () => {
+      void closeBrowser()
+    }
     try {
       const r = fn(...args)
-      if (r instanceof Promise) r.catch(onError)
+      if (r instanceof Promise) {
+        r.then(
+          () => finish(),
+          (err) => {
+            finish()
+            onError(err)
+          },
+        )
+      } else {
+        finish()
+      }
     } catch (err) {
+      finish()
       onError(err)
     }
   }
 }
 
 const cli = cac("rss")
+
+// 全局开关：browser 必须显式 opt-in（见 host/node-host.ts 的注释）。
+cli.option("--browser", "启用抓取浏览器（spawn amoeba-browser sidecar；需先 cargo build -p amoeba-browser）")
+cli.option("--no-browser", "强制关闭抓取浏览器（默认）")
 
 cli
   .command("channels", "列出全部 channel(key/kind/name/参数 tpl)")
@@ -129,8 +160,11 @@ cli
   .action(guard((url: string, opts: { json?: boolean; cookie?: string }) => runDetail(url, opts)))
 
 cli
-  .command("browser-reset", "清掉抓取浏览器(WebView2)profile(会掉微博/小红书登录态)")
-  .action(guard(() => runBrowserReset()))
+  .command("browser-reset", "清掉抓取浏览器 profile(默认 CLI sidecar;--target desktop|all)")
+  .option("--target <target>", "cli|desktop|all(默认 cli)")
+  .action(
+    guard((opts: { target?: "cli" | "desktop" | "all" }) => runBrowserReset(opts)),
+  )
 
 cli
   .command("env", "appHost 门面自检(http/js/storage/ws 注入状态)")

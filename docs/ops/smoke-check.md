@@ -89,7 +89,8 @@ bun scripts/ui-play-check.ts
 ```bash
 bun run rss fetch bili:popular --json        # bili 视频列表
 bun run rss fetch bili:precious --json       # bili 入站必刷（匿名，~98 条）
-# ⚠️ xhs:explore 不能走 CLI：登录态 HTTP SSR 是空壳，列表由页面脚本回填 → 需要桌面抓取浏览器
+# ⚠️ xhs:explore 的 HTTP SSR 是空壳；CLI 需 `--browser` + 登录态（当前只给「需要登录」提示）
+cargo build -p amoeba-browser && bun run rss fetch weibo:user --browser --kv uid=1195230310  # 浏览器渠道冒烟
 bun run rss fetch xhs:user --kv user_id=<id> --kv cookie=<ck> --json   # 小红书用户笔记（HTTP SSR）
 bun run rss fetch douyin:trend --json        # 抖音热点榜（匿名，含热度/榜位）
 bun run rss sug 王者                          # 抖音搜索联想词（匿名）

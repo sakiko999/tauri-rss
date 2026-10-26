@@ -13,7 +13,7 @@
 | --- | --- | --- | --- |
 | **desktop** | 订阅工作台：rail 侧栏 + reader/media/hot/page/player/shortvideo 六种外壳，抓取、播放、订阅 CRUD、频道发现、登录、诊断全量 | 拥有完整 DataLayer 方法面；桌面是唯一注入 `updater` 与真正 CDP 抓取浏览器的端 | `apps/desktop/src/main.tsx`、`App.tsx:132-148` |
 | **mobile** | 极简「看内容」闭环：未读列表 → 播放/阅读，加 RSS 直链增删 | 只用到 `query/patch/subscribe/refresh/addSubscription/resolveDetail/resolvePlay/resolveLivePlay` 等少数 DataLayer 方法；无 router、无频道发现、无登录 UI | `apps/mobile/src/store.ts:44-57`、`App.tsx` |
-| **CLI** | 调试探针：Bun + cac 零构建，12 个命令覆盖注册表、单渠道抓取、by-url 播放/弹幕、DataLayer 冒烟、环境自检、浏览器 profile 清理 | 自行组装 node 宿主与 bun:sqlite；不注入 browser/updater，浏览器驱动渠道不可用 | `apps/cli/src/main.ts:36`、`:73-149` |
+| **CLI** | 调试探针：Bun + cac 零构建，12 个命令覆盖注册表、单渠道抓取、by-url 播放/弹幕、DataLayer 冒烟、环境自检、浏览器 profile 清理 | 自行组装 node 宿主与 bun:sqlite；`--browser` 时注入 `amoeba-browser` sidecar（独立 WebView2 + CDP），默认不注入 | `apps/cli/src/main.ts:36`、`:73-149`、`apps/browser-sidecar/src/main.rs` |
 
 **明确非目标**（代码与文档都成立的部分）：
 

@@ -12,6 +12,12 @@
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
 bun run tauri:release               # ⭐ Rust 以 release 编译但保留热重载（见 CLAUDE.md 环境要求）
 bun run scripts/tauri.ts help       # 全部用法
+
+# CLI 抓取浏览器 sidecar（Windows / WebView2；VS2022 Native Tools 环境）
+cargo build -p amoeba-browser       # 产物 target/debug/amoeba-browser.exe
+bun run rss env --browser           # 确认 CLI 注入了 browser（懒启动，不 spawn）
+bun run rss fetch weibo:user --browser --kv uid=1195230310
+bun run rss browser-reset --target cli   # 清 CLI 自己的 profile（默认）
 ```
 
 ## CLI 调试探针（收编全部 example；设计与边界见下文「CLI 设计与边界」）
@@ -122,8 +128,10 @@ bun scripts/lx-probe.ts                # CDP 网络捕获边界（304/302/gzip/S
 
 ## CLI 设计与边界
 
-**现状**：八命令（`channels` / `fetch` / `item` / `play` / `dm` / `hot` / `align` / `env` /
-`refresh`）全部可用（`bun run rss <cmd>`），bili video/live、douyu、youtube 实测通过；
+**现状**：`channels` / `fetch` / `item` / `play` / `dm` / `hot` / `align` / `env` /
+`refresh` / `sug` / `detail` / `browser-reset` 全部可用（`bun run rss <cmd>`），bili
+video/live、douyu、youtube 实测通过；浏览器渠道经 `--browser` 接入独立 WebView2
+sidecar（`weibo:user` 实测通过，xhs 因必须登录暂只给出提示）。
 M3 `--log` 域开关与 M4 log 清退未做。
 
 ### 定位
@@ -138,11 +146,17 @@ M3 `--log` 域开关与 M4 log 清退未做。
 **一期渠道**（纯 HTTP/算法，零浏览器）：`rss:*` 直链、`bili:*`（popular/weekly/ranking/
 square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya,douyin,bili}`（+hot）。
 
-- ⛔ **浏览器模拟渠道不在 CLI 内**：`weibo:user`、`xhs:*` 及扫码登录（`login`）整条线
-  （依赖 `appHost.browser` = Edge spawn + CDP）。将来解锁时只需补一个 Bun 版 browser
-  backend（拉起 WebView2/Edge + CDP 走 ws 包），门面接口已留好（`appHost.browser` 可选、未注入
-  自动降级），CLI 其余部分零改动。`crawler/src/example/browser-sim.ts` 是唯一保留的
-  example 脚本（CLI 排除该类渠道；2026-09-11 起零依赖：bun 内置 WebSocket 直连 CDP）。
+- ✅ **浏览器渠道可选启用（2026-10-26）**：`--browser` / `AMOEBA_BROWSER=1` 时注入
+  `appHost.browser`，由 `amoeba-browser.exe`（独立 WebView2 进程 + CDP，屏外窗口）
+  承载 `weibo:user`、`xhs:*`。**显式 opt-in**：crawler 一看到 `appHost.browser` 就走
+  浏览器路径并忽略 `--kv cookie=`，默认注入会让现有 HTTP 探针静默失效。
+  - 构建：`cargo build -p amoeba-browser`；找不到时 CLI 保持 `browser=undefined`（HTTP 降级）。
+  - profile：`%LOCALAPPDATA%/app.amoeba.cli/browser-profile`，与桌面 `webview-profile` 严格分开。
+  - 登录：xhs 必须登录，CLI 暂无扫码入口 → 会给出明确提示；下一步是 `rss login`。
+  - 单页/lane：与桌面同一套 `@amoeba/host/cdp` 语义（`Target.createTarget` = 独立顶层窗口，
+    sidecar 500ms tidy 去任务栏；`mode hidden|interactive` 同步切换）。
+  - 退出：命令结束 `closeBrowser()` 关 stdin，sidecar 等 WebView2 flush cookie 后退出；
+    超时 `taskkill /T`，父进程死亡由 `--parent-pid` 兜底。
 - ⛔ **不做播放**：只到「解析出 stream 清单」为止；hls.js/flv.js/dashjs 不进 CLI。
   验证直链用 `--open` 丢给系统播放器。
 - bili 登录档位不受影响：settings 登录态经 credentials provider（client 兜底）与
@@ -157,9 +171,13 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
 | Node + tsx + commander | 不选：仓库其余全 bun，徒增分裂 |
 | Rust clap | 排除：重写整个数据层 |
 
+「零构建」仍成立：HTTP 渠道照旧 `bun run rss` 直跑；只有 `--browser` 需要先
+`cargo build -p amoeba-browser`（独立 WebView2 宿主，不重写数据层）。
+
 目录：
 
 ```
+apps/browser-sidecar/      # amoeba-browser：无 Tauri 依赖的 WebView2 宿主（CDP + stdin 控制）
 apps/cli/
   package.json     # @amoeba/cli；deps: core, host, log + cac + picocolors + qrcode
   tsconfig.json    # 不 extends tsconfig.app.json（DOM/vite 环境）；面向 bun/node:

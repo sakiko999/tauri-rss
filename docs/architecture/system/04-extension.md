@@ -171,7 +171,8 @@ player 只决定怎么把 `streams[0]` 放出来。
   `host/net/governor.ts:250` 的 `platformOf`、UI 的筛选/图标表。细节见 `../platforms/channels.md`。
 
 **回归**：`bun run rss channels --kind <kind>`、`bun run rss fetch <key> --json`；有纯映射则加
-`packages/crawler/src/example/*.check.ts`。浏览器渠道在 CLI 不可用，需桌面实例。
+`packages/crawler/src/example/*.check.ts`。浏览器渠道在 CLI 需 `--browser` 且先
+`cargo build -p amoeba-browser`（xhs 还需登录态）。
 
 ### 3.b 新增平台 client / by-url 播放解析
 
@@ -308,7 +309,8 @@ player 只决定怎么把 `streams[0]` 放出来。
 2. `apps/cli/src/main.ts` 用 `.command(...).action(guard(...))` 注册（`guard` 在 `:60`，统一错误出口 + exit 1）。
 3. 参数装配用 `info.ts` 的 `buildInfo`（`defaultInfo` < 示例 < `--kv`）与 `parseKvPairs`；需要 DataLayer 时
    `createDataLayer()`，但记住 CLI 的 DB 是独立的 `apps/cli/.data/rss.db`，不读桌面登录态。
-4. CLI 不注入 `appHost.browser`：浏览器驱动渠道会失败或回落 HTTP，命令帮助里要写清。
+4. CLI 默认不注入 `appHost.browser`；`--browser` / `AMOEBA_BROWSER=1` 时才注入
+   `amoeba-browser` sidecar。浏览器驱动渠道会因此忽略 `--kv cookie=`，帮助里要写清。
 5. 同步 `docs/ops/commands.md` 与 `docs/ops/smoke-check.md`。
 
 ### 3.g 新增宿主能力 / Tauri command
@@ -348,7 +350,8 @@ player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面�
 | 入口 | 端口 | 只在何时存在 | 用途 |
 | --- | --- | --- | --- |
 | 桌面 dev 实例 CDP | 9222 | `bun run tauri`（叠 `tauri.conf.dev.json`） | `scripts/ui-probe.ts`、`ui-play-check.ts`、`__store` |
-| 抓取浏览器 CDP | 9334 | 桌面运行时按需拉起（WebView2，独立 profile） | 看 xhs/weibo 页面状态；`rss browser-reset` 清 profile |
+| 抓取浏览器 CDP | 9334 | 桌面运行时按需拉起（WebView2，独立 profile） | 看 xhs/weibo 页面状态；`rss browser-reset --target desktop` 清 profile |
+| CLI 浏览器 sidecar CDP | 动态（`READY <port>`） | `rss ... --browser` 期间（`amoeba-browser.exe`） | CLI 的 weibo/xhs 浏览器路径；`rss browser-reset`（默认 cli）清 profile |
 | Vite dev server | 1420 / 1422 | `bun run dev` / `tauri` | 纯前端调试；mobile 走 1422 |
 
 `__store` 只在 `import.meta.env.DEV` 暴露（`apps/desktop/src/main.tsx`、`apps/mobile/src/main.tsx`），

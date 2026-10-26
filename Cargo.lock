@@ -72,6 +72,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "amoeba-browser"
+version = "0.1.0"
+dependencies = [
+ "webview2-com",
+ "windows 0.62.2",
+]
+
+[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

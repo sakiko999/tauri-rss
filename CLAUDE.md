@@ -20,11 +20,15 @@ apps/
                不做频道发现（那属桌面工作台）
   cli/         ★ 调试探针（Bun + cac 零构建），收编全部 example。宿主 = node 后端 +
                bun:sqlite（apps/cli/.data/rss.db）。详见 docs/ops/commands.md
+  browser-sidecar/  amoeba-browser：无 Tauri 依赖的 WebView2 宿主（屏外窗口 + CDP）。
+               CLI `--browser` 时由 packages/host/src/node/browser-sidecar.ts spawn，
+               与 desktop 共用 @amoeba/host/cdp 的 lane/超时/拦截语义
 packages/
   xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。node/browser/tauri 三态；
                net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）。
-               应用走子路径 `./node|tauri|browser|runtime|governor`；根入口无 import 副作用。
+               应用走子路径 `./node|tauri|browser|cdp|runtime|governor`；根入口无 import 副作用。
+               `browser/*` 是载具无关的 CDP 核心（BrowserDriver 收敛桌面/CLI 差异）。
                桌面媒体防盗链走 WebView2 请求头注入（src-tauri/media_referer.rs），
                失败/非 Windows 回退 blob 隧道（appHost.nativeMediaReferer 探测）
   resolve/     ★ 平台解析层：platform/（各平台 client + 播放解析 + 弹幕 codec）、
@@ -127,6 +131,7 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
 bun run tauri:release               # release 编译 + 热重载（调 release-only 分支）
 bun run rss channels | fetch <key> | item <url> | play <url>   # CLI 调试探针
+cargo build -p amoeba-browser        # CLI 浏览器 sidecar（--browser 才用；需 VS2022 环境）
 bun scripts/ui-probe.ts goto tab:all        # UI 巡检（需 dev 实例，9222 已开）
 bun scripts/ui-play-check.ts                # 播放矩阵巡检（真播，报起播）
 bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包的最小断言
@@ -208,4 +213,8 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 实机回归：真实微博/xhs feed 图片网格与实况播放（直连+回退）、滚动时缓存命中、release 构建同一行为
 - [ ] CLI 浏览器载具待定：系统 Chrome/Edge 独立 profile + CDP，默认 `--headless=new`、保留 `--headed`；附 `login` 命令与 cookie 全量 seed 两个前置
 - [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
+- [ ] 下一步：node-chromium driver（spawn 系统 Chrome/Edge，`--remote-debugging-port=0` + `DevToolsActivePort`）+ CLI 懒注入 browser，先跑通 `xhs:explore` 被动采集。
+- [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
+- [ ] CLI 暂不编译为二进制；先把 DATA_DIR 与 sidecar 路径改成 env/同目录可覆盖，保留 `rss:build` 作为后续打包出口。
+- [!] 服务化边界只切取数层（crawler + browser），core/storage 留在 UI；API 用 XML 契约，避免分布式存储。
 <!-- cc-todo:end -->

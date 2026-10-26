@@ -1,11 +1,11 @@
 /**
  * env — appHost 各门面自检。--probe 实测(轻请求 / JS 求值 / KV roundtrip),
- * 缺省只报告注入状态与配置位置。ws 不实际建连(四平台弹幕归 rss dm),
- * browser 明示排除(CLI 不做 Edge+CDP,docs/cli-plan.md §一)。
+ * 缺省只报告注入状态与配置位置。ws 不实际建连(四平台弹幕归 rss dm)。
+ * browser = 可选能力：`--browser` / AMOEBA_BROWSER=1 时懒启动 amoeba-browser sidecar。
  */
 import pc from "picocolors"
 import { existsSync } from "node:fs"
-import { nodeBackend, nodeJsBackend } from "@amoeba/host/node"
+import { locateSidecarBinary, nodeBackend, nodeJsBackend } from "@amoeba/host/node"
 import { sqliteFilePath } from "../store/sqlite-storage.ts"
 import { fail, fmtMs, ok, row, startTimer } from "../ui/render.ts"
 
@@ -21,7 +21,18 @@ export async function runEnv(opts: EnvOptions): Promise<void> {
   console.log(row("js", `${ok("已注入")} (new Function)`))
   console.log(row("storage", `${ok("已注入")} (bun:sqlite: ${dbPath}${dbExists ? "" : pc.dim(", 尚未创建")})`))
   console.log(row("ws", `${ok("已注入")} (ws 包,支持自定义握手 header)`))
-  console.log(row("browser", pc.dim("—(CLI 排除浏览器模拟渠道;desktop 走 Edge+CDP)")))
+  const browser = globalThis.appHost?.browser
+  const sidecar = locateSidecarBinary()
+  console.log(
+    row(
+      "browser",
+      browser
+        ? `${ok("已注入")} (amoeba-browser sidecar, 懒启动${sidecar ? `: ${sidecar}` : ""})`
+        : sidecar
+          ? pc.dim(`未启用（--browser 开启；已找到 ${sidecar}）`)
+          : pc.dim("未启用（未找到 amoeba-browser.exe；cargo build -p amoeba-browser）"),
+    ),
+  )
   console.log(row("log", `info/debug = ${process.env.RSS_LOG === "1" ? "开 (RSS_LOG=1)" : "关(默认;RSS_LOG=1 放开)"},warn/error 永保留`))
 
   if (!opts.probe) return
