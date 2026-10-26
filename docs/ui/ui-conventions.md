@@ -345,3 +345,36 @@ base64 + Blob 隧道，跨重启复用 Chromium HTTP 缓存。
   （`item.subscriptionId:id` / `sub.id` / `group.id`），其次 data-* / 唯一 id / 列表标题；
   虚拟列表滚出滚回、DOM 重建都复用同号。路由变化重置，隐藏/显示不重置。
   见 `docs/ui/numbered-ui-overlay.md`。
+
+## UI 组件/样式/动画库选型（2026-10-27 评估，结论：不换库）
+
+四条硬约束决定匹配度：样式能对接**手写 CSS + 现有 token**、能活在**虚拟列表**（Virtuoso/masonic）里、
+动效受 **`data-motion` 三档**控制、包体/启动敏感（桌面安装包 7.4MB）。按此筛过一轮主流候选，
+**没有任何组件库值得替换**；匹配度 high 的只有 CSS 原生能力。
+
+| 层 | 候选 | 结论 |
+| --- | --- | --- |
+| 行为 | `radix-ui` 聚合伞包 | 同一份代码的打包形态，**零收益**（多约 25 个未用 primitive、锁死版本号） |
+| 行为 | Base UI 1.9.0 | 同类最契合（无样式/CSS 变量/`data-*`/MIT/React 19），但**同面 +28KB gzip、零功能增益** |
+| 行为 | Ark UI / React Aria / Headless UI | 迁移面或 API 距离更大；Headless UI 的 Select 只是原生 `<select>` 包装（系统菜单） |
+| 样式 | **CSS `@layer` 声明层序** | 唯一 high：把「`@import` 顺序 = 层叠顺序」改成显式层声明 |
+| 样式 | Panda / vanilla-extract / Open Props / UnoCSS / CSS Modules | 会造第三个 token 权威，或只改善那 8.7% 的 utility |
+| 动画 | **CSS 原生**（`@starting-style` / `interpolate-size` / View Transition） | 唯一 high，零依赖，正好补浮层退场 |
+| 动画 | `motion/mini`（**不是** `motion/react`） | 可预留：~3KB，补 FLIP/可中断编排；`lib/motion.ts` 已留入口 |
+| 动画 | Motion One | ⚠️ monorepo **已归档**（最后版本 2024-06），别按旧名引入 |
+| 动画 | AutoAnimate / anime.js / tw-animate-css | 不认 `data-motion` 三档 / 体积 10–40KB / 绑定 Tailwind 固定时长 |
+| 部件 | sonner / cmdk / react-resizable-panels / TanStack Virtual | 自研更贴合（token 时序、IME 守卫、grid 折叠补间、Virtuoso 动态高度） |
+
+判据数字（实测）：903 个 className token 里 utility 仅 84（**9.3%**），自维护语义类 359 个；
+Radix 触点仅 **7 条 import / 4 个文件**；样式 11 文件 4087 行。换库只会动到外壳、拿不到功能收益。
+
+可做但**未做**（按性价比排序）：
+
+1. `@layer` 层序（半天）：`styles.css` 顶部声明
+   `@layer theme, base, components, utilities, app.tokens, …, app.responsive;`。
+   ⚠️ `10-tokens.css` **只包选择器块**（`:root`/`[data-theme]`/`[data-density]`/`[data-motion]`），
+   `@theme`/`@keyframes`/`@font-face` 与元素 reset 必须留顶层——包错是静默大面积变色。
+2. Radix 补丁升级：`dialog 1.3.0→1.3.1`、`dropdown-menu 2.2.0→2.2.1`；`packages/player`
+   的 `^2.1.6` 对齐到 `^2.1.25`（消版本漂移）。
+3. 浮层退场（Dialog/Menu/Toast）+ Accordion 高度过渡（0.5–1 人日，纯 CSS，
+   受 `data-motion` 三档控制）。
