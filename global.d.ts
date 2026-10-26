@@ -29,8 +29,6 @@ declare global {
     js: JsBackend
     /** 持久化 KV。core 的 repo 用它存 subscriptions/reading/settings。 */
     storage: StorageBackend
-    /** 日志;缺失时 core 用 console 兜底。 */
-    log?: Logger
     /** 时钟(epoch ms);缺失时 core 用 Date.now 兜底。 */
     now?: () => number
     /** WebSocket 隧道(桌面 Rust ws_connect / node ws 包)。缺失时 crawler 兜底用原生 WS(无自定义 header)。 */
@@ -304,11 +302,6 @@ declare global {
     setSchema?(schema: StorageSchema): void
     /** 关闭底层句柄（long-lived 服务进程退出前调用；其它后端可不实现）。 */
     close?(): void
-  }
-
-  /** 日志输出。缺失时消费方用 console 兜底。 */
-  interface Logger {
-    log(level: "debug" | "info" | "warn" | "error", msg: string, ctx?: Record<string, unknown>): void
   }
 
   /** 一个 HTTP 请求。 */

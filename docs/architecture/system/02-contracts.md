@@ -290,7 +290,7 @@ sequenceDiagram
 | 能力 | 必填 | 缺失行为 |
 | --- | --- | --- |
 | `http` / `js` / `storage` | 是 | getter 抛带指引的错误（`runtime.ts:59-70`） |
-| `log` / `now` | 否 | 回落 `consoleLogger` / `Date.now`（`runtime.ts:71-76`） |
+| `now` | 否 | 回落 `Date.now`（`runtime.ts:71-76`）。日志**不走门面**：所有包用 `@amoeba/log`，服务用 `setLogSink` 接管输出 |
 | `ws` / `browser` / `updater` | 否 | 返回 `undefined`，消费侧降级（`runtime.ts:79-91`） |
 | `net` | 否（类型）/ **恒有（实现）** | `netBackend` 常量，与后端是否注入无关（`runtime.ts:35-41`） |
 | `openExternal` | 是 | 协议白名单 `http/https/mailto`，fail-closed（`runtime.ts:109-115`） |
@@ -313,7 +313,7 @@ sequenceDiagram
 | 接口 | 形状（节选） |
 | --- | --- |
 | `HttpBackend`（`global.d.ts:295-297`） | `request(req: HttpRequest): Promise<HttpResponse>`；`HttpRequest.policy?: {platform?, metered?, dedupeKey?}`；`arraybuffer` 的 `body` 必须是整段 `Uint8Array` |
-| `StorageBackend`（`global.d.ts`） | `get/set/delete/keys(prefix?)`，纯 KV 字符串，**无事务/批量**；可选 `setSchema?(schema: StorageSchema)`，只有 SQL 型后端需实现 |
+| `StorageBackend`（`global.d.ts`） | `get/set/delete/keys(prefix?)`，纯 KV 字符串；可选 `batch?(ops)`（bun:sqlite 用事务；tauri-plugin-sql 刻意不实现，core 回退逐个）与 `setSchema?(schema: StorageSchema)`（只有 SQL 型后端需实现） |
 | `StorageSchema`（`global.d.ts`） | `{ table: string; ddl: string; migrations: ReadonlyArray<string> }`；由 core `createDataLayer()` 首行注入，后端只执行，不持有 DDL |
 | `JsBackend`（`:306-309`） | `call(code, fn, args): unknown`（执行签名 blob） |
 | `WsBackend`（`:156-158`） | `connect(opts): Promise<WsConnection>`；`WsConnection: {connectionId, readyState, send(Uint8Array), close()}` |

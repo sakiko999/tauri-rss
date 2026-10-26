@@ -3,7 +3,8 @@
  *
  * `globalThis.appHost` 是只读门面,字段访问时校验:
  *   - http / js / storage: 未注入抛清晰错误
- *   - log / now: 未注入用兜底(console / Date.now)
+ *   - now: 未注入用 Date.now 兜底
+ * 日志不走门面:所有包统一用 `@amoeba/log`(服务进程用 setLogSink 接管 stderr)。
  *
  * 注入(injectNodeHost / injectTauriHost / injectBrowserHost)只设闭包变量,
  * 不替换门面本身。crawler/core 直接访问 `globalThis.appHost.http` 等,无需
@@ -15,7 +16,6 @@ import { browserGate, configureNetwork, governedHttp, governorStats, reportRisk 
 let _http: HttpBackend | undefined
 let _js: JsBackend | undefined
 let _storage: StorageBackend | undefined
-let _log: Logger | undefined
 let _now: (() => number) | undefined
 let _ws: WsBackend | undefined
 let _browser: BrowserBackend | undefined
@@ -42,18 +42,6 @@ const netBackend: NetBackend = {
   governorStats,
 }
 
-const consoleLogger: Logger = {
-  log(level, msg, ctx) {
-    const fn =
-      level === "error" ? console.error
-      : level === "warn" ? console.warn
-      : level === "debug" ? console.debug
-      : console.info
-    if (ctx !== undefined) fn(msg, ctx)
-    else fn(msg)
-  },
-}
-
 /** 初始化全局门面(模块加载时一次)。之后注入只改闭包。 */
 export function initAppHost(): void {
   if (globalThis.appHost) return
@@ -69,9 +57,6 @@ export function initAppHost(): void {
     get storage(): StorageBackend {
       if (!_storage) throw new Error("appHost.storage not set — 请在应用启动时注入宿主,或 example 用 injectNodeHost/injectBrowserHost")
       return _storage
-    },
-    get log(): Logger {
-      return _log ?? consoleLogger
     },
     get now(): () => number {
       return _now ?? Date.now
@@ -131,7 +116,6 @@ export function setHostCaps(caps: {
   http: HttpBackend
   js: JsBackend
   storage: StorageBackend
-  log?: Logger
   now?: () => number
   ws?: WsBackend
   browser?: BrowserBackend
@@ -144,7 +128,6 @@ export function setHostCaps(caps: {
   _http = governedHttp(caps.http)
   _js = caps.js
   _storage = caps.storage
-  _log = caps.log
   _now = caps.now
   _ws = caps.ws
   _browser = caps.browser

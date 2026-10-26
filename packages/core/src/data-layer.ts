@@ -43,6 +43,7 @@ import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createMediaStore } from "./store/media-store.ts"
+import { coreLog } from "./log.ts"
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
@@ -205,7 +206,6 @@ export function createDataLayer(): DataLayer {
   // 全局 appHost 门面(getter 校验未注入抛清晰错误;now/log 兜底)。
   const storage = globalThis.appHost.storage
   const now = globalThis.appHost.now!
-  const log = globalThis.appHost.log!
   const repo = createSubscriptionRepository(storage, now)
   const contentCache = createContentCacheRepo(storage)
   const bodyCache = createBodyCacheRepo(storage)
@@ -525,6 +525,8 @@ export function createDataLayer(): DataLayer {
           // 无被动数据 → 复用内容缓存(即使过期);连缓存都没有才如实报错。
           const hit = await restoreFromCache(subscriptionId, kind)
           if (hit) return hit
+          // 缓存回退是正常降级不记;连缓存都没有才是需要排障的静默失败。
+          coreLog.passiveNoData({ subscriptionId, channel: channel.key })
           return {
             subscriptionId,
             itemCount: 0,
@@ -563,14 +565,14 @@ export function createDataLayer(): DataLayer {
       try {
         await contentCache.set(subscriptionId, { fetchedAt: now(), xml })
       } catch (e) {
-        log.log("warn", "content cache write failed", { subscriptionId, error: String(e) })
+        coreLog.cacheWriteFailed({ subscriptionId, error: String(e) })
       }
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
     } catch (err) {
       // 取消不是失败：不回退旧缓存（否则取消会把「已加载更多页」的 store 重置回首页）、
       // 不打 error 日志（取消是正常路径，别把日志刷成红色）。
       if (signal?.aborted) return cancelledResult(subscriptionId)
-      log.log("error", "refresh failed", { subscriptionId, error: String(err) })
+      coreLog.refreshFailed({ subscriptionId, error: String(err) })
       // 失败后总数字段已不可信(是上一次成功抓取的残留),清掉免得 UI 计数与内容不符。
       pageTotals.delete(subscriptionId)
       // 抓取失败回退旧缓存(即便过期):不空窗,error 保留供 UI 提示。
@@ -792,7 +794,7 @@ export function createDataLayer(): DataLayer {
       // passive 由渠道自己决定怎么降级(被动模式下不得构造 fetch/API);不支持的渠道返回 null。
       detailItem = await source.resolveDetail(item as never, { passive: channel.passive === true })
     } catch (e) {
-      log.log("warn", "resolveDetail failed", {
+      coreLog.detailFailed({
         subscriptionId,
         itemId,
         channel: sub.channelKey,
@@ -846,10 +848,20 @@ export function createDataLayer(): DataLayer {
       const source = channel.getSource(info)
       if (!isPageable(source)) return { addedCount: 0, hasMore: false }
       const cursor = pageCursors.get(subscriptionId)
-      // existing:游标是页面下标时,首次翻页的起点必须是 store 已有条数(见 Pageable 注释)。
-      const { xml, cursor: nextCursor, hasMore: channelHasMore } = await source.fetchMore(cursor, {
-        existing: store.query({ subscriptionId }).length,
-      })
+      let page: { xml: string; cursor?: string; hasMore?: boolean }
+      try {
+        // existing:游标是页面下标时,首次翻页的起点必须是 store 已有条数(见 Pageable 注释)。
+        page = await source.fetchMore(cursor, { existing: store.query({ subscriptionId }).length })
+      } catch (e) {
+        // 翻页失败此前直接冒泡：调用方只看到错误文本，服务日志里没有「哪个订阅/渠道」。
+        coreLog.loadMoreFailed({
+          subscriptionId,
+          channel: sub.channelKey,
+          error: e instanceof Error ? e.message : String(e),
+        })
+        throw e
+      }
+      const { xml, cursor: nextCursor, hasMore: channelHasMore } = page
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
       if (removedSubs.has(subscriptionId)) return { addedCount: 0, hasMore: false } // 已退订:丢弃
       // ⚠️ 分页条目的 fetchedAt 对齐到该订阅已有内容(首屏)的抓取时间。
@@ -989,11 +1001,11 @@ export function createDataLayer(): DataLayer {
           )
           if (!next) return
           updated.push(field)
-          log.log("info", "browser cookie snapshot synced", { field, user_id: snap.user_id })
+          coreLog.cookieSnapshotSynced({ field, ...(snap.user_id ? { user_id: snap.user_id } : {}) })
         })
       } catch (e) {
         // 浏览器起不来 / CDP 被回收 / 端口被占:只记录,不影响启动与其它平台。
-        log.log("warn", "browser cookie snapshot failed", {
+        coreLog.cookieSnapshotFailed({
           field,
           error: e instanceof Error ? e.message : String(e),
         })

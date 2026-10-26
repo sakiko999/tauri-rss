@@ -344,8 +344,12 @@ desktop 默认不直连 DataLayer，而是同形的 `RemoteDataLayer`。改接�
 
 | 日志系统 | 谁在用 | 开关 | 备注 |
 | --- | --- | --- | --- |
-| `@amoeba/log` 域 | host、resolve（含 crawler 渠道）、player | localStorage `log` / `log:<域名>` 为 `"0"` 关闭；CLI 由 `RSS_LOG=1` 放开 | 域在 emit 时读开关；`warn/error` 永不被屏蔽 |
-| `appHost.log` | core | 无开关，落到 `console` | core 的诊断不走 `@amoeba/log`，不能按域过滤 |
+| `@amoeba/log` 域 | **所有包**（host / resolve+crawler / player / core / cli） | localStorage `log` / `log:<域名>` 为 `"0"` 关闭；CLI 由 `RSS_LOG=1` 放开 | 域在 emit 时读开关；`warn/error` 永不被屏蔽 |
+| `setLogSink` | 服务进程 | — | 全部级别（含 info/debug）改走 stderr，保证 stdout 只有 `READY <port>`；测试也用它收集输出 |
+
+`appHost.log` 已删除（2026-10-26）：core 是最后一个消费者，两套通道会让开关/前缀只覆盖一半。
+core 改用 `@amoeba/log` 的 `[core]` 域（`packages/core/src/log.ts`），并补了 loadMore 失败、
+被动无数据的日志点。
 
 新增日志域时用 `createLogDomain("子系统:名字", ...)`；resolve 的平台域在 `packages/resolve/src/log.ts:108-121`，
 player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面命名空间，重名会复用同一引用，务必带前缀。

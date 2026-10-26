@@ -17,6 +17,7 @@
         "@amoeba/core": "workspace:*",
         "@amoeba/crawler": "workspace:*",
         "@amoeba/host": "workspace:*",
+        "@amoeba/log": "workspace:*",
         "@amoeba/platform": "workspace:*",
         "@amoeba/resolve": "workspace:*",
         "@amoeba/service-client": "workspace:*",
@@ -102,6 +103,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@amoeba/crawler": "workspace:*",
+        "@amoeba/log": "workspace:*",
         "@amoeba/platform": "workspace:*",
         "@amoeba/resolve": "workspace:*",
         "@amoeba/xml": "workspace:*",

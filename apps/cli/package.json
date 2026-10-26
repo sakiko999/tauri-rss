@@ -10,6 +10,7 @@
     "@amoeba/crawler": "workspace:*",
     "@amoeba/core": "workspace:*",
     "@amoeba/host": "workspace:*",
+    "@amoeba/log": "workspace:*",
     "@amoeba/platform": "workspace:*",
     "@amoeba/resolve": "workspace:*",
     "@amoeba/service-client": "workspace:*",

@@ -6,7 +6,6 @@
  *   - ws:      TauriWsBackend(Rust ws_connect 隧道,握手可带 header,弹幕)
  *   - openExternal: tauri-plugin-opener(WebView 会拦 window.open)
  *   - updater: TauriUpdaterBackend(自动更新;仅桌面,移动端不注册插件)
- *   - log:     console
  *   - now:     Date.now
  */
 import { openUrl } from "@tauri-apps/plugin-opener"

@@ -89,7 +89,7 @@ host → core、也不允许 core 生产依赖 host —— 这是唯一能同时
 | **host** | | R | R | | | | | | | `@tauri-apps/api` + opener/process/sql/updater、`ws` |
 | **resolve** | T | R | | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 ui/desktop 取防盗链规则 |
 | **crawler** | R | | | D | R | | | | | — |
-| **core** | R | | R | D | R | R | | | | — |
+| **core** | R | R | R | D | R | R | | | | — |
 | **player** | | R | | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
 | **ui** | | | | | R（仅 `./media-referrer`） | | U | U | | `react`；仍读 `globalThis.appHost.imageProxy/dataSaver` |
 | **desktop** | R | | R | R | R | | R | R | R | react-router、zustand、react-virtuoso、masonic、Radix、dompurify、qrcode、jsqr、lucide |
@@ -130,7 +130,7 @@ graph LR
 | 维度 | 内容 |
 | --- | --- |
 | 负责 | 进程级域注册表（同名幂等、HMR 合并）、模板事件方法（ctx 类型由 `text` 推断）、两级开关、浏览器 `%c` / 终端 ANSI 着色、`formatError` 归一（Error / hls ErrorData / dash `{message}`） |
-| 不负责 | 日志落文件、上报、采样；不读 `appHost.log`，与 core 的宿主日志是两套通道（漂移登记在 `05-risks.md`） |
+| 不负责 | 日志落文件、上报、采样；输出通道由 `setLogSink` 注入（服务写 stderr），包内不直写 console。`appHost.log` 已删除，所有包统一走本包 |
 | 对外导出 | `createLogDomain` / `getLogDomain` / `resetLogDomains` / `formatError`（`packages/log/src/index.ts:2-4`） |
 | 内部结构 | `core.ts` = registry + emit + 方法工厂；`env.ts` = 环境判别与开关；`format.ts` = 错误文本化 |
 | 依赖 / 被依赖 | 无依赖。被 host（`host/src/log.ts:33,59`）、resolve（`resolve/src/log.ts`）、player（`player/src/log/index.ts:13`）使用；crawler 经 resolve 的 `log` 间接使用 |
@@ -356,7 +356,7 @@ sequenceDiagram
 | host 不为 DDL 反向依赖 core（schema 注入） | 「DDL 唯一权威」比「零反向依赖」更重要；`StorageSchema` 让 core 把 schema 当参数交给后端，host 打包不再连带 core 及其 crawler/resolve 依赖 | 代价移到初始化顺序：SQL 后端在 `setSchema` 前不可读写，`createDataLayer` 必须先于一切 storage 访问；后端实现必须记得实现 `setSchema?`（漏实现会在首次读写时抛「schema 未注入」）。CLI 后端仍作为 app 直接 import core 并自行执行 `MIGRATIONS`（未切到 `setSchema`，不影响包依赖图） |
 | player 从 ui 拆出 | 播放器带三个重引擎；图片原子件不该为播放器付包体 | ui 的 `package.json` 仍留着 core/player 的陈旧声明；桌面样式需 `@source` 扫描 player 源码（`apps/desktop/src/styles.css`） |
 | 库包源码直引、无构建产物 | 所有包的 `main/exports` 指向源码，Vite/Bun 直接消费 TS；改库即时热更新 | 无法按包发布消费；消费方打包体积取决于 import 的入口。host/resolve 已用子路径避免整包 barrel，但大多包仍是单入口 |
-| log 做成零依赖叶子 | 任何包都能记日志而不引入宿主 | 与 core 的 `appHost.log` 是两套通道，开关只覆盖前者（`05-risks.md`） |
+| log 做成零依赖叶子 | 任何包都能记日志而不引入宿主 | 输出通道由 `setLogSink` 注入；`appHost.log` 已于 2026-10-26 删除 |
 
 ## 6. 产物与复用矩阵
 

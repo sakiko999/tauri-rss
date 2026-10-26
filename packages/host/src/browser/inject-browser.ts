@@ -4,7 +4,6 @@
  *   - http:    浏览器 fetch(CORS 受限——多数 RSS/直播 API 无 CORS,仅调试可用)
  *   - storage: localStorage
  *   - js:      FunctionJsBackend(new Function,CSP 放开时)
- *   - log:     console
  *   - now:     Date.now
  */
 import { initAppHost, setHostCaps } from "../runtime.ts"

@@ -15,6 +15,7 @@ import {
   nodeWsBackend,
 } from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
+import { setLogSink } from "@amoeba/log"
 import { Database } from "bun:sqlite"
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
@@ -82,6 +83,9 @@ export function backupDbIfNeeded(dbFile: string, dataDir: string): void {
 
 export function setupServiceHost(opts: ServiceHostOptions): ServiceHost {
   shimLocalStorageForLog()
+  // stdout 契约（只允许 `READY <port>`）：@amoeba/log 的所有级别（含 info/debug）
+  // 改走 stderr。此前只有 core 的宿主 Logger 做了这件事，其它包的 console.info 会漏到 stdout。
+  setLogSink((level, text) => console.error(`[${level}] ${text}`))
   const storage = sqliteStorage(opts.dbFile)
   const binary = opts.browser === false ? undefined : opts.browserSidecar ?? locateSidecarBinary()
   const browser = binary
@@ -97,13 +101,6 @@ export function setupServiceHost(opts: ServiceHostOptions): ServiceHost {
     storage,
     ws: nodeWsBackend(),
     ...(browser ? { browser } : {}),
-    // 服务 stdout 只留给 READY；所有级别都走 stderr。
-    log: {
-      log(level, msg, ctx) {
-        const line = `[${level}] ${msg}${ctx ? " " + JSON.stringify(ctx) : ""}`
-        console.error(line)
-      },
-    },
     now: Date.now,
   })
 

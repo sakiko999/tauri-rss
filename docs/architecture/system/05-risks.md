@@ -138,7 +138,7 @@ flowchart LR
 | 被动无数据 | 固定 `no-data` | `doRefresh` 无缓存可回退时写 `RefreshResult.errorKind`；`previewChannel` 无数据直接抛 `ResolveError("no-data")` | 刷新 toast「暂无可用数据」；预览由发现页落错误态 |
 | 平台冷却 | 字符串 `平台冷却中(平台, 剩余, 信号)`（`packages/host/src/net/governor.ts:450-461`）；`errorKindOf` 会把它归到 `rate-limit` | `browserGate` 在 CDP op 之前抛 | 冷却期仍可能遮蔽真实原因（可能只是掉登录），且文案含内部平台名/信号 |
 | 未知流格式 | 无 | 落入裸 `<video>` 分支；已挂 `onError`（`PlayableMedia.tsx:472-475`），但 FLV 分支仍不透传 headers（`useMediaStream.ts:209-212`） | 未知格式/失效直链现在能看到错误文案；FLV 防盗链仍可能失败 |
-| 日志 | core 用 `appHost.log`，实际是 `console`（`packages/host/src/runtime.ts:43-53,71-73`），无日志域/开关 | 只有少量手写点：`refresh failed`（`data-layer.ts:512`）、缓存写失败（`:508`）、详情补全失败（`:719`） | 被动采集无数据、loadMore 失败等路径无日志；core 日志不受 `log:<域>` 开关控制 |
+| 日志 **已修（2026-10-26）** | 所有包统一 `@amoeba/log`；`appHost.log` 已删除（core 是最后消费者） | core 新增 `[core]` 域（refresh/cache/detail/cookie 同步 + loadMore 失败 + 被动无数据）；服务用 `setLogSink` 把所有级别写 stderr，stdout 只留 `READY` | `packages/log/src/example/log.check.ts` 覆盖开关/前缀/sink/幂等注册 |
 
 两条结构性结论：
 
