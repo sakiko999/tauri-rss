@@ -30,7 +30,8 @@
     "tauri:release": "bun run scripts/tauri.ts tauri desktop --release",
     "tauri:build": "bun run scripts/tauri.ts tauri desktop build",
     "tauri:build:mobile": "bun run scripts/tauri.ts tauri mobile build",
-    "rss": "bun run apps/cli/src/main.ts"
+    "rss": "bun run apps/cli/src/main.ts",
+    "service:build": "bun build apps/cli/src/service/main.ts --target=bun --outfile=dist/service/service.js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

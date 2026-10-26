@@ -50,6 +50,13 @@ bun run rss align                       # crawler/rsshub 同构断言
 bun run rss --service --data-dir <dir>  # 数据服务骨架（阶段 0；READY + HTTP/WS）
 bun scripts/service-phase0.ts           # 阶段 0：bootstrap / 双写者丢更新 / markMany 5k
 bun scripts/service-skeleton-check.ts   # 阶段 0：hello/health/state/WS/单实例/shutdown
+bun scripts/service-runtime-check.ts    # 启动器解析 Bun → 拉起服务 → stdout 只有 READY
+bun run service:build                   # 打包独立服务入口 → dist/service/service.js（阶段 0 约 10KB）
+SERVICE_ENTRY=dist/service/service.js bun scripts/service-runtime-check.ts  # 验证打包产物
+cargo build -p amoeba-runtime           # 构建运行时启动器（target/debug/amoeba-runtime.exe）
+target/debug/amoeba-runtime.exe --print # 打印解析到的 Bun（AMOEBA_BUN → PATH → 随包 → 缓存 → 下载）
+target/debug/amoeba-runtime.exe apps/cli/src/main.ts env   # 经启动器跑 CLI
+target/debug/amoeba-runtime.exe --no-download <entry>      # 离线：只用已有 Bun
 ```
 
 ## 自检脚本（仓库无测试基建，用最小断言）

@@ -1,6 +1,6 @@
 # 数据服务（CLI 载具）架构与落地计划
 
-> 状态：阶段 0（2026-10-26 决策；实现未开工）
+> 状态：阶段 0（2026-10-26 决策；骨架与运行时启动器已落地）
 > 范围：desktop + CLI。mobile 不参与，继续进程内 `createDataLayer()`。
 
 ## 0. 决策摘要
@@ -17,7 +17,7 @@
 | 断线 | fail-closed：只读镜像 + 禁用全部 mutation；v1 不做 outbox |
 | 存储 | 沿用 desktop 现有库（WAL 已开）；v1 reading 仍是整 blob + 1s 合并写；行表留 v2 |
 | profile | 归服务；阶段 0 验证从 desktop `webview-profile` 复制迁移 |
-| 打包 | Tauri `resources` 发 JS + 运行时（推荐）或 `externalBin` 编译服务；`amoeba-browser.exe` 始终随包 |
+| 打包 | 小启动器 `amoeba-runtime.exe`（Rust）+ JS；Bun **全局优先、缺失自动下载**；`amoeba-browser.exe` 始终随包 |
 | mobile | 不参与协议；不跑 v2 迁移，保持现有 blob 语义 |
 
 **一句话**：服务是唯一写者，桌面只是带本地镜像的客户端；CLI 是同一服务的另一个客户端，也是这个服务的载具。
@@ -41,13 +41,17 @@
 
 ## 2. 进程模型与生命周期
 
-### 2.1 三个进程
+### 2.1 四个进程
 
 | 进程 | 职责 |
 | --- | --- |
+| `amoeba-runtime.exe` | 运行时引导（Rust）：解析/下载 Bun，spawn 并透传 stdio/退出码；不含业务逻辑 |
 | `rss --service` | 数据层：SQLite、crawler/resolve、浏览器、登录、governor、jobs、事件 |
 | `amoeba-browser.exe` | 浏览器载具：屏外 WebView2 + CDP；由服务按需 spawn |
 | desktop (`amoeba.exe`) | UI：React store/selectors/views、播放器、媒体 Referer、本地偏好 |
+
+`amoeba-runtime` 在服务存活期间保留（它是 Bun 的父进程），desktop 退出时随 Job / `--parent-pid`
+一起收掉；它**只写 stderr**，stdout 原样留给服务的 `READY <port>`。
 
 服务不再使用 Tauri 的抓取 WebView2（`webview_browser_*`）。主窗口的媒体 Referer 注入（`media_referer.rs`）保留。
 
@@ -294,27 +298,55 @@
 - **`bundle.resources`**：把任意文件/目录（JS bundle、`bun.exe`、`amoeba-browser.exe`）复制进安装目录，运行时用 `resourceDir()` 定位。适合脚本/资源。
 - **`bundle.externalBin`**：专为 sidecar 可执行文件设计，按 target triple 放到 app 同目录。
 
-### 8.2 推荐
+### 8.2 推荐：小启动器 + JS，不随包 Bun
 
-**优先：`resources` 发 `dist/service/*.js` + 便携 `bun.exe`；`amoeba-browser.exe` 同样放 resources。**
-理由：服务代码更新不必重打运行时；CLI 与服务共用同一份 JS；安装包体积与编译版相同（~92MB + ~5MB），但升级只替换小文件。
+**发布形态**：`amoeba-runtime.exe`（Rust，release 3.7MB）+ `dist/service/service.js`（阶段 0 10KB）
++ `amoeba-browser.exe`。启动器只做运行时解析/下载，然后 spawn `bun service.js ...`；
+desktop 与 CLI 共用同一份 JS 与同一套解析逻辑。安装包不再背 ~92MB 的 Bun。
 
-**回退：`bun build --compile` 出 `rss.exe`，走 `externalBin`。** 零运行时依赖，但每次服务代码更新都要重打 92MB。
+**运行时顺序（2026-10-26 决策：全局优先 + 失败自动下载）**：
 
-### 8.3 全局 Bun/Node 检测
+1. `AMOEBA_BUN` 显式路径（CI / 离线 / 特殊安装）；
+2. 全局 PATH 里的 `bun`（版本闸门 `1.3 ≤ v < 2`）；
+3. 随包 `bun.exe`（可选，离线发行版才塞；默认没有）；
+4. 托管缓存 `%LOCALAPPDATA%\app.amoeba.runtime\bun-1.4.3\bun.exe`；
+5. 自动下载固定版本 `1.4.3` → SHA256 校验 → 解压到缓存。
 
-- **可以检测，但不能作为发布形态的唯一依赖**：目标机器不保证有 Bun/Node；版本漂移会让 `bun:sqlite`/`Bun.serve` 行为变化。
-- 本服务是 **Bun-only**：`bun:sqlite`、`Bun.serve`、`Bun.spawn`、`Bun.file`；Node 23 的 `node:sqlite` 不能直接替代，v1 不支持 Node 运行时。
-- 检测顺序：`AMOEBA_BUN` 显式路径 → 随包 `resources/bun.exe` → PATH 里的 `bun`（校验最低版本）。
-- 不要从 PATH 直接取 `node` 跑 Bun-only 代码；错误提示要写「需要 Bun ≥ x」。
-- 安全：PATH 可能被劫持；发布形态优先用随包运行时，PATH 只作开发兜底。
+全失败才报错：「需要 Bun ≥1.3；可安装 Bun、设置 AMOEBA_BUN，或允许联网下载」。
+**不静默回退 Node**：服务是 Bun-only（`bun:sqlite` / `Bun.serve` / `Bun.spawn` / `Bun.file`）。
+
+理由：开发机直接吃全局 Bun；干净机器首次启动下载一次（44MB zip → 96MB exe），之后离线可用；
+服务代码升级只替换几 MB 的 JS。代价：首次启动需要网络；全局 Bun 版本由用户环境决定（只做版本闸门）；
+升级 Bun 需改启动器常量并重发（启动器很小）。
+
+**回退**：`bun build --compile` 出 `rss.exe` 走 `externalBin`。零运行时依赖，但每次服务代码更新都要重打 92MB。
+
+### 8.3 解析与下载契约
+
+- **固定版本** `1.4.3`；全局 / `AMOEBA_BUN` 接受 `1.3.x–1.x`，版本不符时**跳过并继续**（不把「版本旧」误报成「找不到」）。
+- `AMOEBA_BUN` 是显式覆盖：路径不存在或版本不合规 → **直接报错**，不静默改道。
+- 下载源固定 HTTPS GitHub release；zip = 44,639,930 bytes，SHA256 =
+  `0bf84e808552beea67bf1202a287a35c6c825d837b287b3f8e9dd513dba35d3d`；流式落盘同时算哈希，
+  校验失败立即删除；大小上限 120MB。
+- 只解压固定成员 `bun-windows-x64/bun.exe`（不按条目路径解压，避免 zip-slip）；先写 `.tmp`，
+  再同卷原子 rename；落盘后跑一次 `bun --version` 复核。
+- 缓存根 `%LOCALAPPDATA%\app.amoeba.runtime`；`AMOEBA_RUNTIME_DIR` 可覆盖；
+  `AMOEBA_BUN_ZIP` 指向本地 zip 供离线/CI 测试（仍走校验和）。
+- 两个客户端同时首次启动：`install.lock`（`create_new`，5 分钟 stale 回收）串行化；
+  拿到锁后二次检查缓存，后到者不重复下载/覆盖。
+- PATH 只接受绝对路径；PATH 上的 Bun 是用户可控的（用户明确选择全局优先），日志打印实际路径，
+  下载/缓存路径不受 PATH 影响。
+- 启动器日志一律 stderr；stdout 保留给服务的 `READY <port>`。下载进度只在 stderr。
+- 自动下载目前仅 Windows x64；其他平台只走 1–3，失败给出手动安装提示。
 
 ### 8.4 阶段 0 打包实测
 
-1. `resources` 里放一个最小 `service.js` + 便携 `bun.exe`，从安装目录启动，确认路径/权限/无控制台闪窗。
-2. 用真实服务（含 `bun:sqlite`、动态渠道 import、`amoeba-browser` 路径）跑一次 clean VM 安装/卸载。
-3. `externalBin` 编译版对比安装包体积、冷启动、updater 替换。
-4. 确认安装目录只读时，DB/profile 仍写 `%APPDATA%`/`%LOCALAPPDATA%`。
+1. 启动器三个来源各跑一次：全局 PATH、托管缓存、下载（本地 zip 模拟）；确认 stdout 干净。
+2. 用真实服务（含 `bun:sqlite`、动态渠道 import、`amoeba-browser` 路径）跑一次 clean VM 安装/卸载，
+   断网走缓存、首次联网走下载。
+3. Tauri `resources` 发 JS + 启动器 + `amoeba-browser.exe`；确认安装目录只读时 DB/profile 仍写
+   `%APPDATA%`/`%LOCALAPPDATA%`，且无控制台闪窗。
+4. `externalBin` 编译版对比安装包体积、冷启动、updater 替换。
 
 ## 9. 性能预算（实测）
 
@@ -350,6 +382,12 @@
     自检 `scripts/service-skeleton-check.ts` 13 项全过。
   - 阶段 0 骨架的 endpoint/lock/token 放在 `--data-dir` 下；阶段 1 起按 instanceKey
     移到 `%LOCALAPPDATA%\app.amoeba.service\<key>\`。
+  - 运行时启动器 `apps/runtime`（`amoeba-runtime.exe`，release 3.7MB）：`AMOEBA_BUN` → PATH →
+    随包 → 缓存 → 下载（SHA256/原子解压）；spawn Bun 并透传 stdio/退出码。
+    已实测：全局命中、本地 zip 安装、真实 HTTPS 下载（44.6MB）、缓存命中、校验失败拒绝、
+    `--no-download` 失败提示；`scripts/service-runtime-check.ts` 6 项全过。
+  - 独立服务入口 `apps/cli/src/service/main.ts` → `bun run service:build` 出
+    `dist/service/service.js`（阶段 0 仅 10KB / 3 modules），启动器跑打包产物同样 6 项全过。
 - 待做：Tauri resources/externalBin 打包；WebView2 loopback；profile 复制迁移。
 - 产出：测量报告 + go/no-go。
 - 停止条件：投影 >1MB 或 boot >500ms；WebView2 被 CSP/混合内容挡住；resources/externalBin 都不可行；profile 必须重扫且不接受。
@@ -364,7 +402,7 @@
 ### 阶段 2：收口与发布（1–2 周）
 
 - 删除 desktop 直连 storage/browser 的残留；去 `tauri-plugin-sql`（mobile 保留）。
-- 打包（resources 或 externalBin）、single-instance、版本协商、updater、回滚演练。
+- 打包（启动器 + JS；编译版作回退）、single-instance、版本协商、updater、回滚演练。
 - 验收：安装包可启动；旧服务/新 UI 强制重启；安全 checklist。
 
 ### 阶段 3（可选，按实测）
@@ -374,7 +412,7 @@
 ## 12. 待决问题
 
 - Tauri 生产 WebView2 的 Origin 是 `http://tauri.localhost` 还是 `https://tauri.localhost`（mixed content 风险）。
-- resources 下便携 Bun 的冷启动/杀软/签名表现。
+- 启动器自动下载在公司代理/杀软/无签名场景的表现；Bun 1.4.3 之外版本的兼容闸门。
 - profile 复制迁移是否保留 xhs/weibo 登录态（阶段 0 实测）。
 - 全量镜像上限：items >10k 时的窗口化/服务端聚合方案。
 - `refreshAll` 服务端单 job 与现有 desktop 编排的替换细节。

@@ -23,6 +23,9 @@ apps/
   browser-sidecar/  amoeba-browser：无 Tauri 依赖的 WebView2 宿主（屏外窗口 + CDP）。
                CLI `--browser` 时由 packages/host/src/node/browser-sidecar.ts spawn，
                与 desktop 共用 @amoeba/host/cdp 的 lane/超时/拦截语义
+  runtime/     amoeba-runtime：小体积 Bun 启动器（Rust）。解析顺序
+               AMOEBA_BUN → 全局 PATH → 随包 → 缓存 → 下载固定版本（SHA256/原子解压），
+               然后 spawn 入口并透传 stdio/退出码。stdout 只留 READY，日志全走 stderr
 packages/
   xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。node/browser/tauri 三态；
@@ -131,7 +134,9 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
 bun run tauri:release               # release 编译 + 热重载（调 release-only 分支）
 bun run rss channels | fetch <key> | item <url> | play <url>   # CLI 调试探针
+bun run service:build                       # 打包独立服务入口 → dist/service/service.js
 cargo build -p amoeba-browser        # CLI 浏览器 sidecar（--browser 才用；需 VS2022 环境）
+cargo build -p amoeba-runtime        # Bun 运行时启动器（全局优先/缺失下载）
 bun scripts/ui-probe.ts goto tab:all        # UI 巡检（需 dev 实例，9222 已开）
 bun scripts/ui-play-check.ts                # 播放矩阵巡检（真播，报起播）
 bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包的最小断言
@@ -211,18 +216,19 @@ live 按平台二次聚合的 UI 侧。
 - [ ] Referer 改造下一步：共享 reqwest Client → WebView2 WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 原生模式改 `unsafe-url` 并保留 blob 回退
 - [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。
 - [ ] 实机回归：真实微博/xhs feed 图片网格与实况播放（直连+回退）、滚动时缓存命中、release 构建同一行为
-- [ ] CLI 浏览器载具待定：系统 Chrome/Edge 独立 profile + CDP，默认 `--headless=new`、保留 `--headed`；附 `login` 命令与 cookie 全量 seed 两个前置
+- [x] CLI 浏览器载具已定：自研 WebView2 sidecar（amoeba-browser），`--browser` 显式开启；不再评估系统 Chrome/`--headless=new`
 - [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
-- [ ] 下一步：node-chromium driver（spawn 系统 Chrome/Edge，`--remote-debugging-port=0` + `DevToolsActivePort`）+ CLI 懒注入 browser，先跑通 `xhs:explore` 被动采集。
+- [x] CDP 核心已与载具解耦（`@amoeba/host/cdp`）；CLI 经 `amoeba-browser` sidecar 接管，`xhs:explore` 仍需登录态
 - [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
-- [ ] CLI 暂不编译为二进制；先把 DATA_DIR 与 sidecar 路径改成 env/同目录可覆盖，保留 `rss:build` 作为后续打包出口。
+- [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS
 - [!] 服务化已升级为「数据层服务」（2026-10-26）：`rss --service` 单写者独占 SQLite/crawler/browser；desktop/CLI 只做客户端，mobile 不参与。计划见 `docs/architecture/system/06-data-service.md`。
 - [ ] 下一步：`rss login xhs`（终端二维码 / cookie 预热）→ release 构建 sidecar → desktop+CLI 并发与退出回归。
 - [!] CLI 浏览器必须显式 `--browser`；默认注入会让 xhs/weibo 忽略 `--kv cookie=`，静默改变现有探针行为。
-- [ ] 重写评估结论待拍板：先做 P0（TS/Bun feed 92-key XML parity），再决定是否进 P1 Rust spike；全量重写需同时满足“可分发/常驻产品 + 有反爬 owner + 接受 12–18 人月”。
-- [!] 若走原生数据层只选 Rust；单二进制形态 = 一个 exe 两种模式（数据服务 + `--browser-host` 自派生），不要合并 tokio 与 COM STA 生命周期。
+- [x] 重写评估结论：不重写数据层（TS/Bun 继续）；收益不抵 12–18 人月与双实现风险。若未来重启，只选 Rust，且数据服务与 `--browser-host` 分开进程，不合并 tokio 与 COM STA 生命周期。
 - [!] 共享数据源只能单写者：服务独占 SQLite 与全部写操作；任何第二写者（Diagnostics 直连、dev seed、旧 desktop、CLI 直开 DB）都会造成静默丢数据。
-- [ ] 待拍板：CLI 只读还是读写、浏览器 profile 归属、mobile/后台刷新是否纳入；先做阶段 0 的 3–5 天实测再决定是否进入 A/B。
+- [x] 已拍板：CLI 是数据服务的全功能客户端；浏览器 profile 归数据层；mobile 不参与；服务与桌面同生命周期，不做常驻 daemon。
 - [!] 服务化后客户端绝不能写 KV blob 或直开 DB；reading/subscriptions/settings 只能发语义命令。第二写者是数据丢失的唯一根因。
-- [ ] 阶段 0 先测：bootstrap 投影体积、Tauri externalBin 打包 `rss --service`、profile 迁移（复用 webview-profile vs 新目录）、WebView2 loopback 访问。
+- [x] 阶段 0 已测：bootstrap 投影 0.48MB、双写者丢更新、服务骨架、运行时启动器（全局/缓存/真实下载/校验失败）。
+- [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
+- [ ] 阶段 0 剩余：Tauri resources 打包（启动器 + JS + sidecar）、WebView2 loopback（HTTP/WS）、desktop `webview-profile` 复制迁移验证；通过后进入阶段 1。
 <!-- cc-todo:end -->
