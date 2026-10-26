@@ -19,6 +19,10 @@
   避免层层传 props）。由 app 层在设置变化时写入
 - **`net`**：网络治理门面（`configure` / `reportRisk` / `governorStats`）。governor 是 host
   内建能力，未注入 http 也恒可用 —— 等级/冷却/统计见 `docs/risk/crawler-risk-control.md`
+- **`nativeMediaReferer`**（只读能力探测）：Windows 桌面 Rust 已注册 WebView2
+  `WebResourceRequested` 防盗链 Referer 注入时为 `true`。消费侧（ui 的 `MediaImage`、
+  实况视频）据此直连原 URL；`false` 或直连失败仍走 blob 隧道。见
+  `apps/src-tauri/src/media_referer.rs` 与 `docs/ui/ui-conventions.md`
 
 **storage 三态**：desktop `SqliteStorageBackend`（tauri-plugin-sql，appData/rss.db）·
 CLI `sqliteStorage`（bun:sqlite）· example 内存版。

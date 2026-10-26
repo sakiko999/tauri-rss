@@ -49,6 +49,11 @@ declare global {
     imageProxy?: boolean
     /** 省流模式:不加载任何图片(镜像 settings.dataSaver;ui 的 MediaImage 直读)。 */
     dataSaver?: boolean
+    /**
+     * 桌面 WebView2 已在原生网络层注入防盗链 Referer(见 apps/src-tauri/src/media_referer.rs)。
+     * true 时 MediaImage / 实况视频直接使用原 URL，不再走 blob 隧道；失败仍回退隧道。
+     */
+    nativeMediaReferer?: boolean
     /** 自动更新(仅 Tauri 桌面注入;浏览器/CLI/移动端为 undefined)。 */
     updater?: UpdaterBackend
     /** 网络治理(等级/冷却/统计)。host 内建,始终存在。 */

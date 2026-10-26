@@ -8,8 +8,10 @@ import { showSkeleton } from "./store/selectors.ts";
 import "@amoeba/core/source/rsshub";
 import "./styles.css";
 
-// 注入桌面宿主能力到全局 appHost(core/crawler 从它读 http/js/storage/now)
-injectTauriHost();
+// 注入桌面宿主能力到全局 appHost(core/crawler 从它读 http/js/storage/now)。
+// nativeMediaReferer: Rust 已在 WebView2 网络层给防盗链图床注入 Referer，
+// 图片/实况可直连(缓存/Range/渐进解码都在)；非 Windows 会在 inject 内部降级。
+injectTauriHost({ nativeMediaReferer: true });
 
 // dev 调试锚点:CDP 连进运行实例时用 `__store.getState()` 读权威状态
 // (订阅表 / refreshErrors / view —— 这些 UI 只以图标/计数呈现,文本读不到)。

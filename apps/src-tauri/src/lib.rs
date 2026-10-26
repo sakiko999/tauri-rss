@@ -1,4 +1,7 @@
 pub mod commands;
+/// 防盗链 Referer 注入(仅 Windows/WebView2；其他平台静默不注册)。
+#[cfg(windows)]
+pub mod media_referer;
 pub mod plugins;
 /// 抓取浏览器 = Tauri 自己的 WebView2（隐藏窗口 + CDP 9334）。
 pub mod webview_browser;
@@ -6,6 +9,13 @@ pub mod webview_browser;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = plugins::configure(tauri::Builder::default())
+        // 主 WebView2 注册防盗链头部改写。必须早于页面图片请求；失败只降级
+        // (前端仍走 blob 隧道)，不阻止应用启动。
+        .setup(|app| {
+            #[cfg(windows)]
+            media_referer::install(app);
+            Ok(())
+        })
         // WS 隧道连接管理(state):弹幕长连接按 connectionId 定位发/关。
         // Arc 包裹供 reader task clone 持引用(跨 command 共享)。
         .manage(std::sync::Arc::new(commands::ws::WsManager::default()))

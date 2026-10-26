@@ -62,7 +62,8 @@ graph LR
 | `ChannelInfo` 投影 | `core/src/types/channel-info.ts:10` | `data-layer.ts:806-816` | desktop 添加订阅/发现页/账号页 | TS import | 表单字段缺失；`loginable/passive` 误判 |
 | `LoginResult` / `LoginCookieSnapshot` | `LoginResult` 三份平行声明（§8）；`LoginCookieSnapshot` 在 crawler/resolve 各一份，core 直接 re-export crawler 版 | channel `scanLogin` / `readLoginCookie` | core `scanLogin`、`syncBrowserCookies` | TS import / 结构兼容 | `refreshToken` 在边界被丢弃 |
 | OPML 文档 | `packages/xml/src/opml.ts`（`OpmlDoc`/`OpmlFeed`） | desktop `lib/opml.ts` | 同包 `parseOpml` | 文件文本 | 导入导出丢分组/重复 URL 被去重 |
-| `imageProxy`/`dataSaver` 旁路 | `global.d.ts:45-51` | desktop `store/lib.ts:88-92` 手写镜像 | ui `MediaImage.tsx:115-122` | 全局对象可写字段 | 开关不生效或已挂载图不重取 |
+| `imageProxy`/`dataSaver` 旁路 | `global.d.ts` | desktop `store/lib.ts:88-92` 手写镜像 | ui `MediaImage.tsx` | 全局对象可写字段 | 开关不生效或已挂载图不重取 |
+| `nativeMediaReferer` | `global.d.ts`（只读） | `setHostCaps`（Windows 桌面注入 true） | ui `MediaImage`、实况视频 | 门面 getter | 标志误报 → 直连 403；回退隧道兜底 |
 
 **错误分类（本轮新增契约）**：`ErrorKind` 的权威在 resolve `errors.ts`（`auth / risk / rate-limit / network / timeout / unsupported / parse / no-data / unknown`）。新抛错点应优先 `throw new ResolveError(kind, msg)`；旧平台 client 仍是普通 `Error`，由 `errorKindOf` 做**启发式兜底**（先认显式 `kind`，再按消息匹配：429/冷却 → `rate-limit`，401/cookie/登录 → `auth`，403/412/418/风控 → `risk`，…）。因此 403 不再一律等同「需要登录」。UI 统一用 `ERROR_KIND_LABEL` 出标题，不再按字符串正则猜；`unknown` 留给调用方自己的默认文案。迁移完成前，普通 `Error` 的分类是**尽力而为**，平台 client 逐步改用 `ResolveError` 才算精确。
 

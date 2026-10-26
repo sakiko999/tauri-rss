@@ -24,8 +24,14 @@ import { TauriUpdaterBackend } from "./updater-backend.ts"
  * @param opts.browser 传 `false` 不注入抓取浏览器 —— 移动端没有 WebView2/CDP。
  *   不传 = 桌面默认注入。能力探测（core 的 passiveMode）按对象真值判断，
  *   所以「注入了但命令全失败」必须在这里显式关掉，不能靠调用时报错。
+ * @param opts.nativeMediaReferer 桌面传 `true`：Rust 已注册 WebView2 防盗链 Referer
+ *   注入，图片/实况可直连。非 Windows 会在此自动降级为 false（Rust 模块是 cfg(windows)）。
  */
-export function injectTauriHost(opts: { updater?: boolean; browser?: boolean } = {}): void {
+export function injectTauriHost(
+  opts: { updater?: boolean; browser?: boolean; nativeMediaReferer?: boolean } = {},
+): void {
+  // Rust 侧拦截只有 #[cfg(windows)]；其他桌面平台仍须走 blob 隧道。
+  const windows = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
   initAppHost()
   setHostCaps({
     http: new TauriHttpBackend(),
@@ -34,6 +40,7 @@ export function injectTauriHost(opts: { updater?: boolean; browser?: boolean } =
     ws: new TauriWsBackend(),
     ...(opts.browser === false ? {} : { browser: new TauriBrowserBackend() }),
     ...(opts.updater === false ? {} : { updater: new TauriUpdaterBackend() }),
+    nativeMediaReferer: opts.nativeMediaReferer === true && windows,
     // ⚠️ 不要退回 window.open:Tauri WebView 会拦掉(「打开原文」无反应)。
     openExternal: async (url) => {
       await openUrl(url)

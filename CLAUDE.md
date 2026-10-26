@@ -24,7 +24,9 @@ packages/
   xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。node/browser/tauri 三态；
                net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）。
-               应用走子路径 `./node|tauri|browser|runtime|governor`；根入口无 import 副作用
+               应用走子路径 `./node|tauri|browser|runtime|governor`；根入口无 import 副作用。
+               桌面媒体防盗链走 WebView2 请求头注入（src-tauri/media_referer.rs），
+               失败/非 Windows 回退 blob 隧道（appHost.nativeMediaReferer 探测）
   resolve/     ★ 平台解析层：platform/（各平台 client + 播放解析 + 弹幕 codec）、
                resolver/（by-url 路由）、browser/（CDP 模拟）、utils/、danmaku/ 原语。
                契约：按 item.url 懒解析 + 平台 client 供 crawler 取数。类型自持，不依赖 crawler
@@ -199,4 +201,11 @@ live 按平台二次聚合的 UI 侧。
 - [ ] release 实机验收实况播放（dev 已修：CDN 对页面源 Referer 403 + ORB 拦截；需确认 release WebView2 下 mp4 解码与暂停/续播）
 - [ ] 下一轮候选：R5（refreshAll 超时仍全局 `abortTabs`，需 lane 化中止）；R9 剩余（平台名表收到一处）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
+- [ ] 下一轮：R15（CLI settings 复用 core 归一化）；R10（退订多键清理幂等化/事务）；R9（平台名表收口）
+- [ ] Referer 改造：优先验证 WebView2 WebResourceRequested 注入（桌面），同时把 http_get 的 reqwest Client 改为共享单例
+- [ ] Referer 改造下一步：共享 reqwest Client → WebView2 WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 原生模式改 `unsafe-url` 并保留 blob 回退
+- [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。
+- [ ] 实机回归：真实微博/xhs feed 图片网格与实况播放（直连+回退）、滚动时缓存命中、release 构建同一行为
+- [ ] CLI 浏览器载具待定：系统 Chrome/Edge 独立 profile + CDP，默认 `--headless=new`、保留 `--headed`；附 `login` 命令与 cookie 全量 seed 两个前置
+- [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
 <!-- cc-todo:end -->
