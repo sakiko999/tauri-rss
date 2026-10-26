@@ -5,13 +5,18 @@
  */
 import pc from "picocolors"
 import { printResolved, resolveByUrl } from "./item.ts"
+import { probeResolve } from "./probe.ts"
 
 export interface PlayOptions {
   open?: boolean
+  viaService?: boolean
+  endpoint?: string
 }
 
 export async function runPlay(url: string, opts: PlayOptions): Promise<void> {
-  const r = await resolveByUrl(url)
+  const r = opts.viaService
+    ? await probeResolve(url, opts.endpoint)
+    : await resolveByUrl(url)
   printResolved(r)
 
   if (!opts.open) return

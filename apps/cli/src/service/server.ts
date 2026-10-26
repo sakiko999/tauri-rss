@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import {
+  cookieFieldFor,
   createDataLayer,
   errorKindOf,
   readingKey,
@@ -29,7 +30,14 @@ import {
   type Subscription,
   type SubscriptionGroup,
 } from "@amoeba/core"
-import { withBrowserGlobal } from "@amoeba/resolve"
+import { getChannel as crawlerGetChannel } from "@amoeba/crawler"
+import {
+  getDanmakuByUrl,
+  resolveLivePlayByUrl as resolveLiveByUrl,
+  resolvePlayByUrl as resolveVideoByUrl,
+  resolveRoute,
+  withBrowserGlobal,
+} from "@amoeba/resolve"
 import {
   ENDPOINT_SCHEMA,
   SERVICE_FEATURES,
@@ -291,6 +299,26 @@ function projectItem(item: MediaItem): MediaItem {
 
 function recordKey(subscriptionId: string, itemId: string): string {
   return readingKey(subscriptionId, itemId)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** CLI probe 的 info 合并：与 core `sourceInfoFor` 同一规则（rsshub→baseUrl，其余补 cookie）。 */
+function mergeProbeInfo(
+  channelKey: string,
+  info: Record<string, string>,
+  settings: AppSettings,
+): Record<string, string> {
+  if (channelKey.startsWith("rsshub:")) {
+    if (info["baseUrl"]) return info
+    return { ...info, baseUrl: settings.rsshubBaseUrl }
+  }
+  const field = cookieFieldFor(channelKey)
+  const cookie = field ? (settings[field] as string | undefined) : undefined
+  if (info["cookie"] !== undefined || !cookie) return info
+  return { ...info, cookie }
 }
 
 export async function runService(opts: ServiceOptions): Promise<number> {
@@ -846,6 +874,63 @@ export async function runService(opts: ServiceOptions): Promise<number> {
           throw new ServiceError("unsupported", 400, "当前环境不支持清理浏览器数据")
         }
         return withBrowserGlobal(() => browser.resetProfile!())
+      }
+
+      // ── CLI 原始探针（只读；cookie/被动规则与抓取同源）────────
+      case "probe.fetch": {
+        const channel = crawlerGetChannel(asString(p.channelKey, "channelKey"))
+        if (!channel) throw new ServiceError("bad-request", 404, "未知渠道")
+        const settings = await layer.settings.get()
+        const info = mergeProbeInfo(
+          channel.key,
+          (p.info ?? {}) as Record<string, string>,
+          settings,
+        )
+        const source = channel.getSource(info) as {
+          fetch(): Promise<string>
+          fetchPassive?(): Promise<string | null>
+        }
+        const passive =
+          p.passive !== false && channel.passive === true && !!globalThis.appHost.browser
+        const started = Date.now()
+        const xml = passive ? ((await source.fetchPassive?.()) ?? null) : await source.fetch()
+        if (!xml) throw new ServiceError("no-data", 502, "无可用数据")
+        return { xml, tookMs: Date.now() - started }
+      }
+      case "probe.resolve": {
+        const url = asString(p.url, "url")
+        const route = resolveRoute(url)
+        if (!route) throw new ServiceError("bad-request", 404, "url 未命中 resolver 路由")
+        const started = Date.now()
+        const { streams } =
+          route.kind === "live"
+            ? await resolveLiveByUrl(url)
+            : await resolveVideoByUrl(url)
+        return { route, streams, tookMs: Date.now() - started }
+      }
+      case "probe.danmaku": {
+        const url = asString(p.url, "url")
+        const route = resolveRoute(url)
+        if (!route) throw new ServiceError("bad-request", 404, "url 未命中 resolver 路由")
+        const kind: "vod" | "live" = route.kind === "video" ? "vod" : "live"
+        const started = Date.now()
+        const stream = getDanmakuByUrl(url, { kind })
+        const items: unknown[] = []
+        const unsub = stream((batch) => items.push(...(batch as unknown[])))
+        try {
+          if (kind === "vod") {
+            const deadline = Date.now() + 10_000
+            while (items.length === 0 && Date.now() < deadline) await sleep(100)
+          } else {
+            const seconds = Math.min(Math.max(typeof p.seconds === "number" ? p.seconds : 5, 1), 30)
+            await sleep(seconds * 1000)
+          }
+        } finally {
+          unsub()
+        }
+        const fallback = kind === "vod" ? 10 : 3
+        const n = typeof p.n === "number" ? p.n : fallback
+        return { route, kind, items: items.slice(0, n), tookMs: Date.now() - started }
       }
 
       default:

@@ -10,23 +10,30 @@ import { now } from "./lib.ts"
 import type { StoreCtx, StoreGet, StoreSet } from "./types.ts"
 
 export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
-  /** 重算当前视图 + 全局条目快照。 */
+  /** 合帧：同一微任务内的多次 refreshView 只算一次（markAllRead 的 N 次 patch、
+   *  WS 事件突发都从这里收敛）。microtask 而非 rAF——WebView2 隐藏窗口 rAF 会停摆。 */
+  let refreshScheduled = false
   function refreshView(): void {
-    const s = get()
-    if (!s.dl) return
-    const slice = {
-      allItems: s.dl.store.all(),
-      subscriptions: s.subscriptions,
-      filter: s.filter,
-      sort: s.sort,
-      page: s.page,
-      query: s.query,
-      selectedNodeId: s.selectedNodeId,
-      refreshErrors: s.refreshErrors,
-    }
-    set({
-      allItems: slice.allItems,
-      view: queryView(slice, s.selectedNodeId, now()),
+    if (refreshScheduled) return
+    refreshScheduled = true
+    queueMicrotask(() => {
+      refreshScheduled = false
+      const s = get()
+      if (!s.dl) return
+      const slice = {
+        allItems: s.dl.store.all(),
+        subscriptions: s.subscriptions,
+        filter: s.filter,
+        sort: s.sort,
+        page: s.page,
+        query: s.query,
+        selectedNodeId: s.selectedNodeId,
+        refreshErrors: s.refreshErrors,
+      }
+      set({
+        allItems: slice.allItems,
+        view: queryView(slice, s.selectedNodeId, now()),
+      })
     })
   }
 

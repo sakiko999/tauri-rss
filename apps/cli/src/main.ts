@@ -108,6 +108,9 @@ const cli = cac("rss")
 // 全局开关：browser 必须显式 opt-in（见 host/node-host.ts 的注释）。
 cli.option("--browser", "启用抓取浏览器（spawn amoeba-browser sidecar；需先 cargo build -p amoeba-browser）")
 cli.option("--no-browser", "强制关闭抓取浏览器（默认）")
+// fetch/item/play/dm 可走数据服务（与订阅抓取同一 cookie/被动/配额路径）。
+cli.option("--via-service", "fetch/item/play/dm 改走数据服务 probe.*（需桌面或 AMOEBA_SERVICE_ENDPOINT）")
+cli.option("--endpoint <path>", "服务 endpoint.json/目录（默认 desktop 服务）")
 
 cli
   .command("channels", "列出全部 channel(key/kind/name/参数 tpl)")
@@ -122,20 +125,38 @@ cli
   .option("-n <n>", "样本/JSON 条数(默认 5)")
   .option("--kv <pair>", "info 覆盖(k=v,可重复;`cookie=` 强制匿名)", { default: [] })
   .action(
-    guard((key: string, opts: { xml?: boolean; json?: boolean; n?: number; kv?: string | string[] }) =>
-      runFetch(key, opts),
+    guard(
+      (
+        key: string,
+        opts: {
+          xml?: boolean
+          json?: boolean
+          n?: number
+          kv?: string | string[]
+          viaService?: boolean
+          endpoint?: string
+        },
+      ) => runFetch(key, opts),
     ),
   )
 
 cli
   .command("item <url>", "★ by-url 一站式:路由 + streams 全档位 + 弹幕元信息")
   .option("--json", "JSON 输出")
-  .action(guard((url: string, opts: { json?: boolean }) => runItem(url, opts)))
+  .action(
+    guard((url: string, opts: { json?: boolean; viaService?: boolean; endpoint?: string }) =>
+      runItem(url, opts),
+    ),
+  )
 
 cli
   .command("play <url>", "解析直链;--open 丢系统播放器实测直链活性")
   .option("--open", "用系统默认播放器打开首选(非 dash)直链")
-  .action(guard((url: string, opts: { open?: boolean }) => runPlay(url, opts)))
+  .action(
+    guard((url: string, opts: { open?: boolean; viaService?: boolean; endpoint?: string }) =>
+      runPlay(url, opts),
+    ),
+  )
 
 cli
   .command("dm <url>", "弹幕探针:VOD 样本 / 直播窗口统计")
@@ -143,7 +164,12 @@ cli
   .option("-s, --seconds <sec>", "直播采集窗口秒数(默认 5)")
   .option("--json", "JSON 输出")
   .action(
-    guard((url: string, opts: { n?: number; seconds?: number; json?: boolean }) => runDm(url, opts)),
+    guard(
+      (
+        url: string,
+        opts: { n?: number; seconds?: number; json?: boolean; viaService?: boolean; endpoint?: string },
+      ) => runDm(url, opts),
+    ),
   )
 
 cli

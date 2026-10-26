@@ -146,10 +146,12 @@
 `reading.deleteBySubscription` 并入 `subscriptions.remove` 的服务端事务，不单独暴露。
 
 **实际实现（2026-10-26）**：39 个成员全部有对应 RPC（`packages/service-protocol` 的
-`RpcMethodMap`），另加 `refreshAll` 与 5 个 `diagnostics.*`（桌面设置页/账号页不再直连
-storage/browser；「清除凭证」也经服务浏览器）。`hydrate()` 是 core 新增的「只读缓存水化」，
-服务 boot 时调用，保证首个快照就有内容；desktop/移动的 init 仍走 `refreshAll(false)`。
-CLI 的 `fetch/item/play/dm` 仍是**本地只读探针**（不写库，不违反单写者）；
+`RpcMethodMap`），另加 `refreshAll`、5 个 `diagnostics.*`（桌面设置页/账号页不再直连
+storage/browser；「清除凭证」也经服务浏览器）与 3 个 `probe.*`（CLI 原始探针远端路径）。
+`hydrate()` 是 core 新增的「只读缓存水化」，服务 boot 时调用，保证首个快照就有内容；
+desktop/移动的 init 仍走 `refreshAll(false)`。
+CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danmaku`，与订阅
+抓取同一 cookie 注入/被动规则/governor 配额）；默认仍是本地只读探针。
 `rss attach` 提供 status/list/refresh/rpc，覆盖数据写路径与跨客户端验证。
 
 ### 4.2 job 语义
@@ -308,7 +310,7 @@ CLI 的 `fetch/item/play/dm` 仍是**本地只读探针**（不写库，不违�
 
 - `apps/desktop/src/store/data-source.ts`：Tauri 默认 `service_endpoint` → `createRemoteDataLayer`；
   `VITE_DATA_SERVICE=0` 才回进程内 `createDataLayer`（调试）。
-- `ctx.ts`：`refreshView` 合帧（未做；当前事件量下未观测到瓶颈）。
+- `ctx.ts`：`refreshView` 合帧（microtask；隐藏窗口 rAF 会停摆，不用 rAF）。
 - `actions/subs.ts`、`actions/reading.ts`：写路径走服务；`markRead/markAllRead/toggleStar`
   失败回滚乐观 patch + toast 已加。
 - `Diagnostics.tsx`、`dev/seed.ts`：已禁止直连 storage/browser；诊断走 `DataLayer.diagnostics`，
@@ -459,8 +461,8 @@ CLI 的 `fetch/item/play/dm` 仍是**本地只读探针**（不写库，不违�
 - 全量镜像上限：dev 2,525 条 = 2.32MB（播客 summary 占 1.46MB）；items >10k 时再做窗口化。
 - `refreshAll`：服务端 job 已实现，但 desktop 仍逐订阅调 `refresh` 以保留逐条 busy/超时 UI；
   是否切换待 R5（lane→job 取消）一起做。
-- 未做：refresh 的 job 级取消（core 无 AbortSignal）、CLI 原始探针（fetch/item/play/dm）
-  走服务、updater 签名/回滚演练、clean VM 安装。
+- 未做：refresh 的 job 级取消（core 无 AbortSignal）、updater 签名/回滚演练、clean VM 安装、
+  `queryView` memo、快照 >10k 窗口化。
 
 ## 13. 验收清单
 

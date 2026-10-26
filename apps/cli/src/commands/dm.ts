@@ -8,35 +8,51 @@ import pc from "picocolors"
 import type { DanmakuItem } from "@amoeba/resolve"
 import { getDanmakuByUrl } from "@amoeba/resolve"
 import { routeWithCookie } from "./item.ts"
+import { probeDanmaku } from "./probe.ts"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface DmOptions {
   n?: number
   seconds?: number
   json?: boolean
+  viaService?: boolean
+  endpoint?: string
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 export async function runDm(url: string, opts: DmOptions): Promise<void> {
-  const route = routeWithCookie(url)
-  const kind = route.kind === "video" ? "vod" : "live"
-
   const elapsed = startTimer()
-  const stream = getDanmakuByUrl(url, { kind })
-  const items: DanmakuItem[] = []
-  const unsub = stream((batch) => items.push(...batch))
+  let route: ReturnType<typeof routeWithCookie>
+  let kind: "vod" | "live"
+  let items: DanmakuItem[]
 
-  try {
-    if (kind === "vod") {
-      // 等首批到位(bili VOD seg 拉取一次全推);10s 上限防挂死。
-      const deadline = Date.now() + 10_000
-      while (items.length === 0 && Date.now() < deadline) await sleep(100)
-    } else {
-      await sleep((opts.seconds ?? 5) * 1000)
+  if (opts.viaService) {
+    const r = await probeDanmaku(
+      url,
+      { ...(opts.seconds !== undefined ? { seconds: opts.seconds } : {}), ...(opts.n !== undefined ? { n: opts.n } : {}) },
+      opts.endpoint,
+    )
+    route = r.route
+    kind = r.kind
+    items = r.items
+  } else {
+    route = routeWithCookie(url)
+    kind = route.kind === "video" ? "vod" : "live"
+    const stream = getDanmakuByUrl(url, { kind })
+    items = []
+    const unsub = stream((batch) => items.push(...batch))
+    try {
+      if (kind === "vod") {
+        // 等首批到位(bili VOD seg 拉取一次全推);10s 上限防挂死。
+        const deadline = Date.now() + 10_000
+        while (items.length === 0 && Date.now() < deadline) await sleep(100)
+      } else {
+        await sleep((opts.seconds ?? 5) * 1000)
+      }
+    } finally {
+      unsub() // 一定退订:直播 WS 连接不释放会泄漏
     }
-  } finally {
-    unsub() // 一定退订:直播 WS 连接不释放会泄漏
   }
   const ms = elapsed()
 
@@ -46,7 +62,7 @@ export async function runDm(url: string, opts: DmOptions): Promise<void> {
     return
   }
   console.log(`route:   ${route.platform} ${kind} ${route.id}`)
-  console.log(`frames:  ${items.length} 条,${fmtMs(ms)}`)
+  console.log(`frames:  ${items.length} 条,${fmtMs(ms)}${opts.viaService ? pc.dim("  (via service)") : ""}`)
   for (const d of items.slice(0, n)) {
     const who = d.user ? `${d.user}: ` : ""
     const when = d.timeMs !== undefined ? pc.dim(` [${(d.timeMs / 1000).toFixed(1)}s]`) : ""

@@ -48,6 +48,7 @@ bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                       # crawler/rsshub 同构断言
 bun run rss --service --data-dir <dir>  # 前台数据服务（READY + HTTP/WS + 单写者）
+bun run rss fetch <key> --via-service --json     # 探针走数据服务（同 cookie/被动/配额；item/play/dm 同）
 bun run rss attach status               # CLI 连桌面服务：endpoint/health/rev/订阅/条目
 bun run rss attach list [--json]        # 列出订阅（含条目数/总数/分组）
 bun run rss attach refresh <id|channel> # 经服务刷新（--all 全部；--no-force 走 TTL）

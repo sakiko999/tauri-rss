@@ -15,6 +15,7 @@ import {
   type ResolveRoute,
 } from "@amoeba/resolve"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
+import { probeResolve } from "./probe.ts"
 
 export interface ResolvedItem {
   route: ResolveRoute
@@ -63,6 +64,8 @@ export function printStreams(streams: Stream[]): void {
 
 export interface ItemOptions {
   json?: boolean
+  viaService?: boolean
+  endpoint?: string
 }
 
 /** 解析结果人读输出(item/play 共用)。 */
@@ -74,7 +77,9 @@ export function printResolved(r: ResolvedItem): void {
 }
 
 export async function runItem(url: string, opts: ItemOptions): Promise<void> {
-  const r = await resolveByUrl(url)
+  const r = opts.viaService
+    ? await probeResolve(url, opts.endpoint)
+    : await resolveByUrl(url)
   if (opts.json) {
     printJson({
       url,

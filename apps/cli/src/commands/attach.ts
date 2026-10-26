@@ -37,7 +37,7 @@ function endpointFile(explicit?: string): string {
   return raw
 }
 
-function resolveEndpoint(explicit?: string): EndpointInfo {
+export function resolveEndpoint(explicit?: string): EndpointInfo {
   const file = endpointFile(explicit)
   if (!existsSync(file)) {
     throw new Error(`找不到服务 endpoint：${file}\n先启动桌面（bun run tauri），或用 --endpoint 指定目录/文件`)

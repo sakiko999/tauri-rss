@@ -225,6 +225,21 @@ export interface RpcMethodMap {
   "diagnostics.clearCookies": { params: { hosts: string[] }; result: void }
   "diagnostics.clearAll": { params: Record<string, never>; result: void }
   "diagnostics.resetBrowserProfile": { params: Record<string, never>; result: string }
+
+  // CLI 原始探针（fetch/item/play/dm 的远端路径；只读，不写库）。
+  // route/streams/items 用 unknown 承载，类型仍由 CLI/resolve 各自持有。
+  "probe.fetch": {
+    params: { channelKey: string; info: Record<string, string>; passive?: boolean }
+    result: { xml: string; tookMs: number }
+  }
+  "probe.resolve": {
+    params: { url: string }
+    result: { route: unknown; streams: unknown[]; tookMs: number }
+  }
+  "probe.danmaku": {
+    params: { url: string; seconds?: number; n?: number }
+    result: { route: unknown; kind: "vod" | "live"; items: unknown[]; tookMs: number }
+  }
 }
 
 export type RpcMethod = keyof RpcMethodMap

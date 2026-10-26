@@ -226,6 +226,19 @@ async function main(): Promise<void> {
     })
     add("previewChannel 2 条", preview.items.length === 2, `count=${preview.items.length}`)
 
+    const probe = await rpc<{ xml: string; tookMs: number }>("probe.fetch", {
+      channelKey: "rss:hn",
+      info: { url: feedUrl },
+    })
+    add("probe.fetch 原始 XML", probe.xml.includes("<rss") && probe.xml.includes("First"), `bytes=${probe.xml.length}`)
+    const probeMiss = await fetch(`http://127.0.0.1:${port}/v1/rpc`, {
+      method: "POST",
+      headers: authClient,
+      body: JSON.stringify({ method: "probe.resolve", params: { url: "https://example.com/nope" } }),
+    })
+    const probeMissBody = (await probeMiss.json()) as { ok?: boolean }
+    add("probe.resolve 未命中 → 4xx", probeMiss.status >= 400 && probeMiss.status < 500 && probeMissBody.ok === false, `status=${probeMiss.status}`)
+
     const more = await rpc<{ addedCount: number; hasMore: boolean }>("loadMore", { subscriptionId: subId })
     add("loadMore 无分页", more.addedCount === 0 && more.hasMore === false, JSON.stringify(more))
     const canMore = await rpc<boolean>("canLoadMore", { subscriptionId: subId })
