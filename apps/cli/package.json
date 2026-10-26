@@ -10,9 +10,18 @@
     "@amoeba/crawler": "workspace:*",
     "@amoeba/core": "workspace:*",
     "@amoeba/host": "workspace:*",
+    "@amoeba/log": "workspace:*",
+    "@amoeba/platform": "workspace:*",
     "@amoeba/resolve": "workspace:*",
+    "@amoeba/service-client": "workspace:*",
+    "@amoeba/service-protocol": "workspace:*",
     "@amoeba/xml": "workspace:*",
     "cac": "^6.7.14",
-    "picocolors": "^1.1.1"
+    "jsqr": "^1.4.0",
+    "picocolors": "^1.1.1",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.6"
   }
 }

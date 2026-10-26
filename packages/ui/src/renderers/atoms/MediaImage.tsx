@@ -12,9 +12,11 @@
  *   否则 loaded=false 时 img 不挂载,onLoad/onError 永远不会触发,
  *   永远显示 skeleton(死锁)。skeleton 作为底层占位,loaded 后淡出。
  *
- * 防盗链图床(sinaimg.cn 等)对空 Referer / 非站内 Referer 返回 403——`<img>`
- * 原生加载必带页面源 Referer(tauri://localhost),无解。命中图床的 src 经
- * appHost.http(Rust reqwest 可设任意 header)带站内 Referer 拉取 → Blob URL 显示。
+ * 防盗链图床(sinaimg.cn 等)对空 Referer / 非站内 Referer 返回 403。两条路径:
+ *   - 桌面 WebView2:宿主在 `WebResourceRequested` 里改写 Referer(见
+ *     `apps/src-tauri/src/media_referer.rs`),图片直接走原生 `<img>`——保留
+ *     HTTP 缓存、HTTP/2 与渐进解码；
+ *   - 其他环境 / 直连失败:回退 `appHost.http` 带 Referer 拉取 → Blob URL。
  * 图床 → Referer 规则在 resolve(mediaReferrerFor),本组件只调宿主、不写死域名。
  *
  * 不做 Folo 的 proxy/blurhash/fitContent —— 无代理部署场景下是死代码。
@@ -112,16 +114,32 @@ async function loadProxiedBlob(src: string, referrer: string): Promise<string> {
  *   - dataSaver:省流模式,完全不加载图片,只留占位。
  * 两者默认 true / false(与 AppSettings 默认一致);未注入的环境行为不变。
  */
-function runtimeFlags(): { imageProxy: boolean; dataSaver: boolean } {
+function runtimeFlags(): { imageProxy: boolean; dataSaver: boolean; nativeReferer: boolean } {
   try {
-    const a = (globalThis as { appHost?: { imageProxy?: boolean; dataSaver?: boolean } }).appHost
-    return { imageProxy: a?.imageProxy !== false, dataSaver: a?.dataSaver === true }
+    const a = (
+      globalThis as {
+        appHost?: { imageProxy?: boolean; dataSaver?: boolean; nativeMediaReferer?: boolean }
+      }
+    ).appHost
+    return {
+      imageProxy: a?.imageProxy !== false,
+      dataSaver: a?.dataSaver === true,
+      nativeReferer: a?.nativeMediaReferer === true,
+    }
   } catch {
-    return { imageProxy: true, dataSaver: false }
+    return { imageProxy: true, dataSaver: false, nativeReferer: false }
   }
 }
 
-function useProxiedImage(src?: string): { src?: string; failed: boolean } {
+interface ProxiedImage {
+  src?: string
+  failed: boolean
+  /** true = 原 URL 直连(WebView2 已在网络层注入 Referer)，onError 时回退隧道。 */
+  native: boolean
+  onNativeError: () => void
+}
+
+function useProxiedImage(src?: string): ProxiedImage {
   const flags = runtimeFlags()
   // ⚠️ 没注入 http(纯浏览器调试)时不能走隧道:那是给「原生 <img> 带不了 Referer」
   // 准备的,缺了它反而把图弄丢。此时退回原 src(这类图床在浏览器里本来就可能 403)。
@@ -137,10 +155,17 @@ function useProxiedImage(src?: string): { src?: string; failed: boolean } {
   // 首渲染同步读缓存:滚动重挂载同图直接命中,不闪骨架。
   const [proxy, setProxy] = useState<string | undefined>(src && referrer ? proxyGet(src) : undefined)
   const [failed, setFailed] = useState(failedBefore)
+  /** 直连失败的 src。按 src 记(而非布尔),换图时自动回到直连路径。 */
+  const [nativeFailedSrc, setNativeFailedSrc] = useState<string | undefined>(undefined)
+  const nativeFailed = !!src && nativeFailedSrc === src
+
+  // WebView2 已注册 Referer 注入 → 直接挂原 URL，缓存/Range/渐进解码全部交给
+  // Chromium；只有直连失败(403/规则漏配)才回退下面的 blob 隧道。
+  const useNative = flags.nativeReferer && !!referrer && !nativeFailed && !failedBefore
 
   useEffect(() => {
     setFailed(failedBefore)
-    if (!src || !referrer || failedBefore) return
+    if (!src || !referrer || failedBefore || useNative) return
     const cached = proxyGet(src)
     setProxy(cached)
     if (cached) return
@@ -159,14 +184,19 @@ function useProxiedImage(src?: string): { src?: string; failed: boolean } {
     return () => {
       cancelled = true
     }
-  }, [src])
+  }, [src, useNative])
+
+  const onNativeError = () => {
+    if (src) setNativeFailedSrc(src)
+  }
 
   // 非防盗链图床:原样。
-  if (!referrer) return { src, failed: false }
+  if (!referrer) return { src, failed: false, native: false, onNativeError }
+  if (useNative) return { src, failed: false, native: true, onNativeError }
   // 隧道失败(含负缓存):不挂原 src(防盗链原样必 403 → 重挂重复请求),failed 由调用方出占位。
-  if (failedBefore || failed) return { src: undefined, failed: true }
+  if (failedBefore || failed) return { src: undefined, failed: true, native: false, onNativeError }
   // 命中未就绪 → undefined(不挂原 src);就绪 → blob URL。
-  return { src: proxy, failed: false }
+  return { src: proxy, failed: false, native: false, onNativeError }
 }
 
 export function MediaImage({
@@ -204,10 +234,10 @@ export function MediaImage({
   const [failed, setFailed] = useState(false)
   // 省流模式:完全不请求图片,只留骨架占位(卡片/列表高度由容器 aspect-ratio 撑住)。
   const dataSaver = runtimeFlags().dataSaver
-  // 防盗链图床(sinaimg 等)经宿主隧道加载,未就绪返回 undefined 不挂原 src;
-  // proxiedFailed = 隧道失败(不走原生 <img> onError,须在此出 ImageOff)。
-  const { src: proxied, failed: proxiedFailed } = useProxiedImage(dataSaver ? undefined : src)
-  const imgSrc = dataSaver ? undefined : proxied
+  // 防盗链图床优先直连(WebView2 已注入 Referer)；直连失败回退宿主隧道，
+  // 未就绪返回 undefined 不挂原 src;proxiedFailed = 隧道失败(不走原生 onError)。
+  const proxied = useProxiedImage(dataSaver ? undefined : src)
+  const imgSrc = dataSaver ? undefined : proxied.src
 
   // src 变化时重置状态(React 不自动做,列表 item 复用实例时 src 会变)。
   useEffect(() => {
@@ -215,7 +245,7 @@ export function MediaImage({
     setFailed(false)
   }, [src])
 
-  const showImage = !dataSaver && !!src && !failed && !proxiedFailed && (loaded || loadedUrls.has(src))
+  const showImage = !dataSaver && !!src && !failed && !proxied.failed && (loaded || loadedUrls.has(src))
 
   // contain:容器 w-full h-full,img object-contain(完整显示,可留背景缝)。
   // fill:容器 w-full h-full,img object-cover(填满,调用方定等比容器则无缝隙无裁剪)。
@@ -233,6 +263,9 @@ export function MediaImage({
           src={imgSrc}
           alt={alt}
           loading={loading}
+          // 始终 no-referrer:未命中宿主规则时不泄露页面源。WebView2 的
+          // WebResourceRequested 在 referrer 策略之后执行，实测 no-referrer
+          // 下仍能把头改写成站内 Referer，所以直连模式不需要 unsafe-url。
           referrerPolicy="no-referrer"
           className={`absolute inset-0 size-full ${contain ? "object-contain" : "object-cover"} transition-opacity duration-200 ${
             showImage ? "opacity-100" : "opacity-0"
@@ -241,14 +274,18 @@ export function MediaImage({
             if (src) cappedAdd(loadedUrls, src)
             setLoaded(true)
           }}
-          onError={() => setFailed(true)}
+          onError={() => {
+            // 直连失败 → 切回 blob 隧道(会保持骨架直到隧道完成或失败)。
+            if (proxied.native) proxied.onNativeError()
+            else setFailed(true)
+          }}
         />
       )}
-      {/* skeleton 底层占位:img 淡入前显示;原生 onError(failed)或隧道失败(proxiedFailed)时叠 ImageOff */}
+      {/* skeleton 底层占位:img 淡入前显示;原生 onError(failed)或隧道失败(proxied.failed)时叠 ImageOff */}
       {!showImage && (
         <div className="absolute inset-0 flex items-center justify-center">
           <Skeleton className="absolute inset-0 rounded-none" />
-          {(failed || proxiedFailed) && <ImageOffIcon className="relative size-5 text-muted-foreground/60" />}
+          {(failed || proxied.failed) && <ImageOffIcon className="relative size-5 text-muted-foreground/60" />}
         </div>
       )}
     </div>

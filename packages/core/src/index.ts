@@ -17,7 +17,10 @@
  * apps 不直接 import crawler(渠道能力经 DataLayer.listChannels/channelKind)。
  */
 export { createDataLayer, cookieFieldFor, cookieFieldForPlatform } from "./data-layer.ts"
-export type { DataLayer } from "./data-layer.ts"
+export type { DataLayer, DataLayerDiagnostics, LoginResult } from "./data-layer.ts"
+/** 远端客户端的本地镜像复用同一份查询语义（newest-first / 智能订阅过滤）。 */
+export { createMediaStore } from "./store/media-store.ts"
+export type { MediaStore, MediaStoreListener } from "./store/media-store.ts"
 export type { ChannelInfo } from "./types/channel-info.ts"
 export type { RefreshResult } from "./types/refresh-result.ts"
 
@@ -66,9 +69,26 @@ export { positionDecision, type PositionDecision } from "./reading-position.ts"
 
 /** 条目/阅读态的身份语义:复合键(带订阅维度)、按 (订阅, id) 定位。 */
 export { findItem, findRecord, itemRefKey, readingKey } from "./types/reading.ts"
+export type { ReadRecord, ReadingMap } from "./types/reading.ts"
 
 /** SQLite schema(两端共用 DDL:desktop tauri-plugin-sql / CLI bun:sqlite)。 */
-export { KV_TABLE, KV_DDL, MIGRATIONS } from "./db/schema.ts"
+export {
+  KV_TABLE,
+  KV_DDL,
+  MIGRATIONS,
+  MIGRATIONS_TABLE,
+  MIGRATIONS_TABLE_DDL,
+  SCHEMA_MIGRATIONS,
+  STORAGE_SCHEMA,
+  schemaChecksum,
+  type SchemaMigration,
+} from "./db/schema.ts"
 
 /** 订阅抓取内容缓存(KV storage 实现;TTL 判定在 data-layer)。 */
 export { createContentCacheRepo, type ContentCacheEntry, type ContentCacheRepo } from "./repo/content-cache-repo.ts"
+
+/**
+ * settings 仓库 —— CLI 探针直接复用(core 的归一化 / 损坏 JSON 留证 / 读改写串行化),
+ * 不再自己解析 `settings` blob(旧旁路会绕过归一化且每次新建连接)。见 R15。
+ */
+export { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"

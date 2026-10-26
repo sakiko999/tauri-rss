@@ -29,8 +29,6 @@ declare global {
     js: JsBackend
     /** 持久化 KV。core 的 repo 用它存 subscriptions/reading/settings。 */
     storage: StorageBackend
-    /** 日志;缺失时 core 用 console 兜底。 */
-    log?: Logger
     /** 时钟(epoch ms);缺失时 core 用 Date.now 兜底。 */
     now?: () => number
     /** WebSocket 隧道(桌面 Rust ws_connect / node ws 包)。缺失时 crawler 兜底用原生 WS(无自定义 header)。 */
@@ -49,6 +47,11 @@ declare global {
     imageProxy?: boolean
     /** 省流模式:不加载任何图片(镜像 settings.dataSaver;ui 的 MediaImage 直读)。 */
     dataSaver?: boolean
+    /**
+     * 桌面 WebView2 已在原生网络层注入防盗链 Referer(见 apps/src-tauri/src/media_referer.rs)。
+     * true 时 MediaImage / 实况视频直接使用原 URL，不再走 blob 隧道；失败仍回退隧道。
+     */
+    nativeMediaReferer?: boolean
     /** 自动更新(仅 Tauri 桌面注入;浏览器/CLI/移动端为 undefined)。 */
     updater?: UpdaterBackend
     /** 网络治理(等级/冷却/统计)。host 内建,始终存在。 */
@@ -233,7 +236,7 @@ declare global {
     resetProfile?(): Promise<string>
     /**
      * 中止在途调用并断开连接。上层整轮刷新超时时调用,让被挂住的 await 立刻返回
-     * 错误而不是继续持锁(见 tauri/browser-backend.ts 的 abortPending 注释)。
+     * 错误而不是继续持锁(见 packages/host/src/browser/channel.ts 的 abortPending 注释)。
      * 可选:非 Tauri 后端不提供(它们底层走 fetch,自带超时)。
      */
     abortPending?(reason: string): void
@@ -255,12 +258,30 @@ declare global {
    * SQL 型存储后端的建表契约。**DDL 唯一权威在 core `db/schema.ts`**，
    * 由 core 在 createDataLayer 时注入；host 只执行，不 import core。
    */
+  interface StorageMigration {
+    version: number
+    name: string
+    sql: string
+    checksum: string
+  }
+
   interface StorageSchema {
     table: string
     ddl: string
-    /** 幂等 SQL,按序全量执行(无版本表;非幂等迁移需先加版本表)。 */
+    /** 幂等 SQL,按序全量执行(旧后端兼容路径)。 */
     migrations: ReadonlyArray<string>
+    /** 版本化迁移：先建版本表；已应用版本 checksum 不一致则拒绝启动。 */
+    versioned?: {
+      table: string
+      ddl: string
+      migrations: ReadonlyArray<StorageMigration>
+    }
   }
+
+  /** 键值批量写的一步（`StorageBackend.batch`）。 */
+  type StorageOp =
+    | { type: "set"; key: string; value: string }
+    | { type: "delete"; key: string }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */
   interface StorageBackend {
@@ -270,15 +291,17 @@ declare global {
     /** 全部 key,可选前缀过滤(命名空间)。 */
     keys(prefix?: string): Promise<string[]>
     /**
+     * 原子批量写：多键一次提交，中途失败不落半套（R10）。
+     * 不支持的后端省略此方法，调用方回退逐个 set/delete；SQL 型后端应实现。
+     */
+    batch?(ops: StorageOp[]): Promise<void>
+    /**
      * SQL 型后端注入 schema（KV/localStorage/内存后端不需要实现）。
      * core 在 `createDataLayer()` 首次读写前调用；实现方应在此之前完成建表。
      */
     setSchema?(schema: StorageSchema): void
-  }
-
-  /** 日志输出。缺失时消费方用 console 兜底。 */
-  interface Logger {
-    log(level: "debug" | "info" | "warn" | "error", msg: string, ctx?: Record<string, unknown>): void
+    /** 关闭底层句柄（long-lived 服务进程退出前调用；其它后端可不实现）。 */
+    close?(): void
   }
 
   /** 一个 HTTP 请求。 */

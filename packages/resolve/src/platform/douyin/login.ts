@@ -16,6 +16,7 @@
  * 二维码载荷:HTTP 路径上游给 base64 png → 补上 data URL 前缀;browser 路径读到的
  * 本就是 data URL。两条路径 emitQr 推的都是 `data:image/...`(QrImage 直接当 img 用)。
  */
+import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
 import { cdpEvaluate, cdpNavigate, withScanLoginLock } from "../../browser/cdp.ts"
 import type { LoginResult } from "../../index.ts"
@@ -128,12 +129,15 @@ async function douyinHttpScanLogin(
   const qrcode = String(payload?.data?.qrcode ?? "")
   if (!token || !qrcode) throw new Error("douyin 扫码: get_qrcode 未返回 token/qrcode")
   emitQr(qrcode.startsWith("data:") ? qrcode : `data:image/png;base64,${qrcode}`)
-  log.douyin.info("二维码已下发(HTTP 路径)")
+  log.douyin.qrReady()
 
   // 2. 轮询扫码状态(1待扫 / 2已扫 / 3已确认 / 5过期)。
   for (;;) {
     assertLive()
-    if (Date.now() > deadline) throw new Error("douyin 扫码: 超时未完成")
+    if (Date.now() > deadline) {
+      log.douyin.loginTimeout()
+      throw new Error("douyin 扫码: 超时未完成")
+    }
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
     const poll = await fetchIntoJar(jar, `${SSO}/check_qrconnect/?${qrParams(fp, token).toString()}`, `${MAIN}/`)
     let data: any = null
@@ -145,7 +149,10 @@ async function douyinHttpScanLogin(
     const status = String(data?.status ?? "")
     if (status === "2") opts?.onScanned?.()
     if (status !== "3" && !data?.redirect_url) {
-      if (status === "5") throw new Error("douyin 扫码: 二维码已过期")
+      if (status === "5") {
+        log.douyin.loginTimeout()
+        throw new Error("douyin 扫码: 二维码已过期")
+      }
       continue
     }
 
@@ -156,7 +163,7 @@ async function douyinHttpScanLogin(
     if (!jar.has(LOGIN_COOKIE)) {
       throw new Error(`douyin 扫码: 确认后未取到 ${LOGIN_COOKIE}(cookie: ${jar.names.join(",") || "空"})`)
     }
-    log.douyin.info("扫码登录成功(HTTP 路径)")
+    log.douyin.loginOk({})
     return { cookie: jar.header }
   }
 }
@@ -238,12 +245,12 @@ async function runDouyinBrowserScanLogin(
 
   assertLive()
   await cdpNavigate(browser, MAIN)
-  log.douyin.info(`扫码登录导航 ${MAIN}(browser 路径)`)
+  log.douyin.loginNavigate({ url: MAIN })
 
   // 已登录检测:Edge profile 里已有 sessionid → 跳过扫码。
   const initial = await browser.getCookies(MAIN)
   if (initial[LOGIN_COOKIE]) {
-    log.douyin.info("已登录(profile 复用)")
+    log.douyin.loginReused()
     return { cookie: serializeCookies(initial), alreadyLoggedIn: true }
   }
 
@@ -254,21 +261,28 @@ async function runDouyinBrowserScanLogin(
       assertLive()
       const src = await readQrSrc(browser)
       if (src) break
-      if (Date.now() > deadline) throw new Error("二维码未出现(登录弹窗可能未打开)")
+      if (Date.now() > deadline) {
+        log.douyin.qrMissing()
+        throw new Error("二维码未出现(登录弹窗可能未打开)")
+      }
       await new Promise((r) => setTimeout(r, 500))
     }
   }
   emitQr(await readQrSrc(browser))
+  log.douyin.qrReady()
 
   // 用户扫码确认后 cookie 落 profile,轮询 sessionid(含 HttpOnly)。
   for (;;) {
     assertLive()
     const c = await browser.getCookies(MAIN)
     if (c[LOGIN_COOKIE]) {
-      log.douyin.info("登录成功(browser 路径)")
+      log.douyin.loginOk({})
       return { cookie: serializeCookies(c) }
     }
-    if (Date.now() > deadline) throw new Error("扫码登录超时或二维码已失效")
+    if (Date.now() > deadline) {
+      log.douyin.loginTimeout()
+      throw new Error("扫码登录超时或二维码已失效")
+    }
     await new Promise((r) => setTimeout(r, 1000))
   }
 }
@@ -289,7 +303,7 @@ export async function douyinScanLogin(
     if (opts?.signal?.aborted) throw e
     const browser = globalThis.appHost?.browser
     if (!browser) throw e // 无 browser(如移动端)只能抛给 UI
-    log.douyin.warn(`HTTP 路径失败,回退浏览器: ${(e as Error).message}`)
+    log.douyin.loginFallback({ reason: formatError(e) })
     emitQr(null) // 作废旧码,UI 回到「准备二维码」态
     return douyinBrowserScanLogin(browser, emitQr, opts)
   }

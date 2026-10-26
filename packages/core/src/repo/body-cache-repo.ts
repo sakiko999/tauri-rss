@@ -22,6 +22,8 @@ export interface BodyCacheRepo {
   get(subscriptionId: string, itemId: string): Promise<BodyCacheEntry | null>
   /** 写某条目正文缓存(覆盖)。 */
   set(subscriptionId: string, itemId: string, entry: BodyCacheEntry): Promise<void>
+  /** 该订阅全部正文缓存的键(退订清理与其它键合成一次 batch)。 */
+  keysOf(subscriptionId: string): Promise<string[]>
   /** 删某订阅的全部条目正文缓存(订阅退订时;条目 id 未知,按前缀清)。 */
   deleteAll(subscriptionId: string): Promise<void>
 }
@@ -42,9 +44,12 @@ export function createBodyCacheRepo(storage: StorageBackend, prefix = "body:"): 
     async set(subscriptionId, itemId, entry) {
       await storage.set(key(subscriptionId, itemId), JSON.stringify(entry))
     },
-    async deleteAll(subscriptionId) {
+    async keysOf(subscriptionId) {
       // 按前缀扫描,不再维护「已缓存 item」索引:索引是读-改-写,并发写会丢项 →
       // 退订时漏删;前缀带分隔符,不会误伤 `s1` 与 `s10`。代价是一次列表查询。
+      return storage.keys(`${prefix}${subscriptionId}:`)
+    },
+    async deleteAll(subscriptionId) {
       const keys = await storage.keys(`${prefix}${subscriptionId}:`)
       await Promise.all(keys.map((k) => storage.delete(k)))
     },

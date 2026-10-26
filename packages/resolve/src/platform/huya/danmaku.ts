@@ -10,6 +10,7 @@
 import { createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuStream } from "../../danmaku"
 import { decodeHuyaDanmakuFrame, TarsWriter } from "./danmaku-tars.ts"
+import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
 import { M_HUYA, huyaClient } from "./client.ts"
 
@@ -73,6 +74,6 @@ export function huyaDanmakuStream(roomId: string): DanmakuStream {
         heartbeatMs: HEARTBEAT_MS,
         onMessage: (data) => decodeHuyaDanmakuFrame(new Uint8Array(data)),
       })(onItems),
-    (e) => log.huya.warn("弹幕初始化失败(未开播?):", (e as Error)?.message),
+    (e) => log.huya.danmakuInitFailed({ error: formatError(e) }),
   )
 }

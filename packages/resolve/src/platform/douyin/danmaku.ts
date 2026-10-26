@@ -19,6 +19,7 @@ import type { DanmakuStream } from "../../danmaku"
 import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "./danmaku-proto.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { httpJson } from "../../host.ts"
+import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
 import { DEFAULT_TTWID, UA_ENTER, enterRoomParams, signDouyinUrl } from "./abogus.ts"
 import { kWebMsSDK } from "./msdk-sign.ts"
@@ -236,13 +237,14 @@ export function douyinDanmakuStream(roomId: string, cookie?: string): DanmakuStr
         },
         heartbeat: () => douyinHeartbeatFrame(),
         heartbeatMs: HEARTBEAT_MS,
-        onClose: (code, reason) => log.douyin.warn(`弹幕 WS 关闭(code=${code} reason=${reason}, room=${room})`),
+        // 断线告警由通用层(danmaku 域 wsClosed)统一打,这里只补房间号,避免一次断线两条 warn。
+        onClose: (code, reason) => log.douyin.debug(`弹幕 WS 关闭(code=${code} reason=${reason}, room=${room})`),
         onMessage: (data, ws) =>
           decodeDouyinPushFrame(new Uint8Array(data), (ack) =>
             ws.send(ack),
           ),
       })(onItems)
     },
-    (e) => log.douyin.warn("弹幕初始化失败:", (e as Error)?.message),
+    (e) => log.douyin.danmakuInitFailed({ error: formatError(e) }),
   )
 }

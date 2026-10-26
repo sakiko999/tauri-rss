@@ -13,7 +13,7 @@
  * 注:crawler channel 的 Referer 是**抓取请求**的业务头;这里管**媒体加载**的
  * 防盗链 Referer,两者用途不同、互不越界。
  */
-const HOTLINK_REFERRERS: Array<[string, string]> = [
+export const MEDIA_REFERRERS: Array<[string, string]> = [
   // 新浪图床:weibo.com 系 Referer 放行,空/其它 403。
   ["sinaimg.cn", "https://weibo.com/"],
 ]
@@ -22,7 +22,7 @@ const HOTLINK_REFERRERS: Array<[string, string]> = [
 export function mediaReferrerFor(url: string): string | undefined {
   const m = url.match(/^https?:\/\/([^/]+)/)
   if (!m) return undefined
-  return HOTLINK_REFERRERS.find(([host]) => m[1].includes(host))?.[1]
+  return MEDIA_REFERRERS.find(([host]) => m[1].includes(host))?.[1]
 }
 
 /**
@@ -34,9 +34,9 @@ export function mediaReferrerFor(url: string): string | undefined {
  * console，表现为「点了实况没反应且无报错」。`<video referrerPolicy>` 在 Chromium
  * 里不存在，只能经宿主隧道（Rust reqwest）重取：站内 Referer 或空 Referer 都是 200。
  *
- * 不并进 `HOTLINK_REFERRERS`：那会让所有 xhs 图片也改走隧道（图片本来直连可用）。
+ * 不并进 `MEDIA_REFERRERS`：那会让所有 xhs 图片也改走隧道（图片本来直连可用）。
  */
-const HOTLINK_VIDEO_REFERRERS: Array<[string, string]> = [
+export const VIDEO_REFERRERS: Array<[string, string]> = [
   ["xhscdn.com", "https://www.xiaohongshu.com/"],
   // 微博实况视频（f.video.weibocdn.com）与图床同源策略。
   ["weibocdn.com", "https://weibo.com/"],
@@ -47,5 +47,5 @@ const HOTLINK_VIDEO_REFERRERS: Array<[string, string]> = [
 export function videoReferrerFor(url: string): string | undefined {
   const m = url.match(/^https?:\/\/([^/]+)/)
   if (!m) return undefined
-  return HOTLINK_VIDEO_REFERRERS.find(([host]) => m[1].includes(host))?.[1]
+  return VIDEO_REFERRERS.find(([host]) => m[1].includes(host))?.[1]
 }

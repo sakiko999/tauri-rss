@@ -40,6 +40,7 @@ export const BiliUserVideoChannel = makeApiChannel({
         pubdate: v.created,
         aid: v.aid,
         bvid: v.bvid,
+        rights: v.rights,
         owner: v.author ? { name: String(v.author) } : undefined,
       }),
     )

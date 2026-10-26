@@ -7,6 +7,7 @@ import { getChannel } from "@amoeba/crawler"
 import { parseFeed } from "@amoeba/xml"
 import { buildInfo, parseKvPairs } from "../info.ts"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
+import { probeFetch } from "./probe.ts"
 
 export interface FetchOptions {
   xml?: boolean
@@ -14,6 +15,9 @@ export interface FetchOptions {
   n?: number
   /** k=v 覆盖(可重复传 --kv;空值 `cookie=` 合法 = 强制匿名)。 */
   kv?: string | string[]
+  /** 走数据服务的 probe.fetch（同一 cookie/被动规则/governor 配额）。 */
+  viaService?: boolean
+  endpoint?: string
 }
 
 export async function runFetch(key: string, opts: FetchOptions): Promise<void> {
@@ -22,7 +26,9 @@ export async function runFetch(key: string, opts: FetchOptions): Promise<void> {
   const info = await buildInfo(key, parseKvPairs(opts.kv))
 
   const elapsed = startTimer()
-  const xml = await ch.getSource(info).fetch()
+  const xml = opts.viaService
+    ? (await probeFetch(key, info, opts.endpoint)).xml
+    : await ch.getSource(info).fetch()
   const ms = elapsed()
 
   if (opts.xml) {

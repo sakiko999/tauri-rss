@@ -15,11 +15,13 @@
       "@amoeba/host/tauri": ["../../packages/host/src/tauri/index.ts"],
       "@amoeba/host/browser": ["../../packages/host/src/browser/index.ts"],
       "@amoeba/log": ["../../packages/log/src/index.ts"],
+      "@amoeba/platform": ["../../packages/platform/src/index.ts"],
       "@amoeba/crawler": ["../../packages/crawler/src/index.ts"],
       "@amoeba/core": ["../../packages/core/src/index.ts"],
       "@amoeba/resolve": ["../../packages/resolve/src/index.ts"],
       "@amoeba/resolve/errors": ["../../packages/resolve/src/errors.ts"],
-      "@amoeba/resolve/media-referrer": ["../../packages/resolve/src/media-referrer.ts"]
+      "@amoeba/resolve/media-referrer": ["../../packages/resolve/src/media-referrer.ts"],
+      "@amoeba/service-protocol": ["../../packages/service-protocol/src/index.ts"]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,

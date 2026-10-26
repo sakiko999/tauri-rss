@@ -66,6 +66,9 @@ export interface DesktopState {
   hotWord: HotWordState | null
   /** DataLayer 初始化失败(库损坏/宿主未注入)→ 整页错误,不让应用白屏。 */
   initError: string | null
+  /** 数据服务/事件通道状态（本地 DataLayer 恒 true）。 */
+  serviceOnline: boolean
+  serviceError: string | null
   /**
    * 首屏可以交给真实视图了 —— 即 init **全部**结束(含首轮 `refreshAll`)。
    *
@@ -232,8 +235,10 @@ export type StoreGet = StoreApi<DesktopState>["getState"]
 export interface StoreCtx {
   set: StoreSet
   get: StoreGet
-  /** 重算当前视图 + 全局条目快照。 */
+  /** 重算当前视图 + 全局条目快照（输入未变时命中 memo，跳过 set）。 */
   refreshView(): void
+  /** store 内容变更（replace/append/patch/clear）时调用，让 refreshView 的 memo 失效。 */
+  markItemsChanged(): void
   /** 订阅集变更后重读 + 重绘。 */
   syncSubscriptions(): Promise<void>
   /** 懒查分页能力并写 canLoadMore(仅真实订阅;已缓存短路)。 */

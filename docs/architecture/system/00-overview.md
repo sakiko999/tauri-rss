@@ -5,21 +5,25 @@
 
 ## 1. 定位与非目标
 
-**一句话**：Amoeba 是一个本地优先的订阅/媒体阅读器 monorepo。一个 Rust crate（`apps/src-tauri`，Cargo package `amoeba`）用 9 个 Tauri command 暴露 HTTP / WebSocket / WebView2 抓取浏览器（`apps/src-tauri/src/lib.rs:12-22`），SQLite、外链、自动更新另由 4 个 Tauri 插件注册（opener / sql / updater / process，`apps/src-tauri/src/plugins/mod.rs:4-17`；updater 与 process 仅桌面）；8 个私有 TypeScript 包组成「协议 → 平台 → 渠道 → 编排 → 播放/原子」链路；3 个 app 是同一数据层的不同形态消费者。
+**一句话**：Amoeba 是一个本地优先的订阅/媒体阅读器 monorepo。一个 Rust crate（`apps/src-tauri`，Cargo package `amoeba`）用 11 个 Tauri command 暴露 HTTP / WebSocket / WebView2 / 数据服务生命周期（`apps/src-tauri/src/lib.rs`），SQLite、外链、自动更新、单实例另由 5 个 Tauri 插件注册（opener / sql / updater / process / single-instance，`apps/src-tauri/src/plugins/mod.rs`；updater/process/single-instance 仅桌面）；10 个私有 TypeScript 包组成「协议 → 平台 → 渠道 → 编排 → 服务客户端 → 播放/原子」链路；desktop 默认是数据服务客户端，CLI 既是探针也是服务载具/客户端。
 
 三个使用端的分工不是「同一产品三套皮」，而是三种不同的数据/状态责任：
 
 | 使用端 | 它是什么 | 实际能力边界 | 代码入口 |
 | --- | --- | --- | --- |
-| **desktop** | 订阅工作台：rail 侧栏 + reader/media/hot/page/player/shortvideo 六种外壳，抓取、播放、订阅 CRUD、频道发现、登录、诊断全量 | 拥有完整 DataLayer 方法面；桌面是唯一注入 `updater` 与真正 CDP 抓取浏览器的端 | `apps/desktop/src/main.tsx`、`App.tsx:132-148` |
+| **desktop** | 订阅工作台：rail 侧栏 + reader/media/hot/page/player/shortvideo 六种外壳，抓取、播放、订阅 CRUD、频道发现、登录、诊断全量 | 默认经 `service_endpoint` + `@amoeba/service-client` 读写本地服务；`storage/browser` 注入为拒绝后端，**不再是数据写者**。桌面仍独占 updater 与媒体 Referer | `apps/desktop/src/main.tsx`、`store/data-source.ts`、`App.tsx` |
 | **mobile** | 极简「看内容」闭环：未读列表 → 播放/阅读，加 RSS 直链增删 | 只用到 `query/patch/subscribe/refresh/addSubscription/resolveDetail/resolvePlay/resolveLivePlay` 等少数 DataLayer 方法；无 router、无频道发现、无登录 UI | `apps/mobile/src/store.ts:44-57`、`App.tsx` |
-| **CLI** | 调试探针：Bun + cac 零构建，12 个命令覆盖注册表、单渠道抓取、by-url 播放/弹幕、DataLayer 冒烟、环境自检、浏览器 profile 清理 | 自行组装 node 宿主与 bun:sqlite；不注入 browser/updater，浏览器驱动渠道不可用 | `apps/cli/src/main.ts:36`、`:73-149` |
+| **CLI** | 调试探针：Bun + cac 零构建，12 个命令覆盖注册表、单渠道抓取、by-url 播放/弹幕、DataLayer 冒烟、环境自检、浏览器 profile 清理 | 自行组装 node 宿主与 bun:sqlite；`--browser` 时注入 `amoeba-browser` sidecar（独立 WebView2 + CDP），默认不注入 | `apps/cli/src/main.ts:36`、`:73-149`、`apps/browser-sidecar/src/main.rs` |
 
 **明确非目标**（代码与文档都成立的部分）：
 
 - **不做云端**：没有服务端、账号体系、多端同步。持久化只在各端本地 KV（`packages/core/src/db/schema.ts:15-18`）；凭证只存在本机 settings 与浏览器 profile。
-- **桌面独立爬虫服务尚未实现**：`../crawler-topology.md` 记录的是决策；当前 desktop 仍在 WebView 进程内 `createDataLayer()` 并抓取（`apps/desktop/src/store/actions/data.ts:25`）。
+- **桌面数据/爬虫服务已落地（2026-10-26）**：`amoeba-runtime.exe` → `service.js --service`
+  单写者独占 SQLite/crawler/浏览器；desktop **只**走 `RemoteDataLayer`（进程内回退已删）。见 `06-data-service.md`。
 - **mobile 不做工作台**：不做频道发现、完整播放器控件、扫码登录、cookie 快照对齐（`apps/mobile/src/store.ts:1-8` 自述；代码无对应 UI 与调用）。
+- **mobile 已冻结（2026-10-26）**：除非主动开启，后续改动**不再为 mobile 做适配/回归**
+  （不跑 mobile tsc/Vite build，不为其加注入开关、UI 或平台分支）。它仍是进程内
+  `createDataLayer()` 的只读参考实现；core/契约的新增成员保持**可选**即可，不要求移动端同步。
 - **不发布公共库**：所有包 `private: true`、`exports` 直指 `src/*.ts`，没有构建产物，也没有版本化 API。
 - **XML 只承诺承载列表快照，不承诺播放解析结果**：`Stream` 走 `tpl:streamJson` 完整往返（`url/format/headers/quality/rate/dashManifest`），标准 `enclosure` 在有 `url` 时仍保留作兼容出口；`Article.media[]` 的 image/video/audio 附件与宽高、时长等属性双向保真。`sourceId` / `raw` 是 crawler 内部字段，刻意不过 XML（见 [02-contracts.md](02-contracts.md) §2.5）。播放解析结果本身仍不进 XML（见 §7 决策 1、4）。
 - **播放器不做平台判断与二次选流**：不接收 `item.kind`，不重排 `streams`（`packages/player/src/PlayableMedia.tsx:1-16`）。
@@ -47,7 +51,7 @@
 
 - **被动采集**：`passiveMode = channel.passive && !!appHost.browser`（`packages/core/src/data-layer.ts:463`）。desktop 为真且可用；mobile 因显式 `browser:false` 为假、回落主动抓取；CLI 为假，同样回落主动抓取。
 - **RSSHub**：`rsshub` provider 靠 `import "@amoeba/core/source/rsshub"` 的模块副作用注册（`packages/core/src/source/rsshub.ts:97`）。desktop/mobile 入口都 import；CLI 没有，所以 `rsshub:*` 在 CLI 里表现为「渠道不存在」。
-- **自动更新与 cookie 对齐**：只有 desktop 注入 updater，并在 init 后延迟调用 `syncBrowserCookies`（`apps/desktop/src/store/actions/data.ts:61-68`）。
+- **自动更新与 cookie 对齐**：只有 desktop 注入 updater；cookie 快照对齐已移到数据服务 boot 后 1.5s（desktop 远端层的 `syncBrowserCookies` 是 no-op）。
 - **数据库隔离**：dev / `tauri dev --release` / 生产分别用 `rss.dev.db` / `rss.release-debug.db` / `rss.db`（`packages/host/src/tauri/sqlite-storage-backend.ts:24-29`）；CLI 另有 `apps/cli/.data/rss.db`。四者互不共享。
 
 ## 3. 包地图分层

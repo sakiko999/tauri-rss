@@ -1,7 +1,6 @@
 /** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile / 完全重置 + 最近抓取错误。 */
 import { useState } from "react"
 import { ERROR_KIND_LABEL } from "@amoeba/core"
-import { withBrowserGlobal } from "@amoeba/resolve"
 import { useDesktop } from "../../../store/index.ts"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
 import { Icon } from "../../../components/Icon.tsx"
@@ -11,18 +10,15 @@ export function Diagnostics() {
   const subscriptions = useDesktop((s) => s.subscriptions)
   const refreshErrors = useDesktop((s) => s.refreshErrors)
   const refreshErrorKinds = useDesktop((s) => s.refreshErrorKinds)
+  const dl = useDesktop((s) => s.dl)
   const toast = useDesktop((s) => s.toast)
   const [cacheSize, setCacheSize] = useState<number | null>(null)
 
   async function measureCache() {
+    if (!dl) return
     try {
-      const keys = await globalThis.appHost.storage.keys("content:")
-      let bytes = 0
-      for (const k of keys) {
-        const v = await globalThis.appHost.storage.get(k)
-        bytes += (v?.length ?? 0) * 2 // UTF-16 近似
-      }
-      setCacheSize(bytes)
+      const stats = await dl.diagnostics.cacheStats()
+      setCacheSize(stats.bytes)
     } catch (e) {
       toast("error", "统计失败", String(e))
     }
@@ -37,13 +33,13 @@ export function Diagnostics() {
       )
     )
       return
+    if (!dl) return
     try {
-      const keys = await globalThis.appHost.storage.keys("content:")
-      for (const k of keys) await globalThis.appHost.storage.delete(k)
+      const count = await dl.diagnostics.clearContentCache()
       setCacheSize(0)
       // ⚠️ 缓存没了但 store 里的条目还在(内存),只是下次刷新会真正走网络。
       // 提示里说清楚,免得用户以为「清空」= 列表清空。
-      toast("ok", "内容缓存已清空", `${keys.length} 条。已加载的条目保留在列表里,下次刷新会重新抓取。`)
+      toast("ok", "内容缓存已清空", `${count} 条。已加载的条目保留在列表里,下次刷新会重新抓取。`)
     } catch (e) {
       toast("error", "清空失败", String(e))
     }
@@ -60,13 +56,10 @@ export function Diagnostics() {
       )
     )
       return
+    if (!dl) return
     try {
-      const browser = globalThis.appHost.browser
-      const reset = browser?.resetProfile?.bind(browser)
-      if (!reset) throw new Error("当前环境不支持(仅桌面端可用)")
-      // withBrowserGlobal:resetProfile 会杀掉整棵 Edge 树,必须与所有 lane 的
-      // 抓取互斥(否则正在跑的刷新被连根拔掉)。
-      const r = await withBrowserGlobal(() => reset())
+      // 服务端 diagnostics 内部用 withBrowserGlobal 与抓取 lane 互斥。
+      const r = await dl.diagnostics.resetBrowserProfile()
       toast("ok", "浏览器数据已清理", r)
     } catch (e) {
       toast("error", "清理失败", String(e))
@@ -91,10 +84,10 @@ export function Diagnostics() {
       )
     )
       return
+    if (!dl) return
     try {
-      const keys = await globalThis.appHost.storage.keys()
-      for (const k of keys) await globalThis.appHost.storage.delete(k)
-      if (import.meta.env.DEV) await globalThis.appHost.storage.set("dev:seeded", "1")
+      await dl.diagnostics.clearAll()
+      // 种子标记在 localStorage；清掉后空库启动会重新种（dev only）。
       localStorage.clear()
       window.location.reload()
     } catch (e) {

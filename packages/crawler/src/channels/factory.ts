@@ -10,6 +10,7 @@
  */
 import type { Item, SerializeOptions } from "@amoeba/xml"
 import { serializeFeed } from "@amoeba/xml"
+import { formatError } from "@amoeba/log"
 import { log } from "@amoeba/resolve"
 import type { Kind, Loginable, Pageable, RssChannel, RssSource, SourceInfo, SourceInfoField } from "../index.ts"
 
@@ -41,7 +42,7 @@ export function apiFetch(
       const { items, total } = await fetchResult()
       return serializeWithTotal(items, opts, total)
     } catch (e) {
-      log.crawler.fetchError({ source: opts.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
+      log.crawler.fetchError({ source: opts.channelTitle ?? "", message: formatError(e) })
       throw e
     }
   }
@@ -154,7 +155,7 @@ export function apiFetchMore(
         ...(hasMore !== undefined ? { hasMore } : {}),
       }
     } catch (e) {
-      log.crawler.fetchError({ source: o.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
+      log.crawler.fetchError({ source: o.channelTitle ?? "", message: formatError(e) })
       throw e
     }
   }

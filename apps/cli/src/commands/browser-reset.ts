@@ -1,28 +1,32 @@
 /**
- * browser-reset — 清掉抓取浏览器(Tauri WebView2)的 profile。
+ * browser-reset — 清掉抓取浏览器 profile。
  *
- * 抓取浏览器是应用内一个隐藏 WebView2 窗口（独立 user-data-dir + CDP 9334），
- * 登录态/缓存都落在该目录。profile 养脏或需要强制重新扫码时清一次即可。
+ * 现在有两套浏览器，profile 必须分开清：
+ *   - `cli`（默认）：`amoeba-browser.exe` 的 `%LOCALAPPDATA%/app.amoeba.cli/browser-profile`
+ *   - `desktop`：Tauri WebView2 的 `.../app.amoeba.desktop/webview-profile`（CDP 9334）
+ *   - `all`：两者都清
  *
- * ⚠️ CLI 独立实现(**不能**转发 `invoke("webview_browser_reset")`):CLI 跑在 Bun 下,
- * 没有 `window.__TAURI_INTERNALS__`,`@tauri-apps/api` 的 invoke 必然抛
- * 「Cannot read properties of undefined (reading 'invoke')」——那样的入口等于永远失败。
- * 与 desktop 的 Rust 命令各自实现同一件事:杀掉占用 CDP 端口的进程树 → 删 profile 目录。
+ * ⚠️ CLI 的浏览器是显式 opt-in（`--browser`）；清 CLI profile 会掉 CLI 侧登录态。
+ * ⚠️ 桌面 profile 的清理仍是「杀 9334 进程树 + 删目录」；CLI profile 用镜像名
+ *    `amoeba-browser.exe`（我们自己的进程，安全）先停 sidecar，再删目录。
  *
- * 用法:`bun run rss browser-reset`
+ * 用法:`bun run rss browser-reset [--target cli|desktop|all]`
  */
 import pc from "picocolors"
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { defaultSidecarProfileDir } from "@amoeba/host/node"
 import { fail, ok, row } from "../ui/render.ts"
 
 /** 与 apps/src-tauri/src/webview_browser.rs 的 `PORT` 对齐。 */
-const CDP_PORT = 9334
+const DESKTOP_CDP_PORT = 9334
 /** 与 tauri.conf.json 的 identifier + Rust `app_local_data_dir()/webview-profile` 对齐。
  *  ⚠️ `app_local_data_dir` 在 Windows 是 LOCALAPPDATA(不是 Roaming)。
  *  ⚠️ **改 identifier 必须同步这里** —— 不同步会去删一个不存在的目录(静默 no-op),
  *  用户以为清了 profile、其实脏数据还在。(2026-10-16 `com.zhh.tauri-app` → `app.amoeba.desktop`) */
-const PROFILE_DIR = join(process.env.LOCALAPPDATA ?? "", "app.amoeba.desktop", "webview-profile")
+const DESKTOP_PROFILE = join(process.env.LOCALAPPDATA ?? "", "app.amoeba.desktop", "webview-profile")
+/** 与 sidecar 默认值同一实现（手抄路径会在规则变化时去删一个不存在的目录，静默 no-op）。 */
+const CLI_PROFILE = defaultSidecarProfileDir()
 
 /** 目录占用体积(MB);不存在返回 null。 */
 function dirSizeMB(dir: string): number | null {
@@ -71,34 +75,74 @@ function killOnPort(port: number): number {
   return pids.size
 }
 
-export async function runBrowserReset(): Promise<void> {
-  console.log(pc.bold("清理抓取浏览器 profile(WebView2)"))
-  console.log(row("目录", pc.dim(PROFILE_DIR)))
-
-  const before = dirSizeMB(PROFILE_DIR)
-  if (before === null) {
-    console.log(row("结果", pc.dim("profile 不存在,无需清理(下次使用会是全新实例)")))
-    return
+/** 停掉所有 amoeba-browser sidecar（我们自己的进程名，不误伤用户浏览器）。 */
+function killCliSidecars(): number {
+  try {
+    const r = Bun.spawnSync(["taskkill", "/F", "/T", "/IM", "amoeba-browser.exe"], {
+      stderr: "ignore",
+    })
+    return r.exitCode === 0 ? 1 : 0
+  } catch {
+    return 0
   }
-  console.log(row("清理前", `${before.toFixed(1)} MB`))
+}
 
-  const killed = killOnPort(CDP_PORT)
-  if (killed) console.log(row("进程", `结束 ${killed} 个占用 :${CDP_PORT} 的实例`))
-
-  // 杀进程后 WebView2 子进程释放文件句柄有延迟,重试几次。
-  let lastErr: unknown = null
+/** 删目录,句柄释放有延迟,重试几次。返回 null 表示成功，否则错误文本。 */
+async function removeProfile(dir: string): Promise<string | null> {
+  let last: unknown = null
   for (let i = 0; i < 10; i++) {
     try {
-      rmSync(PROFILE_DIR, { recursive: true, force: true })
-      console.log(row("结果", ok(`已清理 ${before.toFixed(1)} MB`)))
-      console.log(pc.dim("\n下次打开浏览器路径渠道时会重建全新 profile;微博/小红书需重新登录。"))
-      return
+      rmSync(dir, { recursive: true, force: true })
+      return null
     } catch (e) {
-      lastErr = e
+      last = e
       await new Promise((r) => setTimeout(r, 200))
     }
   }
-  console.log(row("结果", fail(String(lastErr))))
-  console.log(pc.dim("\n可能有抓取浏览器进程仍占用该目录,请先退出应用后重试。"))
-  process.exit(1)
+  return last instanceof Error ? last.message : String(last)
+}
+
+async function resetOne(
+  label: string,
+  dir: string,
+  stop: () => number,
+): Promise<boolean> {
+  const before = dirSizeMB(dir)
+  if (before === null) {
+    console.log(row(label, pc.dim(`${dir} 不存在，无需清理`)))
+    return true
+  }
+  const killed = stop()
+  if (killed) console.log(row(`${label} 进程`, `已停止`))
+  const err = await removeProfile(dir)
+  if (err) {
+    console.log(row(label, `${fail(err)}（${dir}）`))
+    console.log(pc.dim("可能有环境仍占用该目录；关闭相关实例后重试。"))
+    return false
+  }
+  console.log(row(label, ok(`已清理 ${before.toFixed(1)} MB`)))
+  return true
+}
+
+export interface BrowserResetOptions {
+  target?: "cli" | "desktop" | "all"
+}
+
+export async function runBrowserReset(opts: BrowserResetOptions = {}): Promise<void> {
+  const target = opts.target ?? "cli"
+  console.log(pc.bold(`清理抓取浏览器 profile（${target}）`))
+
+  let okAll = true
+  if (target === "cli" || target === "all") {
+    console.log(pc.dim(`  ${CLI_PROFILE}`))
+    okAll = (await resetOne("CLI", CLI_PROFILE, killCliSidecars)) && okAll
+  }
+  if (target === "desktop" || target === "all") {
+    console.log(pc.dim(`  ${DESKTOP_PROFILE}`))
+    // 桌面端可能正在运行：杀占用 9334 的进程树（只认端口，不按镜像名）。
+    okAll = (await resetOne("桌面", DESKTOP_PROFILE, () => killOnPort(DESKTOP_CDP_PORT))) && okAll
+  }
+
+  if (!okAll) process.exit(1)
+  console.log(pc.dim("\n下次使用会重建全新 profile；登录态需要重新建立。"))
 }

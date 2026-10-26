@@ -32,6 +32,7 @@ export function parsePopularItems(payload: unknown): Item[] {
       aid: raw.aid,
       bvid: raw.bvid,
       duration: raw.duration,
+      rights: raw.rights,
       owner: (raw.owner as { name?: string }) ?? undefined,
     }),
   )

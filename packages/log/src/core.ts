@@ -14,6 +14,7 @@
  * 环境:浏览器(WebView devtools)走 %c CSS 着色;node/bun 终端走 ANSI 256 色。
  */
 import { isBrowser, readSwitch } from "./env.ts"
+import { formatError } from "./format.ts"
 
 export type LogLevel = "debug" | "info" | "warn" | "error"
 
@@ -60,6 +61,30 @@ interface RegistryEntry {
 
 const registry = new Map<string, RegistryEntry>()
 
+/** 输出接管：`(level, 已格式化文本) => void`。null = 恢复默认 console 通道。 */
+export type LogSink = (level: LogLevel, text: string) => void
+
+let sink: LogSink | null = null
+
+/**
+ * 接管日志输出。服务进程用它把所有级别（含 info/debug）写 stderr —— 服务 stdout
+ * 只允许 `READY <port>`。测试也用它收集输出（不必 mock console）。
+ */
+export function setLogSink(fn: LogSink | null): void {
+  sink = fn
+}
+
+/** 非字符串参数进 sink 前转文本（Error 保留 message 而不是 `{}`）。 */
+function fmtArg(v: unknown): string {
+  if (typeof v === "string") return v
+  if (v instanceof Error) return formatError(v)
+  try {
+    return JSON.stringify(v)
+  } catch {
+    return String(v)
+  }
+}
+
 function consoleFn(level: LogLevel): (msg?: unknown, ...args: unknown[]) => void {
   switch (level) {
     case "debug":
@@ -77,6 +102,11 @@ function emit(entry: RegistryEntry, level: LogLevel, msg: string, args: unknown[
   // warn/error 永保留;info/debug 受开关控制。
   if (level !== "warn" && level !== "error" && readSwitch(entry.name) === "0") return
   const prefix = `[${entry.name}]`
+  if (sink) {
+    const extra = args.length ? ` ${args.map(fmtArg).join(" ")}` : ""
+    sink(level, `${prefix} ${msg}${extra}`)
+    return
+  }
   const fn = consoleFn(level)
   if (isBrowser()) {
     // 只有前缀在格式串里(我们控制的文本),msg/args 作普通参数 —— 用户数据里的 % 不会被当格式符。

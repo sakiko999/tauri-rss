@@ -16,6 +16,7 @@ import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
+import { formatError } from "@amoeba/log"
 import { log } from "@amoeba/resolve"
 import { toInt } from "@amoeba/resolve"
 import { parseRoomIds } from "@amoeba/resolve"
@@ -44,7 +45,7 @@ export class DouyuLiveChannel implements RssChannel {
     const rooms = await Promise.all(
       roomIds.map((roomId) =>
         this.fetchOne(roomId).catch((e) => {
-          log.douyu.warn(`房间 ${roomId} 拉取失败,跳过:`, (e as Error)?.message)
+          log.douyu.warn(`房间 ${roomId} 拉取失败,跳过:`, formatError(e))
           return null
         }),
       ),

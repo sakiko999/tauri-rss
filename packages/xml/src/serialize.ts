@@ -133,6 +133,8 @@ function itemToTree(item: Item): Record<string, unknown> {
     setTplN(tree, "duration", item.duration)
     setTplN(tree, "channelName", item.channel?.name)
     setTplN(tree, "channelAvatar", item.channel?.avatar)
+    // 会员/付费专属(B站大会员、YouTube 频道会员):deserialize 的 parseVideo 读回。
+    if (item.membersOnly !== undefined) setTpl(tree, "membersOnly", item.membersOnly ? "1" : "0")
   } else if (item.kind === "audio") {
     setTplN(tree, "duration", item.duration)
     setTplN(tree, "artist", item.artist)

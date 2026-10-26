@@ -2,8 +2,16 @@
 
 > 本文件回答「为什么切成这 8 个库 + 3 个前端应用 + 1 个 Rust crate、谁可以依赖谁、改动该落在哪」。基于 2026-10-23 的 master 快照（v0.6.5）；行号是阅读锚点，重构后以符号名与文件为准。
 > 跨包数据结构的逐字段说明见 `02-contracts.md`，端到端流程见 `03-flows.md`。
+>
+> **2026-10-26 数据服务落地后的增量**：新增 `packages/service-protocol`（HTTP/WS 契约）
+> 与 `packages/service-client`（RemoteDataLayer，desktop/CLI 共用）；packages 共 10 个，
+> 规模基准里的「8 个包」已过时。**`apps/mobile` 自 2026-10-26 冻结**（见 `00-overview.md`
+> 「mobile 已冻结」）：下列 mobile 行按历史快照阅读，不再随改动同步。
+> core 增加 `hydrate()`、`diagnostics`、`store.clear`、`STORAGE_SCHEMA`（`_migrations`），
+> desktop 默认不再 `createDataLayer()`。数据服务的进程/协议/打包以
+> `06-data-service.md` 为准；本文件依赖矩阵的旧行号仍可用于纯包边界。
 
-规模基准（本次实测）：`packages/` 下 8 个 `@amoeba/*` 包，`apps/` 下 3 个 TypeScript 应用 + 1 个 Rust crate（`apps/src-tauri`）+ 1 个不参与构建的静态原型（`apps/new_desktop`）。根 `package.json` 的 `workspaces` 只收 3 个 app 与 8 个包，`new_desktop` 与 `src-tauri` 不在其中（`package.json:5-17`）。
+规模基准（2026-10-26 实测）：`packages/` 下 **10** 个 `@amoeba/*` 包（原 8 个 + `service-protocol`/`service-client`），`apps/` 下 3 个 TypeScript 应用 + `runtime`（Rust 启动器）+ 1 个 Rust crate（`apps/src-tauri`）+ 1 个不参与构建的静态原型（`apps/new_desktop`）。根 `package.json` 的 `workspaces` 只收 3 个 app 与 10 个包，`new_desktop`、`src-tauri`、`runtime` 不在其中。
 
 ## 1. 依赖矩阵
 
@@ -64,21 +72,29 @@ graph TD
 
 ### 1.2 矩阵
 
+**`platform`（R9 单一权威，2026-10-26）**：平台名是字符串协议（governor 分桶 / netLevels
+键 / cookie 前缀 / 账号页展示）。此前 host、core、desktop、CLI 各手抄一份，新增平台必漏配。
+现在集中到零依赖叶子 `packages/platform`：`PLATFORMS` 一张表（id / 展示名 / 域名 / channelKey
+前缀 / cookie 字段 / 浏览器登录站点），host 的 `platformOf(host)` 与 core 的
+`cookieFieldFor` / `platformOfChannel` 全部委托。放在叶子里是因为依赖矩阵不允许
+host → core、也不允许 core 生产依赖 host —— 这是唯一能同时被两边依赖的位置。
+
 `R` = 运行时（值）import；`T` = 只有 `import type`/`export type`，编译后无运行时代码；`D` = 仅自检/示例（devDep）；`G` = 不 import，只读 `globalThis.appHost`（类型来自 `global.d.ts`）；`U` = `package.json` 声明但源码零 import。
 
-| 行 \ 列 | xml | log | host | resolve | crawler | core | player | ui | 外部依赖 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **log** | | | | | | | | | 无（零依赖叶子） |
-| **xml** | | | | | | | | | `fast-xml-parser` |
-| **host** | | R | | | | | | | `@tauri-apps/api` + opener/process/sql/updater、`ws` |
-| **resolve** | T | R | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 ui/desktop 取防盗链规则 |
-| **crawler** | R | | D | R | | | | | — |
-| **core** | R | | D | R | R | | | | — |
-| **player** | | R | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
-| **ui** | | | | R（仅 `./media-referrer`） | | U | U | | `react`；仍读 `globalThis.appHost.imageProxy/dataSaver` |
-| **desktop** | R | | R | R | | R | R | R | react-router、zustand、react-virtuoso、masonic、Radix、dompurify、qrcode、lucide |
-| **mobile** | U | | R | U | U | R | R | R | react、zustand；`@tauri-apps/api` 也声明未用 |
-| **cli** | R | | R | R | R | R | | | `cac`、`picocolors` |
+| 行 \ 列 | xml | log | platform | host | resolve | crawler | core | player | ui | 外部依赖 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **log** | | | | | | | | | | 无（零依赖叶子） |
+| **platform** | | | | | | | | | | 无（零依赖叶子，R9 平台表） |
+| **xml** | | | | | | | | | | `fast-xml-parser` |
+| **host** | | R | R | | | | | | | `@tauri-apps/api` + opener/process/sql/updater、`ws` |
+| **resolve** | T | R | | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 ui/desktop 取防盗链规则 |
+| **crawler** | R | R | | D | R | | | | | — |
+| **core** | R | R | R | D | R | R | | | | — |
+| **player** | | R | | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
+| **ui** | | | | | R（仅 `./media-referrer`） | | U | U | | `react`；仍读 `globalThis.appHost.imageProxy/dataSaver` |
+| **desktop** | R | | R | R | R | | R | R | R | react-router、zustand、react-virtuoso、masonic、Radix、dompurify、qrcode、jsqr、lucide |
+| **mobile** | U | | | R | U | U | R | R | R | react、zustand；`@tauri-apps/api` 也声明未用 |
+| **cli** | R | | R | R | R | R | R | | | `cac`、`picocolors`、`qrcode`、`jsqr` |
 | **src-tauri** | — | — | — | — | — | —（DDL 由 core 注入、host 执行） | — | — | Rust：tauri、opener/sql/updater/process、reqwest、tokio-tungstenite、base64、windows-sys |
 
 矩阵的四条破例/噪声，读依赖图时必须知道：
@@ -114,7 +130,7 @@ graph LR
 | 维度 | 内容 |
 | --- | --- |
 | 负责 | 进程级域注册表（同名幂等、HMR 合并）、模板事件方法（ctx 类型由 `text` 推断）、两级开关、浏览器 `%c` / 终端 ANSI 着色、`formatError` 归一（Error / hls ErrorData / dash `{message}`） |
-| 不负责 | 日志落文件、上报、采样；不读 `appHost.log`，与 core 的宿主日志是两套通道（漂移登记在 `05-risks.md`） |
+| 不负责 | 日志落文件、上报、采样；输出通道由 `setLogSink` 注入（服务写 stderr），包内不直写 console。`appHost.log` 已删除，所有包统一走本包 |
 | 对外导出 | `createLogDomain` / `getLogDomain` / `resetLogDomains` / `formatError`（`packages/log/src/index.ts:2-4`） |
 | 内部结构 | `core.ts` = registry + emit + 方法工厂；`env.ts` = 环境判别与开关；`format.ts` = 错误文本化 |
 | 依赖 / 被依赖 | 无依赖。被 host（`host/src/log.ts:33,59`）、resolve（`resolve/src/log.ts`）、player（`player/src/log/index.ts:13`）使用；crawler 经 resolve 的 `log` 间接使用 |
@@ -147,11 +163,11 @@ graph LR
 | --- | --- |
 | 负责 | `globalThis.appHost` 门面（getter 校验）；Tauri/Node/Browser 三态注入；HTTP、WS、CDP 浏览器、SQLite/localStorage/内存存储、JS 求值、外链白名单、更新；`NetworkGovernor`（分类/冷却/去重/平台并发/RPM/全局并发） |
 | 不负责 | 业务重试与订阅编排（core）；渠道/平台协议（crawler/resolve）；DDL 的定义（core 拥有，host 只执行）；媒体 Referer 规则（resolve `media-referrer.ts`）；不 import crawler/resolve/core |
-| 对外导出 | 根入口（兼容聚合）导出 `initAppHost`、`setHostCaps`、三个 injector、各 Backend 单件与 governor 函数；子路径 `./runtime`、`./governor`、`./node`、`./tauri`、`./browser` 供应用按需加载 |
-| 内部结构 | `runtime.ts` 门面 + 闭包；`net/governor.ts` 唯一出站准入点；`tauri/*` 生产后端；`node/*`、`browser/*` 自检/调试后端；`log.ts` 两个域；三个环境各有一个 `index.ts` 聚合子路径 |
+| 对外导出 | 根入口（兼容聚合）导出 `initAppHost`、`setHostCaps`、三个 injector、各 Backend 单件与 governor 函数；子路径 `./runtime`、`./governor`、`./node`、`./tauri`、`./browser`（纯前端注入）、`./cdp`（载具无关的 CDP 核心）供应用按需加载 |
+| 内部结构 | `runtime.ts` 门面 + 闭包；`net/governor.ts` 唯一出站准入点；`tauri/*` 生产后端；`node/*` 自检后端 + CLI 浏览器 sidecar driver / `ws` CDP connector；`browser/*` = 与载具无关的 CDP 核心（`transport` / `channel` / `backend`）+ 纯前端注入；`log.ts` 两个域；三个环境各有一个 `index.ts` 聚合子路径 |
 | 依赖 / 被依赖 | 运行时只依赖 log，外加 Tauri JS API 与 `ws`；**不依赖 core**（SQL 后端的 schema 由 core 注入）。被全部应用经子路径注入；被 core/crawler/player/ui 以 `appHost` 全局读取（不 import） |
 | 常见改动入口 | 新增宿主能力 → `global.d.ts` + `runtime.ts` 门面 + 三个 injector；改风控 → `net/governor.ts`；加图床 Referer → resolve `media-referrer.ts`（不要写在 ui/host 里） |
-| 关键文件 | `packages/host/src/runtime.ts:56`（init）、`:120`（setHostCaps）、`:132`（governedHttp 包装）、`:33`（协议白名单）；`packages/host/src/net/governor.ts:78`（默认策略）、`:117`（configure）、`:679`（governedHttp）；`packages/host/src/tauri/inject-tauri.ts:28`；`packages/host/src/tauri/sqlite-storage-backend.ts`（`setSchema` / `requireSchema` / 惰性 `ready()`）；`packages/host/src/tauri/browser-backend.ts:438`（TauriBrowserBackend） |
+| 关键文件 | `packages/host/src/runtime.ts:56`（init）、`:120`（setHostCaps）、`:132`（governedHttp 包装）、`:33`（协议白名单）；`packages/host/src/net/governor.ts:78`（默认策略）、`:117`（configure）、`:679`（governedHttp）；`packages/host/src/tauri/inject-tauri.ts:28`；`packages/host/src/tauri/sqlite-storage-backend.ts`（`setSchema` / `requireSchema` / 惰性 `ready()`）；`packages/host/src/browser/backend.ts`（`CdpBrowserBackend`，lane/超时/拦截）与 `packages/host/src/tauri/browser-backend.ts`（Tauri driver + ws 隧道 connector） |
 
 不变量：`http/js/storage` 未注入即抛；`ws/browser/updater` 未注入返回 `undefined` 由消费侧降级；`net` 恒可用（`runtime.ts:59-96`）。所有经 `appHost.http` 的请求必过 governor，但原生 `<img>`/`<video>` 与部分 HLS 不走门面，governor 管不到（`governor.ts:17-18`）。CDP 流量绕过 HTTP 流水线，必须显式过 `browserGate`（`scheduler.ts:107-110`）。**SQL 型 storage 后端必须先 `setSchema` 再读写**：`SqliteStorageBackend` 在 `setSchema` 前调用 `get/set` 会抛「schema 未注入」，且 `setSchema` 只允许在首次连接前调用；KV/localStorage/内存后端不必实现。
 
@@ -221,7 +237,7 @@ graph LR
 
 ### 2.8 ui — 原子件
 
-**存在理由**：desktop 与 mobile 都需要同一套「防盗链图片」行为（隧道 + 占位 + 缓存），而图床规则属于宿主层。ui 保留为最小共享面，避免两端各写一份带 Referer 的 Blob 隧道。
+**存在理由**：desktop 与 mobile 都需要同一套「防盗链图片」行为（直连/隧道 + 占位 + 缓存），而图床规则属于平台/媒体知识层（resolve）。ui 保留为最小共享面，避免两端各写一份带 Referer 的加载逻辑。
 
 | 维度 | 内容 |
 | --- | --- |
@@ -340,7 +356,7 @@ sequenceDiagram
 | host 不为 DDL 反向依赖 core（schema 注入） | 「DDL 唯一权威」比「零反向依赖」更重要；`StorageSchema` 让 core 把 schema 当参数交给后端，host 打包不再连带 core 及其 crawler/resolve 依赖 | 代价移到初始化顺序：SQL 后端在 `setSchema` 前不可读写，`createDataLayer` 必须先于一切 storage 访问；后端实现必须记得实现 `setSchema?`（漏实现会在首次读写时抛「schema 未注入」）。CLI 后端仍作为 app 直接 import core 并自行执行 `MIGRATIONS`（未切到 `setSchema`，不影响包依赖图） |
 | player 从 ui 拆出 | 播放器带三个重引擎；图片原子件不该为播放器付包体 | ui 的 `package.json` 仍留着 core/player 的陈旧声明；桌面样式需 `@source` 扫描 player 源码（`apps/desktop/src/styles.css`） |
 | 库包源码直引、无构建产物 | 所有包的 `main/exports` 指向源码，Vite/Bun 直接消费 TS；改库即时热更新 | 无法按包发布消费；消费方打包体积取决于 import 的入口。host/resolve 已用子路径避免整包 barrel，但大多包仍是单入口 |
-| log 做成零依赖叶子 | 任何包都能记日志而不引入宿主 | 与 core 的 `appHost.log` 是两套通道，开关只覆盖前者（`05-risks.md`） |
+| log 做成零依赖叶子 | 任何包都能记日志而不引入宿主 | 输出通道由 `setLogSink` 注入；`appHost.log` 已于 2026-10-26 删除 |
 
 ## 6. 产物与复用矩阵
 

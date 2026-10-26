@@ -9,6 +9,7 @@
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
 import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
+import { cookieFieldForChannelKey, cookieFieldOf, platformOfChannelKey } from "@amoeba/platform"
 import {
   errorKindOf,
   getDanmakuByUrl,
@@ -18,20 +19,21 @@ import {
   resolvePlayByUrl as resolveVideoByUrl,
   serializeCookieDict,
   setPlatformCookieLookup,
+  withBrowserGlobal,
   withBrowserOpSlot,
 } from "@amoeba/resolve"
 import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { serializeFeed } from "@amoeba/xml"
 import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
-import { KV_DDL, KV_TABLE, MIGRATIONS } from "./db/schema.ts"
+import { STORAGE_SCHEMA } from "./db/schema.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
 import type { ResolvePlayback } from "./types/playback.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import { findRecord } from "./types/reading.ts"
-import { type AppSettings, type NetLevel } from "./types/settings.ts"
+import { DEFAULT_SETTINGS, type AppSettings, type NetLevel } from "./types/settings.ts"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
@@ -41,6 +43,7 @@ import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createMediaStore } from "./store/media-store.ts"
+import { coreLog, formatError } from "./log.ts"
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
@@ -86,10 +89,19 @@ export interface DataLayer {
     /** ⚠️ 必须带 subscriptionId —— 同一个 item.id 会跨订阅出现(见 media-store.patch)。 */
     patch(subscriptionId: string, id: string, patch: Partial<MediaItem>): void
     subscribe(listener: () => void): () => void
+    /** 丢弃某订阅全部条目（退订/完全重置；服务端用）。 */
+    clear(subscriptionId: string): void
   }
   /** 刷新一次订阅,把内容写入 store。opts.force=true 跳过 TTL 缓存强制抓取(手动刷新)。
-   *  默认(force=false)走 TTL:TTL 内命中持久化缓存则跳过网络抓取。 */
-  refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult>
+   *  默认(force=false)走 TTL:TTL 内命中持久化缓存则跳过网络抓取。
+   *  opts.signal 取消本次抓取：在途请求结果丢弃，返回 `error: "刷新已取消"`，不覆盖 store/缓存。 */
+  refresh(subscriptionId: string, opts?: { force?: boolean; signal?: AbortSignal }): Promise<RefreshResult>
+  /**
+   * 只从持久化内容缓存重建 store，**不发网络**。
+   * 数据服务 boot 时调用，保证首次快照就有内容；桌面/移动的 init 仍走
+   * `refreshAll(false)`（TTL 命中时同样零网络）。
+   */
+  hydrate(): Promise<void>
   /** 懒解析某条 video item 的可播流(播放时调用;URL 带 deadline 签名,不缓存)。
    *  返回流 + 弹幕能力(source 具备 DanmakuPlayable 时附带,一次拿齐)。 */
   resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
@@ -122,6 +134,21 @@ export interface DataLayer {
    * 与用户保存/扫码的并发覆盖。返回实际更新的 settings 字段。
    */
   syncBrowserCookies(): Promise<Array<keyof AppSettings>>
+  /** 存储/浏览器诊断（桌面设置页用；远端模式走服务端点，不直连 storage/browser）。 */
+  readonly diagnostics: DataLayerDiagnostics
+}
+
+export interface DataLayerDiagnostics {
+  /** 内容缓存条目数与近似字节数（UTF-16）。 */
+  cacheStats(): Promise<{ keys: number; bytes: number }>
+  /** 删除全部 `content:` 缓存，返回删除条数。已加载的 store 条目不动。 */
+  clearContentCache(): Promise<number>
+  /** 删除全部库数据并清空内存条目（调用方负责 reload）。 */
+  clearAll(): Promise<void>
+  /** 清理指定域名的浏览器 cookie（账号页「清除凭证」；远端走服务浏览器）。 */
+  clearCookies(hosts: string[]): Promise<void>
+  /** 清理抓取浏览器 profile（cookie/缓存），返回 profile 目录。 */
+  resetBrowserProfile(): Promise<string>
 }
 
 /**
@@ -136,16 +163,11 @@ type FetchableSource = {
 
 /**
  * channelKey 前缀 → settings 里存的 cookie 字段。
- * **单一权威表**——sourceInfoFor 注入 / scanLogin 写回 / CLI 探针 / desktop 账号页
- * 全部经此,禁止再手抄前缀表(曾漂移出三份:CLI 缺 douyin、AccountPage 各一份)。
+ * **单一权威 = `@amoeba/platform` 的 PLATFORMS 表**（R9）：sourceInfoFor 注入 /
+ * scanLogin 写回 / CLI 探针 / desktop 账号页全部经此，禁止再手抄前缀表。
  */
 export function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
-  if (channelKey.startsWith("bili:")) return "bilibiliCookie"
-  if (channelKey.startsWith("weibo:")) return "weiboCookie"
-  if (channelKey.startsWith("xhs:")) return "xhsCookie"
-  // ⚠️ 抖音渠道前缀是 live:douyin*(不是 douyin:)——platformOf 同款规则。
-  if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
-  return undefined
+  return cookieFieldForChannelKey(channelKey) as keyof AppSettings | undefined
 }
 
 /**
@@ -160,26 +182,15 @@ function normalizeCookie(v: unknown): string {
   return serializeCookieDict(parseCookieDict(typeof v === "string" ? v : ""))
 }
 
-/** 平台名(governor 分类语义:bili/weibo/xhs/douyin)→ settings cookie 字段。 */
+/** 平台名（governor 分类语义）→ settings cookie 字段（同一张 `@amoeba/platform` 表）。 */
 export function cookieFieldForPlatform(platform: string): keyof AppSettings | undefined {
-  switch (platform) {
-    case "bili":
-      return "bilibiliCookie"
-    case "weibo":
-      return "weiboCookie"
-    case "xhs":
-      return "xhsCookie"
-    case "douyin":
-      return "douyinCookie"
-    default:
-      return undefined
-  }
+  return cookieFieldOf(platform) as keyof AppSettings | undefined
 }
 
 export function createDataLayer(): DataLayer {
   // DDL 唯一权威仍在 core：把 schema 注入 SQL 型后端。host 因此不需要反向 import
   // core（旧的 `host → core` 是包级运行时环的一边，见 docs/architecture/system/05-risks.md R2）。
-  globalThis.appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })
+  globalThis.appHost.storage.setSchema?.(STORAGE_SCHEMA)
   registerAllChannels()
   // ── 平台 cookie provider 注册(credentials 收口)────────────────────────────
   // cookie 链「渠道 → client 调用点」一跳靠人肉传参,曾三次漏传(user_video 412 /
@@ -195,7 +206,6 @@ export function createDataLayer(): DataLayer {
   // 全局 appHost 门面(getter 校验未注入抛清晰错误;now/log 兜底)。
   const storage = globalThis.appHost.storage
   const now = globalThis.appHost.now!
-  const log = globalThis.appHost.log!
   const repo = createSubscriptionRepository(storage, now)
   const contentCache = createContentCacheRepo(storage)
   const bodyCache = createBodyCacheRepo(storage)
@@ -296,20 +306,9 @@ export function createDataLayer(): DataLayer {
     return changed ? levels : null
   }
 
-  /** channelKey → 平台名(与 host governor 的 URL 平台分类同名)。 */
+  /** channelKey → 平台名(与 host governor 的 URL 平台分类同源,均来自 `@amoeba/platform`)。 */
   function platformOfChannel(channelKey: string): string | undefined {
-    if (channelKey.startsWith("bili:")) return "bili"
-    if (channelKey.startsWith("weibo:")) return "weibo"
-    if (channelKey.startsWith("xhs:")) return "xhs"
-    if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyin"
-    if (channelKey.startsWith("live:douyu") || channelKey.startsWith("douyu:")) return "douyu"
-    if (channelKey.startsWith("live:huya") || channelKey.startsWith("huya:")) return "huya"
-    if (channelKey.startsWith("youtube:")) return "youtube"
-    if (channelKey.startsWith("apple:")) return "apple"
-    if (channelKey.startsWith("twitch:")) return "twitch"
-    // rsshub 外挂实例自成一桶(请求侧显式声明 platform,见 source/rsshub.ts)。
-    if (channelKey.startsWith("rsshub:")) return "rsshub"
-    return undefined
+    return platformOfChannelKey(channelKey)
   }
 
 
@@ -372,6 +371,43 @@ export function createDataLayer(): DataLayer {
     })
   }
 
+  /** 取消语义的返回值：与「抓取失败」区分——不触发旧缓存回退，也不写 store/缓存。 */
+  function cancelledResult(subscriptionId: string): RefreshResult {
+    return {
+      subscriptionId,
+      itemCount: 0,
+      error: "刷新已取消",
+      errorKind: "timeout",
+      fetchedAt: now(),
+    }
+  }
+
+  /**
+   * 抓取与取消竞速：signal 触发即抛（在途请求的响应被丢弃，不占后续流程）。
+   *
+   * ⚠️ 不做 socket 级 abort：`appHost.http` 契约里没有 signal，且 governor 的
+   * 去重可能把同一请求共享给别的订阅——这里只停「本次刷新的编排」，网络层
+   * 自行跑完（结果无人消费）。
+   */
+  function withSignal<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return p
+    if (signal.aborted) return Promise.reject(new Error("刷新已取消"))
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => reject(new Error("刷新已取消"))
+      signal.addEventListener("abort", onAbort, { once: true })
+      p.then(
+        (v) => {
+          signal.removeEventListener("abort", onAbort)
+          resolve(v)
+        },
+        (e) => {
+          signal.removeEventListener("abort", onAbort)
+          reject(e)
+        },
+      )
+    })
+  }
+
   /**
    * 刷新一次订阅。TTL 缓存语义(2026-08-28 接入):
    *   - 未 force 且有缓存且未过期 → 从缓存 deserializeFeedWithTotal 重建喂 store,
@@ -382,7 +418,13 @@ export function createDataLayer(): DataLayer {
    *   - 渠道 `passive` 且有浏览器 → 只调 source.fetchPassive(),读不到走缓存,
    *     **绝不回退 fetch()**(风控 §2.4/§3.8:应用构造的平台 API 请求正是被动模式要禁的)。
    */
-  async function doRefresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
+  async function doRefresh(
+    subscriptionId: string,
+    opts?: { force?: boolean; signal?: AbortSignal },
+  ): Promise<RefreshResult> {
+    const signal = opts?.signal
+    // 已取消（客户端超时/取消先于 RPC 到达）→ 立刻返回，不读库不发网络。
+    if (signal?.aborted) return cancelledResult(subscriptionId)
     const sub = await repo.get(subscriptionId)
     if (!sub) {
       return {
@@ -478,11 +520,13 @@ export function createDataLayer(): DataLayer {
       if (passiveMode) {
         // 浏览器被动 = 只取页面自然请求的响应体。**绝不回退 fetch()**
         // —— 应用构造的平台 API 调用正是被动模式要禁的行为。
-        const passive = (await source.fetchPassive?.()) ?? null
+        const passive = (await withSignal(Promise.resolve(source.fetchPassive?.()), signal)) ?? null
         if (!passive) {
           // 无被动数据 → 复用内容缓存(即使过期);连缓存都没有才如实报错。
           const hit = await restoreFromCache(subscriptionId, kind)
           if (hit) return hit
+          // 缓存回退是正常降级不记;连缓存都没有才是需要排障的静默失败。
+          coreLog.passiveNoData({ subscriptionId, channel: channel.key })
           return {
             subscriptionId,
             itemCount: 0,
@@ -494,7 +538,7 @@ export function createDataLayer(): DataLayer {
         xml = passive
       } else {
         // L0(调试直通)/ L1:L1 严格只是更紧的配额,由宿主 governor 执行,同样走主动抓取。
-        xml = await source.fetch()
+        xml = await withSignal(source.fetch(), signal)
       }
       // ── 正常抓取 + 回写缓存 ──
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
@@ -507,6 +551,8 @@ export function createDataLayer(): DataLayer {
       if (items.length === 0 && ((await contentCache.get(subscriptionId).catch(() => null)) !== null || store.query({ subscriptionId }).length > 0)) {
         return { subscriptionId, itemCount: 0, error: "本次抓取解析出 0 条,已保留原有内容", fetchedAt: now() }
       }
+      // 抓取途中被取消 → 新内容不落 store/缓存（取消不该改变可见状态）。
+      if (signal?.aborted) return cancelledResult(subscriptionId)
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       replaceIfLive(subscriptionId, await applyReadingState(items))
@@ -519,11 +565,14 @@ export function createDataLayer(): DataLayer {
       try {
         await contentCache.set(subscriptionId, { fetchedAt: now(), xml })
       } catch (e) {
-        log.log("warn", "content cache write failed", { subscriptionId, error: String(e) })
+        coreLog.cacheWriteFailed({ subscriptionId, error: formatError(e) })
       }
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
     } catch (err) {
-      log.log("error", "refresh failed", { subscriptionId, error: String(err) })
+      // 取消不是失败：不回退旧缓存（否则取消会把「已加载更多页」的 store 重置回首页）、
+      // 不打 error 日志（取消是正常路径，别把日志刷成红色）。
+      if (signal?.aborted) return cancelledResult(subscriptionId)
+      coreLog.refreshFailed({ subscriptionId, error: formatError(err) })
       // 失败后总数字段已不可信(是上一次成功抓取的残留),清掉免得 UI 计数与内容不符。
       pageTotals.delete(subscriptionId)
       // 抓取失败回退旧缓存(即便过期):不空窗,error 保留供 UI 提示。
@@ -553,6 +602,17 @@ export function createDataLayer(): DataLayer {
     }
   }
 
+  /**
+   * 只读缓存水化：服务启动时把各订阅首页塞回 store（零网络）。
+   * 停用订阅也照常水化——停用只表示不抓取，不代表不展示旧内容。
+   */
+  async function hydrate(): Promise<void> {
+    const subs = await repo.list().catch(() => [])
+    for (const sub of subs) {
+      await restoreFromCache(sub.id, getChannel(sub.channelKey)?.kind).catch(() => null)
+    }
+  }
+
   /** 按订阅串行化(不同订阅仍可并发;refreshAll 的并行不受影响)。 */
   const chains = new Map<string, Promise<unknown>>()
   function serialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
@@ -576,7 +636,10 @@ export function createDataLayer(): DataLayer {
    * `pageCursors.delete` 会与 loadMore 的 append/set 交错,第 2 页条目混进新首页、
    * 游标指向已失效的序列,表现为重复或跳过整页。
    */
-  function refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
+  function refresh(
+    subscriptionId: string,
+    opts?: { force?: boolean; signal?: AbortSignal },
+  ): Promise<RefreshResult> {
     return serialized(`sub:${subscriptionId}`, () => doRefresh(subscriptionId, opts))
   }
 
@@ -731,11 +794,11 @@ export function createDataLayer(): DataLayer {
       // passive 由渠道自己决定怎么降级(被动模式下不得构造 fetch/API);不支持的渠道返回 null。
       detailItem = await source.resolveDetail(item as never, { passive: channel.passive === true })
     } catch (e) {
-      log.log("warn", "resolveDetail failed", {
+      coreLog.detailFailed({
         subscriptionId,
         itemId,
         channel: sub.channelKey,
-        error: e instanceof Error ? e.message : String(e),
+        error: formatError(e),
       })
       // ⚠️ 不能吞掉:桌面 social 详情弹窗靠这个 reject 进入失败态。吞掉会让用户
       // 把列表摘要误认为完整详情(尤其 xhs 登录失效/风控时)。article 调用方
@@ -785,10 +848,20 @@ export function createDataLayer(): DataLayer {
       const source = channel.getSource(info)
       if (!isPageable(source)) return { addedCount: 0, hasMore: false }
       const cursor = pageCursors.get(subscriptionId)
-      // existing:游标是页面下标时,首次翻页的起点必须是 store 已有条数(见 Pageable 注释)。
-      const { xml, cursor: nextCursor, hasMore: channelHasMore } = await source.fetchMore(cursor, {
-        existing: store.query({ subscriptionId }).length,
-      })
+      let page: { xml: string; cursor?: string; hasMore?: boolean }
+      try {
+        // existing:游标是页面下标时,首次翻页的起点必须是 store 已有条数(见 Pageable 注释)。
+        page = await source.fetchMore(cursor, { existing: store.query({ subscriptionId }).length })
+      } catch (e) {
+        // 翻页失败此前直接冒泡：调用方只看到错误文本，服务日志里没有「哪个订阅/渠道」。
+        coreLog.loadMoreFailed({
+          subscriptionId,
+          channel: sub.channelKey,
+          error: formatError(e),
+        })
+        throw e
+      }
+      const { xml, cursor: nextCursor, hasMore: channelHasMore } = page
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
       if (removedSubs.has(subscriptionId)) return { addedCount: 0, hasMore: false } // 已退订:丢弃
       // ⚠️ 分页条目的 fetchedAt 对齐到该订阅已有内容(首屏)的抓取时间。
@@ -928,13 +1001,13 @@ export function createDataLayer(): DataLayer {
           )
           if (!next) return
           updated.push(field)
-          log.log("info", "browser cookie snapshot synced", { field, user_id: snap.user_id })
+          coreLog.cookieSnapshotSynced({ field, user_id: snap.user_id })
         })
       } catch (e) {
         // 浏览器起不来 / CDP 被回收 / 端口被占:只记录,不影响启动与其它平台。
-        log.log("warn", "browser cookie snapshot failed", {
+        coreLog.cookieSnapshotFailed({
           field,
-          error: e instanceof Error ? e.message : String(e),
+          error: formatError(e),
         })
       }
     }
@@ -943,6 +1016,46 @@ export function createDataLayer(): DataLayer {
 
   function channelKind(channelKey: string): MediaKind | undefined {
     return getChannel(channelKey)?.kind
+  }
+
+  const diagnostics: DataLayerDiagnostics = {
+    async cacheStats() {
+      const keys = await storage.keys("content:")
+      let bytes = 0
+      for (const key of keys) {
+        const value = await storage.get(key)
+        bytes += (value?.length ?? 0) * 2
+      }
+      return { keys: keys.length, bytes }
+    },
+    async clearContentCache() {
+      const keys = await storage.keys("content:")
+      for (const key of keys) await storage.delete(key)
+      return keys.length
+    },
+    async clearAll() {
+      const keys = await storage.keys()
+      for (const key of keys) await storage.delete(key)
+      const subs = new Set(store.all().map((it) => it.subscriptionId))
+      for (const id of subs) store.clear(id)
+      removedSubs.clear()
+      pageCursors.clear()
+      pageTotals.clear()
+      cookieSnapshot = { ...DEFAULT_SETTINGS }
+      syncNetPolicy(cookieSnapshot)
+    },
+    async clearCookies(hosts) {
+      const browser = globalThis.appHost.browser
+      if (!browser?.clearCookies || !hosts.length) return
+      await withBrowserGlobal(async () => {
+        for (const host of hosts) await browser.clearCookies?.(host)
+      })
+    },
+    async resetBrowserProfile() {
+      const browser = globalThis.appHost.browser
+      if (!browser?.resetProfile) throw new Error("当前环境不支持清理浏览器数据")
+      return withBrowserGlobal(() => browser.resetProfile!())
+    },
   }
 
   /** 创建订阅并刷新(拼 id + add + refresh 的编排收敛进 core)。meta 可选带分组与独立 TTL。 */
@@ -1033,8 +1146,24 @@ export function createDataLayer(): DataLayer {
         store.clear(id)
         pageCursors.delete(id)
         pageTotals.delete(id)
-        await contentCache.delete(id).catch(() => {})
-        await bodyCache.deleteAll(id).catch(() => {})
+        // content + body 的多键删除合成一次 batch（R10）：中途失败不会留下
+        // 「删了一半」的中间态。不支持 batch 的后端回退逐个删。
+        const [contentKeys, bodyKeys] = await Promise.all([
+          contentCache.keysOf(id).catch(() => []),
+          bodyCache.keysOf(id).catch(() => []),
+        ])
+        const keys = [...contentKeys, ...bodyKeys]
+        if (keys.length) {
+          const ops: StorageOp[] = keys.map((key) => ({ type: "delete", key }))
+          // 订阅行/内存/索引都已清:这里失败不能再把退订整体抛出去(镜像会留下
+          // 幽灵订阅,点开为空)。只记日志,残留键由同 id 重新订阅覆盖或诊断清理。
+          try {
+            if (storage.batch) await storage.batch(ops)
+            else for (const op of ops) await storage.delete(op.key)
+          } catch (e) {
+            coreLog.unsubscribeCleanupFailed({ subscriptionId: id, error: formatError(e) })
+          }
+        }
         // 阅读态也按订阅清：否则退订后 reading blob 永久残留孤儿记录。
         await reading.deleteBySubscription(id).catch(() => {})
       },
@@ -1058,8 +1187,10 @@ export function createDataLayer(): DataLayer {
       query: (q) => store.query(q),
       patch: (subscriptionId, id, patch) => store.patch(subscriptionId, id, patch),
       subscribe: (l) => store.subscribe(l),
+      clear: (subscriptionId) => store.clear(subscriptionId),
     },
     refresh,
+    hydrate,
     resolvePlay,
     resolveLivePlay,
     resolveHotWord,
@@ -1069,5 +1200,6 @@ export function createDataLayer(): DataLayer {
     totalOf: (id) => pageTotals.get(id),
     scanLogin,
     syncBrowserCookies,
+    diagnostics,
   }
 }

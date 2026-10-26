@@ -199,6 +199,7 @@ function parseVideo(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     ...b,
     kind: "video",
     duration: num(raw["tpl:duration"]),
+    membersOnly: boolTpl(raw["tpl:membersOnly"], undefined),
     // 直链(stream)从标准 enclosure 读;无则 undefined(resolver by-url 重解析)。
     stream: parseStreamFromEnclosure(raw),
     channel:

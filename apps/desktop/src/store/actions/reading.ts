@@ -30,7 +30,11 @@ export function createReadingActions(ctx: StoreCtx): ReadingActions {
       // 标已读存 read=false → applyReadingState 不回填 → 刷新后回到未读。
       const next = !item.isUnread
       dl.store.patch(item.subscriptionId, item.id, { isUnread: next })
-      void dl.reading.markRead(item.subscriptionId, item.id, !next)
+      void dl.reading.markRead(item.subscriptionId, item.id, !next).catch((e) => {
+        // 服务断开/RPC 失败：回滚乐观 patch，避免 UI 显示一个没落库的状态。
+        dl.store.patch(item.subscriptionId, item.id, { isUnread: item.isUnread })
+        get().toast("error", "保存已读失败", e instanceof Error ? e.message : String(e))
+      })
     },
 
     markAllRead(items) {
@@ -41,7 +45,15 @@ export function createReadingActions(ctx: StoreCtx): ReadingActions {
       for (const it of items) dl.store.patch(it.subscriptionId, it.id, { isUnread: false })
       // ⚠️ 必须一次性批量落库:逐条 `void markRead` 会并发读-改-写同一张 reading blob,
       // 后写者用旧快照覆盖前者 —— N 条只落 1 条,且整张表的既有记录被抹掉。
-      void dl.reading.markManyRead(items.map((it) => readingKey(it.subscriptionId, it.id)), true)
+      void dl.reading
+        .markManyRead(
+          items.map((it) => readingKey(it.subscriptionId, it.id)),
+          true,
+        )
+        .catch((e) => {
+          for (const it of items) dl.store.patch(it.subscriptionId, it.id, { isUnread: it.isUnread })
+          get().toast("error", "批量保存已读失败", e instanceof Error ? e.message : String(e))
+        })
     },
 
     toggleStar(item) {
@@ -51,7 +63,10 @@ export function createReadingActions(ctx: StoreCtx): ReadingActions {
       dl.store.patch(item.subscriptionId, item.id, { isStarred: next })
       // ⚠️ 必须落库:refresh 会整批重建条目(isStarred 默认 false),只 patch 内存
       // 的话刷新/重启后星标就丢了(core 侧 refresh 会用 reading 回填)。
-      void dl.reading.setStarred(item.subscriptionId, item.id, next)
+      void dl.reading.setStarred(item.subscriptionId, item.id, next).catch((e) => {
+        dl.store.patch(item.subscriptionId, item.id, { isStarred: item.isStarred })
+        get().toast("error", "保存星标失败", e instanceof Error ? e.message : String(e))
+      })
     },
 
     savePosition(item, sec, durationSec) {

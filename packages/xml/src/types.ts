@@ -122,6 +122,12 @@ export interface Social extends Base {
 export interface Video extends Base {
   kind: "video"
   duration?: number
+  /**
+   * 会员 / 付费专属：列表可见，但播放需要大会员（B站）/ 频道会员（YouTube）。
+   * 只表达「有权限门槛」，不区分付费类型。serialize 写 `tpl:membersOnly`，
+   * deserialize 对称读回（布尔缺省 = 不标）。
+   */
+  membersOnly?: boolean
   stream?: Stream
   channel?: { name: string; avatar?: string }
 }

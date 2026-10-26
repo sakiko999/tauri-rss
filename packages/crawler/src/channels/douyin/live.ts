@@ -19,6 +19,7 @@ import { type SerializeOptions } from "@amoeba/xml"
 import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
+import { formatError } from "@amoeba/log"
 import { log } from "@amoeba/resolve"
 import { toInt } from "@amoeba/resolve"
 import { parseRoomIds } from "@amoeba/resolve"
@@ -82,7 +83,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
         try {
           return (await fetchDouyinUserLive(r)).webRid
         } catch (e) {
-          const msg = (e as Error)?.message ?? String(e)
+          const msg = formatError(e)
           profileErrors.push(`${r}: ${msg}`)
           log.douyin.warn(`主页解析失败,跳过 ${r}:`, msg)
           return ""
@@ -101,7 +102,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
     const rooms = await Promise.all(
       roomIds.map((roomId) =>
         this.fetchOne(roomId).catch((e) => {
-          log.douyin.warn(`房间 ${roomId} 拉取失败,跳过:`, (e as Error)?.message)
+          log.douyin.warn(`房间 ${roomId} 拉取失败,跳过:`, formatError(e))
           return null
         }),
       ),

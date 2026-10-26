@@ -9,7 +9,13 @@ import type { Item, Video } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { httpText, now, getYoutubeLiveMeta } from "@amoeba/resolve"
+import {
+  httpText,
+  now,
+  getYoutubeLiveMeta,
+  fetchYoutubeChannelVideos,
+  type YoutubeChannelVideo,
+} from "@amoeba/resolve"
 import { parseFeed, type ParsedItem } from "@amoeba/xml"
 import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
 
@@ -55,6 +61,15 @@ export class YoutubeChannel implements RssChannel {
     }
     const channelId = info.channelId ?? this.defaultChannelId ?? ""
     if (!channelId) throw new Error("youtube: 需要 channelId 或 videoId")
+    // 主路径：InnerTube 频道 Videos tab —— 官方 RSS 没有会员（Members only）标记。
+    // 失败（风控 / 页面结构变化）回退官方 RSS：条目仍出，但 membersOnly 缺失、
+    // 精确发布时间可用（InnerTube 只给 "9 days ago" 这类相对文本）。
+    try {
+      const page = await fetchYoutubeChannelVideos(channelId)
+      if (page.videos.length) return page.videos.map((v) => channelVideoToItem(v, t))
+    } catch {
+      /* 回退 RSS */
+    }
     const xml = await httpText(
       `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
       { "user-agent": UA },
@@ -93,6 +108,29 @@ export function entryToVideo(entry: ParsedItem, t: number, sourceId = "youtube")
     publishedAt: entry.pubDate ? new Date(entry.pubDate).getTime() : undefined,
     fetchedAt: t,
     duration,
+  }
+}
+
+/**
+ * InnerTube 频道条目 → Video。
+ * 不设 publishedAt：InnerTube 只给相对时间，反推绝对时间会在每次刷新时漂移，
+ * 交给 core 用 fetchedAt 兜底（与 bili:precious 的人工榜单同策略）。
+ */
+function channelVideoToItem(v: YoutubeChannelVideo, t: number): Video {
+  const thumb = v.thumb ?? `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`
+  const meta = [v.viewsText, v.publishedText].filter(Boolean).join(" · ")
+  return {
+    id: v.videoId,
+    sourceId: "youtube",
+    kind: "video",
+    title: v.title,
+    url: `https://www.youtube.com/watch?v=${v.videoId}`,
+    summary: meta || undefined,
+    thumbnail: thumb,
+    poster: thumb,
+    fetchedAt: t,
+    // undefined = 不写 tpl:membersOnly（serialize 只在有值时写）。
+    membersOnly: v.membersOnly || undefined,
   }
 }
 

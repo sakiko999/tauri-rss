@@ -23,14 +23,14 @@ import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { looksLikeHtml } from "../../lib/html.ts"
 
 /**
- * 实况视频经宿主隧道拉成 Blob URL。
+ * 实况视频 Blob 回退路径：整段下载 → Blob URL。
  *
- * 详情里**切到实况图即自动拉取并播放**（不再需要点按钮）；`attempt` 递增 = 失败重试。
+ * 详情里**切到实况图即自动播放**；`attempt` 递增 = 失败重试。
  *
- * ⚠️ 不能直接 `<video src={直链}>`：CDN 对页面源 Referer（dev `localhost:1420` /
- * 生产 `tauri://localhost`）返回 403 text/html，浏览器再按 ORB 拦成
- * `MEDIA_ELEMENT_ERROR: Format error`。媒体错误**不进 console**，表现为「实况
- * 不播且无报错」。`<video>` 上也没有 `referrerPolicy` 可用，只能走 Rust 隧道。
+ * 桌面 WebView2 已注入 Referer 时优先直连（`useLiveVideoSource`），保留原生
+ * Range/seek/缓存；直连失败才回到这里。回退路径仍不能直接 `<video src>`：
+ * CDN 对页面源 Referer 返回 403 text/html，浏览器再按 ORB 拦成
+ * `MEDIA_ELEMENT_ERROR: Format error`，且媒体错误不进 console。
  * Referer 规则归 resolve（videoReferrerFor），这里不写死域名。
  */
 function useLiveVideoBlob(src: string | undefined, attempt: number) {
@@ -92,6 +92,39 @@ function useLiveVideoBlob(src: string | undefined, attempt: number) {
   return { blobUrl, loading, error }
 }
 
+/**
+ * 实况视频源:桌面 WebView2 已注入 Referer 时直接用 https 直链(Chromium 原生
+ * Range/seek/缓存);直连失败才回退上面的整段 blob 隧道。
+ */
+function useLiveVideoSource(src: string | undefined, attempt: number) {
+  const nativeCapable = globalThis.appHost?.nativeMediaReferer === true
+  const native = nativeCapable && !!src && !!videoReferrerFor(src)
+  /** 直连失败记 (src, attempt)；换图或点重试时自动失效，让原生路径再试一次。 */
+  const [nativeFailed, setNativeFailed] = useState<{ src: string; attempt: number } | undefined>()
+  const useNative =
+    native && !(nativeFailed?.src === src && nativeFailed.attempt === attempt)
+
+  const blob = useLiveVideoBlob(useNative ? undefined : src, attempt)
+  if (useNative) {
+    return {
+      url: src,
+      loading: false,
+      error: undefined as string | undefined,
+      native: true,
+      onNativeError: () => {
+        if (src) setNativeFailed({ src, attempt })
+      },
+    }
+  }
+  return {
+    url: blob.blobUrl,
+    loading: blob.loading,
+    error: blob.error,
+    native: false,
+    onNativeError: () => {},
+  }
+}
+
 export function SocialDetailModal() {
   const detail = useDesktop((s) => s.socialDetail)
   const close = useDesktop((s) => s.closeSocialDetail)
@@ -106,7 +139,7 @@ export function SocialDetailModal() {
   const [liveDecodeError, setLiveDecodeError] = useState<string | undefined>(undefined)
   /** 当前图若是实况，取视频直链（统一 https：源站给的是 http，WebView 里会被混合内容拦）。 */
   const liveVideo = httpsify((imgs[imgIndex] as { liveVideo?: string } | undefined)?.liveVideo)
-  const live = useLiveVideoBlob(liveVideo, liveRetry)
+  const live = useLiveVideoSource(liveVideo, liveRetry)
   const liveFailure = live.error ?? liveDecodeError
   useEffect(() => setLiveDecodeError(undefined), [imgIndex, item?.id])
   /**
@@ -242,10 +275,10 @@ export function SocialDetailModal() {
                     媒体列的宽度就跟着变。 */}
                 {/* 实况图：切到即自动拉取并静音循环播；点一下暂停/续播。
                     隧道完成前继续显示静态图（比黑屏/碎播放器可解释）。 */}
-                {liveVideo && live.blobUrl && !liveDecodeError ? (
+                {liveVideo && live.url && !liveDecodeError ? (
                   <video
                     className="social-detail-video"
-                    src={live.blobUrl}
+                    src={live.url}
                     poster={cover}
                     autoPlay
                     muted
@@ -256,8 +289,11 @@ export function SocialDetailModal() {
                       if (v.paused) void v.play()
                       else v.pause()
                     }}
-                    // 解码失败（编码不支持等）→ 退回静态图，脚注说明原因。
-                    onError={() => setLiveDecodeError("视频无法解码")}
+                    // 直连失败 → 回退 blob 隧道；隧道也失败/解码不支持 → 退回静态图。
+                    onError={() => {
+                      if (live.native) live.onNativeError()
+                      else setLiveDecodeError("视频无法解码")
+                    }}
                   />
                 ) : (
                   <MediaImage src={cover} alt={item.title} loading="eager" contain />

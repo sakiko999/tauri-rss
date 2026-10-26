@@ -112,7 +112,14 @@ const tauriDev = (p: Platform, release = false): CmdSpec => ({
   args: ["tauri", "dev", ...DEV_CFG_FOR(p, release), ...(release ? ["--release"] : [])],
   cwd: SRC_TAURI,
 });
-const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...MOBILE_CFG(p)], cwd: SRC_TAURI });
+/** release 配置只在 `tauri build` 叠加：dev/test 不应要求 target/release 下的 sidecar 已存在。 */
+const RELEASE_CFG = (p: Platform) =>
+  p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.release.json`] : [];
+const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...MOBILE_CFG(p), ...RELEASE_CFG(p)], cwd: SRC_TAURI });
+/** 桌面发布包需要：服务 JS bundle + 运行时启动器 + 浏览器 sidecar（进 resources）。 */
+const SERVICE_BUILD: CmdSpec = { label: "服务 bundle", cmd: "bun", args: ["run", "service:build"], cwd: ROOT };
+const RUNTIME_BUILD: CmdSpec = { label: "运行时启动器", cmd: "cargo", args: ["build", "-p", "amoeba-runtime", "--release"], cwd: ROOT };
+const BROWSER_BUILD: CmdSpec = { label: "浏览器 sidecar", cmd: "cargo", args: ["build", "-p", "amoeba-browser", "--release"], cwd: ROOT };
 /** RSSHub sidecar:desktop 订阅源,`bun run tauri` 时随 Vite+Tauri 一并带起(独立 Node 进程,自起 1200 端口)。 */
 
 /**
@@ -154,6 +161,13 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
     case "build-release":
       return [
         { kind: "once", spec: viteBuild(platform) },
+        ...(platform === "desktop"
+          ? [
+              { kind: "once" as const, spec: SERVICE_BUILD },
+              { kind: "once" as const, spec: RUNTIME_BUILD },
+              { kind: "once" as const, spec: BROWSER_BUILD },
+            ]
+          : []),
         { kind: "once", spec: tauriBuild(platform) },
       ];
     default:

@@ -158,9 +158,9 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 
 ## 图片加载与防盗链
 
-> 2026-08。微博图床 403 触发：审计 `<img>` 图片加载的 Referer 处理，评估「Rust 层做
-> Referer / 自定义协议代理」的可行性，结论：**维持 blob 隧道**，自定义协议列为未来
-> mobile 接入时的独立优化。
+> 2026-08。微博图床 403 触发：审计 `<img>` 图片加载的 Referer 处理，当时结论是维持
+> blob 隧道。**2026-10-25 更新**：桌面改为 WebView2 `WebResourceRequested` 原生注入，
+> blob 隧道降级为回退与非 Windows 路径；自定义协议仍不做。
 
 ### 背景：sinaimg 对空 Referer 也 403
 
@@ -171,20 +171,31 @@ Referer**（桌面是 `tauri://localhost`），且 Referer 由 Referrer-Policy �
 fetch 读跨源响应体，改不了 img 发出的 Referer）。无免防盗链子域捷径（实测
 n/tva/ws1.sinaimg.cn 等子域全部 403/404）。
 
-唯一能让 Referer 正确的途径 = **带自定义 header 的请求**（Rust reqwest 可设任意 header）。
+唯一能让 Referer 正确的途径 = **在网络层改写请求头**：桌面用 WebView2
+`WebResourceRequested`，其他环境用 Rust reqwest 代理（可设任意 header）。页面里的
+`fetch` / `<img referrerpolicy>` 都改不了跨源 Referer。
 
-### 现行方案：blob 隧道（已落地）
+### 现行方案：桌面原生注入 + 非 Windows blob 回退（2026-10-25）
 
-命中防盗链图床的 src 经 `appHost.http`（Tauri 生产走 Rust `http_get`，node/browser 后端
-同接口）带站内 Referer 拉取 `arraybuffer` → Blob URL → `<img>` 显示。
+**桌面（Windows/WebView2）**：Rust 在 `setup` 里注册 `WebResourceRequested`，只对
+白名单 host 的 `IMAGE`/`MEDIA` 请求改写 `Referer`，不接管响应
+（`apps/src-tauri/src/media_referer.rs`）。图片/实况直接走原生 `<img>` / `<video>`，
+保留 HTTP 缓存、HTTP/2、Range 与渐进解码；`appHost.nativeMediaReferer` 是能力标志，
+`MediaImage` / 实况视频据此直连，直连失败才回退隧道。
+
+**其他环境 / 回退**：命中防盗链图床的 src 经 `appHost.http`（Tauri 生产走 Rust
+`http_get`，node/browser 后端同接口）带站内 Referer 拉取 `arraybuffer` → Blob URL。
 
 - 规则表 `mediaReferrerFor(url)` 收敛在 **resolve 层**（`packages/resolve/src/media-referrer.ts`，
-  `sinaimg.cn → https://weibo.com/`）—— 唯一权威，ui 不写死任何域名，加图床只改这一处；
-- 消费方 `MediaImage`（`packages/ui/src/renderers/atoms/MediaImage.tsx`）内联
+  `sinaimg.cn → https://weibo.com/`）—— 唯一权威；Rust 侧为了拦截回调保留一份常量，
+  `media-referrer-parity.check.ts` 守住两边一致；
+- 回退路径的 `MediaImage`（`packages/ui/src/renderers/atoms/MediaImage.tsx`）内联
   `useProxiedImage`：命中未就绪返回 undefined（不挂原 src，避免先发必 403 的请求）；
-  隧道失败回退原 src 走 `<img> onError` 占位；模块级 `proxyCache` 防重复请求；
+  隧道失败走占位；模块级 `proxyCache` 防重复请求；
 - 跨三环境统一（tauri/browser/node），纯 TS 无 eval，CSP 安全；
-- 已验证：node 环境带 weibo Referer 拉图 200（1.8MB 字节取回）。
+- 实机验证（2026-10-25）：CDP `requestWillBeSentExtraInfo` 显示 sinaimg 与 xhscdn
+  请求的实际 Referer 分别为 `https://weibo.com/` 与 `https://www.xiaohongshu.com/`；
+  白名单外 host 保持页面源 Referer，不被改写。
 
 **图片宽高**由单独一段解决：`resolve/src/utils/img-size.ts` Range 预取文件头解析
 （PNG 64B / JPEG 1KB），失败退化 4:3。XML `tpl:image` 带 `@_url/@_width/@_height`。
@@ -237,11 +248,12 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 
 ### 决策
 
-- **维持 blob 隧道**。理由：规则已收敛（resolve 层一份）、跨平台统一、后端已跨平台
-  （`http_get`）、无安全洞；自定义协议在桌面是小优化，在 Android 踩伪 scheme + 安全
-  advisory + 跨平台 URL 分支三连坑，远超「Rust 层加个 Referer」的收益。
-- **方案 B 列为未来独立优化**：当 mobile 真正接入 appHost/crawler、瀑布流多图成为性能瓶颈
-  时，按平台评估真 scheme 方案（参考本节的差异表与安全提示）。
+- **桌面优先 WebView2 原生注入，blob 保留为回退与跨平台路径**。理由：原生注入不改
+  响应体，缓存/Range/渐进解码全部保留；Windows 之外没有等价的可写 header 拦截点
+  （Android WebView 只能造响应，不能改请求头），所以回退路径必须保留。
+- **不做自定义协议 `media://`**：Tauri 的 responder 仍要求完整 body，wry 会整块复制
+  进内存流，不是真流式；且自定义协议基本绕开 Chromium 缓存，Android 的 Range 还有
+  已知缺陷（详见 `docs/architecture/system/05-risks.md` 的调研记录）。
 
 ### 性能现状：微博图片加载慢（2026-08 实测）
 
@@ -264,13 +276,15 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 **已有缓解**：`sizeCache`（crawler）缓存尺寸、`proxyCache`（ui）会话内缓存图 → 同一会话内
 滚动重挂载不重复拉图。**跨重启无缓存**是主要短板。
 
-**优化方向**（未来，均未做）：
+**已做（2026-10-25）**：Windows 桌面走 WebView2 原生注入，图片/实况不再经过
+base64 + Blob 隧道，跨重启复用 Chromium HTTP 缓存。
 
-- **方案 B 自定义协议 `media://`**（见上文）：Rust 侧流式返回、`<img>` 原生加载，无 blob
-  膨胀 / JS 隧道，瀑布流多图是真实收益 —— 本慢问题的主要解法；
-- 或隧道层加**磁盘缓存**（图 URL → 字节，持久化，重启复用）；
-- 或 `proxyCache` 加 **LRU 上限**防长期会话内存膨胀；
-- 或隧道请求加**并发批大小上限**（如 ≤6 并发）。
+**剩余优化**（未做）：
+
+- 非 Windows 回退路径仍无磁盘缓存，可加「图 URL → 字节」持久缓存；
+- 回退路径的尺寸预取仍是额外 Range 往返（原生路径不影响显示）；
+- 自定义协议 `media://` 仍不推荐：responder 要求完整 body，不是真流式，且绕开
+  Chromium 缓存（详见 `05-risks` 的调研记录）。
 
 ## 发现页与添加订阅
 

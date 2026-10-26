@@ -13,6 +13,7 @@ pub mod webview_browser;
 pub mod ws;
 
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -71,7 +72,10 @@ pub(crate) fn is_blocked_host(url: &str) -> bool {
         return true;
     };
     // IPv6 literals arrive bracketed from Url::host_str.
-    let host = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    let host = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_ascii_lowercase();
     if host.ends_with(".local") || host.ends_with(".internal") {
         return true; // mDNS / split-horizon names resolving inside a LAN
     }
@@ -95,32 +99,45 @@ fn default_response_type() -> String {
     "text".to_string()
 }
 
+/// 进程级共享 HTTP Client：复用连接池、keep-alive 与 TLS 会话。
+///
+/// ⚠️ 重定向**逐跳复查**:`Policy::limited` 只数次数,不校验跳转目标 —— 公网 URL
+/// 302 → `http://169.254.169.254/`(云元数据)会绕过入口的 is_blocked_host 检查。
+/// 自定义策略对每个目标再跑一次同一判定(loopback 仍按设计放行,见 is_blocked_host)。
+fn http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.previous().len() >= 5 {
+                    attempt.error("too many redirects")
+                } else if is_blocked_host(attempt.url().as_str()) {
+                    attempt.error("refused: redirect target is not routable")
+                } else {
+                    attempt.follow()
+                }
+            }))
+            .build()
+            .expect("failed to build shared reqwest client")
+    })
+}
+
 #[tauri::command]
 pub async fn http_get(req: HttpGetRequest) -> Result<HttpResponse, String> {
     if is_blocked_host(&req.url) {
         return Err("refused: target address is not routable (loopback/link-local/private)".into());
     }
     let timeout = req.timeout_ms.clamp(MIN_TIMEOUT_MS, MAX_TIMEOUT_MS);
-    let client = reqwest::Client::builder()
-        // ⚠️ 重定向**逐跳复查**:`Policy::limited` 只数次数,不校验跳转目标 —— 公网 URL
-        // 302 → `http://169.254.169.254/`(云元数据)会绕过入口的 is_blocked_host 检查。
-        // 自定义策略对每个目标再跑一次同一判定(loopback 仍按设计放行,见 is_blocked_host)。
-        .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            if attempt.previous().len() >= 5 {
-                attempt.error("too many redirects")
-            } else if is_blocked_host(attempt.url().as_str()) {
-                attempt.error("refused: redirect target is not routable")
-            } else {
-                attempt.follow()
-            }
-        }))
-        .timeout(std::time::Duration::from_millis(timeout))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = http_client();
 
     let method = reqwest::Method::from_bytes(req.method.as_bytes()).map_err(|e| e.to_string())?;
 
-    let mut builder = client.request(method, &req.url);
+    // ⚠️ 超时按请求设置：共享 Client 不能把 timeout 写死在 builder 上（不同调用方
+    // 需要不同上限），但连接池/TLS 会话必须复用 —— 每请求新建 Client 会让图片和
+    // 分片每次重新握手，是隧道吞吐上不去的主因之一。
+    let mut builder = client
+        .request(method, &req.url)
+        .timeout(std::time::Duration::from_millis(timeout));
     for (k, v) in &req.headers {
         builder = builder.header(k, v);
     }

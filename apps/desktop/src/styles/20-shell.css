@@ -643,4 +643,15 @@
 .sub-row[data-kind="article"] .sub-dot {
   background: oklch(0.7 0.09 240);
 }
-
+
+/* 数据服务断线横幅（fail-closed：只读镜像 + mutation 会失败） */
+.service-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: color-mix(in oklch, var(--live) 16%, var(--bg));
+  border-bottom: 1px solid color-mix(in oklch, var(--live) 45%, transparent);
+  font-size: 13px;
+}

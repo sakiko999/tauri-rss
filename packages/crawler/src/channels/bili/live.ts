@@ -13,6 +13,7 @@ import { type SerializeOptions } from "@amoeba/xml"
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 import { now } from "@amoeba/resolve"
+import { formatError } from "@amoeba/log"
 import { log } from "@amoeba/resolve"
 import { parseRoomIds } from "@amoeba/resolve"
 import { biliClient } from "@amoeba/resolve"
@@ -58,7 +59,7 @@ async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | nu
         : undefined,
     }
   } catch (e) {
-    log.biliLive.warn(`房间 ${roomId} 拉取失败:`, (e as Error)?.message)
+    log.biliLive.warn(`房间 ${roomId} 拉取失败:`, formatError(e))
     return null
   }
 }

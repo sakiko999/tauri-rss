@@ -8,8 +8,17 @@ import { showSkeleton } from "./store/selectors.ts";
 import "@amoeba/core/source/rsshub";
 import "./styles.css";
 
-// 注入桌面宿主能力到全局 appHost(core/crawler 从它读 http/js/storage/now)
-injectTauriHost();
+// 注入桌面宿主能力到全局 appHost(core/crawler 从它读 http/js/storage/now)。
+// nativeMediaReferer: Rust 已在 WebView2 网络层给防盗链图床注入 Referer，
+// 图片/实况可直连(缓存/Range/渐进解码都在)；非 Windows 会在 inject 内部降级。
+// 数据服务模式（唯一生产路径）：桌面不再是 SQLite/抓取浏览器写者 → storage/browser
+// 都封死。桌面进程内 DataLayer 回退（旧 `VITE_DATA_SERVICE=0`）已删除：它是唯一人为的
+// 第二写者入口，且需要长期维护两套数据路径。要查数据请用 `rss attach` / 诊断页。
+injectTauriHost({
+  nativeMediaReferer: true,
+  storage: false,
+  browser: false,
+});
 
 // dev 调试锚点:CDP 连进运行实例时用 `__store.getState()` 读权威状态
 // (订阅表 / refreshErrors / view —— 这些 UI 只以图标/计数呈现,文本读不到)。

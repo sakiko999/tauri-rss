@@ -123,14 +123,20 @@ export async function biliScanLogin(opts: BiliScanLoginOptions = {}): Promise<Lo
   for (;;) {
     // 取消与超时同优先级:关掉弹窗后不该再打 poll 接口,也不该把结果写回 UI。
     if (opts.signal?.aborted) throw new Error("扫码登录已取消")
-    if (Date.now() > deadline) throw new Error("bili 扫码: 超时未完成")
+    if (Date.now() > deadline) {
+      log.biliLogin.loginTimeout()
+      throw new Error("bili 扫码: 超时未完成")
+    }
     const r = await biliQrPoll(qr.key)
     if (r.status === BILI_QR_STATUS.SUCCESS) {
       if (!r.cookie) throw new Error("bili 扫码: 成功但未取到 cookie")
-      log.biliLogin.info("扫码登录成功")
+      log.biliLogin.loginOk({})
       return { cookie: r.cookie, refreshToken: r.refreshToken }
     }
-    if (r.status === BILI_QR_STATUS.EXPIRED) throw new Error("bili 扫码: 二维码已过期")
+    if (r.status === BILI_QR_STATUS.EXPIRED) {
+      log.biliLogin.loginTimeout()
+      throw new Error("bili 扫码: 二维码已过期")
+    }
     if (r.status === BILI_QR_STATUS.SCANNED && !scannedNotified) {
       scannedNotified = true
       opts.onScanned?.()

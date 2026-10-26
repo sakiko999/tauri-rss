@@ -5,6 +5,11 @@
 > （本机 sidecar 或自部署服务，承载重反爬平台）；mobile 保持**内置 crawler**，
 > 仅支持有限平台。下文记录决策依据（RSSHub / MediaCrawler 对照调研）与形态选型空间，
 > 以及移动端不能复用 CDP 的实测依据。
+>
+> **落地状态（2026-10-26）**：已按本文实现——`rss --service` 单写者 + `amoeba-runtime`
+> 启动器 + WebView2 sidecar，desktop 默认走 `service_endpoint`。形态选型以
+> `system/06-data-service.md` 为准（本文的「候选形态」章节仅为历史依据）。
+> **mobile 于同日冻结**，不再随改动维护。
 
 ## 决策背景与动机
 
@@ -93,6 +98,14 @@ board 大概率仍坏（等不到选择器）。另注意：RSSHub 已从 playwr
 | **C. 混合** | 自研为主 + RSSHub 补充长尾平台 | A 的超集，按需开 |
 
 **初步倾向 A**（代码全复用 + 反爬资产自持），RSSHub 可随时作为 C 叠加。**最终结论待用户选型**。
+
+> 术语：本节的 sidecar = **爬虫取数服务**（Bun/HTTP）。CLI 的 `amoeba-browser` 是
+> **浏览器宿主**（无 Tauri 的 WebView2 + CDP），两者不是同一个东西；后者已在
+> `apps/browser-sidecar/` 落地（`rss --browser`）。
+>
+> 2026-10-26 决策升级：取数服务与 core/storage 合并为 `rss --service` 单写者数据服务，
+> desktop/CLI 都做客户端；本节的形态 A 只是它的子集。计划见
+> `docs/architecture/system/06-data-service.md`。
 
 ## 切分边界（规划期细化）
 

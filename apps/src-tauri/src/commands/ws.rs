@@ -64,8 +64,13 @@ pub enum WsEvent {
     Binary(String),
     /// 入站文本帧,base64 编码(CDP JSON-RPC 用;browser.rs 的 CDP 隧道)。
     Text(String),
-    Close { code: u16, reason: String },
-    Error { message: String },
+    Close {
+        code: u16,
+        reason: String,
+    },
+    Error {
+        message: String,
+    },
 }
 
 /// 单连接状态:sink(写半部)+ 退订信号。
@@ -209,7 +214,9 @@ pub async fn ws_connect(
                     true
                 }
             };
-            if done { break; }
+            if done {
+                break;
+            }
         }
         // 任何退出路径都清理:drop stream(读半部)+ 从 map 移除(drop sink 写半部)。
         println!("[ws] reader ended: {conn_id}");
@@ -252,7 +259,10 @@ pub async fn ws_send(
 
 /// 关闭指定连接(前端退订)。幂等:task 已退时 shutdown_tx.send 返回 Err 被 `let _` 吸收。
 #[tauri::command]
-pub async fn ws_close(connection_id: String, state: State<'_, Arc<WsManager>>) -> Result<(), String> {
+pub async fn ws_close(
+    connection_id: String,
+    state: State<'_, Arc<WsManager>>,
+) -> Result<(), String> {
     // 从 map 移除即 drop 掉 sink(写半部,socket 写侧关闭);再发退订信号让 reader task
     // 结束并 drop 读半部。
     let shutdown_tx = {

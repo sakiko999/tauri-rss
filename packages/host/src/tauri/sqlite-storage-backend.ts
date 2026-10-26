@@ -27,6 +27,12 @@ const DB_PATH =
       ? "sqlite:rss.release-debug.db"
       : "sqlite:rss.dev.db"
 
+/**
+ * ⚠️ 刻意**不实现** `batch`（R10）：tauri-plugin-sql 底层 sqlx 用连接池，多次
+ * `execute` 不保证落在同一连接，`BEGIN`/`COMMIT` 无法可靠成事务。该后端只剩
+ * 只剩 mobile 的进程内 DataLayer 用它（desktop 只走数据服务，bun:sqlite 可事务），
+ * core 见 `storage.batch` 缺失会自动回退逐个 set/delete。
+ */
 export class SqliteStorageBackend implements StorageBackend {
   private dbPromise: Promise<Database> | null = null
   private readyPromise: Promise<unknown> | null = null
@@ -62,7 +68,40 @@ export class SqliteStorageBackend implements StorageBackend {
       // rejected promise 永久留存,之后每次 get/set 都立刻 reject → 进程内 storage 全废。
       // 用 catch 清回 null 让下次调用重跑。
       this.readyPromise = (async () => {
-        for (const sql of schema.migrations) await (await this.dbPromise!).execute(sql)
+        const db = await this.dbPromise!
+        if (!schema.versioned) {
+          // 无版本表的后端只能要求迁移全部幂等（旧行为）。
+          for (const sql of schema.migrations) await db.execute(sql)
+          return
+        }
+        const { table, ddl, migrations } = schema.versioned
+        await db.execute(ddl)
+        // 第一遍只校验 checksum（不执行 SQL）；第二遍只执行未应用的版本。
+        // 见 apps/cli/src/store/sqlite-storage.ts 同款注释。
+        for (const migration of migrations) {
+          const rows = await db.select<Array<{ checksum: string }>>(
+            `SELECT checksum FROM ${table} WHERE version = $1`,
+            [migration.version],
+          )
+          if (rows[0] && rows[0].checksum !== migration.checksum) {
+            throw new Error(
+              `迁移 checksum 不匹配：version ${migration.version}（${migration.name}）；` +
+                `已发布迁移不可修改，请追加新版本`,
+            )
+          }
+        }
+        for (const migration of migrations) {
+          const rows = await db.select<Array<{ checksum: string }>>(
+            `SELECT checksum FROM ${table} WHERE version = $1`,
+            [migration.version],
+          )
+          if (rows[0]) continue
+          await db.execute(migration.sql)
+          await db.execute(
+            `INSERT INTO ${table} (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)`,
+            [migration.version, migration.name, Date.now(), migration.checksum],
+          )
+        }
       })().catch((e) => {
         this.readyPromise = null
         this.dbPromise = null // 连接也可能坏了(load 成功但 execute 失败)→ 一并重建

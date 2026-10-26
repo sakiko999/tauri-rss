@@ -46,6 +46,8 @@ export const useDesktop = create<DesktopState>()((set, get) => {
     socialDetail: null,
     hotWord: null,
     initError: null,
+    serviceOnline: true,
+    serviceError: null,
     ready: false,
 
     openGroups: {},

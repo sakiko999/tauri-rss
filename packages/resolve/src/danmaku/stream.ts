@@ -16,6 +16,7 @@
  * 走宿主。两形态在内部归一成 WsLike 抽象(send/close/readyState)。
  */
 import type { DanmakuItem, DanmakuStream } from "./types.ts"
+import { formatError } from "@amoeba/log"
 import { log } from "../log.ts"
 
 export interface WsStreamOptions {
@@ -109,7 +110,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       // 解码抛错(bili op=8 鉴权被拒)= 当前连接不可用 → 主动断开走重连(含 refresh)。
       const onError = (e: unknown): void => {
         if (stopped || userClosed) return
-        log.danmaku.wsHandshakeError({ message: (e as Error)?.message ?? String(e) })
+        log.danmaku.wsHandshakeError({ message: formatError(e) })
         safeClose(conn)
       }
       // 快路径:同步解码器(huya/douyu)不经微任务;异步(brotli/ack)才包 Promise。
@@ -159,7 +160,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
           })
           .catch((e) => {
             // 握手失败原因(douyin 415 / TLS 证书 / HTTP 拒绝)——之前被吞,重连循环无迹可循。
-            log.danmaku.wsHandshakeError({ message: (e as Error)?.message ?? String(e) })
+            log.danmaku.wsHandshakeError({ message: formatError(e) })
             if (!stopped) void beforeReconnect()
           })
         return
@@ -169,7 +170,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
       try {
         ws = new WebSocket(currentUrl()) as unknown as WsLike
       } catch (e) {
-        log.danmaku.wsHandshakeError({ message: (e as Error)?.message ?? String(e) })
+        log.danmaku.wsHandshakeError({ message: formatError(e) })
         void beforeReconnect()
         return
       }
@@ -194,7 +195,7 @@ export function createWsStream(opts: WsStreamOptions): DanmakuStream {
         try {
           ok = await opts.refresh()
         } catch (e) {
-          log.danmaku.wsHandshakeError({ message: `刷新凭证失败: ${(e as Error)?.message ?? String(e)}` })
+          log.danmaku.wsHandshakeError({ message: `刷新凭证失败: ${formatError(e)}` })
         }
         if (stopped) return
         if (!ok) return

@@ -171,7 +171,8 @@ player 只决定怎么把 `streams[0]` 放出来。
   `host/net/governor.ts:250` 的 `platformOf`、UI 的筛选/图标表。细节见 `../platforms/channels.md`。
 
 **回归**：`bun run rss channels --kind <kind>`、`bun run rss fetch <key> --json`；有纯映射则加
-`packages/crawler/src/example/*.check.ts`。浏览器渠道在 CLI 不可用，需桌面实例。
+`packages/crawler/src/example/*.check.ts`。浏览器渠道在 CLI 需 `--browser` 且先
+`cargo build -p amoeba-browser`（xhs 还需登录态）。
 
 ### 3.b 新增平台 client / by-url 播放解析
 
@@ -287,18 +288,20 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 1. 在 `packages/host/src/<环境>/` 实现 `StorageBackend`（`global.d.ts`）：`get/set/delete/keys(prefix?)`，
    纯字符串 KV，无事务/批量语义。
-2. DDL **唯一权威**是 `packages/core/src/db/schema.ts` 的 `KV_TABLE`/`KV_DDL`/`MIGRATIONS`；后端只执行，
-   不新增建表语句。**不要再 import `@amoeba/core`**：core 在 `createDataLayer()` 首行调
-   `appHost.storage.setSchema?.({ table, ddl, migrations })`。
+2. DDL **唯一权威**是 `packages/core/src/db/schema.ts` 的 `KV_TABLE`/`KV_DDL`/`SCHEMA_MIGRATIONS`
+   （`STORAGE_SCHEMA` 是注入体）；后端只执行，不新增建表语句。**不要再 import `@amoeba/core`**：
+   core 在 `createDataLayer()` 首行调 `appHost.storage.setSchema?.(STORAGE_SCHEMA)`。
 3. SQL 后端实现 `setSchema(schema)`：只保存，不执行；在首次建连/读写时执行 `schema.migrations`；
    未注入就抛「schema 未注入」；建连后只接受同一份 schema，换 schema 要拒绝（防止漂移）。
-   KV/localStorage/内存后端不实现该方法，调用方用 `?.`，保持 no-op。
-   参考 `SqliteStorageBackend` 的 `setSchema` / `requireSchema` / 惰性 `ready()` 与失败可重试。
+   **必须维护 `_migrations(version, name, applied_at, checksum)`**：checksum = FNV-1a(DDL)，
+   已应用条目 checksum 不符要拒绝启动。KV/localStorage/内存后端不实现该方法，调用方用 `?.`，保持 no-op。
+   参考 `SqliteStorageBackend` / CLI `sqliteStorage` 的 `applySchema`。
 4. 注入：加进对应 `injectXxxHost` 的 `setHostCaps` 调用。`http`/`js`/`storage` 三者必填
    （`runtime.ts:120-130`），自定义装配也必须同时给（如 `setHostCaps({ http, js, storage })`）；
    HTTP 会被自动包 governor（`runtime.ts:131`），不要自己再包一层。
-5. CLI 的 `sqliteStorage` 是 app 层、直接 import core 并执行 `MIGRATIONS`（尚未接 `setSchema`）；
-   新写的 SQL 后端不要照抄这个反向依赖。
+   ⚠️ desktop 服务模式下 `injectTauriHost({storage:false})` 注入的是**拒绝后端**（读写即抛），
+   这是有意为之：新代码不要绕过它直连 SQLite。
+5. CLI 的 `sqliteStorage` 是 app 层、直接 import core 并执行同一份 schema（`setSchema` + checksum 校验）。
 6. 验证：`bun packages/host/src/example/host-check.ts`、`bun packages/core/src/example/repo-concurrency.check.ts`、
    `data-layer.check.ts`。
 
@@ -308,8 +311,24 @@ player 只决定怎么把 `streams[0]` 放出来。
 2. `apps/cli/src/main.ts` 用 `.command(...).action(guard(...))` 注册（`guard` 在 `:60`，统一错误出口 + exit 1）。
 3. 参数装配用 `info.ts` 的 `buildInfo`（`defaultInfo` < 示例 < `--kv`）与 `parseKvPairs`；需要 DataLayer 时
    `createDataLayer()`，但记住 CLI 的 DB 是独立的 `apps/cli/.data/rss.db`，不读桌面登录态。
-4. CLI 不注入 `appHost.browser`：浏览器驱动渠道会失败或回落 HTTP，命令帮助里要写清。
+   要复用桌面服务的 cookie/被动/配额，用 `--via-service`（`probe.fetch/resolve/danmaku`），
+   **不要**再建第二个 DataLayer 去写桌面库（第二写者 = 静默丢数据）。
+4. CLI 默认不注入 `appHost.browser`；`--browser` / `AMOEBA_BROWSER=1` 时才注入
+   `amoeba-browser` sidecar。浏览器驱动渠道会因此忽略 `--kv cookie=`，帮助里要写清。
 5. 同步 `docs/ops/commands.md` 与 `docs/ops/smoke-check.md`。
+
+**新增/修改 DataLayer 方法（必须同步数据服务）**
+
+desktop 默认不直连 DataLayer，而是同形的 `RemoteDataLayer`。改接口要一次改全四处，漏一处
+就是「桌面调到了、服务端没有」的运行时 500：
+
+1. `packages/core/src/data-layer.ts`：接口 + 本地实现。
+2. `@amoeba/service-protocol` 的 `RpcMethodMap`：加方法名与 params/result 类型（快照/事件类型同改）。
+3. `apps/cli/src/service/server.ts` 的 dispatch 加 `case`：读镜像的同步读；长任务用
+   `runJob(jobId, fn)`；改变状态的必须 `commit(...)` 产出事件（一次提交可多条事件、共享同一 `rev`）。
+4. `@amoeba/service-client` 的 `RemoteDataLayer`：读走本地镜像、写走 RPC，别在 desktop 里直连。
+5. 回归：`bun scripts/service-data-check.ts`（服务端）+ `bun scripts/remote-data-layer-check.ts`（客户端）；
+   改快照投影字段再看 `bun scripts/service-snapshot-size.ts`（gzip 体积与 boot）。
 
 ### 3.g 新增宿主能力 / Tauri command
 
@@ -325,11 +344,26 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 | 日志系统 | 谁在用 | 开关 | 备注 |
 | --- | --- | --- | --- |
-| `@amoeba/log` 域 | host、resolve（含 crawler 渠道）、player | localStorage `log` / `log:<域名>` 为 `"0"` 关闭；CLI 由 `RSS_LOG=1` 放开 | 域在 emit 时读开关；`warn/error` 永不被屏蔽 |
-| `appHost.log` | core | 无开关，落到 `console` | core 的诊断不走 `@amoeba/log`，不能按域过滤 |
+| `@amoeba/log` 域 | **所有包**（host / resolve+crawler / player / core / cli） | localStorage `log` / `log:<域名>` 为 `"0"` 关闭；CLI 由 `RSS_LOG=1` 放开 | 域在 emit 时读开关；`warn/error` 永不被屏蔽 |
+| `setLogSink` | 服务进程 | — | 全部级别（含 info/debug）改走 stderr，保证 stdout 只有 `READY <port>`；测试也用它收集输出 |
 
-新增日志域时用 `createLogDomain("子系统:名字", ...)`；resolve 的平台域在 `packages/resolve/src/log.ts:108-121`，
+`appHost.log` 已删除（2026-10-26）：core 是最后一个消费者，两套通道会让开关/前缀只覆盖一半。
+core 改用 `@amoeba/log` 的 `[core]` 域（`packages/core/src/log.ts`），并补了 loadMore 失败、
+被动无数据的日志点。
+
+新增日志域时用 `createLogDomain("子系统:名字", ...)`；resolve 的平台域集中在 `packages/resolve/src/log.ts`，
 player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面命名空间，重名会复用同一引用，务必带前缀。
+
+三条调用规范（2026-10-26 审计后）：
+
+1. **同形事件用模板**：登录生命周期 spread `LOGIN_EVENTS`（`loginNavigate`/`qrReady`/`loginOk`/
+   `loginReused`/`loginTimeout`/`loginFallback`/`qrMissing`），弹幕初始化失败 spread
+   `DANMAKU_EVENTS`。同一句话在三个平台各写一遍 → 措辞必然漂移，grep 也搜不全。
+   回归 `packages/resolve/src/example/login-events.check.ts`。
+2. **异常参数一律 `formatError(e)`**，不要 `(e as Error)?.message`：非 `Error` reject（字符串、
+   hls/dash 错误对象）会输出空串或 `[object Object]`。crawler 从 `@amoeba/resolve` 取同一个函数。
+3. **正常回退路径用 `debug`，`warn` 留给「用户会感知到的失败」**：逐 CDN/逐档位失败、单次轮询
+   抖动都是 debug；`warn/error` 不受开关控制，误用就会在服务端 stderr 里刷屏。
 
 ### 4.2 命令速查
 
@@ -348,7 +382,8 @@ player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面�
 | 入口 | 端口 | 只在何时存在 | 用途 |
 | --- | --- | --- | --- |
 | 桌面 dev 实例 CDP | 9222 | `bun run tauri`（叠 `tauri.conf.dev.json`） | `scripts/ui-probe.ts`、`ui-play-check.ts`、`__store` |
-| 抓取浏览器 CDP | 9334 | 桌面运行时按需拉起（WebView2，独立 profile） | 看 xhs/weibo 页面状态；`rss browser-reset` 清 profile |
+| 抓取浏览器 CDP | 9334 | 桌面运行时按需拉起（WebView2，独立 profile） | 看 xhs/weibo 页面状态；`rss browser-reset --target desktop` 清 profile |
+| CLI 浏览器 sidecar CDP | 动态（`READY <port>`） | `rss ... --browser` 期间（`amoeba-browser.exe`） | CLI 的 weibo/xhs 浏览器路径；`rss browser-reset`（默认 cli）清 profile |
 | Vite dev server | 1420 / 1422 | `bun run dev` / `tauri` | 纯前端调试；mobile 走 1422 |
 
 `__store` 只在 `import.meta.env.DEV` 暴露（`apps/desktop/src/main.tsx`、`apps/mobile/src/main.tsx`），

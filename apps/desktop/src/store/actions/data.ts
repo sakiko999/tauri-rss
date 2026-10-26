@@ -3,9 +3,10 @@
  *
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 DataLayer。
  */
-import { createDataLayer, ERROR_KIND_LABEL, errorKindOf, type ErrorKind } from "@amoeba/core"
+import { ERROR_KIND_LABEL, errorKindOf, type ErrorKind } from "@amoeba/core"
 import { PAGE_SIZE } from "../selectors.ts"
 import { applyRuntimeSettings, REFRESH_TIMEOUT_MS, withTimeout } from "../lib.ts"
+import { createDesktopDataLayer } from "../data-source.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
 
 type DataActions = Pick<DesktopState, "init" | "syncBrowserCookies" | "refresh" | "refreshAll" | "loadMore">
@@ -14,7 +15,7 @@ type DataActions = Pick<DesktopState, "init" | "syncBrowserCookies" | "refresh" 
 let initPromise: Promise<void> | null = null
 
 export function createDataActions(ctx: StoreCtx): DataActions {
-  const { set, get, refreshView, queryCanLoadMore, isRealSub } = ctx
+  const { set, get, refreshView, markItemsChanged, queryCanLoadMore, isRealSub } = ctx
 
   return {
     async init() {
@@ -22,7 +23,22 @@ export function createDataActions(ctx: StoreCtx): DataActions {
       if (initPromise) return initPromise
       initPromise = (async () => {
         try {
-          const dl = createDataLayer()
+          const dl = await createDesktopDataLayer({
+            onSubscriptions: (subscriptions, groups) => {
+              set({ subscriptions, groups })
+              refreshView()
+            },
+            onSettings: (settings) => {
+              set({ settings })
+              applyRuntimeSettings(settings)
+            },
+            onStatus: (status) => {
+              set({
+                serviceOnline: status.online && status.events,
+                serviceError: status.error ?? null,
+              })
+            },
+          })
           const settings = await dl.settings.get()
           // 测试/演示订阅只在开发构建写入(空库才写)。代码在 dev/seed.ts 动态 import,
           // 生产构建里整个模块不会进包(发布版首启是空库,走 onboarding)。
@@ -40,8 +56,11 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           })
           // 把「图片隧道开关」同步到宿主门面(ui 的 MediaImage 直读,不经 React 树传参)。
           applyRuntimeSettings(settings)
-          // 全量变更回调:条目/阅读态变化后重算视图。
-          dl.store.subscribe(() => refreshView())
+          // 全量变更回调:条目/阅读态变化后重算视图（先失效 memo，再重算）。
+          dl.store.subscribe(() => {
+            markItemsChanged()
+            refreshView()
+          })
           refreshView()
           // 刷新后恢复的选中节点(router /v/:id)在 dl 就绪前 select 会跳过 canLoadMore——补查。
           const nodeId = get().selectedNodeId
@@ -182,22 +201,16 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         // ⚠️ 必须 allSettled + 逐条超时 + finally:
         //   - 用 Promise.all 时,任一 reject 会让下面的 set({loading:false}) **永不执行**
         //     → 顶栏「更新中」永久转圈(且 Promise.all 会丢结果,其余订阅的白抓);
-        //   - 任一 promise 永不 settle(如 browser 通道 invoke 无超时)同样卡死整轮。
+        //   - 任一 promise 永不 settle(如服务 RPC 无响应)同样卡死整轮。
         // 逐条超时把「无限等待」变成「这一条报错」,finally 保证 loading 一定落回。
+        // 超时同时 abort 该条抓取:远端模式下 signal 会转成 job cancel（服务端真停），
+        // 本地回退模式下 core 丢弃在途结果。浏览器 lane 的取消归服务。
+        const controllers = subs.map(() => new AbortController())
         results = await Promise.allSettled(
-          subs.map((s) =>
-            withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id, () => {
-              // 超时中止在途调用,让持 lane 锁的 await 立刻返回错误,锁得以释放。
-              // ⚠️ **只对浏览器路径的订阅中止**(与旧行为一致):abortTabs 断的是
-              // 所有非登录 lane 的连接,一个非浏览器订阅(慢 HTTP 抓取)超时不该
-              // 掐断别的订阅正在跑的浏览器抓取。
-              // 登录 lane 由 keepLogin 豁免(登录在等用户扫码,掐了会表现成
-              // 「手机已确认但登录超时」)——旧 scanLoginActive 布尔退役。
-              if (/^(weibo|xhs):/.test(s.channelKey)) {
-                globalThis.appHost.browser?.abortTabs?.(`刷新超时:${s.id}`, { keepLogin: true })
-              }
-            }),
-          ),
+          subs.map((s, i) => {
+            const ac = controllers[i]!
+            return withTimeout(dl.refresh(s.id, { force, signal: ac.signal }), REFRESH_TIMEOUT_MS, s.id, () => ac.abort())
+          }),
         )
         results.forEach((r, i) => {
           const id = subs[i]!.id

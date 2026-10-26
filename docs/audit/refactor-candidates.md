@@ -177,6 +177,80 @@ case 写类型谓词，收益为负。
 
 ---
 
+## 2026-10-26：合入 master 前 review 遗留（`feat/browser-driver`）
+
+合入前跑了两轮 review：`/code-review`（正确性，15 条）+ 四维简化审计（Reuse/Simplification/
+Efficiency/Altitude，32 条）+ Workflow 补齐（Rust 载体 / 协议一致性 / 打包与迁移）。
+**P0/P1 已修**：平台前缀尾冒号（`live:douyin` 匹配失败）、WS 帧可打死服务、退订 batch
+失败抛错、`media_referer` COM 出参未释放、迁移先执行后校验、CLI 二维码把图片 URL 编码成
+假二维码、`sinceRev` 重放丢同 rev 事件、WS 握手失败不退避、core 日志 `String(e)`。
+下列为**未修**项，按「改到再动」排序。
+
+### A · 正确性/语义（优先）
+
+- **A0 `browser-sidecar` 没接 WebView2 进程退出事件**（`apps/browser-sidecar/src/main.rs:928` 只有
+  500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
+  `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
+  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。修法：`add_BrowserProcessExited`
+  → `request_shutdown()`（**只对浏览器进程退出**；渲染进程崩溃 WebView2 会自建，别用 ProcessFailed
+  的泛化事件，否则打断在途抓取）。桌面载具已有同款兜底（`webview_browser.rs:414`）。
+- **A0b `rss --service` 的 job 表可能残留**（`apps/cli/src/service/server.ts:488-514`）：`runJob` 的
+  `jobs.delete` 只在 `finally`，被 cancel 但底层 await 未返回时条目与 AbortController 一直挂着。
+
+- **A1 服务端 diagnostics 内联了一份 core 实现**（`apps/cli/src/service/server.ts:829` 起）：
+  `clearAll` 不清 `removedSubs`/`pageCursors`/`pageTotals`、不重置 netPolicy，也不取消在途
+  refresh（在途结果会写回已清空的库）；core 的 `layer.diagnostics` 在生产路径成死代码。
+  建议 dispatch 一律委托 core，`clearAll` 返回受影响的 subscriptionId 供 server 清投影。
+- **A2 `projectItem` 剥掉 article 的 `content`**（`server.ts:294` / `service-client:209`）：
+  桌面全文搜索（`selectors.ts:133`）与卡片摘要直接读 `item.content` → 生产路径静默失效。
+  需产品决策：投影保留 content（体积↑），或搜索改走服务端 / 按需 `resolveDetail`。
+- **A3 扫码登录成功后读本地 settings 镜像再写回**（`AccountPage.tsx:277`）：镜像尚未收到
+  `settings.changed` 时会把刚写入的 cookie 覆盖成旧值。应用 RPC 返回值或等事件后再写。
+- **A4 刷新超时不再 `abortTabs`**：服务端 `withSignal` 只让 race reject，不中止底层请求，
+  被放弃的抓取仍占浏览器 lane（`op:xhs`）直到 CDP 自身超时。`abortTabs` 已无生产调用。
+- **A5 `channelVideoToItem` 缺 author/publishedAt/duration**（`crawler/.../youtube/channel.ts:119`）：
+  「今天」节点恒空、时间排序退化、卡片把 summary 当作者名。设计上刻意不反推 publishedAt，
+  但 author（频道名）与 duration（lockup 里有）可以补。
+- **A6 `contentCache.delete` 无调用**（`core/src/repo/content-cache-repo.ts`）；
+  `bodyCache.deleteAll` 只剩自检用。删前者，后者标注「仅自检」。
+
+### B · 性能
+
+- **B1 `store.patch` 逐条 = 逐次全表扫**：`markAllRead` 500 条 → 建议 `patchMany(entries)`。
+- **B2 `readingRecords()` 为发事件整表读**（`server.ts:473`），每次续播落库多一次 O(R) 解析。
+- **B3 `hydrate()` 串行 restoreFromCache**，且每轮重读整张 reading blob（`data-layer.ts:609`）。
+- **B4 `/v1/state` 每次重建 + `JSON.stringify` + `gzipSync`（同步阻塞）**：可按 rev 缓存。
+- **B5 `browser/backend.ts:445` 每条 CDP 命令都 `sweepJunk(await port())`**：端口可缓存。
+- **B6 `eventLog` 按条数（512）封顶**：`items.replaced` 携整订阅条目 → 长跑常驻上百 MB。
+- **B7 `loadMore` 两次 `store.query` + append 再滤一遍**（`data-layer.ts:854`）。
+
+### C · 分层 / 一致性（本轮只做了一部分）
+
+- **C1 日志开关仍靠 node 入口伪造 `localStorage`**：已抽成 `apps/cli/src/host/log-shim.ts`
+  一份，但根因是 `readSwitch` 只认浏览器 API。建议 `@amoeba/log` 提供 `configureLog()`，
+  node 下读 `process.env.RSS_LOG`，删掉 shim。
+- **C2 DB 文件名（`rss.db`/`rss.dev.db`/`rss.release-debug.db`）4 份**：`data-source.ts`、
+  `sqlite-storage-backend.ts`、Rust `service.rs` 白名单、`scripts/tauri.ts`。建议单一 owner
+  + parity check（照 `media-referrer-parity.check.ts`）。
+- **C3 `mergeProbeInfo`（`server.ts:309`）手抄 `sourceInfoFor` 的 cookie 合并规则**。
+- **C4 `BROWSER_UI_URL` / `EDGE_UI_URL` 与 `targetParams()` 在两个 driver 各一份**：
+  不是载具差异，应移到 `host/src/browser/backend.ts` 常量。
+- **C5 `scripts/check.ts` 是白名单**：新增 `.check.ts` 不登记就静默不跑；`TYPECHECK_PROJECTS`
+  漏 `service-client`/`service-protocol`；`--filter` 打错时打印「0/0 全部通过」退出 0。
+  建议改成 glob 发现 + 未登记即失败。
+- **C6 YouTube InnerTube 文本/缩略图解析 4 份**（`channel.ts` 的 `textOf`/`maxThumb`、
+  `discover.ts` 的 `textOf`/`thumbOf`、`client.ts` 的 `ytText`/`ytThumb`）。
+- **C7 客户端只比 `hello.protocol`，不读 `minClientProtocol`**（`service-client/src/index.ts:104`）：
+  将来服务端抬协议、老客户端仍能连上并按旧语义发 RPC。修法：连上后校验
+  `minClientProtocol <= SERVICE_PROTOCOL`，不满足直接报错而不是静默降级。
+
+### 已核实「不是缺陷」（review 反例，避免下次重复报）
+
+- `service.rs` 的 `child.kill()` 只杀 `amoeba-runtime.exe`：服务进程按 `--parent-pid` 轮询
+  Tauri 进程存活（`service.rs:242`），父进程消失后自行退出 —— 双保险已存在。
+
+---
+
 ## 附：为什么没引入 remeda
 
 - 它不是依赖；按 skill 门禁，不擅自引入。

@@ -1,0 +1,22 @@
+[package]
+name = "amoeba-runtime"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+description = "Small Bun runtime launcher for the Amoeba data service (global-first, download on miss)"
+authors = ["zhh"]
+publish = false
+
+[lib]
+name = "amoeba_runtime"
+path = "src/lib.rs"
+
+[[bin]]
+name = "amoeba-runtime"
+path = "src/main.rs"
+
+[dependencies]
+sha2 = "0.10"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# 启动器不能依赖 Bun/Node 才能下载 Bun；rustls 避免 OpenSSL/系统 TLS 依赖。
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "gzip", "rustls-tls"] }

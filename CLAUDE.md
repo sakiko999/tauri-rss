@@ -15,16 +15,26 @@ apps/
                reader 三栏 / media 网格 / hot 热搜 / page 整页 / player / shortvideo 全屏流。
                状态 src/store/（nodes 节点语法 · selectors 派生 · prefs 偏好 · index 编排），
                视图 src/views/，样式 src/styles/（按区块拆分，入口只留 @import 顺序）。
-  mobile/      React 19 + Vite → dist/mobile。极简「看内容」闭环 + 订阅管理（RSS 直链
-               添加/移除）；复用 core DataLayer + player PlayableMedia + ui MediaImage。
-               不做频道发现（那属桌面工作台）
-  cli/         ★ 调试探针（Bun + cac 零构建），收编全部 example。宿主 = node 后端 +
-               bun:sqlite（apps/cli/.data/rss.db）。详见 docs/ops/commands.md
+  mobile/      ⛔ **已冻结（2026-10-26）**：除主动开启外，后续改动不为 mobile 做适配/回归
+               （不跑 mobile tsc/build、不加注入开关或 UI 分支）。保留为进程内
+               `createDataLayer()` 的只读参考：极简「看内容」闭环 + RSS 直链订阅管理。
+  cli/         ★ 调试探针（Bun + cac 零构建）+ 数据服务载具。默认本地探针宿主 =
+               node 后端 + bun:sqlite（apps/cli/.data/rss.db）；`--service` 跑单写者服务，
+               `rss attach` 作为桌面服务的客户端。详见 docs/ops/commands.md
+  browser-sidecar/  amoeba-browser：无 Tauri 依赖的 WebView2 宿主（屏外窗口 + CDP）。
+               CLI `--browser` 时由 packages/host/src/node/browser-sidecar.ts spawn，
+               与 desktop 共用 @amoeba/host/cdp 的 lane/超时/拦截语义
+  runtime/     amoeba-runtime：小体积 Bun 启动器（Rust）。解析顺序
+               AMOEBA_BUN → 全局 PATH → 随包 → 缓存 → 下载固定版本（SHA256/原子解压），
+               然后 spawn 入口并透传 stdio/退出码。stdout 只留 READY，日志全走 stderr
 packages/
   xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。node/browser/tauri 三态；
                net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）。
-               应用走子路径 `./node|tauri|browser|runtime|governor`；根入口无 import 副作用
+               应用走子路径 `./node|tauri|browser|cdp|runtime|governor`；根入口无 import 副作用。
+               `browser/*` 是载具无关的 CDP 核心（BrowserDriver 收敛桌面/CLI 差异）。
+               桌面媒体防盗链走 WebView2 请求头注入（src-tauri/media_referer.rs），
+               失败/非 Windows 回退 blob 隧道（appHost.nativeMediaReferer 探测）
   resolve/     ★ 平台解析层：platform/（各平台 client + 播放解析 + 弹幕 codec）、
                resolver/（by-url 路由）、browser/（CDP 模拟）、utils/、danmaku/ 原语。
                契约：按 item.url 懒解析 + 平台 client 供 crawler 取数。类型自持，不依赖 crawler
@@ -35,7 +45,12 @@ packages/
                MediaItem（不依赖 crawler 类型）
   player/      ★ 媒体播放器（video/audio/live 共用）。PlayableMedia = 唯一入口（懒解析 + 选流 +
                分发）+ VideoShell/AudioShell + 独立控件。依赖 core 类型 + appHost 隧道 + hls/flv/dash.js
+  platform/    ★ 平台名单一权威（R9）：channelKey 前缀 / URL 域名 / cookie 字段 / 展示名。
+               零依赖叶子，host（governor）与 core（cookie 注入）共用。
   log/         零依赖叶子：域注册语义化日志（log="0" 全局关 / log:<域>="0" 按域关）
+  service-protocol/ ★ 服务 HTTP/WS 契约（39 个 DataLayer 方法 + snapshot/event/job 类型）
+  service-client/   ★ RemoteDataLayer：desktop/CLI 共用。读本地镜像、写 RPC、WS 事件；
+                   运行时不 import core 根入口（避免拉进 crawler/resolve）
   ui/          ⚠️ 只剩原子件：desktop 仅引 MediaImage（防盗链隧道）与 fmtCount
 ```
 
@@ -80,8 +95,22 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   新增「播放」入口一律经 `usePlayerNav` 收口。见 `docs/ui/ui-conventions.md`。
 - **appHost 全局注入**：必填 `http`/`js`/`storage`，可选 `ws`/`browser` 未注入即降级；
   打开外链必须走 `openExternal`（WebView 拦 `window.open`）。见 `docs/architecture/host-abi.md`。
+- **日志统一 `@amoeba/log`，不走 appHost**（`appHost.log` 已删）：包内 `createLogDomain("域", { events })`
+  写语义事件，不直写 `console`；开关 `log="0"` 全局 / `log:<域>="0"` 单域，`warn/error` 永留。
+  服务进程用 `setLogSink` 把全部级别写 stderr（stdout 只留 `READY <port>`）。
+  **同形事件用共享模板**（登录 spread `LOGIN_EVENTS`、弹幕初始化 `DANMAKU_EVENTS`），
+  异常参数一律 `formatError(e)`（不要 `(e as Error)?.message`），正常回退路径用 `debug`。
+  回归 `packages/log/src/example/log.check.ts` + `packages/resolve/src/example/login-events.check.ts`。
 - **存储 DDL 唯一权威 = core `db/schema.ts`**（插件自带 migration 不用，防漂移）；
   由 `createDataLayer()` 首行经 `appHost.storage.setSchema?.()` 注入 SQL 后端，host 不 import core。
+  `_migrations` checksum 变化 → 拒绝启动；已发布迁移只能追加新版本，不能改 SQL。
+- **数据服务单写者**：Tauri 桌面默认 `service_endpoint` → `@amoeba/service-client`，
+  `injectTauriHost({storage:false,browser:false})` 把 desktop 的直连封死
+  （进程内 DataLayer 回退已删除）。任何第二写者
+  （desktop 直连、dev seed、Diagnostics、CLI 直开 desktop 库）都会静默丢数据。
+- **服务协议**：`protocol` 整数不兼容才 +1；RPC/事件类型唯一权威 = `@amoeba/service-protocol`；
+  一次提交 `rev+1` 可带多条事件（共享 rev）；断线/rev gap 先全量 `GET /v1/state`，
+  不做事件补丁恢复。stdout 只留 `READY <port>`，日志全走 stderr。
 - **平台 cookie 三级语义**（`resolve/platform/credentials.ts`）：调用点显式非空 > 显式
   **空串 = 强制匿名**（CLI `--kv cookie=` 依赖；xhs 会因此报「需要登录」）> provider
   （settings 登录态，core DataLayer / CLI 入口注册同一张表）。**渠道层不许再手抄
@@ -125,6 +154,17 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
 bun run tauri:release               # release 编译 + 热重载（调 release-only 分支）
 bun run rss channels | fetch <key> | item <url> | play <url>   # CLI 调试探针
+bun run rss login <platform>                                # 扫码登录（经数据服务；终端二维码）
+bun run rss fetch <key> --via-service           # 探针走数据服务（同 cookie/被动/配额）
+bun run rss attach status | list | refresh <id>  # CLI 作为桌面数据服务客户端
+bun run service:build                       # 打包独立服务入口 → dist/service/service.js
+bun run check                               # ★ 统一检查入口：static+contract+state+typecheck
+bun run check --layer service       # 起真实数据服务（慢）；`--layer all` 五层、`--list` 列清单
+bun scripts/service-data-check.ts           # 服务数据链路 48 项自检（含 job 取消/并发写/回滚）
+bun scripts/remote-data-layer-check.ts      # 远端镜像 38 项自检（含取消/崩溃 fail-closed/重启收敛）
+bun scripts/service-snapshot-size.ts        # 快照体积实测（原始 vs gzip，默认桌面 dev 库副本）
+cargo build -p amoeba-browser        # CLI 浏览器 sidecar（--browser 才用；需 VS2022 环境）
+cargo build -p amoeba-runtime        # Bun 运行时启动器（全局优先/缺失下载）
 bun scripts/ui-probe.ts goto tab:all        # UI 巡检（需 dev 实例，9222 已开）
 bun scripts/ui-play-check.ts                # 播放矩阵巡检（真播，报起播）
 bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包的最小断言
@@ -171,19 +211,19 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 
 ## 下一步
 
+**登录（2026-10-26 收口）**：`rss login <platform>` 已落地（终端二维码，只走服务 RPC
+`scanLogin`）；登录态回归已实测——已登录短路、`xhs:explore` / `xhs:user` 首屏 + 翻页、
+`rss detail` 全过。唯一未验的是**扫码出码本身**（现有 profile 已登录，走的是短路）：
+用未登录 profile 起临时服务（`rss --service --profile-dir <空目录>`）再验。
+
 **未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
 
 - **自动保活**（仅 bili 可行）：已有 `refresh_token` 但无续期调度 —— 到期只能重扫。
-- **desktop 爬虫服务化**：形态待选型（倾向自研 sidecar）。
-- **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行。
 - **抖音登录态搜索调研**：先专用小号 + CDP 被动探针，再决定是否实现。
+- ~~移动端扫码登录~~：mobile 已冻结（2026-10-26），不再排期。
 
-**待实机验证**（没跑过不算完成）：
-
-- release 实例：`webview_browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
-- WebView2 生命周期：关主窗口进程必须退出；空闲回收后自动重建；连续 3 次关/建不撞 profile 占用。
-- `xhs:explore` 手动刷新命中 `passiveBuffer`；未命中走页面 SSR 兜底。
-- `xhs:user` 刷新：登录态导航出条目；**未登录必须报「需要登录」**（匿名态已移除）。
+**待实机验证**：清单在下方 TODO（没跑过不算完成），当前包括干净 VM 安装/卸载与断网首启、
+WebView2 生命周期剩余、release 内存、`xhs:explore` 被动命中、实况图/实况播放。
 
 **长期悬置**（收益不抵复杂度）：CSP（现 `csp: null`，抖音/斗鱼签名脚本靠 `eval`）；
 live 按平台二次聚合的 UI 侧。
@@ -191,12 +231,28 @@ live 按平台二次聚合的 UI 侧。
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）
 
-- [ ] 界面文案清理尚未实机看一眼：发现页与添加订阅弹窗跑一次 `bun run dev` 确认布局没塌
-- [ ] WebView2 生命周期实机验证：关主窗口退出、空闲回收后重建、`/json/new` lane tab 关得掉、`/json/close` 不残留窗口
-- [ ] release 验收：GPU 进程 private 是否因 --disable-gpu-compositing 下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
-- [ ] xhs 全渠道登录态实机回归：扫码 → explore 首屏 + 翻页、user 首屏 + 翻页、详情；未登录三处都必须报「需要登录」
-- [ ] 实况图实机验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图（xhs 403 已确认，改走隧道 + Blob）
-- [ ] release 实机验收实况播放（dev 已修：CDN 对页面源 Referer 403 + ORB 拦截；需确认 release WebView2 下 mp4 解码与暂停/续播）
-- [ ] 下一轮候选：R5（refreshAll 超时仍全局 `abortTabs`，需 lane 化中止）；R9 剩余（平台名表收到一处）
+- [ ] **CI 工作流暂缓（2026-10-26 定）**：`.github/workflows/ci.yml` 未建；统一入口 `bun run check`
+  已在本地跑通（61 项 / 5.4s），接入时 job 跑 `bun run check`，service 层单列（需 bun:sqlite + 端口）。
+- [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
+- [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
+- [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
+- [ ] `xhs:explore` 手动刷新命中 `passiveBuffer`（未命中走页面 SSR 兜底）
+- [ ] 实况图验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图
+- [ ] 实况播放 release 验收：mp4 解码与暂停/续播（dev 已修 Referer 403 + ORB）
+- [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
+- [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
+- [ ] Referer 改造：共享 reqwest Client → WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 改 `unsafe-url` 保留 blob 回退
+- [ ] 系统文档正文细化（03 时序图 / 02 契约正文；01 依赖矩阵与 02 字段表已随 R9 / membersOnly 更新）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
+- [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
+- [!] 桌面只走 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；进程内 DataLayer 回退已删（非 Tauri 的浏览器 dev 仍走进程内）。
+- [!] `tauri-plugin-sql` 保留：mobile 的进程内 DataLayer 仍用它（mobile 冻结但保留）。
+- [!] 视频会员标记 = `Video.membersOnly`（`tpl:membersOnly`）：B站取 `rights.pay/arc_pay/ugc_pay`；YouTube 频道走 InnerTube（官方 RSS 无标记），**匿名首屏可能不含会员视频**，回退 RSS 时标记缺失。
+- [!] CLI 浏览器必须显式 `--browser`；显式空串 `--kv cookie=` 在浏览器路径也强制匿名（xhs 直接报「需要登录」），不传 cookie 键时浏览器路径才用 profile 登录态。
+- [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
+- [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。
+- [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
+- [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS。
+- [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
+- [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
 <!-- cc-todo:end -->

@@ -1,16 +1,32 @@
+use tauri::Manager;
+
 pub mod commands;
+/// 防盗链 Referer 注入(仅 Windows/WebView2；其他平台静默不注册)。
+#[cfg(windows)]
+pub mod media_referer;
 pub mod plugins;
+/// 数据服务进程生命周期（spawn/adopt/shutdown + service_endpoint）。
+pub mod service;
 /// 抓取浏览器 = Tauri 自己的 WebView2（隐藏窗口 + CDP 9334）。
 pub mod webview_browser;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = plugins::configure(tauri::Builder::default())
+        // 主 WebView2 注册防盗链头部改写。必须早于页面图片请求；失败只降级
+        // (前端仍走 blob 隧道)，不阻止应用启动。
+        .setup(|app| {
+            #[cfg(windows)]
+            media_referer::install(app);
+            Ok(())
+        })
         // WS 隧道连接管理(state):弹幕长连接按 connectionId 定位发/关。
         // Arc 包裹供 reader task clone 持引用(跨 command 共享)。
         .manage(std::sync::Arc::new(commands::ws::WsManager::default()))
+        .manage(service::ServiceState::default())
         .invoke_handler(tauri::generate_handler![
             commands::http_get,
+            service::service_endpoint,
             commands::ws::ws_connect,
             commands::ws::ws_send,
             commands::ws::ws_close,
@@ -40,7 +56,9 @@ pub fn run() {
                 event: tauri::WindowEvent::Destroyed,
                 ..
             } if label == "main" => {
-                eprintln!("[tauri] main window destroyed → exit");
+                eprintln!("[tauri] main window destroyed → shutdown service");
+                let state = app_handle.state::<service::ServiceState>();
+                service::shutdown(&state);
                 app_handle.exit(0);
             }
             // ⚠️ 不在 Exit 事件里清理抓取 webview：该事件在 Event::LoopDestroyed 才回调，

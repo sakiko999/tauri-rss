@@ -3,6 +3,13 @@
 > 基于 2026-10-23 master 快照（v0.6.5）。本文只回答「谁定义、谁生产、谁消费、失效会怎样」；包职责与依赖全貌见 `01-packages.md`，端到端时序见 `03-flows.md`，怎么扩展见 `04-extension.md`。
 >
 > 行号是阅读锚点，重构后会漂移；**文件与符号名优先**。文中所有断言均在本次会话打开过源码；契约守卫的实跑状态单独标注。
+>
+> **2026-10-26 数据服务增量（先读这条）**：desktop 默认不再直接持有 `createDataLayer()`，
+> 而是 `RemoteDataLayer`（`@amoeba/service-client`，**与 `DataLayer` 同形**，读本地镜像、
+> 写 HTTP RPC、事件走 WS）；`DataLayer` 新增 `hydrate()` / `diagnostics` / `store.clear` /
+> `refresh(id,{signal})`。跨进程契约（RPC 方法表、快照 NDJSON、事件/`rev`/`epoch`）
+> 唯一权威 = `@amoeba/service-protocol`，以 `06-data-service.md` 为准；本文的描述对这种
+> 「同形替换」仍然成立，但「desktop 直连 SQLite/写 store」的字面表述按服务模式理解。
 
 ---
 
@@ -57,12 +64,13 @@ graph LR
 | `AppHost` 及其 Backend | 根 `global.d.ts:27-317` | 三套 injector（§5） | 所有包直读 `globalThis.appHost` | **全局 ambient 类型 + 全局对象** | 未注入时访问抛错（http/js/storage）或降级（ws/browser） |
 | KV `StorageBackend` + `StorageSchema` + DDL | `global.d.ts`（`StorageBackend` / `StorageSchema`）；`core/src/db/schema.ts:15` | host 的 SQLite/localStorage/内存、CLI 的 bun:sqlite | core 五个 repo、governor 冷却账本；schema 由 core 注入 | 方法调用（键值字符串）+ `setSchema?`（可选，SQL 后端实现） | 键或 DDL 漂移 = 读不到数据 / 建表失败；SQL 后端未收 schema 即读写会抛 |
 | `HttpRequest`/`HttpResponse` | `global.d.ts:269-292` | 三个 HttpBackend | resolve `host.ts`、player loader、ui `MediaImage` | 方法调用 | `arraybuffer` 返回形状不一致 → 图片/分片静默损坏 |
-| `BrowserBackend`/`BrowserTab` | `global.d.ts:167-252` | Tauri `browser-backend.ts` | resolve `browser/cdp.ts`、crawler xhs/weibo | 全局对象 + CDP 隧道 | 能力探测误判平台（见 §5 漂移） |
+| `BrowserBackend`/`BrowserTab` | `global.d.ts:167-252` | `host/src/browser/backend.ts` 的 `CdpBrowserBackend` + 载具 `BrowserDriver`（桌面 = Tauri WebView2） | resolve `browser/cdp.ts`、crawler xhs/weibo | 全局对象 + CDP 隧道 | 能力探测误判平台（见 §5 漂移） |
 | `NetBackend` / `NetPolicy` | `global.d.ts:73-102`；`host/src/net/governor.ts:42-96` | host governor（恒可用） | core `syncNetPolicy`、resolve `reportRisk`、player 统计 | 方法调用 | 配额/冷却不生效或落到错误平台桶 |
 | `ChannelInfo` 投影 | `core/src/types/channel-info.ts:10` | `data-layer.ts:806-816` | desktop 添加订阅/发现页/账号页 | TS import | 表单字段缺失；`loginable/passive` 误判 |
 | `LoginResult` / `LoginCookieSnapshot` | `LoginResult` 三份平行声明（§8）；`LoginCookieSnapshot` 在 crawler/resolve 各一份，core 直接 re-export crawler 版 | channel `scanLogin` / `readLoginCookie` | core `scanLogin`、`syncBrowserCookies` | TS import / 结构兼容 | `refreshToken` 在边界被丢弃 |
 | OPML 文档 | `packages/xml/src/opml.ts`（`OpmlDoc`/`OpmlFeed`） | desktop `lib/opml.ts` | 同包 `parseOpml` | 文件文本 | 导入导出丢分组/重复 URL 被去重 |
-| `imageProxy`/`dataSaver` 旁路 | `global.d.ts:45-51` | desktop `store/lib.ts:88-92` 手写镜像 | ui `MediaImage.tsx:115-122` | 全局对象可写字段 | 开关不生效或已挂载图不重取 |
+| `imageProxy`/`dataSaver` 旁路 | `global.d.ts` | desktop `store/lib.ts:88-92` 手写镜像 | ui `MediaImage.tsx` | 全局对象可写字段 | 开关不生效或已挂载图不重取 |
+| `nativeMediaReferer` | `global.d.ts`（只读） | `setHostCaps`（Windows 桌面注入 true） | ui `MediaImage`、实况视频 | 门面 getter | 标志误报 → 直连 403；回退隧道兜底 |
 
 **错误分类（本轮新增契约）**：`ErrorKind` 的权威在 resolve `errors.ts`（`auth / risk / rate-limit / network / timeout / unsupported / parse / no-data / unknown`）。新抛错点应优先 `throw new ResolveError(kind, msg)`；旧平台 client 仍是普通 `Error`，由 `errorKindOf` 做**启发式兜底**（先认显式 `kind`，再按消息匹配：429/冷却 → `rate-limit`，401/cookie/登录 → `auth`，403/412/418/风控 → `risk`，…）。因此 403 不再一律等同「需要登录」。UI 统一用 `ERROR_KIND_LABEL` 出标题，不再按字符串正则猜；`unknown` 留给调用方自己的默认文案。迁移完成前，普通 `Error` 的分类是**尽力而为**，平台 client 逐步改用 `ResolveError` 才算精确。
 
@@ -148,7 +156,7 @@ sequenceDiagram
 | 公共 | `mimeType` `poster` `width` `height` `aspectRatio` `durationSec` `bitrate` `streamingFormat` `isLiveNow` `lang` | 渲染/播放提示 | `:152-161` |
 | article | `contentFormat` | html/markdown/text | `:172` |
 | live | `platform` `roomId` `liveStatus` `online` `isRecord` `introduction` `showTime` | 直播元数据 | `:232-238` |
-| video | `duration` `channelName` `channelAvatar` | 时长与频道 | `:200-206` |
+| video | `duration` `channelName` `channelAvatar` `membersOnly` | 时长、频道、会员/付费专属 | `parseVideo` |
 | video/audio | `streamJson` | 完整 `Stream` JSON（`url/format/headers/quality/rate/dashManifest`），读取优先于 enclosure | `parseStreamFromEnclosure`（`deserialize.ts:289-313`） |
 | audio | `duration` `artist` `album` | 播客元信息 | `:216-218` |
 | social | `likes` `reposts` `replies` `isLiked` `xsecToken` | 互动数 + 详情开关 | `:185-190` |
@@ -282,7 +290,7 @@ sequenceDiagram
 | 能力 | 必填 | 缺失行为 |
 | --- | --- | --- |
 | `http` / `js` / `storage` | 是 | getter 抛带指引的错误（`runtime.ts:59-70`） |
-| `log` / `now` | 否 | 回落 `consoleLogger` / `Date.now`（`runtime.ts:71-76`） |
+| `now` | 否 | 回落 `Date.now`（`runtime.ts:71-76`）。日志**不走门面**：所有包用 `@amoeba/log`，服务用 `setLogSink` 接管输出 |
 | `ws` / `browser` / `updater` | 否 | 返回 `undefined`，消费侧降级（`runtime.ts:79-91`） |
 | `net` | 否（类型）/ **恒有（实现）** | `netBackend` 常量，与后端是否注入无关（`runtime.ts:35-41`） |
 | `openExternal` | 是 | 协议白名单 `http/https/mailto`，fail-closed（`runtime.ts:109-115`） |
@@ -305,7 +313,7 @@ sequenceDiagram
 | 接口 | 形状（节选） |
 | --- | --- |
 | `HttpBackend`（`global.d.ts:295-297`） | `request(req: HttpRequest): Promise<HttpResponse>`；`HttpRequest.policy?: {platform?, metered?, dedupeKey?}`；`arraybuffer` 的 `body` 必须是整段 `Uint8Array` |
-| `StorageBackend`（`global.d.ts`） | `get/set/delete/keys(prefix?)`，纯 KV 字符串，**无事务/批量**；可选 `setSchema?(schema: StorageSchema)`，只有 SQL 型后端需实现 |
+| `StorageBackend`（`global.d.ts`） | `get/set/delete/keys(prefix?)`，纯 KV 字符串；可选 `batch?(ops)`（bun:sqlite 用事务；tauri-plugin-sql 刻意不实现，core 回退逐个）与 `setSchema?(schema: StorageSchema)`（只有 SQL 型后端需实现） |
 | `StorageSchema`（`global.d.ts`） | `{ table: string; ddl: string; migrations: ReadonlyArray<string> }`；由 core `createDataLayer()` 首行注入，后端只执行，不持有 DDL |
 | `JsBackend`（`:306-309`） | `call(code, fn, args): unknown`（执行签名 blob） |
 | `WsBackend`（`:156-158`） | `connect(opts): Promise<WsConnection>`；`WsConnection: {connectionId, readyState, send(Uint8Array), close()}` |
@@ -313,6 +321,8 @@ sequenceDiagram
 | `BrowserTab`（`:167-188`） | `key/evaluate/getCookies/send?/onEvent?/activate?/close/abortPending?`；同 key 复用同一 target |
 | `NetBackend`（`:73-102`） | `configure({level?, levels?, globalMaxConcurrent?, platforms?})`、`reportRisk(platform, signal)`、`browserGate(platform)`、`governorStats()` |
 | `UpdaterBackend`（`:122-131`） | `version/check/downloadAndInstall(onEvent)/relaunch`；事件 `started/progress/finished` |
+
+**批量写（R10）**：`StorageBackend` 另有可选 `batch?(ops: StorageOp[])`（`StorageOp = {type:"set",key,value} | {type:"delete",key}`）。服务用 bun:sqlite 的 `db.transaction`、内存后端同步循环；`tauri-plugin-sql` 后端**刻意不实现**（sqlx 连接池无法保证同一连接，`BEGIN`/`COMMIT` 不可靠），core 见方法缺失自动回退逐个 set/delete。退订清理把 `content:` 与 `body:` 多键合成一次 batch。
 
 `StorageBackend` 的 DDL 权威仍在 `core/src/db/schema.ts:15`（`kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)`）。**注入路径**：`createDataLayer()` 首行调 `appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；`SqliteStorageBackend` 在首次连接前保存 schema，`ready()` 时执行 `schema.migrations`；未注入就读写会抛错，建连后只能重复注入同一份 schema（同表 + 同一 `migrations` 数组），换 schema 会被拒绝。KV/localStorage/内存后端不实现该方法，调用是 no-op。CLI 的 `sqliteStorage` 是 core 的直接消费者（app 层），仍在构造时 import 并执行 core 的 `MIGRATIONS`，尚未改走 `setSchema`；这不构成包依赖环。`version` 字段目前只是数据，没有版本表（见 §7.3）。
 

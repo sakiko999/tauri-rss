@@ -42,6 +42,7 @@ export const BiliWeeklyChannel = makeApiChannel({
         aid: raw.param,
         bvid: raw.bvid,
         duration: raw.duration,
+        rights: raw.rights,
         forceBvid: head.number > 60,
       }),
     )

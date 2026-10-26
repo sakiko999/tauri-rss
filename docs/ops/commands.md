@@ -12,6 +12,12 @@
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
 bun run tauri:release               # ⭐ Rust 以 release 编译但保留热重载（见 CLAUDE.md 环境要求）
 bun run scripts/tauri.ts help       # 全部用法
+
+# CLI 抓取浏览器 sidecar（Windows / WebView2；VS2022 Native Tools 环境）
+cargo build -p amoeba-browser       # 产物 target/debug/amoeba-browser.exe
+bun run rss env --browser           # 确认 CLI 注入了 browser（懒启动，不 spawn）
+bun run rss fetch weibo:user --browser --kv uid=1195230310
+bun run rss browser-reset --target cli   # 清 CLI 自己的 profile（默认）
 ```
 
 ## CLI 调试探针（收编全部 example；设计与边界见下文「CLI 设计与边界」）
@@ -38,14 +44,49 @@ bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统�
 bun run rss hot <词>                    # 热搜词下微博流（需登录 cookie）
 bun run rss sug <关键词>                # 抖音搜索联想词（匿名 appHost，输入补全）
 bun run rss detail <url> --cookie <ck>  # xhs 单条详情补全（登录态 noteDetail；URL 需带 xsec_token）
+bun run rss login <platform>            # 扫码登录（经数据服务；终端渲染二维码，bili/weibo/xhs/douyin）
+bun run rss login xhs --timeout 120     # 指定等待秒数；已登录时直接返回（不重复扫码）
+bun run rss login xhs --endpoint <dir>  # 显式指定服务 endpoint（默认桌面服务）
 bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                       # crawler/rsshub 同构断言
+bun run rss --service --data-dir <dir>  # 前台数据服务（READY + HTTP/WS + 单写者）
+bun run rss fetch <key> --via-service --json     # 探针走数据服务（同 cookie/被动/配额；item/play/dm 同）
+bun run rss attach status               # CLI 连桌面服务：endpoint/health/rev/订阅/条目
+bun run rss attach list [--json]        # 列出订阅（含条目数/总数/分组）
+bun run rss attach refresh <id|channel> # 经服务刷新（--all 全部；--no-force 走 TTL）
+bun run rss attach rpc <method> @params.json  # 通用 RPC（Windows 传 JSON 用 @file）
+bun scripts/service-phase0.ts           # 阶段 0 测量：bootstrap/双写者/markMany 5k
+bun scripts/service-skeleton-check.ts   # 握手/state/WS/单实例/shutdown（13 项）
+bun scripts/service-data-check.ts       # 数据链路 48 项：快照/事件/阅读/备份/迁移/退订/回滚/取消/并发
+bun scripts/remote-data-layer-check.ts  # 远端镜像 38 项：读/写 RPC/事件/诊断/取消/崩溃收敛
+bun scripts/service-snapshot-size.ts    # 快照体积：原始 NDJSON vs gzip（默认桌面 dev 库副本；--db/--max-kb）
+bun scripts/service-runtime-check.ts    # 启动器解析 Bun → 拉起服务 → stdout 只有 READY
+bun run service:build                   # 打包独立服务入口 → dist/service/service.js（约 1.2MB）
+SERVICE_ENTRY=dist/service/service.js bun scripts/service-runtime-check.ts  # 验证打包产物
+cargo build -p amoeba-runtime           # 构建运行时启动器（target/debug/amoeba-runtime.exe）
+cargo build -p amoeba-browser           # 浏览器 sidecar（--browser / 服务模式）
+cargo test -p amoeba --lib service::tests  # Tauri 侧 spawn/READY/endpoint/shutdown
+target/debug/amoeba-runtime.exe --print # 打印解析到的 Bun（AMOEBA_BUN → PATH → 随包 → 缓存 → 下载）
+target/debug/amoeba-runtime.exe apps/cli/src/main.ts env   # 经启动器跑 CLI
+target/debug/amoeba-runtime.exe --no-download <entry>      # 离线：只用已有 Bun
 ```
 
 ## 自检脚本（仓库无测试基建，用最小断言）
 
 ```bash
+bun run check                          # ★ 统一入口：static + contract + state + typecheck（默认 4 层）
+bun run check --list                   # 列出全部检查项与所属层
+bun run check --layer service          # 起真实数据服务（慢，协议/快照/取消）
+bun run check --layer all              # 五层全跑
+bun run check --filter core           # 按路径子串筛（调试单点时用）
+```
+
+分层与归属清单在 `scripts/check.ts` 的 `FILES` / `TYPECHECK_PROJECTS`；新增 `.check.ts` 要同时加进对应层。
+单跑某个文件（失败信息原样输出）：
+
+```bash
+bun packages/log/src/example/log.check.ts               # 日志域（开关/前缀/sink/幂等注册/HMR 合并）
 bun packages/core/src/example/media-store.check.ts      # 查询分支（分组聚合等）
 bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
@@ -65,9 +106,12 @@ bun packages/crawler/src/example/passive-buffer.check.ts # LX 被动缓冲（URL
 bun packages/crawler/src/example/passive-capture.check.ts # LX 采集编排（假后端回放 CDP 事件）
 bun packages/resolve/src/example/router.check.ts        # by-url 路由表（host 边界 + 各平台命中）
 bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
+bun packages/resolve/src/example/youtube-danmaku-poll.check.ts # 直播聊天轮询退避（封顶 60s）/ 直播结束终止判定
+bun packages/resolve/src/example/login-events.check.ts  # 登录/弹幕日志事件在四平台同形同文案
 bun packages/resolve/src/example/bili-buvid.check.ts    # bili 登录 cookie 缺 buvid3 时补匿名指纹（-352 回归）
 bun packages/resolve/src/example/bili-space-sign.check.ts # bili space 系签名含 dm_* 指纹 + cookie 传递（412/-352 回归）
 bun packages/resolve/src/example/credentials.check.ts   # 平台 cookie provider（三级语义 / sign 同接 / douyin 兜底序 / xhs 空串退出）
+bun packages/resolve/src/example/media-referrer-parity.check.ts # 防盗链 Referer 规则（TS ↔ Rust WebView2 注入）一致
 bun packages/resolve/src/example/youtube-clients.check.ts # YouTube client 请求体形状（VISIONOS）
 bun packages/resolve/src/example/danmaku-proto.check.ts # bili 弹幕 protobuf 解码（截断帧不死循环）
 bun packages/resolve/src/example/douyu-frame.check.ts   # 斗鱼弹幕帧（一帧多包全解）
@@ -121,9 +165,19 @@ bun scripts/lx-probe.ts                # CDP 网络捕获边界（304/302/gzip/S
 
 ## CLI 设计与边界
 
-**现状**：八命令（`channels` / `fetch` / `item` / `play` / `dm` / `hot` / `align` / `env` /
-`refresh`）全部可用（`bun run rss <cmd>`），bili video/live、douyu、youtube 实测通过；
+**现状**：`channels` / `fetch` / `item` / `play` / `dm` / `hot` / `align` / `env` /
+`refresh` / `sug` / `detail` / `login` / `browser-reset` 全部可用（`bun run rss <cmd>`），bili
+video/live、douyu、youtube 实测通过；浏览器渠道经 `--browser` 接入独立 WebView2
+sidecar（`weibo:user` 实测通过）；xhs 登录态经 `rss login` 获取（见下）。
 M3 `--log` 域开关与 M4 log 清退未做。
+
+### 登录：`rss login <platform>`
+
+数据服务是唯一生产者，profile 与 cookie 只存在于服务上，所以登录**只有一条路径**：
+连服务的 `scanLogin` RPC，cookie 由服务写入自己的 settings。CLI 不写本地库、不维护
+第二份 profile —— 服务未运行时直接报错并给出启动方式（桌面会自动拉起服务；手动起
+服务必须复用同一份 db/profile）。二维码在终端用 Unicode 半块字符渲染：data URL 类
+（xhs/weibo/douyin）先解 PNG + jsqr 识别再重编码，纯内容类（bili）直接编码。
 
 ### 定位
 
@@ -137,11 +191,18 @@ M3 `--log` 域开关与 M4 log 清退未做。
 **一期渠道**（纯 HTTP/算法，零浏览器）：`rss:*` 直链、`bili:*`（popular/weekly/ranking/
 square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya,douyin,bili}`（+hot）。
 
-- ⛔ **浏览器模拟渠道不在 CLI 内**：`weibo:user`、`xhs:*` 及扫码登录（`login`）整条线
-  （依赖 `appHost.browser` = Edge spawn + CDP）。将来解锁时只需补一个 Bun 版 browser
-  backend（拉起 WebView2/Edge + CDP 走 ws 包），门面接口已留好（`appHost.browser` 可选、未注入
-  自动降级），CLI 其余部分零改动。`crawler/src/example/browser-sim.ts` 是唯一保留的
-  example 脚本（CLI 排除该类渠道；2026-09-11 起零依赖：bun 内置 WebSocket 直连 CDP）。
+- ✅ **浏览器渠道可选启用（2026-10-26）**：`--browser` / `AMOEBA_BROWSER=1` 时注入
+  `appHost.browser`，由 `amoeba-browser.exe`（独立 WebView2 进程 + CDP，屏外窗口）
+  承载 `weibo:user`、`xhs:*`。**显式 opt-in**：crawler 一看到 `appHost.browser` 就走
+  浏览器路径并忽略 `--kv cookie=`，默认注入会让现有 HTTP 探针静默失效。
+  - 构建：`cargo build -p amoeba-browser`；找不到时 CLI 保持 `browser=undefined`（HTTP 降级）。
+  - profile：`%LOCALAPPDATA%/app.amoeba.cli/browser-profile`，与桌面 `webview-profile` 严格分开。
+  - 登录：xhs 必须登录，用 `rss login <platform>`（经数据服务扫码）。CLI 自己的
+    `--browser` sidecar profile 只用于抓取探针，**不承载登录态**。
+  - 单页/lane：与桌面同一套 `@amoeba/host/cdp` 语义（`Target.createTarget` = 独立顶层窗口，
+    sidecar 500ms tidy 去任务栏；`mode hidden|interactive` 同步切换）。
+  - 退出：命令结束 `closeBrowser()` 关 stdin，sidecar 等 WebView2 flush cookie 后退出；
+    超时 `taskkill /T`，父进程死亡由 `--parent-pid` 兜底。
 - ⛔ **不做播放**：只到「解析出 stream 清单」为止；hls.js/flv.js/dashjs 不进 CLI。
   验证直链用 `--open` 丢给系统播放器。
 - bili 登录档位不受影响：settings 登录态经 credentials provider（client 兜底）与
@@ -156,11 +217,15 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
 | Node + tsx + commander | 不选：仓库其余全 bun，徒增分裂 |
 | Rust clap | 排除：重写整个数据层 |
 
+「零构建」仍成立：HTTP 渠道照旧 `bun run rss` 直跑；只有 `--browser` 需要先
+`cargo build -p amoeba-browser`（独立 WebView2 宿主，不重写数据层）。
+
 目录：
 
 ```
+apps/browser-sidecar/      # amoeba-browser：无 Tauri 依赖的 WebView2 宿主（CDP + stdin 控制）
 apps/cli/
-  package.json     # @amoeba/cli；deps: core, host, log + cac + picocolors + qrcode
+  package.json     # @amoeba/cli；deps: core, host, log, platform + cac + picocolors + qrcode + jsqr
   tsconfig.json    # 不 extends tsconfig.app.json（DOM/vite 环境）；面向 bun/node:
                    #   types: ["@types/bun"], moduleResolution bundler, allowImportingTsExtensions
   src/
@@ -268,5 +333,6 @@ bun:sqlite (CLI，apps/cli/.data/rss.db)  /  tauri-plugin-sql (desktop，appData
 
 - **迭代速度**：免 vite/tauri 的毫秒级反馈循环，crawler/resolve/core 改动即测
 - **回归测试入口**：`fetch`/`item`/`dm` 天然是各平台解析的可脚本化回归（配 `--json` 出断言）
-- **未来 sidecar 地基**（desktop 爬虫服务化，见 `docs/architecture/crawler-topology.md`）：
-  node-host 基建外套 HTTP 层（hono/fastify）即是 sidecar，CLI 先行是该里程碑的第一块
+- **服务化地基（已落地 2026-10-26）**：CLI 先行正是数据服务的第一块 —— node-host 基建
+  + `Bun.serve` HTTP/WS 即 `rss --service`，desktop 经 `service_endpoint` 复用同一进程。
+  见 `docs/architecture/system/06-data-service.md`

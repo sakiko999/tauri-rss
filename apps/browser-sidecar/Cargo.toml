@@ -1,0 +1,28 @@
+[package]
+name = "amoeba-browser"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82" # webview2-com 0.39.1 的 MSRV
+description = "Hidden/off-screen WebView2 host for the Amoeba CLI (CDP only, no Tauri)"
+authors = ["zhh"]
+publish = false
+
+[[bin]]
+name = "amoeba-browser"
+path = "src/main.rs"
+
+# 只有 Windows 有 WebView2；其他平台连依赖都不拉。
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.39" # 与 tauri 2.12.4 锁定的 0.39.1 对齐
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Security",
+  "Win32_System_Com",
+  "Win32_System_Console",
+  "Win32_System_JobObjects",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
+  "Win32_UI_HiDpi",
+  "Win32_UI_WindowsAndMessaging",
+] }

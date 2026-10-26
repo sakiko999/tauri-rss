@@ -167,6 +167,28 @@ if (inStore) {
   )
 }
 
+// ── 5. 退订清理:content/body 多键合并成一次 batch 删净(R10) ──
+{
+  const storage = globalThis.appHost.storage
+  let batches = 0
+  const origBatch = storage.batch?.bind(storage)
+  if (origBatch) {
+    storage.batch = async (ops) => {
+      batches += 1
+      await origBatch(ops)
+    }
+  }
+  await seed({ id: "chk-gc", channelKey: "bili:popular", title: "清理测试", enabled: false, info: {} })
+  await storage.set("content:chk-gc", JSON.stringify({ fetchedAt: t, xml: "<rss/>" }))
+  await storage.set("body:chk-gc:item-1", "{}")
+  await storage.set("body:chk-gc:item-2", "{}")
+  await dl.subscriptions.remove("chk-gc")
+  const left = await storage.keys("")
+  assert.ok(!left.includes("content:chk-gc"), "退订后 content 缓存已清")
+  assert.ok(!left.some((k) => k.startsWith("body:chk-gc:")), "退订后 body 缓存已清")
+  if (origBatch) assert.ok(batches > 0, "多键删除走了 batch(不是逐个删)")
+}
+
 // 清理,避免污染同机的 CLI 库(用的是各自 storage key,这里仍清一遍)。
 await dl.subscriptions.remove("chk-off")
 await dl.subscriptions.remove("chk-on")

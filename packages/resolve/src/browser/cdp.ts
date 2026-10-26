@@ -3,7 +3,8 @@
  *
  * 微博/小红书反爬强,需真实浏览器提供登录态(抓取浏览器 profile cookie)+ 设备指纹。
  * 生产宿主是 `appHost.browser`(Tauri WebView2 隐藏窗口 + CDP,见 packages/host
- * tauri/browser-backend.ts);本模块在其 `evaluate` 之上封装页面级操作:
+ * browser/backend.ts 的通用实现与 tauri/browser-backend.ts 的桌面载具);本模块在其
+ * `evaluate` 之上封装页面级操作:
  *   - cdpFetch:  页面上下文 fetch(自动带 profile 登录态 cookie),返回
  *                 { status, bodyText }(形状对齐 host.ts 的 httpGet);
  *   - cdpJson:   页面内 fetch JSON(weibo API);

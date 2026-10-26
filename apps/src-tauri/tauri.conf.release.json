@@ -1,0 +1,10 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "resources": {
+      "../../target/release/amoeba-runtime.exe": "amoeba-runtime.exe",
+      "../../target/release/amoeba-browser.exe": "amoeba-browser.exe",
+      "../../dist/service/service.js": "service/service.js"
+    }
+  }
+}

@@ -8,9 +8,11 @@
  * 的 InnerTube,context/api key 各取各的,共享 liveId)。
  *
  * poll 语义:createLiveChatPoller(liveId) 返回 `(onItems) => () => void`——
- * 启动轮询循环,onItems 收增量消息;返回 unsubscribe。首轮失败(未开播/无聊天)
- * 静默(log.warn),不回调 onItems。
+ * 启动轮询循环,onItems 收增量消息;返回 unsubscribe。初始化失败(未开播/无聊天)
+ * 只 warn 一次,不回调 onItems;轮询连续失败前 3 次 warn、之后静默指数退避,
+ * 直播结束时直接终止循环。
  */
+import { formatError } from "@amoeba/log"
 import type { DanmakuItem } from "../../danmaku"
 import { httpText } from "../../host.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
@@ -22,6 +24,20 @@ const CHAT_API = "https://www.youtube.com/youtubei/v1/live_chat/get_live_chat"
 const WEB_UA = DESKTOP_CHROME_UA
 /** 服务端未给 timeoutMs 时的兜底轮询间隔,ms。 */
 const DEFAULT_TIMEOUT_MS = 5000
+/** 连续失败时的退避上限:断网/风控期间不要把 warn 刷成每秒一条。 */
+const MAX_BACKOFF_MS = 60_000
+/** 连续失败时前几次保留 warn,之后静默(只退避)。 */
+const MAX_WARN_FAILURES = 3
+
+/** 下一次轮询间隔:前 2 次按服务端 timeoutMs,之后指数退避(上限 60s)。 */
+export function nextPollDelay(timeoutMs: number, failures: number): number {
+  return failures > 1 ? Math.min(timeoutMs * 2 ** (failures - 1), MAX_BACKOFF_MS) : timeoutMs
+}
+
+/** continuations 用尽 = 直播真的结束。瞬时异常(无 continuation)不算。 */
+export function isChatEndedError(message: string): boolean {
+  return /无下一 ?continuation/.test(message)
+}
 
 interface ChatState {
   token: string
@@ -134,23 +150,42 @@ export function createLiveChatPoller(liveId: string): (onItems: (items: DanmakuI
   let cancelled = false
   let timer: ReturnType<typeof setTimeout> | null = null
   let statePromise: Promise<ChatState> | null = null
+  /** 连续失败次数:前 3 次 warn,之后静默并指数退避(上限 60s)。 */
+  let failures = 0
+  /** 直播结束/聊天关闭:轮询无意义,立即终止(否则每 5s 一条 warn 永不停止)。 */
+  let ended = false
 
   function schedule(state: ChatState, onItems: (items: DanmakuItem[]) => void): void {
-    if (cancelled) return
+    if (cancelled || ended) return
+    const delay = nextPollDelay(state.timeoutMs, failures)
     timer = setTimeout(() => {
       void pollOnce(liveId, state, onItems)
+        .then(() => {
+          if (failures) log.youtube.pollRecovered({ failures })
+          failures = 0
+        })
         .catch((e) => {
-          if (!cancelled) log.youtube.warn("live chat 轮询失败:", (e as Error)?.message)
+          if (cancelled) return
+          const msg = formatError(e)
+          // continuations 用尽 = 直播真的结束(再轮询只会每 5s 一条 warn)。
+          // ⚠️ 「无 continuation(直播结束?)」不在此列:可能只是瞬时结构异常,走退避即可。
+          if (isChatEndedError(msg)) {
+            ended = true
+            log.youtube.debug("live chat 已结束,停止轮询")
+            return
+          }
+          failures += 1
+          if (failures <= MAX_WARN_FAILURES) log.youtube.pollFailed({ error: msg })
         })
         .finally(() => schedule(state, onItems))
-    }, state.timeoutMs)
+    }, delay)
   }
 
   return (onItems) => {
     if (!statePromise) {
       statePromise = initChat(liveId)
         .catch((e) => {
-          log.youtube.warn("live chat 初始化失败(未开播?):", (e as Error)?.message)
+          log.youtube.danmakuInitFailed({ error: formatError(e) })
           throw e
         })
     }

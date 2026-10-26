@@ -1,7 +1,7 @@
 {
   "name": "tauri-playground",
   "private": true,
-  "version": "0.6.5",
+  "version": "0.7.0",
   "type": "module",
   "workspaces": [
     "apps/desktop",
@@ -11,8 +11,11 @@
     "packages/crawler",
     "packages/host",
     "packages/log",
+    "packages/platform",
     "packages/player",
     "packages/resolve",
+    "packages/service-client",
+    "packages/service-protocol",
     "packages/ui",
     "packages/xml"
   ],
@@ -29,7 +32,9 @@
     "tauri:release": "bun run scripts/tauri.ts tauri desktop --release",
     "tauri:build": "bun run scripts/tauri.ts tauri desktop build",
     "tauri:build:mobile": "bun run scripts/tauri.ts tauri mobile build",
-    "rss": "bun run apps/cli/src/main.ts"
+    "rss": "bun run apps/cli/src/main.ts",
+    "check": "bun run scripts/check.ts",
+    "service:build": "bun build apps/cli/src/service/main.ts --target=bun --outfile=dist/service/service.js"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",

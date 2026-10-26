@@ -159,7 +159,7 @@ async function runScanLogin(
   //     过期凭证当「已登录」写库,用户永远出不了码(只能清除凭证自救)。
   const initial = await loginState(browser, { preferPageState: true })
   if (initial.loggedIn) {
-    log.xhs.loginOk({ user_id: initial.userId })
+    log.xhs.loginReused()
     return { cookie: serializeCookies(initial.cookies), user_id: initial.userId, alreadyLoggedIn: true }
   }
   // 轮询基线:扫码成功的标志是 user_id **从无到有/变化**,残留的旧值不算。

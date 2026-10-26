@@ -104,12 +104,13 @@ async function runWeiboScanLogin(
 
   assertLive()
   await cdpNavigate(browser, LOGIN_URL, true)
-  log.weibo?.loginNavigate?.({ url: LOGIN_URL })
+  log.weibo.loginNavigate({ url: LOGIN_URL })
 
   // 1. 已登录(SUB 已在 profile)→ 直接返回,避免无意义扫码。
   //    ⚠️ SUB 是 HttpOnly,document.cookie 读不到,必须走 CDP getAllCookies。
   const initial = await browser.getCookies("https://weibo.com")
   if (initial["SUB"]) {
+    log.weibo.loginReused()
     return { cookie: serializeCookies(initial), alreadyLoggedIn: true }
   }
 
@@ -119,9 +120,13 @@ async function runWeiboScanLogin(
     const src = await readQrSrc(browser)
     if (src) {
       emitQr(await qrToDataUrl(src))
+      log.weibo.qrReady()
       break
     }
-    if (Date.now() > deadline) throw new Error("微博二维码未出现(登录页结构可能已变)")
+    if (Date.now() > deadline) {
+      log.weibo.qrMissing()
+      throw new Error("微博二维码未出现(登录页结构可能已变)")
+    }
     await new Promise((r) => setTimeout(r, 500))
   }
 
@@ -131,10 +136,13 @@ async function runWeiboScanLogin(
     const c = await browser.getCookies("https://weibo.com")
     if (c["SUB"]) {
       emitQr(null)
-      log.weibo?.loginOk?.({ user_id: c["SUBP"] ?? c["ALF"] })
+      log.weibo.loginOk({ user_id: c["SUBP"] ?? c["ALF"] })
       return { cookie: serializeCookies(c) }
     }
-    if (Date.now() > deadline) throw new Error("扫码登录超时或二维码已失效")
+    if (Date.now() > deadline) {
+      log.weibo.loginTimeout()
+      throw new Error("扫码登录超时或二维码已失效")
+    }
     await new Promise((r) => setTimeout(r, 1_000))
   }
 }

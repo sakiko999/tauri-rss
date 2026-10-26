@@ -53,7 +53,7 @@ ok(liveBack.introduction === "简介文本", `introduction(得 ${liveBack.introd
 const video: Item = {
   id: "BV1", sourceId: "bili:popular", kind: "video", title: "视频",
   url: "https://www.bilibili.com/video/BV1", fetchedAt: 1,
-  duration: 459, poster: "http://x/p.jpg",
+  duration: 459, poster: "http://x/p.jpg", membersOnly: true,
   channel: { name: "UP主", avatar: "http://x/a.jpg" },
 }
 const videoBack = deserializeFeed(serializeFeed([video]), ctx)[0] as any
@@ -61,6 +61,7 @@ console.log("Video 往返:")
 ok(videoBack.duration === 459, `duration(得 ${videoBack.duration})`)
 ok(videoBack.poster === "http://x/p.jpg", `poster(得 ${videoBack.poster})`)
 ok(videoBack.channel?.name === "UP主", `channel.name(得 ${videoBack.channel?.name})`)
+ok(videoBack.membersOnly === true, `membersOnly(得 ${videoBack.membersOnly})`)
 
 // 2b. Stream 全字段：enclosure 只能装 url+type，headers/quality/rate/dashManifest
 // 必须走 tpl:streamJson，否则 hls/dash 直链过边界即静默丢。

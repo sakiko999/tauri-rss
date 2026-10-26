@@ -1,7 +1,10 @@
+/// <reference types="bun" />
 /**
  * 播放器「统计信息」纯逻辑自检 —— `bun packages/player/src/hooks/player-stats.check.ts`
  *
  * 判的是格式化/缓冲余量计算(node 侧,不碰 DOM 与引擎)。
+ * ⚠️ 三斜线是必要的：player 的 tsconfig 继承 `types: ["vite/client"]`，不会自动加载
+ * node/bun 类型，而本文件用 `node:assert`。只给 check 注入，不污染播放器生产代码。
  */
 import assert from "node:assert/strict"
 import {

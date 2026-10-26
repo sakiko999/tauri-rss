@@ -1,8 +1,9 @@
 /**
  * browser-sim —— 验证脚本:CDP 隧道 + 浏览器模拟抓取(weibo:user / xhs:user)。
  *
- * 生产路径:appHost.browser = Tauri WebView2 隐藏窗口 + CDP(packages/host tauri/
- * browser-backend.ts)。本脚本用 edge-cdp skill 在 WSL 侧拉起干净的 Windows Edge,
+ * 生产路径:appHost.browser = Tauri WebView2 隐藏窗口 + CDP(packages/host
+ * browser/backend.ts + tauri/browser-backend.ts)。本脚本用 edge-cdp skill 在 WSL
+ * 侧拉起干净的 Windows Edge,
  * 再以 bun 内置 WebSocket 直连 CDP,模拟同形状的 BrowserBackend,验证 crawler 侧
  * cdp.ts + channel 浏览器路径(不依赖 Tauri 宿主)。
  *
@@ -22,7 +23,8 @@ const PORT = Number(process.env.EDGE_CDP_PORT ?? 9322)
 
 /**
  * CDP 页面连接 —— TauriBrowserBackend(packages/host/src/tauri/browser-backend.ts)的
- * bun 对等物,形状对齐 global.d.ts 的 BrowserBackend。
+ * bun 对等物,形状对齐 global.d.ts 的 BrowserBackend。可移植的版本见
+ * `@amoeba/host/cdp`(CdpBrowserBackend + 自备 Driver/Connector)。
  *
  * 走 bun 内置 WebSocket(浏览器原生 API,自带帧封装),不再需要 playwright-core。
  * CDP 帧带数字 id,用 pending map 配对响应;无 id 的帧是事件,分发给 onEvent 订阅者。

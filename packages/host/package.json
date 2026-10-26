@@ -10,7 +10,8 @@
     "./governor": "./src/net/governor.ts",
     "./node": "./src/node/index.ts",
     "./tauri": "./src/tauri/index.ts",
-    "./browser": "./src/browser/index.ts"
+    "./browser": "./src/browser/index.ts",
+    "./cdp": "./src/browser/cdp.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -19,6 +20,7 @@
     "@tauri-apps/plugin-sql": "^2",
     "@tauri-apps/plugin-updater": "^2",
     "@amoeba/log": "workspace:*",
+    "@amoeba/platform": "workspace:*",
     "ws": "^8.21.3"
   },
   "scripts": {},

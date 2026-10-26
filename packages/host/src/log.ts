@@ -79,3 +79,23 @@ export const browserLog = createLogDomain("host:browser", {
     },
   },
 })
+
+/**
+ * host:net 域 —— 平台冷却账本的写入点。
+ *
+ * 只记「新进入冷却」:冷却期内的重复信号不打印(否则每次刷新都刷一条)。
+ * 刷新变慢/报「平台冷却中」时,这是唯一能回答「哪个信号、判了多久」的地方。
+ */
+export const netLog = createLogDomain("host:net", {
+  color: "#f97316", // orange-500
+  ansi: 208,
+  events: {
+    cooldownSet: {
+      level: "warn",
+      text: (ctx: { platform: string; signal: string; ms: number }) => {
+        const dur = ctx.ms >= 60_000 ? `${Math.round(ctx.ms / 60_000)} 分钟` : `${Math.max(1, Math.round(ctx.ms / 1000))} 秒`
+        return `平台进入冷却 ${ctx.platform}: 信号 ${ctx.signal || "?"}, ${dur}(该平台 HTTP 与浏览器操作都暂停)`
+      },
+    },
+  },
+})

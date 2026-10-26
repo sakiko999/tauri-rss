@@ -141,6 +141,8 @@ export interface MediaAttachment {
 export interface VideoItem extends MediaItemBase {
   kind: "video"
   duration?: number
+  /** 会员/付费专属（B站大会员/充电、YouTube 频道会员）—— 列表可见但播放受限。 */
+  membersOnly?: boolean
   stream?: MediaStream
   channel?: { name: string; avatar?: string }
 }
