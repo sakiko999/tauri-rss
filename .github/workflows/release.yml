@@ -46,6 +46,16 @@ jobs:
       - name: Build frontend
         run: bun run build:desktop
 
+      # 桌面发布包依赖服务三件（tauri.conf.release.json 的 bundle.resources）：
+      # 服务入口 JS、Bun 运行时启动器、浏览器 sidecar。
+      # ⚠️ 漏掉任何一件 → 安装版启动时「应用数据初始化失败」，且 resources 声明缺失时
+      # tauri 不会自己构建它们（v0.7.0 就是因为 CI 少了这两步而发了一个起不来的包）。
+      - name: Build service bundle
+        run: bun run service:build
+
+      - name: Build sidecars (runtime + browser)
+        run: cargo build --release -p amoeba-runtime -p amoeba-browser
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@v1
         env:
@@ -56,6 +66,9 @@ jobs:
           # 前端与 src-tauri 分属两个目录:tauri 命令必须在 src-tauri 里执行。
           projectPath: apps/src-tauri
           tauriScript: bunx tauri
+          # 必须与 scripts/tauri.ts 的 tauri:build 一致地叠加 release 配置：
+          # bundle.resources（服务三件）只写在这个文件里，不叠加 = 打出一个没有服务的包。
+          args: --config tauri.conf.release.json
           tagName: ${{ github.ref_name }}
           releaseName: "Amoeba __VERSION__"
           releaseBody: |
