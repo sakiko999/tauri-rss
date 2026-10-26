@@ -66,6 +66,9 @@ export interface DesktopState {
   hotWord: HotWordState | null
   /** DataLayer 初始化失败(库损坏/宿主未注入)→ 整页错误,不让应用白屏。 */
   initError: string | null
+  /** 数据服务/事件通道状态（本地 DataLayer 恒 true）。 */
+  serviceOnline: boolean
+  serviceError: string | null
   /**
    * 首屏可以交给真实视图了 —— 即 init **全部**结束(含首轮 `refreshAll`)。
    *

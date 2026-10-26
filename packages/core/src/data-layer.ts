@@ -18,20 +18,21 @@ import {
   resolvePlayByUrl as resolveVideoByUrl,
   serializeCookieDict,
   setPlatformCookieLookup,
+  withBrowserGlobal,
   withBrowserOpSlot,
 } from "@amoeba/resolve"
 import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { serializeFeed } from "@amoeba/xml"
 import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { NoChannelError } from "./errors.ts"
-import { KV_DDL, KV_TABLE, MIGRATIONS } from "./db/schema.ts"
+import { STORAGE_SCHEMA } from "./db/schema.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
 import type { ResolvePlayback } from "./types/playback.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import { findRecord } from "./types/reading.ts"
-import { type AppSettings, type NetLevel } from "./types/settings.ts"
+import { DEFAULT_SETTINGS, type AppSettings, type NetLevel } from "./types/settings.ts"
 import {
   createSubscriptionRepository,
   type SubscriptionRepository,
@@ -86,10 +87,18 @@ export interface DataLayer {
     /** ⚠️ 必须带 subscriptionId —— 同一个 item.id 会跨订阅出现(见 media-store.patch)。 */
     patch(subscriptionId: string, id: string, patch: Partial<MediaItem>): void
     subscribe(listener: () => void): () => void
+    /** 丢弃某订阅全部条目（退订/完全重置；服务端用）。 */
+    clear(subscriptionId: string): void
   }
   /** 刷新一次订阅,把内容写入 store。opts.force=true 跳过 TTL 缓存强制抓取(手动刷新)。
    *  默认(force=false)走 TTL:TTL 内命中持久化缓存则跳过网络抓取。 */
   refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult>
+  /**
+   * 只从持久化内容缓存重建 store，**不发网络**。
+   * 数据服务 boot 时调用，保证首次快照就有内容；桌面/移动的 init 仍走
+   * `refreshAll(false)`（TTL 命中时同样零网络）。
+   */
+  hydrate(): Promise<void>
   /** 懒解析某条 video item 的可播流(播放时调用;URL 带 deadline 签名,不缓存)。
    *  返回流 + 弹幕能力(source 具备 DanmakuPlayable 时附带,一次拿齐)。 */
   resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback>
@@ -122,6 +131,21 @@ export interface DataLayer {
    * 与用户保存/扫码的并发覆盖。返回实际更新的 settings 字段。
    */
   syncBrowserCookies(): Promise<Array<keyof AppSettings>>
+  /** 存储/浏览器诊断（桌面设置页用；远端模式走服务端点，不直连 storage/browser）。 */
+  readonly diagnostics: DataLayerDiagnostics
+}
+
+export interface DataLayerDiagnostics {
+  /** 内容缓存条目数与近似字节数（UTF-16）。 */
+  cacheStats(): Promise<{ keys: number; bytes: number }>
+  /** 删除全部 `content:` 缓存，返回删除条数。已加载的 store 条目不动。 */
+  clearContentCache(): Promise<number>
+  /** 删除全部库数据并清空内存条目（调用方负责 reload）。 */
+  clearAll(): Promise<void>
+  /** 清理指定域名的浏览器 cookie（账号页「清除凭证」；远端走服务浏览器）。 */
+  clearCookies(hosts: string[]): Promise<void>
+  /** 清理抓取浏览器 profile（cookie/缓存），返回 profile 目录。 */
+  resetBrowserProfile(): Promise<string>
 }
 
 /**
@@ -179,7 +203,7 @@ export function cookieFieldForPlatform(platform: string): keyof AppSettings | un
 export function createDataLayer(): DataLayer {
   // DDL 唯一权威仍在 core：把 schema 注入 SQL 型后端。host 因此不需要反向 import
   // core（旧的 `host → core` 是包级运行时环的一边，见 docs/architecture/system/05-risks.md R2）。
-  globalThis.appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })
+  globalThis.appHost.storage.setSchema?.(STORAGE_SCHEMA)
   registerAllChannels()
   // ── 平台 cookie provider 注册(credentials 收口)────────────────────────────
   // cookie 链「渠道 → client 调用点」一跳靠人肉传参,曾三次漏传(user_video 412 /
@@ -550,6 +574,17 @@ export function createDataLayer(): DataLayer {
         errorKind: errorKindOf(err),
         fetchedAt: now(),
       }
+    }
+  }
+
+  /**
+   * 只读缓存水化：服务启动时把各订阅首页塞回 store（零网络）。
+   * 停用订阅也照常水化——停用只表示不抓取，不代表不展示旧内容。
+   */
+  async function hydrate(): Promise<void> {
+    const subs = await repo.list().catch(() => [])
+    for (const sub of subs) {
+      await restoreFromCache(sub.id, getChannel(sub.channelKey)?.kind).catch(() => null)
     }
   }
 
@@ -945,6 +980,46 @@ export function createDataLayer(): DataLayer {
     return getChannel(channelKey)?.kind
   }
 
+  const diagnostics: DataLayerDiagnostics = {
+    async cacheStats() {
+      const keys = await storage.keys("content:")
+      let bytes = 0
+      for (const key of keys) {
+        const value = await storage.get(key)
+        bytes += (value?.length ?? 0) * 2
+      }
+      return { keys: keys.length, bytes }
+    },
+    async clearContentCache() {
+      const keys = await storage.keys("content:")
+      for (const key of keys) await storage.delete(key)
+      return keys.length
+    },
+    async clearAll() {
+      const keys = await storage.keys()
+      for (const key of keys) await storage.delete(key)
+      const subs = new Set(store.all().map((it) => it.subscriptionId))
+      for (const id of subs) store.clear(id)
+      removedSubs.clear()
+      pageCursors.clear()
+      pageTotals.clear()
+      cookieSnapshot = { ...DEFAULT_SETTINGS }
+      syncNetPolicy(cookieSnapshot)
+    },
+    async clearCookies(hosts) {
+      const browser = globalThis.appHost.browser
+      if (!browser?.clearCookies || !hosts.length) return
+      await withBrowserGlobal(async () => {
+        for (const host of hosts) await browser.clearCookies?.(host)
+      })
+    },
+    async resetBrowserProfile() {
+      const browser = globalThis.appHost.browser
+      if (!browser?.resetProfile) throw new Error("当前环境不支持清理浏览器数据")
+      return withBrowserGlobal(() => browser.resetProfile!())
+    },
+  }
+
   /** 创建订阅并刷新(拼 id + add + refresh 的编排收敛进 core)。meta 可选带分组与独立 TTL。 */
   async function addSubscription(
     channelKey: string,
@@ -1058,8 +1133,10 @@ export function createDataLayer(): DataLayer {
       query: (q) => store.query(q),
       patch: (subscriptionId, id, patch) => store.patch(subscriptionId, id, patch),
       subscribe: (l) => store.subscribe(l),
+      clear: (subscriptionId) => store.clear(subscriptionId),
     },
     refresh,
+    hydrate,
     resolvePlay,
     resolveLivePlay,
     resolveHotWord,
@@ -1069,5 +1146,6 @@ export function createDataLayer(): DataLayer {
     totalOf: (id) => pageTotals.get(id),
     scanLogin,
     syncBrowserCookies,
+    diagnostics,
   }
 }

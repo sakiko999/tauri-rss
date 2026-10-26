@@ -53,6 +53,8 @@ export default function App() {
   const nodeId = isPlay ? null : storeNodeId
   const init = useDesktop((s) => s.init)
   const initError = useDesktop((s) => s.initError)
+  const serviceOnline = useDesktop((s) => s.serviceOnline)
+  const serviceError = useDesktop((s) => s.serviceError)
   const toast = useDesktop((s) => s.toast)
   const selectedArticleKey = useDesktop((s) => s.selectedArticleKey)
   const booting = useDesktop(showSkeleton)
@@ -110,6 +112,14 @@ export default function App() {
   return (
     <div className="app-shell">
       <TitleBar />
+      {!serviceOnline && serviceError ? (
+        <div className="service-banner" role="status">
+          <span>数据服务断开：{serviceError}（当前为只读镜像，写操作会失败）</span>
+          <button className="btn btn-secondary" onClick={() => window.location.reload()}>
+            重连
+          </button>
+        </div>
+      ) : null}
       <div
         className="app-body"
         data-view={viewType}

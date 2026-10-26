@@ -260,11 +260,24 @@ declare global {
    * SQL 型存储后端的建表契约。**DDL 唯一权威在 core `db/schema.ts`**，
    * 由 core 在 createDataLayer 时注入；host 只执行，不 import core。
    */
+  interface StorageMigration {
+    version: number
+    name: string
+    sql: string
+    checksum: string
+  }
+
   interface StorageSchema {
     table: string
     ddl: string
-    /** 幂等 SQL,按序全量执行(无版本表;非幂等迁移需先加版本表)。 */
+    /** 幂等 SQL,按序全量执行(旧后端兼容路径)。 */
     migrations: ReadonlyArray<string>
+    /** 版本化迁移：先建版本表；已应用版本 checksum 不一致则拒绝启动。 */
+    versioned?: {
+      table: string
+      ddl: string
+      migrations: ReadonlyArray<StorageMigration>
+    }
   }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */
@@ -279,6 +292,8 @@ declare global {
      * core 在 `createDataLayer()` 首次读写前调用；实现方应在此之前完成建表。
      */
     setSchema?(schema: StorageSchema): void
+    /** 关闭底层句柄（long-lived 服务进程退出前调用；其它后端可不实现）。 */
+    close?(): void
   }
 
   /** 日志输出。缺失时消费方用 console 兜底。 */

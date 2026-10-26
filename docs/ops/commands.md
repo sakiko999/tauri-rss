@@ -47,13 +47,21 @@ bun run rss detail <url> --cookie <ck>  # xhs 单条详情补全（登录态 not
 bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                       # crawler/rsshub 同构断言
-bun run rss --service --data-dir <dir>  # 数据服务骨架（阶段 0；READY + HTTP/WS）
-bun scripts/service-phase0.ts           # 阶段 0：bootstrap / 双写者丢更新 / markMany 5k
-bun scripts/service-skeleton-check.ts   # 阶段 0：hello/health/state/WS/单实例/shutdown
+bun run rss --service --data-dir <dir>  # 前台数据服务（READY + HTTP/WS + 单写者）
+bun run rss attach status               # CLI 连桌面服务：endpoint/health/rev/订阅/条目
+bun run rss attach list [--json]        # 列出订阅（含条目数/总数/分组）
+bun run rss attach refresh <id|channel> # 经服务刷新（--all 全部；--no-force 走 TTL）
+bun run rss attach rpc <method> @params.json  # 通用 RPC（Windows 传 JSON 用 @file）
+bun scripts/service-phase0.ts           # 阶段 0 测量：bootstrap/双写者/markMany 5k
+bun scripts/service-skeleton-check.ts   # 握手/state/WS/单实例/shutdown（13 项）
+bun scripts/service-data-check.ts       # 数据链路 34 项：快照/事件/阅读/备份/迁移/退订
+bun scripts/remote-data-layer-check.ts  # 远端镜像 29 项：读/写 RPC/事件/诊断
 bun scripts/service-runtime-check.ts    # 启动器解析 Bun → 拉起服务 → stdout 只有 READY
-bun run service:build                   # 打包独立服务入口 → dist/service/service.js（阶段 0 约 10KB）
+bun run service:build                   # 打包独立服务入口 → dist/service/service.js（约 1.2MB）
 SERVICE_ENTRY=dist/service/service.js bun scripts/service-runtime-check.ts  # 验证打包产物
 cargo build -p amoeba-runtime           # 构建运行时启动器（target/debug/amoeba-runtime.exe）
+cargo build -p amoeba-browser           # 浏览器 sidecar（--browser / 服务模式）
+cargo test -p amoeba --lib service::tests  # Tauri 侧 spawn/READY/endpoint/shutdown
 target/debug/amoeba-runtime.exe --print # 打印解析到的 Bun（AMOEBA_BUN → PATH → 随包 → 缓存 → 下载）
 target/debug/amoeba-runtime.exe apps/cli/src/main.ts env   # 经启动器跑 CLI
 target/debug/amoeba-runtime.exe --no-download <entry>      # 离线：只用已有 Bun

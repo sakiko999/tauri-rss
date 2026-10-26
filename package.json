@@ -13,6 +13,7 @@
     "packages/log",
     "packages/player",
     "packages/resolve",
+    "packages/service-client",
     "packages/service-protocol",
     "packages/ui",
     "packages/xml"

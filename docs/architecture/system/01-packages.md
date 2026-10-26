@@ -2,6 +2,12 @@
 
 > 本文件回答「为什么切成这 8 个库 + 3 个前端应用 + 1 个 Rust crate、谁可以依赖谁、改动该落在哪」。基于 2026-10-23 的 master 快照（v0.6.5）；行号是阅读锚点，重构后以符号名与文件为准。
 > 跨包数据结构的逐字段说明见 `02-contracts.md`，端到端流程见 `03-flows.md`。
+>
+> **2026-10-26 数据服务落地后的增量**：新增 `packages/service-protocol`（HTTP/WS 契约）
+> 与 `packages/service-client`（RemoteDataLayer，desktop/CLI 共用）；packages 共 10 个。
+> core 增加 `hydrate()`、`diagnostics`、`store.clear`、`STORAGE_SCHEMA`（`_migrations`），
+> desktop 默认不再 `createDataLayer()`。数据服务的进程/协议/打包以
+> `06-data-service.md` 为准；本文件依赖矩阵的旧行号仍可用于纯包边界。
 
 规模基准（本次实测）：`packages/` 下 8 个 `@amoeba/*` 包，`apps/` 下 3 个 TypeScript 应用 + 1 个 Rust crate（`apps/src-tauri`）+ 1 个不参与构建的静态原型（`apps/new_desktop`）。根 `package.json` 的 `workspaces` 只收 3 个 app 与 8 个包，`new_desktop` 与 `src-tauri` 不在其中（`package.json:5-17`）。
 

@@ -72,7 +72,10 @@ pub(crate) fn is_blocked_host(url: &str) -> bool {
         return true;
     };
     // IPv6 literals arrive bracketed from Url::host_str.
-    let host = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    let host = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_ascii_lowercase();
     if host.ends_with(".local") || host.ends_with(".internal") {
         return true; // mDNS / split-horizon names resolving inside a LAN
     }

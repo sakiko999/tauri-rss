@@ -10,7 +10,6 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { cookieFieldFor, type ChannelInfo } from "@amoeba/core"
-import { withBrowserGlobal } from "@amoeba/resolve"
 import { useDesktop } from "../../store/index.ts"
 import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
@@ -129,6 +128,7 @@ function CredentialCard({
   onScan: () => void
 }) {
   const meta = PLATFORM_META[platform]!
+  const dl = useDesktop((s) => s.dl)
   const [draft, setDraft] = useState(value)
   const [busy, setBusy] = useState(false)
   const dirty = draft !== value
@@ -207,15 +207,9 @@ function CredentialCard({
             if (!window.confirm(`清除 ${meta.label} 凭证？\n\n${extra}${after}`)) return
             setBusy(true)
             try {
-              // 先清浏览器登录态，再清 settings：中途失败时不会出现「设置已清、账号还挂着」。
-              // withBrowserGlobal:与所有 lane 的导航/抓取互斥(清一半的 cookie 会被
-              // 正在跑的抓取立刻重新种回)。
-              const browser = globalThis.appHost?.browser
-              await withBrowserGlobal(async () => {
-                for (const host of hosts) {
-                  await browser?.clearCookies?.(host)
-                }
-              })
+              // 清浏览器登录态走 diagnostics（远端 = 服务端浏览器；本地 = appHost.browser），
+              // 先清 cookie 再清 settings：中途失败不会出现「设置已清、账号还挂着」。
+              await dl?.diagnostics.clearCookies(hosts)
               await onSave("")
               onToast("warn", `${meta.label} 凭证已清除`)
             } catch (e) {

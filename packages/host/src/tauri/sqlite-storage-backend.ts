@@ -62,7 +62,30 @@ export class SqliteStorageBackend implements StorageBackend {
       // rejected promise 永久留存,之后每次 get/set 都立刻 reject → 进程内 storage 全废。
       // 用 catch 清回 null 让下次调用重跑。
       this.readyPromise = (async () => {
-        for (const sql of schema.migrations) await (await this.dbPromise!).execute(sql)
+        const db = await this.dbPromise!
+        for (const sql of schema.migrations) await db.execute(sql)
+        if (schema.versioned) {
+          const { table, ddl, migrations } = schema.versioned
+          await db.execute(ddl)
+          for (const migration of migrations) {
+            const rows = await db.select<Array<{ checksum: string }>>(
+              `SELECT checksum FROM ${table} WHERE version = $1`,
+              [migration.version],
+            )
+            if (rows[0] && rows[0].checksum !== migration.checksum) {
+              throw new Error(
+                `迁移 checksum 不匹配：version ${migration.version}（${migration.name}）；` +
+                  `已发布迁移不可修改，请追加新版本`,
+              )
+            }
+            if (!rows[0]) {
+              await db.execute(
+                `INSERT INTO ${table} (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)`,
+                [migration.version, migration.name, Date.now(), migration.checksum],
+              )
+            }
+          }
+        }
       })().catch((e) => {
         this.readyPromise = null
         this.dbPromise = null // 连接也可能坏了(load 成功但 execute 失败)→ 一并重建

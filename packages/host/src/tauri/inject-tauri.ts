@@ -26,16 +26,39 @@ import { TauriUpdaterBackend } from "./updater-backend.ts"
  *   所以「注入了但命令全失败」必须在这里显式关掉，不能靠调用时报错。
  * @param opts.nativeMediaReferer 桌面传 `true`：Rust 已注册 WebView2 防盗链 Referer
  *   注入，图片/实况可直连。非 Windows 会在此自动降级为 false（Rust 模块是 cfg(windows)）。
+ * @param opts.storage 传 `false` 注入「拒绝一切读写」的后端：数据服务模式下 desktop
+ *   不再是 SQLite 写者，任何残留直连都会立刻失败（而不是静默双写）。
  */
 export function injectTauriHost(
-  opts: { updater?: boolean; browser?: boolean; nativeMediaReferer?: boolean } = {},
+  opts: {
+    updater?: boolean
+    browser?: boolean
+    storage?: boolean
+    nativeMediaReferer?: boolean
+  } = {},
 ): void {
   // Rust 侧拦截只有 #[cfg(windows)]；其他桌面平台仍须走 blob 隧道。
   const windows = typeof navigator !== "undefined" && /Windows/i.test(navigator.userAgent);
   initAppHost()
   setHostCaps({
     http: new TauriHttpBackend(),
-    storage: new SqliteStorageBackend(),
+    storage:
+      opts.storage === false
+        ? {
+            async get() {
+              throw new Error("数据服务模式：桌面不得直连 SQLite（请走 DataLayer/RPC）")
+            },
+            async set() {
+              throw new Error("数据服务模式：桌面不得直连 SQLite（请走 DataLayer/RPC）")
+            },
+            async delete() {
+              throw new Error("数据服务模式：桌面不得直连 SQLite（请走 DataLayer/RPC）")
+            },
+            async keys() {
+              throw new Error("数据服务模式：桌面不得直连 SQLite（请走 DataLayer/RPC）")
+            },
+          }
+        : new SqliteStorageBackend(),
     js: new FunctionJsBackend(),
     ws: new TauriWsBackend(),
     ...(opts.browser === false ? {} : { browser: new TauriBrowserBackend() }),

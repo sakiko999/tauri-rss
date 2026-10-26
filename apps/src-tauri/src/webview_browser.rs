@@ -35,6 +35,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, MutexGuard};
 #[cfg(windows)]
 use std::time::{Duration, Instant};
+#[cfg(not(windows))]
+use tauri::AppHandle;
 #[cfg(windows)]
 use tauri::{AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
 #[cfg(windows)]
@@ -49,8 +51,6 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SetWindowPos, ShowWindow, GWL_EXSTYLE, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOSIZE,
     SWP_NOZORDER, SW_HIDE, SW_SHOWNA, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
-#[cfg(not(windows))]
-use tauri::AppHandle;
 
 /// 与正式 Edge 的 9223 不同：本方案不再 spawn Edge，这个端口只服务 WebView2。
 pub const PORT: u16 = 9334;
@@ -172,7 +172,10 @@ fn quiet_command(program: &str) -> std::process::Command {
 /// 监听 CDP 端口的进程 PID（= 抓取 WebView2 的浏览器进程）。
 #[cfg(windows)]
 fn cdp_listener_pids() -> Vec<u32> {
-    let Ok(out) = quiet_command("netstat").args(["-ano", "-p", "TCP"]).output() else {
+    let Ok(out) = quiet_command("netstat")
+        .args(["-ano", "-p", "TCP"])
+        .output()
+    else {
         return Vec::new();
     };
     let text = String::from_utf8_lossy(&out.stdout);
@@ -182,7 +185,11 @@ fn cdp_listener_pids() -> Vec<u32> {
         if !line.contains("LISTENING") || !line.contains(&needle) {
             continue;
         }
-        let Some(pid) = line.split_whitespace().last().and_then(|p| p.parse::<u32>().ok()) else {
+        let Some(pid) = line
+            .split_whitespace()
+            .last()
+            .and_then(|p| p.parse::<u32>().ok())
+        else {
             continue;
         };
         if pid != 0 && !pids.contains(&pid) {
@@ -485,7 +492,11 @@ pub fn set_mode(app: &AppHandle, mode: &str) -> Result<(), String> {
     let visible = match mode {
         "hidden" => false,
         "interactive" => true,
-        other => return Err(format!("未知窗口模式: {other}（可用: hidden / interactive）")),
+        other => {
+            return Err(format!(
+                "未知窗口模式: {other}（可用: hidden / interactive）"
+            ))
+        }
     };
     let _guard = op_lock();
     ensure_open_locked(app)?;

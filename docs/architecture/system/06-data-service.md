@@ -1,6 +1,7 @@
 # 数据服务（CLI 载具）架构与落地计划
 
-> 状态：阶段 0（2026-10-26 决策；骨架与运行时启动器已落地）
+> 状态：阶段 0/1 已完成（2026-10-26 实机）；阶段 2 主体完成（安装包/sidecar/单实例已验，
+> updater 签名需环境变量、回滚演练未做）。剩余见 §11。
 > 范围：desktop + CLI。mobile 不参与，继续进程内 `createDataLayer()`。
 
 ## 0. 决策摘要
@@ -58,15 +59,16 @@
 ### 2.2 desktop 启动顺序
 
 1. Tauri `setup()` 启动；页面先渲染 skeleton。
-2. Rust 解析 `dataDir` / `dbFile`（dev / release-debug / prod 三个文件名）/ `profileDir`，算 `instanceKey`。
-3. 读 `<LOCALAPPDATA>\app.amoeba.service\<instanceKey>\endpoint.json`；有存活服务 → `GET /v1/hello` 校验协议 → adopt。
-4. 否则生成 owner token（32 字节 hex）写临时文件，spawn `rss --service --data-dir ... --db ... --profile-dir ... --port 0 --token-file ... --parent-pid <desktop pid>`。
-5. 读 stdout 首行 `READY <port>`，上限 30s（boot 要跑迁移）。
-6. `GET /v1/hello` 校验 pid / bootId / protocol / token。
-7. `GET /v1/state`（NDJSON）建镜像；收到 `snapshot.end` 才原子替换。
-8. 连 `/v1/events`，首帧认证后 `subscribe { sinceRev }`。
-9. 通过 Tauri command `service_endpoint` 把 `{port, token, bootId, protocol}` 交给 renderer；renderer 建 `RemoteDataLayer`。
-10. `ready=true`；`refreshAll` 以 job 触发。
+2. Rust 解析路径（`apps/src-tauri/src/service.rs:resolve_paths`）：
+   `dataDir=%LOCALAPPDATA%\app.amoeba.desktop\service`、
+   `dbFile=%APPDATA%\app.amoeba.desktop\rss{,.dev,.release-debug}.db`、
+   `profileDir=%LOCALAPPDATA%\app.amoeba.desktop\webview-profile`（复用旧桌面 profile，保登录态）。
+3. 读 `dataDir\endpoint.json`；`/v1/hello` 存活且 protocol=1 → **adopt**，不 spawn。
+4. 否则 spawn `amoeba-runtime.exe <service.js|service/main.ts> --service --data-dir ... --db ... --profile-dir ... --token-file ... --parent-pid <desktop pid>`。
+5. 读 stdout 首行 `READY <port>`，上限 30s；启动先做每日 `VACUUM INTO` 备份再开库。
+6. 读 `endpoint.json`（含 **clientToken**），通过 Tauri command `service_endpoint` 原样交给 renderer；owner token 留在 Rust。
+7. renderer `createRemoteDataLayer`：`GET /v1/state` → 镜像 → `channels.list` → 连 `/v1/events`（hello 后 `subscribe {sinceRev}`）。
+8. `ready=true`；`refreshAll` 仍由 desktop 逐订阅调 `refresh`（保留逐条 busy/超时 UI；服务端另有 `refreshAll` job 供 CLI/其它客户端）。
 
 任何一步失败 → 全页错误 + 重试；**不创建本地 DataLayer、不打开 SQLite**。
 
@@ -142,6 +144,13 @@
 | 客户端本地（2+） | `store.patch`（乐观镜像）、`store.subscribe`（本地事件） | 不上线 |
 
 `reading.deleteBySubscription` 并入 `subscriptions.remove` 的服务端事务，不单独暴露。
+
+**实际实现（2026-10-26）**：39 个成员全部有对应 RPC（`packages/service-protocol` 的
+`RpcMethodMap`），另加 `refreshAll` 与 5 个 `diagnostics.*`（桌面设置页/账号页不再直连
+storage/browser；「清除凭证」也经服务浏览器）。`hydrate()` 是 core 新增的「只读缓存水化」，
+服务 boot 时调用，保证首个快照就有内容；desktop/移动的 init 仍走 `refreshAll(false)`。
+CLI 的 `fetch/item/play/dm` 仍是**本地只读探针**（不写库，不违反单写者）；
+`rss attach` 提供 status/list/refresh/rpc，覆盖数据写路径与跨客户端验证。
 
 ### 4.2 job 语义
 
@@ -219,14 +228,19 @@
 
 - desktop 库实际在 **Roaming**：`%APPDATA%\app.amoeba.desktop\rss.db` / `rss.dev.db` / `rss.release-debug.db`；**已是 WAL**（实测 db 4.26MB + wal 2.88MB）。
 - CLI 库：`apps/cli/.data/rss.db`，只允许显式 `--import-db`；不自动合并。
-- 服务原地打开 desktop 库；迁移前 `VACUUM INTO` 备份。
+- 服务原地打开 desktop 库；打开前 `VACUUM INTO` 每日一次（`dataDir/backups`，保留 7 份；
+  实测 2.75MB）。备份失败只记 stderr，不阻止启动。
 
 ### 6.2 打开门禁
 
-- 服务是唯一 opener；desktop 注入会抛错的 `RejectingStorage`，残留直写立即失败。
-- 参数：WAL、`busy_timeout=5000`、`synchronous=NORMAL`、`foreign_keys=ON`、`wal_autocheckpoint=1000`、`journal_size_limit=64MB`。
-- 新增 `_migrations(version,name,applied_at,checksum)`；只向前；checksum 变化拒绝启动。
-- DDL 仍归 core `db/schema.ts`；迁移执行器放 host 工具。
+- 服务是唯一 opener；desktop 注入会抛错的 `RejectingStorage`，残留直写立即失败
+  （`injectTauriHost({storage:false})`）。
+- 参数：WAL、`busy_timeout=5000`、`synchronous=NORMAL`、`foreign_keys=ON`、`wal_autocheckpoint=1000`、`journal_size_limit=64MB`
+  （`apps/cli/src/store/sqlite-storage.ts`）。
+- `_migrations(version,name,applied_at,checksum)` 已实现：DDL 唯一权威仍是 core
+  `db/schema.ts` 的 `STORAGE_SCHEMA`；SQL 后端只执行。只向前；已应用版本 checksum
+  变化 → 抛错拒绝启动（FNV-1a 32 位，非安全哈希）。两个后端（bun:sqlite /
+  tauri-plugin-sql）各执行同一份注入 schema。
 
 ### 6.3 数据模型（v1）
 
@@ -238,24 +252,31 @@
 
 ### 6.4 写路径
 
-- 单条串行队列 + `BEGIN IMMEDIATE`；每个 mutation 一个事务。
-- `markManyRead` 一次事务；5k 条目标 ≤100ms。
-- 位置/滚动：服务端 1s 合批；客户端不再 5s 一次 RPC。
-- `opId` LRU 5min/1024，内存即可。
+- 服务单进程 + repo 内部串行链（subscriptions/reading/settings 各自）；KV 每条 mutation
+  是单条 `INSERT … ON CONFLICT`，SQLite 语句级原子。v1 不额外包 `BEGIN IMMEDIATE`
+  —— 单条 KV 写入不需要，显式事务留给 v2 行表。
+- `markManyRead` 一次读改写、一次落盘；实测 5k = 6–7ms（阶段 0）。
+- 位置/滚动：服务端 `reading.changed` 1s 合批；客户端仍按 5s 节流发 RPC。
+- `opId` LRU 5min/1024，内存即可；长任务重复 opId 复用同一个 Promise。
 
 ### 6.5 迁移与回滚
 
-- 以 desktop 库为基；备份 `VACUUM INTO` 单文件；冷备份必须 db+wal+shm。
-- 恢复前删除目标 `-wal/-shm` 并 bump epoch。
-- settings 不字段合并；reading 按 `lastReadAt` 较新者胜；content/body 按 `fetchedAt` 较新者胜。
-- 旧 desktop 构建打开已迁移库：schema 门禁拒绝并提示升级。
+- 以 desktop 库为基；每日 `VACUUM INTO` 单文件备份已实现。
+- **回滚演练未做**：恢复时需删除目标 `-wal/-shm` 并 bump epoch（v2 补）。
+- settings 不字段合并；reading 按 `lastReadAt` 较新者胜；content/body 按 `fetchedAt` 较新者胜（未做自动合并，v1 CLI/desktop 共库）。
+- 旧 desktop 构建打开已迁移库：新增 `_migrations` 表对旧构建无害（它只读写 `kv`），
+  尚未加 schema 版本门禁。
 
 ## 7. desktop 客户端改造
 
 ### 7.1 RemoteDataLayer
 
-- 与 `DataLayer` 同形；读走本地镜像，写走 RPC/job。
-- 镜像复用 `createMediaStore()`；`store.all/query/patch/subscribe` 行为不变。
+- 与 `DataLayer` 同形；读走本地镜像，写走 RPC/job。实现在
+  `packages/service-client`（desktop 与 CLI 共用），运行时不 import core 根入口，
+  只从 `@amoeba/core/media-store|reading` 取实现。
+- 镜像复用 `createMediaStore()`；`store.all/query/patch/subscribe/clear` 行为不变。
+- 断线/rev gap → 关闭 WS → 重新 `GET /v1/state` 全量替换（不做事件补丁恢复）；
+  镜像保留只读，写 RPC 失败由 desktop 回滚乐观 patch + toast。
 - `subscriptions/groups/settings/reading` 用普通数组/对象镜像；selectors 不动。
 - `canLoadMore/totalOf` 由快照与事件维护。
 
@@ -279,17 +300,23 @@
 
 - `refreshView` 合帧：microtask/rAF 合并同一帧多次事件。
 - `queryView` memo：按 `(itemsRev, subscriptionsRev, filter, sort, page, query, node)` 缓存。
-- 快照投影 0.48MB；两阶段渲染（元数据先到，items 分块）。
+- 快照投影：dev 库实测 2,525 条 = **2.32MB**（其中播客 `summary` 1.46MB；文章正文已剥离），
+  仍在 ≤4MB 预算内；两阶段渲染（元数据先到，items 每 400 条分块）。
 - 服务与 UI 并行启动；skeleton 不阻塞。
 
 ### 7.5 必改清单
 
-- `apps/desktop/src/store/actions/data.ts`：`createDataLayer` → `createRemoteDataLayer`；`syncBrowserCookies` 移除。
-- `ctx.ts`：`refreshView` 合帧。
-- `actions/subs.ts`、`actions/reading.ts`：写路径改 RPC；批量。
-- `Diagnostics.tsx`、`dev/seed.ts`、`AccountPage.tsx`、`data.ts:197`：禁止直连 storage/browser，改服务端点。
-- `apps/src-tauri`：spawn 服务、externalBin/resources、single-instance、shutdown、`service_endpoint`。
-- 删除 `webview_browser_*` / `TauriBrowserBackend` / `withBrowserGlobal` / `abortTabs`（在服务接管浏览器并通过 parity 后）。
+- `apps/desktop/src/store/data-source.ts`：Tauri 默认 `service_endpoint` → `createRemoteDataLayer`；
+  `VITE_DATA_SERVICE=0` 才回进程内 `createDataLayer`（调试）。
+- `ctx.ts`：`refreshView` 合帧（未做；当前事件量下未观测到瓶颈）。
+- `actions/subs.ts`、`actions/reading.ts`：写路径走服务；`markRead/markAllRead/toggleStar`
+  失败回滚乐观 patch + toast 已加。
+- `Diagnostics.tsx`、`dev/seed.ts`：已禁止直连 storage/browser；诊断走 `DataLayer.diagnostics`，
+  seed 标记改 localStorage。
+- `apps/src-tauri`：`service.rs`（spawn/adopt/READY/endpoint/shutdown）、`single-instance`、
+  `tauri.conf.release.json` resources、`service_endpoint`；主窗口 Destroyed → 服务 shutdown。
+- `webview_browser_*` / `TauriBrowserBackend` 仍保留作 `VITE_DATA_SERVICE=0` 本地调试回退；
+  服务接管路径不再注入 browser，`abortTabs` 调用已从 desktop 移除。
 
 ## 8. 打包与运行时
 
@@ -300,9 +327,10 @@
 
 ### 8.2 推荐：小启动器 + JS，不随包 Bun
 
-**发布形态**：`amoeba-runtime.exe`（Rust，release 3.7MB）+ `dist/service/service.js`（阶段 0 10KB）
-+ `amoeba-browser.exe`。启动器只做运行时解析/下载，然后 spawn `bun service.js ...`；
-desktop 与 CLI 共用同一份 JS 与同一套解析逻辑。安装包不再背 ~92MB 的 Bun。
+**发布形态**：`amoeba-runtime.exe`（release 3.7MB）+ `dist/service/service.js`
+（当前 1.2MB / 601 modules）+ `amoeba-browser.exe`（release 423KB）。启动器只做运行时
+解析/下载，然后 spawn `bun service.js ...`；desktop 与 CLI 共用同一份 JS 与同一套解析逻辑。
+安装包不再背 ~92MB 的 Bun；实测 NSIS 安装包 **7.14MiB**（含三件 sidecar 资源）。
 
 **运行时顺序（2026-10-26 决策：全局优先 + 失败自动下载）**：
 
@@ -341,12 +369,15 @@ desktop 与 CLI 共用同一份 JS 与同一套解析逻辑。安装包不再背
 
 ### 8.4 阶段 0 打包实测
 
-1. 启动器三个来源各跑一次：全局 PATH、托管缓存、下载（本地 zip 模拟）；确认 stdout 干净。
-2. 用真实服务（含 `bun:sqlite`、动态渠道 import、`amoeba-browser` 路径）跑一次 clean VM 安装/卸载，
-   断网走缓存、首次联网走下载。
-3. Tauri `resources` 发 JS + 启动器 + `amoeba-browser.exe`；确认安装目录只读时 DB/profile 仍写
-   `%APPDATA%`/`%LOCALAPPDATA%`，且无控制台闪窗。
-4. `externalBin` 编译版对比安装包体积、冷启动、updater 替换。
+1. **已完成**：启动器全局 PATH / 缓存 / 真实 HTTPS 下载 / 本地 zip / 并发首启只下载一次 /
+   checksum 失败拒绝 / `--no-download` 失败提示；release 3.7MB。
+2. **已完成**：`service.js` 打包产物经启动器拉起，`scripts/service-runtime-check.ts` 全过。
+3. **已完成**：`tauri.conf.release.json` resources；NSIS 安装包（7.14MiB）内确认含
+   `service\service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe`；DB/profile 仍写
+   `%APPDATA%`/`%LOCALAPPDATA%`；服务进程用 `CREATE_NO_WINDOW`。
+4. **未做**：clean VM 安装/卸载、断网首次启动、`externalBin` 编译版对比、updater 签名/替换。
+   ⚠️ 本机 `tauri build` 在 NSIS 之后因缺 `TAURI_SIGNING_PRIVATE_KEY` 失败（安装包已产出）；
+   发布机需配置该私钥。
 
 ## 9. 性能预算（实测）
 
@@ -388,22 +419,33 @@ desktop 与 CLI 共用同一份 JS 与同一套解析逻辑。安装包不再背
     `--no-download` 失败提示；`scripts/service-runtime-check.ts` 6 项全过。
   - 独立服务入口 `apps/cli/src/service/main.ts` → `bun run service:build` 出
     `dist/service/service.js`（阶段 0 仅 10KB / 3 modules），启动器跑打包产物同样 6 项全过。
-- 待做：Tauri resources/externalBin 打包；WebView2 loopback；profile 复制迁移。
-- 产出：测量报告 + go/no-go。
-- 停止条件：投影 >1MB 或 boot >500ms；WebView2 被 CSP/混合内容挡住；resources/externalBin 都不可行；profile 必须重扫且不接受。
+- **已完成（2026-10-26）**：Tauri resources（`tauri.conf.release.json`）与 NSIS 安装包；
+  真实 Tauri dev 实例通过 WebView2 loopback 连服务（CORS/WS/Origin 校验全过）；
+  profile 直接复用 `%LOCALAPPDATA%\app.amoeba.desktop\webview-profile`，不重扫。
+- 产出：测量报告 + go/no-go（go）。
 
-### 阶段 1：单写者数据服务（3–4 周）
+### 阶段 1：单写者数据服务（已完成 2026-10-26）
 
-- 服务接管 DB/迁移/crawler/browser/login/governor/jobs。
-- 快照 + 事件 + RemoteDataLayer + 镜像；desktop 用 `AMOEBA_DATA_SERVICE=1` 开关切换。
-- 迁移 desktop 库、备份、回滚开关。
-- 验收：双客户端并发不丢更新；CLI refresh → desktop 事件；desktop 标已读 → CLI 可见；UI parity。
+- 服务接管 DB/迁移/crawler/browser/login/governor/jobs；
+  `apps/cli/src/service/{server,host}.ts` + `packages/service-protocol`。
+- 快照 + rev 事件环形缓冲 + `RemoteDataLayer`（`packages/service-client`）+ 本地镜像；
+  desktop Tauri 默认走服务，`VITE_DATA_SERVICE=0` 才回进程内。
+- desktop 库原地迁移；每日 `VACUUM INTO` 备份；`_migrations` checksum 门禁。
+- **验收实测**：
+  - `scripts/service-data-check.ts` 34 项全过（快照/事件 rev/阅读合批/settings/refresh/
+    preview/loadMore/cacheStats/幂等/退订清理/token 权限/迁移表/每日备份）。
+  - `scripts/remote-data-layer-check.ts` 29 项全过（镜像读/写 RPC/事件/诊断/退订）。
+  - 真机 Tauri：`remote=true`、53 订阅/2525 条目/ready=true；UI 标已读 → 服务落库；
+    CLI `attach rpc reading.markRead` → 桌面事件立即变已读；反向同样可见。
+  - 正常关窗：服务退出、endpoint/lock 清理、无残留进程。
 
-### 阶段 2：收口与发布（1–2 周）
+### 阶段 2：收口与发布（主体完成）
 
-- 删除 desktop 直连 storage/browser 的残留；去 `tauri-plugin-sql`（mobile 保留）。
-- 打包（启动器 + JS；编译版作回退）、single-instance、版本协商、updater、回滚演练。
-- 验收：安装包可启动；旧服务/新 UI 强制重启；安全 checklist。
+- ✅ desktop 远端模式 `injectTauriHost({storage:false,browser:false})`；Diagnostics/seed 不再直连。
+- ✅ single-instance（第二个实例只聚焦主窗口）、protocol=1 握手/426 门禁、`service_endpoint`。
+- ✅ 安装包（启动器 + JS + 浏览器 sidecar 进 resources；NSIS 7.14MiB）。
+- ⚠️ `tauri-plugin-sql` 保留（mobile 与 `VITE_DATA_SERVICE=0` 回退仍用），未从 desktop 发布路径移除。
+- ❌ updater 签名（本机缺 `TAURI_SIGNING_PRIVATE_KEY`）、回滚演练、clean VM 安装/卸载。
 
 ### 阶段 3（可选，按实测）
 
@@ -411,11 +453,14 @@ desktop 与 CLI 共用同一份 JS 与同一套解析逻辑。安装包不再背
 
 ## 12. 待决问题
 
-- Tauri 生产 WebView2 的 Origin 是 `http://tauri.localhost` 还是 `https://tauri.localhost`（mixed content 风险）。
+- Tauri 生产 WebView2 Origin：dev 已实机通过（`http://tauri.localhost` 类 host 白名单 + CORS）；
+  release clean VM 待验。
 - 启动器自动下载在公司代理/杀软/无签名场景的表现；Bun 1.4.3 之外版本的兼容闸门。
-- profile 复制迁移是否保留 xhs/weibo 登录态（阶段 0 实测）。
-- 全量镜像上限：items >10k 时的窗口化/服务端聚合方案。
-- `refreshAll` 服务端单 job 与现有 desktop 编排的替换细节。
+- 全量镜像上限：dev 2,525 条 = 2.32MB（播客 summary 占 1.46MB）；items >10k 时再做窗口化。
+- `refreshAll`：服务端 job 已实现，但 desktop 仍逐订阅调 `refresh` 以保留逐条 busy/超时 UI；
+  是否切换待 R5（lane→job 取消）一起做。
+- 未做：refresh 的 job 级取消（core 无 AbortSignal）、CLI 原始探针（fetch/item/play/dm）
+  走服务、updater 签名/回滚演练、clean VM 安装。
 
 ## 13. 验收清单
 

@@ -31,6 +31,7 @@ import { runHot } from "./commands/hot.ts"
 import { runSug } from "./commands/sug.ts"
 import { runDetail } from "./commands/detail.ts"
 import { runBrowserReset } from "./commands/browser-reset.ts"
+import { runAttach } from "./commands/attach.ts"
 
 // --service 必须在 setupHost / loadSettings 之前分流：服务不读 CLI settings，
 // 也不走命令注册。阶段 1 会把服务入口拆成独立模块，避免连带加载全部命令。
@@ -165,6 +166,23 @@ cli
   .option("--json", "JSON 输出")
   .option("--cookie <ck>", "小红书登录 cookie(缺省回落 CLI settings 的 xhsCookie)")
   .action(guard((url: string, opts: { json?: boolean; cookie?: string }) => runDetail(url, opts)))
+
+cli
+  .command("attach <action> [arg1] [arg2]", "作为数据服务客户端（status/list/refresh/rpc；默认连桌面）")
+  .option("--endpoint <path>", "endpoint.json 或其目录（默认 desktop 服务）")
+  .option("--json", "JSON 输出")
+  .option("--all", "refresh 全部订阅")
+  .option("--no-force", "refresh 走 TTL 缓存")
+  .action(
+    guard(
+      (
+        action: string,
+        arg1: string | undefined,
+        arg2: string | undefined,
+        opts: { endpoint?: string; json?: boolean; all?: boolean; force?: boolean },
+      ) => runAttach(action, [arg1, arg2].filter((v): v is string => !!v), opts),
+    ),
+  )
 
 cli
   .command("browser-reset", "清掉抓取浏览器 profile(默认 CLI sidecar;--target desktop|all)")

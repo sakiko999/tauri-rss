@@ -1,28 +1,55 @@
 /**
- * rss --service —— 数据服务骨架（阶段 0）。
+ * rss --service —— 数据服务（阶段 1）。
  *
- * 本文件只做「进程/发现/认证/握手/事件通道」，**不碰 SQLite、不读 crawler**：
+ * 单写者：本进程独占 SQLite、crawler/resolve、浏览器、governor、jobs。
  *   stdout 只输出一行 `READY <port>`；日志一律 stderr。
  *   endpoint.json / instance.lock / service.token 都在 dataDir 下。
- *   HTTP: /v1/hello /v1/health /v1/state /v1/rpc /v1/shutdown
- *   WS:   /v1/events（首帧 auth，之后 hello + ping/pong）
+ *   HTTP: /v1/hello /v1/health /v1/state /v1/rpc /v1/jobs/:id/cancel /v1/shutdown
+ *   WS:   /v1/events（首帧 auth → hello → subscribe sinceRev）
  *
- * 阶段 1 会在这个骨架上接 createDataLayer()/bun:sqlite/crawler/browser；
- * 那时 endpoint 增加 bootId/epoch/rev，快照与事件才有真实内容。
+ * 一致性：每个改变镜像状态的提交 rev+1，并广播一条到多条 StateEvent；
+ * 事件环形缓冲供断线重连按 sinceRev 回放，gap 则要求客户端重新取快照。
  */
 import type { ServerWebSocket } from "bun"
-import { createHash, randomBytes } from "node:crypto"
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import {
+  createDataLayer,
+  errorKindOf,
+  readingKey,
+  type AppSettings,
+  type DataLayer,
+  type MediaItem,
+  type MediaQuery,
+  type ReadRecord,
+  type ReadingMap,
+  type RefreshResult,
+  type Subscription,
+  type SubscriptionGroup,
+} from "@amoeba/core"
+import { withBrowserGlobal } from "@amoeba/resolve"
+import {
   ENDPOINT_SCHEMA,
+  SERVICE_FEATURES,
   SERVICE_PROTOCOL,
   SERVICE_VERSION,
+  type AddSubscriptionMeta,
+  type DiagnosticsStats,
   type EndpointInfo,
   type HealthResponse,
   type HelloResponse,
+  type JobProgress,
+  type RpcMethod,
+  type RpcRequest,
+  type RpcResponse,
+  type SnapshotLine,
+  type StateEvent,
+  type WsClientMessage,
+  type WsServerMessage,
 } from "@amoeba/service-protocol"
+import { backupDbIfNeeded, setupServiceHost, type ServiceHost } from "./host.ts"
 
 export interface ServiceOptions {
   dataDir: string
@@ -31,11 +58,32 @@ export interface ServiceOptions {
   port: number
   tokenFile: string
   parentPid?: number
+  browserSidecar?: string
+  browser: boolean
+  cookieSync: boolean
 }
 
 const TOKEN_BYTES = 32
 const AUTH_TIMEOUT_MS = 1_000
 const PARENT_POLL_MS = 2_000
+const HEARTBEAT_MS = 5_000
+const COOKIE_SYNC_DELAY_MS = 1_500
+const READING_BATCH_MS = 1_000
+const EVENT_LOG_LIMIT = 512
+const MAX_RPC_BYTES = 16 * 1024 * 1024
+const SNAPSHOT_CHUNK = 400
+
+type StateEventInput = StateEvent extends infer T
+  ? T extends StateEvent
+    ? Omit<T, "rev">
+    : never
+  : never
+
+interface WsData {
+  authed: boolean
+  role: "owner" | "client" | null
+  subscribed: boolean
+}
 
 function hex(bytes: number): string {
   return randomBytes(bytes).toString("hex")
@@ -60,6 +108,9 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
   let port = 0
   let tokenFile: string | undefined
   let parentPid: number | undefined
+  let browserSidecar: string | undefined
+  let browser = process.env.AMOEBA_BROWSER !== "0"
+  let cookieSync = true
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i]
@@ -70,6 +121,10 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
     }
     switch (arg) {
       case "--service":
+      case "--browser":
+        break
+      case "--no-browser":
+        browser = false
         break
       case "--data-dir":
         dataDir = resolve(next())
@@ -79,6 +134,9 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
         break
       case "--profile-dir":
         profileDir = resolve(next())
+        break
+      case "--browser-sidecar":
+        browserSidecar = resolve(next())
         break
       case "--port":
         port = Number(next())
@@ -90,11 +148,14 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
       case "--parent-pid":
         parentPid = Number(next())
         break
+      case "--no-cookie-sync":
+        cookieSync = false
+        break
       case "--help":
       case "-h":
         return null
       default:
-        // 阶段 0 允许未知参数（main.ts 的全局 --browser 等），不在这里报错。
+        // 允许 main.ts 的全局参数透传，不在这里报错。
         break
     }
   }
@@ -107,19 +168,25 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
     port,
     tokenFile: tokenFile ?? join(dataDir, "service.token"),
     parentPid,
+    browserSidecar,
+    browser,
+    cookieSync,
   }
 }
 
 function usage(): string {
   return [
-    "rss --service — Amoeba 数据服务（阶段 0 骨架）",
+    "rss --service — Amoeba 数据服务",
     "",
-    "  --data-dir <path>    data/endpoint/lock/token 目录",
-    "  --db <file>          SQLite 路径（阶段 1 使用）",
-    "  --profile-dir <path> 浏览器 profile（阶段 1 使用）",
-    "  --port <n>           0 = OS 分配",
-    "  --token-file <path>  读取/写入 token（默认 <data-dir>/service.token）",
-    "  --parent-pid <pid>   父进程退出即关闭",
+    "  --data-dir <path>         endpoint/lock/token 目录",
+    "  --db <file>               SQLite 路径（默认 <data-dir>/rss.db）",
+    "  --profile-dir <path>      浏览器 profile（默认 <data-dir>/browser-profile）",
+    "  --browser-sidecar <path>  amoeba-browser.exe 路径（缺省自动探测）",
+    "  --no-browser              不注入抓取浏览器",
+    "  --no-cookie-sync          启动后不做浏览器 cookie 快照同步",
+    "  --port <n>                0 = OS 分配",
+    "  --token-file <path>       owner token（默认 <data-dir>/service.token）",
+    "  --parent-pid <pid>        父进程退出即关闭",
     "",
     "stdout: READY <port>",
   ].join("\n")
@@ -135,7 +202,13 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-function tokenFrom(opts: ServiceOptions): string {
+function tokenEquals(a: string, b: string): boolean {
+  const ba = Buffer.from(a)
+  const bb = Buffer.from(b)
+  return ba.length === bb.length && timingSafeEqual(ba, bb)
+}
+
+function ownerTokenFrom(opts: ServiceOptions): string {
   if (existsSync(opts.tokenFile)) {
     const existing = readFileSync(opts.tokenFile, "utf8").trim()
     if (existing) return existing
@@ -156,11 +229,68 @@ function originAllowed(req: Request): boolean {
   }
 }
 
-function json(body: unknown, status = 200): Response {
+function hostAllowed(req: Request): boolean {
+  const host = req.headers.get("host") ?? ""
+  const name = host.replace(/^\[|\]$/g, "").split(":")[0]?.toLowerCase()
+  return name === "127.0.0.1" || name === "localhost"
+}
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin")
+  if (!origin) return {}
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "authorization, content-type",
+    "access-control-allow-private-network": "true",
+    vary: "origin",
+  }
+}
+
+function json(req: Request, body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8" },
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...corsHeaders(req),
+    },
   })
+}
+
+function errorResponse(req: Request, status: number, kind: string, message: string): Response {
+  return json(req, { ok: false, error: { kind, message } } satisfies RpcResponse, status)
+}
+
+class ServiceError extends Error {
+  constructor(
+    readonly kind: string,
+    readonly status: number,
+    message: string,
+  ) {
+    super(message)
+  }
+}
+
+function asString(value: unknown, name: string): string {
+  if (typeof value !== "string" || !value) {
+    throw new ServiceError("bad-request", 400, `${name} 无效`)
+  }
+  return value
+}
+
+function sameRefs(a: readonly MediaItem[], b: readonly MediaItem[]): boolean {
+  return a.length === b.length && a.every((it, i) => it === b[i])
+}
+
+/** 轻量投影：文章正文按需 resolveDetail；social 的正文是列表卡片本身，必须保留。 */
+function projectItem(item: MediaItem): MediaItem {
+  if (item.kind !== "article" || item.content === undefined) return item
+  const { content: _content, ...rest } = item
+  return rest as MediaItem
+}
+
+function recordKey(subscriptionId: string, itemId: string): string {
+  return readingKey(subscriptionId, itemId)
 }
 
 export async function runService(opts: ServiceOptions): Promise<number> {
@@ -187,28 +317,623 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     writeFileSync(lockPath, JSON.stringify({ pid: process.pid, bootId, startedAt }), { flag: "wx" })
   }
 
-  const token = tokenFrom(opts)
+  const ownerToken = ownerTokenFrom(opts)
+  const clientToken = hex(TOKEN_BYTES)
   const key = instanceKey(opts.dbFile, opts.profileDir)
+
+  let host: ServiceHost | undefined
+  let dl: DataLayer | undefined
+  let server: ReturnType<typeof Bun.serve<WsData>> | undefined
   let stopping = false
   let rev = 0
-  const sockets = new Set<ServerWebSocket<{ authed: boolean }>>()
+  const sockets = new Set<ServerWebSocket<WsData>>()
+  const eventLog: StateEvent[] = []
+  const lastItems = new Map<string, MediaItem[]>()
+  const jobs = new Map<string, { controller: AbortController; promise: Promise<unknown> }>()
+  const opCache = new Map<string, { at: number; promise: Promise<unknown> }>()
+  const pendingReading = new Map<string, ReadRecord | null>()
+  let readingTimer: ReturnType<typeof setTimeout> | null = null
+  let parentTimer: ReturnType<typeof setInterval> | null = null
+  let heartbeat: ReturnType<typeof setInterval> | null = null
+  let cookieTimer: ReturnType<typeof setTimeout> | null = null
 
-  const server = Bun.serve<{ authed: boolean }>({
+  const dataLayer = (): DataLayer => {
+    if (!dl) throw new ServiceError("unavailable", 503, "data layer not ready")
+    return dl
+  }
+
+  function broadcast(message: WsServerMessage): void {
+    const text = JSON.stringify(message)
+    for (const ws of sockets) {
+      if (!ws.data.authed) continue
+      try {
+        ws.send(text)
+      } catch {
+        /* 已关闭 */
+      }
+    }
+  }
+
+  function commit(...inputs: StateEventInput[]): number {
+    if (!inputs.length) return rev
+    rev++
+    const events = inputs.map((e) => ({ ...e, rev }) as StateEvent)
+    for (const event of events) {
+      eventLog.push(event)
+      if (eventLog.length > EVENT_LOG_LIMIT) eventLog.shift()
+      broadcast({ type: "event", event })
+    }
+    return rev
+  }
+
+  function queueReading(records: Record<string, ReadRecord | null>): void {
+    for (const [key, value] of Object.entries(records)) pendingReading.set(key, value)
+    if (readingTimer) return
+    readingTimer = setTimeout(flushReading, READING_BATCH_MS)
+  }
+
+  function flushReading(): void {
+    if (readingTimer) {
+      clearTimeout(readingTimer)
+      readingTimer = null
+    }
+    if (!pendingReading.size) return
+    const records = Object.fromEntries(pendingReading)
+    pendingReading.clear()
+    commit({ type: "reading.changed", records })
+  }
+
+  async function subsEvent(): Promise<StateEventInput> {
+    const layer = dataLayer()
+    const [subscriptions, groups] = await Promise.all([
+      layer.subscriptions.list(),
+      layer.subscriptions.listGroups(),
+    ])
+    return { type: "subscriptions.changed", subscriptions, groups }
+  }
+
+  async function settingsEvent(): Promise<StateEventInput> {
+    return { type: "settings.changed", settings: await dataLayer().settings.get() }
+  }
+
+  /** 对比上一份 store 快照，产出替换/追加/清空事件。 */
+  function diffItems(subscriptionId: string): StateEventInput | null {
+    const layer = dataLayer()
+    const prev = lastItems.get(subscriptionId) ?? []
+    const next = layer.store.query({ subscriptionId })
+    lastItems.set(subscriptionId, next)
+    if (sameRefs(prev, next)) return null
+    const total = layer.totalOf(subscriptionId)
+    if (!next.length) return { type: "items.cleared", subscriptionId }
+    if (!prev.length) {
+      return {
+        type: "items.replaced",
+        subscriptionId,
+        items: next.map(projectItem),
+        total: total ?? null,
+      }
+    }
+    if (next.length >= prev.length && prev.every((it, i) => it === next[i])) {
+      if (next.length === prev.length) return null
+      return {
+        type: "items.appended",
+        subscriptionId,
+        items: next.slice(prev.length).map(projectItem),
+        total: total ?? null,
+      }
+    }
+    return {
+      type: "items.replaced",
+      subscriptionId,
+      items: next.map(projectItem),
+      total: total ?? null,
+    }
+  }
+
+  function seedLastItems(): void {
+    const layer = dataLayer()
+    lastItems.clear()
+    for (const item of layer.store.all()) {
+      const list = lastItems.get(item.subscriptionId)
+      if (list) list.push(item)
+      else lastItems.set(item.subscriptionId, [item])
+    }
+    // store.all 是插入序；diff 用 query 的排序序，先对齐一次。
+    for (const id of lastItems.keys()) lastItems.set(id, layer.store.query({ subscriptionId: id }))
+  }
+
+  async function readingRecords(keys: string[]): Promise<Record<string, ReadRecord | null>> {
+    const layer = dataLayer()
+    const map: ReadingMap = await layer.reading.getAll().catch(() => ({}))
+    const out: Record<string, ReadRecord | null> = {}
+    for (const key of keys) out[key] = map[key] ?? null
+    return out
+  }
+
+  function progress(jobId: string, value: JobProgress): void {
+    broadcast({ type: "event", event: { type: "job.progress", jobId, progress: value } })
+  }
+
+  function runJob<T>(jobId: string, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+    const existing = jobs.get(jobId)
+    if (existing) return existing.promise as Promise<T>
+    const controller = new AbortController()
+    const promise = (async () => {
+      progress(jobId, { phase: "start" })
+      try {
+        const result = await fn(controller.signal)
+        broadcast({ type: "event", event: { type: "job.done", jobId } })
+        return result
+      } catch (e) {
+        broadcast({
+          type: "event",
+          event: {
+            type: "job.done",
+            jobId,
+            error: { kind: errorKindOf(e), message: e instanceof Error ? e.message : String(e) },
+          },
+        })
+        throw e
+      } finally {
+        jobs.delete(jobId)
+      }
+    })()
+    jobs.set(jobId, { controller, promise })
+    return promise
+  }
+
+  function pruneOps(): void {
+    const cutoff = Date.now() - 5 * 60_000
+    for (const [key, entry] of opCache) {
+      if (entry.at < cutoff) opCache.delete(key)
+    }
+    while (opCache.size > 1024) {
+      const oldest = opCache.keys().next().value
+      if (oldest === undefined) break
+      opCache.delete(oldest)
+    }
+  }
+
+  function opRun<T>(opId: string | undefined, fn: () => Promise<T>): Promise<T> {
+    if (!opId) return fn()
+    pruneOps()
+    const hit = opCache.get(opId)
+    if (hit) return hit.promise as Promise<T>
+    const entry = { at: Date.now(), promise: fn() }
+    entry.promise.catch(() => {
+      if (opCache.get(opId) === entry) opCache.delete(opId)
+    })
+    opCache.set(opId, entry)
+    return entry.promise as Promise<T>
+  }
+
+  async function snapshot(): Promise<string> {
+    const layer = dataLayer()
+    const lastRev = rev
+    const [subscriptions, groups, settings, reading] = await Promise.all([
+      layer.subscriptions.list(),
+      layer.subscriptions.listGroups(),
+      layer.settings.get(),
+      layer.reading.getAll(),
+    ])
+    const totals: Record<string, number> = {}
+    for (const sub of subscriptions) {
+      const total = layer.totalOf(sub.id)
+      if (total !== undefined) totals[sub.id] = total
+    }
+    const items = layer.store.all().map(projectItem)
+    const lines: SnapshotLine[] = [
+      {
+        type: "meta",
+        protocol: SERVICE_PROTOCOL,
+        serviceVersion: SERVICE_VERSION,
+        bootId,
+        rev: lastRev,
+        dataDir: opts.dataDir,
+        dbFile: opts.dbFile,
+        profileDir: opts.profileDir,
+        totals,
+      },
+      { type: "subscriptions", subscriptions, groups },
+      { type: "settings", settings },
+      { type: "reading", reading },
+    ]
+    for (let i = 0; i < items.length; i += SNAPSHOT_CHUNK) {
+      lines.push({ type: "items", items: items.slice(i, i + SNAPSHOT_CHUNK) })
+    }
+    lines.push({ type: "snapshot.end", lastRev })
+    return lines.map((line) => JSON.stringify(line)).join("\n") + "\n"
+  }
+
+  async function dispatch(
+    method: RpcMethod,
+    rawParams: unknown,
+    ctx: { role: "owner" | "client"; jobId: string },
+  ): Promise<unknown> {
+    const layer = dataLayer()
+    const p = (rawParams ?? {}) as Record<string, unknown>
+    const jobId = ctx.jobId
+
+    switch (method) {
+      // ── 读 ─────────────────────────────────────────────────────
+      case "channels.list":
+        return layer.listChannels()
+      case "channels.kind":
+        return layer.channelKind(asString(p.channelKey, "channelKey"))
+
+      case "subscriptions.list":
+        return layer.subscriptions.list()
+      case "subscriptions.listGroups":
+        return layer.subscriptions.listGroups()
+      case "subscriptions.get":
+        return layer.subscriptions.get(asString(p.id, "id"))
+
+      case "reading.getAll":
+        return layer.reading.getAll()
+      case "reading.get":
+        return layer.reading.get(
+          asString(p.subscriptionId, "subscriptionId"),
+          asString(p.itemId, "itemId"),
+        )
+
+      case "settings.get":
+        return layer.settings.get()
+
+      case "store.all":
+        return layer.store.all()
+      case "store.query":
+        return layer.store.query((p.query as MediaQuery | undefined) ?? {})
+
+      case "canLoadMore":
+        return layer.canLoadMore(asString(p.subscriptionId, "subscriptionId"))
+      case "totalOf":
+        return layer.totalOf(asString(p.subscriptionId, "subscriptionId"))
+
+      // ── 订阅/分组语义命令 ─────────────────────────────────────
+      case "subscriptions.add": {
+        const subscription = p.subscription as Subscription
+        if (!subscription?.id || !subscription.channelKey) {
+          throw new ServiceError("bad-request", 400, "subscription 无效")
+        }
+        await layer.subscriptions.add(subscription)
+        commit(await subsEvent())
+        return undefined
+      }
+      case "subscriptions.update": {
+        const updated = await layer.subscriptions.update(
+          asString(p.id, "id"),
+          (p.patch ?? {}) as Partial<Omit<Subscription, "id">>,
+        )
+        commit(await subsEvent())
+        return updated
+      }
+      case "subscriptions.remove": {
+        const id = asString(p.id, "id")
+        const map = await layer.reading.getAll().catch(() => ({}))
+        const removedKeys = Object.keys(map).filter((k) => k.startsWith(`${id}\u0000`))
+        await layer.subscriptions.remove(id)
+        // 不能先删 lastItems：diff 需要旧快照才能识别「清空」。
+        const itemEvent = diffItems(id)
+        commit(
+          await subsEvent(),
+          ...(itemEvent ? [itemEvent] : []),
+          {
+            type: "reading.changed",
+            records: Object.fromEntries(removedKeys.map((k) => [k, null])),
+          },
+        )
+        return undefined
+      }
+      case "subscriptions.addGroup": {
+        const group = p.group as SubscriptionGroup
+        if (!group?.id) throw new ServiceError("bad-request", 400, "group 无效")
+        await layer.subscriptions.addGroup(group)
+        commit(await subsEvent())
+        return undefined
+      }
+      case "subscriptions.updateGroup": {
+        const updated = await layer.subscriptions.updateGroup(
+          asString(p.id, "id"),
+          (p.patch ?? {}) as Partial<Omit<SubscriptionGroup, "id">>,
+        )
+        commit(await subsEvent())
+        return updated
+      }
+      case "subscriptions.removeGroup": {
+        await layer.subscriptions.removeGroup(asString(p.id, "id"))
+        commit(await subsEvent())
+        return undefined
+      }
+
+      // ── 阅读态语义命令 ───────────────────────────────────────
+      case "reading.markRead": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const itemId = asString(p.itemId, "itemId")
+        const read = p.read === undefined ? true : p.read === true
+        await layer.reading.markRead(subscriptionId, itemId, read)
+        queueReading(await readingRecords([recordKey(subscriptionId, itemId)]))
+        return undefined
+      }
+      case "reading.markManyRead": {
+        const keys = Array.isArray(p.keys) ? (p.keys as string[]) : []
+        if (!keys.length) return undefined
+        const read = p.read === undefined ? true : p.read === true
+        await layer.reading.markManyRead(keys, read)
+        queueReading(await readingRecords(keys))
+        return undefined
+      }
+      case "reading.setStarred": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const itemId = asString(p.itemId, "itemId")
+        await layer.reading.setStarred(subscriptionId, itemId, p.starred === true)
+        queueReading(await readingRecords([recordKey(subscriptionId, itemId)]))
+        return undefined
+      }
+      case "reading.setPosition": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const itemId = asString(p.itemId, "itemId")
+        await layer.reading.setPosition(subscriptionId, itemId, Number(p.positionSec) || 0)
+        queueReading(await readingRecords([recordKey(subscriptionId, itemId)]))
+        return undefined
+      }
+      case "reading.setScrollRatio": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const itemId = asString(p.itemId, "itemId")
+        await layer.reading.setScrollRatio(subscriptionId, itemId, Number(p.scrollRatio) || 0)
+        queueReading(await readingRecords([recordKey(subscriptionId, itemId)]))
+        return undefined
+      }
+
+      // ── settings ─────────────────────────────────────────────
+      case "settings.set": {
+        const next = await layer.settings.set((p.patch ?? {}) as Partial<AppSettings>)
+        commit({ type: "settings.changed", settings: next })
+        return next
+      }
+      case "settings.setIfUnchanged": {
+        const next = await layer.settings.setIfUnchanged(
+          (p.expected ?? {}) as Partial<AppSettings>,
+          (p.patch ?? {}) as Partial<AppSettings>,
+        )
+        if (next) commit({ type: "settings.changed", settings: next })
+        return next
+      }
+      case "settings.reset": {
+        const next = await layer.settings.reset()
+        commit({ type: "settings.changed", settings: next })
+        return next
+      }
+
+      // ── 长任务 ───────────────────────────────────────────────
+      case "addSubscription": {
+        const channelKey = asString(p.channelKey, "channelKey")
+        const title = asString(p.title, "title")
+        const info = (p.info ?? {}) as Record<string, string>
+        const meta = p.meta as AddSubscriptionMeta | undefined
+        const result = await runJob(jobId, async () => {
+          const r = await layer.addSubscription(channelKey, title, info, meta)
+          return r
+        })
+        const itemEvent = diffItems(result.id)
+        commit(await subsEvent(), ...(itemEvent ? [itemEvent] : []))
+        return result
+      }
+      case "previewChannel": {
+        return runJob(jobId, () =>
+          layer.previewChannel(asString(p.channelKey, "channelKey"), (p.info ?? {}) as Record<string, string>),
+        )
+      }
+      case "refresh": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const result = await runJob(jobId, () =>
+          layer.refresh(subscriptionId, { force: p.force === true }),
+        )
+        const itemEvent = diffItems(subscriptionId)
+        if (itemEvent) commit(itemEvent)
+        return result
+      }
+      case "refreshAll": {
+        return runJob(jobId, async (signal) => {
+          const subs = await layer.subscriptions.list()
+          const results: RefreshResult[] = []
+          for (let i = 0; i < subs.length; i++) {
+            if (signal.aborted) break
+            const sub = subs[i]!
+            progress(jobId, { phase: "progress", current: i, total: subs.length, label: sub.title })
+            const result = await layer.refresh(sub.id, { force: p.force === true })
+            results.push(result)
+            const itemEvent = diffItems(sub.id)
+            if (itemEvent) commit(itemEvent)
+          }
+          return { results }
+        })
+      }
+      case "loadMore": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const result = await runJob(jobId, () => layer.loadMore(subscriptionId))
+        const itemEvent = diffItems(subscriptionId)
+        if (itemEvent) commit(itemEvent)
+        return result
+      }
+      case "resolveDetail": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const itemId = asString(p.itemId, "itemId")
+        return runJob(jobId, () => layer.resolveDetail(subscriptionId, itemId))
+      }
+      case "resolvePlay": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const itemId = asString(p.itemId, "itemId")
+        return runJob(jobId, () => layer.resolvePlay(subscriptionId, itemId))
+      }
+      case "resolveLivePlay": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const roomId = asString(p.roomId, "roomId")
+        return runJob(jobId, () => layer.resolveLivePlay(subscriptionId, roomId))
+      }
+      case "resolveHotWord": {
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const word = asString(p.word, "word")
+        return runJob(jobId, () => layer.resolveHotWord(subscriptionId, word))
+      }
+      case "scanLogin": {
+        const channelKey = asString(p.channelKey, "channelKey")
+        const timeoutMs = typeof p.timeoutMs === "number" ? p.timeoutMs : undefined
+        const result = await runJob(jobId, (signal) =>
+          layer.scanLogin(
+            channelKey,
+            (qrDataUrl) => progress(jobId, { phase: "qr", qrDataUrl }),
+            { ...(timeoutMs ? { timeoutMs } : {}), signal },
+          ),
+        )
+        commit(await settingsEvent())
+        return result
+      }
+      case "syncBrowserCookies": {
+        const fields = await runJob(jobId, () => layer.syncBrowserCookies())
+        if (fields.length) commit(await settingsEvent())
+        return fields
+      }
+
+      // ── 诊断（桌面不直连 storage/browser）─────────────────────
+      case "diagnostics.cacheStats": {
+        const storage = globalThis.appHost.storage
+        const keys = await storage.keys("content:")
+        let bytes = 0
+        for (const key of keys) {
+          const value = await storage.get(key)
+          bytes += (value?.length ?? 0) * 2
+        }
+        return { keys: keys.length, bytes } satisfies DiagnosticsStats
+      }
+      case "diagnostics.clearContentCache": {
+        const storage = globalThis.appHost.storage
+        const keys = await storage.keys("content:")
+        for (const key of keys) await storage.delete(key)
+        return keys.length
+      }
+      case "diagnostics.clearCookies": {
+        const hosts = Array.isArray(p.hosts)
+          ? (p.hosts as unknown[]).filter((h): h is string => typeof h === "string" && !!h)
+          : []
+        const browser = globalThis.appHost.browser
+        if (browser?.clearCookies && hosts.length) {
+          await withBrowserGlobal(async () => {
+            for (const host of hosts) await browser.clearCookies?.(host)
+          })
+        }
+        return undefined
+      }
+      case "diagnostics.clearAll": {
+        const subs = await layer.subscriptions.list()
+        const map = await layer.reading.getAll().catch(() => ({}))
+        const removedKeys = Object.keys(map)
+        for (const sub of subs) layer.store.clear(sub.id)
+        lastItems.clear()
+        const storage = globalThis.appHost.storage
+        for (const key of await storage.keys()) await storage.delete(key)
+        const settings = await layer.settings.reset()
+        commit(
+          { type: "subscriptions.changed", subscriptions: [], groups: [] },
+          { type: "settings.changed", settings },
+          { type: "reading.changed", records: Object.fromEntries(removedKeys.map((k) => [k, null])) },
+          ...subs.map((sub) => ({ type: "items.cleared" as const, subscriptionId: sub.id })),
+        )
+        return undefined
+      }
+      case "diagnostics.resetBrowserProfile": {
+        const browser = globalThis.appHost.browser
+        if (!browser?.resetProfile) {
+          throw new ServiceError("unsupported", 400, "当前环境不支持清理浏览器数据")
+        }
+        return withBrowserGlobal(() => browser.resetProfile!())
+      }
+
+      default:
+        throw new ServiceError("not-found", 404, `未知方法：${method}`)
+    }
+  }
+
+  async function handleRpc(req: Request, role: "owner" | "client"): Promise<Response> {
+    const length = Number(req.headers.get("content-length") ?? 0)
+    if (length > MAX_RPC_BYTES) {
+      return errorResponse(req, 413, "too-large", "RPC body 过大")
+    }
+    let body: RpcRequest
+    try {
+      body = (await req.json()) as RpcRequest
+    } catch {
+      return errorResponse(req, 400, "bad-request", "JSON 解析失败")
+    }
+    if (!body || typeof body.method !== "string") {
+      return errorResponse(req, 400, "bad-request", "缺少 method")
+    }
+    const jobId =
+      typeof body.jobId === "string" && body.jobId
+        ? body.jobId
+        : `j-${randomBytes(6).toString("hex")}`
+    try {
+      const result = await opRun(body.opId, () =>
+        dispatch(body.method as RpcMethod, body.params, { role, jobId }),
+      )
+      return json(req, { ok: true, result, rev } satisfies RpcResponse)
+    } catch (e) {
+      const status = e instanceof ServiceError ? e.status : 500
+      const kind = e instanceof ServiceError ? e.kind : errorKindOf(e)
+      return errorResponse(req, status, kind, e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // ── 启动 ───────────────────────────────────────────────────
+  try {
+    backupDbIfNeeded(opts.dbFile, opts.dataDir)
+    host = setupServiceHost({
+      dbFile: opts.dbFile,
+      profileDir: opts.profileDir,
+      browserSidecar: opts.browserSidecar,
+      browser: opts.browser,
+    })
+    dl = createDataLayer()
+    await dl.settings.get()
+    await dl.hydrate()
+    seedLastItems()
+  } catch (e) {
+    console.error(
+      `[service] bootstrap failed: ${e instanceof Error ? e.stack ?? e.message : String(e)}`,
+    )
+    await host?.close().catch(() => {})
+    rmSync(lockPath, { force: true })
+    return 1
+  }
+
+  server = Bun.serve<WsData>({
     hostname: "127.0.0.1",
     port: opts.port,
     async fetch(req, srv) {
-      if (!originAllowed(req)) return json({ kind: "forbidden", message: "origin" }, 403)
+      if (!originAllowed(req) || !hostAllowed(req)) {
+        return errorResponse(req, 403, "forbidden", "origin/host")
+      }
+      if (req.method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders(req) })
+      }
       const url = new URL(req.url)
-      const auth = req.headers.get("authorization")
-      const authed = auth === `Bearer ${token}`
+      const auth = req.headers.get("authorization") ?? ""
+      const token = auth.startsWith("Bearer ") ? auth.slice(7) : ""
+      const role =
+        token && tokenEquals(token, ownerToken)
+          ? "owner"
+          : token && tokenEquals(token, clientToken)
+            ? "client"
+            : null
 
       if (url.pathname === "/v1/events") {
-        if (srv.upgrade(req, { data: { authed: false } })) return undefined
-        return json({ kind: "bad-request", message: "websocket upgrade failed" }, 400)
+        if (srv.upgrade(req, { data: { authed: false, role: null, subscribed: false } })) {
+          return undefined
+        }
+        return errorResponse(req, 400, "bad-request", "websocket upgrade failed")
       }
 
       if (url.pathname === "/v1/hello" && req.method === "GET") {
-        if (!authed) return json({ kind: "unauthorized", message: "token" }, 401)
+        if (!role) return errorResponse(req, 401, "unauthorized", "token")
         const body: HelloResponse = {
           protocol: SERVICE_PROTOCOL,
           minClientProtocol: SERVICE_PROTOCOL,
@@ -216,55 +941,56 @@ export async function runService(opts: ServiceOptions): Promise<number> {
           bootId,
           pid: process.pid,
           rev,
-          features: ["skeleton"],
+          features: [...SERVICE_FEATURES],
         }
-        return json(body)
+        return json(req, body)
       }
 
       if (url.pathname === "/v1/health" && req.method === "GET") {
-        if (!authed) return json({ kind: "unauthorized", message: "token" }, 401)
+        if (!role) return errorResponse(req, 401, "unauthorized", "token")
         const body: HealthResponse = {
           ok: true,
           uptimeMs: Date.now() - startedAt,
-          jobs: 0,
+          jobs: jobs.size,
           rev,
           bootId,
         }
-        return json(body)
+        return json(req, body)
       }
 
       if (url.pathname === "/v1/state" && req.method === "GET") {
-        if (!authed) return json({ kind: "unauthorized", message: "token" }, 401)
-        // 阶段 0：只是空快照；阶段 1 换成真实 NDJSON。
-        const lines = [
-          JSON.stringify({
-            type: "meta",
-            protocol: SERVICE_PROTOCOL,
-            bootId,
-            rev,
-            dataDir: opts.dataDir,
-            dbFile: opts.dbFile,
-            profileDir: opts.profileDir,
-          }),
-          JSON.stringify({ type: "snapshot.end", lastRev: rev }),
-        ]
-        return new Response(lines.join("\n") + "\n", {
-          headers: { "content-type": "application/x-ndjson; charset=utf-8" },
+        if (!role) return errorResponse(req, 401, "unauthorized", "token")
+        const body = await snapshot()
+        return new Response(body, {
+          headers: {
+            "content-type": "application/x-ndjson; charset=utf-8",
+            ...corsHeaders(req),
+          },
         })
       }
 
       if (url.pathname === "/v1/rpc" && req.method === "POST") {
-        if (!authed) return json({ kind: "unauthorized", message: "token" }, 401)
-        return json({ ok: false, error: { kind: "not-implemented", message: "阶段 1" } }, 501)
+        if (!role) return errorResponse(req, 401, "unauthorized", "token")
+        return handleRpc(req, role)
+      }
+
+      if (url.pathname.startsWith("/v1/jobs/") && url.pathname.endsWith("/cancel") && req.method === "POST") {
+        if (!role) return errorResponse(req, 401, "unauthorized", "token")
+        const id = decodeURIComponent(url.pathname.slice("/v1/jobs/".length, -"/cancel".length))
+        const job = jobs.get(id)
+        if (!job) return errorResponse(req, 404, "not-found", "job 不存在")
+        job.controller.abort()
+        return json(req, { ok: true })
       }
 
       if (url.pathname === "/v1/shutdown" && req.method === "POST") {
-        if (!authed) return json({ kind: "unauthorized", message: "token" }, 401)
+        if (!role) return errorResponse(req, 401, "unauthorized", "token")
+        if (role !== "owner") return errorResponse(req, 403, "forbidden", "仅 owner 可 shutdown")
         setTimeout(() => void stop(0), 20)
-        return json({ ok: true })
+        return json(req, { ok: true })
       }
 
-      return json({ kind: "not-found", message: url.pathname }, 404)
+      return errorResponse(req, 404, "not-found", url.pathname)
     },
     websocket: {
       open(ws) {
@@ -274,33 +1000,59 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         }, AUTH_TIMEOUT_MS)
       },
       message(ws, raw) {
-        let msg: { type?: string; token?: string } = {}
+        let msg: WsClientMessage = { type: "ping" }
         try {
-          msg = JSON.parse(String(raw)) as typeof msg
+          msg = JSON.parse(String(raw)) as WsClientMessage
         } catch {
           return
         }
         if (!ws.data.authed) {
-          if (msg.type === "auth" && msg.token === token) {
-            ws.data.authed = true
-            ws.send(
-              JSON.stringify({
-                type: "hello",
-                data: {
-                  protocol: SERVICE_PROTOCOL,
-                  serviceVersion: SERVICE_VERSION,
-                  bootId,
-                  rev,
-                  pid: process.pid,
-                },
-              }),
-            )
-          } else {
+          if (msg.type !== "auth" || !msg.token) {
             ws.close(4001, "unauthorized")
+            return
+          }
+          const role = tokenEquals(msg.token, ownerToken)
+            ? "owner"
+            : tokenEquals(msg.token, clientToken)
+              ? "client"
+              : null
+          if (!role) {
+            ws.close(4001, "unauthorized")
+            return
+          }
+          ws.data.authed = true
+          ws.data.role = role
+          const helloSelf: WsServerMessage = {
+            type: "hello",
+            data: {
+              protocol: SERVICE_PROTOCOL,
+              minClientProtocol: SERVICE_PROTOCOL,
+              serviceVersion: SERVICE_VERSION,
+              bootId,
+              pid: process.pid,
+              rev,
+              features: [...SERVICE_FEATURES],
+              clientToken: role === "client",
+            },
+          }
+          ws.send(JSON.stringify(helloSelf))
+          return
+        }
+        if (msg.type === "subscribe") {
+          ws.data.subscribed = true
+          const since = typeof msg.sinceRev === "number" ? msg.sinceRev : undefined
+          if (since === undefined || since === rev) return
+          const first = eventLog[0]?.rev
+          if (since > rev || first === undefined || first > since + 1) {
+            ws.send(JSON.stringify({ type: "resync", reason: "event gap" } satisfies WsServerMessage))
+            return
+          }
+          for (const event of eventLog) {
+            if (event.rev > since) ws.send(JSON.stringify({ type: "event", event } satisfies WsServerMessage))
           }
           return
         }
-        if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" }))
+        if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" } satisfies WsServerMessage))
       },
       close(ws) {
         sockets.delete(ws)
@@ -309,7 +1061,14 @@ export async function runService(opts: ServiceOptions): Promise<number> {
   })
 
   const port = server.port ?? 0
-  if (!port) throw new Error("Bun.serve 未返回端口")
+  if (!port) {
+    console.error("[service] Bun.serve 未返回端口")
+    await host.close().catch(() => {})
+    server.stop(true)
+    rmSync(lockPath, { force: true })
+    return 1
+  }
+
   const endpoint: EndpointInfo = {
     schema: ENDPOINT_SCHEMA,
     pid: process.pid,
@@ -321,18 +1080,32 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     dbFile: opts.dbFile,
     profileDir: opts.profileDir,
     startedAt,
+    clientToken,
     ...(opts.parentPid ? { parentPid: opts.parentPid } : {}),
   }
   const tmp = `${endpointPath}.tmp`
   writeFileSync(tmp, JSON.stringify(endpoint, null, 2))
-  // rename 在 Windows 上不覆盖已存在文件；先删再 rename。
   rmSync(endpointPath, { force: true })
   renameSync(tmp, endpointPath)
 
   process.stdout.write(`READY ${port}\n`)
-  console.error(`[service] ready port=${port} bootId=${bootId} instance=${key}`)
+  console.error(
+    `[service] ready port=${port} bootId=${bootId} instance=${key} db=${opts.dbFile} profile=${opts.profileDir}`,
+  )
 
-  const parentTimer = opts.parentPid
+  if (opts.cookieSync) {
+    cookieTimer = setTimeout(() => {
+      if (stopping || !globalThis.appHost.browser) return
+      void dataLayer()
+        .syncBrowserCookies()
+        .then(async (fields) => {
+          if (fields.length) commit(await settingsEvent())
+        })
+        .catch((e) => console.error(`[service] cookie sync failed: ${String(e)}`))
+    }, COOKIE_SYNC_DELAY_MS)
+  }
+
+  parentTimer = opts.parentPid
     ? setInterval(() => {
         if (!pidAlive(opts.parentPid as number)) {
           console.error(`[service] parent ${opts.parentPid} exited`)
@@ -341,17 +1114,26 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       }, PARENT_POLL_MS)
     : null
 
-  const heartbeat = setInterval(() => {
+  heartbeat = setInterval(() => {
     for (const ws of sockets) {
-      if (ws.data.authed) ws.send(JSON.stringify({ type: "ping" }))
+      if (ws.data.authed) {
+        try {
+          ws.send(JSON.stringify({ type: "ping" } satisfies WsServerMessage))
+        } catch {
+          /* 已关闭 */
+        }
+      }
     }
-  }, 5_000)
+  }, HEARTBEAT_MS)
 
   async function stop(code: number): Promise<void> {
     if (stopping) return
     stopping = true
     if (parentTimer) clearInterval(parentTimer)
-    clearInterval(heartbeat)
+    if (heartbeat) clearInterval(heartbeat)
+    if (cookieTimer) clearTimeout(cookieTimer)
+    flushReading()
+    broadcast({ type: "event", event: { type: "service.shutdown", reason: "shutdown" } })
     for (const ws of sockets) {
       try {
         ws.close(1001, "service shutdown")
@@ -360,7 +1142,8 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       }
     }
     sockets.clear()
-    server.stop(true)
+    server?.stop(true)
+    await host?.close().catch(() => {})
     rmSync(endpointPath, { force: true })
     rmSync(lockPath, { force: true })
     process.exit(code)
