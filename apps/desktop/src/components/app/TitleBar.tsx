@@ -5,6 +5,7 @@
  * 播放页/设置页等整页视图下搜索框仍可用(切回库视图生效)。
  */
 import { useEffect, useRef } from "react"
+import brandLogo from "../../assets/brand/logo-64.png"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { usePrefs } from "../../store/prefs.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
@@ -50,9 +51,7 @@ export function TitleBar() {
   return (
     <header className="titlebar" {...overlayBlock("titlebar", "app:titlebar")}>
       <div className="titlebar-brand" {...overlayBlock("titlebar-brand", "app:titlebar:brand")}>
-        <span className="titlebar-mark">
-          <Icon name="rss" size={14} />
-        </span>
+        <img className="titlebar-mark" src={brandLogo} alt="" width={20} height={20} draggable={false} />
         <span className="titlebar-name">订阅工作台</span>
         <Icon name="chevronRight" size={13} className="t-dim" />
         <span className="titlebar-path">{viewTitleFor(meta, hotWord)}</span>

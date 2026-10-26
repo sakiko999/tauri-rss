@@ -49,8 +49,6 @@
   --shadow-2: 0 8px 24px oklch(0 0 0 / 45%);
   --scrim: oklch(0.14 0.008 72 / 74%);
 
-  --logo-plate: oklch(0.925 0.004 80);
-  --logo-ink: oklch(0.168 0.006 72);
   --stage-bg: oklch(0.11 0.006 72);
   --on-media: oklch(0.98 0 0);
 }
@@ -92,8 +90,6 @@
   --shadow-2: 0 8px 24px oklch(0.25 0.02 72 / 12%);
   --scrim: oklch(0.25 0.015 72 / 48%);
 
-  --logo-plate: oklch(0.22 0.012 72);
-  --logo-ink: oklch(0.985 0.003 75);
   --stage-bg: oklch(0.22 0.01 72);
   --on-media: oklch(0.99 0 0);
 }

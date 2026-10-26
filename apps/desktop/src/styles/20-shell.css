@@ -101,14 +101,12 @@
   padding-left: var(--sp-2);
 }
 .titlebar-mark {
-  display: grid;
-  place-items: center;
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border-radius: var(--r-sm);
-  background: var(--logo-plate);
-  color: var(--logo-ink);
+  /* 品牌图标自带底与圆角，不再叠 plate 色块（深色主题同样可见）。 */
+  object-fit: contain;
 }
 .titlebar-name {
   flex: none;
