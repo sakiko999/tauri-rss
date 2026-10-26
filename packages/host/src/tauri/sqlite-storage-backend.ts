@@ -30,7 +30,7 @@ const DB_PATH =
 /**
  * ⚠️ 刻意**不实现** `batch`（R10）：tauri-plugin-sql 底层 sqlx 用连接池，多次
  * `execute` 不保证落在同一连接，`BEGIN`/`COMMIT` 无法可靠成事务。该后端只剩
- * `VITE_DATA_SERVICE=0` 调试回退（生产路径是数据服务的 bun:sqlite，事务可用），
+ * 只剩 mobile 的进程内 DataLayer 用它（desktop 只走数据服务，bun:sqlite 可事务），
  * core 见 `storage.batch` 缺失会自动回退逐个 set/delete。
  */
 export class SqliteStorageBackend implements StorageBackend {

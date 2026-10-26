@@ -19,8 +19,7 @@
 
 - **不做云端**：没有服务端、账号体系、多端同步。持久化只在各端本地 KV（`packages/core/src/db/schema.ts:15-18`）；凭证只存在本机 settings 与浏览器 profile。
 - **桌面数据/爬虫服务已落地（2026-10-26）**：`amoeba-runtime.exe` → `service.js --service`
-  单写者独占 SQLite/crawler/浏览器；desktop 默认 `RemoteDataLayer`，
-  `VITE_DATA_SERVICE=0` 才回进程内 `createDataLayer()`。见 `06-data-service.md`。
+  单写者独占 SQLite/crawler/浏览器；desktop **只**走 `RemoteDataLayer`（进程内回退已删）。见 `06-data-service.md`。
 - **mobile 不做工作台**：不做频道发现、完整播放器控件、扫码登录、cookie 快照对齐（`apps/mobile/src/store.ts:1-8` 自述；代码无对应 UI 与调用）。
 - **mobile 已冻结（2026-10-26）**：除非主动开启，后续改动**不再为 mobile 做适配/回归**
   （不跑 mobile tsc/Vite build，不为其加注入开关、UI 或平台分支）。它仍是进程内

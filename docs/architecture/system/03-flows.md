@@ -5,8 +5,8 @@
 >
 > **2026-10-26 数据服务增量**：desktop 的「启动 → 拉数据 → 刷新」已改为
 > `service_endpoint` → `RemoteDataLayer`（快照 NDJSON 建镜像 + WS 事件增量），
-> 写操作走 RPC/job；文中的 desktop `createDataLayer()` 直连路径仅剩
-> `VITE_DATA_SERVICE=0` 调试回退。`abortTabs` 已从 desktop 移除（服务取消改走
+> 写操作走 RPC/job；文中 desktop `createDataLayer()` 直连路径**已删除**（不再保留进程内
+> 回退）。`abortTabs` 已从 desktop 移除（服务取消改走
 > `/v1/jobs/:id/cancel`）；§3/§5 的「超时 → 全局中止 lane」按此理解。详见 `06-data-service.md`。
 
 阅读前先记住三条贯穿全部流程的分工（它们决定了下面每一步写谁、读谁）：

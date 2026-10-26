@@ -13,7 +13,7 @@
 - **desktop 默认（数据服务模式）**：`injectTauriHost({nativeMediaReferer:true, storage:false, browser:false})`
   —— `storage:false` 注入「读写即抛错」的拒绝后端，`browser:false` 不构造 CDP 后端；
   两者都是**能力探测可见的关闭**（不是「注入了但命令失败」），保证 desktop 不再是第二写者。
-  `VITE_DATA_SERVICE=0` 时才退回 `injectTauriHost({nativeMediaReferer:true})`（进程内 DataLayer 调试）。
+  desktop 固定 `storage:false` / `browser:false`；进程内 DataLayer 回退（旧 `VITE_DATA_SERVICE=0`）已删除。
 - **必填**：`http` / `js`（签名脚本执行）/ `storage`（数据服务模式下是拒绝后端）。未注入时访问抛清晰错误
 - **可选**（未注入返回 undefined，消费侧据此降级）：`ws`（弹幕隧道）、`browser`（CDP 模拟）、`updater`
 - **兜底**：`log`（console）、`now`（Date.now）
@@ -29,8 +29,8 @@
   `apps/src-tauri/src/media_referer.rs` 与 `docs/ui/ui-conventions.md`
 
 **storage 四态（2026-10-26）**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）·
-desktop 拒绝后端（`injectTauriHost({storage:false})`，读写即抛）· desktop `SqliteStorageBackend`
-（tauri-plugin-sql，仅 `VITE_DATA_SERVICE=0` 回退）· example 内存版。
+desktop 拒绝后端（`injectTauriHost({storage:false})`，读写即抛）· mobile `SqliteStorageBackend`
+（tauri-plugin-sql，进程内 DataLayer）· example 内存版。
 **DDL 唯一权威 = core `db/schema.ts`**（插件自带的 migration 机制不用，防漂移）。
 **注入方式**：`StorageBackend` 新增可选 `setSchema?(schema: StorageSchema)`（`StorageSchema = { table, ddl, migrations }`，
 类型在根 `global.d.ts`）。core 在 `createDataLayer()` 首行调用
@@ -42,8 +42,7 @@ KV/localStorage/内存后端不实现，调用方用 `?.` 保持 no-op。
 
 **批量写（R10）**：可选 `batch?(ops: StorageOp[])`（set/delete 混合）。服务 bun:sqlite 用
 `db.transaction`、内存后端同步循环；`SqliteStorageBackend`（tauri-plugin-sql）刻意不实现
-——sqlx 连接池无法保证同一连接，靠 core 回退逐个调用（该后端只剩 `VITE_DATA_SERVICE=0`
-调试回退）。
+——sqlx 连接池无法保证同一连接，靠 core 回退逐个调用（该后端只剩 mobile 的进程内路径）。
 
 **内容缓存**：refresh 走 TTL 缓存（KV key `content:<subId>`，value = `{fetchedAt, xml}`）。
 细则见 `docs/architecture/data-and-storage.md`。

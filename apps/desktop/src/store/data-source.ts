@@ -1,11 +1,11 @@
 /**
  * 桌面数据层选择器。
  *
- * - Tauri 桌面：默认连本地数据服务（Rust spawn `amoeba-runtime` + `service.js`）。
- * - Web dev / mobile / `VITE_DATA_SERVICE=0`：沿用进程内 `createDataLayer()`（单写者）。
+ * - Tauri 桌面：**只连本地数据服务**（Rust spawn `amoeba-runtime` + `service.js`）。
+ * - 非 Tauri（浏览器里跑 `bun run dev`）：进程内 `createDataLayer()`，仅纯前端调试。
  *
- * ⚠️ 远端模式失败**不回退本地库**（fail-closed）：否则会出现第二写者，
- * 静默丢更新。要本地调试显式设 `VITE_DATA_SERVICE=0`。
+ * ⚠️ 远端模式失败**不回退本地库**（fail-closed）：否则会出现第二写者，静默丢更新。
+ * 桌面进程内回退（旧 `VITE_DATA_SERVICE=0`）已删除，见 main.tsx 的注入注释。
  */
 import type { DataLayer } from "@amoeba/core"
 import { invoke } from "@tauri-apps/api/core"
@@ -25,10 +25,9 @@ function dbFileName(): string {
 }
 
 export async function createDesktopDataLayer(hooks: RemoteHooks = {}): Promise<DataLayer> {
-  const env = (import.meta as unknown as { env?: Record<string, unknown> }).env ?? {}
-  const remote = env.VITE_DATA_SERVICE !== "0" && isTauri()
-  if (!remote) {
-    // 动态 import：远端模式不把 crawler/resolve/本进程 DataLayer 拉进首屏包。
+  if (!isTauri()) {
+    // 浏览器 dev（没有 Rust 侧服务）：动态 import 进程内 DataLayer，仅供纯前端调试；
+    // 远端模式不把它拉进首屏包。
     const { createDataLayer } = await import("@amoeba/core")
     return createDataLayer()
   }

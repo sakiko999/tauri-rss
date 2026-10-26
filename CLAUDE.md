@@ -100,7 +100,7 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   `_migrations` checksum 变化 → 拒绝启动；已发布迁移只能追加新版本，不能改 SQL。
 - **数据服务单写者**：Tauri 桌面默认 `service_endpoint` → `@amoeba/service-client`，
   `injectTauriHost({storage:false,browser:false})` 把 desktop 的直连封死
-  （`VITE_DATA_SERVICE=0` 才是进程内 DataLayer 调试回退）。任何第二写者
+  （进程内 DataLayer 回退已删除）。任何第二写者
   （desktop 直连、dev seed、Diagnostics、CLI 直开 desktop 库）都会静默丢数据。
 - **服务协议**：`protocol` 整数不兼容才 +1；RPC/事件类型唯一权威 = `@amoeba/service-protocol`；
   一次提交 `rev+1` 可带多条事件（共享 rev）；断线/rev gap 先全量 `GET /v1/state`，
@@ -240,8 +240,8 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 系统文档正文细化（02 契约表 / 03 时序图 / 01 依赖矩阵按服务模式重写）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
 - [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
-- [!] 桌面默认 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；`VITE_DATA_SERVICE=0` 仅调试回退。
-- [!] `tauri-plugin-sql` 暂留：`VITE_DATA_SERVICE=0` 回退仍用它（mobile 已冻结，不再是理由）。
+- [!] 桌面只走 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；进程内 DataLayer 回退已删（非 Tauri 的浏览器 dev 仍走进程内）。
+- [!] `tauri-plugin-sql` 保留：mobile 的进程内 DataLayer 仍用它（mobile 冻结但保留）。
 - [!] CLI 浏览器必须显式 `--browser`；默认注入会让 xhs/weibo 忽略 `--kv cookie=`，静默改变现有探针行为。
 - [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
 - [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。

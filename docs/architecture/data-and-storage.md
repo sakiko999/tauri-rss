@@ -141,9 +141,9 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 就是同一 KV 表里 `content:<subId>` 的记录（`core/repo/content-cache-repo.ts`）。
 单条 value 是一条 feed 的 XML，量级可接受；真要拆表时改 repo 实现即可，接口不变。
 
-**storage 三态**：数据服务 `sqliteStorage`（bun:sqlite，默认路径）· desktop
-`SqliteStorageBackend`（tauri-plugin-sql，仅 `VITE_DATA_SERVICE=0` 调试回退注入）·
-CLI 本地探针 / example（bun:sqlite / 内存版）。
+**storage 三态**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）· desktop 拒绝后端 /
+mobile `SqliteStorageBackend`（tauri-plugin-sql，进程内 DataLayer）· CLI 本地探针 / example
+（bun:sqlite / 内存版）。
 **DDL 唯一权威 = core `db/schema.ts`**（插件自带的 migration 机制不用，防漂移）。
 **执行方式（2026-10-23 起）**：core 在 `createDataLayer()` 首行调用
 `appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；
@@ -192,7 +192,9 @@ P1 schema 极简（KV 一张表），不需要版本化框架；`MIGRATIONS` 数
 （KV string）语义保持——**换的是 backend 实现，不是 repo**：
 
 ```
-desktop:  injectTauriHost → SqliteStorageBackend(tauri-plugin-sql, appData/rss.db)
+服务:     amoeba-runtime → sqliteStorage(bun:sqlite, appData/rss.db)   ← 唯一写者
+desktop:  injectTauriHost({storage:false}) → 拒绝后端（只读服务镜像）
+mobile:   injectTauriHost → SqliteStorageBackend(tauri-plugin-sql, appData/rss.db)
 CLI:      setupHost       → sqliteStorage(bun:sqlite, apps/cli/.data/rss.db)
 共用:     core db/schema.ts 的 KV_TABLE/KV_DDL/MIGRATIONS（唯一 DDL 权威）
 注入:     core createDataLayer → appHost.storage.setSchema?()（SQL 后端只执行）

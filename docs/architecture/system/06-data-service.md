@@ -321,8 +321,9 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 
 ### 7.5 必改清单
 
-- `apps/desktop/src/store/data-source.ts`：Tauri 默认 `service_endpoint` → `createRemoteDataLayer`；
-  `VITE_DATA_SERVICE=0` 才回进程内 `createDataLayer`（调试）。
+- `apps/desktop/src/store/data-source.ts`：Tauri **只**走 `service_endpoint` → `createRemoteDataLayer`；
+  非 Tauri（浏览器里跑 `bun run dev`）才回进程内 `createDataLayer`（纯前端调试）。
+  桌面进程内回退（旧 `VITE_DATA_SERVICE=0`）已删除——它是唯一人为的第二写者入口。
 - `ctx.ts`：`refreshView` 合帧（microtask；隐藏窗口 rAF 会停摆，不用 rAF）。
 - `actions/subs.ts`、`actions/reading.ts`：写路径走服务；`markRead/markAllRead/toggleStar`
   失败回滚乐观 patch + toast 已加。
@@ -330,7 +331,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   seed 标记改 localStorage。
 - `apps/src-tauri`：`service.rs`（spawn/adopt/READY/endpoint/shutdown）、`single-instance`、
   `tauri.conf.release.json` resources、`service_endpoint`；主窗口 Destroyed → 服务 shutdown。
-- `webview_browser_*` / `TauriBrowserBackend` 仍保留作 `VITE_DATA_SERVICE=0` 本地调试回退；
+- `webview_browser_*` / `TauriBrowserBackend` 保留给 mobile / 进程内调试（desktop 不注入）；
   服务接管路径不再注入 browser，`abortTabs` 调用已从 desktop 移除。
 
 ## 8. 打包与运行时
@@ -449,7 +450,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - 服务接管 DB/迁移/crawler/browser/login/governor/jobs；
   `apps/cli/src/service/{server,host}.ts` + `packages/service-protocol`。
 - 快照 + rev 事件环形缓冲 + `RemoteDataLayer`（`packages/service-client`）+ 本地镜像；
-  desktop Tauri 默认走服务，`VITE_DATA_SERVICE=0` 才回进程内。
+  desktop Tauri 只走服务（进程内回退已删）。
 - desktop 库原地迁移；每日 `VACUUM INTO` 备份；`_migrations` checksum 门禁。
 - **验收实测**：
   - `scripts/service-data-check.ts` 48 项全过（快照/事件 rev/阅读合批/settings/refresh/
@@ -468,7 +469,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - ✅ single-instance（第二个实例只聚焦主窗口）、protocol=1 握手/426 门禁、`service_endpoint`。
 - ✅ 安装包（启动器 + JS + 浏览器 sidecar 进 resources；NSIS 7.12MiB）+ updater 签名（`.sig`）。
 - ✅ 本机静默安装/卸载（临时目录）验证无残留；实际安装版启动/关窗/硬杀均无孤儿进程。
-- ⚠️ `tauri-plugin-sql` 保留（mobile 与 `VITE_DATA_SERVICE=0` 回退仍用），未从 desktop 发布路径移除。
+- ⚠️ `tauri-plugin-sql` 保留（mobile 的进程内 DataLayer 仍用），未从 desktop 发布路径移除。
 - 回滚演练已验：备份覆盖恢复 → settings 回到备份时点。
 
 ### 阶段 3（可选，按实测）
