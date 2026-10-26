@@ -27,6 +27,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::http_get,
             service::service_endpoint,
+            service::service_shutdown,
             commands::ws::ws_connect,
             commands::ws::ws_send,
             commands::ws::ws_close,
@@ -60,6 +61,13 @@ pub fn run() {
                 let state = app_handle.state::<service::ServiceState>();
                 service::shutdown(&state);
                 app_handle.exit(0);
+            }
+            // ⚠️ updater 的 install 走 `app.exit(0)`，**不经过**主窗口 Destroyed ——
+            // 不在这里补一次，安装器会在数据服务/sidecar 还在退时开始替换文件
+            // （表现为更新卡住、提示 browser 未完全退出）。shutdown 幂等。
+            tauri::RunEvent::ExitRequested { .. } => {
+                let state = app_handle.state::<service::ServiceState>();
+                service::shutdown(&state);
             }
             // ⚠️ 不在 Exit 事件里清理抓取 webview：该事件在 Event::LoopDestroyed 才回调，
             // 此时投递任何窗口消息都不会再被处理（no-op）。进程退出会带走 WebView2 子进程

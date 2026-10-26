@@ -9,8 +9,9 @@
  * relaunch() 主要为 macOS/Linux 兜底,Windows 走安装器自带的重启。
  */
 import { getVersion } from "@tauri-apps/api/app"
+import { invoke } from "@tauri-apps/api/core"
 import { relaunch } from "@tauri-apps/plugin-process"
-import { check, type Update } from "@tauri-apps/plugin-updater"
+import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater"
 
 export class TauriUpdaterBackend implements UpdaterBackend {
   /** 最近一次 check() 的结果(已下载的 update 与之绑定)。 */
@@ -44,24 +45,30 @@ export class TauriUpdaterBackend implements UpdaterBackend {
 
     let total: number | undefined
     let downloaded = 0
+    const onProgress = (p: DownloadEvent): void => {
+      if (p.event === "Started") {
+        total = p.data.contentLength
+        onEvent({ event: "started", ...(total !== undefined ? { contentLength: total } : {}) })
+      } else if (p.event === "Progress") {
+        downloaded += p.data.chunkLength
+        onEvent({ event: "progress", downloaded, ...(total !== undefined ? { contentLength: total } : {}) })
+      } else {
+        onEvent({ event: "finished" })
+      }
+    }
     try {
-      await update.downloadAndInstall(
-        (p) => {
-          if (p.event === "Started") {
-            total = p.data.contentLength
-            onEvent({ event: "started", ...(total !== undefined ? { contentLength: total } : {}) })
-          } else if (p.event === "Progress") {
-            downloaded += p.data.chunkLength
-            onEvent({ event: "progress", downloaded, ...(total !== undefined ? { contentLength: total } : {}) })
-          } else {
-            onEvent({ event: "finished" })
-          }
-        },
-        // 下载卡死时也要能失败退出(默认无限等待)。
-        { timeout: 10 * 60_000 },
-      )
+      // 分两步(而不是 downloadAndInstall):Windows 上 install 走 `std::process::exit(0)`
+      // (插件文档原话),不触发我们的 ExitRequested 钩子 —— 必须在 install 之前
+      // 显式停数据服务(含 amoeba-browser),否则安装器会撞上仍在退出的 sidecar,
+      // 表现为更新进度卡住 / 「browser 还未完全退出」。
+      await update.download(onProgress, { timeout: 10 * 60_000 })
+      await invoke("service_shutdown").catch(() => {
+        /* 服务已停/未启动都不阻塞安装 */
+      })
+      await update.install()
     } catch (e) {
       // 失败(下载中断/签名不符)时释放 Rust 侧资源,允许用户重新检查。
+      // ⚠️ 若失败发生在 service_shutdown 之后,数据服务已停,需要重启应用恢复。
       await update.close().catch(() => {})
       throw e
     }

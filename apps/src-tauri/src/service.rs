@@ -383,7 +383,21 @@ fn post_shutdown(endpoint: &Value, token: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// 主窗口销毁时调用（幂等）。
+/// 关服务的等待上限：必须**大于** sidecar 的关闭超时（`CLOSE_TIMEOUT_MS = 5s`，cookie flush），
+/// 否则安装器会撞上还在退出的 `amoeba-browser.exe`（更新卡在「browser 还未完全退出」）。
+const SHUTDOWN_WAIT: Duration = Duration::from_secs(8);
+
+/// 更新安装前由前端显式调用（幂等）。
+///
+/// ⚠️ Windows 上 `updater.install()` 走 `std::process::exit(0)`（插件文档原话），
+/// **不触发** `RunEvent::ExitRequested` —— 只靠退出钩子停服务，安装器会在
+/// 服务/sidecar 还在退时开始替换文件。
+#[tauri::command]
+pub fn service_shutdown(state: tauri::State<'_, ServiceState>) {
+    shutdown(&state);
+}
+
+/// 主窗口销毁 / 应用退出（含 updater 的 `app.exit(0)`）时调用（幂等）。
 pub fn shutdown(state: &ServiceState) {
     let mut inner = match state.inner.lock() {
         Ok(g) => g,
@@ -395,13 +409,22 @@ pub fn shutdown(state: &ServiceState) {
     if let (Some(endpoint), Some(token)) = (inner.endpoint.clone(), inner.owner_token.clone()) {
         let _ = post_shutdown(&endpoint, &token);
     }
-    let deadline = Instant::now() + Duration::from_secs(3);
+    let deadline = Instant::now() + SHUTDOWN_WAIT;
     loop {
         match child.try_wait() {
             Ok(Some(_)) => return,
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(100)),
             _ => break,
         }
+    }
+    // 超时：杀**整棵进程树**（launcher → bun → amoeba-browser）。只 kill launcher 会让
+    // sidecar 继续存活，安装器替换文件时报「browser 还未完全退出」。
+    let pid = child.id().to_string();
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/F", "/T", "/PID", pid.as_str()])
+            .output();
     }
     let _ = child.kill();
     let _ = child.wait();
