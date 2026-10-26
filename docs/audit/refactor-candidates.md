@@ -188,6 +188,15 @@ Efficiency/Altitude，32 条）+ Workflow 补齐（Rust 载体 / 协议一致性
 
 ### A · 正确性/语义（优先）
 
+- **A0 `browser-sidecar` 没接 WebView2 进程退出事件**（`apps/browser-sidecar/src/main.rs:928` 只有
+  500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
+  `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
+  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。修法：`add_BrowserProcessExited`
+  → `request_shutdown()`（**只对浏览器进程退出**；渲染进程崩溃 WebView2 会自建，别用 ProcessFailed
+  的泛化事件，否则打断在途抓取）。桌面载具已有同款兜底（`webview_browser.rs:414`）。
+- **A0b `rss --service` 的 job 表可能残留**（`apps/cli/src/service/server.ts:488-514`）：`runJob` 的
+  `jobs.delete` 只在 `finally`，被 cancel 但底层 await 未返回时条目与 AbortController 一直挂着。
+
 - **A1 服务端 diagnostics 内联了一份 core 实现**（`apps/cli/src/service/server.ts:829` 起）：
   `clearAll` 不清 `removedSubs`/`pageCursors`/`pageTotals`、不重置 netPolicy，也不取消在途
   refresh（在途结果会写回已清空的库）；core 的 `layer.diagnostics` 在生产路径成死代码。
@@ -231,6 +240,14 @@ Efficiency/Altitude，32 条）+ Workflow 补齐（Rust 载体 / 协议一致性
   建议改成 glob 发现 + 未登记即失败。
 - **C6 YouTube InnerTube 文本/缩略图解析 4 份**（`channel.ts` 的 `textOf`/`maxThumb`、
   `discover.ts` 的 `textOf`/`thumbOf`、`client.ts` 的 `ytText`/`ytThumb`）。
+- **C7 客户端只比 `hello.protocol`，不读 `minClientProtocol`**（`service-client/src/index.ts:104`）：
+  将来服务端抬协议、老客户端仍能连上并按旧语义发 RPC。修法：连上后校验
+  `minClientProtocol <= SERVICE_PROTOCOL`，不满足直接报错而不是静默降级。
+
+### 已核实「不是缺陷」（review 反例，避免下次重复报）
+
+- `service.rs` 的 `child.kill()` 只杀 `amoeba-runtime.exe`：服务进程按 `--parent-pid` 轮询
+  Tauri 进程存活（`service.rs:242`），父进程消失后自行退出 —— 双保险已存在。
 
 ---
 

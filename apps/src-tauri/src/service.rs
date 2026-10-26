@@ -107,11 +107,25 @@ fn resolve_paths(app: &AppHandle, db_file: &str) -> Result<Paths, String> {
             .path()
             .resource_dir()
             .map_err(|e| format!("resource_dir: {e}"))?;
-        (
+        let packed = (
             res.join(exe_name("amoeba-runtime")),
             res.join("service").join("service.js"),
             Some(res.join(exe_name("amoeba-browser"))),
-        )
+        );
+        // 安装版：三件资源由 tauri-build 复制进 resource_dir。
+        // ⚠️ `bun run tauri:release`（= `tauri dev --release`）不叠 tauri.conf.release.json，
+        // 资源不会进 target/release —— 此时回退到仓库产物，否则文档里的 release 调试
+        // 入口启动后拿不到数据服务（进程内回退已删，整个工作台不可用）。
+        if packed.1.is_file() {
+            packed
+        } else {
+            let target = target_dir();
+            (
+                target.join(exe_name("amoeba-runtime")),
+                repo_root().join("dist").join("service").join("service.js"),
+                Some(target.join(exe_name("amoeba-browser"))),
+            )
+        }
     };
 
     Ok(Paths {
@@ -213,8 +227,13 @@ fn drain_stdout(stdout: std::process::ChildStdout, ready_tx: mpsc::Sender<String
 
 fn spawn_service(paths: &Paths) -> Result<(Child, u16), String> {
     if !paths.launcher.is_file() {
+        let hint = if cfg!(debug_assertions) {
+            "cargo build -p amoeba-runtime"
+        } else {
+            "cargo build --release -p amoeba-runtime"
+        };
         return Err(format!(
-            "找不到运行时启动器：{}\n先运行 `cargo build -p amoeba-runtime`",
+            "找不到运行时启动器：{}\n先运行 `{hint}`",
             paths.launcher.display()
         ));
     }
