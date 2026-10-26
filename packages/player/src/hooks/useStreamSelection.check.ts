@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 /**
  * 选流契约自检 —— 默认选流必须命中 crawler 契约的「最高清晰度」(= streams[0])。
  *
@@ -6,6 +7,7 @@
  * ⚠️ 为什么单列:选流错了**不报错**,只是画质静默变低 —— 没人会发现。
  * 旧实现按**格式族**挑(渐进式 → hls → flv → 兜底),一旦首档不是渐进式、
  * 后面却有,就会跳过低档去取那个渐进式。
+ * ⚠️ 三斜线只给本文件注入 bun 类型（player tsconfig 的 types 只有 vite/client）。
  */
 import assert from "node:assert/strict"
 import type { MediaStream } from "@amoeba/core"

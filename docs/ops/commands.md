@@ -75,6 +75,18 @@ target/debug/amoeba-runtime.exe --no-download <entry>      # 离线：只用已�
 ## 自检脚本（仓库无测试基建，用最小断言）
 
 ```bash
+bun run check                          # ★ 统一入口：static + contract + state + typecheck（默认 4 层）
+bun run check --list                   # 列出全部检查项与所属层
+bun run check --layer service          # 起真实数据服务（慢，协议/快照/取消）
+bun run check --layer all              # 五层全跑
+bun run check --filter core           # 按路径子串筛（调试单点时用）
+```
+
+分层与归属清单在 `scripts/check.ts` 的 `FILES` / `TYPECHECK_PROJECTS`；新增 `.check.ts` 要同时加进对应层。
+单跑某个文件（失败信息原样输出）：
+
+```bash
+bun packages/log/src/example/log.check.ts               # 日志域（开关/前缀/sink/幂等注册/HMR 合并）
 bun packages/core/src/example/media-store.check.ts      # 查询分支（分组聚合等）
 bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）

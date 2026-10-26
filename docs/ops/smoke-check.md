@@ -60,15 +60,15 @@
 | 滚动条 / `scrollBarStyle:fluentOverlay` | CDP 量 `El.offsetWidth - clientWidth`：**必须 0**（>0 = 被 `::-webkit-scrollbar` 顶成经典条）。空白页对照法见下方结论记录 |
 | 改 `styles.css` 的 `@layer` / reset 结构 | CDP 量 tailwind 按钮的 `getComputedStyle(btn).padding`：**必须 `6px 12px`**（`0px` = reset 漏在层外，把 utility 压死了） |
 
-## 二、类型检查（6 包，必须全 0）
+## 二、类型检查（12 个项目，必须全 0）
 
 ```bash
-for p in packages/xml packages/core packages/crawler packages/resolve apps/desktop apps/mobile; do
-  ./node_modules/.bin/tsc -p $p/tsconfig.json --noEmit
-done
+bun run check                  # static + contract + state + typecheck 一次跑完（推荐）
+bun run check --layer typecheck # 只看类型
 ```
-⚠️ player 包 tsconfig 单独跑会报 `Cannot find type definition file for 'vite/client'`（历史配置问题，
-非代码错）；用 `tsc -p apps/desktop` 会连带编译 player，能查到 player 的类型错。
+
+覆盖 `packages/{xml,log,platform,resolve,crawler,core,host,player,ui}` + `apps/{cli,desktop,mobile}`，
+每个项目单独 `tsc -p`（入口 `scripts/check.ts`）。列表在 `scripts/check.ts:87` 的 `TYPECHECK_PROJECTS`。
 
 ## 二点五、Numbered UI Overlay（dev-only）
 

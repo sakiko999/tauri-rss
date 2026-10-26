@@ -95,6 +95,9 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   新增「播放」入口一律经 `usePlayerNav` 收口。见 `docs/ui/ui-conventions.md`。
 - **appHost 全局注入**：必填 `http`/`js`/`storage`，可选 `ws`/`browser` 未注入即降级；
   打开外链必须走 `openExternal`（WebView 拦 `window.open`）。见 `docs/architecture/host-abi.md`。
+- **日志统一 `@amoeba/log`，不走 appHost**（`appHost.log` 已删）：包内 `createLogDomain("域", { events })`
+  写语义事件，不直写 `console`；开关 `log="0"` 全局 / `log:<域>="0"` 单域，`warn/error` 永留。
+  服务进程用 `setLogSink` 把全部级别写 stderr（stdout 只留 `READY <port>`）。回归 `packages/log/src/example/log.check.ts`。
 - **存储 DDL 唯一权威 = core `db/schema.ts`**（插件自带 migration 不用，防漂移）；
   由 `createDataLayer()` 首行经 `appHost.storage.setSchema?.()` 注入 SQL 后端，host 不 import core。
   `_migrations` checksum 变化 → 拒绝启动；已发布迁移只能追加新版本，不能改 SQL。
@@ -152,6 +155,8 @@ bun run rss login <platform>                                # 扫码登录（经
 bun run rss fetch <key> --via-service           # 探针走数据服务（同 cookie/被动/配额）
 bun run rss attach status | list | refresh <id>  # CLI 作为桌面数据服务客户端
 bun run service:build                       # 打包独立服务入口 → dist/service/service.js
+bun run check                               # ★ 统一检查入口：static+contract+state+typecheck
+bun run check --layer service       # 起真实数据服务（慢）；`--layer all` 五层、`--list` 列清单
 bun scripts/service-data-check.ts           # 服务数据链路 48 项自检（含 job 取消/并发写/回滚）
 bun scripts/remote-data-layer-check.ts      # 远端镜像 38 项自检（含取消/崩溃 fail-closed/重启收敛）
 bun scripts/service-snapshot-size.ts        # 快照体积实测（原始 vs gzip，默认桌面 dev 库副本）
@@ -223,6 +228,8 @@ live 按平台二次聚合的 UI 侧。
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）
 
+- [ ] **CI 工作流暂缓（2026-10-26 定）**：`.github/workflows/ci.yml` 未建；统一入口 `bun run check`
+  已在本地跑通（61 项 / 5.4s），接入时 job 跑 `bun run check`，service 层单列（需 bun:sqlite + 端口）。
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
 - [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
