@@ -40,6 +40,11 @@ SQL 后端（`SqliteStorageBackend` / CLI `sqliteStorage`）只保存并执行�
 checksum 不符拒绝启动（见 `data-and-storage.md`「单写者与迁移/备份」）。
 KV/localStorage/内存后端不实现，调用方用 `?.` 保持 no-op。
 
+**批量写（R10）**：可选 `batch?(ops: StorageOp[])`（set/delete 混合）。服务 bun:sqlite 用
+`db.transaction`、内存后端同步循环；`SqliteStorageBackend`（tauri-plugin-sql）刻意不实现
+——sqlx 连接池无法保证同一连接，靠 core 回退逐个调用（该后端只剩 `VITE_DATA_SERVICE=0`
+调试回退）。
+
 **内容缓存**：refresh 走 TTL 缓存（KV key `content:<subId>`，value = `{fetchedAt, xml}`）。
 细则见 `docs/architecture/data-and-storage.md`。
 

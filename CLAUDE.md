@@ -45,6 +45,8 @@ packages/
                MediaItem（不依赖 crawler 类型）
   player/      ★ 媒体播放器（video/audio/live 共用）。PlayableMedia = 唯一入口（懒解析 + 选流 +
                分发）+ VideoShell/AudioShell + 独立控件。依赖 core 类型 + appHost 隧道 + hls/flv/dash.js
+  platform/    ★ 平台名单一权威（R9）：channelKey 前缀 / URL 域名 / cookie 字段 / 展示名。
+               零依赖叶子，host（governor）与 core（cookie 注入）共用。
   log/         零依赖叶子：域注册语义化日志（log="0" 全局关 / log:<域>="0" 按域关）
   service-protocol/ ★ 服务 HTTP/WS 契约（39 个 DataLayer 方法 + snapshot/event/job 类型）
   service-client/   ★ RemoteDataLayer：desktop/CLI 共用。读本地镜像、写 RPC、WS 事件；
@@ -146,6 +148,7 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
 bun run tauri:release               # release 编译 + 热重载（调 release-only 分支）
 bun run rss channels | fetch <key> | item <url> | play <url>   # CLI 调试探针
+bun run rss login <platform>                                # 扫码登录（经数据服务；终端二维码）
 bun run rss fetch <key> --via-service           # 探针走数据服务（同 cookie/被动/配额）
 bun run rss attach status | list | refresh <id>  # CLI 作为桌面数据服务客户端
 bun run service:build                       # 打包独立服务入口 → dist/service/service.js
@@ -200,15 +203,13 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 
 ## 下一步
 
-**下一轮（2026-10-26 定）**：`rss login xhs` + xhs 登录态回归
+**已完成（2026-10-26）**：`rss login <platform>`（终端渲染二维码，只走服务 RPC `scanLogin`；
+profile/cookie 只归服务，不做本地 sidecar 回退）+ xhs 显式匿名闸门（`--kv cookie=` 在浏览器
+路径也强制匿名，三处统一报「需要登录」）。
 
-1. `rss login <platform>`：终端渲染二维码（复用 `channel.scanLogin` 的 `emitQr`），**默认走服务
-   RPC `scanLogin`**（服务拉浏览器、profile 归服务、cookie 落服务 settings）；无服务时回退本地
-   `--browser` sidecar。
-2. 回归四步：`xhs:explore` 首屏+翻页、`xhs:user` 首屏+翻页、`rss detail <url>` 全过；
-   `--kv cookie=` 空串强制匿名时三处都必须报「需要登录」。
-3. 收尾：命令写进 `docs/ops/commands.md`，profile 归属写进 `06-data-service.md`。
-   ⚠️ 待拍板：CLI 是否允许独立 profile（建议不再维护第二份，默认走服务）。
+**待实机**：xhs 三处登录态回归（扫码 / 已登录短路 + 首屏 / 翻页 / `rss detail`）——需要数据
+服务持有 `webview-profile`。当前安装版是服务前版本（进程内直连 DB），回归前先升级，或手动
+`rss --service --db <桌面库> --profile-dir <webview-profile>`。
 
 **未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
 
@@ -225,7 +226,7 @@ live 按平台二次聚合的 UI 侧。
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）
 
-- [ ] **下一轮**：`rss login xhs` + xhs 三处登录态回归（方案见「下一步」）
+- [x] `rss login <platform>`（终端二维码）+ xhs 显式匿名闸门（2026-10-26）；登录态回归待实机
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
 - [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
@@ -234,7 +235,7 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 实况播放 release 验收：mp4 解码与暂停/续播（dev 已修 Referer 403 + ORB）
 - [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
 - [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
-- [ ] 架构债：R9（平台名表收口）、R15（CLI settings 复用 core 归一化）、R10（退订多键清理幂等/事务）
+- [x] 架构债：R9（`packages/platform` 单一权威）/ R15（CLI 复用 core settings 仓库）/ R10（退订多键 batch）
 - [ ] Referer 改造：共享 reqwest Client → WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 改 `unsafe-url` 保留 blob 回退
 - [ ] 系统文档正文细化（02 契约表 / 03 时序图 / 01 依赖矩阵按服务模式重写）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。

@@ -17,11 +17,16 @@
 | 事件 | `epoch` + 连续 `rev`；合帧 = 合并成一次提交（rev 不跳号）；缺口 → 全量 resync |
 | 断线 | fail-closed：只读镜像 + 禁用全部 mutation；v1 不做 outbox |
 | 存储 | 沿用 desktop 现有库（WAL 已开）；v1 reading 仍是整 blob + 1s 合并写；行表留 v2 |
-| profile | 归服务；阶段 0 验证从 desktop `webview-profile` 复制迁移 |
+| profile | 归服务（cookie/登录态只在服务上，desktop/CLI 都是消费者）；复用 desktop `webview-profile` |
 | 打包 | 小启动器 `amoeba-runtime.exe`（Rust）+ JS；Bun **全局优先、缺失自动下载**；`amoeba-browser.exe` 始终随包 |
 | mobile | 不参与协议；不跑 v2 迁移，保持现有 blob 语义 |
 
 **一句话**：服务是唯一写者，桌面只是带本地镜像的客户端；CLI 是同一服务的另一个客户端，也是这个服务的载具。
+
+**服务不与 desktop 绑定**：desktop 只是当前最常见的「谁把服务拉起来」——CLI 也可以
+`rss --service --db <同一份库> --profile-dir <同一份 profile>` 手动起，登录态与订阅
+完全共享。生命周期管理（spawn / 退出带走）是 desktop 的实现细节，不是协议约束；
+`rss login` 只要求「有服务在跑」，不要求桌面开着。
 
 ## 1. 目标与非目标
 

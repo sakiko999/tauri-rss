@@ -36,6 +36,9 @@
 | **数据服务/协议/客户端** | `service-skeleton-check.ts` + `service-data-check.ts`（含迁移表/每日备份/回滚演练/退订清理/取消/并发）+ `remote-data-layer-check.ts`（含取消/崩溃收敛）+ `service-snapshot-size.ts`（改投影字段时看 gzip 体积）+ `SERVICE_ENTRY=dist/service/service.js service-runtime-check.ts` + `cargo test -p amoeba --lib service::tests`；真机：`bun run tauri` → `ui-probe eval`（`dl.remote===true`）→ `bun run rss attach status` → 两端互标已读看对方变化 → 正常关窗看 endpoint/lock 清理 |
 | **服务打包** | `bun run service:build` + `cargo build -p amoeba-runtime` + `-p amoeba-browser` + `bun run tauri:build`；⚠️ 无 `TAURI_SIGNING_PRIVATE_KEY` 时 NSIS 之后的 updater 步失败，**安装包已产出**（7z 应列出 service.js/runtime/browser 三件） |
 | **core schema/迁移** | `service-data-check.ts` 会断言 `_migrations`；本地再跑 `bun run rss env` 后查 CLI 库 `_migrations`。改 `STORAGE_SCHEMA` 的已发布条目 = checksum 拒绝启动，只能追加新版本 |
+| **`rss login` / 二维码渲染**（2026-10-26） | `bun apps/cli/src/ui/qr-terminal.check.ts`（PNG 解码 → jsqr 还原 → 半块尺寸）；真机：起服务 → `rss login xhs`，终端码能被手机扫到；已登录 profile 应直接返回「已登录」。⚠️ 登录只走服务 RPC，服务未运行时命令应报错并给启动方式 |
+| **平台表 / governor 分类**（2026-10-26，R9） | `bun packages/platform/src/example/platform.check.ts` + `governor.check.ts`；改平台只动 `packages/platform/src/index.ts`，`rss channels` 与账号页展示名应同步 |
+| **StorageBackend.batch / 退订清理**（2026-10-26，R10） | `data-layer.check.ts`（断言多键一次 batch 删净）+ `service-data-check.ts` 退订段；⚠️ tauri-plugin-sql 后端刻意不实现 batch，`VITE_DATA_SERVICE=0` 回退时逐个删是预期行为 |
 
 | 新增/改动 channel | `bun run rss channels --kind <kind>` + `bun run rss fetch <key> --json`；⚠️ 发现页「可一键订阅」判据是 `!!defaultInfo \|\| 无必填项` —— **空对象是 truthy**，给需要参数的渠道写 `defaultInfo = {}` 会让它被误列进去 |
 | **Twitch（直播频道 / 热门 / 分区 / HLS）**（2026-10-20） | `bun run rss fetch twitch:live --kv roomIds=shroud --json`（离线频道也返 `offline` item，非 bug）+ `bun run rss fetch twitch:hot --json`（观看数降序）+ `bun run rss fetch twitch:category --kv category=just-chatting --json`（slug 或 `twitch.tv/directory/category/<slug>`）+ `bun run rss item https://www.twitch.tv/<login>`（应出多档 `hls`，**首档最高、`audio_only` 最后**）+ `bun packages/resolve/src/example/twitch-playlist.check.ts` + `bun packages/crawler/src/example/twitch-live.check.ts` |
@@ -92,7 +95,8 @@ bun scripts/ui-play-check.ts
 ```bash
 bun run rss fetch bili:popular --json        # bili 视频列表
 bun run rss fetch bili:precious --json       # bili 入站必刷（匿名，~98 条）
-# ⚠️ xhs:explore 的 HTTP SSR 是空壳；CLI 需 `--browser` + 登录态（当前只给「需要登录」提示）
+# ⚠️ xhs:explore 的 HTTP SSR 是空壳；登录态用 `rss login xhs`（经数据服务），
+#    探针再走 `--via-service`（或 `--browser` + 已登录的 sidecar profile 仅作调试）
 cargo build -p amoeba-browser && bun run rss fetch weibo:user --browser --kv uid=1195230310  # 浏览器渠道冒烟
 bun run rss fetch xhs:user --kv user_id=<id> --kv cookie=<ck> --json   # 小红书用户笔记（HTTP SSR）
 bun run rss fetch douyin:trend --json        # 抖音热点榜（匿名，含热度/榜位）

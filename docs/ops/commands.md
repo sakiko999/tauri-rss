@@ -44,6 +44,9 @@ bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统�
 bun run rss hot <词>                    # 热搜词下微博流（需登录 cookie）
 bun run rss sug <关键词>                # 抖音搜索联想词（匿名 appHost，输入补全）
 bun run rss detail <url> --cookie <ck>  # xhs 单条详情补全（登录态 noteDetail；URL 需带 xsec_token）
+bun run rss login <platform>            # 扫码登录（经数据服务；终端渲染二维码，bili/weibo/xhs/douyin）
+bun run rss login xhs --timeout 120     # 指定等待秒数；已登录时直接返回（不重复扫码）
+bun run rss login xhs --endpoint <dir>  # 显式指定服务 endpoint（默认桌面服务）
 bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                       # crawler/rsshub 同构断言
@@ -149,10 +152,18 @@ bun scripts/lx-probe.ts                # CDP 网络捕获边界（304/302/gzip/S
 ## CLI 设计与边界
 
 **现状**：`channels` / `fetch` / `item` / `play` / `dm` / `hot` / `align` / `env` /
-`refresh` / `sug` / `detail` / `browser-reset` 全部可用（`bun run rss <cmd>`），bili
+`refresh` / `sug` / `detail` / `login` / `browser-reset` 全部可用（`bun run rss <cmd>`），bili
 video/live、douyu、youtube 实测通过；浏览器渠道经 `--browser` 接入独立 WebView2
-sidecar（`weibo:user` 实测通过，xhs 因必须登录暂只给出提示）。
+sidecar（`weibo:user` 实测通过）；xhs 登录态经 `rss login` 获取（见下）。
 M3 `--log` 域开关与 M4 log 清退未做。
+
+### 登录：`rss login <platform>`
+
+数据服务是唯一生产者，profile 与 cookie 只存在于服务上，所以登录**只有一条路径**：
+连服务的 `scanLogin` RPC，cookie 由服务写入自己的 settings。CLI 不写本地库、不维护
+第二份 profile —— 服务未运行时直接报错并给出启动方式（桌面会自动拉起服务；手动起
+服务必须复用同一份 db/profile）。二维码在终端用 Unicode 半块字符渲染：data URL 类
+（xhs/weibo/douyin）先解 PNG + jsqr 识别再重编码，纯内容类（bili）直接编码。
 
 ### 定位
 
@@ -172,7 +183,8 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
   浏览器路径并忽略 `--kv cookie=`，默认注入会让现有 HTTP 探针静默失效。
   - 构建：`cargo build -p amoeba-browser`；找不到时 CLI 保持 `browser=undefined`（HTTP 降级）。
   - profile：`%LOCALAPPDATA%/app.amoeba.cli/browser-profile`，与桌面 `webview-profile` 严格分开。
-  - 登录：xhs 必须登录，CLI 暂无扫码入口 → 会给出明确提示；下一步是 `rss login`。
+  - 登录：xhs 必须登录，用 `rss login <platform>`（经数据服务扫码）。CLI 自己的
+    `--browser` sidecar profile 只用于抓取探针，**不承载登录态**。
   - 单页/lane：与桌面同一套 `@amoeba/host/cdp` 语义（`Target.createTarget` = 独立顶层窗口，
     sidecar 500ms tidy 去任务栏；`mode hidden|interactive` 同步切换）。
   - 退出：命令结束 `closeBrowser()` 关 stdin，sidecar 等 WebView2 flush cookie 后退出；
@@ -199,7 +211,7 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
 ```
 apps/browser-sidecar/      # amoeba-browser：无 Tauri 依赖的 WebView2 宿主（CDP + stdin 控制）
 apps/cli/
-  package.json     # @amoeba/cli；deps: core, host, log + cac + picocolors + qrcode
+  package.json     # @amoeba/cli；deps: core, host, log, platform + cac + picocolors + qrcode + jsqr
   tsconfig.json    # 不 extends tsconfig.app.json（DOM/vite 环境）；面向 bun/node:
                    #   types: ["@types/bun"], moduleResolution bundler, allowImportingTsExtensions
   src/

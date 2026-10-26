@@ -322,6 +322,8 @@ sequenceDiagram
 | `NetBackend`（`:73-102`） | `configure({level?, levels?, globalMaxConcurrent?, platforms?})`、`reportRisk(platform, signal)`、`browserGate(platform)`、`governorStats()` |
 | `UpdaterBackend`（`:122-131`） | `version/check/downloadAndInstall(onEvent)/relaunch`；事件 `started/progress/finished` |
 
+**批量写（R10）**：`StorageBackend` 另有可选 `batch?(ops: StorageOp[])`（`StorageOp = {type:"set",key,value} | {type:"delete",key}`）。服务用 bun:sqlite 的 `db.transaction`、内存后端同步循环；`tauri-plugin-sql` 后端**刻意不实现**（sqlx 连接池无法保证同一连接，`BEGIN`/`COMMIT` 不可靠），core 见方法缺失自动回退逐个 set/delete。退订清理把 `content:` 与 `body:` 多键合成一次 batch。
+
 `StorageBackend` 的 DDL 权威仍在 `core/src/db/schema.ts:15`（`kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)`）。**注入路径**：`createDataLayer()` 首行调 `appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；`SqliteStorageBackend` 在首次连接前保存 schema，`ready()` 时执行 `schema.migrations`；未注入就读写会抛错，建连后只能重复注入同一份 schema（同表 + 同一 `migrations` 数组），换 schema 会被拒绝。KV/localStorage/内存后端不实现该方法，调用是 no-op。CLI 的 `sqliteStorage` 是 core 的直接消费者（app 层），仍在构造时 import 并执行 core 的 `MIGRATIONS`，尚未改走 `setSchema`；这不构成包依赖环。`version` 字段目前只是数据，没有版本表（见 §7.3）。
 
 ### 5.4 `imageProxy` / `dataSaver` 旁路

@@ -18,13 +18,13 @@
 | R6 | 失败只有字符串，登录/风控/403 不可区分 **已修（2026-10-23，启发式兜底）** | — | — | `RefreshResult.errorKind?`（`packages/core/src/types/refresh-result.ts`）；`packages/resolve/src/errors.ts`；desktop `refreshErrorKinds` / 诊断表 / 首刷 toast；player `errorKindOf` | 平台 client 逐步从普通 `Error` 换成 `ResolveError(kind)`，启发式兜底随之退场 |
 | R7 | mobile 能力模型不一致（注入 browser、可播缺 `isFeedItem`） **已修（2026-10-23）** | — | — | `inject-tauri.ts:31` 新增 `browser?: boolean`；mobile 显式 `browser:false`（`apps/mobile/src/main.tsx:16`）；`isPlayable` 排除无 stream 的 audio（`apps/mobile/src/store.ts:146-152`） | 新增可选宿主能力时同步两端的注入开关 |
 | R8 | `previewChannel` 绕过被动采集承诺 **已修（2026-10-23）** | — | — | `previewChannel` 与刷新共用被动门：`channel.passive && appHost.browser` 时只调 `fetchPassive`，无数据抛 `ResolveError("no-data")`（`packages/core/src/data-layer.ts`）；`passive-mode.check.ts` 新增预览用例 | 无 |
-| R9 | 平台名是字符串协议、多份映射（RSSHub 已独立归桶）**（部分修复 2026-10-23）** | 中 | 高 | core `source/rsshub.ts` 显式 `policy.platform="rsshub"`；`governor.ts` 的 `rsshub` 配额 + `rsshub.app` 兜底；设置页新增 RSSHub 行；平台名仍分散在 core/host/global.d.ts | 共享平台表；`platformOfChannel` 与 `platformOf` 同源 |
-| R10 | 存储无事务/多键原子（正文索引已取消）**（部分修复 2026-10-23）** | 中 | 中 | body 清理改前缀扫描 `body-cache-repo.ts`；退订清理 `data-layer.ts:1016-1020`、`reading-repo.ts:115-127`；仍无 `batch`/事务 | 补 `batch`/事务 |
+| R9 | 平台名是字符串协议、多份映射 **已修（2026-10-26）** | — | — | 单一权威 `packages/platform`（零依赖叶子，host/core/desktop/CLI 共用）；`cookieFieldFor` / `platformOfChannel` / governor `platformOf` / 账号页 `PLATFORM_META` 全部委托；`platform.check.ts` 守四组映射 | 新增平台只改 `PLATFORMS` |
+| R10 | 存储无事务/多键原子 **已修（2026-10-26，多键删除）** | — | — | `StorageBackend.batch?`；bun:sqlite 用 `db.transaction`、mem 同步循环；退订把 content + body 多键合成一次 batch（`data-layer.ts` 的 `subscriptions.remove`）。tauri-plugin-sql 后端**刻意不实现**（sqlx 连接池无法可靠事务），core 回退逐个删；生产路径是服务的 bun:sqlite | `data-layer.check.ts` 断言批量删净；`storage-batch` 冒烟 |
 | R11 | `MIGRATIONS.version` 是死数据，非幂等迁移会每次重跑 **已修（2026-10-23）** | — | — | `MIGRATIONS` 改为 `readonly string[]`，注释明确「只放幂等 SQL，非幂等前先加版本表」（`packages/core/src/db/schema.ts`）；host/CLI 两个后端按序全量执行 | 加非幂等迁移时先补 `_migrations` 版本表 |
 | R12 | `bun run tauri:build` 曾实际启动 dev **已修（2026-10-23）** | — | — | `scripts/tauri.ts:125-136` 新增 `build` 意图，`:246-250` 映射到 `build-release`；`package.json:30` 不再落进 dev | 回归：`bun run tauri:build` 应产出安装包 |
 | R13 | release-only 分支无法被同一套巡检覆盖 | 中 | 高 | `scripts/tauri.ts:54-61`；`apps/desktop/src/main.tsx`（`__store` 仅 DEV） | release 下开受控 CDP 或加核对钩子 |
 | R14 | 进程级单例：provider 后注册覆盖、门面 last-writer-wins、`cookieSnapshot` 无版本 | 中 | 低 | `packages/resolve/src/platform/credentials.ts:25-30`；`packages/core/src/data-layer.ts:177-183,417,823-828`；`packages/host/src/runtime.ts:120-141` | per-instance 化或显式 dispose |
-| R15 | CLI 旁路 settings（绕过归一化/损坏留证）；CLI 有自己的 settings 快照 provider，桌面库登录态不会自动进入 CLI | 中 | 中 | `apps/cli/src/info.ts:38-46,53-58`；`apps/cli/src/main.ts:41-48`；`packages/resolve/src/platform/credentials.ts:25-30`；`apps/cli/src/store/sqlite-storage.ts:14` | 复用 core 导出的纯函数/仓库 |
+| R15 | CLI 旁路 settings **已修（2026-10-26）** | — | — | `apps/cli/src/info.ts` 的 `loadSettings` 改走 core `createSettingsRepository`（归一化/损坏留证/串行化，顺带修掉每次新建连接）；登录态不再写 CLI 本地库 —— profile/cookie 只在数据服务（`rss login` 走服务 RPC） | CLI 探针仍读自己的库（调试载具），登录态消费请用 `--via-service` 或桌面 |
 | R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 | 中 | 中 | `packages/host/src/tauri/browser-backend.ts`（`IDLE_CLOSE_MS`）、`packages/host/src/browser/backend.ts`（`closeIfIdle`） | 登录/长轮询显式续期或豁免 |
 | R17 | 播放器兜底链静默（FLV 无 headers）**（部分修复 2026-10-23）** | 中 | 中 | 未知格式裸 `<video>` 已挂 onError（`PlayableMedia.tsx:472-475`）；FLV 仍不带 headers（`useMediaStream.ts:209-212`） | FLV 走隧道或显式提示 |
 | R18 | 死字段与无生产者字段面 **已修（2026-10-23）** | — | — | `Live.quality`/`Live.notice` 无生产者，已从类型与 serialize 删除；`Base.sourceId`/`raw` 注明「crawler 内部字段，不过 XML」 | 新增字段前先 grep 生产者；不可达字段直接删 |
@@ -234,9 +234,7 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 
 | 债务 | 最小改法 | 验证方式 |
 | --- | --- | --- |
-| R9 平台表（剩余） | 一份 `channelKeyPrefix → platform → 展示元数据` 放 core 并导出，host 复用（RSSHub 已走显式 `policy.platform`） | `levelFor("rsshub")` 与 `rsshub.app` 同桶；新增平台只改一处 |
 | R11 迁移版本（未来） | 出现非幂等迁移时补 `_migrations(version)` 表并在两个 backend 共用同一执行器 | 新增一条非幂等 SQL，重启两次不报错 |
-| R10 存储收口（剩余） | 退订清理与 reading 写入补 `batch`/事务 | `body-cache.check.ts` + 退订后查 reading blob |
 | R18 死字段（剩余） | 新增字段前先 grep 生产者；不可达字段直接删，不做「预留」 | `tsc` + grep 无 producer 的字段清单 |
 | R19 文档漂移（剩余） | 新注释与代码同改；发现漂移按 §7.3 登记 | `tsc` 通过即可（无逻辑改动） |
 
@@ -248,12 +246,14 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 
 | 顺序 | 动作 | 收益 | 成本 | 前置 |
 | --- | --- | --- | --- | --- |
-| 1 | 存储收口：清理/写入的 `batch`/事务（R10 剩余）；出现非幂等迁移时再补版本表（R11 未来） | 多键写入不再有中间态 | 1 天 | 需确认已有库的兼容 |
-| 2 | 平台/配额表单一权威（R9 剩余） | 新增平台只改一处，去掉漏配一类问题 | 半天 | 与 host 平台推导同一改动 |
-| 3 | WebView2 边界显式化：登录续期、长等待豁免（R16） | 降低扫码/刷新失败率 | 1 天 | 需真机；R5 的取消部分已由 job 取消解决（2026-10-26），仅 lane 化未做 |
-| 4 | 文档漂移持续收尾（R19） | 类型/注释不再承诺不存在的东西 | 随时 | `tsc` + grep；新漂移登记到 §7.3 |
+| 1 | WebView2 边界显式化：登录续期、长等待豁免（R16） | 降低扫码/刷新失败率 | 1 天 | 需真机；R5 的取消部分已由 job 取消解决（2026-10-26），仅 lane 化未做 |
+| 2 | 文档漂移持续收尾（R19） | 类型/注释不再承诺不存在的东西 | 随时 | `tsc` + grep；新漂移登记到 §7.3 |
 
-一个判断依据：依赖/加载层（R2）已在本轮完成，剩下的存储收口与平台表改动小、消除的是静默错误；WebView2 边界需要真机验收（见 [../../ops/smoke-check.md](../../ops/smoke-check.md)）。在当前无测试基建的状态下，优先做能被 `*.check.ts` 守住的部分。错误分类（R6）、预览被动（R8）、RSSHub 归桶（R9）、正文索引与 `MIGRATIONS.version`（R10/R11）、死字段（R18）与 R2 也已在本轮完成，后续只需平台 client 逐步换 `ResolveError`，以及把平台名表收到一处。
+一个判断依据：依赖/加载层（R2）已完成，平台表（R9）与存储多键原子（R10）已在
+2026-10-26 收口，消除的都是静默错误；WebView2 边界需要真机验收（见
+[../../ops/smoke-check.md](../../ops/smoke-check.md)）。错误分类（R6）、预览被动（R8）、
+RSSHub 归桶、正文索引与 `MIGRATIONS.version`（R10/R11）、死字段（R18）与 R2 均已完成，
+后续只需平台 client 逐步换 `ResolveError`。
 
 ## 延伸阅读
 

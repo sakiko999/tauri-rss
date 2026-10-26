@@ -72,21 +72,29 @@ graph TD
 
 ### 1.2 矩阵
 
+**`platform`（R9 单一权威，2026-10-26）**：平台名是字符串协议（governor 分桶 / netLevels
+键 / cookie 前缀 / 账号页展示）。此前 host、core、desktop、CLI 各手抄一份，新增平台必漏配。
+现在集中到零依赖叶子 `packages/platform`：`PLATFORMS` 一张表（id / 展示名 / 域名 / channelKey
+前缀 / cookie 字段 / 浏览器登录站点），host 的 `platformOf(host)` 与 core 的
+`cookieFieldFor` / `platformOfChannel` 全部委托。放在叶子里是因为依赖矩阵不允许
+host → core、也不允许 core 生产依赖 host —— 这是唯一能同时被两边依赖的位置。
+
 `R` = 运行时（值）import；`T` = 只有 `import type`/`export type`，编译后无运行时代码；`D` = 仅自检/示例（devDep）；`G` = 不 import，只读 `globalThis.appHost`（类型来自 `global.d.ts`）；`U` = `package.json` 声明但源码零 import。
 
-| 行 \ 列 | xml | log | host | resolve | crawler | core | player | ui | 外部依赖 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| **log** | | | | | | | | | 无（零依赖叶子） |
-| **xml** | | | | | | | | | `fast-xml-parser` |
-| **host** | | R | | | | | | | `@tauri-apps/api` + opener/process/sql/updater、`ws` |
-| **resolve** | T | R | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 ui/desktop 取防盗链规则 |
-| **crawler** | R | | D | R | | | | | — |
-| **core** | R | | D | R | R | | | | — |
-| **player** | | R | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
-| **ui** | | | | R（仅 `./media-referrer`） | | U | U | | `react`；仍读 `globalThis.appHost.imageProxy/dataSaver` |
-| **desktop** | R | | R | R | | R | R | R | react-router、zustand、react-virtuoso、masonic、Radix、dompurify、qrcode、lucide |
-| **mobile** | U | | R | U | U | R | R | R | react、zustand；`@tauri-apps/api` 也声明未用 |
-| **cli** | R | | R | R | R | R | | | `cac`、`picocolors` |
+| 行 \ 列 | xml | log | platform | host | resolve | crawler | core | player | ui | 外部依赖 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **log** | | | | | | | | | | 无（零依赖叶子） |
+| **platform** | | | | | | | | | | 无（零依赖叶子，R9 平台表） |
+| **xml** | | | | | | | | | | `fast-xml-parser` |
+| **host** | | R | R | | | | | | | `@tauri-apps/api` + opener/process/sql/updater、`ws` |
+| **resolve** | T | R | | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 ui/desktop 取防盗链规则 |
+| **crawler** | R | | | D | R | | | | | — |
+| **core** | R | | R | D | R | R | | | | — |
+| **player** | | R | | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
+| **ui** | | | | | R（仅 `./media-referrer`） | | U | U | | `react`；仍读 `globalThis.appHost.imageProxy/dataSaver` |
+| **desktop** | R | | R | R | R | | R | R | R | react-router、zustand、react-virtuoso、masonic、Radix、dompurify、qrcode、jsqr、lucide |
+| **mobile** | U | | | R | U | U | R | R | R | react、zustand；`@tauri-apps/api` 也声明未用 |
+| **cli** | R | | R | R | R | R | R | | | `cac`、`picocolors`、`qrcode`、`jsqr` |
 | **src-tauri** | — | — | — | — | — | —（DDL 由 core 注入、host 执行） | — | — | Rust：tauri、opener/sql/updater/process、reqwest、tokio-tungstenite、base64、windows-sys |
 
 矩阵的四条破例/噪声，读依赖图时必须知道：
