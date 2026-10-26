@@ -25,11 +25,15 @@
   `"access_id"`，短时效 token，`discover.ts` 模块级缓存 + -352 逐出重取）；
   匿名实测一律 `-352`（渠道翻译成「需要登录」文案）。20 条/页 + `has_more` 翻页。
   分区树 `Area/getList` 匿名可用（顶层条目 `areaId=0` 即整区列房）。
-- ⚠️ **会员/付费字段各接口不一致**（2026-10-26，线上漏标修复）：`space/wbi/arc/search`
-  （`bili:user_video`）的 vlist 项**没有 `rights` 对象**，充电专属只体现为 `is_charging_arc`
-  （bool）——只读 `rights` 会让该订阅里所有充电视频没有「会员」徽标。`popular`/`ranking`/
-  `season`/`series`/`favlist` 走 `rights.pay/arc_pay/ugc_pay`（后三个未逐一实测）。
-  漏标时先看接口原始字段，别假设 `rights` 一定存在。
+- ⚠️ **会员/付费字段各接口不一致**（2026-10-26 实测，7 个 `bili:user_video` 订阅）：
+  - `space/wbi/arc/search`（`bili:user_video`）：vlist **没有 `rights`**，充电专属只在
+    `is_charging_arc`（bool）——已修（`ugc({ charging })`）。
+  - `popular` / `ranking`：vlist 带 `rights`（含 pay/arc_pay/ugc_pay），正常。
+  - `favlist`（`x/v3/fav/resource/list` 的 medias）与 `season`/`series`（archives）：
+    **都没有 `rights`**，充电专属仍漏标。列表侧没有可用字段——`is_upower_exclusive`
+    只存在于 `view` 详情接口；`seasons_archives_list` 对充电视频返回的 `ugc_pay` 也是 0。
+    要补只能按条目懒查详情（成本高，且卡片角标是抓取时快照，详情补标回不到列表）。
+  - 数据侧参考：该用户 450 条 UP 投稿中 47 条 `is_upower_exclusive=true`，其余 `rights.*` 全 0。
 - ✅ **搜UP主**（2026-10-16，`searchBiliUsers` / 渠道 `bili:user`）：
   `search_type=bili_user` + **匿名 buvid3/4**（`biliClient.getJson(..., {buvid:true})`，
   裸请求 412）。与 `bili:user_video`（uid 投稿订阅）配对，走「添加订阅 → UP主 / 频道」

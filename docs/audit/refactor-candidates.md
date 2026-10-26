@@ -188,6 +188,13 @@ Efficiency/Altitude，32 条）+ Workflow 补齐（Rust 载体 / 协议一致性
 
 ### A · 正确性/语义（优先）
 
+- **A-1 B站收藏夹/合集的会员标记仍缺**（`crawler/src/channels/bili/favlist.ts:55`、`season.ts:95`、
+  `series.ts:98`）：这三个接口的列表项没有 `rights`，充电专属不可判（详见
+  `docs/platforms/platform-notes.md` 的 B站段）。已修的是 `user_video`（`is_charging_arc`）；
+  这两个渠道要么接受缺口，要么按条目懒查 `view`（不建议）。
+- **A-2 「在播」判据两处各写一遍**（`Apps/desktop/src/lib/media.ts` 的 `isLiveNow` 与
+  `Cards.tsx:102` 的内联 `liveStatus !== "offline"`）：应统一走 `isLiveNow`，避免下次只改一处。
+
 - **A0 `browser-sidecar` 没接 WebView2 进程退出事件**（`apps/browser-sidecar/src/main.rs:928` 只有
   500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
   `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
