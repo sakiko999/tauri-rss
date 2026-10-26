@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react"
 import { useNavigate, useSearchParams } from "react-router"
 import { VirtuosoGrid } from "react-virtuoso"
 import type { CategoryItem, MediaItem } from "@amoeba/core"
-import { itemKey } from "../../lib/media.ts"
+import { isLiveNow, itemKey } from "../../lib/media.ts"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { healthOf, matchesQuery } from "../../store/selectors.ts"
@@ -80,8 +80,10 @@ export function MediaMain() {
       ? hotWord.items
       : view.list
   const socialOnly = items.length > 0 && items.every((i) => i.kind === "social")
-  const liveItems = useMemo(() => items.filter((i) => i.kind === "live"), [items])
-  const restItems = useMemo(() => items.filter((i) => i.kind !== "live"), [items])
+  // 只收在播房间：twitch/YouTube 的下播频道会以 liveStatus="offline" 留在内容里，
+  // 它们属于「其余内容」，不该出现在「正在直播 N 个房间」。
+  const liveItems = useMemo(() => items.filter(isLiveNow), [items])
+  const restItems = useMemo(() => items.filter((i) => !isLiveNow(i)), [items])
   const health = meta.sub ? healthOf(meta.sub, refreshErrors, busy) : "ok"
   const hasMix = liveItems.length > 0 && restItems.length > 0
 

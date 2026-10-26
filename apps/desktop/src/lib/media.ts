@@ -30,6 +30,18 @@ export function httpsify(url: string | undefined): string | undefined {
   return url
 }
 
+/**
+ * 真·在播：`kind === "live"` 且不是明确的 `offline`。
+ *
+ * ⚠️ twitch / YouTube 会为**已下播**的频道保留条目（`liveStatus: "offline"`，标题带
+ * 「（离线）」），目的是「下播后订阅不空」、详情页显示「已下播」——这是设计，不是脏数据。
+ * 但「正在直播」区块只该收在播房间，否则离线房间会被写进「N 个房间」。
+ * `unknown`（老数据没写 liveStatus）按在播处理，保持原行为。
+ */
+export function isLiveNow(item: MediaItem): boolean {
+  return item.kind === "live" && item.liveStatus !== "offline"
+}
+
 /** 条目主图 src(可能为空)。index 指定社交图集里的第几张。 */
 export function mediaUrl(item: MediaItem, index = 0): string | undefined {
   const it = item as {
