@@ -9,6 +9,7 @@
  *   - 非 bilibili host / 缺 ID / 空串 → null。
  */
 import { parseBiliFavlistRef, parseBiliSeasonRef, parseBiliSeriesRef } from "../channels/bili/refs.ts"
+import { ugc } from "../channels/bili/video-common.ts"
 
 let fails = 0
 const ok = (c: unknown, label: string) => {
@@ -62,6 +63,17 @@ ok(
 ok(parseBiliFavlistRef("bilibili.com/x?media_id=1052622027")?.mediaId === "1052622027", "media_id=（无 scheme）")
 ok(parseBiliFavlistRef("https://space.bilibili.com/686127/favlist") === null, "缺 fid → null")
 ok(parseBiliFavlistRef("https://example.com/favlist?fid=1052622027") === null, "非 B 站 host → null")
+
+// 会员/充电专属标记：两个字段来源都要覆盖。
+// space arc/search 没有 rights 对象，只有 is_charging_arc（2026-10-26 线上漏标回归）。
+console.log("会员/充电专属:")
+{
+  const base = { title: "t", bvid: "BV1xx411c7mD", pubdate: 1_700_000_000 }
+  ok(ugc("bili:user_video", 0, { ...base, charging: true }).membersOnly === true, "is_charging_arc=true → membersOnly")
+  ok(ugc("bili:user_video", 0, { ...base, charging: false }).membersOnly === undefined, "非充电不出标记")
+  ok(ugc("bili:user_video", 0, { ...base, rights: { ugc_pay: 1 } }).membersOnly === true, "rights.ugc_pay 仍生效")
+  ok(ugc("bili:user_video", 0, { ...base, rights: { pay: 0, arc_pay: 0 } }).membersOnly === undefined, "rights 全 0 不误标")
+}
 
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
 process.exit(fails === 0 ? 0 : 1)

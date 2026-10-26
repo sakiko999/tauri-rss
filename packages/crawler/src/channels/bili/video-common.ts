@@ -13,6 +13,10 @@ const BVID_TIME = 1_589_990_400
  * bili `rights` → 会员/付费专属。
  *   - `pay`：付费稿件；`arc_pay`：大会员/付费稿件；`ugc_pay`：充电专属。
  * 任一为 1 都表示「列表可见但播放受限」，统一成一个「会员」徽标（区分类型要再拆契约）。
+ *
+ * ⚠️ **space 投稿接口（`x/space/wbi/arc/search`）不返回 `rights`**：它的 vlist 项只有
+ * `is_charging_arc`（充电专属）与 `is_pay`，没有 rights 对象。只读 rights 会让
+ * 「UP 主投稿」订阅里所有充电专属视频都没有标记（2026-10-26 用户实测）。
  */
 function isPaywalled(rights: unknown): boolean {
   const r = rights as { pay?: unknown; arc_pay?: unknown; ugc_pay?: unknown } | null | undefined
@@ -32,6 +36,8 @@ export function ugc(sourceId: string, t: number, v: {
   duration?: unknown
   /** 原始 `rights` 对象（多数列表接口都有；没有就不标记）。 */
   rights?: unknown
+  /** 充电专属（space 投稿接口的 `is_charging_arc`；与 rights.ugc_pay 同义）。 */
+  charging?: unknown
 }): Video {
   const pubdate = Number(v.pubdate ?? 0)
   const aid = Number(v.aid ?? 0)
@@ -52,7 +58,7 @@ export function ugc(sourceId: string, t: number, v: {
     publishedAt: pubdate ? pubdate * 1000 : undefined,
     fetchedAt: t,
     duration: typeof v.duration === "number" ? v.duration : undefined,
-    membersOnly: isPaywalled(v.rights) || undefined,
+    membersOnly: isPaywalled(v.rights) || v.charging === true || v.charging === 1 || undefined,
     channel: ownerName ? { name: ownerName } : undefined,
     // playable stream lazily resolved downstream — bilibili playurl needs bvid+cid and URLs carry a deadline signature
   }

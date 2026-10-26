@@ -41,6 +41,8 @@ export const BiliUserVideoChannel = makeApiChannel({
         aid: v.aid,
         bvid: v.bvid,
         rights: v.rights,
+        // space arc/search 没有 rights 对象，充电专属只体现在 is_charging_arc 上。
+        charging: v.is_charging_arc,
         owner: v.author ? { name: String(v.author) } : undefined,
       }),
     )
