@@ -31,6 +31,7 @@ async function main(): Promise<void> {
     if (existsSync(sourceDb + suffix)) copyFileSync(sourceDb + suffix, dbFile + suffix)
   }
 
+  const startedAt = Date.now()
   const child = Bun.spawn(
     [
       process.execPath,
@@ -50,6 +51,7 @@ async function main(): Promise<void> {
 
   try {
     const ready = await firstLine(child.stdout)
+    const readyMs = Date.now() - startedAt
     const m = ready.match(/^READY (\d+)$/)
     if (!m) throw new Error(`服务未就绪：${ready}`)
     const port = Number(m[1])
@@ -79,6 +81,7 @@ async function main(): Promise<void> {
         {
           db: sourceDb,
           items,
+          readyMs,
           identityBytes,
           gzipBytes,
           gzipRatio: Number((gzipBytes / identityBytes).toFixed(3)),

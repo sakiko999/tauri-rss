@@ -485,7 +485,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
       一条 settings.set 同时发出，全部落库；真机双向可见另验）。
 - [x] CLI 与 desktop 看到同一订阅/已读/设置/缓存。
 - [x] 快照 ≤1MB（**gzip 传输量** 616KB / 2,521 条；原始 NDJSON 2.42MB）、首屏不白屏；
-      boot 未单独计时（dev 实机无白屏，快照与 UI 并行启动）。
+      boot 实测 306ms（spawn → READY，含 `hydrate()`；`service-snapshot-size.ts` 可复测）。
 - [x] markAllRead <50ms（服务端 5k 条 6–7ms）。
 - [x] 服务崩溃/重启后镜像收敛：kill 进程 → status 离线 + 写 fail-closed → 同库重启 →
       新客户端快照恢复订阅/已读/星标（`remote-data-layer-check`）；回滚演练另验。
