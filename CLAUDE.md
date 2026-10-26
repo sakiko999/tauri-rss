@@ -200,21 +200,24 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 
 ## 下一步
 
+**下一轮（2026-10-26 定）**：`rss login xhs` + xhs 登录态回归
+
+1. `rss login <platform>`：终端渲染二维码（复用 `channel.scanLogin` 的 `emitQr`），**默认走服务
+   RPC `scanLogin`**（服务拉浏览器、profile 归服务、cookie 落服务 settings）；无服务时回退本地
+   `--browser` sidecar。
+2. 回归四步：`xhs:explore` 首屏+翻页、`xhs:user` 首屏+翻页、`rss detail <url>` 全过；
+   `--kv cookie=` 空串强制匿名时三处都必须报「需要登录」。
+3. 收尾：命令写进 `docs/ops/commands.md`，profile 归属写进 `06-data-service.md`。
+   ⚠️ 待拍板：CLI 是否允许独立 profile（建议不再维护第二份，默认走服务）。
+
 **未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
 
 - **自动保活**（仅 bili 可行）：已有 `refresh_token` 但无续期调度 —— 到期只能重扫。
-- **desktop 数据/爬虫服务化**：已完成（`amoeba-runtime` + Bun 服务 + WebView2 sidecar；
-  签名/安装卸载/回滚演练均验，仅剩干净 VM 复核）。
-- **移动端扫码登录**：`Loginable` 已具备，移动端 CDP 不可行。
 - **抖音登录态搜索调研**：先专用小号 + CDP 被动探针，再决定是否实现。
+- ~~移动端扫码登录~~：mobile 已冻结（2026-10-26），不再排期。
 
-**待实机验证**（没跑过不算完成）：
-
-- 安装包：本机静默安装/启动/关窗/卸载/签名已验（7.12MiB + `.sig`）；剩余**干净 VM** 与断网首启（Bun 缓存命中）。
-- release 实例：`webview_browser_set_mode` hidden ↔ interactive 切换 + `xhs:user` 翻页各一次。
-- WebView2 生命周期：关主窗口进程必须退出；空闲回收后自动重建；连续 3 次关/建不撞 profile 占用。
-- `xhs:explore` 手动刷新命中 `passiveBuffer`；未命中走页面 SSR 兜底。
-- `xhs:user` 刷新：登录态导航出条目；**未登录必须报「需要登录」**（匿名态已移除）。
+**待实机验证**：清单在下方 TODO（没跑过不算完成），当前包括干净 VM 安装/卸载与断网首启、
+WebView2 生命周期剩余、release 内存、`xhs:explore` 被动命中、实况图/实况播放。
 
 **长期悬置**（收益不抵复杂度）：CSP（现 `csp: null`，抖音/斗鱼签名脚本靠 `eval`）；
 live 按平台二次聚合的 UI 侧。
@@ -222,29 +225,27 @@ live 按平台二次聚合的 UI 侧。
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）
 
-- [ ] 界面文案清理尚未实机看一眼：发现页与添加订阅弹窗跑一次 `bun run dev` 确认布局没塌
-- [ ] WebView2 生命周期剩余：空闲回收后重建、`/json/new` lane tab 关得掉、`/json/close` 不残留窗口
-- [ ] release 验收：GPU 进程 private 是否因 --disable-gpu-compositing 下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
-- [ ] xhs 全渠道登录态实机回归：扫码 → explore 首屏 + 翻页、user 首屏 + 翻页、详情；未登录三处都必须报「需要登录」
-- [ ] 实况图实机验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图（xhs 403 已确认，改走隧道 + Blob）
-- [ ] release 实机验收实况播放（dev 已修：CDN 对页面源 Referer 403 + ORB 拦截；需确认 release WebView2 下 mp4 解码与暂停/续播）
-- [ ] 下一轮候选：R9 剩余（平台名表收到一处）
+- [ ] **下一轮**：`rss login xhs` + xhs 三处登录态回归（方案见「下一步」）
+- [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
+- [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
+- [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
+- [ ] `xhs:explore` 手动刷新命中 `passiveBuffer`（未命中走页面 SSR 兜底）
+- [ ] 实况图验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图
+- [ ] 实况播放 release 验收：mp4 解码与暂停/续播（dev 已修 Referer 403 + ORB）
+- [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
+- [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
+- [ ] 架构债：R9（平台名表收口）、R15（CLI settings 复用 core 归一化）、R10（退订多键清理幂等/事务）
+- [ ] Referer 改造：共享 reqwest Client → WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 改 `unsafe-url` 保留 blob 回退
+- [ ] 系统文档正文细化（02 契约表 / 03 时序图 / 01 依赖矩阵按服务模式重写）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
-- [ ] 下一轮：R15（CLI settings 复用 core 归一化）；R10（退订多键清理幂等化/事务）；R9（平台名表收口）
-- [ ] Referer 改造：优先验证 WebView2 WebResourceRequested 注入（桌面），同时把 http_get 的 reqwest Client 改为共享单例
-- [ ] Referer 改造下一步：共享 reqwest Client → WebView2 WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 原生模式改 `unsafe-url` 并保留 blob 回退
-- [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。
-- [ ] 实机回归：真实微博/xhs feed 图片网格与实况播放（直连+回退）、滚动时缓存命中、release 构建同一行为
-- [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
-- [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
-- [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS
-- [!] 服务化已升级为「数据层服务」（2026-10-26）：`rss --service` 单写者独占 SQLite/crawler/browser；desktop/CLI 只做客户端，mobile 不参与。计划见 `docs/architecture/system/06-data-service.md`。
-- [ ] 下一步：`rss login xhs`（终端二维码 / cookie 预热）；干净 VM 复核安装/卸载与断网首启。
-- [!] CLI 浏览器必须显式 `--browser`；默认注入会让 xhs/weibo 忽略 `--kv cookie=`，静默改变现有探针行为。
-- [!] 共享数据源只能单写者：服务独占 SQLite 与全部写操作；任何第二写者（Diagnostics 直连、dev seed、旧 desktop、CLI 直开 DB）都会造成静默丢数据。
-- [!] 服务化后客户端绝不能写 KV blob 或直开 DB；reading/subscriptions/settings 只能发语义命令。第二写者是数据丢失的唯一根因。
-- [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
+- [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
 - [!] 桌面默认 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；`VITE_DATA_SERVICE=0` 仅调试回退。
-- [ ] 干净 VM 复核（断网首启、生产 WebView2 Origin）；`tauri-plugin-sql` 暂留（mobile/本地回退）。
+- [!] `tauri-plugin-sql` 暂留：`VITE_DATA_SERVICE=0` 回退仍用它（mobile 已冻结，不再是理由）。
+- [!] CLI 浏览器必须显式 `--browser`；默认注入会让 xhs/weibo 忽略 `--kv cookie=`，静默改变现有探针行为。
+- [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
+- [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。
+- [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
+- [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS。
+- [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
 - [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
 <!-- cc-todo:end -->
