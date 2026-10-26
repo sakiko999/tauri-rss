@@ -107,6 +107,7 @@ bun packages/crawler/src/example/passive-capture.check.ts # LX 采集编排（�
 bun packages/resolve/src/example/router.check.ts        # by-url 路由表（host 边界 + 各平台命中）
 bun packages/resolve/src/example/xhs-time.check.ts      # xhs 时间戳单位判别（秒/毫秒不写反）
 bun packages/resolve/src/example/youtube-danmaku-poll.check.ts # 直播聊天轮询退避（封顶 60s）/ 直播结束终止判定
+bun packages/resolve/src/example/login-events.check.ts  # 登录/弹幕日志事件在四平台同形同文案
 bun packages/resolve/src/example/bili-buvid.check.ts    # bili 登录 cookie 缺 buvid3 时补匿名指纹（-352 回归）
 bun packages/resolve/src/example/bili-space-sign.check.ts # bili space 系签名含 dm_* 指纹 + cookie 传递（412/-352 回归）
 bun packages/resolve/src/example/credentials.check.ts   # 平台 cookie provider（三级语义 / sign 同接 / douyin 兜底序 / xhs 空串退出）

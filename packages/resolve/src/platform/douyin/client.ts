@@ -7,7 +7,7 @@
  */
 import { httpJson } from "../../host.ts"
 import { deferredStream } from "../../danmaku"
-import { log } from "../../log.ts"
+import { formatError, log } from "../../log.ts"
 import { platformCookie } from "../credentials.ts"
 import { UA_ENTER, DEFAULT_TTWID, signDouyinUrl, enterRoomParams } from "./abogus.ts"
 import { douyinDanmakuStream } from "./danmaku.ts"
@@ -103,6 +103,6 @@ export const douyinClient = {
     deferredStream(
       () => (opts?.cookie ? Promise.resolve(opts.cookie) : douyinCookie()),
       (cookie, onItems) => douyinDanmakuStream(roomId, cookie)(onItems),
-      (e) => log.douyin.warn("弹幕初始化失败:", (e as Error)?.message),
+      (e) => log.douyin.danmakuInitFailed({ error: formatError(e) }),
     ),
 } satisfies PlatformClient

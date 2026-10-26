@@ -24,7 +24,7 @@ import { argbToHex, createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuItem, DanmakuStream } from "../../danmaku"
 import { biliClient } from "./client.ts"
 import { extractCookie } from "../../utils/cookie.ts"
-import { log } from "../../log.ts"
+import { formatError, log } from "../../log.ts"
 
 /** 编解码复用单例(每帧热路径,共享安全)。 */
 const TE = new TextEncoder()
@@ -194,6 +194,6 @@ export function biliLiveDanmakuStream(roomId: string, cookie?: string): DanmakuS
         onMessage: (data) => parseBiliDanmakuFrame(new Uint8Array(data)),
       })(onItems)
     },
-    (e) => log.biliLive.warn("直播弹幕初始化失败(未开播?):", (e as Error)?.message),
+    (e) => log.biliLive.danmakuInitFailed({ error: formatError(e) }),
   )
 }

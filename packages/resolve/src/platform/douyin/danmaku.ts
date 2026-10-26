@@ -19,7 +19,7 @@ import type { DanmakuStream } from "../../danmaku"
 import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "./danmaku-proto.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { httpJson } from "../../host.ts"
-import { log } from "../../log.ts"
+import { formatError, log } from "../../log.ts"
 import { DEFAULT_TTWID, UA_ENTER, enterRoomParams, signDouyinUrl } from "./abogus.ts"
 import { kWebMsSDK } from "./msdk-sign.ts"
 
@@ -244,6 +244,6 @@ export function douyinDanmakuStream(roomId: string, cookie?: string): DanmakuStr
           ),
       })(onItems)
     },
-    (e) => log.douyin.warn("弹幕初始化失败:", (e as Error)?.message),
+    (e) => log.douyin.danmakuInitFailed({ error: formatError(e) }),
   )
 }

@@ -13,7 +13,7 @@ import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 import { httpJson, now } from "@amoeba/resolve"
 import { parseRoomIds } from "@amoeba/resolve"
-import { log } from "@amoeba/resolve"
+import { formatError, log } from "@amoeba/resolve"
 import { HUYA_UA } from "@amoeba/resolve"
 
 /** 单房间 → Live item(profileRoom API)。房间失败抛错,由调用方 catch 隔离。 */
@@ -67,7 +67,7 @@ export class HuyaLiveChannel implements RssChannel {
     const rooms = await Promise.all(
       roomIds.map((roomId) =>
         fetchHuyaRoom(roomId).catch((e) => {
-          log.huya.warn(`房间 ${roomId} 拉取失败,跳过:`, (e as Error)?.message)
+          log.huya.warn(`房间 ${roomId} 拉取失败,跳过:`, formatError(e))
           return null
         }),
       ),

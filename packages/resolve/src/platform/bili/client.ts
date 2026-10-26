@@ -14,7 +14,7 @@
  */
 import * as R from "ramda"
 import type { Stream } from "@amoeba/xml"
-import { log } from "../../log.ts"
+import { formatError, log } from "../../log.ts"
 import { httpJson, now } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
@@ -311,7 +311,7 @@ async function resolvePlayUrl(bvidOrAid: string, cid: string, cookie?: string): 
     } catch (e) {
       if (idx === 0) throw e
       // 非首档失败=少一个可选档位,不是故障(首档失败上面已 throw)。
-      log.bili.debug(`视频档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, (e as Error)?.message)
+      log.bili.debug(`视频档位 ${q.name}(qn=${q.qn}) 解析失败,跳过:`, formatError(e))
     }
   }
   if (!durlStreams.length) {

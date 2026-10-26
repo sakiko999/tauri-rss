@@ -10,7 +10,7 @@
  */
 import type { Item, SerializeOptions } from "@amoeba/xml"
 import { serializeFeed } from "@amoeba/xml"
-import { log } from "@amoeba/resolve"
+import { formatError, log } from "@amoeba/resolve"
 import type { Kind, Loginable, Pageable, RssChannel, RssSource, SourceInfo, SourceInfoField } from "../index.ts"
 
 /** serializeFeed + 可选 total(翻页渠道真实总数,经 tpl:total 带出)。apiFetch / fetchMore 共用。 */
@@ -41,7 +41,7 @@ export function apiFetch(
       const { items, total } = await fetchResult()
       return serializeWithTotal(items, opts, total)
     } catch (e) {
-      log.crawler.fetchError({ source: opts.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
+      log.crawler.fetchError({ source: opts.channelTitle ?? "", message: formatError(e) })
       throw e
     }
   }
@@ -154,7 +154,7 @@ export function apiFetchMore(
         ...(hasMore !== undefined ? { hasMore } : {}),
       }
     } catch (e) {
-      log.crawler.fetchError({ source: o.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
+      log.crawler.fetchError({ source: o.channelTitle ?? "", message: formatError(e) })
       throw e
     }
   }

@@ -351,8 +351,19 @@ desktop 默认不直连 DataLayer，而是同形的 `RemoteDataLayer`。改接�
 core 改用 `@amoeba/log` 的 `[core]` 域（`packages/core/src/log.ts`），并补了 loadMore 失败、
 被动无数据的日志点。
 
-新增日志域时用 `createLogDomain("子系统:名字", ...)`；resolve 的平台域在 `packages/resolve/src/log.ts:108-121`，
+新增日志域时用 `createLogDomain("子系统:名字", ...)`；resolve 的平台域集中在 `packages/resolve/src/log.ts`，
 player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面命名空间，重名会复用同一引用，务必带前缀。
+
+三条调用规范（2026-10-26 审计后）：
+
+1. **同形事件用模板**：登录生命周期 spread `LOGIN_EVENTS`（`loginNavigate`/`qrReady`/`loginOk`/
+   `loginReused`/`loginTimeout`/`loginFallback`/`qrMissing`），弹幕初始化失败 spread
+   `DANMAKU_EVENTS`。同一句话在三个平台各写一遍 → 措辞必然漂移，grep 也搜不全。
+   回归 `packages/resolve/src/example/login-events.check.ts`。
+2. **异常参数一律 `formatError(e)`**，不要 `(e as Error)?.message`：非 `Error` reject（字符串、
+   hls/dash 错误对象）会输出空串或 `[object Object]`。crawler 从 `@amoeba/resolve` 取同一个函数。
+3. **正常回退路径用 `debug`，`warn` 留给「用户会感知到的失败」**：逐 CDN/逐档位失败、单次轮询
+   抖动都是 debug；`warn/error` 不受开关控制，误用就会在服务端 stderr 里刷屏。
 
 ### 4.2 命令速查
 

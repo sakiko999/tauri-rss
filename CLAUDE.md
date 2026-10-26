@@ -97,7 +97,10 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   打开外链必须走 `openExternal`（WebView 拦 `window.open`）。见 `docs/architecture/host-abi.md`。
 - **日志统一 `@amoeba/log`，不走 appHost**（`appHost.log` 已删）：包内 `createLogDomain("域", { events })`
   写语义事件，不直写 `console`；开关 `log="0"` 全局 / `log:<域>="0"` 单域，`warn/error` 永留。
-  服务进程用 `setLogSink` 把全部级别写 stderr（stdout 只留 `READY <port>`）。回归 `packages/log/src/example/log.check.ts`。
+  服务进程用 `setLogSink` 把全部级别写 stderr（stdout 只留 `READY <port>`）。
+  **同形事件用共享模板**（登录 spread `LOGIN_EVENTS`、弹幕初始化 `DANMAKU_EVENTS`），
+  异常参数一律 `formatError(e)`（不要 `(e as Error)?.message`），正常回退路径用 `debug`。
+  回归 `packages/log/src/example/log.check.ts` + `packages/resolve/src/example/login-events.check.ts`。
 - **存储 DDL 唯一权威 = core `db/schema.ts`**（插件自带 migration 不用，防漂移）；
   由 `createDataLayer()` 首行经 `appHost.storage.setSchema?.()` 注入 SQL 后端，host 不 import core。
   `_migrations` checksum 变化 → 拒绝启动；已发布迁移只能追加新版本，不能改 SQL。

@@ -13,7 +13,7 @@
 import * as R from "ramda"
 import type { Stream } from "@amoeba/xml"
 import { httpJson, httpText } from "../../host.ts"
-import { log } from "../../log.ts"
+import { formatError, log } from "../../log.ts"
 import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { toInt } from "../../utils/number.ts"
 import { UA_ENTER } from "./abogus.ts"
@@ -35,14 +35,14 @@ export async function douyinResolveStreams(roomId: string): Promise<Stream[]> {
     const streams = parseDouyinStreams((enterRes.stream_url ?? {}) as Record<string, any>)
     if (streams.length) return streams
   } catch (e) {
-    log.douyin.warn("enter API 失败:", (e as Error)?.message)
+    log.douyin.warn("enter API 失败:", formatError(e))
   }
   // 2. reflow/info(room 长号;复用 step 1 的 enter 响应,不再重抓)
   try {
     const streams = await fetchReflowStreams(roomId, enterRes)
     if (streams.length) return streams
   } catch (e) {
-    log.douyin.warn("reflow API 失败,降级 HTML:", (e as Error)?.message)
+    log.douyin.warn("reflow API 失败,降级 HTML:", formatError(e))
   }
   // 3. HTML 兜底
   return resolveFromHtml(roomId)

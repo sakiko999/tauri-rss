@@ -9,7 +9,7 @@
  */
 import { type Live, type SerializeOptions, serializeFeed } from "@amoeba/xml"
 import type { Pageable, RssSource } from "../../index.ts"
-import { type TwitchStreamPage, log, now } from "@amoeba/resolve"
+import { type TwitchStreamPage, formatError, log, now } from "@amoeba/resolve"
 import { twitchStreamToLive } from "./live.ts"
 
 export interface TwitchStreamsSourceOptions {
@@ -37,7 +37,7 @@ export function createTwitchStreamsSource(
     try {
       return await fn()
     } catch (e) {
-      log.crawler.fetchError({ source: o.channelTitle ?? "", message: (e as Error)?.message ?? String(e) })
+      log.crawler.fetchError({ source: o.channelTitle ?? "", message: formatError(e) })
       throw e
     }
   }

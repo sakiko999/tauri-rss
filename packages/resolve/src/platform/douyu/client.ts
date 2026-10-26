@@ -6,7 +6,7 @@
  */
 import type { Stream } from "@amoeba/xml"
 import { httpGet, httpJson, now } from "../../host.ts"
-import { log } from "../../log.ts"
+import { formatError, log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 import { douyuDanmakuStream } from "./danmaku.ts"
@@ -104,7 +104,7 @@ export async function douyuResolveH5Play(
     } catch (e) {
       lastErr = e
       // 逐 CDN 回退属正常路径(拿到流也可能先失败几条):debug,失败整体由调用方报错。
-      log.douyu.debug(`cdn=${cdn} rate=${rate} 失败,换下一个:`, (e as Error)?.message)
+      log.douyu.debug(`cdn=${cdn} rate=${rate} 失败,换下一个:`, formatError(e))
     }
   }
   throw lastErr ?? new Error(`douyu H5Play: no stream for room ${roomId}`)
@@ -140,7 +140,7 @@ export async function douyuResolveStreams(roomId: string): Promise<Stream[]> {
     } catch (e) {
       if (idx === 0) throw e
       // 非首档失败=少一个可选档位,不是故障(首档失败上面已 throw)。
-      log.douyu.debug(`档位 ${q.name}(rate=${q.rate}) 解析失败,跳过:`, (e as Error)?.message)
+      log.douyu.debug(`档位 ${q.name}(rate=${q.rate}) 解析失败,跳过:`, formatError(e))
     }
   }
   if (!streams.length) {

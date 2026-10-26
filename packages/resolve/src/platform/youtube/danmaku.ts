@@ -12,6 +12,7 @@
  * 只 warn 一次,不回调 onItems;轮询连续失败前 3 次 warn、之后静默指数退避,
  * 直播结束时直接终止循环。
  */
+import { formatError } from "@amoeba/log"
 import type { DanmakuItem } from "../../danmaku"
 import { httpText } from "../../host.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
@@ -160,12 +161,12 @@ export function createLiveChatPoller(liveId: string): (onItems: (items: DanmakuI
     timer = setTimeout(() => {
       void pollOnce(liveId, state, onItems)
         .then(() => {
-          if (failures) log.youtube.info(`live chat 轮询恢复(此前连续失败 ${failures} 次)`)
+          if (failures) log.youtube.pollRecovered({ failures })
           failures = 0
         })
         .catch((e) => {
           if (cancelled) return
-          const msg = (e as Error)?.message ?? String(e)
+          const msg = formatError(e)
           // continuations 用尽 = 直播真的结束(再轮询只会每 5s 一条 warn)。
           // ⚠️ 「无 continuation(直播结束?)」不在此列:可能只是瞬时结构异常,走退避即可。
           if (isChatEndedError(msg)) {
@@ -174,7 +175,7 @@ export function createLiveChatPoller(liveId: string): (onItems: (items: DanmakuI
             return
           }
           failures += 1
-          if (failures <= MAX_WARN_FAILURES) log.youtube.warn("live chat 轮询失败:", msg)
+          if (failures <= MAX_WARN_FAILURES) log.youtube.pollFailed({ error: msg })
         })
         .finally(() => schedule(state, onItems))
     }, delay)
@@ -184,7 +185,7 @@ export function createLiveChatPoller(liveId: string): (onItems: (items: DanmakuI
     if (!statePromise) {
       statePromise = initChat(liveId)
         .catch((e) => {
-          log.youtube.warn("live chat 初始化失败(未开播?):", (e as Error)?.message)
+          log.youtube.danmakuInitFailed({ error: formatError(e) })
           throw e
         })
     }

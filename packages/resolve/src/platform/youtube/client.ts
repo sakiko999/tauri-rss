@@ -17,7 +17,7 @@
  */
 import * as R from "ramda"
 import type { Stream } from "@amoeba/xml"
-import { log } from "../../log.ts"
+import { formatError, log } from "../../log.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 import { getItag, isPlayableItag } from "./itag.ts"
 import { deobfuscateNParam, hasThrottlingParam } from "./signature.ts"
@@ -695,7 +695,7 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
       const iosHls = ios.streamingData?.hlsManifestUrl
       if (iosHls) return [{ url: iosHls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
     } catch (e) {
-      log.youtube.warn("iOS live 请求失败:", (e as Error)?.message)
+      log.youtube.warn("iOS live 请求失败:", formatError(e))
     }
     // iOS 也拿不到 HLS,回退 ANDROID_VR/WEB 的 formats(若有)。
   }
