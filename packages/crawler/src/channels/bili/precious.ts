@@ -37,6 +37,7 @@ export const BiliPreciousChannel = makeApiChannel({
         // 稳定排序保持 feed 顺序）；forceBvid 保证有 bvid 时仍用现代链接。
         pubdate: 0,
         forceBvid: true,
+        rights: raw.rights,
         aid: raw.aid,
         bvid: raw.bvid,
         duration: raw.duration,

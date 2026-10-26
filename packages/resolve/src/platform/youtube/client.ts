@@ -183,21 +183,28 @@ export function getVisitorData(): Promise<string> {
 /**
  * POST 一次 InnerTube browse(WEB client + visitorData),返回原始 JSON。
  *
- * crawler 的直播页(热门/栏目)用。固定 `hl:"en"`、`gl:"US"` —— 栏目名是解析依据
- * (`Live Now - Gaming` 等),跟随系统语言会让栏目名变成「正在直播」。
+ * crawler 的直播页(热门/栏目)与频道视频列表用。固定 `hl:"en"`、`gl:"US"` ——
+ * 栏目名是解析依据(`Live Now - Gaming` 等),跟随系统语言会让栏目名变成「正在直播」。
+ *
+ * `params`：tab 选择器（频道 Videos tab 用固定 params）；`continuation`：翻页令牌，
+ * 与 browseId 二选一（InnerTube 的 continuation 请求不带 browseId）。
  */
-export async function youtubeBrowse(browseId: string): Promise<Record<string, any>> {
+export async function youtubeBrowse(
+  browseId: string,
+  opts: { params?: string; continuation?: string } = {},
+): Promise<Record<string, any>> {
   const visitorData = await getVisitorData()
-  const res = await postJson(
-    `${YOUTUBEI_V1}/browse?prettyPrint=false`,
-    {
-      context: {
-        client: { clientName: "WEB", clientVersion: WEB_CLIENT_VERSION, hl: "en", gl: "US", visitorData },
-      },
-      browseId,
+  const body: Record<string, unknown> = {
+    context: {
+      client: { clientName: "WEB", clientVersion: WEB_CLIENT_VERSION, hl: "en", gl: "US", visitorData },
     },
-    { "user-agent": WEB_UA },
-  )
+  }
+  if (opts.continuation) body.continuation = opts.continuation
+  else {
+    body.browseId = browseId
+    if (opts.params) body.params = opts.params
+  }
+  const res = await postJson(`${YOUTUBEI_V1}/browse?prettyPrint=false`, body, { "user-agent": WEB_UA })
   return res as Record<string, any>
 }
 

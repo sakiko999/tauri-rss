@@ -39,6 +39,7 @@ export const BiliRankingChannel = makeApiChannel({
         aid: raw.aid,
         bvid: raw.bvid,
         duration: raw.duration,
+        rights: raw.rights,
         owner: (raw.owner as { name?: string }) ?? undefined,
       }),
     )

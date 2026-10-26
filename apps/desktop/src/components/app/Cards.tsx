@@ -150,6 +150,11 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
         ) : dur ? (
           <span className="card-duration num">{fmtTime(dur)}</span>
         ) : null}
+        {item.kind === "video" && (item as { membersOnly?: boolean }).membersOnly ? (
+          <span className="card-member" title="需要会员/付费才能观看">
+            会员
+          </span>
+        ) : null}
         {live && online ? <span className="live-online num">{fmtCount(online)} 人在看</span> : null}
         {/* 续播进度条(看过一半的条目一眼可辨)。仅非直播、有位置与时长时。 */}
         {!isLiveNow && dur && item.positionSec ? (

@@ -4,3 +4,4 @@
  */
 export * from "./client.ts"
 export * from "./discover.ts"
+export * from "./channel.ts"

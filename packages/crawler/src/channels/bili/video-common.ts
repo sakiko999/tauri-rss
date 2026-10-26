@@ -9,6 +9,16 @@ import type { Video } from "@amoeba/xml"
 export const API = "https://api.bilibili.com"
 const BVID_TIME = 1_589_990_400
 
+/**
+ * bili `rights` → 会员/付费专属。
+ *   - `pay`：付费稿件；`arc_pay`：大会员/付费稿件；`ugc_pay`：充电专属。
+ * 任一为 1 都表示「列表可见但播放受限」，统一成一个「会员」徽标（区分类型要再拆契约）。
+ */
+function isPaywalled(rights: unknown): boolean {
+  const r = rights as { pay?: unknown; arc_pay?: unknown; ugc_pay?: unknown } | null | undefined
+  return Number(r?.pay) === 1 || Number(r?.arc_pay) === 1 || Number(r?.ugc_pay) === 1
+}
+
 /** bilibili UGC 视频 → Video(kind=video)。stream 留空——playurl 直链由下游懒解析。 */
 export function ugc(sourceId: string, t: number, v: {
   title: unknown
@@ -20,6 +30,8 @@ export function ugc(sourceId: string, t: number, v: {
   owner?: { name?: string } | undefined
   forceBvid?: boolean
   duration?: unknown
+  /** 原始 `rights` 对象（多数列表接口都有；没有就不标记）。 */
+  rights?: unknown
 }): Video {
   const pubdate = Number(v.pubdate ?? 0)
   const aid = Number(v.aid ?? 0)
@@ -40,6 +52,7 @@ export function ugc(sourceId: string, t: number, v: {
     publishedAt: pubdate ? pubdate * 1000 : undefined,
     fetchedAt: t,
     duration: typeof v.duration === "number" ? v.duration : undefined,
+    membersOnly: isPaywalled(v.rights) || undefined,
     channel: ownerName ? { name: ownerName } : undefined,
     // playable stream lazily resolved downstream — bilibili playurl needs bvid+cid and URLs carry a deadline signature
   }

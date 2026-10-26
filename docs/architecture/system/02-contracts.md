@@ -156,7 +156,7 @@ sequenceDiagram
 | 公共 | `mimeType` `poster` `width` `height` `aspectRatio` `durationSec` `bitrate` `streamingFormat` `isLiveNow` `lang` | 渲染/播放提示 | `:152-161` |
 | article | `contentFormat` | html/markdown/text | `:172` |
 | live | `platform` `roomId` `liveStatus` `online` `isRecord` `introduction` `showTime` | 直播元数据 | `:232-238` |
-| video | `duration` `channelName` `channelAvatar` | 时长与频道 | `:200-206` |
+| video | `duration` `channelName` `channelAvatar` `membersOnly` | 时长、频道、会员/付费专属 | `parseVideo` |
 | video/audio | `streamJson` | 完整 `Stream` JSON（`url/format/headers/quality/rate/dashManifest`），读取优先于 enclosure | `parseStreamFromEnclosure`（`deserialize.ts:289-313`） |
 | audio | `duration` `artist` `album` | 播客元信息 | `:216-218` |
 | social | `likes` `reposts` `replies` `isLiked` `xsecToken` | 互动数 + 详情开关 | `:185-190` |

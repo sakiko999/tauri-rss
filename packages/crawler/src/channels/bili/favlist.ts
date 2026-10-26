@@ -52,6 +52,7 @@ export const BiliFavlistChannel = makeApiChannel({
           bvid: m.bvid,
           owner: m.upper?.name ? { name: String(m.upper.name) } : undefined,
           duration: m.duration,
+          rights: m.rights,
           forceBvid: true,
         }),
       )

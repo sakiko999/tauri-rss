@@ -337,6 +337,20 @@
   font-size: var(--fs-micro);
   font-weight: 560;
 }
+/* 会员/付费专属(B站大会员、YouTube 频道会员):左上角,与实况图角标同层。
+   列表可见但播放受限 —— 只是提示,不拦截点击(播放器会给出平台自己的错误)。 */
+.card-member {
+  position: absolute;
+  left: var(--sp-2);
+  top: var(--sp-2);
+  padding: 1px 7px;
+  border-radius: var(--r-full);
+  background: oklch(0.12 0.01 264 / 76%);
+  color: var(--warning);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  pointer-events: none;
+}
 /* 续播进度条:贴卡片底缘的细条(整卡宽度),看过一半一眼可辨。 */
 .card-progress {
   position: absolute;

@@ -92,6 +92,7 @@ export class BiliSeasonChannel implements RssChannel {
           aid: a.aid,
           bvid: a.bvid,
           duration: a.duration,
+          rights: a.rights,
         }),
       )
   }
