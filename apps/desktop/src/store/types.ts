@@ -235,8 +235,10 @@ export type StoreGet = StoreApi<DesktopState>["getState"]
 export interface StoreCtx {
   set: StoreSet
   get: StoreGet
-  /** 重算当前视图 + 全局条目快照。 */
+  /** 重算当前视图 + 全局条目快照（输入未变时命中 memo，跳过 set）。 */
   refreshView(): void
+  /** store 内容变更（replace/append/patch/clear）时调用，让 refreshView 的 memo 失效。 */
+  markItemsChanged(): void
   /** 订阅集变更后重读 + 重绘。 */
   syncSubscriptions(): Promise<void>
   /** 懒查分页能力并写 canLoadMore(仅真实订阅;已缓存短路)。 */

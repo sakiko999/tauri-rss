@@ -753,8 +753,8 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       }
       case "refresh": {
         const subscriptionId = asString(p.subscriptionId, "subscriptionId")
-        const result = await runJob(jobId, () =>
-          layer.refresh(subscriptionId, { force: p.force === true }),
+        const result = await runJob(jobId, (signal) =>
+          layer.refresh(subscriptionId, { force: p.force === true, signal }),
         )
         const itemEvent = diffItems(subscriptionId)
         if (itemEvent) commit(itemEvent)
@@ -768,10 +768,13 @@ export async function runService(opts: ServiceOptions): Promise<number> {
             if (signal.aborted) break
             const sub = subs[i]!
             progress(jobId, { phase: "progress", current: i, total: subs.length, label: sub.title })
-            const result = await layer.refresh(sub.id, { force: p.force === true })
+            const result = await layer.refresh(sub.id, { force: p.force === true, signal })
             results.push(result)
             const itemEvent = diffItems(sub.id)
             if (itemEvent) commit(itemEvent)
+            // 取消落在抓取途中 → 当前订阅返回「刷新已取消」，整轮到此为止。
+            // ⚠️ 先 commit diff：取消与抓取成功可能同时发生，漏发事件会让镜像停在旧内容。
+            if (signal.aborted) break
           }
           return { results }
         })
@@ -1046,12 +1049,19 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       if (url.pathname === "/v1/state" && req.method === "GET") {
         if (!role) return errorResponse(req, 401, "unauthorized", "token")
         const body = await snapshot()
-        return new Response(body, {
-          headers: {
-            "content-type": "application/x-ndjson; charset=utf-8",
-            ...corsHeaders(req),
-          },
-        })
+        const headers = {
+          "content-type": "application/x-ndjson; charset=utf-8",
+          vary: "accept-encoding",
+          ...corsHeaders(req),
+        }
+        // 快照是整库投影（2.5k 条 ≈ 2.3MB，播客 summary 占大头）：gzip 后降到
+        // ~0.5MB 传输量。浏览器/Node/Bun 的 fetch 都自动解压，客户端无感。
+        if (/\bgzip\b/.test(req.headers.get("accept-encoding") ?? "")) {
+          return new Response(Bun.gzipSync(new TextEncoder().encode(body)), {
+            headers: { ...headers, "content-encoding": "gzip" },
+          })
+        }
+        return new Response(body, { headers })
       }
 
       if (url.pathname === "/v1/rpc" && req.method === "POST") {

@@ -91,8 +91,9 @@ export interface DataLayer {
     clear(subscriptionId: string): void
   }
   /** 刷新一次订阅,把内容写入 store。opts.force=true 跳过 TTL 缓存强制抓取(手动刷新)。
-   *  默认(force=false)走 TTL:TTL 内命中持久化缓存则跳过网络抓取。 */
-  refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult>
+   *  默认(force=false)走 TTL:TTL 内命中持久化缓存则跳过网络抓取。
+   *  opts.signal 取消本次抓取：在途请求结果丢弃，返回 `error: "刷新已取消"`，不覆盖 store/缓存。 */
+  refresh(subscriptionId: string, opts?: { force?: boolean; signal?: AbortSignal }): Promise<RefreshResult>
   /**
    * 只从持久化内容缓存重建 store，**不发网络**。
    * 数据服务 boot 时调用，保证首次快照就有内容；桌面/移动的 init 仍走
@@ -396,6 +397,43 @@ export function createDataLayer(): DataLayer {
     })
   }
 
+  /** 取消语义的返回值：与「抓取失败」区分——不触发旧缓存回退，也不写 store/缓存。 */
+  function cancelledResult(subscriptionId: string): RefreshResult {
+    return {
+      subscriptionId,
+      itemCount: 0,
+      error: "刷新已取消",
+      errorKind: "timeout",
+      fetchedAt: now(),
+    }
+  }
+
+  /**
+   * 抓取与取消竞速：signal 触发即抛（在途请求的响应被丢弃，不占后续流程）。
+   *
+   * ⚠️ 不做 socket 级 abort：`appHost.http` 契约里没有 signal，且 governor 的
+   * 去重可能把同一请求共享给别的订阅——这里只停「本次刷新的编排」，网络层
+   * 自行跑完（结果无人消费）。
+   */
+  function withSignal<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return p
+    if (signal.aborted) return Promise.reject(new Error("刷新已取消"))
+    return new Promise<T>((resolve, reject) => {
+      const onAbort = () => reject(new Error("刷新已取消"))
+      signal.addEventListener("abort", onAbort, { once: true })
+      p.then(
+        (v) => {
+          signal.removeEventListener("abort", onAbort)
+          resolve(v)
+        },
+        (e) => {
+          signal.removeEventListener("abort", onAbort)
+          reject(e)
+        },
+      )
+    })
+  }
+
   /**
    * 刷新一次订阅。TTL 缓存语义(2026-08-28 接入):
    *   - 未 force 且有缓存且未过期 → 从缓存 deserializeFeedWithTotal 重建喂 store,
@@ -406,7 +444,13 @@ export function createDataLayer(): DataLayer {
    *   - 渠道 `passive` 且有浏览器 → 只调 source.fetchPassive(),读不到走缓存,
    *     **绝不回退 fetch()**(风控 §2.4/§3.8:应用构造的平台 API 请求正是被动模式要禁的)。
    */
-  async function doRefresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
+  async function doRefresh(
+    subscriptionId: string,
+    opts?: { force?: boolean; signal?: AbortSignal },
+  ): Promise<RefreshResult> {
+    const signal = opts?.signal
+    // 已取消（客户端超时/取消先于 RPC 到达）→ 立刻返回，不读库不发网络。
+    if (signal?.aborted) return cancelledResult(subscriptionId)
     const sub = await repo.get(subscriptionId)
     if (!sub) {
       return {
@@ -502,7 +546,7 @@ export function createDataLayer(): DataLayer {
       if (passiveMode) {
         // 浏览器被动 = 只取页面自然请求的响应体。**绝不回退 fetch()**
         // —— 应用构造的平台 API 调用正是被动模式要禁的行为。
-        const passive = (await source.fetchPassive?.()) ?? null
+        const passive = (await withSignal(Promise.resolve(source.fetchPassive?.()), signal)) ?? null
         if (!passive) {
           // 无被动数据 → 复用内容缓存(即使过期);连缓存都没有才如实报错。
           const hit = await restoreFromCache(subscriptionId, kind)
@@ -518,7 +562,7 @@ export function createDataLayer(): DataLayer {
         xml = passive
       } else {
         // L0(调试直通)/ L1:L1 严格只是更紧的配额,由宿主 governor 执行,同样走主动抓取。
-        xml = await source.fetch()
+        xml = await withSignal(source.fetch(), signal)
       }
       // ── 正常抓取 + 回写缓存 ──
       const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
@@ -531,6 +575,8 @@ export function createDataLayer(): DataLayer {
       if (items.length === 0 && ((await contentCache.get(subscriptionId).catch(() => null)) !== null || store.query({ subscriptionId }).length > 0)) {
         return { subscriptionId, itemCount: 0, error: "本次抓取解析出 0 条,已保留原有内容", fetchedAt: now() }
       }
+      // 抓取途中被取消 → 新内容不落 store/缓存（取消不该改变可见状态）。
+      if (signal?.aborted) return cancelledResult(subscriptionId)
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       replaceIfLive(subscriptionId, await applyReadingState(items))
@@ -547,6 +593,9 @@ export function createDataLayer(): DataLayer {
       }
       return { subscriptionId, itemCount: items.length, fetchedAt: now() }
     } catch (err) {
+      // 取消不是失败：不回退旧缓存（否则取消会把「已加载更多页」的 store 重置回首页）、
+      // 不打 error 日志（取消是正常路径，别把日志刷成红色）。
+      if (signal?.aborted) return cancelledResult(subscriptionId)
       log.log("error", "refresh failed", { subscriptionId, error: String(err) })
       // 失败后总数字段已不可信(是上一次成功抓取的残留),清掉免得 UI 计数与内容不符。
       pageTotals.delete(subscriptionId)
@@ -611,7 +660,10 @@ export function createDataLayer(): DataLayer {
    * `pageCursors.delete` 会与 loadMore 的 append/set 交错,第 2 页条目混进新首页、
    * 游标指向已失效的序列,表现为重复或跳过整页。
    */
-  function refresh(subscriptionId: string, opts?: { force?: boolean }): Promise<RefreshResult> {
+  function refresh(
+    subscriptionId: string,
+    opts?: { force?: boolean; signal?: AbortSignal },
+  ): Promise<RefreshResult> {
     return serialized(`sub:${subscriptionId}`, () => doRefresh(subscriptionId, opts))
   }
 

@@ -723,15 +723,29 @@ export async function createRemoteDataLayer(
     },
 
     async refresh(subscriptionId, opts) {
-      const result = await client.rpc(
-        "refresh",
-        { subscriptionId, force: opts?.force === true },
-        { opId: uid("op") },
-      )
-      // WS 事件会更新 items；WS 未连上时显式拉一次镜像，避免静默停留在旧内容。
-      if (!wsReady) await syncItems(subscriptionId).catch(() => {})
-      else setTotal(subscriptionId, await client.rpc("totalOf", { subscriptionId }))
-      return result
+      // jobId + cancel：客户端超时/取消时让服务端**真的停下这条抓取**（旧实现只
+      // abort 本地 fetch，服务端 job 继续跑完并把结果广播出去）。
+      const jobId = uid("job")
+      const controller = new AbortController()
+      const onAbort = () => {
+        controller.abort()
+        void client.cancel(jobId)
+      }
+      opts?.signal?.addEventListener("abort", onAbort, { once: true })
+      if (opts?.signal?.aborted) onAbort()
+      try {
+        const result = await client.rpc(
+          "refresh",
+          { subscriptionId, force: opts?.force === true },
+          { opId: uid("op"), jobId, signal: controller.signal },
+        )
+        // WS 事件会更新 items；WS 未连上时显式拉一次镜像，避免静默停留在旧内容。
+        if (!wsReady) await syncItems(subscriptionId).catch(() => {})
+        else setTotal(subscriptionId, await client.rpc("totalOf", { subscriptionId }))
+        return result
+      } finally {
+        opts?.signal?.removeEventListener("abort", onAbort)
+      }
     },
 
     hydrate: async () => {

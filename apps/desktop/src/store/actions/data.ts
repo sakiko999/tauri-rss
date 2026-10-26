@@ -15,7 +15,7 @@ type DataActions = Pick<DesktopState, "init" | "syncBrowserCookies" | "refresh" 
 let initPromise: Promise<void> | null = null
 
 export function createDataActions(ctx: StoreCtx): DataActions {
-  const { set, get, refreshView, queryCanLoadMore, isRealSub } = ctx
+  const { set, get, refreshView, markItemsChanged, queryCanLoadMore, isRealSub } = ctx
 
   return {
     async init() {
@@ -56,8 +56,11 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           })
           // 把「图片隧道开关」同步到宿主门面(ui 的 MediaImage 直读,不经 React 树传参)。
           applyRuntimeSettings(settings)
-          // 全量变更回调:条目/阅读态变化后重算视图。
-          dl.store.subscribe(() => refreshView())
+          // 全量变更回调:条目/阅读态变化后重算视图（先失效 memo，再重算）。
+          dl.store.subscribe(() => {
+            markItemsChanged()
+            refreshView()
+          })
           refreshView()
           // 刷新后恢复的选中节点(router /v/:id)在 dl 就绪前 select 会跳过 canLoadMore——补查。
           const nodeId = get().selectedNodeId
@@ -200,9 +203,14 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         //     → 顶栏「更新中」永久转圈(且 Promise.all 会丢结果,其余订阅的白抓);
         //   - 任一 promise 永不 settle(如服务 RPC 无响应)同样卡死整轮。
         // 逐条超时把「无限等待」变成「这一条报错」,finally 保证 loading 一定落回。
-        // 浏览器 lane 的取消归服务（desktop 不再持有抓取浏览器）。
+        // 超时同时 abort 该条抓取:远端模式下 signal 会转成 job cancel（服务端真停），
+        // 本地回退模式下 core 丢弃在途结果。浏览器 lane 的取消归服务。
+        const controllers = subs.map(() => new AbortController())
         results = await Promise.allSettled(
-          subs.map((s) => withTimeout(dl.refresh(s.id, { force }), REFRESH_TIMEOUT_MS, s.id)),
+          subs.map((s, i) => {
+            const ac = controllers[i]!
+            return withTimeout(dl.refresh(s.id, { force, signal: ac.signal }), REFRESH_TIMEOUT_MS, s.id, () => ac.abort())
+          }),
         )
         results.forEach((r, i) => {
           const id = subs[i]!.id

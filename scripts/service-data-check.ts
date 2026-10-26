@@ -37,11 +37,14 @@ async function main(): Promise<void> {
   const checks: Check[] = []
   const add = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, detail })
 
+  // slowMs > 0 时 /feed.xml 故意延迟响应，用于验证取消能让抓取提前结束。
+  let slowMs = 0
   const feedServer = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
-    fetch(req) {
+    async fetch(req) {
       if (new URL(req.url).pathname === "/feed.xml") {
+        if (slowMs > 0) await new Promise((r) => setTimeout(r, slowMs))
         return new Response(FEED, { headers: { "content-type": "application/rss+xml" } })
       }
       return new Response("not found", { status: 404 })
@@ -219,6 +222,53 @@ async function main(): Promise<void> {
     add("refresh 2 条", refreshed.itemCount === 2, `count=${refreshed.itemCount}`)
     await refreshP
     add("refresh 发出 items 事件", true)
+
+    // ── job 级取消：抓取途中 cancel → 服务端真停（不等慢响应），且内容/缓存不变 ──
+    slowMs = 1_200
+    const cancelStart = Date.now()
+    const cancelJob = "job-cancel"
+    const cancelPromise = rpc<{ error?: string }>(
+      "refresh",
+      { subscriptionId: subId, force: true },
+      { jobId: cancelJob },
+    )
+    await new Promise((r) => setTimeout(r, 150))
+    const cancelRes = await fetch(`http://127.0.0.1:${port}/v1/jobs/${cancelJob}/cancel`, {
+      method: "POST",
+      headers: authClient,
+    })
+    const cancelled = await cancelPromise
+    const cancelMs = Date.now() - cancelStart
+    slowMs = 0
+    add("job cancel 200", cancelRes.status === 200, `status=${cancelRes.status}`)
+    add("取消返回「刷新已取消」", cancelled.error === "刷新已取消", String(cancelled.error))
+    add("取消先于慢响应返回", cancelMs < 1_000, `${cancelMs}ms`)
+    const afterCancel = await (
+      await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: authClient })
+    ).text()
+    const afterCancelCount = afterCancel
+      .trim()
+      .split("\n")
+      .filter((line) => line.startsWith('{"type":"items"'))
+      .flatMap((line) => (JSON.parse(line) as { items?: unknown[] }).items ?? []).length
+    add("取消不动内容（仍 2 条）", afterCancelCount === 2, `count=${afterCancelCount}`)
+
+    // ── 并发写：多客户端同时改 reading/settings 不丢更新 ──
+    const [c1, c2, c3] = await Promise.all([
+      rpc("reading.markRead", { subscriptionId: subId, itemId: "first", read: false }, { opId: "op-c1" }),
+      rpc("reading.markRead", { subscriptionId: subId, itemId: "second", read: true }, { opId: "op-c2" }),
+      rpc("settings.set", { patch: { fontSize: 17 } }, { opId: "op-c3" }),
+    ])
+    void c1
+    void c2
+    void c3
+    const readingMap = await rpc<Record<string, { read?: boolean }>>("reading.getAll")
+    add(
+      "并发 reading 写不丢",
+      readingMap[key]?.read === false && readingMap[`${subId}\u0000second`]?.read === true,
+      JSON.stringify({ first: readingMap[key]?.read, second: readingMap[`${subId}\u0000second`]?.read }),
+    )
+    add("并发 settings 写不丢", (await rpc<{ fontSize?: number }>("settings.get")).fontSize === 17)
 
     const preview = await rpc<{ items: unknown[]; total?: number }>("previewChannel", {
       channelKey: "rss:hn",

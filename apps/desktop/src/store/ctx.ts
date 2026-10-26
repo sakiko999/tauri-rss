@@ -10,6 +10,14 @@ import { now } from "./lib.ts"
 import type { StoreCtx, StoreGet, StoreSet } from "./types.ts"
 
 export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
+  /** items 内容版本：store 每次 emit（replace/append/patch/clear）自增。
+   *  ⚠️ 不能拿 `store.all()` 的数组身份当键——它每次返回新数组。 */
+  let itemsVersion = 0
+  /** queryView 单槽记忆：刷新事件（WS 突发、busy/loading 翻转）常不改输入，
+   *  合帧只能省掉重复调用，省不掉「同一输入再算一次」（全库 2.5k 条 = filter + sort）。 */
+  let viewKey: readonly unknown[] | null = null
+  let viewValue: ReturnType<typeof queryView> | null = null
+
   /** 合帧：同一微任务内的多次 refreshView 只算一次（markAllRead 的 N 次 patch、
    *  WS 事件突发都从这里收敛）。microtask 而非 rAF——WebView2 隐藏窗口 rAF 会停摆。 */
   let refreshScheduled = false
@@ -20,6 +28,20 @@ export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
       refreshScheduled = false
       const s = get()
       if (!s.dl) return
+      // 「今天」节点依赖时间，用日桶当键；其余节点与 now 无关。
+      const node = s.selectedNodeId ?? "tab:all"
+      const dayBucket = node === "today" ? Math.floor(now() / 86_400_000) : 0
+      const key = [
+        itemsVersion,
+        s.subscriptions,
+        node,
+        s.filter[node],
+        s.sort[node],
+        s.page[node],
+        s.query,
+        dayBucket,
+      ] as const
+      if (viewValue && viewKey && key.every((v, i) => v === viewKey![i])) return
       const slice = {
         allItems: s.dl.store.all(),
         subscriptions: s.subscriptions,
@@ -30,11 +52,16 @@ export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
         selectedNodeId: s.selectedNodeId,
         refreshErrors: s.refreshErrors,
       }
-      set({
-        allItems: slice.allItems,
-        view: queryView(slice, s.selectedNodeId, now()),
-      })
+      const view = queryView(slice, s.selectedNodeId, now())
+      viewKey = key
+      viewValue = view
+      set({ allItems: slice.allItems, view })
     })
+  }
+
+  /** store 变更（items 内容变了）→ 让下一次 refreshView 重算。 */
+  function markItemsChanged(): void {
+    itemsVersion++
   }
 
   /**
@@ -75,5 +102,5 @@ export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
     return !!get().subscriptions.find((s) => s.id === nodeId)
   }
 
-  return { set, get, refreshView, syncSubscriptions, queryCanLoadMore, isRealSub }
+  return { set, get, refreshView, markItemsChanged, syncSubscriptions, queryCanLoadMore, isRealSub }
 }

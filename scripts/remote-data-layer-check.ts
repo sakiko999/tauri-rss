@@ -20,33 +20,38 @@ async function main(): Promise<void> {
   const checks: Array<{ name: string; ok: boolean; detail?: string }> = []
   const add = (name: string, ok: boolean, detail?: string) => checks.push({ name, ok, detail })
 
+  // slowMs > 0 时 /feed.xml 延迟响应，用于验证取消。
+  let slowMs = 0
   const feed = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
-    fetch(req) {
-      return new URL(req.url).pathname === "/feed.xml"
-        ? new Response(FEED, { headers: { "content-type": "application/rss+xml" } })
-        : new Response("nope", { status: 404 })
+    async fetch(req) {
+      if (new URL(req.url).pathname !== "/feed.xml") return new Response("nope", { status: 404 })
+      if (slowMs > 0) await new Promise((r) => setTimeout(r, slowMs))
+      return new Response(FEED, { headers: { "content-type": "application/rss+xml" } })
     },
   })
   const feedUrl = `http://127.0.0.1:${feed.port}/feed.xml`
   const dir = mkdtempSync(join(tmpdir(), "amoeba-remote-dl-"))
-  const child = Bun.spawn(
-    [
-      process.execPath,
-      ENTRY,
-      "--service",
-      "--data-dir",
-      dir,
-      "--db",
-      join(dir, "rss.db"),
-      "--profile-dir",
-      join(dir, "profile"),
-      "--no-browser",
-      "--no-cookie-sync",
-    ],
-    { cwd: ROOT, stdin: "pipe", stdout: "pipe", stderr: "pipe" },
-  )
+  const spawnService = () =>
+    Bun.spawn(
+      [
+        process.execPath,
+        ENTRY,
+        "--service",
+        "--data-dir",
+        dir,
+        "--db",
+        join(dir, "rss.db"),
+        "--profile-dir",
+        join(dir, "profile"),
+        "--no-browser",
+        "--no-cookie-sync",
+      ],
+      { cwd: ROOT, stdin: "pipe", stdout: "pipe", stderr: "pipe" },
+    )
+  const child = spawnService()
+  let child2: ReturnType<typeof spawnService> | null = null
   let dl: Awaited<ReturnType<typeof createRemoteDataLayer>> | null = null
 
   try {
@@ -62,6 +67,7 @@ async function main(): Promise<void> {
     let subsEvents = 0
     let settingsEvents = 0
     let statusEvents = 0
+    let lastOnline: boolean | null = null
     dl = await createRemoteDataLayer(endpoint, {
       onSubscriptions: () => {
         subsEvents++
@@ -69,8 +75,9 @@ async function main(): Promise<void> {
       onSettings: () => {
         settingsEvents++
       },
-      onStatus: () => {
+      onStatus: (status) => {
         statusEvents++
+        lastOnline = status.online
       },
     })
     add("remote 层创建", dl.remote === true)
@@ -105,6 +112,27 @@ async function main(): Promise<void> {
     add("refresh 后仍 2 条", dl.store.all().length === 2, `count=${dl.store.all().length}`)
     add("totalOf 可读", dl.totalOf(added.id) === undefined)
 
+    // ── 取消：signal abort → 客户端立即返回，服务端 job 一并取消 ──
+    slowMs = 1_200
+    const ac = new AbortController()
+    const cancelStart = Date.now()
+    const pending = dl.refresh(added.id, { force: true, signal: ac.signal })
+    await new Promise((r) => setTimeout(r, 150))
+    ac.abort()
+    let abortErr: unknown = null
+    try {
+      await pending
+    } catch (e) {
+      abortErr = e
+    }
+    const abortMs = Date.now() - cancelStart
+    slowMs = 0
+    add("signal 取消 → 抛错", !!abortErr, String(abortErr))
+    add("取消立即返回", abortMs < 1_000, `${abortMs}ms`)
+    // 等慢响应窗口过去：服务端 job 已取消，不应再写入内容/缓存。
+    await new Promise((r) => setTimeout(r, 1_400))
+    add("取消后内容不变", dl.store.all().length === 2, `count=${dl.store.all().length}`)
+
     const stats = await dl.diagnostics.cacheStats()
     add("cacheStats", stats.keys > 0 && stats.bytes > 0, JSON.stringify(stats))
 
@@ -118,19 +146,50 @@ async function main(): Promise<void> {
     const detail = await dl.resolveDetail(added.id, item!.id)
     add("resolveDetail 回退 item", detail?.id === "alpha")
 
-    await dl.subscriptions.remove(added.id)
-    add("退订镜像", (await dl.subscriptions.list()).length === 0)
-    add("退订清条目", dl.store.all().length === 0)
+    // 退订用第二条订阅验证（第一条留给后面的崩溃/重启收敛）。
+    const added2 = await dl.addSubscription("rss:hn", "Remote Test 2", { url: feedUrl })
+    add("第二条订阅镜像", (await dl.subscriptions.list()).length === 2)
+    await dl.subscriptions.remove(added2.id)
+    add("退订镜像", (await dl.subscriptions.list()).length === 1)
+    add("退订清条目", dl.store.all().length === 2, `count=${dl.store.all().length}`)
 
     add("status 回调", statusEvents >= 1, `count=${statusEvents}`)
+
+    // ── 崩溃：进程被杀 → status 转离线 → 写操作 fail-closed ──
+    child.kill()
+    await child.exited
+    await waitFor(() => lastOnline === false, 5_000)
+    add("崩溃后 status 离线", lastOnline === false)
+    let writeRejected = false
+    try {
+      await dl.reading.markRead(item!.subscriptionId, item!.id, false)
+    } catch {
+      writeRejected = true
+    }
+    add("离线写 fail-closed", writeRejected)
     dl.close()
 
-    const shutdown = await fetch(`http://127.0.0.1:${port}/v1/shutdown`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${owner}` },
-    })
-    add("owner shutdown", shutdown.status === 200, `status=${shutdown.status}`)
-    add("服务退出", (await child.exited) === 0)
+    // ── 重启（同 data dir）：新 endpoint → 新客户端从快照收敛 ──
+    child2 = spawnService()
+    const ready2 = await firstLine(child2.stdout)
+    const m2 = ready2.match(/^READY (\d+)$/)
+    add("重启 READY", !!m2, ready2)
+    if (m2) {
+      await waitFor(() => existsSync(join(dir, "endpoint.json")))
+      const endpoint2 = JSON.parse(readFileSync(join(dir, "endpoint.json"), "utf8")) as EndpointInfo
+      const owner2 = readFileSync(join(dir, "service.token"), "utf8").trim()
+      const dl2 = await createRemoteDataLayer(endpoint2, {})
+      add("重启后快照含订阅", (await dl2.subscriptions.list()).length === 1)
+      const alpha = dl2.store.all().find((it) => it.id === "alpha")
+      add("重启后已读/星标收敛", alpha?.isUnread === false && alpha?.isStarred === true, JSON.stringify({ unread: alpha?.isUnread, starred: alpha?.isStarred }))
+      dl2.close()
+      const shutdown = await fetch(`http://127.0.0.1:${m2[1]}/v1/shutdown`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${owner2}` },
+      })
+      add("owner shutdown", shutdown.status === 200, `status=${shutdown.status}`)
+      add("服务退出", (await child2.exited) === 0)
+    }
   } finally {
     try {
       dl?.close()
@@ -139,6 +198,11 @@ async function main(): Promise<void> {
     }
     try {
       child.kill()
+    } catch {
+      /* exited */
+    }
+    try {
+      child2?.kill()
     } catch {
       /* exited */
     }
