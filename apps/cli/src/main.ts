@@ -32,6 +32,13 @@ import { runSug } from "./commands/sug.ts"
 import { runDetail } from "./commands/detail.ts"
 import { runBrowserReset } from "./commands/browser-reset.ts"
 
+// --service 必须在 setupHost / loadSettings 之前分流：服务不读 CLI settings，
+// 也不走命令注册。阶段 1 会把服务入口拆成独立模块，避免连带加载全部命令。
+if (process.argv.includes("--service")) {
+  const { runServiceFromArgv } = await import("./service/server.ts")
+  process.exit(await runServiceFromArgv())
+}
+
 // 先注入宿主(file storage / node http+js+ws / log shim)再进命令逻辑。
 setupHost()
 

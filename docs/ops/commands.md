@@ -47,6 +47,9 @@ bun run rss detail <url> --cookie <ck>  # xhs 单条详情补全（登录态 not
 bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                       # crawler/rsshub 同构断言
+bun run rss --service --data-dir <dir>  # 数据服务骨架（阶段 0；READY + HTTP/WS）
+bun scripts/service-phase0.ts           # 阶段 0：bootstrap / 双写者丢更新 / markMany 5k
+bun scripts/service-skeleton-check.ts   # 阶段 0：hello/health/state/WS/单实例/shutdown
 ```
 
 ## 自检脚本（仓库无测试基建，用最小断言）

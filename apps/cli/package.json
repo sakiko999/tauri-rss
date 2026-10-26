@@ -11,6 +11,7 @@
     "@amoeba/core": "workspace:*",
     "@amoeba/host": "workspace:*",
     "@amoeba/resolve": "workspace:*",
+    "@amoeba/service-protocol": "workspace:*",
     "@amoeba/xml": "workspace:*",
     "cac": "^6.7.14",
     "picocolors": "^1.1.1"

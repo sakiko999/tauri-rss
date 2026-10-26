@@ -18,6 +18,7 @@
         "@amoeba/crawler": "workspace:*",
         "@amoeba/host": "workspace:*",
         "@amoeba/resolve": "workspace:*",
+        "@amoeba/service-protocol": "workspace:*",
         "@amoeba/xml": "workspace:*",
         "cac": "^6.7.14",
         "picocolors": "^1.1.1",
@@ -157,6 +158,10 @@
         "@types/ramda": "^0.32.0",
       },
     },
+    "packages/service-protocol": {
+      "name": "@amoeba/service-protocol",
+      "version": "0.1.0",
+    },
     "packages/ui": {
       "name": "@amoeba/ui",
       "version": "0.1.0",
@@ -196,6 +201,8 @@
     "@amoeba/player": ["@amoeba/player@workspace:packages/player"],
 
     "@amoeba/resolve": ["@amoeba/resolve@workspace:packages/resolve"],
+
+    "@amoeba/service-protocol": ["@amoeba/service-protocol@workspace:packages/service-protocol"],
 
     "@amoeba/ui": ["@amoeba/ui@workspace:packages/ui"],
 

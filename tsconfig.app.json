@@ -24,6 +24,7 @@
       "@amoeba/resolve": ["./packages/resolve/src/index.ts"],
       "@amoeba/resolve/errors": ["./packages/resolve/src/errors.ts"],
       "@amoeba/resolve/media-referrer": ["./packages/resolve/src/media-referrer.ts"],
+      "@amoeba/service-protocol": ["./packages/service-protocol/src/index.ts"],
       "@amoeba/player": ["./packages/player/src/index.ts"],
       "@amoeba/ui": ["./packages/ui/src/index.ts"]
     },

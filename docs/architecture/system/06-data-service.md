@@ -342,10 +342,15 @@
 
 ### 阶段 0：实测与骨架（3–5 天）
 
-- **已完成（2026-10-26）**：`scripts/service-phase0.ts` 全过——投影 0.48MB、解析 111ms、
-  双写者丢更新已复现、单写者对照不丢、markManyRead 5k = 6ms。
-- 待做：服务骨架（`/v1/hello`、`/v1/health`、`/v1/events` echo、discovery/token/lock；
-  **不写 DB**）；Tauri resources/externalBin 打包；WebView2 loopback；profile 复制迁移。
+- **已完成（2026-10-26）**：
+  - `scripts/service-phase0.ts` 全过——投影 0.48MB、解析 111ms、双写者丢更新已复现、
+    单写者对照不丢、markManyRead 5k = 6ms。
+  - 服务骨架 `apps/cli/src/service/server.ts`：`/v1/hello`、`/v1/health`、`/v1/state`
+    （空快照）、`/v1/events`（WS 首帧认证）、`/v1/shutdown`、`instance.lock`、token；
+    自检 `scripts/service-skeleton-check.ts` 13 项全过。
+  - 阶段 0 骨架的 endpoint/lock/token 放在 `--data-dir` 下；阶段 1 起按 instanceKey
+    移到 `%LOCALAPPDATA%\app.amoeba.service\<key>\`。
+- 待做：Tauri resources/externalBin 打包；WebView2 loopback；profile 复制迁移。
 - 产出：测量报告 + go/no-go。
 - 停止条件：投影 >1MB 或 boot >500ms；WebView2 被 CSP/混合内容挡住；resources/externalBin 都不可行；profile 必须重扫且不接受。
 
