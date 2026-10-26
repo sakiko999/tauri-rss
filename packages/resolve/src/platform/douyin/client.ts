@@ -7,7 +7,8 @@
  */
 import { httpJson } from "../../host.ts"
 import { deferredStream } from "../../danmaku"
-import { formatError, log } from "../../log.ts"
+import { formatError } from "@amoeba/log"
+import { log } from "../../log.ts"
 import { platformCookie } from "../credentials.ts"
 import { UA_ENTER, DEFAULT_TTWID, signDouyinUrl, enterRoomParams } from "./abogus.ts"
 import { douyinDanmakuStream } from "./danmaku.ts"

@@ -15,6 +15,7 @@
 import pc from "picocolors"
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
+import { defaultSidecarProfileDir } from "@amoeba/host/node"
 import { fail, ok, row } from "../ui/render.ts"
 
 /** 与 apps/src-tauri/src/webview_browser.rs 的 `PORT` 对齐。 */
@@ -24,8 +25,8 @@ const DESKTOP_CDP_PORT = 9334
  *  ⚠️ **改 identifier 必须同步这里** —— 不同步会去删一个不存在的目录(静默 no-op),
  *  用户以为清了 profile、其实脏数据还在。(2026-10-16 `com.zhh.tauri-app` → `app.amoeba.desktop`) */
 const DESKTOP_PROFILE = join(process.env.LOCALAPPDATA ?? "", "app.amoeba.desktop", "webview-profile")
-/** 与 apps/browser-sidecar 的默认值、host/node/browser-sidecar.ts 的 defaultSidecarProfileDir 对齐。 */
-const CLI_PROFILE = join(process.env.LOCALAPPDATA ?? "", "app.amoeba.cli", "browser-profile")
+/** 与 sidecar 默认值同一实现（手抄路径会在规则变化时去删一个不存在的目录，静默 no-op）。 */
+const CLI_PROFILE = defaultSidecarProfileDir()
 
 /** 目录占用体积(MB);不存在返回 null。 */
 function dirSizeMB(dir: string): number | null {

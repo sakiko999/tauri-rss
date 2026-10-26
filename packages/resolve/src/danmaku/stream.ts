@@ -16,7 +16,8 @@
  * 走宿主。两形态在内部归一成 WsLike 抽象(send/close/readyState)。
  */
 import type { DanmakuItem, DanmakuStream } from "./types.ts"
-import { formatError, log } from "../log.ts"
+import { formatError } from "@amoeba/log"
+import { log } from "../log.ts"
 
 export interface WsStreamOptions {
   /** 连接地址。传函数 = 每次建连重新求值(重连时 host/token 可能已变)。 */

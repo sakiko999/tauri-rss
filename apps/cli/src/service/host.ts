@@ -34,18 +34,7 @@ export interface ServiceHost {
   close(): Promise<void>
 }
 
-function shimLocalStorageForLog(): void {
-  const value = process.env.RSS_LOG === "1" ? "1" : "0"
-  const store = new Map<string, string>([["log", value]])
-  ;(globalThis as Record<string, unknown>).localStorage = {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, v: string) => void store.set(key, v),
-    removeItem: (key: string) => void store.delete(key),
-    clear: () => store.clear(),
-    key: () => null,
-    length: store.size,
-  }
-}
+import { shimLocalStorageForLog } from "../host/log-shim.ts"
 
 const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000
 const MAX_BACKUPS = 7

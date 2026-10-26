@@ -24,7 +24,8 @@ import { argbToHex, createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuItem, DanmakuStream } from "../../danmaku"
 import { biliClient } from "./client.ts"
 import { extractCookie } from "../../utils/cookie.ts"
-import { formatError, log } from "../../log.ts"
+import { formatError } from "@amoeba/log"
+import { log } from "../../log.ts"
 
 /** 编解码复用单例(每帧热路径,共享安全)。 */
 const TE = new TextEncoder()

@@ -6,7 +6,8 @@
  */
 import type { Stream } from "@amoeba/xml"
 import { httpGet, httpJson, now } from "../../host.ts"
-import { formatError, log } from "../../log.ts"
+import { formatError } from "@amoeba/log"
+import { log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 import { douyuDanmakuStream } from "./danmaku.ts"

@@ -9,7 +9,8 @@
  */
 import { type Live, type SerializeOptions, serializeFeed } from "@amoeba/xml"
 import type { Pageable, RssSource } from "../../index.ts"
-import { type TwitchStreamPage, formatError, log, now } from "@amoeba/resolve"
+import { formatError } from "@amoeba/log"
+import { type TwitchStreamPage, log, now } from "@amoeba/resolve"
 import { twitchStreamToLive } from "./live.ts"
 
 export interface TwitchStreamsSourceOptions {

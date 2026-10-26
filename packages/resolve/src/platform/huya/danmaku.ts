@@ -10,7 +10,8 @@
 import { createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuStream } from "../../danmaku"
 import { decodeHuyaDanmakuFrame, TarsWriter } from "./danmaku-tars.ts"
-import { formatError, log } from "../../log.ts"
+import { formatError } from "@amoeba/log"
+import { log } from "../../log.ts"
 import { M_HUYA, huyaClient } from "./client.ts"
 
 const WS_URL = "wss://cdnws.api.huya.com"

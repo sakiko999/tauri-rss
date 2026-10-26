@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@amoeba/log": "workspace:*",
     "@amoeba/resolve": "workspace:*",
     "@amoeba/xml": "workspace:*"
   },

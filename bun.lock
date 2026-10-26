@@ -116,6 +116,7 @@
       "name": "@amoeba/crawler",
       "version": "0.1.0",
       "dependencies": {
+        "@amoeba/log": "workspace:*",
         "@amoeba/resolve": "workspace:*",
         "@amoeba/xml": "workspace:*",
       },

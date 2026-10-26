@@ -9,7 +9,8 @@ import { argbToHex, deferredStream } from "../../danmaku"
 import type { DanmakuItem, DanmakuStream } from "../../danmaku"
 import { decodeDanmakuSeg } from "./danmaku-proto.ts"
 import { BILIBILI_UA, biliClient } from "./client.ts"
-import { formatError, log } from "../../log.ts"
+import { formatError } from "@amoeba/log"
+import { log } from "../../log.ts"
 
 const API = "https://api.bilibili.com"
 /** 每段弹幕时长,秒。 */

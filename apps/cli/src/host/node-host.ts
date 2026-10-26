@@ -66,17 +66,4 @@ export function setupHost(): void {
   })
 }
 
-/** log 开关 shim:默认全局关 info/debug;RSS_LOG=1 放开(等价 log="1")。 */
-function shimLocalStorageForLog(): void {
-  const value = process.env.RSS_LOG === "1" ? "1" : "0"
-  const store = new Map<string, string>([["log", value]])
-  const shim = {
-    getItem: (key: string) => store.get(key) ?? null,
-    setItem: (key: string, v: string) => void store.set(key, v),
-    removeItem: (key: string) => void store.delete(key),
-    clear: () => store.clear(),
-    key: () => null,
-    length: store.size,
-  }
-  ;(globalThis as Record<string, unknown>).localStorage = shim
-}
+import { shimLocalStorageForLog } from "./log-shim.ts"

@@ -169,19 +169,13 @@ function main(): number {
   const t0 = performance.now()
 
   for (const layer of layers) {
-    const label = layer === "typecheck" ? "typecheck" : layer
-    const items =
-      layer === "typecheck"
-        ? TYPECHECK_PROJECTS.filter((p) => !filter || p.includes(filter))
-        : FILES[layer].filter((f) => !filter || f.includes(filter))
+    const isTsc = layer === "typecheck"
+    const items = (isTsc ? TYPECHECK_PROJECTS : FILES[layer]).filter((x) => !filter || x.includes(filter))
     if (!items.length) continue
-    console.log(`\n${label}`)
+    console.log(`\n${layer}`)
     for (const item of items) {
-      const cmd =
-        layer === "typecheck"
-          ? [process.execPath, tscBin, "-p", item]
-          : [process.execPath, item]
-      const name = layer === "typecheck" ? `${item} (tsc)` : item
+      const cmd = isTsc ? [process.execPath, tscBin, "-p", item] : [process.execPath, item]
+      const name = isTsc ? `${item} (tsc)` : item
       const r = run(cmd, name)
       results.push(r)
       const mark = r.ok ? "✓" : "✘"

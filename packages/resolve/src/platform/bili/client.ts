@@ -14,7 +14,8 @@
  */
 import * as R from "ramda"
 import type { Stream } from "@amoeba/xml"
-import { formatError, log } from "../../log.ts"
+import { formatError } from "@amoeba/log"
+import { log } from "../../log.ts"
 import { httpJson, now } from "../../host.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"

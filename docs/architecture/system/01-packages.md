@@ -88,7 +88,7 @@ host → core、也不允许 core 生产依赖 host —— 这是唯一能同时
 | **xml** | | | | | | | | | | `fast-xml-parser` |
 | **host** | | R | R | | | | | | | `@tauri-apps/api` + opener/process/sql/updater、`ws` |
 | **resolve** | T | R | | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 ui/desktop 取防盗链规则 |
-| **crawler** | R | | | D | R | | | | | — |
+| **crawler** | R | R | | D | R | | | | | — |
 | **core** | R | R | R | D | R | R | | | | — |
 | **player** | | R | | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
 | **ui** | | | | | R（仅 `./media-referrer`） | | U | U | | `react`；仍读 `globalThis.appHost.imageProxy/dataSaver` |
