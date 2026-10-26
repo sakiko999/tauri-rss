@@ -147,11 +147,11 @@ graph LR
 | --- | --- |
 | 负责 | `globalThis.appHost` 门面（getter 校验）；Tauri/Node/Browser 三态注入；HTTP、WS、CDP 浏览器、SQLite/localStorage/内存存储、JS 求值、外链白名单、更新；`NetworkGovernor`（分类/冷却/去重/平台并发/RPM/全局并发） |
 | 不负责 | 业务重试与订阅编排（core）；渠道/平台协议（crawler/resolve）；DDL 的定义（core 拥有，host 只执行）；媒体 Referer 规则（resolve `media-referrer.ts`）；不 import crawler/resolve/core |
-| 对外导出 | 根入口（兼容聚合）导出 `initAppHost`、`setHostCaps`、三个 injector、各 Backend 单件与 governor 函数；子路径 `./runtime`、`./governor`、`./node`、`./tauri`、`./browser` 供应用按需加载 |
-| 内部结构 | `runtime.ts` 门面 + 闭包；`net/governor.ts` 唯一出站准入点；`tauri/*` 生产后端；`node/*`、`browser/*` 自检/调试后端；`log.ts` 两个域；三个环境各有一个 `index.ts` 聚合子路径 |
+| 对外导出 | 根入口（兼容聚合）导出 `initAppHost`、`setHostCaps`、三个 injector、各 Backend 单件与 governor 函数；子路径 `./runtime`、`./governor`、`./node`、`./tauri`、`./browser`（纯前端注入）、`./cdp`（载具无关的 CDP 核心）供应用按需加载 |
+| 内部结构 | `runtime.ts` 门面 + 闭包；`net/governor.ts` 唯一出站准入点；`tauri/*` 生产后端；`node/*` 自检后端；`browser/*` = 与载具无关的 CDP 核心（`transport` / `channel` / `backend`）+ 纯前端注入；`log.ts` 两个域；三个环境各有一个 `index.ts` 聚合子路径 |
 | 依赖 / 被依赖 | 运行时只依赖 log，外加 Tauri JS API 与 `ws`；**不依赖 core**（SQL 后端的 schema 由 core 注入）。被全部应用经子路径注入；被 core/crawler/player/ui 以 `appHost` 全局读取（不 import） |
 | 常见改动入口 | 新增宿主能力 → `global.d.ts` + `runtime.ts` 门面 + 三个 injector；改风控 → `net/governor.ts`；加图床 Referer → resolve `media-referrer.ts`（不要写在 ui/host 里） |
-| 关键文件 | `packages/host/src/runtime.ts:56`（init）、`:120`（setHostCaps）、`:132`（governedHttp 包装）、`:33`（协议白名单）；`packages/host/src/net/governor.ts:78`（默认策略）、`:117`（configure）、`:679`（governedHttp）；`packages/host/src/tauri/inject-tauri.ts:28`；`packages/host/src/tauri/sqlite-storage-backend.ts`（`setSchema` / `requireSchema` / 惰性 `ready()`）；`packages/host/src/tauri/browser-backend.ts:438`（TauriBrowserBackend） |
+| 关键文件 | `packages/host/src/runtime.ts:56`（init）、`:120`（setHostCaps）、`:132`（governedHttp 包装）、`:33`（协议白名单）；`packages/host/src/net/governor.ts:78`（默认策略）、`:117`（configure）、`:679`（governedHttp）；`packages/host/src/tauri/inject-tauri.ts:28`；`packages/host/src/tauri/sqlite-storage-backend.ts`（`setSchema` / `requireSchema` / 惰性 `ready()`）；`packages/host/src/browser/backend.ts`（`CdpBrowserBackend`，lane/超时/拦截）与 `packages/host/src/tauri/browser-backend.ts`（Tauri driver + ws 隧道 connector） |
 
 不变量：`http/js/storage` 未注入即抛；`ws/browser/updater` 未注入返回 `undefined` 由消费侧降级；`net` 恒可用（`runtime.ts:59-96`）。所有经 `appHost.http` 的请求必过 governor，但原生 `<img>`/`<video>` 与部分 HLS 不走门面，governor 管不到（`governor.ts:17-18`）。CDP 流量绕过 HTTP 流水线，必须显式过 `browserGate`（`scheduler.ts:107-110`）。**SQL 型 storage 后端必须先 `setSchema` 再读写**：`SqliteStorageBackend` 在 `setSchema` 前调用 `get/set` 会抛「schema 未注入」，且 `setSchema` 只允许在首次连接前调用；KV/localStorage/内存后端不必实现。
 

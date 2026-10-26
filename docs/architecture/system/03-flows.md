@@ -136,7 +136,7 @@ flowchart TD
 - 缓存写失败只 warn，不把成功刷新降级为失败（`data-layer.ts`）。
 - 被动采集无数据（且无缓存）返回固定 `errorKind: "no-data"`，与普通抓取失败区分。
 - desktop 单条：失败写 `refreshErrors[id]` 与 `refreshErrorKinds[id]`，toast 标题取 `ERROR_KIND_LABEL[kind]`（`unknown` 用「刷新失败」），成功清两表并按 `itemCount` 抬本地窗口（`apps/desktop/src/store/actions/data.ts`）。
-- desktop 全量：`kinds` 与 `errors` 同键写入，toast 额外汇总「其中 N 条需要登录」（`auth` 计数）。任一超时对 `^(weibo|xhs):` 订阅调用 `abortTabs(...,{keepLogin:true})`，但该调用会中止**所有非登录 lane**（`data.ts`、`packages/host/src/tauri/browser-backend.ts:669-671`），因此错误可能被归因到别的订阅。
+- desktop 全量：`kinds` 与 `errors` 同键写入，toast 额外汇总「其中 N 条需要登录」（`auth` 计数）。任一超时对 `^(weibo|xhs):` 订阅调用 `abortTabs(...,{keepLogin:true})`，但该调用会中止**所有非登录 lane**（`data.ts`、`packages/host/src/browser/backend.ts` 的 `abortTabs`），因此错误可能被归因到别的订阅。
 - `refreshAll` 的 `finally` 无条件 `set({busy:{}})`，会清掉并行单条刷新的 busy（`data.ts:215`）。
 
 **代码锚点**：`packages/core/src/data-layer.ts:372-566`、`:761-803`、`apps/desktop/src/store/actions/data.ts:87-257`。
@@ -435,7 +435,7 @@ flowchart TD
 **失败/降级**
 - **分类通道**：新抛错点用 `ResolveError(kind)`；旧平台 client 仍是普通 `Error`，`errorKindOf` 按消息启发式归类（429 → `rate-limit`、401/cookie → `auth`、403/412/418/风控 → `risk`、超时/网络/解析各自成类），无法识别时 `unknown`。所以分类是**逐步迁移 + 兜底**，不是全量精确。
 - 文案与事实脱节：refresh 失败 toast 仍无条件说「旧缓存已保留」，首次抓取失败时并无缓存（`data.ts`）。
-- 超时只丢弃不取消（**HTTP/非浏览器路径**）：底层抓取完成后仍会 `replace` 并写缓存，UI 却保留失败标记；`^(weibo|xhs):` 的浏览器路径则经 `abortTabs` reject 在途 CDP 命令，刷新直接走失败分支、保留旧缓存（底层 invoke 仍跑完，只是不再等待）。中止粒度是全部非登录 lane，见流程 3（`data.ts`、`packages/host/src/tauri/browser-backend.ts:143-153`、`:669-673`）。
+- 超时只丢弃不取消（**HTTP/非浏览器路径**）：底层抓取完成后仍会 `replace` 并写缓存，UI 却保留失败标记；`^(weibo|xhs):` 的浏览器路径则经 `abortTabs` reject 在途 CDP 命令，刷新直接走失败分支、保留旧缓存（底层 invoke 仍跑完，只是不再等待）。中止粒度是全部非登录 lane，见流程 3（`data.ts`、`packages/host/src/browser/channel.ts` 的 `abortPending`、`packages/host/src/browser/backend.ts` 的 `abortTabs`）。
 - 错误重复呈现：播放器舞台 + `PlayerPage` toast 各一份，标题一致但详情格式不同（`PlayerPage.tsx`、`PlayableMedia.tsx`）。
 - 日志覆盖不全：core 走注入的 console，无日志域；被动无数据、loadMore 失败、preview/热搜/弹幕失败均无日志（`runtime.ts:43-53`、`data-layer.ts`）。
 

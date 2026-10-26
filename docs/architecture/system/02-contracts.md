@@ -57,7 +57,7 @@ graph LR
 | `AppHost` 及其 Backend | 根 `global.d.ts:27-317` | 三套 injector（§5） | 所有包直读 `globalThis.appHost` | **全局 ambient 类型 + 全局对象** | 未注入时访问抛错（http/js/storage）或降级（ws/browser） |
 | KV `StorageBackend` + `StorageSchema` + DDL | `global.d.ts`（`StorageBackend` / `StorageSchema`）；`core/src/db/schema.ts:15` | host 的 SQLite/localStorage/内存、CLI 的 bun:sqlite | core 五个 repo、governor 冷却账本；schema 由 core 注入 | 方法调用（键值字符串）+ `setSchema?`（可选，SQL 后端实现） | 键或 DDL 漂移 = 读不到数据 / 建表失败；SQL 后端未收 schema 即读写会抛 |
 | `HttpRequest`/`HttpResponse` | `global.d.ts:269-292` | 三个 HttpBackend | resolve `host.ts`、player loader、ui `MediaImage` | 方法调用 | `arraybuffer` 返回形状不一致 → 图片/分片静默损坏 |
-| `BrowserBackend`/`BrowserTab` | `global.d.ts:167-252` | Tauri `browser-backend.ts` | resolve `browser/cdp.ts`、crawler xhs/weibo | 全局对象 + CDP 隧道 | 能力探测误判平台（见 §5 漂移） |
+| `BrowserBackend`/`BrowserTab` | `global.d.ts:167-252` | `host/src/browser/backend.ts` 的 `CdpBrowserBackend` + 载具 `BrowserDriver`（桌面 = Tauri WebView2） | resolve `browser/cdp.ts`、crawler xhs/weibo | 全局对象 + CDP 隧道 | 能力探测误判平台（见 §5 漂移） |
 | `NetBackend` / `NetPolicy` | `global.d.ts:73-102`；`host/src/net/governor.ts:42-96` | host governor（恒可用） | core `syncNetPolicy`、resolve `reportRisk`、player 统计 | 方法调用 | 配额/冷却不生效或落到错误平台桶 |
 | `ChannelInfo` 投影 | `core/src/types/channel-info.ts:10` | `data-layer.ts:806-816` | desktop 添加订阅/发现页/账号页 | TS import | 表单字段缺失；`loginable/passive` 误判 |
 | `LoginResult` / `LoginCookieSnapshot` | `LoginResult` 三份平行声明（§8）；`LoginCookieSnapshot` 在 crawler/resolve 各一份，core 直接 re-export crawler 版 | channel `scanLogin` / `readLoginCookie` | core `scanLogin`、`syncBrowserCookies` | TS import / 结构兼容 | `refreshToken` 在边界被丢弃 |

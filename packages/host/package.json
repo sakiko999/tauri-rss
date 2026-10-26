@@ -10,7 +10,8 @@
     "./governor": "./src/net/governor.ts",
     "./node": "./src/node/index.ts",
     "./tauri": "./src/tauri/index.ts",
-    "./browser": "./src/browser/index.ts"
+    "./browser": "./src/browser/index.ts",
+    "./cdp": "./src/browser/cdp.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

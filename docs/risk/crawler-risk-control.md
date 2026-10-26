@@ -823,7 +823,7 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   忽略）：`--disable-session-crashed-bubble`、`--edge-redirect-feed-at-first-run-disabled=1`、
   `--disable-client-side-phishing-detection`、`--safebrowsing-disable-auto-update`，
   以及 `--disable-features=InterestFeedContentSuggestions`。
-- **字体/媒体/统计域名在 CDP 层拦**（`browser-backend.ts` 的 `armNetwork`：每次建连
+- **字体/媒体/统计域名在 CDP 层拦**（`host/src/browser/channel.ts` 的 `armNetwork`：每次建连
   `Network.enable` + `Network.setBlockedURLs`）。⚠️ **不拦 CSS** —— 布局一变，懒加载与
   可见性判定（IntersectionObserver）可能跟着变。
 - **空闲 3 分钟自动关 Edge**（`TauriBrowserBackend.closeIfIdle`）：活跃实例约 0.9–1.0GB

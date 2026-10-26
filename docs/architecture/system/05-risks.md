@@ -14,7 +14,7 @@
 | R2 | 包级运行时环 / 隐式宿主加载 **已修（2026-10-23）** | — | — | host 不再 import core（schema 注入）；`resolve/media-referrer.ts` 取代 `resolve → host` 值导入；host `./runtime|governor|node|tauri|browser` 子路径 + 根入口无 import 副作用；`setHostCaps` 自建门面 | 新跨包值导入先查 `01-packages.md` 矩阵；应用走 host 子路径 |
 | R3 | 视图层裸 id 寻址，跨订阅同 id 串条目 **已修（2026-10-23）** | — | — | `router.tsx:36,60,67` 写 `?sub=`；`store/types.ts:59-63` 的 `selectedArticleKey`；队列存复合键（`store/actions/ui.ts:45-51`）；正文缓存带订阅（`ReaderMain.tsx:79-120`） | 新增「按 id 记/改/查」入口先过 `itemRefKey`/`readingKey` |
 | R4 | 新建订阅的首抓失败被丢弃，成功提示 + 空视图 **已修（2026-10-23）** | — | — | `data-layer.ts:64,939-962` 返回 `{ id, refresh }`；desktop 失败弹 warn（`subs.ts:70-76`）；CLI 复用首刷结果（`refresh.ts:47-57`） | 调用方不要只取 `id` 忽略 `refresh.error` |
-| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 | 中 | 中 | `apps/desktop/src/store/actions/data.ts:177-197`；`packages/host/src/tauri/browser-backend.ts:669-674` | 按订阅 lane 中止 + 独立 reason |
+| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 | 中 | 中 | `apps/desktop/src/store/actions/data.ts:177-197`；`packages/host/src/browser/backend.ts`（`abortTabs`） | 按订阅 lane 中止 + 独立 reason |
 | R6 | 失败只有字符串，登录/风控/403 不可区分 **已修（2026-10-23，启发式兜底）** | — | — | `RefreshResult.errorKind?`（`packages/core/src/types/refresh-result.ts`）；`packages/resolve/src/errors.ts`；desktop `refreshErrorKinds` / 诊断表 / 首刷 toast；player `errorKindOf` | 平台 client 逐步从普通 `Error` 换成 `ResolveError(kind)`，启发式兜底随之退场 |
 | R7 | mobile 能力模型不一致（注入 browser、可播缺 `isFeedItem`） **已修（2026-10-23）** | — | — | `inject-tauri.ts:31` 新增 `browser?: boolean`；mobile 显式 `browser:false`（`apps/mobile/src/main.tsx:16`）；`isPlayable` 排除无 stream 的 audio（`apps/mobile/src/store.ts:146-152`） | 新增可选宿主能力时同步两端的注入开关 |
 | R8 | `previewChannel` 绕过被动采集承诺 **已修（2026-10-23）** | — | — | `previewChannel` 与刷新共用被动门：`channel.passive && appHost.browser` 时只调 `fetchPassive`，无数据抛 `ResolveError("no-data")`（`packages/core/src/data-layer.ts`）；`passive-mode.check.ts` 新增预览用例 | 无 |
@@ -25,7 +25,7 @@
 | R13 | release-only 分支无法被同一套巡检覆盖 | 中 | 高 | `scripts/tauri.ts:54-61`；`apps/desktop/src/main.tsx`（`__store` 仅 DEV） | release 下开受控 CDP 或加核对钩子 |
 | R14 | 进程级单例：provider 后注册覆盖、门面 last-writer-wins、`cookieSnapshot` 无版本 | 中 | 低 | `packages/resolve/src/platform/credentials.ts:25-30`；`packages/core/src/data-layer.ts:177-183,417,823-828`；`packages/host/src/runtime.ts:120-141` | per-instance 化或显式 dispose |
 | R15 | CLI 旁路 settings（绕过归一化/损坏留证）；CLI 有自己的 settings 快照 provider，桌面库登录态不会自动进入 CLI | 中 | 中 | `apps/cli/src/info.ts:38-46,53-58`；`apps/cli/src/main.ts:41-48`；`packages/resolve/src/platform/credentials.ts:25-30`；`apps/cli/src/store/sqlite-storage.ts:14` | 复用 core 导出的纯函数/仓库 |
-| R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 | 中 | 中 | `packages/host/src/tauri/browser-backend.ts:78,669-674` | 登录/长轮询显式续期或豁免 |
+| R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 | 中 | 中 | `packages/host/src/tauri/browser-backend.ts`（`IDLE_CLOSE_MS`）、`packages/host/src/browser/backend.ts`（`closeIfIdle`） | 登录/长轮询显式续期或豁免 |
 | R17 | 播放器兜底链静默（FLV 无 headers）**（部分修复 2026-10-23）** | 中 | 中 | 未知格式裸 `<video>` 已挂 onError（`PlayableMedia.tsx:472-475`）；FLV 仍不带 headers（`useMediaStream.ts:209-212`） | FLV 走隧道或显式提示 |
 | R18 | 死字段与无生产者字段面 **已修（2026-10-23）** | — | — | `Live.quality`/`Live.notice` 无生产者，已从类型与 serialize 删除；`Base.sourceId`/`raw` 注明「crawler 内部字段，不过 XML」 | 新增字段前先 grep 生产者；不可达字段直接删 |
 | R19 | 文档/注释与代码相反，误导后续修改 **（部分修复 2026-10-23）** | 低 | 高 | 见 §7.3；kind 顺序、inject-tauri storage、query/index/settings/credentials 注释已修 | 新注释与代码同改；漂移按 §7.3 登记 |
@@ -182,11 +182,11 @@ sequenceDiagram
   Note over UI: 其它订阅把这条 reason 记成自己的失败原因
 ```
 
-图里的两处错位值得单独记：`abortTabs` 的粒度是**全局非登录 lane**（`browser-backend.ts:669-674`），不是「该订阅持有的 lane」；而 `data.ts:184-185` 的守卫是 channelKey 前缀而不是「是否走浏览器」。于是一个 xhs 订阅卡住，会让其它 xhs/weibo 订阅收到同一句 reason，诊断表里的「失败原因」指向另一个订阅。
+图里的两处错位值得单独记：`abortTabs` 的粒度是**全局非登录 lane**（`browser/backend.ts`），不是「该订阅持有的 lane」；而 `data.ts:184-185` 的守卫是 channelKey 前缀而不是「是否走浏览器」。于是一个 xhs 订阅卡住，会让其它 xhs/weibo 订阅收到同一句 reason，诊断表里的「失败原因」指向另一个订阅。
 
 两处生命周期风险：
 
-- **WebView2 空闲回收**：零在途满 3 分钟关闭（`browser-backend.ts:78`），计时只在 CDP 操作 `begin()/end()` 时重置（`:452-470`）。**当前扫码登录不会踩到**——xhs 每 1s（`packages/resolve/src/platform/xhs/login.ts:181-193`）、weibo 每 0.5/1s（`packages/resolve/src/platform/weibo/login.ts:117-138`）持续产生 CDP 命令，等于隐式续期；真正的缺口是「任何不产生 CDP 命令的长等待没有显式 lease」，这个边界没有写进契约。
+- **WebView2 空闲回收**：零在途满 3 分钟关闭（`tauri/browser-backend.ts` 的 `IDLE_CLOSE_MS`），计时只在 CDP 操作 `begin()/end()` 时重置（`browser/backend.ts` 的 `touch()`）。**当前扫码登录不会踩到**——xhs 每 1s（`packages/resolve/src/platform/xhs/login.ts:181-193`）、weibo 每 0.5/1s（`packages/resolve/src/platform/weibo/login.ts:117-138`）持续产生 CDP 命令，等于隐式续期；真正的缺口是「任何不产生 CDP 命令的长等待没有显式 lease」，这个边界没有写进契约。
 - **cookie 快照无版本**：`doRefresh` 每次用 `settings.get()` 覆盖 `cookieSnapshot`（`data-layer.ts:417`），`applySettings` 也写同一个闭包变量（`:823-828`）。二者交错时后写者胜，provider 可能回退到旧 cookie（风控与登录相关请求静默退回匿名）。同一模式还有进程级单钩子（`credentials.ts:25-30`）与门面 last-writer-wins（`runtime.ts:120-141`）。
 
 RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显式声明 `policy.platform="rsshub"`，自建实例（任意自定义域名）也归同一桶；governor 另保留 `rsshub.app` 的 host 兜底，设置页新增 RSSHub 行。剩余问题是平台名字符串仍分散在 core（`platformOfChannel`）、host（`platformOf`）与 `global.d.ts` 三处，新增平台要人工同步；RSSHub 只是不再依赖 host 推导。详见 [../../risk/crawler-risk-control.md](../../risk/crawler-risk-control.md)。
