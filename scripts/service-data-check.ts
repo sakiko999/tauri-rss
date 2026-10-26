@@ -4,11 +4,11 @@
  *   bun scripts/service-data-check.ts
  *
  * 覆盖：addSubscription → 快照投影 → WS 事件/rev → 阅读态合帧 → settings →
- * refresh/preview/loadMore/canLoadMore → cacheStats → 幂等 opId → 退订清理 →
- * owner/client token 权限 → shutdown 清理。
+ * refresh/preview/loadMore/canLoadMore → probe → cacheStats → 幂等 opId → 退订清理 →
+ * owner/client token 权限 → shutdown 清理 → 每日备份 → 回滚演练（备份覆盖恢复）。
  */
 import { Database } from "bun:sqlite"
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs"
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { ServiceEvent } from "@amoeba/service-protocol"
@@ -304,16 +304,64 @@ async function main(): Promise<void> {
     const ready2 = await firstLine(child2.stdout)
     const m2 = ready2.match(/^READY (\d+)$/)
     add("第二次启动 READY", !!m2, ready2)
-    const backups = readdirSync(join(dir, "backups")).filter((name) => name.endsWith(".db"))
+    const backupDir = join(dir, "backups")
+    const backups = existsSync(backupDir) ? readdirSync(backupDir).filter((name) => name.endsWith(".db")) : []
     add("每日备份已生成", backups.length > 0, backups.join(","))
     if (m2) {
       const port2 = Number(m2[1])
+      // 制造「备份之后又发生了写入」的漂移，供回滚演练用。
+      const drift = await fetch(`http://127.0.0.1:${port2}/v1/rpc`, {
+        method: "POST",
+        headers: authOwner,
+        body: JSON.stringify({ method: "settings.set", params: { patch: { refreshIntervalMin: 42 } } }),
+      })
+      add("制造漂移 settings=42", drift.status === 200, `status=${drift.status}`)
       const shutdown2 = await fetch(`http://127.0.0.1:${port2}/v1/shutdown`, {
         method: "POST",
         headers: authOwner,
       })
       add("第二次 shutdown", shutdown2.status === 200, `status=${shutdown2.status}`)
       add("第二次退出码 0", (await child2.exited) === 0)
+    }
+
+    // 回滚演练（§6.5）：删 -wal/-shm → 用备份覆盖 → 重启应回到备份时点（settings=7）。
+    const dbFile = join(dir, "rss.db")
+    for (const suffix of ["-wal", "-shm"]) {
+      try {
+        unlinkSync(dbFile + suffix)
+      } catch {
+        /* 不存在 */
+      }
+    }
+    copyFileSync(join(backupDir, backups[0]!), dbFile)
+    child2 = spawnService(dir)
+    const ready3 = await firstLine(child2.stdout)
+    const m3 = ready3.match(/^READY (\d+)$/)
+    add("回滚后启动 READY", !!m3, ready3)
+    if (m3) {
+      const port3 = Number(m3[1])
+      const rolled = (await (
+        await fetch(`http://127.0.0.1:${port3}/v1/rpc`, {
+          method: "POST",
+          headers: authOwner, // 第三次启动换了 clientToken；owner token 从文件复用，跨重启稳定
+          body: JSON.stringify({ method: "settings.get" }),
+        })
+      ).json()) as { ok?: boolean; result?: { refreshIntervalMin?: number } }
+      add(
+        "回滚生效（settings 回到 7）",
+        rolled.ok === true && rolled.result?.refreshIntervalMin === 7,
+        JSON.stringify(rolled.result),
+      )
+      const migDb = new Database(dbFile, { readonly: true })
+      const migCount = (migDb.query("SELECT COUNT(*) AS n FROM _migrations").all() as Array<{ n: number }>)[0]?.n
+      migDb.close()
+      add("回滚后 _migrations 仍在", migCount === 1, `n=${migCount}`)
+      const shutdown3 = await fetch(`http://127.0.0.1:${port3}/v1/shutdown`, {
+        method: "POST",
+        headers: authOwner,
+      })
+      add("回滚后 shutdown", shutdown3.status === 200, `status=${shutdown3.status}`)
+      add("回滚后退出码 0", (await child2.exited) === 0)
     }
   } finally {
     try {

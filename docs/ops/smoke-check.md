@@ -33,7 +33,7 @@
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | **响应式断点** | 逐宽度量真实几何（`Emulation.setDeviceMetricsOverride` + 读 `getBoundingClientRect`）。⚠️ **别只看断点数字**：两个断点撞在同一个宽度会产生**反向跳变**（播放页单栏 1080 与侧栏折叠 1080 撞车，窗口越窄播放器越小、到 1040 反而暴涨 912）。基线见下方结论记录 |
 | **类名冲突（跨区块复用）** | ⚠️ `styles/` 拆成多文件后，**同名类会跨文件叠加**（`.rail-head` 同时给侧栏和直播区写过，`column` + `wrap` 叠加把头部撑成 132px）。改样式前先 `grep` 类名在 `styles/` 下**出现了几次**；新组件用**模块前缀**（`live-*`），别借侧栏的命名空间 |
-| **数据服务/协议/客户端** | `service-skeleton-check.ts` + `service-data-check.ts`（含迁移表/每日备份/退订清理）+ `remote-data-layer-check.ts` + `SERVICE_ENTRY=dist/service/service.js service-runtime-check.ts` + `cargo test -p amoeba --lib service::tests`；真机：`bun run tauri` → `ui-probe eval`（`dl.remote===true`）→ `bun run rss attach status` → 两端互标已读看对方变化 → 正常关窗看 endpoint/lock 清理 |
+| **数据服务/协议/客户端** | `service-skeleton-check.ts` + `service-data-check.ts`（含迁移表/每日备份/回滚演练/退订清理）+ `remote-data-layer-check.ts` + `SERVICE_ENTRY=dist/service/service.js service-runtime-check.ts` + `cargo test -p amoeba --lib service::tests`；真机：`bun run tauri` → `ui-probe eval`（`dl.remote===true`）→ `bun run rss attach status` → 两端互标已读看对方变化 → 正常关窗看 endpoint/lock 清理 |
 | **服务打包** | `bun run service:build` + `cargo build -p amoeba-runtime` + `-p amoeba-browser` + `bun run tauri:build`；⚠️ 无 `TAURI_SIGNING_PRIVATE_KEY` 时 NSIS 之后的 updater 步失败，**安装包已产出**（7z 应列出 service.js/runtime/browser 三件） |
 | **core schema/迁移** | `service-data-check.ts` 会断言 `_migrations`；本地再跑 `bun run rss env` 后查 CLI 库 `_migrations`。改 `STORAGE_SCHEMA` 的已发布条目 = checksum 拒绝启动，只能追加新版本 |
 

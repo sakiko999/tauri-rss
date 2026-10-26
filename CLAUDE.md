@@ -149,7 +149,7 @@ bun run rss channels | fetch <key> | item <url> | play <url>   # CLI 调试探�
 bun run rss fetch <key> --via-service           # 探针走数据服务（同 cookie/被动/配额）
 bun run rss attach status | list | refresh <id>  # CLI 作为桌面数据服务客户端
 bun run service:build                       # 打包独立服务入口 → dist/service/service.js
-bun scripts/service-data-check.ts           # 服务数据链路 34 项自检
+bun scripts/service-data-check.ts           # 服务数据链路 42 项自检
 bun scripts/remote-data-layer-check.ts      # 远端镜像 29 项自检
 cargo build -p amoeba-browser        # CLI 浏览器 sidecar（--browser 才用；需 VS2022 环境）
 cargo build -p amoeba-runtime        # Bun 运行时启动器（全局优先/缺失下载）
@@ -252,6 +252,7 @@ live 按平台二次聚合的 UI 侧。
 - [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
 - [x] 阶段 0 剩余已完成：Tauri resources（release 配置）、WebView2 loopback 实机、desktop profile 直接复用；阶段 1 数据服务/远端层/CLI attach 全部落地。
 - [!] 桌面默认 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；`VITE_DATA_SERVICE=0` 仅调试回退。
-- [ ] 阶段 2 剩余：clean VM 安装/卸载、`TAURI_SIGNING_PRIVATE_KEY` updater 签名、回滚演练；`tauri-plugin-sql` 暂留（mobile/本地回退）。
-- [ ] 未做：refresh job 级取消（core 无 signal）、`queryView` memo、快照 >10k 窗口化、updater 签名/回滚演练、clean VM。
+- [x] 回滚演练已验：备份覆盖（删 -wal/-shm）→ settings 回到备份时点、`_migrations` 完好。
+- [ ] 阶段 2 剩余：clean VM 安装/卸载、`TAURI_SIGNING_PRIVATE_KEY` updater 签名；`tauri-plugin-sql` 暂留（mobile/本地回退）。
+- [ ] 未做：refresh job 级取消（core 无 signal）、`queryView` memo、快照 >10k 窗口化、updater 签名、clean VM。
 <!-- cc-todo:end -->

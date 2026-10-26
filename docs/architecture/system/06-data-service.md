@@ -1,7 +1,7 @@
 # 数据服务（CLI 载具）架构与落地计划
 
-> 状态：阶段 0/1 已完成（2026-10-26 实机）；阶段 2 主体完成（安装包/sidecar/单实例已验，
-> updater 签名需环境变量、回滚演练未做）。剩余见 §11。
+> 状态：阶段 0/1 已完成（2026-10-26 实机）；阶段 2 主体完成（安装包/sidecar/单实例/备份回滚已验，
+> updater 签名需环境变量、clean VM 安装卸载待验）。剩余见 §12。
 > 范围：desktop + CLI。mobile 不参与，继续进程内 `createDataLayer()`。
 
 ## 0. 决策摘要
@@ -264,7 +264,9 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 ### 6.5 迁移与回滚
 
 - 以 desktop 库为基；每日 `VACUUM INTO` 单文件备份已实现。
-- **回滚演练未做**：恢复时需删除目标 `-wal/-shm` 并 bump epoch（v2 补）。
+- **回滚演练已验**（`service-data-check.ts`）：制造漂移 → 停服 → 删 `-wal/-shm` →
+  备份覆盖 → 重启，settings 回到备份时点、`_migrations` 完好。bump epoch 由重启的
+  新 `bootId` 天然提供（客户端 rev gap → resync）。
 - settings 不字段合并；reading 按 `lastReadAt` 较新者胜；content/body 按 `fetchedAt` 较新者胜（未做自动合并，v1 CLI/desktop 共库）。
 - 旧 desktop 构建打开已迁移库：新增 `_migrations` 表对旧构建无害（它只读写 `kv`），
   尚未加 schema 版本门禁。
@@ -434,8 +436,8 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   desktop Tauri 默认走服务，`VITE_DATA_SERVICE=0` 才回进程内。
 - desktop 库原地迁移；每日 `VACUUM INTO` 备份；`_migrations` checksum 门禁。
 - **验收实测**：
-  - `scripts/service-data-check.ts` 34 项全过（快照/事件 rev/阅读合批/settings/refresh/
-    preview/loadMore/cacheStats/幂等/退订清理/token 权限/迁移表/每日备份）。
+  - `scripts/service-data-check.ts` 42 项全过（快照/事件 rev/阅读合批/settings/refresh/
+    preview/loadMore/probe/cacheStats/幂等/退订清理/token 权限/迁移表/每日备份/回滚演练）。
   - `scripts/remote-data-layer-check.ts` 29 项全过（镜像读/写 RPC/事件/诊断/退订）。
   - 真机 Tauri：`remote=true`、53 订阅/2525 条目/ready=true；UI 标已读 → 服务落库；
     CLI `attach rpc reading.markRead` → 桌面事件立即变已读；反向同样可见。
@@ -447,7 +449,8 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - ✅ single-instance（第二个实例只聚焦主窗口）、protocol=1 握手/426 门禁、`service_endpoint`。
 - ✅ 安装包（启动器 + JS + 浏览器 sidecar 进 resources；NSIS 7.14MiB）。
 - ⚠️ `tauri-plugin-sql` 保留（mobile 与 `VITE_DATA_SERVICE=0` 回退仍用），未从 desktop 发布路径移除。
-- ❌ updater 签名（本机缺 `TAURI_SIGNING_PRIVATE_KEY`）、回滚演练、clean VM 安装/卸载。
+- ❌ updater 签名（本机缺 `TAURI_SIGNING_PRIVATE_KEY`）、clean VM 安装/卸载。
+  （回滚演练已验：备份覆盖恢复 → settings 回到备份时点。）
 
 ### 阶段 3（可选，按实测）
 
@@ -461,16 +464,19 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - 全量镜像上限：dev 2,525 条 = 2.32MB（播客 summary 占 1.46MB）；items >10k 时再做窗口化。
 - `refreshAll`：服务端 job 已实现，但 desktop 仍逐订阅调 `refresh` 以保留逐条 busy/超时 UI；
   是否切换待 R5（lane→job 取消）一起做。
-- 未做：refresh 的 job 级取消（core 无 AbortSignal）、updater 签名/回滚演练、clean VM 安装、
+- 未做：refresh 的 job 级取消（core 无 AbortSignal）、updater 签名、clean VM 安装、
   `queryView` memo、快照 >10k 窗口化。
 
 ## 13. 验收清单
 
-- [ ] 服务唯一写者，desktop 直写会抛错。
-- [ ] 双客户端并发 reading/subscriptions/settings 不丢更新。
-- [ ] CLI 与 desktop 看到同一订阅/已读/设置/缓存。
-- [ ] 快照 ≤1MB、boot ≤500ms、首屏不白屏。
-- [ ] markAllRead <50ms。
-- [ ] 服务崩溃/重启后镜像 resync 收敛。
-- [ ] profile 复用或一次性迁移，登录态不丢。
-- [ ] 安装包包含服务与浏览器载具，卸载/更新无残留。
+- [x] 服务唯一写者，desktop 直写会抛错（`storage:false` → RejectingStorage；Diagnostics/seed 走 RPC）。
+- [ ] 双客户端并发 reading/subscriptions/settings 不丢更新：双向可见已验（desktop 标已读 ↔
+      `attach rpc`），并发压测未做。
+- [x] CLI 与 desktop 看到同一订阅/已读/设置/缓存。
+- [ ] 快照 ≤1MB、boot ≤500ms、首屏不白屏：实测 2,525 条 = 2.32MB（播客 summary 1.46MB，
+      超预算待 §12 窗口化）；boot 未计时，dev 首屏正常。
+- [x] markAllRead <50ms（服务端 5k 条 6–7ms）。
+- [ ] 服务崩溃/重启后镜像 resync 收敛：正常重启（新 `bootId`）+ 回滚演练已验，
+      进程被 kill 的断线重连未单独验。
+- [x] profile 复用 desktop `webview-profile`，登录态不丢。
+- [ ] 安装包包含服务与浏览器载具（已验内容），卸载/更新无残留待 clean VM 验。
