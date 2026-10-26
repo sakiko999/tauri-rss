@@ -33,6 +33,7 @@ import {
   resolveXhsItemDetail,
   scrollXhsUntilGrown,
   XHS_FETCH_MORE_WINDOW,
+  XHS_LOGIN_REQUIRED,
 } from "./shared.ts"
 import { XhsChannelBase } from "./base.ts"
 
@@ -44,6 +45,11 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
 
   getSource(info: SourceInfo): RssSource & Partial<Pageable> & ItemDetailSource {
     const userId = String(info.user_id ?? "").trim()
+    // 显式空串 = 强制匿名（CLI `--kv cookie=`）：匿名态已移除，浏览器路径也不得绕过。
+    if (info.cookie === "") {
+      const denied = () => Promise.reject(new Error(XHS_LOGIN_REQUIRED))
+      return { fetch: denied, fetchPassive: denied, fetchMore: denied, resolveDetail: denied }
+    }
     const browser = globalThis.appHost?.browser
     const fetch = apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info))
     const base = (browser

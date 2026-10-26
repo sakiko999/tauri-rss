@@ -32,6 +32,7 @@ import { runSug } from "./commands/sug.ts"
 import { runDetail } from "./commands/detail.ts"
 import { runBrowserReset } from "./commands/browser-reset.ts"
 import { runAttach } from "./commands/attach.ts"
+import { runLogin } from "./commands/login.ts"
 
 // --service 必须在 setupHost / loadSettings 之前分流：服务不读 CLI settings，
 // 也不走命令注册。阶段 1 会把服务入口拆成独立模块，避免连带加载全部命令。
@@ -59,17 +60,23 @@ setupHost()
 function onError(err: unknown): void {
   const message = err instanceof Error ? err.message : String(err)
   console.error(`${pc.red("✘")} ${message}`)
-  // xhs 已强制登录；CLI 的 sidecar profile 与桌面独立，暂时没有扫码入口。
-  if (message.includes("登录") && globalThis.appHost?.browser) {
+  // 登录态只存在于数据服务（CLI 的 --browser sidecar profile 只用于抓取探针）。
+  if (message.includes("登录") && !process.argv.includes("login")) {
     console.error(
       pc.dim(
-        "提示：CLI 的抓取浏览器 profile 与桌面独立，当前版本未提供 CLI 扫码登录；" +
-          "xhs 需要登录态，可先用 --no-browser 走 HTTP cookie 路径，或等 `rss login`。",
+        "提示：运行 `rss login <platform>` 扫码登录（登录态由数据服务持有，" +
+          "CLI 自己的 sidecar profile 不承载登录态）。",
       ),
     )
   }
   if (err instanceof Error && err.stack) {
-    console.error(pc.dim(err.stack.split("\n").slice(1).join("\n")))
+    // 只留调用帧：多行 message 时 stack 的第 2 行起是 message 的续行，直接 slice(1)
+    // 会把它们当成堆栈再打一遍。
+    const frames = err.stack
+      .split("\n")
+      .slice(1)
+      .filter((line) => /^\s+at /.test(line))
+    if (frames.length) console.error(pc.dim(frames.join("\n")))
   }
   process.exit(1)
 }
@@ -192,6 +199,20 @@ cli
   .option("--json", "JSON 输出")
   .option("--cookie <ck>", "小红书登录 cookie(缺省回落 CLI settings 的 xhsCookie)")
   .action(guard((url: string, opts: { json?: boolean; cookie?: string }) => runDetail(url, opts)))
+
+cli
+  .command("login <platform>", "扫码登录平台账号（经数据服务；bili / weibo / xhs / douyin）")
+  .option("--timeout <sec>", "等待扫码的秒数（缺省由平台决定）")
+  .option("--json", "JSON 输出")
+  .action(
+    guard((platform: string, opts: { endpoint?: string; timeout?: string; json?: boolean }) => {
+      const timeout = opts.timeout === undefined ? undefined : Number(opts.timeout)
+      if (timeout !== undefined && (!Number.isFinite(timeout) || timeout <= 0)) {
+        throw new Error("--timeout 需要正数秒")
+      }
+      return runLogin(platform, { endpoint: opts.endpoint, timeout, json: opts.json })
+    }),
+  )
 
 cli
   .command("attach <action> [arg1] [arg2]", "作为数据服务客户端（status/list/refresh/rpc；默认连桌面）")

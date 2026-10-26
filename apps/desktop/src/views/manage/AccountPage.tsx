@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 import { cookieFieldFor, type ChannelInfo } from "@amoeba/core"
+import { LOGIN_PLATFORMS, browserCookieHostsOf, platformDef } from "@amoeba/platform"
 import { useDesktop } from "../../store/index.ts"
 import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
@@ -18,42 +19,55 @@ import { QrImage } from "../../components/QrImage.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { platformOf } from "../../lib/subscriptions.ts"
 
-/** 平台前缀 → 展示名 + 对应的 settings cookie 字段。 */
-const PLATFORM_META: Record<
-  string,
-  {
-    label: string
-    field: "bilibiliCookie" | "weiboCookie" | "xhsCookie" | "douyinCookie"
-    note: string
-    /** 未配置时渠道完全不可用（不是「降级为匿名」）。 */
-    needsLogin?: boolean
-  }
-> = {
-  bili: {
-    label: "B站",
-    field: "bilibiliCookie",
-    note: "解锁视频 1080P / 直播原画档位；弹幕与动态也依赖登录态。",
-  },
-  weibo: { label: "微博", field: "weiboCookie", note: "关注人时间线与热搜词流需要登录。" },
+type PlatformMeta = {
+  label: string
+  field: "bilibiliCookie" | "weiboCookie" | "xhsCookie" | "douyinCookie"
+  note: string
+  /** 未配置时渠道完全不可用（不是「降级为匿名」）。 */
+  needsLogin?: boolean
+}
+
+/**
+ * UI 文案（架构层只放平台身份/展示名/字段，见 `@amoeba/platform`）。
+ * 平台 id 与登录字段来自单一权威表，这里不再重复。
+ */
+const PLATFORM_NOTES: Record<string, { note: string; needsLogin?: boolean }> = {
+  bili: { note: "解锁视频 1080P / 直播原画档位；弹幕与动态也依赖登录态。" },
+  weibo: { note: "关注人时间线与热搜词流需要登录。" },
   xhs: {
-    label: "小红书",
-    field: "xhsCookie",
     note: "所有小红书渠道都需要登录；桌面抓取使用抓取浏览器的登录态，扫码登录才生效（手填 cookie 不会同步到浏览器）。",
     needsLogin: true,
   },
-  douyin: { label: "抖音", field: "douyinCookie", note: "解锁直播原画档位；搜索类能力始终需要账号。" },
+  douyin: { note: "解锁直播原画档位；搜索类能力始终需要账号。" },
 }
+
+/** 平台 → 展示名 + settings cookie 字段（平台表派生，R9）。 */
+const PLATFORM_META: Record<string, PlatformMeta> = Object.fromEntries(
+  LOGIN_PLATFORMS.map((id) => {
+    const def = platformDef(id)!
+    return [
+      id,
+      {
+        label: def.label,
+        field: def.cookieField as PlatformMeta["field"],
+        ...(PLATFORM_NOTES[id] ?? { note: "" }),
+      },
+    ]
+  }),
+)
 
 /**
  * 桌面抓取实际用的是抓取浏览器（WebView2）profile 的登录态，不是 settings 里的 cookie 串。
  * 「清除凭证」必须同时登出这些站点，否则只是清掉 UI 显示，下一次刷新仍以真实账号导航。
- * 只列**浏览器登录路径**的平台：B站是纯 HTTP 扫码，清 settings 即可，不该为此拉起抓取浏览器。
+ * 只列**浏览器登录路径**的平台（表里的 browserCookieHosts）：B站是纯 HTTP 扫码，清
+ * settings 即可，不该为此拉起抓取浏览器。
  */
-const COOKIE_HOSTS: Record<string, string[]> = {
-  xhs: ["xiaohongshu.com"],
-  weibo: ["weibo.cn", "weibo.com"],
-  douyin: ["douyin.com"],
-}
+const COOKIE_HOSTS: Record<string, string[]> = Object.fromEntries(
+  LOGIN_PLATFORMS.flatMap((id) => {
+    const hosts = browserCookieHostsOf(id)
+    return hosts ? [[id, hosts] as const] : []
+  }),
+)
 
 export function AccountPage() {
   const dl = useDesktop((s) => s.dl)
@@ -258,10 +272,10 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
         setPhase("success")
         // core 已按平台前缀写库(scanLogin 内部),这里把 UI 的 settings 同步过来,
         // 凭证卡片的输入框才会立刻显示新 cookie。
-        const field = cookieFieldOf(channel.key)
+        const field = cookieFieldFor(channel.key)
         if (field) {
           const s = await dl.settings.get()
-          await setSetting(field as "bilibiliCookie", s[field as "bilibiliCookie"])
+          await setSetting(field, s[field])
         }
         toast("ok", "登录成功", `${channel.name} 的凭证已保存。`)
       })
@@ -321,7 +335,3 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
   )
 }
 
-// channelKey → settings cookie 字段:core 的单一权威表(勿再手抄前缀表)。
-function cookieFieldOf(channelKey: string): string {
-  return cookieFieldFor(channelKey) ?? ""
-}

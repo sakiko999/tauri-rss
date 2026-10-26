@@ -280,6 +280,11 @@ declare global {
     }
   }
 
+  /** 键值批量写的一步（`StorageBackend.batch`）。 */
+  type StorageOp =
+    | { type: "set"; key: string; value: string }
+    | { type: "delete"; key: string }
+
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */
   interface StorageBackend {
     get(key: string): Promise<string | null>
@@ -287,6 +292,11 @@ declare global {
     delete(key: string): Promise<void>
     /** 全部 key,可选前缀过滤(命名空间)。 */
     keys(prefix?: string): Promise<string[]>
+    /**
+     * 原子批量写：多键一次提交，中途失败不落半套（R10）。
+     * 不支持的后端省略此方法，调用方回退逐个 set/delete；SQL 型后端应实现。
+     */
+    batch?(ops: StorageOp[]): Promise<void>
     /**
      * SQL 型后端注入 schema（KV/localStorage/内存后端不需要实现）。
      * core 在 `createDataLayer()` 首次读写前调用；实现方应在此之前完成建表。

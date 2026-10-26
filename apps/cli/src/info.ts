@@ -7,9 +7,8 @@
  *   - 订阅级 `--kv cookie=` 覆盖:键存在即尊重,**空串 = 强制匿名探针**
  *     (渠道把 info.cookie 显式传给 client,client 侧空串不回落 provider)。
  */
-import { DEFAULT_SETTINGS, type AppSettings } from "@amoeba/core"
+import { createSettingsRepository, type AppSettings } from "@amoeba/core"
 import { getChannel, type SourceInfo } from "@amoeba/crawler"
-import { sqliteStorage } from "./store/sqlite-storage.ts"
 
 /** 各 channel 的示例参数(收编自 crawler example/backend.ts;无参 channel 空)。 */
 export function exampleInfo(key: string): Record<string, string> {
@@ -34,15 +33,13 @@ export function exampleInfo(key: string): Record<string, string> {
   }
 }
 
-/** 读 settings(与 core SettingsRepository 同构:DEFAULT_SETTINGS 兜底)。 */
+/** 进程内单例仓库(读改写串行化 + 归一化 + 损坏留证都在 core,R15)。 */
+let settingsRepo: ReturnType<typeof createSettingsRepository> | null = null
+
+/** 读 settings —— 走 core 的 SettingsRepository(与桌面/服务同一套归一化)。 */
 export async function loadSettings(): Promise<AppSettings> {
-  const raw = await sqliteStorage().get("settings")
-  if (!raw) return { ...DEFAULT_SETTINGS }
-  try {
-    return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<AppSettings>) }
-  } catch {
-    return { ...DEFAULT_SETTINGS }
-  }
+  settingsRepo ??= createSettingsRepository(globalThis.appHost.storage)
+  return settingsRepo.get()
 }
 
 /**

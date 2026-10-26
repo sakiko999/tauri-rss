@@ -17,6 +17,7 @@
  * ⚠️ 原生 `<img>` / 原生 mp4 / 部分 HLS 不经过 `appHost.http`,governor 管不到,
  * 不要假设它能限住全部媒体流量。
  */
+import { platformOfHost } from "@amoeba/platform"
 
 /**
  * 防御等级(数字统一):
@@ -249,39 +250,13 @@ function pathOf(url: string): string {
   }
 }
 
-/** 平台由 host 推导;未知 host 去掉 `www.` 后原样作平台(每站一个桶)。 */
+/**
+ * 平台由 host 推导 —— 域名表在 `@amoeba/platform`（R9 单一权威）；
+ * 未登记 host 去掉 `www.` 后原样作平台（每站一个桶）。
+ * 自建 RSSHub 实例靠 core 的 rsshub source 显式传 policy.platform。
+ */
 function platformOf(host: string): string {
-  if (!host) return "unknown"
-  if (host === "bilibili.com" || host.endsWith(".bilibili.com")) return "bili"
-  if (
-    host === "weibo.com" ||
-    host.endsWith(".weibo.com") ||
-    host === "weibo.cn" ||
-    host.endsWith(".weibo.cn")
-  ) {
-    return "weibo"
-  }
-  if (host === "xiaohongshu.com" || host.endsWith(".xiaohongshu.com")) return "xhs"
-  if (host === "douyin.com" || host.endsWith(".douyin.com")) return "douyin"
-  if (host === "douyu.com" || host.endsWith(".douyu.com")) return "douyu"
-  if (host === "huya.com" || host.endsWith(".huya.com")) return "huya"
-  if (host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtubei.googleapis.com") {
-    return "youtube"
-  }
-  if (host === "itunes.apple.com" || host.endsWith(".itunes.apple.com")) return "apple"
-  // 公网 RSSHub 兜底归类;自建实例靠 core 的 rsshub source 显式传 policy.platform。
-  if (host === "rsshub.app" || host.endsWith(".rsshub.app")) return "rsshub"
-  if (
-    host === "twitch.tv" ||
-    host.endsWith(".twitch.tv") ||
-    host === "ttvnw.net" ||
-    host.endsWith(".ttvnw.net") ||
-    host === "jtvnw.net" ||
-    host.endsWith(".jtvnw.net")
-  ) {
-    return "twitch"
-  }
-  return host.startsWith("www.") ? host.slice(4) : host
+  return platformOfHost(host)
 }
 
 function isMeteredHost(host: string, url: string): boolean {

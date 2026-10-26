@@ -9,6 +9,7 @@
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
  */
 import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
+import { cookieFieldForChannelKey, cookieFieldOf, platformOfChannelKey } from "@amoeba/platform"
 import {
   errorKindOf,
   getDanmakuByUrl,
@@ -161,16 +162,11 @@ type FetchableSource = {
 
 /**
  * channelKey 前缀 → settings 里存的 cookie 字段。
- * **单一权威表**——sourceInfoFor 注入 / scanLogin 写回 / CLI 探针 / desktop 账号页
- * 全部经此,禁止再手抄前缀表(曾漂移出三份:CLI 缺 douyin、AccountPage 各一份)。
+ * **单一权威 = `@amoeba/platform` 的 PLATFORMS 表**（R9）：sourceInfoFor 注入 /
+ * scanLogin 写回 / CLI 探针 / desktop 账号页全部经此，禁止再手抄前缀表。
  */
 export function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
-  if (channelKey.startsWith("bili:")) return "bilibiliCookie"
-  if (channelKey.startsWith("weibo:")) return "weiboCookie"
-  if (channelKey.startsWith("xhs:")) return "xhsCookie"
-  // ⚠️ 抖音渠道前缀是 live:douyin*(不是 douyin:)——platformOf 同款规则。
-  if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyinCookie"
-  return undefined
+  return cookieFieldForChannelKey(channelKey) as keyof AppSettings | undefined
 }
 
 /**
@@ -185,20 +181,9 @@ function normalizeCookie(v: unknown): string {
   return serializeCookieDict(parseCookieDict(typeof v === "string" ? v : ""))
 }
 
-/** 平台名(governor 分类语义:bili/weibo/xhs/douyin)→ settings cookie 字段。 */
+/** 平台名（governor 分类语义）→ settings cookie 字段（同一张 `@amoeba/platform` 表）。 */
 export function cookieFieldForPlatform(platform: string): keyof AppSettings | undefined {
-  switch (platform) {
-    case "bili":
-      return "bilibiliCookie"
-    case "weibo":
-      return "weiboCookie"
-    case "xhs":
-      return "xhsCookie"
-    case "douyin":
-      return "douyinCookie"
-    default:
-      return undefined
-  }
+  return cookieFieldOf(platform) as keyof AppSettings | undefined
 }
 
 export function createDataLayer(): DataLayer {
@@ -321,20 +306,9 @@ export function createDataLayer(): DataLayer {
     return changed ? levels : null
   }
 
-  /** channelKey → 平台名(与 host governor 的 URL 平台分类同名)。 */
+  /** channelKey → 平台名(与 host governor 的 URL 平台分类同源,均来自 `@amoeba/platform`)。 */
   function platformOfChannel(channelKey: string): string | undefined {
-    if (channelKey.startsWith("bili:")) return "bili"
-    if (channelKey.startsWith("weibo:")) return "weibo"
-    if (channelKey.startsWith("xhs:")) return "xhs"
-    if (channelKey.startsWith("live:douyin") || channelKey.startsWith("douyin:")) return "douyin"
-    if (channelKey.startsWith("live:douyu") || channelKey.startsWith("douyu:")) return "douyu"
-    if (channelKey.startsWith("live:huya") || channelKey.startsWith("huya:")) return "huya"
-    if (channelKey.startsWith("youtube:")) return "youtube"
-    if (channelKey.startsWith("apple:")) return "apple"
-    if (channelKey.startsWith("twitch:")) return "twitch"
-    // rsshub 外挂实例自成一桶(请求侧显式声明 platform,见 source/rsshub.ts)。
-    if (channelKey.startsWith("rsshub:")) return "rsshub"
-    return undefined
+    return platformOfChannelKey(channelKey)
   }
 
 
@@ -1160,8 +1134,18 @@ export function createDataLayer(): DataLayer {
         store.clear(id)
         pageCursors.delete(id)
         pageTotals.delete(id)
-        await contentCache.delete(id).catch(() => {})
-        await bodyCache.deleteAll(id).catch(() => {})
+        // content + body 的多键删除合成一次 batch（R10）：中途失败不会留下
+        // 「删了一半」的中间态。不支持 batch 的后端回退逐个删。
+        const [contentKeys, bodyKeys] = await Promise.all([
+          contentCache.keysOf(id).catch(() => []),
+          bodyCache.keysOf(id).catch(() => []),
+        ])
+        const keys = [...contentKeys, ...bodyKeys]
+        if (keys.length) {
+          const ops: StorageOp[] = keys.map((key) => ({ type: "delete", key }))
+          if (storage.batch) await storage.batch(ops)
+          else for (const op of ops) await storage.delete(op.key)
+        }
         // 阅读态也按订阅清：否则退订后 reading blob 永久残留孤儿记录。
         await reading.deleteBySubscription(id).catch(() => {})
       },

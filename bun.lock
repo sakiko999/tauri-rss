@@ -17,12 +17,18 @@
         "@amoeba/core": "workspace:*",
         "@amoeba/crawler": "workspace:*",
         "@amoeba/host": "workspace:*",
+        "@amoeba/platform": "workspace:*",
         "@amoeba/resolve": "workspace:*",
         "@amoeba/service-client": "workspace:*",
         "@amoeba/service-protocol": "workspace:*",
         "@amoeba/xml": "workspace:*",
         "cac": "^6.7.14",
+        "jsqr": "^1.4.0",
         "picocolors": "^1.1.1",
+        "qrcode": "^1.5.4",
+      },
+      "devDependencies": {
+        "@types/qrcode": "^1.5.6",
       },
     },
     "apps/desktop": {
@@ -31,6 +37,7 @@
       "dependencies": {
         "@amoeba/core": "workspace:*",
         "@amoeba/host": "workspace:*",
+        "@amoeba/platform": "workspace:*",
         "@amoeba/player": "workspace:*",
         "@amoeba/resolve": "workspace:*",
         "@amoeba/service-client": "workspace:*",
@@ -95,6 +102,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@amoeba/crawler": "workspace:*",
+        "@amoeba/platform": "workspace:*",
         "@amoeba/resolve": "workspace:*",
         "@amoeba/xml": "workspace:*",
       },
@@ -118,6 +126,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@amoeba/log": "workspace:*",
+        "@amoeba/platform": "workspace:*",
         "@tauri-apps/api": "^2",
         "@tauri-apps/plugin-opener": "^2.7.1",
         "@tauri-apps/plugin-process": "^2",
@@ -131,6 +140,10 @@
     },
     "packages/log": {
       "name": "@amoeba/log",
+      "version": "0.1.0",
+    },
+    "packages/platform": {
+      "name": "@amoeba/platform",
       "version": "0.1.0",
     },
     "packages/player": {
@@ -212,6 +225,8 @@
     "@amoeba/log": ["@amoeba/log@workspace:packages/log"],
 
     "@amoeba/mobile": ["@amoeba/mobile@workspace:apps/mobile"],
+
+    "@amoeba/platform": ["@amoeba/platform@workspace:packages/platform"],
 
     "@amoeba/player": ["@amoeba/player@workspace:packages/player"],
 
@@ -658,6 +673,8 @@
     "jsesc": ["jsesc@3.1.0", "https://registry.npmmirror.com/jsesc/-/jsesc-3.1.0.tgz", { "bin": { "jsesc": "bin/jsesc" } }, "sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA=="],
 
     "json5": ["json5@2.2.3", "https://registry.npmmirror.com/json5/-/json5-2.2.3.tgz", { "bin": { "json5": "lib/cli.js" } }, "sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg=="],
+
+    "jsqr": ["jsqr@1.4.0", "https://registry.npmmirror.com/jsqr/-/jsqr-1.4.0.tgz", {}, "sha512-dxLob7q65Xg2DvstYkRpkYtmKm2sPJ9oFhrhmudT1dZvNFFTlroai3AWSpLey/w5vMcLBXRgOJsbXpdN9HzU/A=="],
 
     "lie": ["lie@3.1.1", "https://registry.npmmirror.com/lie/-/lie-3.1.1.tgz", { "dependencies": { "immediate": "~3.0.5" } }, "sha512-RiNhHysUjhrDQntfYSfY4MU24coXXdEOgw9WGcKHNeEwffDYbF//u87M1EWaMGzuFoSbqW0C9C6lEEhDOAswfw=="],
 

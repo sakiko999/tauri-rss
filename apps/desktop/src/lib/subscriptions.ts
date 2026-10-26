@@ -5,6 +5,7 @@
  * ——绝不编造 uid / 房号。
  */
 import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/core"
+import { platformOfChannelKey } from "@amoeba/platform"
 import { mediaUrl } from "./media.ts"
 
 /** 逗号分隔、可把候选**并入**已有订阅的列表型参数(直播房间号)。 */
@@ -72,10 +73,13 @@ function fmtNum(n?: number): string {
   return String(v)
 }
 
-/** 渠道 key 前缀 → 平台 id(`live:douyu` 归 douyu)。 */
+/**
+ * 渠道 key 前缀 → 平台 id（`live:douyu` 归 douyu）。
+ * 已登记的走 `@amoeba/platform`（与 governor / core 同源）；未登记的（rss: 直链等）
+ * 退回取第一段，保持 UI 分组不崩。
+ */
 export function platformOf(key: string): string {
-  const parts = key.split(":")
-  return parts[0] === "live" && parts[1] ? parts[1] : parts[0] ?? key
+  return platformOfChannelKey(key) ?? key.split(":")[0] ?? key
 }
 
 /**

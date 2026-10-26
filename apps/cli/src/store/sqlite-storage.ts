@@ -64,6 +64,13 @@ export function sqliteStorage(dbFile = sqliteFilePath()): StorageBackend {
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
   )
   const deleteStmt = db.prepare(`DELETE FROM ${STORAGE_SCHEMA.table} WHERE key = ?`)
+  // 事务体必须是同步的（bun:sqlite）；退订清理的键数量很小，同步循环足够。
+  const batchTx = db.transaction((ops: StorageOp[]) => {
+    for (const op of ops) {
+      if (op.type === "set") setStmt.run(op.key, op.value)
+      else deleteStmt.run(op.key)
+    }
+  })
 
   return {
     async get(key) {
@@ -78,6 +85,9 @@ export function sqliteStorage(dbFile = sqliteFilePath()): StorageBackend {
     },
     async keys(prefix = "") {
       return (keysStmt.all(prefix) as Array<{ key: string }>).map((r) => r.key)
+    },
+    async batch(ops) {
+      if (ops.length) batchTx(ops)
     },
     setSchema(schema) {
       // 构造时已按 core 的 STORAGE_SCHEMA 建表；注入不同 schema 说明装配顺序/版本错了。

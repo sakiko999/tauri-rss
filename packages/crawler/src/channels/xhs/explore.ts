@@ -26,6 +26,7 @@ import {
   resolveXhsItemDetail,
   scrollXhsUntilGrown,
   waitXhsListNonEmpty,
+  XHS_LOGIN_REQUIRED,
 } from "./shared.ts"
 import { XhsChannelBase } from "./base.ts"
 
@@ -55,6 +56,12 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
   getSource(info: SourceInfo): RssSource & Partial<Pageable> & ItemDetailSource {
     // 保留显式空串语义(强制匿名 → 现在会报「需要登录」),不要用 `||` 抹成 undefined。
     const cookie = info.cookie as string | undefined
+    // ⚠️ 显式空串 = 强制匿名（CLI `--kv cookie=`）：匿名态已移除，浏览器路径也不得
+    // 绕过。此前浏览器分支直接忽略 info.cookie，`--kv cookie=` 会静默变成「有登录态」。
+    if (cookie === "") {
+      const denied = () => Promise.reject(new Error(XHS_LOGIN_REQUIRED))
+      return { fetch: denied, fetchPassive: denied, fetchMore: denied, resolveDetail: denied }
+    }
     const browser = globalThis.appHost?.browser
     const source: RssSource & Partial<Pageable> & ItemDetailSource = {
       fetch: apiFetchItems(

@@ -11,6 +11,7 @@
     "packages/crawler",
     "packages/host",
     "packages/log",
+    "packages/platform",
     "packages/player",
     "packages/resolve",
     "packages/service-client",

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@amoeba/crawler": "workspace:*",
+    "@amoeba/platform": "workspace:*",
     "@amoeba/resolve": "workspace:*",
     "@amoeba/xml": "workspace:*"
   },

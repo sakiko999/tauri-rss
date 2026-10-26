@@ -16,6 +16,7 @@
     "@radix-ui/react-switch": "^1.4.0",
     "@amoeba/core": "workspace:*",
     "@amoeba/host": "workspace:*",
+    "@amoeba/platform": "workspace:*",
     "@amoeba/player": "workspace:*",
     "@amoeba/resolve": "workspace:*",
     "@amoeba/service-client": "workspace:*",

@@ -18,6 +18,7 @@
       "@amoeba/host/browser": ["./packages/host/src/browser/index.ts"],
       "@amoeba/host/cdp": ["./packages/host/src/browser/cdp.ts"],
       "@amoeba/log": ["./packages/log/src/index.ts"],
+      "@amoeba/platform": ["./packages/platform/src/index.ts"],
       "@amoeba/crawler": ["./packages/crawler/src/index.ts"],
       "@amoeba/core": ["./packages/core/src/index.ts"],
       "@amoeba/core/source/rsshub": ["./packages/core/src/source/rsshub.ts"],

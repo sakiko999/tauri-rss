@@ -86,3 +86,9 @@ export {
 
 /** 订阅抓取内容缓存(KV storage 实现;TTL 判定在 data-layer)。 */
 export { createContentCacheRepo, type ContentCacheEntry, type ContentCacheRepo } from "./repo/content-cache-repo.ts"
+
+/**
+ * settings 仓库 —— CLI 探针直接复用(core 的归一化 / 损坏 JSON 留证 / 读改写串行化),
+ * 不再自己解析 `settings` blob(旧旁路会绕过归一化且每次新建连接)。见 R15。
+ */
+export { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
