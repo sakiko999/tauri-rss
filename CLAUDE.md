@@ -237,7 +237,7 @@ live 按平台二次聚合的 UI 侧。
 ## TODO / 重要信息（cc-todo 自动维护）
 
 - [ ] **CI 工作流暂缓（2026-10-26 定）**：`.github/workflows/ci.yml` 未建；统一入口 `bun run check`
-  已在本地跑通（61 项 / 5.4s），接入时 job 跑 `bun run check`，service 层单列（需 bun:sqlite + 端口）。
+  已在本地跑通，接入时 job 跑 `bun run check`，service 层单列（需 bun:sqlite + 端口）。
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
 - [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
@@ -261,4 +261,5 @@ live 按平台二次聚合的 UI 侧。
 - [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
 - [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
 - [ ] 合流改版计划草案待评审排期：docs/ui/heliu-redesign-plan.md（分支 docs/desktop-redesign-plan）
+- [ ] 跑 `bun run dev` 实拍添加订阅弹窗：分类 chip 换行、24 行列表滚动、「已订阅 N」与行尾动作文字的密度
 <!-- cc-todo:end -->

@@ -1,10 +1,14 @@
 /**
- * bili:square —— bilibili 热搜(article channel)。
+ * bili:square —— bilibili 热搜(social channel)。
+ *
+ * ⚠️ kind 是 **social** 而非 article:条目是**热搜词条**(关键词),不是可读文章。
+ * 曾在 article 下 —— 词条于是混进「阅读」列表、被一键归类塞进「文章」组,点开还是
+ * 一个只有关键词的空正文。与 weibo:hot / douyin:trend 同款语义:热搜榜统一走 social。
  *
  * wbi 签名(signWeb)→ search/square 热搜榜。零登录可用;登录 cookie 经
  * credentials provider 兜底(签名与请求同 cookie,见 bili client)。
  */
-import type { Article, Item } from "@amoeba/xml"
+import type { Item, Social } from "@amoeba/xml"
 import { biliClient, now } from "@amoeba/resolve"
 import { makeApiChannel } from "../factory.ts"
 import { API } from "./video-common.ts"
@@ -12,7 +16,7 @@ import { API } from "./video-common.ts"
 export const BiliSquareChannel = makeApiChannel({
   key: "bili:square",
   name: "B站热搜",
-  kind: "article",
+  kind: "social",
   channelTitle: () => "B站热搜",
   channelLink: "https://www.bilibili.com/",
   fetchPage: async (info) => {
@@ -33,15 +37,14 @@ export const BiliSquareChannel = makeApiChannel({
         // 因位次变化被当成新条目反复进库(与 weibo:hot / douyin:trend 同款约定)。
         id: `bili-rank-${keyword}`,
         sourceId: "bili:square",
-        kind: "article",
+        kind: "social",
         title: keyword,
         url: link,
         summary: raw["icon"] ? `<img src="${raw.icon}">` : undefined,
         content: `<p>${keyword}</p>`,
-        contentFormat: "html",
         fetchedAt: t,
         raw,
-      } satisfies Article
+      } satisfies Social
     })
   },
 })

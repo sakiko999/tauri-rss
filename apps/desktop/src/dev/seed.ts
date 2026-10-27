@@ -50,15 +50,6 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-article",
     info: {},
   },
-  {
-    id: "s-article-bili-square",
-    channelKey: "bili:square",
-    title: "B站热搜",
-    enabled: true,
-    groupId: "g-article",
-    info: {},
-  },
-
   // ── 视频 ────────────────────────────────────────────────────────────────
   {
     id: "s-video-youtube",
@@ -345,6 +336,15 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
   },
 
   // ── 社交 ────────────────────────────────────────────────────────────────
+  // 热搜榜三条(B站/微博/抖音):条目是**词条**不是文章,三个渠道 kind 都是 social。
+  {
+    id: "s-hot-bili",
+    channelKey: "bili:square",
+    title: "B站热搜",
+    enabled: true,
+    groupId: "g-social",
+    info: {},
+  },
   // 微博热搜:列表匿名可用(词流需登录),保留启用。
   {
     id: "s-hot-weibo",
