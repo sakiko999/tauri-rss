@@ -37,6 +37,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | `ui/ui-conventions.md` | ★ 样式组织、浮层、滚动与虚拟化、交互守卫、卡片分流、发现页、图片防盗链、调试工具 |
+| `ui/heliu-redesign-plan.md` | 桌面端「合流」改版计划：原型差距矩阵、目标 IA 与路由、M0–M7 分期、风险登记与决策记录（草案） |
 | `ui/numbered-ui-overlay.md` | Numbered UI Overlay（dev-only）：编号语义、400 上限、AI 清单 |
 | `ui/rail-tree-accordion.md` | 侧栏树为何用 Accordion + 三个静默失败坑 |
 
