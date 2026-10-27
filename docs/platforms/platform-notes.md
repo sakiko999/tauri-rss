@@ -34,6 +34,10 @@
     只存在于 `view` 详情接口；`seasons_archives_list` 对充电视频返回的 `ugc_pay` 也是 0。
     要补只能按条目懒查详情（成本高，且卡片角标是抓取时快照，详情补标回不到列表）。
   - 数据侧参考：该用户 450 条 UP 投稿中 47 条 `is_upower_exclusive=true`，其余 `rights.*` 全 0。
+- ✅ **UP 投稿翻页**（2026-10-27，`bili:user_video`）：`space/wbi/arc/search` 的 `pn` 递增
+  （`ps` 固定 30），`data.page.count` 给真实总数。渠道原先写死 `pn=1` —— 实测 7 个订阅里
+  6 个正好卡在 30 条上限（该用户 450 条投稿只看得到前 30 条）。现在
+  `pageable: { first: 2, step: 1 }`，登录态连翻 3 页验证无重复、`hasMore` 按 `count` 判。
 - ✅ **搜UP主**（2026-10-16，`searchBiliUsers` / 渠道 `bili:user`）：
   `search_type=bili_user` + **匿名 buvid3/4**（`biliClient.getJson(..., {buvid:true})`，
   裸请求 412）。与 `bili:user_video`（uid 投稿订阅）配对，走「添加订阅 → UP主 / 频道」

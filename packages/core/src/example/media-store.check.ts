@@ -76,4 +76,18 @@ assert.equal(store.query({ subscriptionId: "s-dup" })[0]?.isUnread, false, "应�
 store.append("s-b", [item("b1", "s-b"), item("b2", "s-b", { publishedAt: NOW })])
 assert.deepEqual(store.query({ subscriptionId: "s-b" }).map((i) => i.id), ["b2", "b1"])
 
-console.log("✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / append)")
+// ⭐ replace 也按 id 去重(契约:id 在订阅内唯一)。
+// 案底:小红书滚动翻页后平台 state 会把同一笔记追加两次,xml 缓存 61 条里 60 唯一,
+// UI 报「Encountered two children with the same key」。
+store.replace("s-dup2", [
+  item("x1", "s-dup2", { publishedAt: NOW }),
+  item("x2", "s-dup2", { publishedAt: NOW - 1000 }),
+  item("x1", "s-dup2", { publishedAt: NOW - 2000 }),
+])
+assert.deepEqual(
+  store.query({ subscriptionId: "s-dup2" }).map((i) => i.id),
+  ["x1", "x2"],
+  "replace 未按 id 去重 —— 同一订阅会渲染重复条目",
+)
+
+console.log("✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / append / replace 去重)")

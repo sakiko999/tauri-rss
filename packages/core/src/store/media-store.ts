@@ -68,7 +68,12 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
     },
 
     replace(subscriptionId, next) {
-      items = [...items.filter((it) => it.subscriptionId !== subscriptionId), ...next]
+      // ⚠️ 按 id 去重:「id 在订阅内唯一」是契约,append 早就去重而 replace 没有 ——
+      // 渠道产出重复条目(xhs 滚动 state 会把同一笔记追加两次)时,UI 会因重复 React key 报警,
+      // 且同一条在列表里出现两次。保留首次出现,顺序不变。
+      const seen = new Set<string>()
+      const unique = next.filter((it) => !seen.has(it.id) && (seen.add(it.id), true))
+      items = [...items.filter((it) => it.subscriptionId !== subscriptionId), ...unique]
       emit()
     },
 
