@@ -1,13 +1,14 @@
 # 03 · 核心业务流程与状态流转
 
-> 基于 2026-10-23 代码快照。每条流程按同一结构给出：**触发 → 时序 → 状态变化 → 成功路径 → 失败/降级 → 代码锚点**。
+> 基于 2026-10-23 基线，2026-10-27 复核（含 10-26 数据服务增量）。每条流程按同一结构给出：**触发 → 时序 → 状态变化 → 成功路径 → 失败/降级 → 代码锚点**。
 > 只描述数据、状态、接口与协议；视觉/布局不在此文。包职责见 [01-packages.md](01-packages.md)，跨包类型契约见 [02-contracts.md](02-contracts.md)。
 >
 > **2026-10-26 数据服务增量**：desktop 的「启动 → 拉数据 → 刷新」已改为
-> `service_endpoint` → `RemoteDataLayer`（快照 NDJSON 建镜像 + WS 事件增量），
-> 写操作走 RPC/job；文中 desktop `createDataLayer()` 直连路径**已删除**（不再保留进程内
-> 回退）。`abortTabs` 已从 desktop 移除（服务取消改走
-> `/v1/jobs/:id/cancel`）；§3/§5 的「超时 → 全局中止 lane」按此理解。详见 `06-data-service.md`。
+> `service_endpoint` → `RemoteDataLayer`（`GET /v1/state` 的 NDJSON 快照建镜像 + WS 事件增量），
+> 写操作走 RPC/job；desktop 的 Tauri 直连路径已删除；仅非 Tauri 浏览器 dev 保留进程内
+> `createDataLayer()` 作纯前端调试（`apps/desktop/src/store/data-source.ts:27-32`），不保留
+> `VITE_DATA_SERVICE=0` 回退。desktop 侧 `abortTabs` 调用已移除，超时取消改走 `/v1/jobs/:id/cancel`
+> （`BrowserBackend.abortTabs` 仍在，CLI 的浏览器路径照用）。详见 `06-data-service.md`。
 
 阅读前先记住三条贯穿全部流程的分工（它们决定了下面每一步写谁、读谁）：
 
@@ -27,38 +28,43 @@
 flowchart TD
   A["main.tsx: injectTauriHost()/injectBrowserHost()<br/>（@amoeba/host/tauri|browser）"] --> B["setHostCaps 内部 initAppHost() 幂等建门面"]
   B --> C{"运行形态"}
-  C -->|desktop| D["injectTauriHost()"]
+  C -->|desktop| D["injectTauriHost({ storage:false, browser:false, nativeMediaReferer:true })<br/>（唯一生产路径；不再持有 SQLite/抓取浏览器）"]
   C -->|mobile Tauri| E["injectTauriHost({ updater:false, browser:false })"]
   C -->|mobile 纯浏览器| F["injectBrowserHost()"]
   D --> G["setHostCaps：http 被 governedHttp 包裹"]
   E --> G
   F --> G
   G --> H["App effect → init()"]
-  H --> I["createDataLayer()"]
-  I --> S["storage.setSchema?({table, ddl, migrations})"]
-  S --> J["registerAllChannels + cookie provider + 5 个 repo + MediaStore"]
+  H --> I{"createDesktopDataLayer()"}
+  I -->|Tauri 桌面| R["service_endpoint → createRemoteDataLayer<br/>（GET /v1/state 建镜像 + WS /v1/events 增量）"]
+  I -->|浏览器 dev / mobile| S["createDataLayer()"]
+  S --> S1["storage.setSchema?.(STORAGE_SCHEMA)"]
+  S1 --> J["registerAllChannels + cookie provider + 5 个 repo + MediaStore"]
   J --> K["异步读 settings → 折叠旧 netLevels → syncNetPolicy"]
+  R --> K
   K --> L["首轮 refreshAll(force=false)（desktop）/ 逐条 refresh(force=false)（mobile）"]
   L --> M["ready=true → 摘启动骨架"]
 ```
 
 **状态变化**
 - 门面：`initAppHost()` 幂等创建，由 `setHostCaps` / 各 `inject*Host` 调用（根入口 import 不再有副作用）；`setHostCaps` 覆盖闭包值，`_http = governedHttp(caps.http)`（`packages/host/src/runtime.ts`）。
-- core：`createDataLayer()` **首行**调 `appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`，把 DDL 注入 SQL 后端；随后 `registerAllChannels()`、注册进程级 cookie provider、按 `appHost.storage` 建 repo（`packages/core/src/data-layer.ts`）。
-- 设置投影：读一次 settings 后同步 `cookieSnapshot`（仅当尚未被更晚写入覆盖）、折叠旧 channelKey 级 `netLevels`、`syncNetPolicy`（`data-layer.ts:195-209`、`:251-261`）。
-- desktop：`init()` 把订阅/分组/设置写入 zustand、`dl.store.subscribe(refreshView)`、首轮 `refreshAll(false)` 结束才 `ready=true`；1.5s 后后台 `syncBrowserCookies()`（`apps/desktop/src/store/actions/data.ts:20-71`）。
+- core：`createDataLayer()` **首行**调 `appHost.storage.setSchema?.(STORAGE_SCHEMA)`（表/DDL/版本化迁移都在 `packages/core/src/db/schema.ts`），把 DDL 注入 SQL 后端；随后 `registerAllChannels()`、注册进程级 cookie provider、按 `appHost.storage` 建 repo（`packages/core/src/data-layer.ts:190-210`）。desktop 的这条调用发生在**数据服务进程**，renderer 不再调用。
+- 设置投影：读一次 settings 后同步 `cookieSnapshot`（仅当尚未被更晚写入覆盖）、折叠旧 channelKey 级 `netLevels`、`syncNetPolicy`（`data-layer.ts:216-230`）。
+- desktop：`init()` 把订阅/分组/设置写入 zustand、`dl.store.subscribe(refreshView)`、首轮 `refreshAll(false)` 结束才 `ready=true`；1.5s 后后台调 `syncBrowserCookies()`，但远端实现是 no-op（`packages/service-client/src/index.ts:806-808`），真正对齐只发生在服务进程 READY 后（`apps/desktop/src/store/actions/data.ts:20-71`）。
 - mobile：`init()` 写 `dl/items/subs`，订阅 store，逐条串行 `refresh(s.id,{force:false})`（`apps/mobile/src/store.ts:44-64`）。
 
-**成功路径**：门面可读 → `createDataLayer` 返回 → 首轮刷新命中 TTL 缓存则零网络 → store 有内容 → 骨架收一次（`apps/desktop/src/main.tsx:44-70`、`selectors.ts:47-55`）。
+**成功路径**：门面可读 → `createDesktopDataLayer` 返回 → 首轮刷新命中 TTL 缓存则零网络 → store 有内容 → 骨架收一次（`apps/desktop/src/main.tsx:44-70`、`selectors.ts:47-55`）。
 
 **失败/降级**
 - 未注入 `http/js/storage`：访问 getter 立即抛带指引错误（`runtime.ts:59-70`）。
-- `createDataLayer` 抛错：desktop 置 `initError` 且 `ready=true`，渲染整页错误 + 重试（`data.ts:54-60`、`apps/desktop/src/App.tsx:90-105`）。
+- `createDesktopDataLayer` 抛错（服务未起、`/v1/hello` 或 `/v1/state` 失败）：desktop 置 `initError` 且 `ready=true`，渲染整页错误 + 重试；远端模式**不回退本地库**（fail-closed，`store/data-source.ts:4-9`、`store/actions/data.ts:73-79`）。
 - 后台 cookie 同步失败只 `console.warn`，不阻塞启动（`data.ts:61-68`、`:73-85`）。
 - 移动端显式 `browser:false`（`apps/mobile/src/main.tsx:16`），`appHost.browser` 为 `undefined`；core 的 passive 判定按「无浏览器」回落主动抓取（见流程 8）。
 - `SqliteStorageBackend` 首次访问**不搬迁** localStorage（无该逻辑）；schema 由 `createDataLayer()` 注入，`ready()` 只执行 `schema.migrations`（`packages/host/src/tauri/sqlite-storage-backend.ts` 的 `setSchema` / `requireSchema`）。未注入或在首次读写后再调 `setSchema` 都抛错；KV/内存后端不实现 `setSchema`，调用是 no-op。
 
-**代码锚点**：`apps/desktop/src/main.tsx:4-12`、`apps/mobile/src/main.tsx:16-17`、`packages/host/src/index.ts:24-26`、`packages/core/src/data-layer.ts:171-210`。
+**代码锚点**：`apps/desktop/src/main.tsx:4-12`、`apps/desktop/src/store/data-source.ts:27-37`、`apps/mobile/src/main.tsx:16-17`、`packages/host/src/index.ts:24-26`、`packages/core/src/data-layer.ts:190-210`。
+
+服务的 spawn/adopt、端口与 token 见 [06-data-service.md](06-data-service.md) §2.2–§2.3；本图只画客户端侧。
 
 ---
 
@@ -86,8 +92,8 @@ sequenceDiagram
 ```
 
 **状态变化**
-- 订阅 id = `s-<base36(ms)>-<4 随机>`，创建前清同名退订墓碑（`data-layer.ts:940-943`）。
-- `addSubscription` 内部**已刷新一次**并返回 `{id, refresh}`，调用方不应再补一次 `force:true`；需要提示首刷结果时读 `refresh.error`（`data-layer.ts:939-963`、`apps/mobile/src/store.ts:98-103`）。
+- 订阅 id = `s-<base36(ms)>-<4 随机>`，创建前清同名退订墓碑（`data-layer.ts:1068-1071`）。
+- `addSubscription` 内部**已刷新一次**并返回 `{id, refresh}`，调用方不应再补一次 `force:true`；需要提示首刷结果时读 `refresh.error`（`data-layer.ts:1062-1086`、`apps/mobile/src/store.ts:98-103`）。
 - desktop 额外：重复订阅按 `sameInfo`（键序无关）拦截；`autoGroupOnAdd` 时按 kind 建/复用分组；成功后 `syncSubscriptions()`（`apps/desktop/src/store/actions/subs.ts:48-74`）。
 - mobile 只允许 `rss:url`，重复按 `channelKey==="rss:url" && info.url` 精确匹配并静默返回（`apps/mobile/src/store.ts:85-104`）。
 
@@ -95,10 +101,10 @@ sequenceDiagram
 
 **失败/降级**
 - 首次抓取失败：`addSubscription` 返回 `{id, refresh}`，`refresh.error` 即首刷结果 → desktop 读它弹 warn「已订阅 ${title}，但${ERROR_KIND_LABEL[kind]}」并附错误详情（无 kind 时用「首次抓取失败」），不再用成功 toast 掩盖空列表（`subs.ts`）；CLI `refresh` 直接复用该结果，避免二次抓取并输出 kind 标签（`refresh.ts`）；mobile 仍刻意只刷新列表、不展示失败徽标（`store.ts`）。
-- `autoRefresh=false`：新订阅刷新直接走缓存语义，无缓存时返回 0 条且无 error（`data-layer.ts:424-432`）。
+- `autoRefresh=false`：新订阅刷新直接走缓存语义，无缓存时返回 0 条且无 error（`data-layer.ts:477-487`）。
 - OPML 批量导入不经 `store.addSubscription`，只 `dl.addSubscription` 并在末尾统一 `syncSubscriptions`（`subs.ts:231-267`）。
 
-**代码锚点**：`apps/desktop/src/store/actions/subs.ts:48-76`、`packages/core/src/data-layer.ts:939-963`、`apps/mobile/src/store.ts:85-104`、`apps/cli/src/commands/refresh.ts:48-57`。
+**代码锚点**：`apps/desktop/src/store/actions/subs.ts:48-76`、`packages/core/src/data-layer.ts:1062-1086`、`apps/mobile/src/store.ts:85-104`、`apps/cli/src/commands/refresh.ts:48-57`。
 
 ---
 
@@ -129,11 +135,9 @@ flowchart TD
 ```
 
 **状态变化**
-- 并发模型：不同订阅可并发；**同一订阅的 refresh 与 loadMore 共用一条链**，防止 `fetchMore` 的 await 期间首页被替换、游标错位（`data-layer.ts:541-566`、`:761-762`）。
+- 并发模型：不同订阅可并发；**同一订阅的 refresh 与 loadMore 共用一条链**，防止 `fetchMore` 的 await 期间首页被替换、游标错位（`data-layer.ts:618-637`、`:839`）。
 - app 层全量刷新：`Promise.allSettled` + 每条 `withTimeout(45s)` + `finally` 落 `loading/busy`（`apps/desktop/src/store/actions/data.ts:154-228`、`apps/desktop/src/store/lib.ts:53-79`）。
-- TTL：订阅级 `refreshIntervalSec` 优先，否则 `settings.refreshIntervalMin`（默认 30 分钟）（`data-layer.ts:440-443`、`packages/core/src/types/settings.ts:114`）。
-- 分页：`loadMore` 把本页 `fetchedAt` 对齐到该订阅已有内容的最小值，保证无 `publishedAt` 的源按 append 顺序稳定排序（`data-layer.ts:779-787`）。
-- 分页到底：`cursorMoved && addedCount===0 && channelHasMore!==true`（`data-layer.ts:799-801`）。
+- TTL（订阅级 `refreshIntervalSec` 优先，否则 `settings.refreshIntervalMin`，默认 30 分钟）、分页条目 `fetchedAt` 对齐首屏、游标前进但 0 新增 = 到底 —— 机制与实测成因见 [`../data-and-storage.md`](../data-and-storage.md)；本流程只关心「未 force 且 TTL 内命中 → 零网络」。
 
 **成功路径**：新 XML → 反序列化 → 回填阅读态 → `store.replace`（或 `append`）→ 清/更新游标与总数 → 写 content 缓存 → 返回 `{subscriptionId,itemCount,fetchedAt}`。
 
@@ -142,10 +146,10 @@ flowchart TD
 - 缓存写失败只 warn，不把成功刷新降级为失败（`data-layer.ts`）。
 - 被动采集无数据（且无缓存）返回固定 `errorKind: "no-data"`，与普通抓取失败区分。
 - desktop 单条：失败写 `refreshErrors[id]` 与 `refreshErrorKinds[id]`，toast 标题取 `ERROR_KIND_LABEL[kind]`（`unknown` 用「刷新失败」），成功清两表并按 `itemCount` 抬本地窗口（`apps/desktop/src/store/actions/data.ts`）。
-- desktop 全量：`kinds` 与 `errors` 同键写入，toast 额外汇总「其中 N 条需要登录」（`auth` 计数）。任一超时对 `^(weibo|xhs):` 订阅调用 `abortTabs(...,{keepLogin:true})`，但该调用会中止**所有非登录 lane**（`data.ts`、`packages/host/src/browser/backend.ts` 的 `abortTabs`），因此错误可能被归因到别的订阅。
+- desktop 全量：`kinds` 与 `errors` 同键写入，toast 额外汇总「其中 N 条需要登录」（`auth` 计数）。任一超时调 `onTimeout` → `ac.abort()`，signal 随 `dl.refresh` 到服务端（远端转成 `POST /v1/jobs/:id/cancel`），core 的 `withSignal` 丢弃在途结果且不写 store/缓存（`packages/core/src/data-layer.ts:386-405`）。`^(weibo|xhs):` + `abortTabs` 的 lane 级中止已随 R5 退场。
 - `refreshAll` 的 `finally` 无条件 `set({busy:{}})`，会清掉并行单条刷新的 busy（`data.ts:215`）。
 
-**代码锚点**：`packages/core/src/data-layer.ts:372-566`、`:761-803`、`apps/desktop/src/store/actions/data.ts:87-257`。
+**代码锚点**：`packages/core/src/data-layer.ts:421-608`、`:839-890`、`apps/desktop/src/store/actions/data.ts:87-257`。
 
 ---
 
@@ -180,7 +184,7 @@ flowchart LR
 **失败/降级**
 - 缓存解析失败视为无缓存（`content-cache-repo.ts:40-45`）。
 - `tpl:kind` 非法/缺失时退回 channel kind 或 `article`；`live` 的 `platform/roomId` 缺失时给 `"bilibili"/""` 静态默认（`deserialize.ts:58-80`、`:232-234`）。
-- XML 保真：`stream` 走 `tpl:streamJson` 完整往返（`url/format/headers/quality/rate/dashManifest`），`enclosure` 仅作标准兼容出口；`Article.media[]` 的 image/video/audio 与全部属性双向保真（`serialize.ts:92-98`、`:157-196`；`deserialize.ts:285-313`、`:469-542`）。`sourceId/raw` 是 crawler 内部字段、刻意不过 XML。
+- XML 保真（`stream`/`media[]` 哪些字段能过界、哪些有损，`enclosure` 仅作标准兼容出口）见 [02-contracts.md](02-contracts.md) §2.4 的保真矩阵；`sourceId/raw` 是 crawler 内部字段、刻意不过 XML。
 
 **代码锚点**：`packages/xml/src/serialize.ts:90-155`、`packages/core/src/processing/deserialize.ts:31-80`、`packages/core/src/data-layer.ts:486-509`。
 
@@ -205,16 +209,16 @@ flowchart TD
 - 身份键：reading 用 `${subscriptionId}\u0000${itemId}`，刻意不用 `:`（itemId 常含冒号）；视图/队列用 `itemRefKey` 的 `${subscriptionId}:${itemId}`，只作 React key / 选中态、不反解（`packages/core/src/types/reading.ts:32-45`）。
 - 双写：先 patch 内存让 UI 立即变，再 `void` 落库；批量标已读必须 `markManyRead` 一次落盘，逐条并发会互相覆盖（`apps/desktop/src/store/actions/reading.ts:36-45`、`packages/core/src/repo/reading-repo.ts:34-42`、`:75-88`）。
 - 续播判据：近片尾（余 <15s 或 >98%）清除、变化 <5s 不写（`packages/core/src/reading-position.ts:31-35`）；文章滚动 ≥0.95 清除、<0.05 不写（`reading.ts:79-95`）。
-- 刷新回填：`applyReadingState` 按复合键回填，`lastReadAt` 无条件覆盖（`data-layer.ts:342-360`）。
+- 刷新回填：`applyReadingState` 按复合键回填，`lastReadAt` 无条件覆盖（`data-layer.ts:354-372`）。
 - 视图定位：选中态 `selectedArticleKey` 存复合键，`ReaderMain` 按 `itemKey` 查找，正文会话缓存也按复合键（`apps/desktop/src/store/types.ts:59-63`、`apps/desktop/src/views/library/ReaderMain.tsx:29-43`）。跨订阅同 id（实测 `bilibili:7734200`）不再串条目。
-- 退订清理：`deleteBySubscription` 按 `subscriptionId\0` 前缀删除 reading（`reading-repo.ts:115-127`、`data-layer.ts:1020`），不再残留孤儿记录。
+- 退订清理：`deleteBySubscription` 按 `subscriptionId\0` 前缀删除 reading（`reading-repo.ts:115-127`、`data-layer.ts:1168`），不再残留孤儿记录。
 
 **成功路径**：内存即时反馈 → 持久层串行写 → 下次整批重建时回填，不会因刷新/重启丢已读、星标、续播。
 
 **失败/降级**
 - 持久化全部 `void ...` 且不接 catch：写失败无 toast/日志，内存与磁盘分歧直到下次刷新才收敛（`reading.ts:33-34` 等）。
 
-**代码锚点**：`packages/core/src/types/reading.ts:21-58`、`packages/core/src/data-layer.ts:342-360`、`apps/desktop/src/store/actions/reading.ts:24-95`。
+**代码锚点**：`packages/core/src/types/reading.ts:21-58`、`packages/core/src/data-layer.ts:354-372`、`apps/desktop/src/store/actions/reading.ts:24-95`。
 
 ---
 
@@ -252,7 +256,7 @@ sequenceDiagram
 - 导航收口：`usePlayNavigate` 收条目而非裸 id，`playPath(item.id, from, item.subscriptionId)` 写入 `?sub=`（`apps/desktop/src/router.tsx:36-45`、`:60-64`）。
 - 定位（代码顺序）：预览条目（`preview:*`）→ `?sub=<subscriptionId>` 精确匹配 → `?from=` 若恰为真实订阅 id（旧链接兼容）→ 裸 id 兜底，且**有 `sub` 时不走裸 id**（`apps/desktop/src/views/player/PlayerPage.tsx:55-64`）。
 - 复合键：播放器 `key`、队列行、相关列表与队列选中态一律 `itemKey(item)`；队列/相关条目点击也传整条 item（`PlayerPage.tsx:180`、`:277`、`:311`）。
-- 解析与入参：`findItemUrl` 先按 `(subscriptionId,id)` 在 store 内查 `item.url`；**入参本身含 `://` 时直接当 URL 用**——预览条目（`preview:*`）不在库里，`PlayerPage` 因此传 `item.url` 而非 `item.id`（只要在库内或 `url` 为空则传 id）。凭证侧：订阅条目走 `sourceInfoFor`，预览条目走 `previewInfoFor` 补 cookie/baseUrl（`data-layer.ts:605-609`、`:620-626`；`apps/desktop/src/views/player/PlayerPage.tsx:184-185`）。
+- 解析与入参：`findItemUrl` 先按 `(subscriptionId,id)` 在 store 内查 `item.url`；**入参本身含 `://` 时直接当 URL 用**——预览条目（`preview:*`）不在库里，`PlayerPage` 因此传 `item.url` 而非 `item.id`（只要在库内或 `url` 为空则传 id）。凭证侧：订阅条目走 `sourceInfoFor`，预览条目走 `previewInfoFor` 补 cookie/baseUrl（`data-layer.ts:683-688`、`:698-704`；`apps/desktop/src/views/player/PlayerPage.tsx:184-185`）。
 - 选流：`streams[0]`，player 不排序（`packages/player/src/hooks/useStreamSelection.ts:57`、`packages/player/src/hooks/streamKind.ts:65-67`）。
 - 引擎：HLS 锁最高档 + 隧道 loader；FLV 仅 http-flv；DASH 用 `dashManifest` 造 blob MPD 并关 ABR；原生 mp4 由 `VideoShell` 写 `src`（`packages/player/src/hooks/useMediaStream.ts:104-108`、`:118-139`、`:204-233`、`:239-313`、`PlayableMedia.tsx:412-459`）。
 - 续播/进度：`startAtSec` 只跳一次且 ≤3s 视为从头；`timeupdate` → `onProgress` → `positionDecision`（`PlayableMedia.tsx:271-306`、`reading.ts:57-77`）。
@@ -264,10 +268,10 @@ sequenceDiagram
 - 播放失败只 `retryKey++` 重建引擎；**原生分支**没有 re-render `src` 的逻辑，点重试实际上不重载媒体（`PlayableMedia.tsx:384-405`、`VideoShell.tsx:69-73`）。
 - FLV 的 ERROR 原样上报 info 对象，`String(error)` 得到 `[object Object]`（`useMediaStream.ts:215-218`）。
 - 未知格式兜底裸 `<video>` 现在有 `onError` 上报（`PlayableMedia.tsx:469-475`），不再表现为永久黑框无提示。
-- `resolveLivePlay` 的参数名叫 `roomId`，实现却比较 `item.id`；按参数名传 `LiveItem.roomId` 会误报「不指向可解析的直播链接」（`data-layer.ts:590-595`、`:605-610`）。
-- 弹幕失败不阻塞播放：core 只 catch 同步路由错误，异步失败进各平台日志（`data-layer.ts:639-645`）。
+- `resolveLivePlay` 的参数名叫 `roomId`，实现却比较 `item.id`；按参数名传 `LiveItem.roomId` 会误报「不指向可解析的直播链接」（签名 `:668-673`、比较 `:727-728`）。
+- 弹幕失败不阻塞播放：core 只 catch 同步路由错误，异步失败进各平台日志（`data-layer.ts:735-739`）。
 
-**代码锚点**：`packages/core/src/data-layer.ts:581-663`、`packages/resolve/src/resolver/play.ts:35-62`、`packages/player/src/PlayableMedia.tsx:158-306`。
+**代码锚点**：`packages/core/src/data-layer.ts:650-741`、`packages/resolve/src/resolver/play.ts:35-62`、`packages/player/src/PlayableMedia.tsx:158-306`。
 
 ---
 
@@ -295,22 +299,22 @@ sequenceDiagram
 ```
 
 **状态变化**
-- 能力探测在 channel 级（`"scanLogin" in channel`），结果 cookie 由 core 按前缀映射到 settings 字段（`packages/crawler/src/index.ts:73-94`、`data-layer.ts:134-141`、`:831-844`）。
-- `applySettings` 是唯一合法写入点：写 repo + 立即 `syncNetPolicy` + 更新 `cookieSnapshot`（`data-layer.ts:823-828`）。
+- 能力探测在 channel 级（`"scanLogin" in channel`），结果 cookie 由 `@amoeba/platform` 的 `PLATFORMS` 表映射到 settings 字段（core 的 `cookieFieldFor`/`cookieFieldForPlatform` 只是转发：`packages/core/src/data-layer.ts:169-188`、`packages/crawler/src/index.ts:73-94`；单一权威见 05-risks R9）。
+- `applySettings` 是唯一合法写入点：写 repo + 立即 `syncNetPolicy` + 更新 `cookieSnapshot`（`data-layer.ts:911-916`）。
 - cookie 三级语义：显式非空 > 显式空串（强制匿名）> provider；provider 是进程级单钩子，后注册覆盖先注册（`packages/resolve/src/platform/credentials.ts:25-44`）。
 - 抓取侧注入：`sourceInfoFor` 按 `cookieFieldFor` 补 cookie；rsshub 只补 `baseUrl`，不把平台 cookie 发给公网实例（`data-layer.ts:320-333`）。
-- 启动对齐：只处理「有启用订阅」的平台；`weiboCookie` 优先（桌面 HTTP 消费方），其余只在浏览器已被拉起时顺带；`withBrowserOpSlot` 与清凭证互斥；`setIfUnchanged` 原子写（`data-layer.ts:879-927`）。
+- 启动对齐：只处理「有启用订阅」的平台；`weiboCookie` 优先（桌面 HTTP 消费方），其余只在浏览器已被拉起时顺带；`withBrowserOpSlot` 与清凭证互斥；`setIfUnchanged` 原子写（`data-layer.ts:967-1015`）。
 
 **成功路径**：扫码得到 cookie → 落 settings + 快照 → 后续 `sourceInfoFor`/provider 双通道生效 → 登录档位/私有资源可用。
 
 **失败/降级**
-- channel 不支持 `Loginable` → `NoChannelError` 或「does not support scan login」（`data-layer.ts:836-838`）。
+- channel 不支持 `Loginable` → `NoChannelError` 或「does not support scan login」（`data-layer.ts:924-926`）。
 - 无 `appHost.browser` 时 xhs/weibo 登录不可用，douyin 仅剩纯 HTTP 路径（被 TLS 风控拦即失败，`packages/resolve/src/platform/douyin/login.ts:280-294`）；xhs 的 HTTP 路径必须拿到 cookie，否则抛可操作中文错误（`packages/crawler/src/channels/xhs/shared.ts:84-91`）。
 - 登录流程**刻意不过 `browserGate`**，冷却期仍允许重新扫码自救（`packages/resolve/src/browser/cdp.ts:110-124`）。
-- 浏览器无登录标记时 `syncBrowserCookies` 保留旧快照、不清空（`data-layer.ts:873-877`、`:906-913`）。
-- CLI 使用独立的 settings 读取与静态快照，不经 `SettingsRepository` 的归一化/损坏留证（`apps/cli/src/info.ts:38-46`、`apps/cli/src/main.ts:41-48`）。
+- 浏览器无登录标记时 `syncBrowserCookies` 保留旧快照、不清空（`data-layer.ts:961-965`、`:995`）。
+- CLI 的 `loadSettings` 走 core `createSettingsRepository`（`apps/cli/src/info.ts:36-43`），与桌面/服务同一套归一化与损坏留证，进程内只缓存一份静态快照给 credentials provider；登录态不在 CLI 本地库 —— `rss login` 写的是服务（R15）。
 
-**代码锚点**：`packages/core/src/data-layer.ts:134-141`、`:831-927`、`packages/resolve/src/platform/credentials.ts:41-44`。
+**代码锚点**：`packages/core/src/data-layer.ts:134-141`、`:911-932`、`packages/resolve/src/platform/credentials.ts:41-44`。
 
 ---
 
@@ -352,13 +356,13 @@ sequenceDiagram
 **成功路径**：导航产生页面自身响应 → 缓冲命中 → 解析 `__INITIAL_STATE__.feed.feeds` → 序列化 → 正常落库。
 
 **失败/降级**
-- 缓冲无数据 → core 回退内容缓存（即使过期），**绝不回退 `fetch()`**（`data-layer.ts:463-479`）。
-- 连缓存都没有 → `error: "被动采集：没有可用的数据，且无缓存可回退"`（`data-layer.ts:471-478`）。
+- 缓冲无数据 → core 回退内容缓存（即使过期），**绝不回退 `fetch()`**（`data-layer.ts:513-541`）。
+- 连缓存都没有 → `error: "被动采集：没有可用的数据，且无缓存可回退"`（`data-layer.ts:524-535`）。
 - 无浏览器门面 → 若走主动 `fetch()`，xhs 直接抛「发现页需要桌面抓取浏览器」（`xhs/explore.ts:39-40`、`:60-64`）。
-- 移动端显式 `browser:false` 后 `passiveMode` 为假，被动渠道按主动 `fetch()` 走；移动端不做 CDP 的设计边界由此成立（`inject-tauri.ts:35`、`data-layer.ts:463`）。
+- 移动端显式 `browser:false` 后 `passiveMode` 为假，被动渠道按主动 `fetch()` 走；移动端不做 CDP 的设计边界由此成立（`inject-tauri.ts:35`、`data-layer.ts:518`）。
 - 预览路径与刷新遵守**同一条被动门**：`previewChannel` 在 `channel.passive && appHost.browser` 时只调 `fetchPassive()`；无数据直接抛 `ResolveError("no-data")`（预览没有订阅缓存可回退），**不回落 `fetch()`**；无浏览器时（CLI/mobile）才走主动抓取（`data-layer.ts` 的 `previewChannel`；`passive-mode.check.ts` 有预览用例）。
 
-**代码锚点**：`packages/crawler/src/channels/xhs/explore.ts:174-199`、`packages/crawler/src/passive/capture.ts:46-142`、`packages/core/src/data-layer.ts:459-480`。
+**代码锚点**：`packages/crawler/src/channels/xhs/explore.ts:174-199`、`packages/crawler/src/passive/capture.ts:46-142`、`packages/core/src/data-layer.ts:513-541`。
 
 ---
 
@@ -441,11 +445,11 @@ flowchart TD
 **失败/降级**
 - **分类通道**：新抛错点用 `ResolveError(kind)`；旧平台 client 仍是普通 `Error`，`errorKindOf` 按消息启发式归类（429 → `rate-limit`、401/cookie → `auth`、403/412/418/风控 → `risk`、超时/网络/解析各自成类），无法识别时 `unknown`。所以分类是**逐步迁移 + 兜底**，不是全量精确。
 - 文案与事实脱节：refresh 失败 toast 仍无条件说「旧缓存已保留」，首次抓取失败时并无缓存（`data.ts`）。
-- 超时只丢弃不取消（**HTTP/非浏览器路径**）：底层抓取完成后仍会 `replace` 并写缓存，UI 却保留失败标记；`^(weibo|xhs):` 的浏览器路径则经 `abortTabs` reject 在途 CDP 命令，刷新直接走失败分支、保留旧缓存（底层 invoke 仍跑完，只是不再等待）。中止粒度是全部非登录 lane，见流程 3（`data.ts`、`packages/host/src/browser/channel.ts` 的 `abortPending`、`packages/host/src/browser/backend.ts` 的 `abortTabs`）。
+- 超时只丢弃结果、不 abort 底层 HTTP：`withTimeout` 的 `onTimeout` 先 `abort()`（远端 → job cancel），core 在 `replace` 与写缓存前检查 `signal.aborted`，命中就返回 `cancelledResult`（`packages/core/src/data-layer.ts:375-384`、`:555-570`）——所以超时**不会**把新内容写进 store/缓存。`appHost.http` 契约没有 signal，网络请求本身仍会跑完（R5 已收敛）。
 - 错误重复呈现：播放器舞台 + `PlayerPage` toast 各一份，标题一致但详情格式不同（`PlayerPage.tsx`、`PlayableMedia.tsx`）。
-- 日志覆盖不全：core 走注入的 console，无日志域；被动无数据、loadMore 失败、preview/热搜/弹幕失败均无日志（`runtime.ts:43-53`、`data-layer.ts`）。
+- 日志：core 已统一走 `@amoeba/log` 的 `core` 域（`packages/core/src/log.ts`）—— refresh/缓存写/详情补全/loadMore/被动无数据/cookie 快照同步都有语义事件；仍缺日志的是 preview 与热搜失败（`apps/desktop/src/store/actions/view.ts`）与弹幕初始化失败。
 
-**代码锚点**：`packages/crawler/src/channels/factory.ts:34-48`、`packages/core/src/data-layer.ts:511-538`、`apps/desktop/src/store/actions/data.ts:154-228`。
+**代码锚点**：`packages/crawler/src/channels/factory.ts:34-48`、`packages/core/src/data-layer.ts:571-594`、`apps/desktop/src/store/actions/data.ts:154-228`。
 
 ---
 
@@ -456,7 +460,8 @@ flowchart TD
 ```mermaid
 flowchart LR
   subgraph CLI
-    C1["setupHost：node http/js + bun:sqlite + ws"] --> C2["fetch：getSource().fetch() 直连"]
+    C0["attach status|list|refresh / --via-service<br/>（ServiceClient → 桌面数据服务）"] --> C1["setupHost：node http/js + bun:sqlite + ws"]
+    C1 --> C2["fetch：getSource().fetch() 直连"]
     C1 --> C3["item/play/dm：resolver 直连"]
     C1 --> C4["refresh/hot：createDataLayer()"]
   end
@@ -469,7 +474,8 @@ flowchart LR
 ```
 
 **状态变化（CLI）**
-- 宿主自组装：不复用 `injectNodeHost`（它绑死内存存储），而是 `setHostCaps({http:nodeBackend, storage:sqliteStorage, ws:nodeWsBackend})`；**不注入 browser/updater/openExternal**（`apps/cli/src/host/node-host.ts:17-25`）。
+- 宿主自组装：不复用 `injectNodeHost`（它绑死内存存储），而是 `setHostCaps({http: nodeBackend, js: nodeJsBackend, storage: sqliteStorage, ws: nodeWsBackend})`；`--browser` / `AMOEBA_BROWSER=1` 时额外注入 `createSidecarBrowser()` 的 `amoeba-browser`，`updater`/`openExternal` 永不注入（`apps/cli/src/host/node-host.ts:38-76`）。
+- `rss attach status|list|refresh|rpc` 与 `probe.fetch/resolve/danmaku` 打同一份服务（`apps/cli/src/commands/attach.ts`、`probe.ts`）；默认仍走本地探针 + CLI 自己的 `.data/rss.db`。
 - 入口注册静态 cookie provider，读 CLI 自己的 `settings`（与桌面 DB 分离）（`apps/cli/src/main.ts:41-48`、`apps/cli/src/store/sqlite-storage.ts`）。
 - `fetch` 直调 `channel.getSource(info).fetch()`，不经 DataLayer，也不应用 settings 的网络等级（`apps/cli/src/commands/fetch.ts:19-31`）。
 - `item/play/dm` 直调 resolver；`dm` 在 `finally` 必须 `unsub()`，否则直播 WS 泄漏（`apps/cli/src/commands/item.ts:35-41`、`apps/cli/src/commands/dm.ts:21-40`）。

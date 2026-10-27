@@ -1,15 +1,13 @@
 # 命令清单与 CLI 设计
 
-> 合并自 commands.md + cli-plan.md（2026-10-21 整理）。前一部分是「现在能跑什么」，后一部分是 CLI 的定位、选型与非目标。
-
-> 命令清单部分从 `CLAUDE.md` 迁出（2026-10-21）。`CLAUDE.md` 只留最常用的 6 条。
+> 上篇=现在能跑什么（命令 / 自检 / 探针）；下篇=CLI 的定位、选型与非目标。
 > 产物输出到根 `dist/<platform>/`（Vite outDir；tauri.conf 的 frontendDist 指过去）。
-> CLI 首次运行需 `apps/cli/.data/` 目录存在（gitignore，bun:sqlite 不会自建）。
+> CLI 首次运行会自建 `apps/cli/.data/`（gitignore）与库文件 `rss.db`；目录不必预建。
 
 ## 构建与运行
 
 ```bash
-bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
+bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 发布构建（含 service:build + runtime/browser + release 配置）
 bun run tauri:release               # ⭐ Rust 以 release 编译但保留热重载（见 CLAUDE.md 环境要求）
 bun run scripts/tauri.ts help       # 全部用法
 
@@ -71,6 +69,9 @@ target/debug/amoeba-runtime.exe --print # 打印解析到的 Bun（AMOEBA_BUN �
 target/debug/amoeba-runtime.exe apps/cli/src/main.ts env   # 经启动器跑 CLI
 target/debug/amoeba-runtime.exe --no-download <entry>      # 离线：只用已有 Bun
 ```
+
+★ = 使用频率最高的三条探针（`channels` / `fetch` / `item`），可观测性是一等公民：
+**每个命令默认给耗时，`--json` 全线支持**，错误打完整堆栈。
 
 ## 自检脚本（仓库无测试基建，用最小断言）
 
@@ -165,11 +166,11 @@ bun scripts/lx-probe.ts                # CDP 网络捕获边界（304/302/gzip/S
 
 ## CLI 设计与边界
 
-**现状**：`channels` / `fetch` / `item` / `play` / `dm` / `hot` / `align` / `env` /
-`refresh` / `sug` / `detail` / `login` / `browser-reset` 全部可用（`bun run rss <cmd>`），bili
-video/live、douyu、youtube 实测通过；浏览器渠道经 `--browser` 接入独立 WebView2
-sidecar（`weibo:user` 实测通过）；xhs 登录态经 `rss login` 获取（见下）。
-M3 `--log` 域开关与 M4 log 清退未做。
+**现状**：`channels` / `fetch` / `item` / `play` / `dm` / `hot` / `sug` / `detail` / `align` /
+`env` / `refresh` / `login` / `attach` / `browser-reset` 全部可用（`bun run rss <cmd>`）；
+`--service` 起数据服务，`--via-service` 让 fetch/item/play/dm 走服务。浏览器渠道经
+`--browser` 接入独立 WebView2 sidecar；xhs 登录态经 `rss login` 获取（见下）。
+`--log <域>` 开关未实现，调试日志用 `RSS_LOG=1` 全开。
 
 ### 登录：`rss login <platform>`
 
@@ -184,7 +185,7 @@ M3 `--log` 域开关与 M4 log 清退未做。
 **调试优先**，不是终端版 RSS 阅读器。它是 crawler/resolve/core 的正式观测面——
 把散装 example（list_channels / sample_sources / resolve / test-danmaku / verify-*）统一收编
 成命令，以 ad-hoc 直跑取代「开 tauri dev + desktop UI 复现」的调试循环。
-附带红利：三大探针立起后，可以清退大部分数据路径 debug log（见下「log 清退联动」）。
+附带红利：三大探针立起后，可以清退大部分数据路径 debug log（见下「log 边界」）。
 
 ### 范围与非目标
 
@@ -225,28 +226,30 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
 ```
 apps/browser-sidecar/      # amoeba-browser：无 Tauri 依赖的 WebView2 宿主（CDP + stdin 控制）
 apps/cli/
-  package.json     # @amoeba/cli；deps: core, host, log, platform + cac + picocolors + qrcode + jsqr
+  package.json     # @amoeba/cli；deps: crawler/core/resolve/host/log/platform/xml/service-* + cac + picocolors + qrcode + jsqr
   tsconfig.json    # 不 extends tsconfig.app.json（DOM/vite 环境）；面向 bun/node:
                    #   types: ["@types/bun"], moduleResolution bundler, allowImportingTsExtensions
   src/
     main.ts             # cac 入口 + 命令注册（根 scripts 加 rss:* 快捷）
-    host/node-host.ts   # injectNodeHost 变体：http=fetch / js=new Function / ws=ws 包
+    host/node-host.ts   # setHostCaps：http=nodeBackend / js=nodeJsBackend / ws=nodeWsBackend + sqliteStorage
                         #   [纪律] ws 必须绑 nodeWsBackend（ws 包），不透传 Bun 原生 WebSocket（见下）
     store/sqlite-storage.ts # StorageBackend 实现（bun:sqlite，见「存储」）
-    commands/*.ts       # 命令实现（见「命令集」）
+    commands/*.ts       # 命令实现（清单见文首）
     ui/render.ts        # 表格输出（picocolors 即够）
-    ui/qr.ts            # 暂缓（登录延后）
+    ui/qr-terminal.ts   # 二维码 → 终端半块字符（PNG+jsqr 解码 / 纯内容直接编码）
+    service/server.ts   # 数据服务 HTTP/WS（--service 入口）
 ```
 
 ### Rust 绑定能力的对应（appHost 门面已解决）
 
-desktop 前端 grep `@tauri-apps` 零命中——所有 Rust 能力只经门面暴露，且 node 后端
-已被 crawler/core example 长期验证。逐项对应：
+desktop 前端只有 `store/data-source.ts` 一处直引 `@tauri-apps/api/core`（拿
+`service_endpoint`），其余 Rust 能力只经门面暴露，且 node 后端已被 crawler/core
+example 长期验证。逐项对应：
 
 | Rust command | CLI（Bun）实现 | 状态 |
 |---|---|---|
-| `http_get`（reqwest） | fetch（`node-backend.ts`） | ✅ 已验证 |
-| `ws_connect`（tungstenite+header） | `ws` 包（`node-ws.ts`） | ✅ test-danmaku 四平台通 |
+| `http_get`（reqwest） | fetch（`@amoeba/host/node` 的 `node-backend.ts`） | ✅ 已验证 |
+| `ws_connect`（tungstenite+header） | `ws` 包（`node-ws.ts`） | ✅ `rss dm` 四平台通 |
 | js 签名执行（new Function） | Node new Function（`node-js.ts`） | ✅ douyin abogus/webmssdk 通 |
 | localStorage | storage backend（bun:sqlite） | ✅ |
 | webview_browser_* | — | 已排除（与宿主窗口绑定） |
@@ -260,74 +263,40 @@ desktop 前端 grep `@tauri-apps` 零命中——所有 Rust 能力只经门面�
    自定义握手头，而 bili 要在握手里带 Cookie（buvid3/nav mid）。必须经 `appHost.ws`
    注入 `ws` 包 backend——注入层别图省事透传 native WS。
 
-### 命令集（以调试为中心）
-
-```bash
-rss channels [--kind live]          # 渠道注册表：name/tpl 字段/defaultInfo 快照
-                                    #   --kind category 可看分区目录订阅
-rss fetch <key> k=v ...             # ★ 单渠道抓取探针：耗时+条数；--xml 看原始输出；
-                                    #   --json 进管道配 jq；失败完整堆栈；--log <域,...> 细粒度日志开关
-rss item <url>                      # ★ by-url 一站式：resolveRoute 命中 → streams 全档位表
-                                    #   （format/rate/headers）→ danmaku 元信息
-rss play <url> [--open]             # 同 item 只看流；--open 丢系统播放器实测直链活性
-rss dm <url> [-n 50]                # 弹幕探针：VOD 前 N 条样本 / 直播实时滚动 + 连接帧数统计
-rss align                           # 收编 verify-alignment：crawler XML 与 rsshub 同构消费断言
-rss env                             # ★ appHost 各门面自检（http/ws/js/storage 可用性+caps）
-rss refresh [sub]                   # core createDataLayer 编排冒烟（SQLite 持久化）
-rss hot <词>                        # weibo:hot resolveHotWord 热搜词流（需登录 cookie；纯匿名失败）
-rss detail <url> --cookie <ck>      # xhs 单条详情补全（登录态 noteDetail；URL 需带 xsec_token）
-```
-
-★ = 使用频率最高的三条探针（`channels` / `fetch` / `item`），可观测性是一等公民：
-**每个命令默认给耗时，`--json` 全线支持**，错误打完整堆栈。
-
 ### example 收编
 
 散装 example 已全部收编转正并清退；**唯一保留** `crawler/src/example/browser-sim.ts`
 （浏览器模拟，CLI 排除该类渠道）。新增调试能力只写一处（CLI），不再新起 example。
 
-### 存储：bun:sqlite（CLI）/ tauri-plugin-sql（desktop）
+### 存储
 
 core 数据层认 repo 接口（`subscription/reading/settings-repo` 注入 `createDataLayer`），
 换 backend 不动 core 与命令层：
 
 ```
-bun:sqlite (CLI，apps/cli/.data/rss.db)  /  tauri-plugin-sql (desktop，appData/rss.db)
-共用：DDL 唯一权威 = core db/schema.ts（两端各跑同一份幂等迁移）
+bun:sqlite（数据服务 rss --service，唯一写者，appData/rss.db）  ← desktop / CLI 都只发 RPC
+bun:sqlite（CLI 本地探针，apps/cli/.data/rss.db） / tauri-plugin-sql（mobile 进程内，冻结保留）
+共用：DDL 唯一权威 = core db/schema.ts（createDataLayer 经 appHost.storage.setSchema?.() 注入）
 ```
 
-- 两端都**不用插件/库各自的 migration 机制**（防与对方各写各的 SQL 漂移）；desktop 用
-  官方 tauri-plugin-sql（sqlx 底层），CLI 用内置 `bun:sqlite`；StorageBackend 语义保持
-  （KV string），三 repo 与 commands 全身而退。选型/迁移/验证状态见
-  `docs/architecture/data-and-storage.md`。
-- WAL：两端各持独立库文件、单进程访问，暂不开；sidecar 互通（同库文件）时再开。
+- desktop 已无进程内 DataLayer：`createDesktopDataLayer` → `service_endpoint` +
+  `createRemoteDataLayer`（读镜像 / 写 RPC / WS 事件），`injectTauriHost({storage:false})`
+  封死直连。第二写者会静默丢数据 —— 详见 `docs/architecture/data-and-storage.md`
+  「单写者与迁移/备份」。
+- WAL/PRAGMA：`journal_mode=WAL` + `busy_timeout=5000` + `synchronous=NORMAL` +
+  `foreign_keys=ON`（`sqlite-storage.ts` 的 `applyPragmas`，服务与 CLI 探针共用）。
 
-### log 清退联动（CLI 的最大一次性红利，未执行）
+### log 边界（判据）
 
-判据不是「log 写得好不好」，而是 **「CLI 能否直接复现」**：
+判据 = **「CLI 能否直接复现」**：能复现的数据路径 log 不加（用探针）；环境路径 log
+（隧道 / canplay 时序 / UI 竞态）保留。⚠️ CLI 抓不到的两类 bug（长期运行泄漏/竞态、
+UI 交互态错乱）留保险。
 
-| 类型 | 定义（~占比） | 处置 |
-|---|---|---|
-| 数据路径 log（~80%） | request/response、抓取、流解析决策、弹幕帧统计、deserialize 中间值——函数进出与数据形态 | **清退**。CLI 探针给出结构化答案，优于把散布各处的 log 自己拼回去 |
-| 环境路径 log（~20%） | 仅 Tauri/WebView 存在的行为：base64 分片隧道、hls/flv 锁档带宽失真、canplay 自动播时序、webview 并发 UI 竞态 | **保留**。CLI 无法复现，log 是唯一案发现场 |
+**防回涨约定**：任何 bug 先问「CLI 能否复现」。能 → 不许为它加 log，去修 CLI / 加探针；
+不能 → 才允许埋 log。
 
-具体动作（探针在岗后分批执行；现 `resolve/src/log.ts` 仍引用本表，勿删本节）：
-
-- warn/error 一级不留地保留（永久级别）
-- crawler 各 channel 域 + danmaku WS 模板事件几乎全是数据路径 → 大面积清退，仅在
-  「请求失败/风控命中」处留一个 warn
-- player/host 分拣：`loader/play/engine` 里隧道/canplay 相关留；`select`（选流纯逻辑）
-  在 `rss item` 可重演 → 清
-- 清完后剩余 log 收敛进更少域（host 一个 + player 一两个），不再每 channel 一个
-- 现状：`--log <域>` 全面接入 `@amoeba/log` 属未完成项；`RSS_LOG=1` 全开（CLI 无
-  localStorage，垫了默认 `log="0"` 的 shim）
-
-**防回涨新约定**：任何 bug 先问「CLI 能否复现」。能 → 不许为它加 log，去修 CLI/加探针；
-不能 → 才允许埋 log。没有这条，下一次赶工 log 会重新长回来。
-
-⚠️ 顺序不能反：先立三大探针再动 log（旧观测拆掉前新的必须在岗）。
-⚠️ CLI 抓不到的两类 bug 留保险：长时间运行的累积性问题（泄漏/竞态）、UI 交互触发的
-状态错乱——这几处 log 别删。
+⚠️ `packages/resolve/src/log.ts` 的注释仍指向 `docs/cli-plan.md §7`（已并入本节），
+改注释前别删本节。
 
 ### 收益
 

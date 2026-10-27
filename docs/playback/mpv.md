@@ -1,7 +1,7 @@
 # mpv 外部播放器接入调研(2026-08-27)
 
-> 动机:desktop 的 ExpandPlayer 弹窗播放(Webview + hls/flv/dash.js + 宿主隧道)有
-> 两类结构性包袱——① 自动播政策/canplay 时序的历史踩坑(见 CLAUDE.md 播放章节);
+> 动机:desktop 的内嵌播放页(Webview + hls/flv/dash.js + 宿主隧道)有
+> 两类结构性包袱——① 自动播政策/canplay 时序的历史踩坑(见 `docs/playback/playback.md`);
 > ② 分片必须走 base64 隧道,固定开销让 ABR 失真被迫锁最高档。外部 mpv 天然没有这两个
 > 问题:**无 CORS/无隧道(header 直接满足 Referer 校验)、无自动播策略、硬解画质更好**。
 > 与 CLI（`docs/ops/commands.md`）的 `rss play --open` 是同一条链路,CLI 可先行验证。
@@ -12,10 +12,10 @@
 |---|---|---|
 | A. spawn-only | `Command spawn mpv <url> <args...>`,UI 不管控播放过程 | ✅ **Phase 1 选定**,一次拉起即为完整价值 |
 | B. JSON IPC 增强 | `--input-ipc-server`(Windows named pipe)+ observe_property/loadfile | ✅ Phase 2 增强:播放状态回读、eof 事件联动 UI、秒切档 |
-| C. libmpv 嵌入 | Rust libmpv crate 渲染到自有窗口 | ❌ 排除:重、窗口生命周期复杂,与「替代弹窗」诉求相反 |
+| C. libmpv 嵌入 | Rust libmpv crate 渲染到自有窗口 | ❌ 排除:重、窗口生命周期复杂,与「播放交给外部程序」的诉求相反 |
 
 **定位替换而非并存**:设置 `playbackBackend: "embedded" | "mpv"`;选中 mpv 后点击
-卡片不再弹出内嵌窗,直接拉起外部 mpv。未检测到 mpv → 自动降级 embedded 并提示安装。
+卡片不再进内嵌播放页,直接拉起外部 mpv。未检测到 mpv → 自动降级 embedded 并提示安装。
 
 ## 二、流格式 → mpv 参数映射(核心表)
 
@@ -56,9 +56,7 @@ app 退出时清理。**唯一待实测风险**:ffmpeg dash demuxer 对 SegmentB
 
 ## 三、架构对接
 
-### appHost.player 门面(新,可选门面第三例)
-
-仿 `ws`/`browser` 模式——可选注入、缺失则调用方降级:
+### appHost.player 门面（仿 `ws`/`browser`/`updater` 模式：可选注入、缺失则调用方降级）
 
 ```ts
 interface PlayerHost {
@@ -89,8 +87,8 @@ interface PlayerHost {
 
 ```
 resolvePlay() ──► playbackBackend === "mpv" && appHost.player
-                    ├─ yes → player.launch(streams[0] 映射)  (不弹窗)
-                    └─ no  → ExpandPlayer 弹窗(现行为不变)
+                    ├─ yes → player.launch(streams[0] 映射)  (不进播放页)
+                    └─ no  → 进内嵌播放页(现行为不变)
 ```
 
 ## 四、弹幕与自定义控件:mpv 侧支持深度
@@ -102,9 +100,9 @@ resolvePlay() ──► playbackBackend === "mpv" && appHost.player
 
 | 渲染器 | 场景 | 形态 | 成本 |
 |---|---|---|---|
-| DOM Layer(现状) | desktop 弹窗 | CSS transition | 已有 |
+| Canvas 2D Layer(现状) | desktop 播放页 | rAF 自绘 | 已有 |
 | 终端打印 | CLI `rss dm` | console | 零成本 |
-| ASS 字幕轨 | mpv **VOD** | bili protobuf 解析已有 → 转 .ass → `--sub-files`;轨道防重叠借现成算法(danmaku2ass 类),libass 渲染质量高于 DOM | **低** —— 本期可带 |
+| ASS 字幕轨 | mpv **VOD** | bili protobuf 解析已有 → 转 .ass → `--sub-files`;轨道防重叠借现成算法(danmaku2ass 类),libass 渲染质量高于 canvas 自绘 | **低** —— 本期可带 |
 | **TS over JSON IPC** | mpv **直播** | DanmakuStream 订阅 → IPC `osd-overlay`(format="ass",libass 渲染,mpv ≥ 0.36)add/update/remove 动态增删移动;轨道防重叠算法写在 TS 侧,**零内嵌脚本、纯 TypeScript** | **中** —— 全程 TS |
 
 mpv 扩展路径备忘(为什么不用内嵌脚本):内置 **Lua**(一等)+ **JS/Duktape** 两套脚本
@@ -127,7 +125,7 @@ config-dir scripts 即用)。直播弹幕经 IPC 的往返延迟 ms 级,30fps �
    无效——不做一套永远输给专业播放器的二等 UI。**分工:app 管「启动前选档 +
    列表联动」,播放中操作全归 mpv**
 
-诚实边界:不能嵌入 app 弹窗(libmpv 已排除),系统级独立窗口,与 app 的视觉
+诚实边界:不能嵌入 app 页面(libmpv 已排除),系统级独立窗口,与 app 的视觉
 连续性弱于 Webview。
 
 ### 4.3 配置隔离纪律(重要)
@@ -180,7 +178,7 @@ GLSL/一切长尾能力的兜底,避免为每种玩法建 UI)。
 
 ## 六、落地顺序
 
-- **M0(CLI 内 spike)**:手工/半自动验证 §五 全部 7 项 —— 决定 DASH 与弹幕方案去留,
+- **M0(CLI 内 spike)**:手工/半自动验证 §五 全部 9 项 —— 决定 DASH 与弹幕方案去留,
   ~小时级
 - **M1**:appHost.player 门面 + tauri `mpv_launch` + settings 开关/fallback +
   desktop 卡片分流(spawn-only);交付内含 app 专属 `--config-dir` 默认

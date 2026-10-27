@@ -5,7 +5,7 @@
 > 背景：对照 `tmp/pure_live`（Flutter 直播聚合器，23 平台）逐平台比对。
 > 第一节记录**已实现的渠道扩展**（2026-10-20 匿名实测）；其余各节只留**未做的缺口**与
 > **实测证伪的结论**（防止后人重走已证明走不通的路）。
-> 状态更新至 2026-10-21。
+> 状态更新至 2026-10-22（B站直播分区目录落地）。
 
 ## 一、已实现的渠道扩展
 
@@ -26,7 +26,7 @@
 | B站收藏夹 | ✅ 公开夹可接 | `x/v3/fav/resource/list`，匿名；私有夹需登录 |
 | 现有分区订阅改二级操作 | ✅ 已实现 | 目录渠道（`*:categories`）+ `kind:"category"`；虎牙/斗鱼/抖音/Twitch/YouTube |
 
-一句话：**YouTube 的「分区」只是 Live 页的编辑栏目，B站没有可匿名读取的直播分区列表**。其余几类都能用现有
+一句话：**YouTube 的「分区」只是 Live 页的编辑栏目；B站分区树（`Area/getList`）匿名可读，但列房需登录**。其余几类都能用现有
 `previewChannel` + `Pageable` 模型接入，不需要新依赖，也不需要改播放解析。
 
 ---
@@ -152,8 +152,9 @@ GET https://api.bilibili.com/x/polymer/web-space/seasons_archives_list
 - `archives[]` 字段：`bvid` / `aid` / `title` / `pic` / `pubdate` / `duration` / `stat`；没有作者名。
 - 输入可以是 `seasonId`，也可以是视频 URL：先走 `x/web-interface/view?bvid=` 读 `data.ugc_season.id`。
 - 可直接复用 `packages/crawler/src/channels/bili/video-common.ts` 的 `ugc()`。
-- ✅ `bili:season` 已实现：`page_num` 递增翻页（`Pageable`），`seasonId` 按 source 实例
-  memo（视频链接只换一次）；输入归一化在 `channels/bili/refs.ts`。
+- ✅ `bili:season` 已实现：`page_num` 递增翻页（`Pageable`），`seasonId` 用**模块级**
+  `seasonIdCache`（`season.ts:49`；core 每次 refresh/loadMore 都新建 source，实例级 memo
+  跨不过一次调用），视频链接只换一次；输入归一化在 `channels/bili/refs.ts`。
 
 #### 3.2 视频列表 / 系列（series）
 
@@ -192,29 +193,10 @@ GET https://api.bilibili.com/x/v3/fav/resource/list
 
 ### 4. 分区订阅改造成「苹果播客式」二级操作（✅ 已实现）
 
-#### 4.1 改造前现状
+#### 4.1 设计动机
 
-发现页已经具备**第二层**：
-
-- `PlatformBrowser` 调 `dl.previewChannel(categoryChannel, info)` 取一次性房间数据（不建订阅）。
-- 结果用 `CandidateList` 展示，可选中房间直接订阅。
-- 「订阅该分区」打开 `AddSubscriptionDialog`，用 `presetInfo` 预填参数。
-
-缺的是**第一层分类目录**：用户必须先手输 `gameId` / `areaId` / `partition` / `category`，
-而不是从可见的分类列表点进去。
-
-Apple 播客的模型是：
-
-```text
-榜单（节目 feed）
-  → 点节目 → 右侧列表（?open=，临时单集列表，复用正常网格）
-  → 选单集播放 / 订阅该节目
-```
-
-分类不是 feed：它没有自己的 RSS。设计上曾考虑 channel 级 `listCategories` 能力（目录只在
-发现页临时用），但最终采用**目录渠道**模型 —— 用户明确要求「和播客热门榜一样作为一个订阅，
-订阅的内容就是分区列表，点进去看对应分区的内容」。因此新增 `kind:"category"` 条目：
-目录本身就是订阅内容，点击条目用自带的 `categoryChannel` + `categoryInfo` 预览目标分区。
+改造前用户只能手输 `gameId` / `areaId` / `partition`，缺「第一层分类目录」；最终采用目录渠道而非
+channel 级 `listCategories`（理由见 §4.5）。
 
 #### 4.2 可行性矩阵
 
@@ -293,7 +275,8 @@ UI 流程（与播客榜单完全同构）：
   实测 **30** 个分类；`categoryInfo = { category: slug }`。
 - **YouTube** ✅：复用 Live 页解析，实测 `News` / `Gaming` / `Sports` 3 个栏目；
   `categoryInfo = { category: slug }`。`Live Now` 本身不是分区，归 `youtube:live-hot`。
-- **B站直播**：不实现；不要用 `Area/getList` 造一个只有名字、没有房间的假目录。
+- **B站直播** ✅：`bili:live:areas`（`Area/getList` 匿名出全树）+ `bili:live:area`
+  （`second/getList` 列房，需登录 + `w_webid`）；目录条目 `areaId="0"` 即整区列房。
 
 #### 4.5 为什么新增 `kind:"category"` 而不是伪装成文章/音频
 
@@ -319,48 +302,6 @@ UI 流程（与播客榜单完全同构）：
 
 ---
 
-### 5. 频道扩展建议优先级（均已落地）
-
-1. ✅ `youtube:live-hot` + `youtube:live-category`（Live 页栏目解析，一次请求）
-2. ✅ `youtube:playlist`（先 RSS 15 条；需要完整列表再接 `VL` + continuation）
-3. ✅ `bili:season`（合集；匿名 + 分页 + 现有 `ugc()`）
-4. ✅ `bili:series`（视频列表；URL 解析 mid + seriesId）
-5. ✅ `bili:favlist`（公开收藏夹；私有夹需登录）
-6. ✅ 分区订阅二级化：目录渠道（`*:categories`）+ `kind:"category"` +
-   右侧内容视图（与 1、Twitch、抖音等一起做）
-
-实测补充（2026-10-20，接入后复核）：
-
-| 渠道 | 实测 |
-| --- | --- |
-| `youtube:live-hot` | 10 条（Live Now，按 watching 降序），864ms |
-| `youtube:live-category` | `gaming` 12 条，1.19s |
-| `youtube:playlist` | 15 条，178ms |
-| `bili:season` | 30 条/页；第二页新增 30，cursor 前进 |
-| `bili:series` | 20 条/页；第二页新增 20（修 `pn`/`ps` 前为 0） |
-| `bili:favlist` | 20 条/页；第二页 8 条（总数 28） |
-
-现有播放链路无需改：YouTube 条目落 `watch?v=`，B站条目落 `bilibili.com/video/<bvid>`，
-`resolve` 已覆盖。
-
----
-
-### 6. 实测记录（2026-10-20，匿名）
-
-| 探针 | 结果 |
-| --- | --- |
-| YouTube Live 页 `browseId=UC4R8DWoMoI7CAwX8_LjQHig` | 200；`Live Now` 12、News/Gaming/Sports 各 12；无 continuation |
-| YouTube `VL<playlistId>` | 200；100 条 + continuation；第二页 100 条 |
-| YouTube playlist RSS | 200；12 / 15 条；无翻页 |
-| B站 `seasons_archives_list`（season 2974525） | 带 Referer 200/code 0；61 条、30/页；不带 Referer `-352` |
-| B站 `x/series/archives`（series 358495） | 200/code 0；54 条、20/页；mid 必须匹配 |
-| B站公开收藏夹 `media_id=1052622027` | 200/code 0；28 条、20/页；匿名可读 |
-| Twitch `games(first: 10)` | 200；slug/displayName/viewersCount/boxArt 全出 |
-| 目录渠道（接入后复核） | `twitch:categories` 30 / `youtube:live-categories` 3 / `live:douyin:categories` 16 / `live:douyu:categories` 530 / `live:huya:categories` 389 |
-| 目录条目 XML 往返 | `kind/categoryChannel/categoryInfo` 全保住；抖音 `partition=101` + `partitionType=4` |
-| 抖音顶层分区列房 | `partition=101&partitionType=4` 出 15 条（修复前默认 type=1 取不到） |
-| desktop 二级流程 | 一键订阅 `twitch:categories` → 点 Just Chatting → 弹窗 30 个房间 →「订阅该分区」；抖音目录点「聊天」→ 15 个房间 → 订阅成功 |
-
 ## 二、未做的缺口
 
 - ~~**bili 按分区列房**~~ ✅ 已落地（2026-10-22）：`bili:live:areas`（目录，匿名）+
@@ -369,7 +310,7 @@ UI 流程（与播客榜单完全同构）：
   -352」的结论系探针 cookie 拼接缺 `; ` 分隔导致 buvid3 失效所致，登录态实测可用。
 - **抖音分区搜索的词表局限** —— `live:douyin:search` 本质是分区搜索，只按分区名匹配；
   主播名（`旭旭宝宝`）与三级词（`美食`）返回 0。已知主播请用 `live:douyin` +
-  抖音号/主页链接（见第五节）；`live:douyin:user` 仅保留给存量订阅。
+  抖音号/主页链接（见 `docs/platforms/platform-notes.md`）；`live:douyin:user` 仅保留给存量订阅。
   `live:douyin:anchor` 已删除（本地过滤热门房间没有意义）。
 - **虎牙搜索不可分页** —— 接口 `start` 参数实测无效（`start=0` 返 20 条、`start>=20` 一律
   返同一批 40 条），故只取首页、不声明 `Pageable`。
@@ -383,9 +324,8 @@ UI 流程（与播客榜单完全同构）：
   游标翻页）+ by-url 直播 HLS 播放；**VOD / clip / 聊天弹幕 / 关键词搜索 / 登录均未做**：
   - VOD/clip 路由要排在频道名**单段路径之前**（`/videos/<id>`、`/<login>/clip/<slug>`），
     二期再加；`normalizeTwitchLogin` 现在对多段路径一律返回 null（避免误当频道）。
-  - **分类榜 `games(first)` 不做 channel**：匿名可用，但只给分类元数据（name/slug），
-    **分类本身没有可播房间**，订阅后只会是空列表。要做发现层应「点分类 → 订阅
-    `twitch:category`」，不另造分类 feed。
+  - **分类榜已做成目录订阅 `twitch:categories`**（`games(first)` 只给分类元数据、本身没有
+    可播房间）→ 点分类订阅 `twitch:category`，不另造分类 feed。
   - 聊天（IRC `wss://irc-ws.chat.twitch.tv:443` + `justinfan`）文本帧实测可用，但宿主
     `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 要先给宿主 ws 加 text 帧。
   - 关键词搜索（搜频道/流）依赖 persisted query（结构不稳），二期再评估；登录
@@ -398,10 +338,8 @@ UI 流程（与播客榜单完全同构）：
   continuation。游戏级分区（`/gaming` 页的 Top live games，每个频道约 51 条）未做。
 - **B站合集 / 视频列表 / 收藏夹的分页深度**（2026-10-20）—— 剩余：
   私有收藏夹需登录；「稍后再看」不接；合集/系列条目没有作者名（archives 里只有
-  `mid`，不回查用户资料）。详见 `docs/platforms/channels.md` §3。
-- **分区目录订阅的剩余项**（2026-10-22）—— B站直播分区已落地（`bili:live:areas` +
-  `bili:live:area`，列房需登录）；剩余：预览弹窗里的房间**只读**
-  （预览条目无真实订阅，不能直接播）。详见 `docs/platforms/channels.md` §4。
+  `mid`，不回查用户资料）。
+- **分区目录订阅的剩余项**：预览弹窗里的房间**只读**（预览条目无真实订阅，不能直接播）。
 
 ## 三、条件触发的迁移（当前不做，等信号）
 
@@ -450,82 +388,12 @@ UI 流程（与播客榜单完全同构）：
   （优先），`display_value` 仅兜底（`resolve/platform/douyin/audience.ts` 的 `douyinOnline()`）。
 - **参照项目抖音弹幕签名已失效** —— 参照用 xbogus（`douyin_danmaku.dart:306`）**已失效**；
   我们用 2026 有效的 webmssdk `get_sign`，**领先**，不必抄。
-- **bili 直播档位：匿名一律降档** —— 匿名请求 `qn=10000`（原画）服务器只给 `current_qn=250`
-  （超清），且 `10000/400/250` 三个请求**全部收敛到 250**。故读 `current_qn` 标注、按实际值去重
-  （否则 UI 说谎、菜单出现三个重复档）。
+- **bili 直播档位：匿名一律降档**（见 `docs/platforms/platform-notes.md`；此处只记结论：
+  读 `current_qn` 标注、按实际值去重，否则 UI 说谎、菜单出现三个重复档）。
 - **bili 匿名弹幕真因** —— 此前误判「匿名 uid=0 被 1006 拒」，真实根因是 buvid3 取自 cookie、
   匿名时必然为空。改用 `/x/frontend/finger/spi` 的匿名 buvid3（`client.ts` 的 `anonBuvid3()`）后匿名可收。
 
-## 五、抖音直播补充实测（2026-10-18）
-
-> 触发：确认「已知用户抖音号/主页信息，如何订阅其直播间」。探针脚本为临时文件
-> （`tmp/douyin-live-probe*.ts`，已废弃），结论均已用 CLI 复现。
-
-### 5.1 已知抖音号：直接当 `web_rid` 用（可落地）
-
-`live:douyin` 的 `roomIds` **不要求纯数字**。把用户抖音号（`unique_id`，如
-`pvcyinse`）或数字短 ID（如 `3482057509`）填进去，enter API 会解析到该用户当前
-直播间：
-
-```bash
-bun run rss fetch live:douyin --kv roomIds=pvcyinse --json
-bun run rss fetch live:douyin --kv roomIds=3482057509 --json
-bun run rss item https://live.douyin.com/pvcyinse --json   # 4 档 flv 全出
-```
-
-实测结果：
-
-| 输入 | 结果 |
-| --- | --- |
-| `pvcyinse`（抖音号，在播） | 1 条 live，标题/作者/在线数正确；播放解析出 4 档 |
-| `3482057509`（short_id，在播） | 1 条 live，同一房间 |
-| `22316883325`（杨楷文，离线） | 1 条 offline，标题/头像为最近一场 |
-| `renyixu1989`（旭旭宝宝，离线） | 1 条 offline，同上 |
-| `7697963097109187378`（长 room_id） | enter API `4001038`，**不可用** |
-| `https://www.douyin.com/user/<sec_uid>`（主页链接） | 走 5.2 的匿名资料 API 换成抖音号后可订阅（2026-10-19 收编进 `live:douyin`） |
-
-结论：**知道抖音号就是最优解**；离线也能建订阅，开播后刷新自动变 live。
-`roomIds` 会自动归一 `@抖音号`、`抖音号：xxx`、`live.douyin.com/<id>`，也接受
-主页链接（先解析成抖音号）；`live:douyin:user` 保留给存量订阅。
-
-### 5.2 主页链接（sec_uid）→ 抖音号：匿名资料 API 可用
-
-`GET https://www.douyin.com/aweme/v1/web/user/profile/other/?sec_user_id=<sec_uid>&...`
-带 ABogus 签名 + ttwid（现有 `signDouyinUrl` 可复用）**匿名 200**，返回
-`user.unique_id` / `short_id` / `uid` / `room_id_str` / `live_status`：
-
-- `live_status: 1` = 直播中（对应 enter `room.status=2`）；`0` = 未开播。
-- `room_id_str` 是精确长 ID；`room_id` 是 JSON number，超过 2^53 会丢精度，**别用**。
-- 该接口只认 `sec_user_id`；传 `unique_id` / `short_id` / `uid` 均返回
-  `UserId不合法`（status_code 2）。
-- `www.douyin.com/user/<sec_uid>` 是客户端渲染 shell（约 72KB，无用户数据）；
-  `iesdouyin.com/web/api/v2/user/info` 已返回空 body（旧接口失效）。
-- `webcast.amemv.com/douyin/webcast/reflow/<room_id>?sec_user_id=<sec_uid>` 可返回房间
-  页（含 webRid），但页面里可能有推荐房间的同名字段，**不要取第一个 `webRid`**；
-  已知抖音号时无需这条路径。
-
-✅ 已落地（2026-10-18）：新增渠道 `live:douyin:user`（`channels/douyin/user.ts`）——
-sec_uid/主页链接 → 资料 API → `unique_id`/`short_id` → enter API（离线也返 offline；
-从未开播的账号可能拿不到房间数据，会报抓取失败）；`live:douyin` 的 `roomIds` 增加归一
-（`@抖音号`、`抖音号：xxx`、`live.douyin.com/<id>`）。2026-10-19 起 `live:douyin`
-也直接接受主页链接（内部先走同一条资料 API），用户渠道只保留给存量订阅。
-纯函数在 `resolve/platform/douyin/ids.ts`，自检
-`resolve/src/example/douyin-user.check.ts`。
-
-### 5.3 现有搜索渠道实测（都不适合「找指定主播」）
-
-| 渠道 | 输入 | 结果 |
-| --- | --- | --- |
-| `live:douyin:search` | `原神` | 20 条（分区名命中） |
-| `live:douyin:search` | `舞蹈` | 20 条（本地顶层分区匹配） |
-| `live:douyin:search` | `旭旭宝宝` | 0 条 |
-| `live:douyin:search` | `美食` | 0 条（三级词不在分区树） |
-
-原因：`live:douyin:search` 本质是「关键词 → 分区 → 列房」，不是搜房间标题/主播；
-渠道已更名为「抖音分区搜索」。`live:douyin:anchor` 已于 2026-10-18 删除（本地过滤
-热门房间没有意义）。`SEARCH_CHANNEL` 已登记 douyin → `live:douyin:search`（发现页/
-搜索面板显示「抖音分区」，输入框明确写「分区关键词」；结果仍是可一键订阅的直播间）。
-**已知主播时直接用 5.1 的抖音号或 5.2 的 `live:douyin` + 主页链接，不要依赖分区搜索。**
+> 抖音号 / 主页链接 / 分区搜索的实测结论见 `docs/platforms/platform-notes.md` 的「斗鱼 / 虎牙 / 抖音」一节。
 
 ## 附：参照项目位置
 

@@ -10,7 +10,7 @@
 
 ## 0. 范围与已拍板决策
 
-改造对象 = `apps/desktop` 的信息架构 + 视觉系统 + 首页新增。**不动**：crawler / resolve / host / player 四个包的功能面，
+改造对象 = `apps/desktop` 的信息架构 + 视觉系统 + 首页新增。**不动**：crawler / resolve / host / player 四个包的功能面（唯一例外是 D13 的可选弹幕 `onDanmakuBatch` 加法），
 **不动**：`/v/:nodeId` 路由语法（见 §3.1 决策 D1）、数据服务单写者边界、`/play/:itemId` 播放链。
 
 用户已拍板（2026-10-27，不重议）：
@@ -104,7 +104,7 @@
 
 **保留 `/v/:nodeId` 单一路由 + 新增 `/`（home）+ 预留 `/library`。** 不采纳「五路径根」（`/read//dynamic//media/...`）方案：
 
-- 节点语法（tab:/s-\*/group:/smart/short:/page:）已经是「位置唯一权威」，8 处 `viewPath` 调用、`?word=`/`?open=`/`?tab=` 三类 query、
+- 节点语法（tab:/s-\*/group:/smart/short:/page:）已经是「位置唯一权威」，5 处 `viewPath` 调用（另有 3 处 `previewPath`）、`?word=`/`?open=`/`?tab=` 三类 query、
   `router.tsx` loader 同步 `select()` 的机制全部免改；
 - 双权威风险（红队 blocker）：路径根与 `nodeMeta.type` 会漂移（`/media/tab:article`），需要 assertRoot + redirect 层 + search 保真三件套，
   纯粹为了 URL 好看，不值。
@@ -185,7 +185,7 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 | **M1 视觉基座**（1 天） | §2.3 全部 token 换值 + 新增变量 + @theme 注册；主题切换颜色过渡白名单进 `[data-motion]` 门控（写死 .25s 会绕过动效开关）；浅色逐项覆盖对表（漏写会继承深色值） | `scripts/ui-design-audit.ts` 0 处低于 AA；三档实拍；`bun run check --layer static` |
 | **M2 外壳重构**（2 天） | 双列模型：titlebar 收进主列、品牌区 + 主导航 section 进侧栏、内容类型段缩为 全部/音频/直播、页脚同步行；NavRow live 槽位；头像菜单（账号/设置/关于，扫码入口迁入且关闭仍 `AbortController.abort`，否则浏览器锁卡满 5 分钟）；⌘K 合一（两段共用 index 空间，IME 守卫保留）；删铃铛与 update-chip；`home` 节点 + `/` 路由 + `DEFAULT_VIEW="home"`；`navIdOf` 高亮（修播放页高亮缺陷） | 启动骨架不跳（boot-skeleton 同批改）；旧深链 `/v/...`、`?word/?open/?tab` 全部实测；Alt+Left 行为不变；`rail-nav.check` 绿 |
 | **M3 首页**（2 天） | 五个 selectors + 五个 `.check`；`itemsVersion` 失效键改造 + 等长 patch 验证；HomeView 五区块 + `.media-rail` 通用轨 + `65-home.css`；空态全部走 StateBlock | 首页五区块在 无订阅/空库/离线 三态下不出现假信息；等长 patch 恰好重算一次；滚动死区实测（头部随滚） |
-| **M4 阅读换装**（1-2 天） | `ViewFilter.starredOnly` + 阅读列表 `?filter=unread|starred` chips（loader 写入 filter 并复位 page）；选中态 `?sub=&item=` 两参数（**禁** `?item=<sub>:<id>` 单参数——itemRefKey 不反解，preview 伪订阅与含冒号 id 都会解析错）；删 `usePlayerNav` 的 `setTimeout(0)` 补丁（选中态由 URL 派生）；`FocusReader` 弹层（同一 readingKey 单写入口） | 刷新/分享 URL 还原同一条文章；双滚动互写自检（切换后 progress 不变）；IME 回车守卫保留 |
+| **M4 阅读换装**（1-2 天） | `ViewFilter.starredOnly` + 阅读列表 `?filter=unread\|starred` chips（loader 写入 filter 并复位 page）；选中态 `?sub=&item=` 两参数（**禁** `?item=<sub>:<id>` 单参数——itemRefKey 不反解，preview 伪订阅与含冒号 id 都会解析错）；删 `usePlayerNav` 的 `setTimeout(0)` 补丁（选中态由 URL 派生）；`FocusReader` 弹层（同一 readingKey 单写入口） | 刷新/分享 URL 还原同一条文章；双滚动互写自检（切换后 progress 不变）；IME 回车守卫保留 |
 | **M5 动态换装**（1-2 天） | SocialCard mosaic 1-4 + `estimateItemHeight` 分档；动态 chips（图文/多图/视频/文字，客户端 filter）；`Lightbox`（MediaImage contain + radix，键盘左右翻页）；详情弹层加灯箱入口；外链一律 `openExternalSafely`（裸 `<a>` = WebView 整页被顶掉） | 微博/小红书实图回归（直连+回退）；灯箱在 9334 CDP 实测翻页；`ui-probe` 无裸 href 断言 |
 | **M6 影音与播放**（2 天） | 影音 tabs（视频/直播/音频；`tab:video` 直达、`tab:live/audio` 落对应 tab）；直播 hero（`selectLive` top1）；`.video-tile` 卡；播放页宿主：右栏 336px、剧场模式 data-attr 单列（与 1280 断点用 data-attr 区分，不新增类名）；「播放器无圆角」契约不动（`VideoShell.tsx:114`） | `ui-play-check.ts` 起播矩阵绿；剧场模式与窄窗单列不互压；清晰度仍走 `MediaQualityButton`（<2 档不显示，不自造菜单） |
 | **M7 收尾**（1 天） | 发现页瘦身（搜索型入口统一到 AddSubscriptionDialog，页内只留榜单/平台矩阵）；热搜确认为订阅派生视图（无改动，验证 `?word=` 链路）；响应式断点统一到 §2.3 五档；文档更新（本文状态、`ui-conventions.md`、`docs/README.md`、CLAUDE.md 目录段） | `bun run check` 全绿；`smoke-check.md` 走一遍；旧 `/v/tab:all` 等 3 类旧链 redirect 断言 |
@@ -223,7 +223,7 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 | # | 决策 | 采纳 | 理由与放弃项 |
 | --- | --- | --- | --- |
 | D1 | 路由形态 | **保留 `/v/:nodeId`，新增 `/` 与 `/library`** | 放弃五路径根：双权威漂移 + redirect 层 + search 保真三件套成本，只为 URL 语义化 |
-| D2 | 首页与 tab:all 关系 | **并存**：首页=看板，`tab:all` 保留为混合列表（内容类型段） | 退订落点（`subs.ts:104,152`）与 8 处 `viewPath` 语义不漂移 |
+| D2 | 首页与 tab:all 关系 | **并存**：首页=看板，`tab:all` 保留为混合列表（内容类型段） | 退订落点（`subs.ts:104,152`）与 5 处 `viewPath` 调用语义不漂移 |
 | D3 | 侧栏 IA 终态 | 主导航常驻，其余段全部保留（§3.2） | P2 拍板；不删任何节点 |
 | D4 | 短视频入口 | 侧栏「模式」段原样保留 | P2；`ShortVideoView` 对 `selectedNodeId` 的依赖不动 |
 | D5 | 发现页 | 页脚一级入口保留；页内搜索入口统一到 AddSubscriptionDialog | 防双轨搜索 |
@@ -236,7 +236,7 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 | D12 | 「上次同步」 | 文案改「最近变更」，取 `max(sub.updatedAt)` | 不为一行假新鲜度加协议字段 |
 | D13 | 章节 / 实时评论 | 章节 v1 不做；弹幕只读列表**可选**做（须 `PlayableMedia` 加 additive 的 `onDanmakuBatch` 共享订阅，侧栏禁止二次调 `danmaku()`；无流整块隐藏，文案写「弹幕」不写「评论」） | `DanmakuStream` 调用即订阅，二次调用双倍拉流 |
 | D14 | 片库长期 | 展示层=随包静态 JSON + localStorage 片单（零协议）；可播=新 channel 走 XML；跨设备收藏=library.* RPC（唯一满足单写者+跨设备）。**禁止 desktop 直写 KV/SQLite（第二写者）** | 触发条件：真实片源/元数据源确定时立项 |
-| D15 | 主题取值 | 采纳信号橙 + 媒体块浅色恒深；两套主题分别核算对比度；补 system 三态入口 | `ThemeMode="system"` 已有解析无 UI 入口 |
+| D15 | 主题取值 | 采纳信号橙 + 媒体块浅色恒深；两套主题分别核算对比度；保留现有 system 三态入口 | 三态入口已存在（设置→外观 `Appearance.tsx:12`），M2 只迁入新几何、不新增 |
 | D16 | 顶栏/侧栏几何 | M2 先收 titlebar 进主列（结构改），`--rail 244/--header-h 64` 数值对齐放 M1 一次做完，boot-skeleton 同批 | 几何与结构分离，各自可回滚 |
 
 ---

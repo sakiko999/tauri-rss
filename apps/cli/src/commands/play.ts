@@ -23,7 +23,7 @@ export async function runPlay(url: string, opts: PlayOptions): Promise<void> {
   const target = r.streams.find((s) => s.format !== "dash") ?? r.streams[0]
   if (!target?.url) throw new Error("无可用直链可打开")
   if (target.format === "dash") {
-    console.log(pc.yellow("⚠ 全部档位均为 DASH(dashManifest),系统播放器无法直接消费——不打开。mpv 落盘 .mpd 方案见 docs/mpv-playback-research.md"))
+    console.log(pc.yellow("⚠ 全部档位均为 DASH(dashManifest),系统播放器无法直接消费——不打开。mpv 落盘 .mpd 方案见 docs/playback/mpv.md"))
     return
   }
   console.log(`open:    ${target.quality ?? ""} ${target.format ?? ""} → 系统播放器`)

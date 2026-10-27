@@ -1,6 +1,6 @@
 # 文档索引
 
-> 2026-10-21 重组：按「架构 / 平台 / UI / 播放 / 风控 / 运维 / 审计」分类，相近文档已合并。
+> 2026-10-27 按数据服务单写者复核：分类不变，过时结论已清理。
 > `CLAUDE.md` 只保留高频硬契约与本文的精简版。
 
 ## 怎么读
@@ -14,11 +14,12 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| `architecture/host-abi.md` | 全局 `appHost` 门面：注入方式、必填/可选能力、storage 三态 |
+| `architecture/host-abi.md` | ★ 全局 `appHost` 门面：注入方式、必填/可选能力、`storage` 四态、`batch`/`setSchema` |
 | `architecture/data-and-storage.md` | 数据契约（XML 唯一通道 / id 唯一性 / 分页 / 正文补全 / 种子）+ SQLite 选型与迁移 |
-| `architecture/crawler-topology.md` | desktop 爬虫服务化决策与切分边界 + 移动端为何不能复用 CDP |
+| `architecture/crawler-topology.md` | 抓取浏览器归谁/用什么载体（服务 spawn sidecar）+ 移动端为何不能复用 CDP |
 | `architecture/system/README.md` | ★ 全仓系统架构文档集：系统总览、包职责与依赖、跨包契约、核心流程、扩展指南、风险与演进 |
-| `architecture/system/06-data-service.md` | 数据服务（CLI 载具）计划：单写者边界、HTTP/WS 协议、事件/存储、客户端改造、打包与阶段 |
+| `architecture/system/00-overview.md` – `05-risks.md` | 系统六篇正文（00 总览 → 05 风险与演进），逐篇索引见 `system/README.md` |
+| `architecture/system/06-data-service.md` | ★ 数据服务架构与落地（阶段 0–2 已完成）：单写者边界、HTTP/WS 协议、事件/存储、客户端改造、打包 |
 
 ## 平台
 
@@ -26,11 +27,11 @@
 | --- | --- |
 | `platforms/platform-notes.md` | ★ 各平台实测行为与坑：bili / 斗鱼虎牙抖音 / YouTube / 小红书 / Twitch / 时间戳 / Apple 播客 / cookie 登录 |
 | `platforms/channels.md` | 渠道与能力总表：已实现的渠道扩展（YouTube 栏目、播放列表、B站合集/收藏夹、分区目录）、未做的缺口、已证伪的路线 |
-| `platforms/youtube.md` | YouTube 直链提取（InnerTube / VISIONOS / poToken / DASH 自拼） |
+| `platforms/youtube.md` | YouTube 直链提取（InnerTube / VISIONOS / poToken / DASH 自拼）；client 链与 poToken 结论的唯一权威 |
 | `platforms/twitch.md` | Twitch 渠道（公开 GQL + PlaybackAccessToken + usher HLS） |
-| `platforms/xhs-signature.md` | 小红书 x-s 签名：461 根因、有效参照、社区现状复核、不重启的决定 |
-| `platforms/login.md` | 三平台扫码登录 + 保活设计（仅 bili 可自动续期；保活未实现） |
-| `platforms/domestic-feeds.md` | 国内 RSS/Atom feed 可用性实测 |
+| `platforms/xhs-signature.md` | 小红书为何不自己实现 x-s 签名：461 根因、签名频率证据、不重启的决定与触发条件 |
+| `platforms/login.md` | 平台扫码登录调研（bili/weibo/xhs；weibo/xhs 走 CDP）+ 保活设计（仅 bili 可自动续期；保活未实现） |
+| `platforms/domestic-feeds.md` | 国内 RSS/Atom 原生 feed 清单与可用性（2026-08 快照；渠道可用性以 `channels.md` 为准） |
 
 ## UI
 
@@ -53,7 +54,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| `risk/crawler-risk-control.md` | ★ L0–L3 等级与配额、governor、CDP 闸门、浏览器被动采集、窗口模式、多 tab/lane 设计 |
+| `risk/crawler-risk-control.md` | ★ L0–L3 等级与配额、governor、CDP 闸门与 lane、被动采集、窗口模式（浏览器载体归 `crawler-topology.md`） |
 
 ## 运维
 
@@ -68,22 +69,6 @@
 | 文档 | 内容 |
 | --- | --- |
 | `audit/findings.md` | 审计结论（故意不改 / 误报证伪）+ 兼容补丁清单 + 破坏性变更 |
-| `audit/refactor-candidates.md` | 重构候选分档（A 建议做 / B 改到再动 / C 明确不改 / D 待确认） |
+| `audit/refactor-candidates.md` | 重构候选分档（A 建议做 / B 改到再动 / C 明确不改 / D 已核实） |
 
-## 本次整理的合并与删除
-
-| 原文档 | 去向 |
-| --- | --- |
-| `capability-gaps.md` + `channel-expansion-research.md` | → `platforms/channels.md` |
-| `audit-backlog.md` + `compatibility-inventory.md` | → `audit/findings.md` |
-| `desktop-crawler-service.md` + `mobile-cdp-feasibility.md` | → `architecture/crawler-topology.md` |
-| `data-conventions.md` + `sqlite-storage-research.md` | → `architecture/data-and-storage.md` |
-| `commands.md` + `cli-plan.md` | → `ops/commands.md` |
-| `image-loading-referrer.md` | → `ui/ui-conventions.md`（图片加载与防盗链一节） |
-| `rsshub-vs-crawler.md` | 删除；RSSHub 具名渠道已于 2026-10-18 移除，决策教训并入 `platforms/channels.md` |
-| `folo-architecture-research.md` | 删除；未采纳任何结论 |
-
-其余文档仅移动/改名（`youtube-stream-extraction` → `youtube`、`twitch-channel` → `twitch`、
-`xhs-signature-research` → `xhs-signature`、`platform-login-research` → `login`、
-`domestic-feed-availability` → `domestic-feeds`、`danmaku-research` → `danmaku`、
-`mpv-playback-research` → `mpv`），内容不变。
+> 2026-10-21 的文档重组与合并/删除记录见当次 git 提交；本索引只列现存文档。

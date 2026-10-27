@@ -1,29 +1,29 @@
 # 05 · 架构约束、耦合与演进风险
 
-> 代码快照：2026-10-23（`master` @ 58b0d77 + 本轮工作区修复）。只覆盖会影响数据、契约、状态与工程可维护性的问题；UI 视觉/布局不在范围。
+> 代码快照：2026-10-23 基线（`master` @ 58b0d77）；R5/R9/R10/R11/R15 已于 2026-10-26 复核更新；其余条目按 10-23 基线判定（行号已按 10-27 代码重核）。只覆盖会影响数据、契约、状态与工程可维护性的问题；UI 视觉/布局不在范围。
 > 判定口径：**严重度** = 触发后对正确性与可恢复性的影响；**可能性** = 当前代码与默认使用方式下的触发概率。
-> 状态口径：**未标「已修 / 部分修复」的条目 = 本轮未处理**（R13–R17 均属此列，不是漏标）。
+> 状态口径：**未标「已修 / 部分修复」的条目 = 未处理**（R13/R14/R16 属此列；R15/R18 已修，R17/R19 部分修复，不是漏标）。
 > 本次实跑守卫：`serialize-roundtrip.check.ts`、`serialize-contract.check.ts`、`passive-mode.check.ts`（含预览 `no-data` 用例）与 `error-kind.check.ts` 均通过（exit 0）；本轮共跑 19 个自检（含 mobile `html.check.ts`）、core/host/resolve/desktop/mobile/cli 的 tsc 与两端 Vite build。
-> 行号均为本次复核读到的位置；只写文件名的条目表示未逐行复核到该断言。同目录：README.md · 00-overview.md · 01-packages.md · 02-contracts.md · 03-flows.md · 04-extension.md。
+> 行号是复核时的锚点，代码移动后以符号名为准；只写文件名的条目表示未逐行复核到该断言。同目录：README.md · 00-overview.md · 01-packages.md · 02-contracts.md · 03-flows.md · 04-extension.md。
 
 ## 0. 风险总表
 
 | # | 风险 | 严重度 | 可能性 | 关键证据 | 最小建议 |
 | --- | --- | --- | --- | --- | --- |
 | R1 | XML 契约守卫曾常红，Stream/Attachment 边界曾有损（sourceId 另见 R18）**已修（2026-10-23）** | — | — | 两个 check 实跑 exit 0；Stream 走 `tpl:streamJson`（`packages/xml/src/serialize.ts:92-98`）；附件全字段往返（`deserialize.ts:289-320,475-541`） | 保持两侧对称；新增附件字段两边同改 |
-| R2 | 包级运行时环 / 隐式宿主加载 **已修（2026-10-23）** | — | — | host 不再 import core（schema 注入）；`resolve/media-referrer.ts` 取代 `resolve → host` 值导入；host `./runtime|governor|node|tauri|browser` 子路径 + 根入口无 import 副作用；`setHostCaps` 自建门面 | 新跨包值导入先查 `01-packages.md` 矩阵；应用走 host 子路径 |
+| R2 | 包级运行时环 / 隐式宿主加载 **已修（2026-10-23）** | — | — | host 不再 import core（schema 注入）；`resolve/media-referrer.ts` 取代 `resolve → host` 值导入；host `./cdp\|runtime\|governor\|node\|tauri\|browser` 子路径 + 根入口无 import 副作用；`setHostCaps` 自建门面 | 新跨包值导入先查 `01-packages.md` 矩阵；应用走 host 子路径 |
 | R3 | 视图层裸 id 寻址，跨订阅同 id 串条目 **已修（2026-10-23）** | — | — | `router.tsx:36,60,67` 写 `?sub=`；`store/types.ts:59-63` 的 `selectedArticleKey`；队列存复合键（`store/actions/ui.ts:45-51`）；正文缓存带订阅（`ReaderMain.tsx:79-120`） | 新增「按 id 记/改/查」入口先过 `itemRefKey`/`readingKey` |
-| R4 | 新建订阅的首抓失败被丢弃，成功提示 + 空视图 **已修（2026-10-23）** | — | — | `data-layer.ts:64,939-962` 返回 `{ id, refresh }`；desktop 失败弹 warn（`subs.ts:70-76`）；CLI 复用首刷结果（`refresh.ts:47-57`） | 调用方不要只取 `id` 忽略 `refresh.error` |
-| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 **已消解（2026-10-26）** | — | — | desktop 不再持有抓取浏览器（`injectTauriHost({browser:false})`，全局 `abortTabs` 退场）；超时改走 job 取消：`/v1/jobs/:id/cancel` → `AbortSignal` → core `refresh(…,{signal})`（`apps/desktop/src/store/actions/data.ts` 的 `withTimeout(..., onTimeout)`） | 新增长任务沿用 jobId + `cancel(jobId)`，不要在客户端只 abort 本地 fetch |
+| R4 | 新建订阅的首抓失败被丢弃，成功提示 + 空视图 **已修（2026-10-23）** | — | — | `data-layer.ts:70-75,1062-1086` 返回 `{ id, refresh }`；desktop 失败弹 warn（`subs.ts:70-76`）；CLI 复用首刷结果（`refresh.ts:47-57`） | 调用方不要只取 `id` 忽略 `refresh.error` |
+| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 **已消解（2026-10-26）** | — | — | desktop 不再持有抓取浏览器（`injectTauriHost({storage:false,browser:false})`，desktop 侧的 `abortTabs` 调用已移除，host 仍保留该 API 给 CLI/浏览器路径）；超时改走 job 取消：`/v1/jobs/:id/cancel` → `AbortSignal` → core `refresh(…,{signal})`（`apps/desktop/src/store/actions/data.ts` 的 `withTimeout(..., onTimeout)`） | 新增长任务沿用 jobId + `cancel(jobId)`，不要在客户端只 abort 本地 fetch |
 | R6 | 失败只有字符串，登录/风控/403 不可区分 **已修（2026-10-23，启发式兜底）** | — | — | `RefreshResult.errorKind?`（`packages/core/src/types/refresh-result.ts`）；`packages/resolve/src/errors.ts`；desktop `refreshErrorKinds` / 诊断表 / 首刷 toast；player `errorKindOf` | 平台 client 逐步从普通 `Error` 换成 `ResolveError(kind)`，启发式兜底随之退场 |
 | R7 | mobile 能力模型不一致（注入 browser、可播缺 `isFeedItem`） **已修（2026-10-23）** | — | — | `inject-tauri.ts:31` 新增 `browser?: boolean`；mobile 显式 `browser:false`（`apps/mobile/src/main.tsx:16`）；`isPlayable` 排除无 stream 的 audio（`apps/mobile/src/store.ts:146-152`） | 新增可选宿主能力时同步两端的注入开关 |
 | R8 | `previewChannel` 绕过被动采集承诺 **已修（2026-10-23）** | — | — | `previewChannel` 与刷新共用被动门：`channel.passive && appHost.browser` 时只调 `fetchPassive`，无数据抛 `ResolveError("no-data")`（`packages/core/src/data-layer.ts`）；`passive-mode.check.ts` 新增预览用例 | 无 |
 | R9 | 平台名是字符串协议、多份映射 **已修（2026-10-26）** | — | — | 单一权威 `packages/platform`（零依赖叶子，host/core/desktop/CLI 共用）；`cookieFieldFor` / `platformOfChannel` / governor `platformOf` / 账号页 `PLATFORM_META` 全部委托；`platform.check.ts` 守四组映射 | 新增平台只改 `PLATFORMS` |
 | R10 | 存储无事务/多键原子 **已修（2026-10-26，多键删除）** | — | — | `StorageBackend.batch?`；bun:sqlite 用 `db.transaction`、mem 同步循环；退订把 content + body 多键合成一次 batch（`data-layer.ts` 的 `subscriptions.remove`）。tauri-plugin-sql 后端**刻意不实现**（sqlx 连接池无法可靠事务），core 回退逐个删；生产路径是服务的 bun:sqlite | `data-layer.check.ts` 断言批量删净；`storage-batch` 冒烟 |
-| R11 | `MIGRATIONS.version` 是死数据，非幂等迁移会每次重跑 **已修（2026-10-23）** | — | — | `MIGRATIONS` 改为 `readonly string[]`，注释明确「只放幂等 SQL，非幂等前先加版本表」（`packages/core/src/db/schema.ts`）；host/CLI 两个后端按序全量执行 | 加非幂等迁移时先补 `_migrations` 版本表 |
-| R12 | `bun run tauri:build` 曾实际启动 dev **已修（2026-10-23）** | — | — | `scripts/tauri.ts:125-136` 新增 `build` 意图，`:246-250` 映射到 `build-release`；`package.json:30` 不再落进 dev | 回归：`bun run tauri:build` 应产出安装包 |
+| R11 | 迁移版本门禁 **已修（2026-10-26，版本表落地）** | — | — | `SCHEMA_MIGRATIONS`（version + name + FNV-1a checksum）+ `_migrations` 表已落地，checksum 变化拒绝启动（`packages/core/src/db/schema.ts:25-63`；执行端 `apps/cli/src/store/sqlite-storage.ts:39-58`）；`MIGRATIONS` 只是兼容别名 | 加迁移时在 `SCHEMA_MIGRATIONS` 追加新 version，不改已发布条目的 SQL |
+| R12 | `bun run tauri:build` 曾实际启动 dev **已修（2026-10-23）** | — | — | `scripts/tauri.ts:132-143` 新增 `build` 意图，`:264` 映射到 `build-release`；`package.json:33` 不再落进 dev | 回归：`bun run tauri:build` 应产出安装包 |
 | R13 | release-only 分支无法被同一套巡检覆盖 | 中 | 高 | `scripts/tauri.ts:54-61`；`apps/desktop/src/main.tsx`（`__store` 仅 DEV） | release 下开受控 CDP 或加核对钩子 |
-| R14 | 进程级单例：provider 后注册覆盖、门面 last-writer-wins、`cookieSnapshot` 无版本 | 中 | 低 | `packages/resolve/src/platform/credentials.ts:25-30`；`packages/core/src/data-layer.ts:177-183,417,823-828`；`packages/host/src/runtime.ts:120-141` | per-instance 化或显式 dispose |
+| R14 | 进程级单例：provider 后注册覆盖、门面 last-writer-wins、`cookieSnapshot` 无版本 | 中 | 低 | `packages/resolve/src/platform/credentials.ts:25-30`；`packages/core/src/data-layer.ts:200-221,472,914,945`；`packages/host/src/runtime.ts:120-141` | per-instance 化或显式 dispose |
 | R15 | CLI 旁路 settings **已修（2026-10-26）** | — | — | `apps/cli/src/info.ts` 的 `loadSettings` 改走 core `createSettingsRepository`（归一化/损坏留证/串行化，顺带修掉每次新建连接）；登录态不再写 CLI 本地库 —— profile/cookie 只在数据服务（`rss login` 走服务 RPC） | CLI 探针仍读自己的库（调试载具），登录态消费请用 `--via-service` 或桌面 |
 | R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 | 中 | 中 | `packages/host/src/tauri/browser-backend.ts`（`IDLE_CLOSE_MS`）、`packages/host/src/browser/backend.ts`（`closeIfIdle`） | 登录/长轮询显式续期或豁免 |
 | R17 | 播放器兜底链静默（FLV 无 headers）**（部分修复 2026-10-23）** | 中 | 中 | 未知格式裸 `<video>` 已挂 onError（`PlayableMedia.tsx:472-475`）；FLV 仍不带 headers（`useMediaStream.ts:209-212`） | FLV 走隧道或显式提示 |
@@ -57,16 +57,16 @@
 | 类型 | 权威 | 副本 | 同步手段 |
 | --- | --- | --- | --- |
 | `Item / Stream / Attachment / SocialImage / LivePlatformId / Kind` | `packages/xml/src/types.ts` | `packages/core/src/types/media-item.ts`、`live.ts` | 人工 + roundtrip 样本 |
-| `LoginResult` | `packages/crawler/src/index.ts` | `packages/core/src/data-layer.ts:46-51`；`packages/resolve/src/index.ts:17-23` | 三份平行声明。resolve 版多 `refreshToken`，core 版没有，且 `scanLogin` 只把 `result.cookie` 写 settings（`packages/core/src/data-layer.ts:839-842`）→ bili 续期凭证在边界丢弃 |
+| `LoginResult` | `packages/crawler/src/index.ts` | `packages/core/src/data-layer.ts:52-57`；`packages/resolve/src/index.ts:17-23` | 三份平行声明。resolve 版多 `refreshToken`，core 版没有，且 `scanLogin` 只把 `result.cookie` 写 settings（`packages/core/src/data-layer.ts:930`）→ bili 续期凭证在边界丢弃 |
 | `NetLevel` | `packages/core/src/types/settings.ts:20` | `packages/host/src/net/governor.ts`、`global.d.ts` 内联 | 三份同形字面量，无 type import 关系 |
 | `ErrorKind` / `ResolveError` | `packages/resolve/src/errors.ts`（`./errors` 子路径） | core `index.ts` 原样 re-export（无复制） | 跨模块副本按结构认 `kind`；新增值要同步 `ERROR_KIND_LABEL` 与 `errorKindOf` 的匹配顺序 |
-| 平台名（`bili/weibo/...`） | host `platformOf`（`packages/host/src/net/governor.ts:249-280`，按 URL host） | core `platformOfChannel`（`packages/core/src/data-layer.ts:289-300`，按 channelKey 前缀） | 纯字符串约定；新增平台要改两处 + 设置页文案 |
+| 平台名（`bili/weibo/...`） | `packages/platform` 的 `PLATFORMS` 表（零依赖叶子） | host `platformOfHost`（`packages/host/src/net/governor.ts:259`）、core `platformOfChannel`（`packages/core/src/data-layer.ts:310`，委托 `platformOfChannelKey`）均只查表 | 新增平台只改 `PLATFORMS`；`platform.check.ts` 守四组映射 |
 
 `RssChannel / SourceInfo / LoginCookieSnapshot` 已改为 core 直接 `import type` crawler 并 re-export（`packages/core/src/source/index.ts:17,19`），字段漂移现在由 `tsc` 兜底；mirror + `satisfies` 的旧建议只适用于仍未收口的 `LoginResult` / `LivePlatformId`。
 
 ### 1.4 id 作用域：写路径与视图定位均已收口
 
-`MediaItem.id` 只在订阅内唯一是实测事实（`packages/core/src/types/reading.ts:22-30` 记了 `bilibili:7734200` 同时出现在 `bili:live` 与 `bili:live:hot`）。写路径一直带订阅维度：reading 持久键、`findItem`/`findRecord`、`store.patch`、`resolvePlay`/`resolveDetail` 与 desktop 的标读/星标/续播/批量标读（`packages/core/src/types/reading.ts:32-68`；`packages/core/src/data-layer.ts:610-615`）。本轮把**视图定位**也收口了（R3 已修）：
+`MediaItem.id` 只在订阅内唯一是实测事实（`packages/core/src/types/reading.ts:22-30` 记了 `bilibili:7734200` 同时出现在 `bili:live` 与 `bili:live:hot`）。写路径一直带订阅维度：reading 持久键、`findItem`/`findRecord`、`store.patch`、`resolvePlay`/`resolveDetail` 与 desktop 的标读/星标/续播/批量标读（`packages/core/src/types/reading.ts:32-68`；`packages/core/src/data-layer.ts:683-688`）。本轮把**视图定位**也收口了（R3 已修）：
 
 - **选中态**：`selectedArticleKey` = `itemKey(subscriptionId, id)`，`selectArticle(item)` 收条目而非裸 id（`apps/desktop/src/store/types.ts:59-63`；`store/actions/view.ts:93`）；`itemsById` 已删，避免裸 id 查全表。
 - **播放路由**：`playPath(itemId, from, sub)` 写 `?sub=`（`apps/desktop/src/router.tsx:36`），`usePlayNavigate` 收 `{ id, subscriptionId }`（`:60`）；`PlayerPage` 先按 `sub` 精确匹配，再兼容 `from` 恰好是订阅 id 的旧链接，最后才裸 id 兜底（`PlayerPage.tsx:53-63`）。
@@ -87,46 +87,17 @@
 
 ## 2. 分层与依赖风险
 
-```mermaid
-flowchart LR
-  xml["@amoeba/xml"]
-  log["@amoeba/log"]
-  resolve["@amoeba/resolve"]
-  crawler["@amoeba/crawler"]
-  core["@amoeba/core"]
-  host["@amoeba/host"]
-  player["@amoeba/player"]
-  ui["@amoeba/ui"]
-  app["apps/*"]
+> 权威依赖图与依赖矩阵见 [01-packages.md](01-packages.md) §1.1；本节只记仍存在的耦合与风险。
 
-  crawler --> xml
-  crawler --> resolve
-  core --> crawler
-  core --> resolve
-  core --> xml
-  host --> log
-  player -.->|type only| core
-  player -.->|type only| resolve
-  ui --> resolve
-  app --> core
-  app --> host
-  app --> player
-  core -.->|globalThis.appHost| host
-  crawler -.->|globalThis.appHost| host
-  resolve -.->|globalThis.appHost| host
-  player -.->|globalThis.appHost| host
-  ui -.->|globalThis.appHost| host
-```
-
-实线是真实运行边，虚线是运行时全局依赖或纯类型依赖。**依赖图已恢复 DAG**（2026-10-23）：host 不再 import core（schema 注入）、resolve 不再 import host（Referer 规则下沉）、host 根入口不再有 import 副作用并拆出环境子路径。剩余的只有**隐式全局契约** `globalThis.appHost`（虚线）：它不参与打包器模块图，但约束初始化顺序。xhs 基类的拆文件注释（`packages/crawler/src/channels/xhs/base.ts:4-7`）是旧环遗留，保留但不再是必需。
+**依赖图已恢复 DAG**（2026-10-23）：host 不再 import core（schema 注入）、resolve 不再 import host（Referer 规则下沉）、host 根入口不再有 import 副作用并拆出环境子路径，平台名单一权威收在 `@amoeba/platform`（R9）。剩余的只有**隐式全局契约** `globalThis.appHost`：它不参与打包器模块图，但约束初始化顺序。xhs 基类的拆文件注释（`packages/crawler/src/channels/xhs/base.ts:4-7`）是旧环遗留，保留但不再是必需。
 
 | 耦合点 | 事实 | 风险 |
 | --- | --- | --- |
-| `globalThis.appHost` | 类型在仓库根 `global.d.ts`，经 `tsconfig.app.json:33` 的 `files` 传给所有包；host 只实现不拥有 | 包不自包含：单独 type-check/发布时类型不存在；player 完全不声明 host 依赖却读 `appHost.http`；漏注入只在运行时炸 |
-| host 根入口仍是聚合 barrel | `packages/host/src/index.ts` 静态 re-export 全部 node/browser/tauri 后端；根入口已无 import 副作用，环境入口拆到 `./node|tauri|browser` | 应用/CLI 已走子路径；新代码若仍 import 根入口，会把三套后端拉进模块图（可发现、非静默错误） |
+| `globalThis.appHost` | 类型在仓库根 `global.d.ts`，经 `tsconfig.app.json:43` 的 `files` 传给所有包；host 只实现不拥有 | 包不自包含：单独 type-check/发布时类型不存在；player 完全不声明 host 依赖却读 `appHost.http`；漏注入只在运行时炸 |
+| host 根入口仍是聚合 barrel | `packages/host/src/index.ts` 静态 re-export 全部 node/browser/tauri 后端；根入口已无 import 副作用，环境入口拆到 `./node\|tauri\|browser` | 应用/CLI 已走子路径；新代码若仍 import 根入口，会把三套后端拉进模块图（可发现、非静默错误） |
 | host ↔ core | `packages/host/package.json` 已删 `@amoeba/core`；core 把 `host` 放 `devDependencies`，并在运行时经 `appHost.storage.setSchema?()` 注入 `StorageSchema` | 反向依赖已消除；剩余风险是**初始化顺序**：SQL 后端在 `setSchema` 前读写会抛，`createDataLayer` 必须早于任何 storage 访问。CLI 的 `sqliteStorage` 仍是 app 层直接 import core（不构成环） |
 | resolve 边界 | `packages/resolve/src/index.ts:10-11` 声明「类型自持、不依赖 crawler」——成立；运行时只依赖 log/ramda，另有 xml 的类型依赖 | 「不依赖上游」**不等于**「无跨包依赖」；改包前先看矩阵，不要只读文件头 |
-| workspace | 根 `workspaces` 收 3 apps + 8 packages；`apps/new_desktop` 无 `package.json` 也不在列表、不被 `scripts/tauri.ts` 引用 | 仓库里存在第二套不可构建的桌面 UI，依赖审计容易漏它 |
+| workspace | 根 `workspaces` 收 3 apps + 11 packages（含 platform / service-protocol / service-client；数据服务拓扑见 [06-data-service.md](06-data-service.md)）；`apps/new_desktop` 无 `package.json` 也不在列表、不被 `scripts/tauri.ts` 引用 | 仓库里存在第二套不可构建的桌面 UI，依赖审计容易漏它 |
 
 ## 3. 错误与降级风险
 
@@ -136,7 +107,7 @@ flowchart LR
 | 新建订阅首抓失败 | 同上（经 `refresh.errorKind`） | `addSubscription` 返回 `{ id, refresh: RefreshResult }`（`data-layer.ts`） | desktop 首刷失败弹 warn「已订阅，但${label}」（`apps/desktop/src/store/actions/subs.ts`）；CLI 复用首刷结果并打印 label（`apps/cli/src/commands/refresh.ts`）；mobile 刻意不展示失败徽标（`apps/mobile/src/store.ts`） |
 | 播放解析失败 | `ResolveError(kind)`（新代码）或普通 `Error` 的启发式归类 | `PlayableMedia` 错误态 + `PlayerPage` 再 toast 一次（标题均为 `ERROR_KIND_LABEL[kind]`，`unknown` 用「解析失败」/「播放失败」） | 舞台与 toast 仍是两份，但分类一致；`auth` 才提示「需要登录」，403 归 `risk`（`PlayableMedia.tsx`） |
 | 被动无数据 | 固定 `no-data` | `doRefresh` 无缓存可回退时写 `RefreshResult.errorKind`；`previewChannel` 无数据直接抛 `ResolveError("no-data")` | 刷新 toast「暂无可用数据」；预览由发现页落错误态 |
-| 平台冷却 | 字符串 `平台冷却中(平台, 剩余, 信号)`（`packages/host/src/net/governor.ts:450-461`）；`errorKindOf` 会把它归到 `rate-limit` | `browserGate` 在 CDP op 之前抛 | 冷却期仍可能遮蔽真实原因（可能只是掉登录），且文案含内部平台名/信号 |
+| 平台冷却 | 字符串 `平台冷却中(平台, 剩余, 信号)`（`packages/host/src/net/governor.ts:442,597`）；`errorKindOf` 会把它归到 `rate-limit` | `browserGate` 在 CDP op 之前抛 | 冷却期仍可能遮蔽真实原因（可能只是掉登录），且文案含内部平台名/信号 |
 | 未知流格式 | 无 | 落入裸 `<video>` 分支；已挂 `onError`（`PlayableMedia.tsx:472-475`），但 FLV 分支仍不透传 headers（`useMediaStream.ts:209-212`） | 未知格式/失效直链现在能看到错误文案；FLV 防盗链仍可能失败 |
 | 日志 **已修（2026-10-26）** | 所有包统一 `@amoeba/log`；`appHost.log` 已删除（core 是最后消费者） | core 新增 `[core]` 域（refresh/cache/detail/cookie 同步 + loadMore 失败 + 被动无数据）；服务用 `setLogSink` 把所有级别写 stderr，stdout 只留 `READY` | `packages/log/src/example/log.check.ts` 覆盖开关/前缀/sink/幂等注册 |
 
@@ -151,65 +122,42 @@ CORS/referrer 隧道是另一条降级链：HLS 只对 `googlevideo.com` 全隧�
 
 | 不变量 | 机制 | 失效模式 |
 | --- | --- | --- |
-| 订阅集变更后「重读 + 重绘」 | `syncSubscriptions`：先 `set` 再 `refreshView`（`apps/desktop/src/store/ctx.ts:42-49`） | 删除当前节点必须先修 `selectedNodeId`；8 处调用全部满足（`subs.ts:71,80,102,133,150,211,219,265`），`toggleSubEnabled` 刻意不走（`subs.ts:106-116`） |
+| 订阅集变更后「重读 + 重绘」 | `syncSubscriptions`：先 `set` 再 `refreshView`（`apps/desktop/src/store/ctx.ts:76-83`） | 删除当前节点必须先修 `selectedNodeId`；8 处调用全部满足（`subs.ts:72,86,108,139,156,217,225,271`），`toggleSubEnabled` 刻意不走（`subs.ts` 的 `toggleSubEnabled`） |
 | 请求世代 | `useLatestOnly` 只丢弃不取消（`apps/desktop/src/lib/useLatestOnly.ts:25-27,44-56`） | store 内另有请求键比对（`hotWord.word` / `previewDetail.key`）；未接入的路径仍会串结果 |
-| 刷新与翻页共享游标 | 按订阅串行链（`packages/core/src/data-layer.ts:541-566,761-762`） | 不同订阅并发；超时/取消由 app 层负责 |
-| TTL | 命中缓存跳过网络（`data-layer.ts:437-455`） | 语义是「复用缓存」而不是「定时刷新」；桌面无 `setInterval`（grep 无命中），UI 文案「每 N 分钟刷新」会误导 |
-| 0 条保护 | 空抓取不清空已有内容（`data-layer.ts:487-495`） | 首次抓取（无缓存、store 空）不受保护，失败即空视图 |
-| 退订竞态 | `removedSubs` 墓碑 + 先立后删（`data-layer.ts:215-222,997-1020`） | 现在清 store/游标/内容/正文/reading（`reading.deleteBySubscription`）；但仍是多次独立写，任一失败会留下部分残留 |
+| 刷新与翻页共享游标 | 按订阅串行链（`packages/core/src/data-layer.ts:618-637,839`） | 不同订阅并发；超时/取消由 app 层负责 |
+| TTL | 命中缓存跳过网络（`data-layer.ts:491-511`） | 语义是「复用缓存」而不是「定时刷新」；桌面无 `setInterval`（grep 无命中），UI 文案「每 N 分钟刷新」会误导 |
+| 0 条保护 | 空抓取不清空已有内容（`data-layer.ts:551-553`） | 首次抓取（无缓存、store 空）不受保护，失败即空视图 |
+| 退订竞态 | `removedSubs` 墓碑 + 先立后删（`data-layer.ts:237,1131-1143`） | 现在清 store/游标/内容/正文/reading（`reading.deleteBySubscription`）；但仍是多次独立写，任一失败会留下部分残留 |
 | 刷新状态 | `refreshAll` finally 无条件 `busy:{}`（`apps/desktop/src/store/actions/data.ts:215`） | 并行单条 `refresh` 的 busy 被一起清掉，health 状态短暂失真 |
 
-```mermaid
-sequenceDiagram
-  autonumber
-  participant UI as desktop data.ts
-  participant DL as core DataLayer
-  participant CH as crawler channel
-  participant GOV as host governor
-  participant BR as appHost.browser
-
-  UI->>DL: refreshAll → allSettled(逐条 withTimeout 45s)
-  DL->>DL: serialized("sub:<id>") 同订阅排队
-  DL->>CH: getSource(info) / fetch()
-  CH->>GOV: appHost.http.request → 分类/冷却/配额
-  GOV-->>CH: 403/412/418/429 → reportRisk 写冷却
-  CH-->>DL: throw（不吞）
-  DL->>DL: catch → 回退 contentCache
-  DL-->>UI: RefreshResult{ error: string }
-  Note over UI: 该订阅超时（仅 channelKey 前缀 weibo/xhs）
-  UI->>BR: abortTabs("刷新超时:<subId>", { keepLogin: true })
-  BR-->>UI: 所有非 login:* lane 的在途命令 reject
-  Note over UI: 其它订阅把这条 reason 记成自己的失败原因
-```
-
-图里的两处错位值得单独记：`abortTabs` 的粒度是**全局非登录 lane**（`browser/backend.ts`），不是「该订阅持有的 lane」；而 `data.ts:184-185` 的守卫是 channelKey 前缀而不是「是否走浏览器」。于是一个 xhs 订阅卡住，会让其它 xhs/weibo 订阅收到同一句 reason，诊断表里的「失败原因」指向另一个订阅。
+一次 `refreshAll` 的时序与 job 语义以 [06-data-service.md](06-data-service.md) §4.2 为准。2026-10-26 起 desktop 不再持有抓取浏览器：45s 超时经 `withTimeout` 的 `onTimeout` → `AbortController` → `cancel(jobId)`（`apps/desktop/src/store/actions/data.ts:208-212`），只作用于该订阅的 job，不再出现跨订阅串因。
 
 两处生命周期风险：
 
 - **WebView2 空闲回收**：零在途满 3 分钟关闭（`tauri/browser-backend.ts` 的 `IDLE_CLOSE_MS`），计时只在 CDP 操作 `begin()/end()` 时重置（`browser/backend.ts` 的 `touch()`）。**当前扫码登录不会踩到**——xhs 每 1s（`packages/resolve/src/platform/xhs/login.ts:181-193`）、weibo 每 0.5/1s（`packages/resolve/src/platform/weibo/login.ts:117-138`）持续产生 CDP 命令，等于隐式续期；真正的缺口是「任何不产生 CDP 命令的长等待没有显式 lease」，这个边界没有写进契约。
-- **cookie 快照无版本**：`doRefresh` 每次用 `settings.get()` 覆盖 `cookieSnapshot`（`data-layer.ts:417`），`applySettings` 也写同一个闭包变量（`:823-828`）。二者交错时后写者胜，provider 可能回退到旧 cookie（风控与登录相关请求静默退回匿名）。同一模式还有进程级单钩子（`credentials.ts:25-30`）与门面 last-writer-wins（`runtime.ts:120-141`）。
+- **cookie 快照无版本**：`doRefresh` 每次用 `settings.get()` 覆盖 `cookieSnapshot`（`data-layer.ts:472`），`applySettings` / `scanLogin` 写回也写同一个闭包变量（`:914`、`:945`）。二者交错时后写者胜，provider 可能回退到旧 cookie（风控与登录相关请求静默退回匿名）。同一模式还有进程级单钩子（`credentials.ts:25-30`）与门面 last-writer-wins（`runtime.ts:120-141`）。
 
-RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显式声明 `policy.platform="rsshub"`，自建实例（任意自定义域名）也归同一桶；governor 另保留 `rsshub.app` 的 host 兜底，设置页新增 RSSHub 行。剩余问题是平台名字符串仍分散在 core（`platformOfChannel`）、host（`platformOf`）与 `global.d.ts` 三处，新增平台要人工同步；RSSHub 只是不再依赖 host 推导。详见 [../../risk/crawler-risk-control.md](../../risk/crawler-risk-control.md)。
+RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显式声明 `policy.platform="rsshub"`，自建实例（任意自定义域名）也归同一桶；governor 另保留 `rsshub.app` 的 host 兜底，设置页新增 RSSHub 行。平台名已收口到 `@amoeba/platform`（R9）：core 的 `platformOfChannel` 与 host 的 `platformOfHost` 都只是查表，新增平台只改 `PLATFORMS`；RSSHub 不再依赖 host 推导。详见 [../../risk/crawler-risk-control.md](../../risk/crawler-risk-control.md)。
 
 ## 5. 平台与运维风险
 
 | 面 | 现状约束 | 影响 | 细节 |
 | --- | --- | --- | --- |
 | xhs | 全渠道要求登录、匿名态移除；CDP 走 `browserGate` | 未登录直接失败；mobile 无任何登录/凭证入口（`apps/mobile/src` 无 `scanLogin` 命中） | [../../platforms/platform-notes.md](../../platforms/platform-notes.md) |
-| bili | `refreshToken` 在 resolve 产出（`packages/resolve/src/index.ts:22`），core 的 `LoginResult` 无该字段（`packages/core/src/data-layer.ts:46-51`），且只落 cookie | 「已有 refresh_token、可做自动保活」的前提不成立（§1.3） | [../../platforms/login.md](../../platforms/login.md) |
+| bili | `refreshToken` 在 resolve 产出（`packages/resolve/src/index.ts:22`），core 的 `LoginResult` 无该字段（`packages/core/src/data-layer.ts:52-57`），且只落 cookie | 「已有 refresh_token、可做自动保活」的前提不成立（§1.3） | [../../platforms/login.md](../../platforms/login.md) |
 | douyin | cookie 已由 provider 消费；登录解锁原画待真机验证 | 登录收益未证实 | [../../platforms/platform-notes.md](../../platforms/platform-notes.md) |
 | YouTube | 主力 client `VISIONOS`；机房 IP 风控与 client 无关 | 换 client 救不了 IP 风控 | [../../platforms/youtube.md](../../platforms/youtube.md) |
 | mobile | 无 CDP、无扫码、`imageProxy/dataSaver` 从未写入门面 | 只能 RSS 直链 + 未读流；被动渠道恒走缓存 | 见 04-extension.md / 01-packages.md |
-| 构建 | 三份 tauri.conf + `scripts/tauri.ts`；9222 只在 dev | release 分支验收成本高（R13） | [../../ops/commands.md](../../ops/commands.md) |
+| 构建 | 四份 tauri.conf（含 tauri.conf.release.json）+ `scripts/tauri.ts`；9222 只在 dev | release 分支验收成本高（R13） | [../../ops/commands.md](../../ops/commands.md) |
 
 ## 6. 工程与构建风险
 
 | 项 | 事实 | 风险 |
 | --- | --- | --- |
-| 构建入口 | 根脚本 `tauri:build` → `scripts/tauri.ts tauri desktop build`；`parseArgs` 新增 `build` 意图（`scripts/tauri.ts:125-136`），`main` 把 `tauri + build` 映射到 `build-release`（`:246-250`） | 已修（2026-10-23）：发布构建跑 Vite build + Tauri build；`build` 单独出现仍只构建前端。建议实跑一次确认产出安装包 |
-| TS paths | `tsconfig.app.json:11-21` 把全部 `@amoeba/*` 指到源码 | 未声明依赖/深层引用 tsc 全绿；`apps/cli/src/commands/align.ts:12` 就直引 `packages/core/src/processing/deserialize.ts` |
+| 构建入口 | 根脚本 `tauri:build` → `scripts/tauri.ts tauri desktop build`；`parseArgs` 新增 `build` 意图（`scripts/tauri.ts:132-143`），`main` 把 `tauri + build` 映射到 `build-release`（`:264`） | 已修（2026-10-23）：发布构建跑 Vite build + Tauri build；`build` 单独出现仍只构建前端。建议实跑一次确认产出安装包 |
+| TS paths | `tsconfig.app.json:11-31` 把全部 `@amoeba/*` 指到源码 | 未声明依赖/深层引用 tsc 全绿；`apps/cli/src/commands/align.ts:12` 就直引 `packages/core/src/processing/deserialize.ts` |
 | 根 tsc | 根 `tsconfig.json` 只有 references（`:2-6`），目标配置无 `composite` | `tsc -b` 不是有效入口；仓库实际按 per-project `tsc -p` 使用 |
-| 全局 ABI | `global.d.ts` 经开 `files`（`tsconfig.app.json:33`）传播 | 独立编译/发布的包必须自己再声明一次；CLI/scripts 是同类漏配的高发区 |
+| 全局 ABI | `global.d.ts` 经开 `files`（`tsconfig.app.json:43`）传播 | 独立编译/发布的包必须自己再声明一次；CLI/scripts 是同类漏配的高发区 |
 | 依赖声明 | `packages/ui/package.json:11,13` 声明 core/player 但源码未 import；`apps/mobile/package.json:12,17-19` 声明 `@tauri-apps/api`、crawler/resolve/xml 但源码未 import | 安装体积与依赖审计失真；读者误判真实边界 |
 | 锁文件/安装 | 唯一 `bun.lock`；各 workspace 的 `node_modules/@amoeba/*` 是指向源码目录的符号链接 | 未声明的依赖在隔离安装下会解析失败，但 `tsconfig paths` 会掩盖；CI 不能用 npm/pnpm 重装 |
 | 双 dist | `apps/src-tauri/tauri.conf.json:10` → `../../dist/desktop` | 桌面/移动产物同根不同目录，清理与 CI 缓存要分开指定 |
@@ -224,17 +172,16 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 | XML 是 crawler→core 唯一通道 | 30+ 个 tpl 字段两侧硬编码 | core 不依赖 crawler 条目模型，外部 RSSHub 可同管 | 两个 check 脚本 + [../data-and-storage.md](../data-and-storage.md) |
 | `streams[0]` 由产流侧排序，player 不排序 | 每个平台各自保证顺序 | 档位语义不同：douyu 的 rate 是档位 ID、huya 的 0 是最高档；player 二次排序必错 | `useStreamSelection.check.ts` + 真机播放矩阵 |
 | `useLatestOnly` 只丢弃不取消 | 浪费一次请求 | `appHost.http` 隧道没有 abort 信号（`useLatestOnly.ts:25-27`） | 代码约束，无替代 |
-| passive 渠道绝不回退 `fetch()` | 无被动数据时只剩缓存 | 主动构造的平台请求正是被动模式要禁的（`data-layer.ts:463-479`） | `passive-mode.check.ts` |
+| passive 渠道绝不回退 `fetch()` | 无被动数据时只剩缓存 | 主动构造的平台请求正是被动模式要禁的（`data-layer.ts:513-541`） | `passive-mode.check.ts` |
 | 表现型偏好放 localStorage、功能型设置放 SQLite | 两套存储 | 首帧脚本必须同步读主题 | `prefs.ts`；core 的 `theme/fontSize/density` 是历史遗留、无消费者 |
 | CDP 只过 `browserGate`，不走 `governedHttp` | 两套治理 | 浏览器导航不是 HTTP 请求，配额模型不同 | `governor.check.ts` |
-| 退订先立墓碑 | 复杂度 | 防在途刷新把已退订内容写回（`data-layer.ts:997-1014`） | `repo-concurrency.check.ts` |
-| 45s 超时只丢外层结果 | 内容可能「报失败但已更新」 | 底层 invoke 没有取消通道（`data.ts:168-177`） | 真机 + 诊断表 |
+| 退订先立墓碑 | 复杂度 | 防在途刷新把已退订内容写回（`data-layer.ts:1131-1143`） | `repo-concurrency.check.ts` |
+| 45s 超时只拒绝外层 Promise | 远端模式已把 signal 转成 `cancel(jobId)`（服务端真停）；本地回退模式 core 丢弃在途结果 | 底层 invoke 仍无 abort 通道 | `apps/desktop/src/store/actions/data.ts:208-212` |
 
 ### 7.2 待还债（按建议顺序）
 
 | 债务 | 最小改法 | 验证方式 |
 | --- | --- | --- |
-| R11 迁移版本（未来） | 出现非幂等迁移时补 `_migrations(version)` 表并在两个 backend 共用同一执行器 | 新增一条非幂等 SQL，重启两次不报错 |
 | R18 死字段（剩余） | 新增字段前先 grep 生产者；不可达字段直接删，不做「预留」 | `tsc` + grep 无 producer 的字段清单 |
 | R19 文档漂移（剩余） | 新注释与代码同改；发现漂移按 §7.3 登记 | `tsc` 通过即可（无逻辑改动） |
 
@@ -249,11 +196,7 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 | 1 | WebView2 边界显式化：登录续期、长等待豁免（R16） | 降低扫码/刷新失败率 | 1 天 | 需真机；R5 的取消部分已由 job 取消解决（2026-10-26），仅 lane 化未做 |
 | 2 | 文档漂移持续收尾（R19） | 类型/注释不再承诺不存在的东西 | 随时 | `tsc` + grep；新漂移登记到 §7.3 |
 
-一个判断依据：依赖/加载层（R2）已完成，平台表（R9）与存储多键原子（R10）已在
-2026-10-26 收口，消除的都是静默错误；WebView2 边界需要真机验收（见
-[../../ops/smoke-check.md](../../ops/smoke-check.md)）。错误分类（R6）、预览被动（R8）、
-RSSHub 归桶、正文索引与 `MIGRATIONS.version`（R10/R11）、死字段（R18）与 R2 均已完成，
-后续只需平台 client 逐步换 `ResolveError`。
+已完成项以 §0 总表为准；剩余只有 WebView2 边界（R16）、文档漂移（R19）与平台 client 逐步换 `ResolveError`（R6 残余），真机项见 [../../ops/smoke-check.md](../../ops/smoke-check.md)。
 
 ## 延伸阅读
 

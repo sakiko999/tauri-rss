@@ -11,71 +11,53 @@
 
 | 档 | 条目 | 净收益（估） |
 | --- | --- | --- |
-| A · 低风险、建议尽快 | 8 条 | ~150 行 |
+| A · 低风险、建议尽快 | 6 条（A2/A5 已完成，已删） | ~100 行 |
 | B · 中风险、改到再动 | 5 条 | ~160 行 |
 | C · 明确不改 | 3 条 | — |
-| D · 待确认 | 1 条 | — |
+| D · 已核实（可删） | 1 条 | — |
 
 ---
 
 ## A · 低风险，建议做
 
-### A1. 串行队列在 5 个文件各写一份
+### A1. 串行队列在 4 个文件各写一份
 
-- 位置：`packages/core/src/repo/subscription-repo.ts:37` · `reading-repo.ts:34` ·
-  `settings-repo.ts:20` · `body-cache-repo.ts:42`（按 key 分组）· `packages/core/src/data-layer.ts:475`
-- 现状：五处都是 `let serial = Promise.resolve(); const next = serial.then(fn, fn)`；
-  data-layer/body-cache 还要额外维护 `Map<key, Promise>`。注释各写各的。
+- 位置：`packages/core/src/repo/subscription-repo.ts:37` · `reading-repo.ts:36` ·
+  `settings-repo.ts:26` · `packages/core/src/data-layer.ts:618`（`serialized()`，共四处）
+- 现状：四处都是 `let serial = Promise.resolve(); const next = serial.then(fn, fn)`；
+  data-layer 还要额外维护 `Map<key, Promise>`。注释各写各的。body-cache 的串行队列已删，
+  改为 `keysOf` 前缀扫描（`body-cache-repo.ts:47-51`）。
 - 建议：新增 `packages/core/src/repo/serial.ts`，导出 `createSerialQueue()` 与
-  `createKeyedSerialQueue()`，五处替换本地实现。纯 Promise 编排，不需要任何库。
-- 风险：low ｜ 省 ~35 行 ｜ remeda_fit: bad（这是控制流，不是数据变换）
+  `createKeyedSerialQueue()`，四处替换本地实现。纯 Promise 编排，不需要任何库。
+- 风险：low ｜ 省 ~30 行 ｜ remeda_fit: bad（这是控制流，不是数据变换）
 
-### A2. `previewChannel` 重抄了一份凭证合并规则
+### A3. kind 的中文名/图标造了两份
 
-- 位置：`packages/core/src/data-layer.ts:805`
-- 现状：手写了与 `sourceInfoFor()`（:253）相同的 rsshub baseUrl / 平台 cookie 合并，注释自认「同规则」。
-  改一处会让「预览」和「正式抓取」用不同凭证。
-- 建议：`const merged = await sourceInfoFor({ channelKey, info }, s)`，删掉 805–811。
-- 风险：low ｜ 省 ~7 行
-
-### A3. kind 的中文名/图标造了三份
-
-- 位置：`apps/desktop/src/components/app/Cards.tsx:300`（`kindLabel`）·
-  `apps/desktop/src/views/player/PlayerPage.tsx:325`（`kindName`）·
-  `CommandPalette` 的 icon 四层三元
-- 现状：`store/nodes.ts:32` 的 `KIND_META` 已有全部 label+icon，三份副本**已经不一致**
-  （`kindName` 缺 `category`）。
-- 建议：统一 `KIND_META[kind]?.label ?? kind` / `KIND_META[kind]?.icon ?? "rss"`，删两个本地函数。
+- 位置：`apps/desktop/src/views/player/PlayerPage.tsx:335`（`kindName`）·
+  `apps/desktop/src/views/palette/CommandPalette.tsx:83`（icon 四层三元）
+- 现状：`store/nodes.ts:32` 的 `KIND_META` 已有全部 label+icon，两份副本**已经不一致**
+  （`kindName` 缺 `category`）。`Cards.tsx` 的 `kindLabel` 已删。
+- 建议：统一 `KIND_META[kind]?.label ?? kind` / `KIND_META[kind]?.icon ?? "rss"`，删两处本地实现。
 - 风险：low ｜ 省 ~14 行
 
-### A4. 可播判定 4 处各写一遍
+### A4. 可播判定 desktop 两处各写一遍（mobile 已冻结，不再动）
 
 - 位置：`Cards.tsx:42`（唯一定义）· `store/selectors.ts:89`（`short:` 分支内联）·
-  `apps/mobile/src/store.ts:146`（`isPlayable`）
+  `apps/mobile/src/store.ts:150`（`isPlayable`，仅存档）
 - 建议：把 `isPlayableKind` 下沉到 `apps/desktop/src/lib/media.ts`（或 core 的 kind 工具），
-  desktop 三处统一引用；mobile 保留自己的（跨端不共享 app 代码，但可复用 core 常量）。
+  desktop 两处统一引用；mobile 保留自己的。
 - 风险：low ｜ 省 ~6 行 ｜ 价值在**契约一致**（新增 kind 时不会漏一处）
-
-### A5. 添加订阅弹窗的 filter 是死状态
-
-- 位置：`apps/desktop/src/views/manage/AddSubscriptionDialog.tsx:77` + `:138`
-- 现状：`const [filter] = useState("")` **没有 setter**，`shown` 的 useMemo 恒等于 `cands`；
-  CandidateList 的「匹配 N / N」和空筛选分支都是死路径。发现页调用处直接传 `shown={cands}`。
-- 建议：删 `filter`/`shown`，CandidateList 只收 `cands`，标签改成「N 项」。
-  将来真要筛选，从外层传受控值。
-- 风险：low ｜ 省 ~10 行
 
 ### A6. `selectors.ts` 有无调用者的导出
 
-- 已确认 **0 引用**：`itemsById` · `subUnread` · `lastFetchedOf` · `unreadCount` · `heatOf`
-  （`git grep` 排除定义文件后无命中）。
-- 待确认：补扫 agent 还报了 nodes 的 2 个分组 helper、`media.fmtNum`、`LiveRailCard`（转发壳）。
+- 仍确认 **0 引用**：`unreadCount:185` · `subUnread:197` · `lastFetchedOf:217`
+  （`itemsById` 已删；`heatOf` 已被 `sortItems` 内部使用，保留）。
 - 建议：删除确认无用的导出；若想留作调试 API，加 `@internal` 注释，避免被当公共接口继续引用。
 - 风险：low ｜ 省 ~35 行
 
 ### A7. 两条按 URL 解析的链路只差一行
 
-- 位置：`packages/core/src/data-layer.ts:560` / `:581`
+- 位置：`packages/core/src/data-layer.ts:706` / `:727`
 - 现状：`resolvePlayByUrl` 与 `resolveLivePlayByUrl` 除 resolver 调用外完全相同。
 - 建议：`resolveByUrl(itemId, subscriptionId, resolveFn)` 共用。
 - 风险：low ｜ 省 ~20 行
@@ -93,11 +75,12 @@
 
 ## B · 中风险，改到那块时顺手做
 
-### B1. 缓存 XML 回填写了四遍（helper 反而闲置）
+### B1. 缓存 XML 回填：helper 之外还有两处内联
 
-- 位置：`packages/core/src/data-layer.ts` —— `restoreFromCache:157` · 停用路径 `:318` ·
-  TTL 短路 `:369` · 失败回退 `:448`
-- 现状：四处重复 `deserializeFeedWithTotal → applyReadingState → replaceIfLive → pageCursors.delete`；
+- 位置：`packages/core/src/data-layer.ts` —— `restoreFromCache:250` · 自动刷新关闭 `:481` ·
+  TTL 短路 `:499-507` · 失败回退 `:582-589` · 水化 `:612`
+- 现状：三处重复 `deserializeFeedWithTotal → applyReadingState → replaceIfLive → pageCursors.delete`
+  （helper + TTL 短路/失败回退两处内联；`:481` 与 `:612` 直接复用 helper）；
   且 **total 语义不一致**（停用路径 total 为 undefined 时不清旧值，TTL 路径会清）。
 - 建议：抽 `applyCachedXml(subscriptionId, xml, kind)`，返回 `{ items, total }`；
   total 的 set/delete 仍由调用点决定，**不要顺手统一**（会改变停用/失败回退语义）。
@@ -105,8 +88,8 @@
 
 ### B2. YouTube 四种 client 的请求体重复（~120 行）
 
-- 位置：`packages/resolve/src/platform/youtube/client.ts` —— `getAndroidPlayerResponse:205` ·
-  `getWebPlayerResponse:238` · `getIosPlayerResponse:263` · `getVisionosPlayerResponse:316`
+- 位置：`packages/resolve/src/platform/youtube/client.ts` —— `getAndroidPlayerResponse:213` ·
+  `getWebPlayerResponse:246` · `getIosPlayerResponse:271` · `getVisionosPlayerResponse:324`
 - 现状：四份几乎相同的 context/videoId/cpn/contentCheckOk/racyCheckOk，只差 client 字段、端点、UA。
 - 建议：`CLIENT_CONFIG` 表（clientName/version/device/os/端点/UA/headers）+ `playerBody(...)`
   + `requestPlayer(...)`；保留导出的 `visionosPlayerBody` 薄包装给 `youtube-clients.check.ts` 钉形状。
@@ -123,8 +106,8 @@
 
 ### B4. 「按名查找或新建分组」写了三遍
 
-- 位置：`apps/desktop/src/store/actions/subs.ts` —— `ensureKindGroup:21` ·
-  `autoGroupByKind` 内的 `ensureGroup:178` · `importOpml` 的 `groupIdOfLeaf:244`
+- 位置：`apps/desktop/src/store/actions/subs.ts` —— `ensureKindGroup:22` ·
+  `autoGroupByKind` 内的 `ensureGroup:184` · `importOpml` 的 `groupIdOfLeaf:250`
 - 现状：三份「按标题找组，找不到就建」；组 id 拼接在 `addGroup:123` 与 `importOpml:249` 各写一次。
 - 建议：抽 `ensureGroupByTitle(title)`；importOpml 若不想逐组 set state，让 helper 接一个
   create 回调以保留 dl 直连。
@@ -169,22 +152,18 @@ case 写类型谓词，收益为负。
 
 ---
 
-## D · 待确认
+## D · 已核实（可删，按需）
 
-- `apps/desktop/src/store/nodes.ts` 的几个分组 helper、`lib/media.ts` 的 `fmtNum`、
-  `LiveRailCard`（仅转发）是否还有调用者。删除前用 `git grep` 逐个确认（A6 已确认 5 个，
-  这几个是补扫 agent 报的，尚未逐个核实）。
+- 已核实：`lib/media.ts:155` 的 `fmtNum`、`components/app/Cards.tsx:301` 的 `LiveRailCard`
+  均 0 引用（可删）；`lib/subscriptions.ts:69` 另有一份私有 `fmtNum` 副本；
+  `nodes.ts` 的分组 helper 仍需逐个 grep。
 
 ---
 
-## 2026-10-26：合入 master 前 review 遗留（`feat/browser-driver`）
+## 2026-10-26：`feat/browser-driver` 合入前 review 遗留
 
-合入前跑了两轮 review：`/code-review`（正确性，15 条）+ 四维简化审计（Reuse/Simplification/
-Efficiency/Altitude，32 条）+ Workflow 补齐（Rust 载体 / 协议一致性 / 打包与迁移）。
-**P0/P1 已修**：平台前缀尾冒号（`live:douyin` 匹配失败）、WS 帧可打死服务、退订 batch
-失败抛错、`media_referer` COM 出参未释放、迁移先执行后校验、CLI 二维码把图片 URL 编码成
-假二维码、`sinceRev` 重放丢同 rev 事件、WS 握手失败不退避、core 日志 `String(e)`。
-下列为**未修**项，按「改到再动」排序。
+2026-10-26 `feat/browser-driver` 合入前的 review 中 P0/P1 已修（见 git log）；下列为未修项，
+按「改到再动」排序。
 
 ### A · 正确性/语义（优先）
 
@@ -214,7 +193,7 @@ Efficiency/Altitude，32 条）+ Workflow 补齐（Rust 载体 / 协议一致性
 - **A3 扫码登录成功后读本地 settings 镜像再写回**（`AccountPage.tsx:277`）：镜像尚未收到
   `settings.changed` 时会把刚写入的 cookie 覆盖成旧值。应用 RPC 返回值或等事件后再写。
 - **A4 刷新超时不再 `abortTabs`**：服务端 `withSignal` 只让 race reject，不中止底层请求，
-  被放弃的抓取仍占浏览器 lane（`op:xhs`）直到 CDP 自身超时。`abortTabs` 已无生产调用。
+  被放弃的抓取仍占浏览器 lane（`op:xhs`）直到 CDP 自身超时。desktop 侧 `abortTabs` 调用已移除。
 - **A5 `channelVideoToItem` 缺 author/publishedAt/duration**（`crawler/.../youtube/channel.ts:119`）：
   「今天」节点恒空、时间排序退化、卡片把 summary 当作者名。设计上刻意不反推 publishedAt，
   但 author（频道名）与 duration（lockup 里有）可以补。
@@ -264,5 +243,5 @@ Efficiency/Altitude，32 条）+ Workflow 补齐（Rust 载体 / 协议一致性
 - 本项目已有「零依赖叶子包」的取向（`log`、`xml` 只持一个解析器）。
 - 真正适合 Remeda 的形态（多次遍历、分组计数、不可变更新）在仓库里**并不多**：
   核心逻辑大量是「副作用 + 平台协议解析」，数据变换多是单次 `map/filter`，原生写法更短。
-- 若将来引入，A1/A2/A3/A7 这类**抽取共享函数**的收益与 remeda 无关，先做这些；
+- 若将来引入，A1/A3/A7 这类**抽取共享函数**的收益与 remeda 无关，先做这些；
   `remeda_fit: good` 的条目为 0，也说明现在没有引入的动机。
