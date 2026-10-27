@@ -10,6 +10,7 @@
  * 会以同样的方式静默污染阅读流 —— 这里直接拦下。
  */
 import { listChannels } from "../index.ts"
+import { squareItems } from "../channels/bili/square.ts"
 
 let fails = 0
 const ok = (c: unknown, label: string) => {
@@ -36,6 +37,27 @@ console.log("新增热搜渠道守卫:")
   for (const c of keywordChannels) {
     ok(c.kind === "social", `${c.key}(${c.name}) kind = ${c.kind},应为 social`)
   }
+}
+
+console.log("条目级输出(权威 = tpl:kind):")
+{
+  // 渠道元数据的 kind 只是声明;core 归档看条目(tpl:kind)。这里直接跑映射函数。
+  const items = squareItems(
+    [
+      { keyword: "AI", link: "https://search.bilibili.com/all?keyword=AI", icon: "https://i0.hdslb.com/x.jpg" },
+      { keyword: "没有链接" },
+    ],
+    1_700_000_000_000,
+  )
+  ok(items.length === 2, "两条词条都产出条目")
+  ok(items.every((i) => i.kind === "social"), "条目 kind = social(不是 article)")
+  ok(
+    items.every((i) => !/[<>]/.test(String((i as { content?: string }).content ?? ""))),
+    "正文是纯文本(social 卡片按文本渲染)",
+  )
+  ok(items[0]?.thumbnail === "https://i0.hdslb.com/x.jpg", "icon → thumbnail")
+  ok(items[1]?.url?.includes("search.bilibili.com"), "缺 link 时用关键词拼搜索地址")
+  ok(items[0]?.id === "bili-rank-AI", "id 只用词(位次变化不算新条目)")
 }
 
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)
