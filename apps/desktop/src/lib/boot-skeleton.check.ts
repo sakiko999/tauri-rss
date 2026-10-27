@@ -50,4 +50,11 @@ assert.equal(narrowRail, bsCollapsed, `窄窗 --rail(${narrowRail})与骨架折�
 const bsBreakpoint = skeleton.match(/@media \(max-width:\s*(\d+)px\)\s*\{\s*\.bs-rail/)?.[1]
 assert.equal(bsBreakpoint, "1080", `骨架的窄窗断点(${bsBreakpoint})与真实断点(1080)不一致`)
 
-console.log("✔ 骨架/侧栏宽度契约自检通过(展开 268 / 折叠 64 / 断点 1080 三处一致)")
+// ── 4. 顶栏高度:骨架 .bs-topbar vs 真实 --header-h ───────────────────────
+// 合流改版会把顶栏收进主列并把高度改到 64px。改 token 时若漏改骨架,首帧顶栏会跳。
+const headerVar = tokens.match(/--header-h:\s*([^;]+);/)?.[1]?.trim()
+const bsHeader = skeleton.match(/\.bs-topbar\s*\{[^}]*?height:\s*([^;]+);/)?.[1]?.trim()
+assert.equal(headerVar, "52px", `真实顶栏高度变了(${headerVar})——记得同步改 boot-skeleton.css 的 .bs-topbar`)
+assert.equal(bsHeader, headerVar, `骨架顶栏高度(${bsHeader})与真实 --header-h(${headerVar})不一致 —— 启动会跳一下`)
+
+console.log("✔ 骨架/侧栏/顶栏契约自检通过(展开 268 / 折叠 64 / 断点 1080 / 顶栏 52 四处一致)")

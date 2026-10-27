@@ -1,6 +1,7 @@
 # 桌面端「合流」改版计划（HELIU Redesign Plan）
 
-> 状态：**草案，未排期**（2026-10-27）。分支 `docs/desktop-redesign-plan`。
+> 状态：**实施中**（2026-10-27 起）。分支 `feat/heliu-redesign`。
+> 进度：M0 的 `navIdOf`/节点断言与 `--header-h` 断言、M3 的五个首页 selectors 已落地。
 > 来源原型：`X:\design\聚合多媒体看板原型`（合流 HELIU，纯静态 HTML/CSS/JS，单屏 demo + 假数据）。
 > 测绘方法：11 个并行读码 agent 对外壳 / store / 列表视图 / 播放器 / 管理页 / 数据层 / 样式做测绘，
 > 产出 IA / 数据 / 视觉三张差距矩阵 + 一轮契约红队；本文是该输出的收敛与裁决。
@@ -22,7 +23,8 @@
 
 由此派生的「不可删清单」（红队 blocker #1）：`TABS` 6 + `SMART` 4 + `SHORT_MODES` 2 + `PAGES` 3 + `page:discover`
 （`apps/desktop/src/store/nodes.ts:46-70`）一律保留节点语义；差距矩阵里的 drop 项只作为未来候选，本轮一律不删。
-`rail-nav.check.ts` 目前只覆盖 `navAction`（删除节点无回归保护）——**M0 必须先补断言再动侧栏**。
+`rail-nav.check.ts` 只覆盖 `navAction`（删除节点无回归保护）——**M0 先补断言再动侧栏**：
+节点/导航映射落在 `store/nodes.check.ts`（节点清单 + `navIdOf`），键盘映射留在 `rail-nav.check.ts`。
 
 ## 1. 原型拆解（要还原什么）
 
@@ -118,7 +120,8 @@
 
 改动收敛在：`nodes.ts` 增 `home` 分支（`nodeMeta` type:"home"）+ `navIdOf(nodeId)` 纯函数（节点 → 4 主导航高亮之一，
 按 `channelKind` 派生：article 类订阅 → 阅读，social → 动态，video/live/audio → 影音，其余不高亮），
-两者进 `rail-nav.check.ts` 断言。`navIdOf` 同时修掉现有缺陷「播放页不改 `selectedNodeId` → rail 高亮停在上一节点」。
+两者进 `store/nodes.check.ts` 断言（节点清单与导航映射归节点层，键盘映射留在 `rail-nav.check.ts`）。
+`navIdOf` 同时修掉现有缺陷「播放页不改 `selectedNodeId` → rail 高亮停在上一节点」。
 
 ### 3.2 侧栏终态（自上而下）
 
@@ -181,7 +184,7 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 
 | 阶段 | 范围 | 验收 |
 | --- | --- | --- |
-| **M0 回归保护**（前置，半天） | `rail-nav.check.ts` 补 SMART/SHORT/PAGES 断言 + `navIdOf` 表驱动自检；`boot-skeleton.check.ts` 加 `--header-h` 断言；建立「字段矩阵」文档（字段→tpl key→类型→产生渠道→消费视图，v2 用） | `bun run check` 全绿；删任一 SMART 节点的演练被断言拦住 |
+| **M0 回归保护**（前置，半天） | `store/nodes.check.ts` 补 SMART/SHORT/PAGES 断言 + `navIdOf` 表驱动自检；`boot-skeleton.check.ts` 加 `--header-h` 断言；建立「字段矩阵」文档（字段→tpl key→类型→产生渠道→消费视图，v2 用） | `bun run check` 全绿；删任一 SMART 节点的演练被断言拦住 |
 | **M1 视觉基座**（1 天） | §2.3 全部 token 换值 + 新增变量 + @theme 注册；主题切换颜色过渡白名单进 `[data-motion]` 门控（写死 .25s 会绕过动效开关）；浅色逐项覆盖对表（漏写会继承深色值） | `scripts/ui-design-audit.ts` 0 处低于 AA；三档实拍；`bun run check --layer static` |
 | **M2 外壳重构**（2 天） | 双列模型：titlebar 收进主列、品牌区 + 主导航 section 进侧栏、内容类型段缩为 全部/音频/直播、页脚同步行；NavRow live 槽位；头像菜单（账号/设置/关于，扫码入口迁入且关闭仍 `AbortController.abort`，否则浏览器锁卡满 5 分钟）；⌘K 合一（两段共用 index 空间，IME 守卫保留）；删铃铛与 update-chip；`home` 节点 + `/` 路由 + `DEFAULT_VIEW="home"`；`navIdOf` 高亮（修播放页高亮缺陷） | 启动骨架不跳（boot-skeleton 同批改）；旧深链 `/v/...`、`?word/?open/?tab` 全部实测；Alt+Left 行为不变；`rail-nav.check` 绿 |
 | **M3 首页**（2 天） | 五个 selectors + 五个 `.check`；`itemsVersion` 失效键改造 + 等长 patch 验证；HomeView 五区块 + `.media-rail` 通用轨 + `65-home.css`；空态全部走 StateBlock | 首页五区块在 无订阅/空库/离线 三态下不出现假信息；等长 patch 恰好重算一次；滚动死区实测（头部随滚） |

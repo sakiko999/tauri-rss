@@ -112,6 +112,58 @@ export function pageIdOf(id: string): PageId | null {
   return p === "discover" || p === "settings" || p === "account" ? (p as PageId) : null
 }
 
+/**
+ * 主导航（合流改版）：首页 / 阅读 / 动态 / 影音。片库第一版不做（P1）。
+ * 只用于侧栏高亮，不参与视图分发——视图仍由 nodeMeta.type 决定。
+ */
+export type NavId = "home" | "reader" | "social" | "media"
+
+/** 内容 kind → 主导航。category 是目录条目，没有对应导航。 */
+export function navForKind(kind: MediaKind | undefined): NavId | null {
+  if (kind === "article") return "reader"
+  if (kind === "social") return "social"
+  if (kind === "video" || kind === "audio" || kind === "live") return "media"
+  return null
+}
+
+/**
+ * 节点 → 应高亮的主导航（无对应则 null，不强行高亮）。
+ *
+ * ⚠️ 单独一份映射而不是复用 nodeMeta.type：nodeMeta.type 是**布局**（reader/media/hot/page/…），
+ * 主导航是**入口分组**；两者不同构（tab:live 的布局是 media，但它和 tab:video 同属「影音」）。
+ * 分组节点只有成员同属一个导航时才高亮，混组不高亮——避免「高亮一个、实际混着五种内容」。
+ *
+ * ⚠️ 播放页不调用本函数：`/play/:itemId` 没有 nodeId，返回位置由 `?from=` 承载，
+ * 高亮应取 `navIdOf(from)`（这是 M2 的事，本函数先只保证映射本身可断言）。
+ */
+export function navIdOf(
+  id: string | null,
+  subscriptions: Subscription[],
+  channelKind: (channelKey: string) => MediaKind | undefined,
+): NavId | null {
+  if (!id) return null
+  if (id === "home") return "home"
+  if (isTabNode(id)) {
+    const k = id.slice(4)
+    return k === "all" ? null : navForKind(k as MediaKind)
+  }
+  if (isGroupNode(id)) {
+    const gid = groupIdOf(id)
+    if (!gid) return null
+    const navs = new Set<NavId>()
+    for (const sub of subscriptions) {
+      if (sub.groupId !== gid) continue
+      const nav = navForKind(channelKind(sub.channelKey))
+      if (nav) navs.add(nav)
+    }
+    const only = Array.from(navs)[0] ?? null
+    return navs.size === 1 ? only : null
+  }
+  if (isSmartFeed(id) || isShortNode(id) || isPageNode(id) || isPlayNode(id)) return null
+  const sub = subscriptions.find((s) => s.id === id)
+  return sub ? navForKind(channelKind(sub.channelKey)) : null
+}
+
 /** 节点固有 kind(无 kind 维度 = undefined:tab:all / smart feed / 分组 / 页面)。 */
 export function nodeKindOf(
   id: string | null,

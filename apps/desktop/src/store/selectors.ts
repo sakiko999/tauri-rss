@@ -6,6 +6,7 @@
  * (MediaItem.isUnread / isStarred 已是权威,不再另存 read/starred 映射)。
  */
 import type { MediaItem, MediaKind, Subscription } from "@amoeba/core"
+import { isLiveNow } from "../lib/media.ts"
 import { groupIdOf, isGroupNode, isTabNode } from "./nodes.ts"
 
 /** 视图筛选(按节点分别记忆)。 */
@@ -219,4 +220,140 @@ export function lastFetchedOf(sub: Subscription): number {
 }
 
 // itemsById 已删：裸 id 定位会跨订阅串条目，统一走 itemKey/复合键。
+
+// ═══════════════════════════════════════════════════════════════════════
+// 首页聚合（合流改版 M3）
+//
+// 五个纯函数，输入都是 allItems/subscriptions 快照 + now，不读 store、不写状态。
+// 首页五个区块各消费一个；各自的取舍写在注释里（都是「看起来能算、其实会算错」的点）。
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface TodayCounts {
+  /** 今日发布的条目总数。 */
+  total: number
+  /** 今日各 kind 的条数（key 为 MediaKind）。 */
+  byKind: Partial<Record<MediaKind, number>>
+  /** 此刻在播的直播数（与「今日」无关：直播没有 publishedAt）。 */
+  liveNow: number
+}
+
+/**
+ * 今日计数 + 在播直播数。
+ *
+ * ⚠️ 文案必须写「今日有更新」而不是精确篇数：YouTube InnerTube / bili:precious 等源
+ * 刻意不设 `publishedAt`，精确计数会漏掉它们（见 selectors.ts 顶部 timeKey 的注释）。
+ */
+export function todayCounts(items: MediaItem[], now: number): TodayCounts {
+  const byKind: Partial<Record<MediaKind, number>> = {}
+  let total = 0
+  let liveNow = 0
+  for (const i of items) {
+    if (isLiveNow(i)) liveNow++
+    if (!i.publishedAt || !isToday(i.publishedAt, now)) continue
+    total++
+    byKind[i.kind] = (byKind[i.kind] ?? 0) + 1
+  }
+  return { total, byKind, liveNow }
+}
+
+export interface ResumeEntry {
+  item: MediaItem
+  /** 0..1，已裁剪到合法区间。 */
+  pct: number
+}
+
+/**
+ * 继续观看/继续阅读：算进度百分比并按最近阅读排序。
+ *
+ * ⚠️ 时长取 `duration ?? durationSec`：bili 只写 `VideoItem.duration`，只看 durationSec
+ * 会让整条被过滤掉（NaN / 0）。工期缺失的条目**整条丢弃**，不显示「已观看 0%」。
+ * 直播不记进度（live 的 duration 恒 0），不参与。
+ */
+export function resumeWithPct(items: MediaItem[]): ResumeEntry[] {
+  const out: ResumeEntry[] = []
+  for (const item of items) {
+    if (item.kind === "live" || item.kind === "category") continue
+    let pct = 0
+    if ((item.positionSec ?? 0) > 0) {
+      const dur = (item as { duration?: number }).duration ?? item.durationSec
+      if (!dur || !Number.isFinite(dur) || dur <= 0) continue
+      pct = (item.positionSec ?? 0) / dur
+    } else if ((item.scrollRatio ?? 0) > 0) {
+      pct = item.scrollRatio ?? 0
+    } else {
+      continue
+    }
+    if (!Number.isFinite(pct)) continue
+    out.push({ item, pct: Math.min(1, Math.max(0, pct)) })
+  }
+  return out.sort(
+    (a, b) => (b.item.lastReadAt ?? b.item.publishedAt ?? 0) - (a.item.lastReadAt ?? a.item.publishedAt ?? 0),
+  )
+}
+
+/**
+ * 在播直播列表（在线人数降序，截断）。
+ *
+ * ⚠️ 判据只认 `isLiveNow`（unknown 算在播、offline 不算）——曾经只看 kind，
+ * 把 twitch 的「（离线）」房间算进「正在直播 N 个」。
+ */
+export function selectLive(items: MediaItem[], limit = 12): MediaItem[] {
+  return items
+    .filter(isLiveNow)
+    .slice()
+    .sort((a, b) => ((b as { online?: number }).online ?? 0) - ((a as { online?: number }).online ?? 0))
+    .slice(0, limit)
+}
+
+export interface SubFeed {
+  sub: Subscription
+  /** 该订阅最近 N 条。 */
+  items: MediaItem[]
+  /** 该订阅未读数（全量，不是这 N 条里的）。 */
+  unread: number
+}
+
+/**
+ * 订阅更新：每个订阅取最近 N 条 + 未读数，按最新一条排序。
+ *
+ * 一次遍历建 map，**不要**对每个订阅调 subUnread（那是 O(订阅×条目) 全扫）。
+ * 没有条目的订阅（刚订阅/抓取失败）不出现——空源不该占首页一块位置。
+ */
+export function groupedBySub(items: MediaItem[], subscriptions: Subscription[], perSub = 3): SubFeed[] {
+  const bySub = new Map<string, MediaItem[]>()
+  for (const i of items) {
+    const list = bySub.get(i.subscriptionId)
+    if (list) list.push(i)
+    else bySub.set(i.subscriptionId, [i])
+  }
+  const out: SubFeed[] = []
+  for (const sub of subscriptions) {
+    const list = bySub.get(sub.id)
+    if (!list?.length) continue
+    list.sort((a, b) => timeKey(b) - timeKey(a))
+    out.push({ sub, items: list.slice(0, perSub), unread: list.filter((i) => i.isUnread).length })
+  }
+  return out.sort((a, b) => timeKey(b.items[0]!) - timeKey(a.items[0]!))
+}
+
+/**
+ * 为你精选：动态与影音按 kind 轮转混排。
+ *
+ * ⚠️ 不叫「按你的阅读习惯」——没有推荐模型。两个池子分别排序后交替取：
+ * 动态按热度（likes），影音按时间。**不能**把 likes 与 online 放进同一个 heatOf 比较，
+ * 量纲不同会让直播/大 VOD 长期霸榜（见 heatOf 注释）。
+ */
+export function picksMix(items: MediaItem[], limit = 12): MediaItem[] {
+  const social = items.filter((i) => i.kind === "social").slice().sort((a, b) => heatOf(b) - heatOf(a))
+  const media = items.filter((i) => i.kind === "video").slice().sort((a, b) => timeKey(b) - timeKey(a))
+  const out: MediaItem[] = []
+  for (let i = 0; out.length < limit && (i < social.length || i < media.length); i++) {
+    const s = social[i]
+    if (s) out.push(s)
+    if (out.length >= limit) break
+    const v = media[i]
+    if (v) out.push(v)
+  }
+  return out
+}
 

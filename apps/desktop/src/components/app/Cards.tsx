@@ -7,7 +7,7 @@
 import type { AudioItem, CategoryItem, MediaItem } from "@amoeba/core"
 import { MediaImage, fmtCount } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
-import { fmtAgo, fmtTime, httpsify, itemKey, mediaUrl, onlineOf, socialRatio } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, httpsify, isLiveNow, itemKey, mediaUrl, onlineOf, socialRatio } from "../../lib/media.ts"
 import { rememberSocialSource } from "../../lib/viewTransition.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
@@ -99,7 +99,8 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
   // 可播流**,主操作必须是「打开原文/详情」而不是播放 —— 否则点一下必然跳到
   // 「该条目不指向可解析的视频链接」的破碎播放页。(整屏社交走 SocialCard/MasonryGrid。)
   const playable = isPlayableKind(item.kind)
-  const isLiveNow = live && (item as { liveStatus?: string }).liveStatus !== "offline"
+  // 「在播」判据只走 lib/media.ts 的 isLiveNow（offline 不算、unknown 算在播）——
+  // 以前这里内联一份，和首页区块的判据各写各的，下播房间会漏过滤。
   const dur = (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
   const online = onlineOf(item)
   const b = badged(item, actions)
@@ -143,7 +144,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
     >
       <div className="card-media aspect-video">
         <MediaImage src={img} ratio={16 / 9} fill />
-        {isLiveNow ? (
+        {isLiveNow(item) ? (
           <span className="live-pulse">
             <span className="status-dot" data-state="live" /> LIVE
           </span>
@@ -157,7 +158,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
         ) : null}
         {live && online ? <span className="live-online num">{fmtCount(online)} 人在看</span> : null}
         {/* 续播进度条(看过一半的条目一眼可辨)。仅非直播、有位置与时长时。 */}
-        {!isLiveNow && dur && item.positionSec ? (
+        {!isLiveNow(item) && dur && item.positionSec ? (
           <span className="card-progress" aria-hidden>
             <span style={{ width: `${Math.min(100, (item.positionSec / dur) * 100)}%` }} />
           </span>
