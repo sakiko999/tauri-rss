@@ -295,7 +295,7 @@ UI 交互态错乱）留保险。
 **防回涨约定**：任何 bug 先问「CLI 能否复现」。能 → 不许为它加 log，去修 CLI / 加探针；
 不能 → 才允许埋 log。
 
-⚠️ `packages/resolve/src/log.ts` 的注释仍指向 `docs/cli-plan.md §7`（已并入本节），
+⚠️ `packages/resolve/src/log.ts` 的注释已改指本节（原 `docs/cli-plan.md §7` 已并入此处）。
 改注释前别删本节。
 
 ### 收益

@@ -15,7 +15,7 @@
 | 权威 | 载体 | 谁写 | 谁读 |
 | --- | --- | --- | --- |
 | 数据 | core `DataLayer`（`MediaStore` + 5 个 repo + 缓存） | core 编排、app 动作 | 全部 app 层 |
-| 视图位置 | URL（`/v/:nodeId`、`/play/:itemId?from=&sub=`） | router loader / 导航桥 | `App`、`PlayerPage` |
+| 视图位置 | URL（`/`=home、`/v/:nodeId`、`/library`、`/play/:itemId?from=&sub=`） | router loader / 导航桥 | `App`、`PlayerPage` |
 | 宿主能力 | `globalThis.appHost`（http/js/storage/ws/browser/net） | 入口 inject 函数 | 所有包直读 |
 
 ---

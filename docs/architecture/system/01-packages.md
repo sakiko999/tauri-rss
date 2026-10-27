@@ -291,7 +291,7 @@ graph LR
 - **定位**：唯一全功能端。注入 Tauri 宿主后经 `createDesktopDataLayer()` 连本地数据服务（`service_endpoint` + `@amoeba/service-client` 的 RemoteDataLayer），浏览器 dev 才回退进程内 `createDataLayer()`；views 不直接 import crawler。
 - **分层**（判据见 CLAUDE.md，代码落点）：
   - `store/` = 视图状态与动作编排，`useDesktop` 单 store（`apps/desktop/src/store/index.ts:34-78`）。数据权威是 core，位置权威是 URL，store 只做镜像（`store/index.ts:1-21`）。
-  - `views/` = 业务视图，按 `nodeMeta.type` 分发 reader/media/hot/page/player/shortvideo；router loader 在渲染前同步 `select()`（`apps/desktop/src/router.tsx:62-86`）。
+  - `views/` = 业务视图，按 `nodeMeta.type` 分发 home/reader/media/hot/page/player/shortvideo（home 由根路径 `/` 承载）；router loader 在渲染前同步 `select()`，**节点未变时不重复 select**（否则同路径 search 变化会清选中态/搜索词）（`apps/desktop/src/router.tsx`）。
   - `components/*.tsx` = 纯 props 功能件；`components/app/*.tsx` = 读 `useDesktop`/`usePrefs` 的业务件（本次实测 `useDesktop` 只出现在 `views/`、`components/app/`、`store/`、`lib/`、入口）。
   - `lib/` = 工具与少量 store 适配（`useLatestOnly` 世代守卫、`itemKey` 复合键、OPML 映射、快捷键、更新状态机）；其中 `host.ts`/`shortcuts.ts`/`update.ts` 直接读 `useDesktop`。
 - **跨包面**：core（30+ 处，含动态 import）、ui 7、player 3、xml 2（OPML：`lib/opml.ts:10`、`store/actions/subs.ts:7`）、resolve 1（`SocialDetailModal.tsx:19` 取 `./media-referrer`）、platform 2（`AccountPage.tsx:13`、`lib/subscriptions.ts:8`）、host 1（`main.tsx:4`）、service-client/service-protocol 各 1（`store/data-source.ts:12-13`）、`@tauri-apps/api` 1（`store/data-source.ts:11`）。

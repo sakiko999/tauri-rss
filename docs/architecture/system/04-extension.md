@@ -251,7 +251,8 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 ### 3.e 新增视图 / 设置项（只讲数据接线）
 
-**视图**（`nodeId` 驱动的六种外壳）：
+**视图**（`nodeMeta.type` 驱动的七种外壳：home / reader / media / hot / page / player / shortvideo；
+其中 home 由根路径 `/` 承载，其余由 `/v/:nodeId`、`/play/:itemId` 承载）：
 
 1. `apps/desktop/src/store/nodes.ts`：确定 `nodeId` 语法，扩展 `NodeType` 与 `nodeMeta()`（`:144`）。
 2. `apps/desktop/src/App.tsx:133-147`：按 `meta.type` 挂新主区。注意 `main` 以 `nodeId` 为 key 重挂，

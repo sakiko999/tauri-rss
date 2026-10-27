@@ -12,8 +12,9 @@ apps/
   src-tauri/   应用 Rust crate（amoeba），desktop/mobile 共享 commands/plugins；
                另有 browser-sidecar / runtime 两个独立 crate
   desktop/     React 19 + Vite + Tailwind 4 → dist/desktop
-               订阅工作台：rail 侧栏（内容类型/智能订阅/分组树）+ 六视图
-               reader 三栏 / media 网格 / hot 热搜 / page 整页 / player / shortvideo 全屏流。
+               订阅工作台：rail 侧栏（主导航/内容类型/智能订阅/分组树）+ 七种视图意图
+               home 看板（`/`）/ reader 三栏 / media 网格 / hot 热搜 / page 整页 /
+               player / shortvideo 全屏流（`/library` 深链落「未开放」说明，P1）。
                状态 src/store/（nodes 节点语法 · selectors 派生 · prefs 偏好 · index 编排），
                视图 src/views/，样式 src/styles/（按区块拆分，入口只留 @import 顺序）。
   mobile/      ⛔ **已冻结（2026-10-26）**：除主动开启外，后续改动不为 mobile 做适配/回归
@@ -208,7 +209,7 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 | --- | --- |
 | 架构与契约 | ★ `docs/architecture/system/README.md`（全仓系统架构：包职责/契约/流程/扩展/风险） · `docs/architecture/system/06-data-service.md`（数据服务单写者/协议） · `docs/architecture/host-abi.md` · `docs/architecture/data-and-storage.md` · `docs/architecture/crawler-topology.md` |
 | 平台 | ★ `docs/platforms/platform-notes.md` · `docs/platforms/channels.md`（渠道与缺口）· `docs/platforms/youtube.md` · `docs/platforms/twitch.md` · `docs/platforms/xhs-signature.md` · `docs/platforms/login.md` · `docs/platforms/domestic-feeds.md` |
-| UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` · `docs/ui/heliu-redesign-plan.md`（草案，未实施） |
+| UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` · `docs/ui/heliu-redesign-plan.md`（实施中，分支 `feat/heliu-redesign`） |
 | 播放与弹幕 | ★ `docs/playback/playback.md` · `docs/playback/danmaku.md` · `docs/playback/mpv.md`（未做） |
 | 风控 | ★ `docs/risk/crawler-risk-control.md` |
 | 运维 | ★ `docs/ops/commands.md` · ★ `docs/ops/smoke-check.md` · `docs/ops/release-updater.md` |
@@ -260,6 +261,7 @@ live 按平台二次聚合的 UI 侧。
 - [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS。
 - [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
 - [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
-- [ ] 合流改版计划草案待评审排期：docs/ui/heliu-redesign-plan.md（分支 docs/desktop-redesign-plan）
+- [ ] 合流改版：M0–M6 已落地、M7 部分收尾（分支 `feat/heliu-redesign`），
+  进度与剩余项见 `docs/ui/heliu-redesign-plan.md` §实施状态
 - [ ] 跑 `bun run dev` 实拍添加订阅弹窗：分类 chip 换行、24 行列表滚动、「已订阅 N」与行尾动作文字的密度
 <!-- cc-todo:end -->
