@@ -1,0 +1,142 @@
+/* 社交:瀑布流卡片宫格 + 灯箱
+   拆自 50-shortvideo 的社交卡片段之外的**新增**部分(2026-10-27 合流改版)。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**:
+      必须在 50-shortvideo.css 之后(要覆盖 `.social-media img` 的 height:auto),
+      在 90-responsive.css 之前(响应式仍最后生效)。 */
+
+/* =========================================================================
+   社交卡片宫格(mosaic)
+   ── 块的总比例由**组件内联** aspect-ratio 给出(= 封面比例),这里只决定内部怎么切。
+   为什么比例不能让 CSS 定:Cards.tsx 里按封面比例算,瀑布流的 estimateItemHeight
+   也只认封面 —— 比例随图数变化会让追加条目时「估算 vs 实际」不符、卡片跳动。
+   data-count 1-4;data-orient:横图按列切、竖图按行切(竖图按列切会得到细长条)。
+   ========================================================================= */
+.smosaic {
+  display: grid;
+  gap: 2px;
+}
+.smosaic[data-count="1"] {
+  grid-template: 1fr / 1fr;
+}
+.smosaic[data-count="2"][data-orient="rows"] {
+  grid-template: 1fr 1fr / 1fr;
+}
+.smosaic[data-count="2"][data-orient="cols"] {
+  grid-template: 1fr / 1fr 1fr;
+}
+/* 3 图:第一张占两格(横图左大右两小 / 竖图上大下两小) */
+.smosaic[data-count="3"][data-orient="rows"] {
+  grid-template: 2fr 1fr / 1fr 1fr;
+}
+.smosaic[data-count="3"][data-orient="rows"] > .smosaic-item:first-child {
+  grid-column: 1 / span 2;
+}
+.smosaic[data-count="3"][data-orient="cols"] {
+  grid-template: 1fr 1fr / 2fr 1fr;
+}
+.smosaic[data-count="3"][data-orient="cols"] > .smosaic-item:first-child {
+  grid-row: 1 / span 2;
+}
+.smosaic[data-count="4"] {
+  grid-template: 1fr 1fr / 1fr 1fr;
+}
+
+.smosaic-item {
+  position: relative;
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* ⚠️ 必须盖掉 50-shortvideo 的 `.social-media img { height: auto }`:
+   宫格里的图是按**轨道**铺满(fill),height:auto 会按图片自身比例把格子撑高,
+   格线错位、宫格歪掉。同特异性 + 本文件在后 → 这里赢。 */
+.smosaic img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* 超过 4 张:最后一格盖一层 +N(完整图集进详情/灯箱看) */
+.smosaic-more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: oklch(0.12 0.01 264 / 58%);
+  color: var(--on-media);
+  font-size: var(--fs-h2);
+  font-weight: 600;
+}
+
+/* 筛选条:整屏社交时的 chips(客户端过滤,见 MediaMain 的 SOCIAL_FILTERS)。
+   padding-inline 8px + 瀑布流容器的 px-4 = 24px,与 .grid-head 的文字起点对齐。 */
+.social-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding: var(--sp-4) var(--sp-2) 0;
+}
+
+/* =========================================================================
+   灯箱
+   ========================================================================= */
+/* 承载灯箱的弹窗比普通弹窗大(图是主角)。:has 只选中「里面有 .lightbox」的那层,
+   不影响社交详情等其它 flush 弹窗。⚠️ 不动 .modal 的居中(它靠内联 translate)。 */
+.modal.modal-flush:has(.lightbox) {
+  width: min(1400px, 96vw);
+  height: min(92vh, 960px);
+}
+.lightbox {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  /* 媒体块恒深(与 hero/舞台一致):浅色主题下看照片也不该垫一块亮底。 */
+  background: var(--stage-bg);
+}
+.lightbox-stage {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+/* 底部控件条:翻页 + 计数,贴底居中。压在图上时用深底,深浅主题都读得清。 */
+.lightbox-nav {
+  position: absolute;
+  left: 50%;
+  bottom: var(--sp-4);
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 3px 6px;
+  border-radius: var(--r-full);
+  background: oklch(0.12 0.01 264 / 62%);
+}
+.lightbox-arrow {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-full);
+  color: var(--on-media);
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.lightbox-arrow:hover {
+  background: oklch(1 0 0 / 16%);
+}
+.lightbox-count {
+  padding-inline: 4px;
+  color: var(--on-media);
+  font-size: var(--fs-micro);
+  font-weight: 560;
+  white-space: nowrap;
+}
+
+/* 详情主图 → 灯箱的点击区(实况视频那一支不套:它自己接管点击做暂停/续播)。 */
+.social-detail-zoom {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

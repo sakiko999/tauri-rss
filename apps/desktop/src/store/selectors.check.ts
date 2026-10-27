@@ -7,7 +7,7 @@
  */
 import assert from "node:assert/strict"
 import type { MediaItem, Subscription } from "@amoeba/core"
-import { groupedBySub, picksMix, resumeWithPct, selectLive, todayCounts } from "./selectors.ts"
+import { groupedBySub, picksMix, queryView, resumeWithPct, selectLive, todayCounts } from "./selectors.ts"
 
 const NOW = new Date("2026-10-27T12:00:00").getTime()
 const HOUR = 3600_000
@@ -104,4 +104,24 @@ const sub = (id: string): Subscription =>
   assert.equal(picksMix(items, 99).length, 4, "limit 大于池子时取尽可用的")
 }
 
-console.log("✔ 首页聚合 selectors 自检通过（今日/续播/在播/订阅更新/精选）")
+// ── 6. 阅读筛选：两个条件同时置位 = AND ──────────────────────────────────
+{
+  const items = [
+    item("both", "article", "s1", { isUnread: true, isStarred: true }),
+    item("unread", "article", "s1", { isUnread: true, isStarred: false }),
+    item("starred", "article", "s1", { isUnread: false, isStarred: true }),
+  ]
+  const slice = {
+    allItems: items,
+    subscriptions: [],
+    filter: { "tab:all": { unreadOnly: true, starredOnly: true } },
+    sort: {},
+    page: {},
+    query: "",
+    selectedNodeId: "tab:all",
+    refreshErrors: {},
+  }
+  assert.deepEqual(queryView(slice, "tab:all", NOW).list.map((x) => x.id), ["both"], "未读+收藏同时置位是 AND")
+}
+
+console.log("✔ 首页聚合 selectors 自检通过（今日/续播/在播/订阅更新/精选/筛选）")

@@ -244,6 +244,22 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 
 ---
 
+## 实施状态（2026-10-27，`feat/heliu-redesign`）
+
+| 阶段 | 状态 | 实现要点 / 与计划的偏差 |
+| --- | --- | --- |
+| M0 | ✅ | `store/nodes.check.ts`（节点清单 + `navIdOf`）+ `boot-skeleton.check.ts` 的 `--header-h` 断言 |
+| M1（令牌） | ✅ 取值 / ⏸ 断点 | 信号橙、石墨系表面、`--bg-elev`/`--text-body`/`--accent-text`/`--accent-on-stage`/`--shadow-pop`/`--r-card|tile|chip`/`--ease-heliu` 全部落地并接线（`article-body`、`.modal/.palette/.toast`、`.chip`、首页过渡）；⚠️ 深色 `--live` 压到 `oklch(0.58 0.21 25)`（LIVE 白字 4.63:1）。**断点统一未做**（仍只有 1080 一档） |
+| M2（外壳） | ⚠️ 部分 | 品牌区 + 4 主导航 + 内容类型 3 项 + 智能订阅/模式/树/页脚（含同步与「最近变更」）完成，`navIdOf` 高亮（播放页取 `?from=`）；删除顶栏 update-chip。**titlebar 未收进主列**（D16 的几何改动留待实拍验收） |
+| M3（首页） | ✅ | 五区块 + 三态空态（离线/无订阅/无内容）；`todayCounts` 等在 store 侧；**`itemsVersion` 失效键未改造**，暂以 `allItems` 引用为依赖 |
+| M4（阅读） | ✅ 主体 | chips（全部/未读/收藏）+ `ViewFilter.starredOnly` + `?filter=` 落 URL（loader 写入并复位页码）+ 专注阅读浮层（复用同一棵已消毒节点、单一 scrollRatio 写入口）。**选中态 `?sub=&item=` 未做** |
+| M5（动态） | ✅ | SocialCard 1-4 图 mosaic（块比例恒等于封面比例，不破瀑布流估算）+ Lightbox（radix + MediaImage）+ 四类筛选 chips |
+| M6（影音/播放） | ✅ | 影音 tabs（导航，`aria-current`）+ 直播 hero + `.video-tile` + 剧场模式（`data-theater`）。章节与实时评论按 D13 不做 |
+| M7（收尾） | ⏳ | 发现页瘦身、断点统一、文档同步未做 |
+| 片库 | ⏸ | 按 P1 不做，`/library` 未建 |
+
+---
+
 ## 附：本计划未覆盖但已知的后续项
 
 - 真同步时间戳（新 RPC/state 字段，非 XML）——D12 的升级路径。

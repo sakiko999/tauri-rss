@@ -2,19 +2,23 @@
  * router —— 视图位置路由(react-router,data 模式)。
  *
  * URL 是「视图位置」的唯一真相,store 是「数据」的真相,单向同步:
+ *   - `/` → 首页看板,同步 `store.select(HOME_NODE)`;
  *   - `/v/:nodeId?word=` → loader 在渲染前跑,同步 `store.select(nodeId)`;
  *   - `/play/:itemId?from=` → 播放页;from 记住返回位置;
- *   - 其余路径 → 重定向默认视图。
+ *   - 其余路径 → 重定向首页。
  *
  * 数据不在 loader 里加载(数据在 zustand + DataLayer);路由只定「位置」。
  */
 import { createBrowserRouter, Navigate, useNavigate, useParams, useSearchParams } from "react-router"
 import App from "./App"
-import { DEFAULT_VIEW } from "./store/nodes.ts"
+import { DEFAULT_VIEW, HOME_NODE } from "./store/nodes.ts"
 import { useDesktop } from "./store/index.ts"
 
-/** `/v/{nodeId}?word={hotWord}`。 */
+/** `/v/{nodeId}?word={hotWord}`；首页是根路径 `/`（§3.1）。 */
 export function viewPath(nodeId: string, word?: string): string {
+  // 首页只有一个 URL 形态：生成 /v/home 会让同一个视图有两个地址（深链/分享/返回栈
+  // 各记一份），且 `/v/home` 的 loader 还要再走一遍节点判定。
+  if (nodeId === HOME_NODE) return "/"
   return word ? `/v/${encodeURIComponent(nodeId)}?word=${encodeURIComponent(word)}` : `/v/${encodeURIComponent(nodeId)}`
 }
 
@@ -72,15 +76,31 @@ export function usePlayParams(): { itemId: string | null; from: string | null; s
 
 export const router = createBrowserRouter([
   {
+    path: "/",
+    Component: App,
+    // ⚠️ 首页也**必须**走 select()：App 的布局读的是 store.selectedNodeId，
+    // 不调它就会用上一个节点的数据渲染新布局（仓库已踩过同型故障，见 App.tsx 顶部注释）。
+    loader: () => {
+      useDesktop.getState().select(HOME_NODE)
+      return { nodeId: HOME_NODE }
+    },
+    errorElement: <RouteError />,
+  },
+  {
     path: "/v/:nodeId",
     Component: App,
     loader: ({ params, request }) => {
       const nodeId = params.nodeId ?? DEFAULT_VIEW
-      const word = new URL(request.url).searchParams.get("word")
+      const sp = new URL(request.url).searchParams
+      const word = sp.get("word")
       const st = useDesktop.getState()
       st.select(nodeId)
+      // 阅读筛选也走 URL（D10）：刷新/分享/Alt+← 能还原；没有参数 = 全部。
+      // ⚠️ 必须放在 select() 之后（select 不清 filter，但顺序固定才不会被后人改坏）。
+      const filter = sp.get("filter")
+      st.setFilter(nodeId, { unreadOnly: filter === "unread", starredOnly: filter === "starred" })
       if (word) void st.loadHotWord(word)
-      return { nodeId, word }
+      return { nodeId, word, filter }
     },
     errorElement: <RouteError />,
   },
@@ -93,7 +113,7 @@ export const router = createBrowserRouter([
     loader: () => null,
     errorElement: <RouteError />,
   },
-  { path: "*", element: <Navigate to={`/v/${DEFAULT_VIEW}`} replace /> },
+  { path: "*", element: <Navigate to="/" replace /> },
 ])
 
 function RouteError() {
@@ -101,8 +121,8 @@ function RouteError() {
   return (
     <div className="state-block">
       <p className="state-title">视图渲染出错了</p>
-      <button className="btn btn-secondary" onClick={() => navigate(`/v/${DEFAULT_VIEW}`)}>
-        回到默认视图
+      <button className="btn btn-secondary" onClick={() => navigate("/")}>
+        回到首页
       </button>
     </div>
   )

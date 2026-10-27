@@ -53,8 +53,22 @@
   .nav-count,
   .nav-warn,
   .rail-empty,
-  .group-empty {
+  .group-empty,
+  .rail-brand-text,
+  .rail-sync-meta {
     display: none;
+  }
+  /* 64px 栏：品牌行纵排（图标 + 添加订阅），与 .rail-collapsed 那份逐项一致。 */
+  .rail-brand-row {
+    flex-direction: column;
+    height: auto;
+    gap: var(--sp-2);
+    padding: var(--sp-2) 0;
+  }
+  .rail-brand {
+    justify-content: center;
+    height: auto;
+    padding-inline: 0;
   }
   .rail-head {
     align-items: center;

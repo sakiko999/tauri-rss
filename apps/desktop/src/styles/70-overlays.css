@@ -40,7 +40,8 @@
   background: var(--surface-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-2);
+  /* 弹层用大投影(负扩散收在边缘内);--shadow-2 留给卡片/分段控件。 */
+  box-shadow: var(--shadow-pop);
   overflow: hidden;
   /* 入场:位移 + 淡入。遮罩(.scrim)已在淡,弹窗本体原本是**瞬间出现**。
      ⚠️ `translate` 用属性而非 transform —— .modal 的居中靠 Modal.tsx 内联的
@@ -161,7 +162,7 @@
   background: var(--surface-1);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-pop);
   overflow: hidden;
 }
 .palette-input {
@@ -295,7 +296,7 @@ kbd {
   background: var(--surface-2);
   border: 1px solid var(--border-strong);
   border-radius: var(--r-md);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-pop);
   font-size: var(--fs-small);
   animation: rise var(--dur-slow) var(--ease-in);
   pointer-events: auto;

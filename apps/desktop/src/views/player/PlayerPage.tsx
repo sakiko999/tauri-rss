@@ -8,7 +8,7 @@
  * 解析走 core:video → resolvePlay, live → resolveLivePlay;两者都返回
  * `{ streams, danmaku }`,danmaku 由 PlayableMedia 内部接给 DanmakuLayer。
  */
-import { useCallback, useEffect, useMemo } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import { PlayableMedia } from "@amoeba/player"
 import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream } from "@amoeba/core"
@@ -40,6 +40,8 @@ export function PlayerPage() {
   // ⚠️ 播放页内跳向另一条内容必须走 /play/:itemId。用 go("play:"+id) 会生成
   // `/v/play%3Aid`,App 的 isPlay 判的是 params.itemId → 落到 MediaMain 网格。
   const playTo = usePlayNavigate()
+  /** 剧场模式:单列 + 收起右栏(队列/同订阅),把宽度全给画面。只存本页状态,不改设置。 */
+  const [theater, setTheater] = useState(false)
 
   // ⚠️ 合并 `previewDetail`:二级订阅的单集/房间是**临时预览**出来的(未落库、未建订阅),
   // 只查 allItems 会「找不到这条内容」。队列/下一条也走这份合并表。
@@ -143,7 +145,13 @@ export function PlayerPage() {
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
 
   return (
-    <div className="player-view" {...overlayBlock("player-view", "player:view")}>
+    <div
+      className="player-view"
+      // data 属性(不是新类名)驱动剧场模式:与 1280 断点收单列的 @media 规则互不覆盖,
+      // 两边同时命中也是同一结果(单列),不会出现「窄窗 + 剧场」两套规则打架。
+      data-theater={theater ? "on" : undefined}
+      {...overlayBlock("player-view", "player:view")}
+    >
       <header className="detail-head" {...overlayBlock("player-head", "player:head")}>
         <button className="icon-btn sm" aria-label="返回" onClick={() => navigate(backTo())}>
           <Icon name="back" size={15} />
@@ -244,6 +252,14 @@ export function PlayerPage() {
                 <span className="player-time">{fmtAgo(item.publishedAt)}</span>
               </div>
               <div className="player-actions">
+                {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。 */}
+                <button
+                  className="btn btn-quiet"
+                  aria-pressed={theater}
+                  onClick={() => setTheater((v) => !v)}
+                >
+                  <Icon name="monitor" size={14} /> 剧场模式
+                </button>
                 <button className="btn btn-quiet" onClick={() => addToQueue(item)}>
                   <Icon name="queue" size={14} /> 加入队列
                 </button>
@@ -271,7 +287,9 @@ export function PlayerPage() {
             ) : null}
           </div>
 
-          <aside className="stack" {...overlayBlock("player-side", "player:side")}>
+          {/* ⚠️ `player-side` 类给剧场模式用(data-theater=on 时 display:none)——
+              只靠 overlayBlock 的属性没法在 CSS 里稳定选中(DEV 之外它根本不渲染)。 */}
+          <aside className="stack player-side" {...overlayBlock("player-side", "player:side")}>
             <SideCard title={`播放队列 ${queueItems.length}`} icon="queue" blockKey="player:queue">
               {queueItems.length === 0 ? (
                 <p className="rail-empty">队列为空。在卡片上点 + 加入,或从列表播放。</p>

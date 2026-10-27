@@ -15,6 +15,7 @@ export function NavRow({
   label,
   count,
   unread,
+  dot,
   active,
   onClick,
 }: {
@@ -24,6 +25,12 @@ export function NavRow({
   count?: number
   /** 徽标走「未读」强调色(`data-unread`)。 */
   unread?: boolean
+  /**
+   * 状态小圆点(「影音」有直播在播时用)。**独立槽位**,不塞进 count：
+   * 数字徽标读作「有多少条」，圆点读作「此刻有动静」，两种语义混用会互相误导
+   * （例如把 3 场直播显示成「3」→ 用户以为有 3 条未看视频）。
+   */
+  dot?: boolean
   active?: boolean
   onClick: () => void
 }) {
@@ -31,6 +38,7 @@ export function NavRow({
     <button className="nav-row" aria-current={active ? "page" : undefined} onClick={onClick} title={label}>
       <Icon name={icon} />
       <span className="nav-label">{label}</span>
+      {dot ? <span className="nav-dot" aria-hidden /> : null}
       {count && count > 0 ? (
         <span className="nav-count num" data-unread={unread ? "true" : undefined}>
           {count}

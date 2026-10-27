@@ -15,6 +15,14 @@ export interface ViewFilter {
   platform?: string
   subscriptionId?: string
   unreadOnly?: boolean
+  /**
+   * 只看星标(阅读栏「收藏」chip)。
+   *
+   * ⚠️ 与 unreadOnly **并列**而不是互斥:两者都置位时按 AND 取交集。
+   * 互斥性由 UI 的 chip 组保证(切换时显式清掉另一个),不在这里靠「谁优先」猜 ——
+   * 猜出来的优先级会让「未读 + 收藏」这种组合永远不可达,且行为随字段增删漂移。
+   */
+  starredOnly?: boolean
 }
 
 export type SortMode = "new" | "hot"
@@ -55,7 +63,8 @@ export function showSkeleton(s: {
   return s.allItems.length === 0 && s.loading && s.subscriptions.length > 0
 }
 
-function isToday(ts: number | undefined, now: number): boolean {
+/** 「今天」判定（本地时区的日历日）。导出给首页复用，避免两处口径漂移。 */
+export function isToday(ts: number | undefined, now: number): boolean {
   if (!ts) return false
   const a = new Date(ts)
   const b = new Date(now)
@@ -169,6 +178,7 @@ export function queryView(s: StoreSlice, node: string | null, now: number): View
     if (f.platform) list = list.filter((i) => (i as { platform?: string }).platform === f.platform)
     if (f.subscriptionId) list = list.filter((i) => i.subscriptionId === f.subscriptionId)
     if (f.unreadOnly) list = list.filter((i) => i.isUnread)
+    if (f.starredOnly) list = list.filter((i) => i.isStarred)
   }
   const q = s.query.trim().toLowerCase()
   if (q) list = list.filter((i) => matchesQuery(i, q))

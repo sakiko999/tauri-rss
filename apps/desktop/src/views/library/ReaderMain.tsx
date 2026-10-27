@@ -2,7 +2,8 @@
  * ReaderMain —— 阅读视图的主区:工具栏 + 正文。
  *
  * ⚠️ 正文 HTML 一律经 DOMPurify 消毒(来自第三方 feed,是安全边界);纯文本走
- * 保留换行的 div。
+ * 保留换行的 div。消毒**只在这里做一次**:专注阅读浮层拿到的是同一棵已经消毒的
+ * 节点(见 FocusReader 的 children),不复制第二份 DOMPurify 配置。
  * 滚动进度条按主区绝对定位(styles.css 里 .main-region position:relative)。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
@@ -10,6 +11,7 @@ import DOMPurify from "dompurify"
 import { useDesktop } from "../../store/index.ts"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { Icon } from "../../components/Icon.tsx"
+import { FocusReader } from "../../components/app/FocusReader.tsx"
 import { MediaImage } from "@amoeba/ui"
 import { fmtDate, heroWidth, itemKey, mediaUrl, ratioOf } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
@@ -39,6 +41,17 @@ export function ReaderMain() {
   const fontSize = usePrefs((s) => s.fontSize)
   const measure = usePrefs((s) => s.measure)
   const setPrefs = usePrefs((s) => s.set)
+  /** 专注阅读浮层。**同一时刻只有一个滚动所有者**:打开期间这份三栏不写进度,
+   *  由浮层独占写 saveScrollRatio;关闭时本文件的恢复 effect 把三栏对到同一进度。 */
+  const [focusOpen, setFocusOpen] = useState(false)
+  const focusOpenRef = useRef(focusOpen)
+  focusOpenRef.current = focusOpen
+  /** 专注阅读最后一次滚动位置,关闭时三栏按它归位。带条目复合键:换文章后不能拿
+   *  上一篇的位置套到这一篇上。
+   *  ⚠️ 不能只读 item.scrollRatio:读到结尾(≥95%)store 会**刻意清掉**记录
+   *  (saveScrollRatio),那时三栏会弹回顶部 —— 而用户刚在浮层里读到文章结尾。
+   *  三栏自己一滚动就清空它(见 onScroll),以 store 为准。 */
+  const focusRatioRef = useRef<{ key: string; ratio: number } | null>(null)
 
   // 滚动进度条(直接改 DOM 宽度,不走 React 渲染)+ 阅读进度持久化。
   // saveScrollRatio 用 ref 持最新,effect 只随条目重挂(不因回调变化重建监听)。
@@ -63,8 +76,12 @@ export function ReaderMain() {
       const ratio = max > 0 ? Math.min(1, el.scrollTop / max) : 0
       bar.style.width = `${ratio * 100}%`
       // 只对 article 记进度(store 侧另有 5% 节流);恢复完成前不写回。
+      // 专注阅读打开期间**不写**:两个滚动容器各写一份会互相覆盖(阅读进度只有一个值)。
       const cur = itemRef.current
-      if (!pendingRestoreRef.current && cur && cur.kind === "article") saveRatioRef.current(cur, ratio)
+      if (!pendingRestoreRef.current && !focusOpenRef.current && cur && cur.kind === "article") {
+        focusRatioRef.current = null // 三栏自己动了,进度以 store 为准
+        saveRatioRef.current(cur, ratio)
+      }
     }
     onScroll()
     el.addEventListener("scroll", onScroll, { passive: true })
@@ -139,18 +156,31 @@ export function ReaderMain() {
   // 切条目 / 补全正文到达后:按当前 scrollHeight 恢复阅读进度(有则跳,无则回顶)。
   // ⚠️ deps 含 hasFull:补全是异步的,到达后 scrollHeight 变长,须按最终高度**再定位一次**,
   // 否则落在按旧(摘要)高度算出的像素处(读了比保存进度更靠前的位置)。
+  // ⚠️ deps 含 focusOpen:关掉专注阅读时,三栏要对到浮层期间写下的进度 —— 否则三栏
+  // 停在旧位置,用户下一次在这儿滚动就会用旧比例覆盖浮层刚存的值(进度倒退)。
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
     pendingRestoreRef.current = true // 恢复前先屏蔽写回
-    const ratio = item?.scrollRatio ?? 0
+    // 浮层刚记录的位置优先(见 focusRatioRef 的注释);否则用 store 里的进度。
+    // 只在**浮层关着**时取:打开期间这条记录还在被浮层更新,拿去挪三栏没有意义。
+    const focusMark = focusRatioRef.current
+    const fromFocus = !focusOpen && focusMark && focusMark.key === itemCacheKey ? focusMark.ratio : null
+    if (fromFocus !== null) focusRatioRef.current = null // 用一次就消费掉:只负责浮层 → 三栏这一次归位
+    const ratio = fromFocus ?? item?.scrollRatio ?? 0
     const raf = requestAnimationFrame(() => {
       const max = el.scrollHeight - el.clientHeight
       el.scrollTo({ top: ratio > 0.02 && max > 0 ? ratio * max : 0 })
       pendingRestoreRef.current = false // 恢复完成,允许写回
     })
     return () => cancelAnimationFrame(raf)
-  }, [item?.id, hasFull])
+  }, [item?.id, hasFull, focusOpen])
+
+  // 选中条目被刷新事件删掉时收起浮层:浮层此时已随空态卸载,而 focusOpen 还是 true,
+  // 下一条一选中它会自己弹出来(用户没点)。
+  useEffect(() => {
+    if (!item) setFocusOpen(false)
+  }, [item])
 
   if (!item) {
     return (
@@ -188,6 +218,94 @@ export function ReaderMain() {
       useDesktop.getState().toast("error", "复制失败", e instanceof Error ? e.message : String(e))
     }
   }
+
+  /**
+   * 文章标签。
+   *
+   * ⚠️ v1 数据面**没有** tags 字段(`tpl:tags` 是 v2,见 heliu 计划 §5):这里读可选
+   * 字段,现在恒为空、一个标签都不渲染。**不要**拿来源/kind/作者拼假标签充数。
+   */
+  const tags = ((item as { tags?: string[] }).tags ?? []).filter((t) => typeof t === "string" && t.trim() !== "")
+
+  /**
+   * 文章内容(标题 / 署名 / 标签 / 正文 / 页脚) —— **一个节点,两处渲染**:
+   * 三栏的 `<article class="article">` 与专注阅读浮层。
+   *
+   * ⚠️ 这样正文只消毒一次(上面的 cleanHtml),浮层不会出现第二份 DOMPurify 配置
+   * ——两份配置迟早漂移,漏掉一个标签就是一处 XSS 面。标题/署名/页脚也不会两处写法不同。
+   */
+  const articleContent = (
+    <>
+      <div className="article-kicker">
+        {item.author?.name ? <span>{item.author.name}</span> : null}
+        {item.author?.name ? <span className="dot-sep" /> : null}
+        <span>{fmtDate(item.publishedAt)}</span>
+      </div>
+
+      <h1 className="article-title">{item.title}</h1>
+
+      {item.author?.name ? (
+        <div className="article-byline">
+          <span className="article-avatar">{(item.author.name[0] ?? "?").toUpperCase()}</span>
+          <span className="article-byline-text">
+            <span className="article-author">{item.author.name}</span>
+            <span className="t-micro t-dim">{item.author.handle ?? "订阅来源"}</span>
+          </span>
+        </div>
+      ) : null}
+
+      {tags.length ? (
+        <div className="article-tags">
+          {tags.map((t) => (
+            <span className="tag" key={t}>
+              {t}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {/* ⚠️ hero 门槛:低清缩略图(如 320px 宽)拉满整栏会模糊占半屏,正文要滚动
+          才看得到。只在原图够大(≥640px 宽)时当满栏头图,否则不渲染 —— 列表行
+          已有缩略图,信息不丢。 */}
+      {hero && heroWidth(item) >= 640 ? (
+        <figure className="article-hero" style={{ aspectRatio: ratioOf(item) }}>
+          <MediaImage src={hero} ratio={ratioOf(item)} fill />
+        </figure>
+      ) : null}
+
+      {article ? (
+        html ? (
+          // ⚠️ 正文里的 <a> 必须拦截:不拦的话 WebView 会**整页导航走**(应用没配
+          // Tauri on_navigation),界面被外部网页顶掉,只能重启应用才回来。
+          <div className="article-body" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: cleanHtml }} />
+        ) : (
+          <div className="article-body whitespace-pre-wrap">
+            {shownContent || item.summary || "（该条目没有正文，请打开原文查看）"}
+          </div>
+        )
+      ) : (
+        <div className="article-body">{item.summary || "（该条目没有正文，请打开原文查看）"}</div>
+      )}
+      {/* feed 只带摘要时按需补全原文正文:补全前给「正在补全」提示,避免用户以为
+          摘要就是全文而直接去开原文。 */}
+      {article && resolving && !hasFull ? (
+        <p className="article-resolving t-micro t-dim">
+          <Icon name="loader" size={13} className="animate-spin" /> 正在补全原文正文…
+        </p>
+      ) : null}
+
+      <div className="article-foot">
+        <button className="btn btn-secondary" onClick={() => toggleStar(item)}>
+          <Icon name="star" size={14} /> {item.isStarred ? "取消星标" : "星标"}
+        </button>
+        {item.url ? (
+          <button className="btn btn-quiet" onClick={openExternal}>
+            <Icon name="external" size={14} /> 打开原文
+          </button>
+        ) : null}
+      </div>
+    </>
+  )
 
   return (
     <>
@@ -242,6 +360,17 @@ export function ReaderMain() {
         >
           <Icon name="type" size={15} />
         </button>
+        <button
+          className="icon-btn sm"
+          aria-label="专注阅读"
+          title="专注阅读"
+          onClick={() => {
+            focusRatioRef.current = null // 上一次浮层的位置不属于这一回
+            setFocusOpen(true)
+          }}
+        >
+          <Icon name="fullscreen" size={15} />
+        </button>
         {item.url ? (
           <button className="icon-btn sm" aria-label="打开原文" title="打开原文" onClick={openExternal}>
             <Icon name="external" size={15} />
@@ -251,66 +380,22 @@ export function ReaderMain() {
 
       <div className="scroll-area article-scroll" ref={scrollRef} {...overlayBlock("reader-scroll", "reader:scroll")}>
         <article className="article" {...overlayBlock("reader-article", "reader:article")}>
-          <div className="article-kicker">
-            {item.author?.name ? <span>{item.author.name}</span> : null}
-            {item.author?.name ? <span className="dot-sep" /> : null}
-            <span>{fmtDate(item.publishedAt)}</span>
-          </div>
-
-          <h1 className="article-title">{item.title}</h1>
-
-          {item.author?.name ? (
-            <div className="article-byline">
-              <span className="article-avatar">{(item.author.name[0] ?? "?").toUpperCase()}</span>
-              <span className="article-byline-text">
-                <span className="article-author">{item.author.name}</span>
-                <span className="t-micro t-dim">{item.author.handle ?? "订阅来源"}</span>
-              </span>
-            </div>
-          ) : null}
-
-          {/* ⚠️ hero 门槛:低清缩略图(如 320px 宽)拉满整栏会模糊占半屏,正文要滚动
-              才看得到。只在原图够大(≥640px 宽)时当满栏头图,否则不渲染 —— 列表行
-              已有缩略图,信息不丢。 */}
-          {hero && heroWidth(item) >= 640 ? (
-            <figure className="article-hero" style={{ aspectRatio: ratioOf(item) }}>
-              <MediaImage src={hero} ratio={ratioOf(item)} fill />
-            </figure>
-          ) : null}
-
-          {article ? (
-            html ? (
-              // ⚠️ 正文里的 <a> 必须拦截:不拦的话 WebView 会**整页导航走**(应用没配
-              // Tauri on_navigation),界面被外部网页顶掉,只能重启应用才回来。
-              <div className="article-body" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: cleanHtml }} />
-            ) : (
-              <div className="article-body whitespace-pre-wrap">
-                {shownContent || item.summary || "（该条目没有正文，请打开原文查看）"}
-              </div>
-            )
-          ) : (
-            <div className="article-body">{item.summary || "（该条目没有正文，请打开原文查看）"}</div>
-          )}
-          {/* feed 只带摘要时按需补全原文正文:补全前给「正在补全」提示,避免用户以为
-              摘要就是全文而直接去开原文。 */}
-          {article && resolving && !hasFull ? (
-            <p className="article-resolving t-micro t-dim">
-              <Icon name="loader" size={13} className="animate-spin" /> 正在补全原文正文…
-            </p>
-          ) : null}
-
-          <div className="article-foot">
-            <button className="btn btn-secondary" onClick={() => toggleStar(item)}>
-              <Icon name="star" size={14} /> {item.isStarred ? "取消星标" : "星标"}
-            </button>
-            {item.url ? (
-              <button className="btn btn-quiet" onClick={openExternal}>
-                <Icon name="external" size={14} /> 打开原文
-              </button>
-            ) : null}
-          </div>
+          {articleContent}
         </article>
       </div>
+
+      {/* 专注阅读:同一份内容节点进浮层(正文不再消毒第二遍),浮层打开期间上面这份
+          三栏不写阅读进度 —— 见 focusOpenRef 的门控。 */}
+      <FocusReader
+        open={focusOpen}
+        onOpenChange={setFocusOpen}
+        item={item}
+        onRatio={(r) => {
+          if (itemCacheKey) focusRatioRef.current = { key: itemCacheKey, ratio: r }
+        }}
+      >
+        {articleContent}
+      </FocusReader>
     </>
   )
 }
