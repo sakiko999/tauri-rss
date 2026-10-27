@@ -21,6 +21,10 @@ v0.7.5 前后修了两件事：`bili:user_video` 写死 `pn=1`（7 个订阅 6 �
 与已修工作的关系：`5340265`（replace 去重 + user_video 分页）已把 UI 重复与 B站投稿
 截断兜住；本文修正其中一处**根因归因**（见 B-1）。
 
+**实施状态（2026-10-27 当轮，15/19 已修）**：
+A1+A2+B1+B2+B3 → `c3eb177`；A3+A4+A5+A8 → `765771f`；A7+A11+B4+B5+B6 → `0c0a802`。
+余下 open：A6 / A9 / A10（单独立项）、B7 / B8 / B9（low，见各条处置）。
+
 ---
 
 ## A. 拿不全（缺分页 / 被截断）
@@ -172,16 +176,20 @@ fresh 非空、游标推进、append 去重后 0 新增 → 判到底；另一�
 
 ## D. 排期建议（按收益/风险）
 
-1. **A1 `bili:dynamic` offset 翻页** + **A2 YouTube channel continuation**：两个「高」，与
-   user_video 同型，能力侧已就绪。
-2. **B1 xhs notesToItems 去重**（一行根治缓存重复）+ **B3 season 排序反转**（一条参数）+
-   **B2 append 页内去重**（契约对称）。
-3. **A5 huya search rows=100** + **A8 anchor rows=50** + **A3 popular pageable** +
-   **A4 douyin search offset**：全是小改动。
-4. 小件：B4 douyin id→webRid、B5 空 guid 兜底、B6 douyu hasMore、A11 factory total、
-   A7 apple clamp、B9 hasMore 加固。
-5. 单独立项：A6 RSS 入站上限（涉及 core 缓存策略）、A9 搜索候选翻页（涉及 previewChannel/UI）、
-   A10 youtube:playlist InnerTube 化。
+1. ✅ **A1 `bili:dynamic` offset 翻页** + ✅ **A2 YouTube channel continuation**（`c3eb177`；
+   真机：dynamic 13→37 条、youtube 30→90 条）。
+2. ✅ **B1 xhs notesToItems 去重** + ✅ **B3 season `sort_reverse=true`**（实测唯一生效的排序
+   参数，`sort_by`/`ascending`/`order` 均无效）+ ✅ **B2 append 页内去重**（`c3eb177`；
+   season page1 首条 2024-08-21 降序）。
+3. ✅ **A5 huya search rows=100**（真机 99 条）+ ✅ **A8 anchor rows=50**（50 条）+
+   ✅ **A3 popular pageable**（more +20 全新增）+ ✅ **A4 douyin search 首分区 offset**
+   （more +20 全新增）（`765771f`）。
+4. ✅ 小件（`0c0a802`）：B4 douyin id→webRid、B5 空 guid 兜底、B6 douyu hasMore、
+   A11 factory total（单元验证 tpl:total=42 透传 + 末页到底）、A7 apple clamp 200（真机 198 条）。
+5. 单独立项（open）：A6 RSS 入站上限（涉及 core 缓存策略）、A9 搜索候选翻页（涉及
+   previewChannel/UI）、A10 youtube:playlist InnerTube 化；
+   B7 xhs:explore 提前到底（low 未复现；toItems 去重已在 `c3eb177` 顺带落地）、
+   B8 实时榜漂移（固有限制，渠道注释已覆盖）、B9 user_video hasMore 加固（可选）。
 
 > 修复时的回归：§各条目的实测口径已写明；渠道改动跑
 > `bun run rss fetch <key>` + 对应 `.check.ts`，core 改动跑 `media-store.check.ts`。
