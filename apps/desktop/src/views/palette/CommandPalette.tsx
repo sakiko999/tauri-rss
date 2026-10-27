@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useDesktop } from "../../store/index.ts"
 import { queryView } from "../../store/selectors.ts"
-import { HOME_NODE, LIBRARY_NODE, PAGES, SMART, TABS } from "../../store/nodes.ts"
+import { HOME_NODE, KIND_META, LIBRARY_NODE, PAGES, SMART, TABS } from "../../store/nodes.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
 import { usePrefs } from "../../store/prefs.ts"
@@ -80,7 +80,8 @@ export function CommandPalette() {
       group: "条目",
       title: it.title,
       sub: it.author?.name,
-      icon: it.kind === "live" ? "radio" : it.kind === "video" ? "play" : it.kind === "audio" ? "music" : it.kind === "social" ? "message" : "rss",
+      // kind → 图标只有一份权威（KIND_META）；四层三元副本曾漏掉 category。
+      icon: KIND_META[it.kind]?.icon ?? "rss",
       run: () => actions.onPlay(it),
     }))
     return [...nav, ...items]

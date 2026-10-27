@@ -386,8 +386,3 @@ export function LiveHero({ item, actions }: { item: MediaItem; actions: CardActi
     </article>
   )
 }
-
-/** 横向轨道的直播卡(比网格卡宽)。 */
-export function LiveRailCard({ item, actions }: { item: MediaItem; actions: CardActions }) {
-  return <MediaCard item={item} actions={actions} />
-}

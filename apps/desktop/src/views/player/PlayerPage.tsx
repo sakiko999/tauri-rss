@@ -11,8 +11,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import { PlayableMedia } from "@amoeba/player"
-import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream } from "@amoeba/core"
+import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaKind, type MediaStream } from "@amoeba/core"
 import { useDesktop } from "../../store/index.ts"
+import { KIND_META } from "../../store/nodes.ts"
 import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock, SideCard } from "../../components/StateBlock.tsx"
@@ -350,6 +351,7 @@ export function PlayerPage() {
   )
 }
 
+/** kind 的展示名统一走 KIND_META（本地副本曾缺 category，与侧栏漂移）。 */
 function kindName(kind: string): string {
-  return { article: "文章", video: "视频", audio: "音频", live: "直播", social: "社交" }[kind] ?? kind
+  return KIND_META[kind as MediaKind]?.label ?? kind
 }
