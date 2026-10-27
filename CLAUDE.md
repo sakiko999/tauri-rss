@@ -268,7 +268,8 @@ live 按平台二次聚合的 UI 侧。
 - [ ] `scripts/ui-design-audit.ts` 把 oklch 背景解析成 `rgb(271,111,74)` 这类非法值（>255），
   active chip / `.tag-ok` 恒报 ~1.1:1 误报；真实值已手工复算过 AA。修脚本前别把它的
   `contrastIssues` 当阻塞项
-- [ ] docs 遗留清单已全量对码（2026-10-27，120 条：open 89 / stale 9 / decision 21）：
-  分批按 `docs/audit/refactor-candidates.md` 排期；下一批优先 A0（browser-sidecar 进程退出自愈）、
-  A1（服务端 diagnostics 归位）、A4（取消时 abortTabs），再做 B 段性能
+- [ ] docs 遗留清单已全量对码（2026-10-27，120 条：open 81 / stale 8 / fixed 10 / decision 21；
+  快照见 `docs/audit/doc-backlog-2026-10-27.md`）：
+  分批按 `docs/audit/refactor-candidates.md` 排期；下一批优先 A1（服务端 diagnostics 归位）、
+  A4（取消时 abortTabs）、A0b（runJob abort race），再做 B 段性能
 <!-- cc-todo:end -->

@@ -10,12 +10,12 @@
 
 | 状态 | 数量 | 含义 |
 | --- | --- | --- |
-| open | 82 | 确实没做（其中大量是 low/trivial 的清理或产品 backlog） |
+| open | 81 | 确实没做（其中大量是 low/trivial 的清理或产品 backlog） |
 | stale | 8 | 文档写法已过期（代码已变），只需改文档 |
-| fixed | 9 | 核对时仍未做，本轮已修（见 §本轮已修） |
+| fixed | 10 | 核对时仍未做，已修（9 条见 §本轮已修；A0 于 2026-10-27 追加修复） |
 | decision | 21 | 文档明确写了「故意不改/不做」并有理由，不算待办 |
 
-按严重度：high 2 · medium 22 · low 96；
+按严重度：high 1 · medium 22 · low 95；
 按工作量：trivial 32 · small 43 · medium 40 · large 5。
 
 来源分布：
@@ -69,12 +69,13 @@
   - 证据：apps/desktop/src/views/library/ShortVideoView.tsx:51 直接 savePosition(item,sec,dur)；只有 packages/player/src/PlayableMedia.tsx:300-303 与 AudioShell.tsx:100-103 的 dur<=0 早退。直播若返回有限 duration 会写 positionSec 进「继续」。
   - 处理：savePosition 入口统一拦 kind=live（2026-10-27 已修）
 
-## open · high（1）
+## open · high（0）
 
-- **[high/medium]** A0 browser-sidecar 未接 WebView2 浏览器进程退出事件，浏览器崩溃后 sidecar 仍存活并继续返回坏端口
-  - 来源：`docs/audit/refactor-candidates.md:177`
-  - 证据：apps/browser-sidecar/src/main.rs 全文无 BrowserProcessExited / ProcessFailed 注册（grep 0 命中），仍只有 SetTimer(500ms)（:928）+ on_timer/tidy（:690-714）；open_process_for_wait 只在 Drop 里用于关 controller 后等进程退出（:794-800）。host/src/node/browser-sidecar.ts:87-88 ensureReady 只判 child.exitCode === null 就直接返回旧 port。对照桌面载具已有自愈：webview_browser.rs:414-435 每次 open 先 cdp_alive() 探活，不通就销毁重建
-  - 建议：main.rs 注册 ICoreWebView2::add_BrowserProcessExited → request_shutdown()（只对浏览器进程退出，不要用泛化的 ProcessFailed，否则渲染进程崩溃会打断在途抓取）；或退一步在 on_timer 里对 browser_pid 做 SYNCHRONIZE 存活检查，失效即 shutdown。TS 侧 ensureReady 可再加一次端口探活兜底
+- ~~**[high/medium]** A0 browser-sidecar 未接 WebView2 浏览器进程退出事件~~
+  ✅ 已修（2026-10-27，追加）：`apps/browser-sidecar/src/main.rs` 注册 `add_ProcessFailed`，
+  只拦 `BROWSER_PROCESS_EXITED` → `request_shutdown()` 让 sidecar 自行退出、宿主
+  `ensureReady` 重启；渲染进程失败不拦（WebView2 自建进程，避免打断在途抓取）。
+  真机验证：杀 sidecar 的 msedgewebview2 子进程 → sidecar 干净退出（exitCode 0）。
 
 
 ## open · medium（19）
@@ -507,19 +508,19 @@
 
 ## 下一批建议（按收益/风险排序）
 
-1. **A0 browser-sidecar 接 BrowserProcessExited**：浏览器崩溃/OOM 后 sidecar 不自愈，长跑服务
-   后续所有浏览器渠道失败。只对浏览器进程退出回调，别用泛化 ProcessFailed。
-2. **A1 服务端 diagnostics 归位 core**：clearAll 要取消在途 job、挂 removedSubs 墓碑，
+1. **A1 服务端 diagnostics 归位 core**：clearAll 要取消在途 job、挂 removedSubs 墓碑，
    否则「清除后内容复活」。
-3. **A4 取消/超时走 abortTabs**：被放弃的刷新仍占浏览器 lane（op:<platform>）。
-4. **A0b runJob 用 abort race 结算**：cancel 后 job 条目立即消失（当前有界但会挂到操作结束）。
-5. **B1–B4 性能**：patchMany、readingRecords 按 key 取、hydrate 复用 reading map、
+2. **A4 取消/超时走 abortTabs**：被放弃的刷新仍占浏览器 lane（op:<platform>）。
+3. **A0b runJob 用 abort race 结算**：cancel 后 job 条目立即消失（当前有界但会挂到操作结束）。
+4. **B1–B4 性能**：patchMany、readingRecords 按 key 取、hydrate 复用 reading map、
    /v1/state 按 rev 缓存（含 gzip）。
-6. **A-1 / A5 数据完整性**：B站收藏夹/合集会员标记（建议接受缺口并写清）、YouTube 频道
+5. **A-1 / A5 数据完整性**：B站收藏夹/合集会员标记（建议接受缺口并写清）、YouTube 频道
    author/duration。
-7. **R13–R17 风险登记**：release-only 巡检缺口、cookieSnapshot 无版本、抓取浏览器无 lease、
+6. **R13–R17 风险登记**：release-only 巡检缺口、cookieSnapshot 无版本、抓取浏览器无 lease、
    FLV 分支不带 headers、resolveDetail 零校验边界。
-8. **8 条 stale 文档**：逐条改掉（本轮已改 RSSHub 那条）。
+7. **8 条 stale 文档**：逐条改掉（本轮已改 RSSHub 那条）。
+
+> （原第 1 项 A0 browser-sidecar 接 BrowserProcessExited 已于 2026-10-27 落地。）
 
 > 平台产品缺口（抖音搜索/登录、YouTube 播放列表与游戏分区、Twitch VOD/clip/chat、B站账号、
 > bili 自动保活）属于新功能，不列入「收尾」；立项时看 docs/platforms/channels.md。

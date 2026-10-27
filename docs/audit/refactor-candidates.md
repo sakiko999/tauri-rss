@@ -177,9 +177,10 @@ case 写类型谓词，收益为负。
 - **A0 `browser-sidecar` 没接 WebView2 进程退出事件**（`apps/browser-sidecar/src/main.rs:928` 只有
   500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
   `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
-  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。修法：`add_BrowserProcessExited`
-  → `request_shutdown()`（**只对浏览器进程退出**；渲染进程崩溃 WebView2 会自建，别用 ProcessFailed
-  的泛化事件，否则打断在途抓取）。桌面载具已有同款兜底（`webview_browser.rs:414`）。
+  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。桌面载具已有同款兜底（`webview_browser.rs:414`）。
+  ✅ 已修（2026-10-27）：`add_ProcessFailed` 只拦 `BROWSER_PROCESS_EXITED` → `request_shutdown()`
+  让 sidecar 自行退出、由宿主 `ensureReady` 重启整载具；渲染进程失败 WebView2 会自建进程，不拦，
+  避免打断在途抓取。真机验证：杀 sidecar 的 msedgewebview2 子进程 → sidecar 干净退出（exitCode 0）。
 - **A0b `rss --service` 的 job 表可能残留**（`apps/cli/src/service/server.ts:488-514`）：`runJob` 的
   `jobs.delete` 只在 `finally`，被 cancel 但底层 await 未返回时条目与 AbortController 一直挂着。
   **2026-10-27 复核**：实际等待有界（core refresh 自带 abort race、CDP 命令 30s、HTTP 超时），
@@ -264,8 +265,9 @@ stale 9 / decision 21）。本轮修掉的：
   `--filter` 空匹配退出 1。
 - **AI 文案**：搜索空态不再承诺「搜正文」（A2）。
 
-> 其余 open 项按本文分档排期（A0 browser-sidecar 退出事件、A1 diagnostics 归位、A4 abortTabs、
+> 其余 open 项按本文分档排期（A1 diagnostics 归位、A4 abortTabs、
 > B 段性能、C 段分层）——都不属于合流改版的收尾范围，单独开轮做。
+> （A0 browser-sidecar 退出事件已于 2026-10-27 落地，见上。）
 
 ## 附：为什么没引入 remeda
 
