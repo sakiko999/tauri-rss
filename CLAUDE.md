@@ -263,5 +263,9 @@ live 按平台二次聚合的 UI 侧。
 - [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
 - [ ] 合流改版：M0–M6 已落地、M7 部分收尾（分支 `feat/heliu-redesign`），
   进度与剩余项见 `docs/ui/heliu-redesign-plan.md` §实施状态
-- [ ] 跑 `bun run dev` 实拍添加订阅弹窗：分类 chip 换行、24 行列表滚动、「已订阅 N」与行尾动作文字的密度
+- [x] 实拍添加订阅弹窗（2026-10-27，`bun scripts/ui-shots-all.ts` + CDP）：渠道目录分类 tab、搜索、
+  行式列表与「添加/配置」密度均正常；首页/阅读空态/动态/影音/发现/片库页同时复核（深浅两套主题）
+- [ ] `scripts/ui-design-audit.ts` 把 oklch 背景解析成 `rgb(271,111,74)` 这类非法值（>255），
+  active chip / `.tag-ok` 恒报 ~1.1:1 误报；真实值已手工复算过 AA。修脚本前别把它的
+  `contrastIssues` 当阻塞项
 <!-- cc-todo:end -->
