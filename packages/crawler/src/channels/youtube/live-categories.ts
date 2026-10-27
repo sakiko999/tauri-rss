@@ -14,10 +14,11 @@ import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
 
 export const YoutubeLiveCategoriesChannel = makeApiChannel({
   key: "youtube:live-categories",
-  name: "YouTube 直播栏目",
+  // ⚠️ 与 youtube:live-category（内容渠道）只差一个 s，展示名必须能分清谁是目录。
+  name: "YouTube 直播栏目目录",
   kind: "category",
   defaultInfo: {},
-  channelTitle: () => "YouTube 直播栏目",
+  channelTitle: () => "YouTube 直播栏目目录",
   channelLink: "https://www.youtube.com/live",
   fetchPage: async (): Promise<Item[]> => {
     const shelves = await fetchYoutubeLiveShelves()

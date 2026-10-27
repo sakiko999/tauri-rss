@@ -218,7 +218,7 @@ channel 级 `listCategories`（理由见 §4.5）。
 | 目录渠道 | 内容 | 目标订阅渠道 |
 | --- | --- | --- |
 | `twitch:categories` | Twitch 分类（30 条） | `twitch:category` |
-| `youtube:live-categories` | 直播栏目（News/Gaming/Sports） | `youtube:live-category` |
+| `youtube:live-categories` | 直播栏目目录（News/Gaming/Sports） | `youtube:live-category` |
 | `live:douyin:categories` | 抖音顶层 + 子分区（16 条） | `live:douyin:category` |
 | `live:douyu:categories` | 斗鱼二级分区（530 条） | `live:douyu:category` |
 | `live:huya:categories` | 虎牙二级分区（389 条） | `live:huya:category` |
