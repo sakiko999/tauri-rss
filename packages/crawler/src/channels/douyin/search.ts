@@ -11,8 +11,10 @@
  * （如「旭旭宝宝」）或三级词（如「美食」）返回 0 条。已知主播请用
  * `live:douyin`（抖音号）或 `live:douyin:user`（主页链接）。
  *
- * ⚠️ **不可分页**：上游是「关键词→分区→列房」的合成结果，无页码语义
- * （page 参数被忽略），故不声明 Pageable。
+ * ⚠️ **分页只翻第一个命中分区**：上游「关键词→分区」无页码语义，但分区→列房
+ * 支持 offset —— 现声明 Pageable，`page` 折算成首分区 offset（与「只有第一个
+ * 分区贡献数据」的现状单调一致）。首分区不满页时翻页会有缝隙（多分区各自续翻
+ * 需要「每分区 offset 组」游标，暂不做）。
  *
  * ✅ **命中断面（2026-10 增强）**：上游 `partition/search` 只认**游戏名级**分区
  * （`原神` 命中，`舞蹈`/`音乐` 返空）——但顶层分区名**恰恰就是这些词**
@@ -34,9 +36,10 @@ export const DouyinPartitionSearchChannel = makeApiChannel({
   ],
   channelTitle: (info) => `抖音分区搜索 ${info.keyword ?? ""}`,
   channelLink: "https://live.douyin.com",
-  fetchPage: async (info) => {
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (info, page) => {
     const kw = String(info.keyword ?? "").trim()
     if (!kw) throw new Error("douyin:search 需要分区关键词")
-    return searchDouyinRooms(kw, 1, PAGE_SIZE)
+    return searchDouyinRooms(kw, page, PAGE_SIZE)
   },
 })

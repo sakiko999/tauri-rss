@@ -4,12 +4,14 @@
  * 与 `live:huya:search`(搜房间,`v=4`)同端点,差别只在 `v` 与取哪个桶
  * (`response["1"]` = 主播)。取数在 `resolve/platform/huya/discover.ts`。
  *
- * ⚠️ **不可分页**(接口 `start` 实测无效,同搜房间)。
+ * ⚠️ **不可分页**:v=1 的 `start` 实测有效但语义怪异(start>0 恒返 40 条、与
+ * rows 无关,窗口对齐不直观),暂不接 Pageable。`rows` 服务端封顶 50 ——
+ * 2026-10-27 起取 rows=50(此前 rows=20 只见 20/50)。
  */
 import { makeApiChannel } from "../factory.ts"
 import { searchHuyaAnchors } from "@amoeba/resolve"
 
-const PAGE = 20
+const PAGE = 50
 
 export const HuyaAnchorChannel = makeApiChannel({
   key: "live:huya:anchor",

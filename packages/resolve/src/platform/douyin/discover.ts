@@ -205,7 +205,7 @@ function matchLocalPartitions(tree: DouyinCategory[], kw: string): DouyinPartiti
  *
  * ⚠️ 本地树匹配失败(首页 SSR 变脸)时静默回落纯上游路径——退化为旧行为,不抛错。
  */
-export async function searchDouyinRooms(keyword: string, _page = 1, pageSize = 20): Promise<Item[]> {
+export async function searchDouyinRooms(keyword: string, page = 1, pageSize = 20): Promise<Item[]> {
   const kw = keyword.trim()
   if (!kw) return []
 
@@ -222,9 +222,13 @@ export async function searchDouyinRooms(keyword: string, _page = 1, pageSize = 2
 
   const seen = new Set<string>()
   const out: Item[] = []
-  for (const p of parts.slice(0, 3)) {
+  // ⚠️ 分页只翻**第一个命中分区**(offset 递增):与「只有第一个分区贡献数据」
+  // 的现状单调一致(首分区通常满 pageSize,后面分区只是补零头)。多分区各自续翻
+  // 需要「每分区 offset 组」游标,暂不做 —— 代价:首分区不满页时翻页会有缝隙。
+  for (const [i, p] of parts.slice(0, 3).entries()) {
     try {
-      const rooms = await fetchDouyinPartitionRooms(p.id, String(p.type), 0, pageSize, "live:douyin:search")
+      const offset = i === 0 ? (page - 1) * pageSize : 0
+      const rooms = await fetchDouyinPartitionRooms(p.id, String(p.type), offset, pageSize, "live:douyin:search")
       for (const r of rooms as Live[]) {
         if (seen.has(r.roomId)) continue
         seen.add(r.roomId)

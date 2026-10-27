@@ -58,9 +58,13 @@ function ossCover(raw: unknown): string {
   return s && !s.includes("?") ? `${s}?x-oss-process=style/w338_h190` : s
 }
 
-/** 搜索房间。分页为 offset(start 从 0)。 */
+/**
+ * 搜索房间。⚠️ `start` 实测无效(2026-10-27:服务端只回显 start、不换窗口),
+ * 真正的深度杠杆是 `rows`(实测 ~100 封顶:rows=100 → numFound≈97 全量)。
+ * page 参数保留在 URL 里无害,但不要据此接 Pageable/fetchMore。
+ */
 export async function searchHuyaRooms(keyword: string, page = 1, pageSize = 20): Promise<Item[]> {
-  const rows = Math.min(Math.max(pageSize, 1), 50)
+  const rows = Math.min(Math.max(pageSize, 1), 100)
   const url =
     `https://search.cdn.huya.com/?m=Search&do=getSearchContent&q=${encodeURIComponent(keyword)}` +
     `&uid=0&v=4&typ=-5&livestate=0&rows=${rows}&start=${(page - 1) * rows}`
@@ -104,7 +108,9 @@ export async function searchHuyaRooms(keyword: string, page = 1, pageSize = 20):
 /**
  * 搜索主播。与 `searchHuyaRooms` 同端点,**唯一区别 `v=1`**(房间是 v=4)。
  * 取主播桶 `response["1"].docs`(房间桶那个是 v=4 才有的)。
- * ⚠️ 同样**不可分页**(`start` 无效,同 searchRooms)。
+ * ⚠️ `rows` 服务端封顶 50(rows=100 仍返 50);v=1 的 `start` 实测**有效**
+ * (start=20/70 返回不相交窗口),但语义怪异(start>0 时恒返 40 条、与 rows 无关),
+ * 接 Pageable 前需再实测窗口映射 —— 暂不接,单次 rows=50 即当前上限。
  */
 export async function searchHuyaAnchors(keyword: string, pageSize = 20): Promise<Item[]> {
   const rows = Math.min(Math.max(pageSize, 1), 50)

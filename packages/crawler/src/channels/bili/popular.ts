@@ -15,7 +15,7 @@ import { API, ugc } from "./video-common.ts"
 
 /** `/x/web-interface/popular` 的响应形状（只取用到的字段）。 */
 export interface PopularPayload {
-  data?: { list?: Array<Record<string, unknown>> }
+  data?: { list?: Array<Record<string, unknown>>; no_more?: boolean }
 }
 
 /** 热门列表 payload → Item[]。纯函数：只做字段映射，不发请求。 */
@@ -63,11 +63,16 @@ export const BiliPopularChannel = makeApiChannel({
   scanLogin,
   channelTitle: () => "B站综合热门",
   channelLink: "https://www.bilibili.com/",
-  fetchPage: async (info) => {
+  // pn/ps 翻页(2026-10-27 实测:pn=2 返回 20 条与首页零重叠,深度约 1000 条,
+  // pn 越界时 list 空 + no_more=true)。hasMore 直接透上游 no_more —— 热门榜跨
+  // 快照翻页必有重叠,不能靠「本页 0 条=到底」(core 的 append 去重会把重叠吞成 0)。
+  pageable: { first: 2, step: 1 },
+  fetchPage: async (info, page) => {
     // 登录 cookie 从 info 显式取(provider 是 client 兜底,这里显式=kv 覆盖可达)。
-    const data = await biliClient.getJson<PopularPayload>(`${API}/x/web-interface/popular`, {
-      cookie: info.cookie,
-    })
-    return parsePopularItems(data)
+    const data = await biliClient.getJson<PopularPayload>(
+      `${API}/x/web-interface/popular?pn=${page}&ps=20`,
+      { cookie: info.cookie },
+    )
+    return { items: parsePopularItems(data), hasMore: data?.data?.no_more !== true }
   },
 })
