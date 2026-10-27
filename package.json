@@ -1,7 +1,7 @@
 {
   "name": "tauri-playground",
   "private": true,
-  "version": "0.7.4",
+  "version": "0.7.5",
   "type": "module",
   "workspaces": [
     "apps/desktop",
