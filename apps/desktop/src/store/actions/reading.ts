@@ -72,6 +72,9 @@ export function createReadingActions(ctx: StoreCtx): ReadingActions {
     savePosition(item, sec, durationSec) {
       const dl = get().dl
       if (!dl) return
+      // 直播没有「续播位置」语义。某些流会报有限 duration(录制回放/伪直播)，
+      // 写进去会把直播间塞进「继续观看」。入口处统一拦，调用方不必各自守卫。
+      if (item.kind === "live") return
       // ⚠️ 必须读 store 里的**当前**值,不能用参数 item —— 调用方(播放页)持有的 item
       // 可能是 patch 前的旧对象(高频回调下尤其),用旧值判断会让清除/节流失效。
       // ⚠️ 必须**同时匹配 subscriptionId**:同一个 id 会跨订阅出现(bili:live 与

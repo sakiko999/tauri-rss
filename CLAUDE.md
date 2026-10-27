@@ -9,10 +9,12 @@ mobile 保持内置 crawler 仅有限平台。决策见 `docs/architecture/crawl
 
 ```
 apps/
-  src-tauri/   唯一 Rust crate（amoeba），双端共享 commands/plugins
+  src-tauri/   应用 Rust crate（amoeba），desktop/mobile 共享 commands/plugins；
+               另有 browser-sidecar / runtime 两个独立 crate
   desktop/     React 19 + Vite + Tailwind 4 → dist/desktop
-               订阅工作台：rail 侧栏（内容类型/智能订阅/分组树）+ 五视图
-               reader 三栏 / media 网格 / hot 热搜 / page 整页 / player / shortvideo 全屏流。
+               订阅工作台：rail 侧栏（主导航/内容类型/智能订阅/分组树）+ 七种视图意图
+               home 看板（`/`）/ reader 三栏 / media 网格 / hot 热搜 / page 整页 /
+               player / shortvideo 全屏流（`/library` 深链落「未开放」说明，P1）。
                状态 src/store/（nodes 节点语法 · selectors 派生 · prefs 偏好 · index 编排），
                视图 src/views/，样式 src/styles/（按区块拆分，入口只留 @import 顺序）。
   mobile/      ⛔ **已冻结（2026-10-26）**：除主动开启外，后续改动不为 mobile 做适配/回归
@@ -27,6 +29,8 @@ apps/
   runtime/     amoeba-runtime：小体积 Bun 启动器（Rust）。解析顺序
                AMOEBA_BUN → 全局 PATH → 随包 → 缓存 → 下载固定版本（SHA256/原子解压），
                然后 spawn 入口并透传 stdio/退出码。stdout 只留 READY，日志全走 stderr
+  new_desktop/ 纯静态 JS 原型（window.OD + 内置假数据），只作界面参考；
+               不在 workspaces、不参与构建
 packages/
   xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。node/browser/tauri 三态；
@@ -48,7 +52,8 @@ packages/
   platform/    ★ 平台名单一权威（R9）：channelKey 前缀 / URL 域名 / cookie 字段 / 展示名。
                零依赖叶子，host（governor）与 core（cookie 注入）共用。
   log/         零依赖叶子：域注册语义化日志（log="0" 全局关 / log:<域>="0" 按域关）
-  service-protocol/ ★ 服务 HTTP/WS 契约（39 个 DataLayer 方法 + snapshot/event/job 类型）
+  service-protocol/ ★ 服务 HTTP/WS 契约（45 个 RPC 方法 = 36 个 DataLayer 语义方法 +
+                   refreshAll/diagnostics/probe + snapshot/event/job 类型）
   service-client/   ★ RemoteDataLayer：desktop/CLI 共用。读本地镜像、写 RPC、WS 事件；
                    运行时不 import core 根入口（避免拉进 crawler/resolve）
   ui/          ⚠️ 只剩原子件：desktop 仅引 MediaImage（防盗链隧道）与 fmtCount
@@ -89,7 +94,7 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   见 `docs/architecture/data-and-storage.md`。
 - **`MediaItem.id` 只在订阅内唯一**：凡「按 id 记/改/查」都要带 `subscriptionId`
   （reading 键、store.patch、播放队列、findItem）。见 `docs/architecture/data-and-storage.md`。
-- **选流 = `streams[0]`**，crawler 保证最高清晰度排最前，player 不做二次排序。
+- **选流 = `streams[0]`**，产流侧（resolve 平台解析）保证最高清晰度排最前，player 不做二次排序。
   见 `docs/playback/playback.md`。
 - **可播判定 = kind 门控**（video/audio/live）+ `isFeedItem`（audio 且无 stream = 播客 feed）。
   新增「播放」入口一律经 `usePlayerNav` 收口。见 `docs/ui/ui-conventions.md`。
@@ -193,17 +198,18 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建实例也归同一桶，不靠域名猜）。
 被动采集是**渠道属性** `RssChannel.passive`（`xhs:explore` 声明、`xhs:user` 刻意不声明）。
 窗口模式 `hidden` / `interactive` **是整实例级**，滚动驱动页面用
-`withBrowserMode(browser, "interactive", fn)`（内部串行 + 结束切回 hidden），不要手写
-`withBrowserLock` + `setMode`。多 tab 与 lane 化（设计，未实现）见 §3.13。
+`withBrowserOp(browser, {lane, mode:"interactive", platform}, fn)`；`withBrowserMode` 只是
+`lane:"default"` 兼容壳，不要手写 `withBrowserLock` + `setMode`。多 tab 与 lane 化已实现
+（2026-10-22）见 `docs/risk/crawler-risk-control.md` §3.13。
 **完整规则见 `docs/risk/crawler-risk-control.md`**。
 
 ## 文档地图（完整索引见 `docs/README.md`）
 
 | 分类 | 文档 |
 | --- | --- |
-| 架构与契约 | ★ `docs/architecture/system/README.md`（全仓系统架构：包职责/契约/流程/扩展/风险） · `docs/architecture/host-abi.md` · `docs/architecture/data-and-storage.md` · `docs/architecture/crawler-topology.md` |
+| 架构与契约 | ★ `docs/architecture/system/README.md`（全仓系统架构：包职责/契约/流程/扩展/风险） · `docs/architecture/system/06-data-service.md`（数据服务单写者/协议） · `docs/architecture/host-abi.md` · `docs/architecture/data-and-storage.md` · `docs/architecture/crawler-topology.md` |
 | 平台 | ★ `docs/platforms/platform-notes.md` · `docs/platforms/channels.md`（渠道与缺口）· `docs/platforms/youtube.md` · `docs/platforms/twitch.md` · `docs/platforms/xhs-signature.md` · `docs/platforms/login.md` · `docs/platforms/domestic-feeds.md` |
-| UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` |
+| UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` · `docs/ui/heliu-redesign-plan.md`（实施中，分支 `feat/heliu-redesign`） |
 | 播放与弹幕 | ★ `docs/playback/playback.md` · `docs/playback/danmaku.md` · `docs/playback/mpv.md`（未做） |
 | 风控 | ★ `docs/risk/crawler-risk-control.md` |
 | 运维 | ★ `docs/ops/commands.md` · ★ `docs/ops/smoke-check.md` · `docs/ops/release-updater.md` |
@@ -232,7 +238,7 @@ live 按平台二次聚合的 UI 侧。
 ## TODO / 重要信息（cc-todo 自动维护）
 
 - [ ] **CI 工作流暂缓（2026-10-26 定）**：`.github/workflows/ci.yml` 未建；统一入口 `bun run check`
-  已在本地跑通（61 项 / 5.4s），接入时 job 跑 `bun run check`，service 层单列（需 bun:sqlite + 端口）。
+  已在本地跑通，接入时 job 跑 `bun run check`，service 层单列（需 bun:sqlite + 端口）。
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
 - [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
@@ -255,4 +261,14 @@ live 按平台二次聚合的 UI 侧。
 - [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS。
 - [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
 - [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
+- [ ] 合流改版：M0–M6 已落地、M7 部分收尾（分支 `feat/heliu-redesign`），
+  进度与剩余项见 `docs/ui/heliu-redesign-plan.md` §实施状态
+- [x] 实拍添加订阅弹窗（2026-10-27，`bun scripts/ui-shots-all.ts` + CDP）：渠道目录分类 tab、搜索、
+  行式列表与「添加/配置」密度均正常；首页/阅读空态/动态/影音/发现/片库页同时复核（深浅两套主题）
+- [ ] `scripts/ui-design-audit.ts` 把 oklch 背景解析成 `rgb(271,111,74)` 这类非法值（>255），
+  active chip / `.tag-ok` 恒报 ~1.1:1 误报；真实值已手工复算过 AA。修脚本前别把它的
+  `contrastIssues` 当阻塞项
+- [ ] docs 遗留清单已全量对码（2026-10-27，120 条：open 89 / stale 9 / decision 21）：
+  分批按 `docs/audit/refactor-candidates.md` 排期；下一批优先 A0（browser-sidecar 进程退出自愈）、
+  A1（服务端 diagnostics 归位）、A4（取消时 abortTabs），再做 B 段性能
 <!-- cc-todo:end -->

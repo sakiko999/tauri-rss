@@ -1,12 +1,13 @@
 # 播放约定
 
-> 从 `CLAUDE.md` 迁出（2026-10-21）。`CLAUDE.md` 只留「选流 = `streams[0]`」与
-> 「release 才暴露的 loader 差异」。弹幕见 `docs/playback/danmaku.md`。
+> 从 `CLAUDE.md` 迁出（2026-10-21）。`CLAUDE.md` 只留「选流 = `streams[0]`」硬契约；
+> Twitch release 403 等 loader 差异与弹幕细节全在本文与 `docs/playback/danmaku.md`。
 
 ## 选流契约
 
-crawler 保证返回数组内**最高清晰度排最前**（bili/youtube/douyin/huya 显式按 rate 降序；
-douyu 例外——`rate` 是档位 ID，保留服务端顺序）。player `pickDefaultStream`
+产流侧（resolve 平台解析）保证返回数组内**最高清晰度排最前**（bili/youtube/douyin 显式按 rate 降序；
+huya 依赖 API 档位原序——最高档 `iBitRate=0`，按 rate 降序反而排最后；douyu 例外——
+`rate` 是档位 ID，保留服务端顺序）。player `pickDefaultStream`
 （`hooks/streamKind.ts`）**就取 `streams[0]`**，不做二次排序。
 
 ⚠️ 曾按**格式族**挑（`find(渐进式) ?? find(hls) ?? find(flv) ?? [0]`），以为「原生可播的最稳」

@@ -120,7 +120,9 @@ JSON 形态（字段精简，**不包含任何输入值**）：
 
 ```
 apps/desktop/src/dev/ui-overlay/
-  index.ts     安装/卸载、快捷键、观察器、window.__uiOverlay
+  index.ts     安装/卸载、观察器、window.__uiOverlay
+  hotkey.ts    快捷键解析/匹配（parseHotkey/matchHotkey/formatHotkey，纯函数）
+  types.ts     共享类型（Candidate / OverlayEntry / PublicEntry）
   scan.ts      候选选择器（控件 + 区块）、可见性/遮挡、React onClick 兜底
   key.ts       稳定键（fiber 业务 id / data-* / 区块 / 标题 / 结构回退）+ 名称/选择器
   registry.ts  编号分配（纯逻辑）：同 key 固定、reset
@@ -178,32 +180,10 @@ bun apps/desktop/src/dev/ui-overlay/overlay.check.ts   # 快捷键/编号/定位
 bun run build:desktop
 ```
 
-2026-10-18 用临时 React harness（已删除）实测：
-
-| 场景 | 结果 |
-| --- | --- |
-| 初始页面 | 43 个候选 / 43 个标签 |
-| 30 张卡片 + 虚拟行全量 DOM 重建 | 43 个 key 的编号 **0 变化** |
-| 隐藏 → 显示 | 编号 **0 变化**，根节点仍只有 1 个 |
-| 虚拟列表滚到 800px 再滚回 | 原来条目的编号全部复用（6/9/13…） |
-| 500 个可见小按钮 | `candidates=501`、`labels=400`、`overflow=101`、标签编号唯一 |
-| 真实点击（overlay 开启） | 目标点击正常触发，无信息卡误弹 |
-| Ctrl+Shift+U 合成事件 | 关 → 开，单根节点 |
-| 信息卡 / Esc | 打开字段完整；Esc 只关闭信息卡 |
-| JSON | 合法、按视觉顺序、无 `value` 字段 |
-
-2026-10-18 区块 harness（临时文件已删除）：
-
-| 场景 | 结果 |
-| --- | --- |
-| 6 个显式区块（其中 1 个在视口外）+ 3 个按钮 | `candidates=8`、`blocks=5`、`labels=8`；视口外区块正确排除 |
-| 「仅区块」模式 | `labels=5`、`blockLabels=5`，控件标签全部隐藏 |
-| React root 全量重挂载 | 区块编号 `1,2,3,5,7` **0 变化**（靠 `data-ui-overlay-key`） |
-| 标签样式 | 区块 18px 绿色软底、控件 16px 琥珀色 |
-| 区块边界框 | 5 个可见区块各 1 个框；`box rect` 与目标 `getBoundingClientRect()` 逐像素一致 |
-| 仅区块模式 | 5 个标签 + 5 个边界框，控件无框 |
-| 信息卡 | `#1` 显示「类型：区块 (harness-header)」，控件显示「可交互控件」 |
-| JSON | 顶层含 `blocks=5` / `mode`，条目含 `block:true` / `blockName` |
+2026-10-18 用临时 React harness（已删除）实测：编号在虚拟列表滚动 / DOM 重建 / 隐藏-显示 /
+React root 重挂载下均 **0 变化**；500 个可见控件 → `labels=400`、`overflow=101`（编号唯一）；
+区块边界框与 `getBoundingClientRect()` 逐像素一致，「仅区块」只渲染区块标签，信息卡/Esc/真实
+点击行为符合预期。
 
 ## 七、已知上限与后续
 

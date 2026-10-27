@@ -1,11 +1,13 @@
 /**
- * AddPanels —— 「添加订阅」弹窗的两块**功能件**(纯展示:状态与动作都由外层
- * `useAddForm` 持有,经 `form` 传入)。
+ * AddPanels —— 「添加订阅」弹窗的两块功能件。
  *
- * 拆出来的理由:AddSubscriptionDialog 原本把「搜索添加」(平台/关键词/候选列表/
- * 添加到)与「按渠道配置」(渠道 chip / 摘要 / 参数表单)两大块 JSX 和表单状态
- * 堆在同一个 591 行的组件里。两块互不依赖,只有共享的 `form` 对象。
+ * 表单状态与提交编排都在 `AddSubscriptionDialog`（经 `f` 传入）；这里只有渲染，
+ * 外加浏览步骤自己的临时 UI 状态（分类 / 搜索词 / 分页），它们不影响订阅结果。
+ *
+ * 拆出来的理由:两块互不依赖 —— 「搜索添加」是调平台搜索接口选候选，
+ * 「浏览渠道」是查渠道目录再填参数。
  */
+import { useMemo, useState } from "react"
 import type { ChannelInfo } from "@amoeba/core"
 import { KIND_META } from "../../store/nodes.ts"
 import { Banner } from "../../components/StateBlock.tsx"
@@ -15,6 +17,7 @@ import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { MediaImage } from "@amoeba/ui"
 import { platformOf, SEARCH_CHANNEL, USER_SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
 import { isImeComposing } from "../../lib/ime.ts"
+import { CATALOG_PAGE, catalogView, isSingleton } from "../../lib/channel-catalog.ts"
 
 /** 渠道 → 平台图标名(与 Dialog 里那份是同一张表,提出来给两块面板共用)。 */
 export const PLATFORM_ICON: Record<string, string> = {
@@ -218,10 +221,10 @@ export function SearchPanel(f: SearchPanelProps) {
   )
 }
 
-/** 「按渠道配置」面板的入参。 */
+/** 「浏览渠道」面板的入参。 */
 export interface ChannelPanelProps {
   builtins: ChannelInfo[]
-  /** 内置 RSS 直链清单(36 条,用下拉收起来,不铺 chip)。 */
+  /** 内置 RSS 直链清单(36 条,用下拉收起来,不铺进目录)。 */
   rssFeeds: ChannelInfo[]
   rsshub: ChannelInfo[]
   channelKey: string
@@ -236,91 +239,40 @@ export interface ChannelPanelProps {
   targetId: string
   onTargetId: (v: string) => void
   landParam: string | undefined
+  /** 各渠道已有的订阅条数：目录行显示「已订阅 N」，单例渠道据此禁用。 */
+  subCounts: Record<string, number>
 }
 
-const GROUP_TITLE: Record<string, string> = { builtin: "内置渠道", rsshub: "RSSHub 外挂" }
-
-/** 按渠道配置:选渠道 → 出摘要 + 参数表单(必填现场校验)。 */
+/**
+ * 浏览渠道 → 点一行进配置步骤。
+ *
+ * 近百个渠道平铺成 chip 是不可读的（合流原型改成「分类 + 搜索 + 行式目录」）；
+ * 分类/搜索/分页的算法在 `lib/channel-catalog.ts`，这里只管渲染与步骤切换。
+ * `channelKey` 为空 = 目录步骤，非空 = 配置步骤（「返回渠道列表」= `onPick("")`）。
+ */
 export function ChannelPanel(f: ChannelPanelProps) {
+  const [cat, setCat] = useState("all")
+  const [query, setQuery] = useState("")
+  const [limit, setLimit] = useState(CATALOG_PAGE)
+  const all = useMemo(() => [...f.builtins, ...f.rsshub], [f.builtins, f.rsshub])
+  const view = useMemo(() => catalogView(all, cat, query, limit), [all, cat, query, limit])
+
   // loginable 是**channel 级**能力，但登录态是**平台级**的（同平台共用一个 cookie）。
   // 先按平台聚合，避免「B站只有综合热门有标记、其余三个没有」这种不可解释的差异。
-  // 用 QR 小标记而不是「可扫码登录」文字 tag：chip 里的小字读不懂、还像警告。
-  const loginPlatforms = new Set(
-    [...f.builtins, ...f.rsshub]
-      .filter((c) => c.loginable)
-      .map((c) => platformOf(c.key)),
+  // 用 QR 小标记而不是「可扫码登录」文字 tag：目录行里的小字读不懂、还像警告。
+  const loginPlatforms = useMemo(
+    () => new Set(all.filter((c) => c.loginable).map((c) => platformOf(c.key))),
+    [all],
   )
-  const channelChip = (c: ChannelInfo) => {
-    const platform = platformOf(c.key)
-    const canLogin = loginPlatforms.has(platform)
+
+  /* ── 配置步骤:选中的渠道 ──────────────────────────────────────────── */
+  if (f.channel) {
     return (
-      <button
-        key={c.key}
-        className="chip"
-        aria-pressed={f.channelKey === c.key}
-        aria-label={canLogin ? `${c.name}（支持扫码登录）` : undefined}
-        onClick={() => f.onPick(c.key)}
-      >
-        <Icon
-          name={c.kind === "audio" ? "music" : (PLATFORM_ICON[platform] ?? "layers")}
-          size={14}
-        />
-        {c.name}
-        {canLogin ? (
-          <span className="chip-login" title="支持扫码登录；未登录也能先订阅" aria-hidden="true">
-            <Icon name="qr" size={13} strokeWidth={2} />
-          </span>
-        ) : null}
-      </button>
-    )
-  }
-  return (
-    <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("channel-panel", "add:channel")}>
-      <div className="field">
-        <span className="field-label" id="lbl-channel">
-          渠道
-        </span>
-        <div className="channel-groups" role="group" aria-labelledby="lbl-channel">
-          {[
-            { id: "builtin", channels: f.builtins },
-            { id: "rsshub", channels: f.rsshub },
-          ]
-            .filter((g) => g.channels.length > 0)
-            .map((g) => (
-              <div className="channel-group" key={g.id}>
-                <div className="eyebrow">{GROUP_TITLE[g.id]}</div>
-                <div className="chip-row">{g.channels.map(channelChip)}</div>
-              </div>
-            ))}
-        </div>
-      </div>
-
-      {f.rssFeeds.length > 0 ? (
-        <div className="field">
-          <label className="field-label" htmlFor="add-rss-feed">
-            内置 RSS 源
-          </label>
-          <Select
-            id="add-rss-feed"
-            value={f.rssFeeds.some((c) => c.key === f.channelKey) ? f.channelKey : ""}
-            onChange={(v) => {
-              if (v) f.onPick(v)
-              // 「不使用内置源」不是空操作：当前正选中某条内置 RSS 时退回通用直链；
-              // 当前本来就是其它渠道（bili 等）则保持不动。
-              else if (f.channelKey.startsWith("rss:")) f.onPick("rss:url")
-            }}
-            placeholder="选择内置 RSS 源（可选）"
-            options={[
-              // radix 不接受空串 value；给一个显式的「未选」项，避免 value 为哨兵时
-              // 触发器渲染成空白。
-              { value: "", label: "不使用内置源" },
-              ...f.rssFeeds.map((c) => ({ value: c.key, label: c.name })),
-            ]}
-          />
-        </div>
-      ) : null}
-
-      {f.channel ? (
+      <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("channel-panel", "add:channel")}>
+        {/* 目录状态(cat/query/limit)留在 ChannelPanel 里:返回时回到刚才那一屏 */}
+        <button className="cat-back" onClick={() => f.onPick("")}>
+          <Icon name="back" size={14} /> 返回渠道列表
+        </button>
         <div className="channel-form">
           <div className="channel-summary">
             <span className="platform-mark platform-mark-sm">
@@ -328,7 +280,6 @@ export function ChannelPanel(f: ChannelPanelProps) {
             </span>
             <span className="platform-title">
               <span className="t-h3">{f.channel.name}</span>
-              <span className="t-micro t-dim mono od-truncate">{f.channel.key}</span>
             </span>
             <span className="tag">{KIND_META[f.channel.kind]?.label ?? f.channel.kind}</span>
           </div>
@@ -400,6 +351,154 @@ export function ChannelPanel(f: ChannelPanelProps) {
               </div>
             ))
           ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  /* ── 目录步骤:分类 + 搜索 + 行式列表 + 分页 ───────────────────────── */
+  const rest = view.total - view.shown
+  return (
+    <div className="stack" style={{ gap: "var(--sp-4)" }} {...overlayBlock("channel-panel", "add:channel")}>
+      <div className="chip-row" role="group" aria-label="渠道分类">
+        {view.cats.map((c) => (
+          <button
+            key={c.id}
+            className="chip"
+            aria-pressed={cat === c.id}
+            onClick={() => {
+              setCat(c.id)
+              setLimit(CATALOG_PAGE)
+            }}
+          >
+            {c.label}
+            <span className="cand-chip">{c.count}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="input-group">
+        <Icon name="search" size={16} />
+        <input
+          className="input"
+          type="search"
+          value={query}
+          placeholder="搜索渠道或平台"
+          aria-label="搜索订阅渠道"
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setLimit(CATALOG_PAGE)
+          }}
+        />
+      </div>
+
+      {view.groups.length === 0 ? (
+        <div className="field">
+          <p className="t-small t-dim">
+            {query.trim() ? `没有匹配「${query.trim()}」的渠道。` : "没有可用渠道。"}
+          </p>
+          {/* 在某个分类里搜空是最常见的死路：给一条出路，而不是让用户自己切 tab 重搜 */}
+          {query.trim() ? (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                if (cat !== "all") {
+                  setCat("all")
+                  setLimit(CATALOG_PAGE)
+                } else setQuery("")
+              }}
+            >
+              {cat !== "all" ? "在全部渠道中搜索" : "清除搜索"}
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <div className="cat-list">
+          {view.groups.map((g) => (
+            <div className="cat-group" key={g.id}>
+              {/* 只剩一组时组头与分类 tab 说的是同一件事，不画 */}
+              {view.groups.length > 1 ? (
+                <div className="cat-head eyebrow">
+                  {g.label}
+                  <span>{g.items.length}</span>
+                </div>
+              ) : null}
+              {g.items.map((c) => {
+                const n = f.subCounts[c.key] ?? 0
+                const canLogin = loginPlatforms.has(platformOf(c.key))
+                // 无参渠道再订阅一份就是同一份内容 → 已订阅即禁用；带参数的可反复添加
+                const blocked = n > 0 && isSingleton(c)
+                const needsParams = (c.sourceInfoTpl?.length ?? 0) > 0
+                return (
+                  <button
+                    key={c.key}
+                    className="cat-row"
+                    aria-disabled={blocked || undefined}
+                    title={canLogin ? "支持扫码登录；未登录也能先订阅" : undefined}
+                    onClick={() => {
+                      if (!blocked) f.onPick(c.key)
+                    }}
+                  >
+                    <span className="cat-ico">
+                      <Icon
+                        name={c.kind === "audio" ? "music" : (PLATFORM_ICON[platformOf(c.key)] ?? "layers")}
+                        size={16}
+                      />
+                    </span>
+                    <span className="cat-name">
+                      {c.name}
+                      {canLogin ? (
+                        <span className="chip-login" aria-hidden="true">
+                          <Icon name="qr" size={12} strokeWidth={2} />
+                        </span>
+                      ) : null}
+                    </span>
+                    {/* 单例渠道的「已订阅」在行尾已经说了，这里只给可反复添加的渠道报数量 */}
+                    {n > 0 && !blocked ? <span className="cand-chip">已订阅 {n}</span> : null}
+                    <span className="cat-go">
+                      {blocked ? "已订阅" : needsParams ? "配置" : "添加"}
+                      <Icon name={blocked ? "check" : needsParams ? "chevronRight" : "plus"} size={12} />
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+          {rest > 0 ? (
+            <button className="cat-more" onClick={() => setLimit((l) => l + CATALOG_PAGE)}>
+              显示更多渠道 · 还有 {rest} 个 <Icon name="chevronDown" size={14} />
+            </button>
+          ) : null}
+        </div>
+      )}
+
+      {f.rssFeeds.length > 0 ? (
+        <div className="field">
+          <label className="field-label" htmlFor="add-rss-feed">
+            内置 RSS 源
+          </label>
+          <Select
+            id="add-rss-feed"
+            value={f.rssFeeds.some((c) => c.key === f.channelKey) ? f.channelKey : ""}
+            onChange={(v) => {
+              if (v) f.onPick(v)
+              // 「不使用内置源」不是空操作：当前正选中某条内置 RSS 时退回通用直链；
+              // 当前本来就是其它渠道（bili 等）则保持不动。
+              else if (f.channelKey.startsWith("rss:")) f.onPick("rss:url")
+            }}
+            placeholder="选择内置 RSS 源（可选）"
+            options={[
+              // radix 不接受空串 value；给一个显式的「未选」项，避免 value 为哨兵时
+              // 触发器渲染成空白。
+              { value: "", label: "不使用内置源" },
+              // 已订阅的内置源不可再选:与目录同一规则(无参渠道重复订阅只是同一份内容)
+              ...f.rssFeeds.map((c) => ({
+                value: c.key,
+                label: c.name,
+                disabled: (f.subCounts[c.key] ?? 0) > 0,
+              })),
+            ]}
+          />
         </div>
       ) : null}
     </div>

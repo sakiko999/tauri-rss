@@ -19,6 +19,12 @@
 @import "./styles/50-shortvideo.css";
 @import "./styles/55-player.css";
 @import "./styles/60-pages.css";
+/* 合流改版视图区块（首页 / 阅读 / 动态 / 影音）—— 顺序即层叠顺序,放在 60 之后、
+   70 浮层之前:视图区块可以覆盖通用页面样式,但浮层永远在最上层。 */
+@import "./styles/65-home.css";
+@import "./styles/66-reader.css";
+@import "./styles/67-social.css";
+@import "./styles/68-media.css";
 @import "./styles/70-overlays.css";
 @import "./styles/90-responsive.css";
 

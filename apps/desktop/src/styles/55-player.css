@@ -33,6 +33,20 @@
     max-width: none;
   }
 }
+/* 剧场模式:单列 + 收起右栏(队列/同订阅),宽度全给画面。
+   用 **data 属性**(不是新类名):上面 90-responsive 的 1280 断点也给 .player-layout
+   收单列,属性选择器特异性更高 → 两边同时命中是同一个结果,不会打架;窗口变宽时
+   剧场模式也不会被断点规则「抢回」双列。
+   ⚠️ 播放器本体仍无圆角(视频外壳的契约),这里只动布局与舞台宽度上限。 */
+.player-view[data-theater="on"] .player-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.player-view[data-theater="on"] .player-side {
+  display: none;
+}
+.player-view[data-theater="on"] .stage {
+  max-width: none;
+}
 .player-meta {
   display: grid;
   gap: var(--sp-3);
@@ -61,6 +75,14 @@
   align-items: center;
   gap: var(--sp-2);
   flex-wrap: wrap;
+}
+/* 剧场模式开关的按下态 —— .btn 本身没有 aria-pressed 样式(只有 .icon-btn/.chip 有),
+   没有这行按钮按了和没按长得一样。 */
+.player-actions .btn[aria-pressed="true"] {
+  background: var(--accent-soft);
+  /* ⚠️ 用 --accent-text 而不是 --accent:accent 压在 accent-soft 上浅色只有 3.99:1
+     (13px 正文需 4.5),按下反而更难读。accent-text 浅 4.97 / 深 6.21。 */
+  color: var(--accent-text);
 }
 
 .queue-row {

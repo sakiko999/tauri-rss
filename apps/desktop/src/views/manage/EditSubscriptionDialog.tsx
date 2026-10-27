@@ -44,7 +44,8 @@ export function EditSubscriptionDialog({ sub, onClose }: { sub: Subscription | n
       await updateSubscription(sub.id, {
         title: title.trim() || sub.title,
         groupId: groupId || null,
-        refreshIntervalSec: ttl > 0 ? ttl * 60 : undefined,
+        // `null` = 清除（undefined 会在 RPC 的 JSON 里丢掉，旧值清不掉）
+        refreshIntervalSec: ttl > 0 ? ttl * 60 : null,
         enabled,
       })
       toast("ok", `已保存「${title.trim() || sub.title}」`)

@@ -23,15 +23,15 @@
 `.live-pulse` / `.live-online` 一致），别借侧栏命名空间。改样式前先 `grep` 类名在
 `styles/` 下出现了几次。
 
-⚠️ **元素级 reset 必须写在 `@layer base` 里**：`styles.css` 的 `@layer base{}` 一旦被
+⚠️ **元素级 reset 必须写在 `@layer base` 里**：`styles/10-tokens.css` 的 `@layer base{}` 一旦被
 自己提前 `}` 收尾，后面的 `button/h1/ul` reset 就成了**无层规则** —— 而**无层 CSS 优先级
 高于所有 `@layer`**（Tailwind 4 层序 `theme < base < components < utilities`）。后果：
 `button{background:none;border:0;padding:0}` 把 packages 里所有 tailwind 按钮的
 `bg-*`/`border-*`/`px-*`/`py-*` **全废掉**（渲染成无边框无内边距的裸按钮）。app 内看不出来
 （desktop 用自己的 `.btn`/`.icon-btn`，同为无层、自己就能赢），受害的是 `packages/player`、
-`packages/ui` 这类只靠 utility 的代码。2026-10-14 已全部移进 base 层。**改 styles.css 的
-结构性规则后，务必用 CDP 量一次真实 computed style**（`getComputedStyle(btn).padding` 应为
-`6px 12px` 而非 `0px`）。
+`packages/ui` 这类只靠 utility 的代码。2026-10-14 已全部移进 base 层。**改 `styles/10-tokens.css`
+的结构性规则后，务必用 CDP 量一次真实 computed style**（`getComputedStyle(btn).paddingInlineStart`
+应为 `12px` 而非 `0px`）。
 
 ⚠️ **app 的 `styles/` 是无层 CSS；Tailwind utility 在 `@layer utilities`**。同一属性若被
 无层语义类设置（如 `.stack{gap}`、`.pane > .scroll-area{flex}`、`.article-body{...}`），
@@ -58,7 +58,12 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 
 - **字体**：IBM Plex 自托管（`apps/desktop/public/fonts`，~136KB，离线可用）。
   Sans=UI/标题，**Serif=正文**，Mono=数字/通道号。中文回落到系统栈（字体包太大不随包）。
-- **视觉基调**：暖石墨中性（色相 72/75）+ 琥珀 accent；深/浅两套同色相，改一处要改两处。
+- **视觉基调**：冷石墨表面 + 信号橙 accent（合流改版，2026-10-27）。
+  深色表面 hue≈264–275（`--bg` 264 / `--surface-1..3` 275/271/267），浅色 hue≈106；
+  accent 深 `oklch(0.686 0.205 34)`（#FF5C38）/ 浅 `oklch(0.553 0.174 38)`（#C2410C）。
+  **深/浅两套是各自独立取色（浅色不是深色反转）**，改值要逐主题核对是否漏写覆盖；
+  文字与 `--scrim`/`--stage-bg` 仍是近中性暖值（hue 72–80）。取值与实测对比度以
+  `apps/desktop/src/styles/10-tokens.css` 的行内注释为准。
   对比度用 `scripts/ui-design-audit.ts` 复测（目标 0 处低于 WCAG AA）。
 
 ## 组件与浮层
@@ -82,8 +87,8 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
   是 grid item；默认 `min-width:auto` 时，错误文案里的长 URL 会把 min-content 撑到 **592px**，
   无视 `max-width:360px` 直接出视口。`.toast-body` 也要 `min-width:0`，`.toast-text` 加
   `overflow-wrap:anywhere`。governor 的冷却错误已去掉完整 URL（只留平台/剩余时间/信号）。
-- ⚠️ **侧栏窄栏隐藏列表必须两份对齐**：`styles.css` 里 `.rail.rail-collapsed`（手动折叠）
-  与 `@media (max-width:1080px)`（窄窗）各有一份 `display:none` 清单，**逐项必须一致**
+- ⚠️ **侧栏窄栏隐藏列表必须两份对齐**：`styles/20-shell.css` 里 `.rail.rail-collapsed`（手动折叠）
+  与 `styles/90-responsive.css` 的 `@media (max-width:1080px)`（窄窗）各有一份 `display:none` 清单，**逐项必须一致**
   （`nav-label`/`nav-count`/`nav-warn`/`rail-empty`/`group-empty`/…）。曾漏掉 `group-empty`
   → 空分组提示文案在 64px 栏里被压成逐字竖排
 
@@ -91,7 +96,7 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 
 - ⚠️ **主区里不在滚动器内部的元素是「滚动死区」**：`body` 是 `overflow:hidden`，鼠标停在
   这些元素上找不到可滚祖先 → 滚轮完全无反应（用户会描述成「页面无法上下滑动」）。
-  `MediaMain` 的 `.grid-head` / `.rail-block` 曾占掉 **59% 的视口**。
+  `MediaMain` 的 `.grid-head` / `.live-block` 曾占掉 **59% 的视口**。
   ✅ **正解是把它们移进滚动器内部**（hasMix 走 `VirtuosoGrid` 的 `Header`；socialOnly 走
   `MasonryGrid` 的 `header` prop）—— 既消除死区，又让**头跟着一起滚**（整体滚动）。
   ❌ 不要用「捕获阶段转发 wheel」绕：那只是内容滚、**头依旧固定**，不是用户要的。
@@ -124,7 +129,8 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 - ⚠️ **正文里的外链必须拦截**：`.article-body` 的委托 click 命中 `<a>` 要走
   `openExternalSafely`；不拦的话 WebView 会整页导航走（应用没配 Tauri `on_navigation`），
   界面被外部网页顶掉、只能重启才回来
-- ⚠️ **JS 驱动的动画挡不住 `prefers-reduced-motion`**：`styles.css` 那条媒体查询只压
+- ⚠️ **JS 驱动的动画挡不住 `prefers-reduced-motion`**：`styles/90-responsive.css` 里那条
+  `@media (prefers-reduced-motion: reduce)` 只压
   CSS 的 animation/transition，对 `scrollIntoView({behavior:"smooth"})`、脚本编排的入场与
   形变**完全无效**。要在 JS 侧问偏好，用 `lib/motion.ts`（`prefersReducedMotion()` /
   `scrollBehavior()` / `motionDurationMs()`）。**等动画放完再卸载**时读
@@ -200,26 +206,9 @@ n/tva/ws1.sinaimg.cn 等子域全部 403/404）。
 **图片宽高**由单独一段解决：`resolve/src/utils/img-size.ts` Range 预取文件头解析
 （PNG 64B / JPEG 1KB），失败退化 4:3。XML `tpl:image` 带 `@_url/@_width/@_height`。
 
-### Rust 层替代方案评估
-
-#### 方案 A：http_get command 内自动补 Referer
-
-Rust 侧维护「host → Referer」表，请求进来自动带。代价小，但**前端仍需判断「这张图要不要
-走隧道」** —— 判断依据和 Referer 规则是同一份知识，会在 TS（判断）与 Rust（补头）**分裂成
-两份**，比现在的 `mediaReferrerFor`（resolve 层一份）更分散。**不值**。
-
-#### 方案 B：自定义协议 `media://` 代理图片（彻底 Rust 化）
-
-`<img src="media://…">`，Rust 注册 `register_uri_scheme_protocol` 带站内 Referer 拉图、
-流式返回字节。img 原生加载，无 blob/base64 膨胀 / JS 隧道，性能显著更好（瀑布流多图时是
-真实收益）。代价（「四件套」）：
-
-1. tauri.conf 配 scheme + Rust handler；
-2. 前端 URL 重写（`https://wx1.sinaimg.cn/...` → `media://...`），需跨平台分支（见下）；
-3. browser 纯前端调试环境无 Rust scheme，需降级回原生 img / fetch；
-4. **跨平台 scheme 形态差异 + 已知安全洞**（见下）。
-
 ### Tauri 自定义协议跨平台差异（官方 docs.rs 查证）
+
+> 评估过用自定义协议 `media://` 替代隧道，结论是**不做**（见「决策」）；本节与下节「安全」是评估依据。
 
 `register_uri_scheme_protocol` 把协议映射成两种形态：
 
@@ -253,38 +242,18 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
   （Android WebView 只能造响应，不能改请求头），所以回退路径必须保留。
 - **不做自定义协议 `media://`**：Tauri 的 responder 仍要求完整 body，wry 会整块复制
   进内存流，不是真流式；且自定义协议基本绕开 Chromium 缓存，Android 的 Range 还有
-  已知缺陷（详见 `docs/architecture/system/05-risks.md` 的调研记录）。
+  已知缺陷（形态差异与安全洞见上文两节）。**两条替代路线都不做**：`http_get` 自动补
+  Referer 会把同一份规则分裂成 TS/Rust 两份；`media://` 的原生 img 加载收益已被桌面
+  WebView2 原生注入覆盖。
 
-### 性能现状：微博图片加载慢（2026-08 实测）
+### 图片加载性能（2026-08 实测；2026-10-25 起只剩回退路径）
 
-**现象**：桌面端瀑布流微博图片加载明显慢（skeleton 持续时间长、图片逐个缓慢浮现）。
+桌面走 WebView2 原生注入后不再有隧道瓶颈（跨重启复用 Chromium HTTP 缓存）。旧瓶颈只剩
+非 Windows 回退路径：整图下载（无渐进）、`proxyCache` 只活一个会话、无磁盘缓存、尺寸预取
+多一次 Range 往返（`sizeCache` 只存尺寸，见 `resolve/src/utils/img-size.ts`）。
 
-**原因分析**（按影响排序）：
-
-1. **隧道每次全量下载** —— 命中 sinaimg 的图经 `appHost.http` 拉**完整图字节**
-   （arraybuffer，原图可达 1.8MB 级），一次性取回后才显示；`<img>` 原生加载本可按需渐进，
-   隧道路径丢了这个能力。
-2. **缓存只活一个会话** —— `MediaImage` 的 `proxyCache`（src → blob URL）是**模块级内存
-   Map**，应用重启 / HMR 后即清空，瀑布流全部微博图**重新隧道下载**。crawler 层
-   `fetchImageSize` 的 `sizeCache` 只缓存**尺寸**（Range 文件头 ~1KB），不缓存图内容。
-3. **无并发上限** —— 瀑布流多图各自独立发起隧道请求，无批大小限制；几十张图同时走 Rust
-   隧道（reqwest 线程池）排队时放大总耗时。
-4. **尺寸预取是额外往返** —— 缺宽高的图先发一个 Range 请求（~1KB），再发全量隧道请求，
-   两段式；微博图没有 API 宽高，每张都要走（小红书 SSR 自带宽高、bili 动态 API 自带宽高，
-   不受此影响）。
-
-**已有缓解**：`sizeCache`（crawler）缓存尺寸、`proxyCache`（ui）会话内缓存图 → 同一会话内
-滚动重挂载不重复拉图。**跨重启无缓存**是主要短板。
-
-**已做（2026-10-25）**：Windows 桌面走 WebView2 原生注入，图片/实况不再经过
-base64 + Blob 隧道，跨重启复用 Chromium HTTP 缓存。
-
-**剩余优化**（未做）：
-
-- 非 Windows 回退路径仍无磁盘缓存，可加「图 URL → 字节」持久缓存；
-- 回退路径的尺寸预取仍是额外 Range 往返（原生路径不影响显示）；
-- 自定义协议 `media://` 仍不推荐：responder 要求完整 body，不是真流式，且绕开
-  Chromium 缓存（详见 `05-risks` 的调研记录）。
+**剩余优化（未做）**：回退路径加「图 URL → 字节」持久缓存；尺寸预取与显示合并；自定义协议
+`media://` 仍不推荐（见「决策」）。
 
 ## 发现页与添加订阅
 
@@ -327,24 +296,20 @@ base64 + Blob 隧道，跨重启复用 Chromium HTTP 缓存。
 
 - ⚠️ **UI 自动化的 CDP target 必须按 URL 过滤**：DevTools 自己也是 `type: "page"`，取第一个
   会连到 DevTools 而不是应用页面（曾因此截了一堆 DevTools 的图当「应用截图」）。
-- ⭐ **抓取浏览器（WebView2）的 CDP 端口固定 9334，可从外部脚本直连**（`GET http://127.0.0.1:9334/json/list`
-  → page target → WebSocket `Runtime.evaluate`）。验证 browser 侧行为（页面 state / 滚动 /
-  翻页方向）不必往产品代码加日志：前后两次读 `__INITIAL_STATE__` 对比即可（2026-10-20 用它
-  定位了 explore 分页方向）。⚠️ 两个测量陷阱：① state 树里有**循环引用**
-  （`user.loggedIn` 可能是对象），`JSON.stringify` 整棵树抛「Converting circular structure」
+- ⭐ **抓取浏览器的 CDP**：桌面已封 `browser`（`injectTauriHost({browser:false})`），抓取浏览器
+  由数据服务 spawn 的 `amoeba-browser` sidecar 承载，**端口不固定**（sidecar 输出 `READY <port>`，
+  见 `docs/architecture/crawler-topology.md`）；固定 9334 只属于 Tauri 内嵌路径（宿主未封 `browser` 时）。
+  拿到端口后 `GET http://127.0.0.1:<port>/json/list` → page target → WebSocket `Runtime.evaluate`。
+  验证 browser 侧行为（页面 state / 滚动 / 翻页方向）不必往产品代码加日志：前后两次读
+  `__INITIAL_STATE__` 对比即可（2026-10-20 用它定位了 explore 分页方向）。⚠️ 两个测量陷阱：
+  ① state 树里有**循环引用**（`user.loggedIn` 可能是对象），`JSON.stringify` 整棵树抛
+  「Converting circular structure」
   —— 只挑标量/字符串再序列化，布尔判据写 `=== true` 或解 `_rawValue`；② 虚拟列表
   `scrollTo(0,0)` 后**立即**读 `innerText` 拿到的是滚动前的卡片（Virtuoso/masonic 重渲染是
   异步），等 ~1s 再读，否则会把「顶部没变」误判成「顶部被换掉」。
-- **Numbered UI Overlay**（`apps/desktop/src/dev/ui-overlay/`，dev-only）：`Ctrl+Shift+U`。
-  扫描**已挂载 + 视口内**的候选 = **组件显式声明的区块**（`data-ui-overlay-block`）+ 自动
-  发现的可交互控件。区块用 `lib/uiOverlay.ts` 的 `{...overlayBlock("kind", "可选业务 key")}`
-  声明（DEV 之外返回 `{}`，生产无属性）；区块 = 绿色标签 + **整个区块的绿色描边边界框**
-  （随滚动实时重定位），控件 = 琥珀标签；工具栏可「仅区块」。`400` 是**同屏标签上限**，
-  不是编号上限（编号可超 400，超出部分只显示 `+N`，**区块优先保留**）。同一元素/条目在本
-  路由会话内编号固定：稳定 key 优先取 `data-ui-overlay-key` / React fiber 业务 id
-  （`item.subscriptionId:id` / `sub.id` / `group.id`），其次 data-* / 唯一 id / 列表标题；
-  虚拟列表滚出滚回、DOM 重建都复用同号。路由变化重置，隐藏/显示不重置。
-  见 `docs/ui/numbered-ui-overlay.md`。
+- **Numbered UI Overlay**（`apps/desktop/src/dev/ui-overlay/`，dev-only）：`Ctrl+Shift+U` 开关，
+  区块用 `lib/uiOverlay.ts` 的 `overlayBlock()` 声明。编号语义、400 上限、稳定键优先级与重置规则见
+  `docs/ui/numbered-ui-overlay.md`。
 
 ## UI 组件/样式/动画库选型（2026-10-27 评估，结论：不换库）
 

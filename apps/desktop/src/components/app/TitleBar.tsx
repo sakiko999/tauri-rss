@@ -1,16 +1,19 @@
 /**
- * TitleBar —— 顶栏。三列 grid:品牌+路径 | 搜索框 + 更新状态 | 快捷动作。
+ * TitleBar —— 顶栏。三列 grid:当前路径 | 搜索框 | 快捷动作。
  *
- * 中列表头的搜索框是**全局条目搜索**(store.query),作用于当前视图;
- * 播放页/设置页等整页视图下搜索框仍可用(切回库视图生效)。
+ * 品牌区已移到侧栏（§3.2）—— 同一个产品名在顶栏和侧栏各写一遍是两份迟早不一致的副本。
+ * 同步状态也移到侧栏页脚（唯一入口），这里不再放 update-chip。
+ *
+ * 中列表头的搜索框是**当前列表搜索**(store.query),只在有列表的视图出现
+ * (reader / media / hot / shortvideo);首页、整页与播放页隐藏 —— 那里没有列表可筛,
+ * 留着输入框就是假入口。跨库的全局搜索是 ⌘K 命令面板。
  */
 import { useEffect, useRef } from "react"
-import brandLogo from "../../assets/brand/logo-64.png"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { usePrefs } from "../../store/prefs.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { Icon } from "../Icon.tsx"
-import { useViewNavigate } from "../../router.tsx"
+import { usePlayParams, useViewNavigate } from "../../router.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 export function TitleBar() {
@@ -18,9 +21,6 @@ export function TitleBar() {
   const hotWord = useDesktop((s) => s.hotWord)
   const query = useDesktop((s) => s.query)
   const setQuery = useDesktop((s) => s.setQuery)
-  const refreshAll = useDesktop((s) => s.refreshAll)
-  const loading = useDesktop((s) => s.loading)
-  const refreshErrors = useDesktop((s) => s.refreshErrors)
   const offline = useDesktop((s) => s.offline)
   const setOffline = useDesktop((s) => s.setOffline)
   const setPaletteOpen = useDesktop((s) => s.setPaletteOpen)
@@ -30,6 +30,14 @@ export function TitleBar() {
   const theme = usePrefs((s) => s.theme)
   const go = useViewNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
+  const play = usePlayParams()
+  /**
+   * 内联搜索作用于**当前列表**（store.query → queryView）。首页/片库/设置页/播放页
+   * 没有列表可筛，留着输入框就是假入口：打字没有任何反馈（query 还会被下一次
+   * select() 清掉）。全局搜索是 ⌘K，不受影响。
+   */
+  const hasList =
+    !play.itemId && (meta.type === "reader" || meta.type === "media" || meta.type === "hot" || meta.type === "shortvideo")
 
   // ⌘F → 聚焦搜索框(与命令面板的 ⌘K 区分)。
   useEffect(() => {
@@ -44,35 +52,26 @@ export function TitleBar() {
     return () => window.removeEventListener("keydown", onKey)
   }, [])
 
-  const errCount = Object.keys(refreshErrors).length
-  const chipState = offline ? "error" : loading ? "busy" : errCount ? "stale" : "ok"
-  const chipText = offline ? "离线" : loading ? "更新中" : errCount ? `${errCount} 条失败` : "已同步"
-
   return (
     <header className="titlebar" {...overlayBlock("titlebar", "app:titlebar")}>
-      <div className="titlebar-brand" {...overlayBlock("titlebar-brand", "app:titlebar:brand")}>
-        <img className="titlebar-mark" src={brandLogo} alt="" width={20} height={20} draggable={false} />
-        <span className="titlebar-name">订阅工作台</span>
-        <Icon name="chevronRight" size={13} className="t-dim" />
+      <div className="titlebar-crumb" {...overlayBlock("titlebar-crumb", "app:titlebar:crumb")}>
         <span className="titlebar-path">{viewTitleFor(meta, hotWord)}</span>
       </div>
 
       <div className="titlebar-center" {...overlayBlock("titlebar-center", "app:titlebar:center")}>
-        <label className="titlebar-search">
-          <Icon name="search" size={14} />
-          <input
-            ref={inputRef}
-            type="search"
-            value={query}
-            placeholder="搜索当前列表…"
-            aria-label="搜索内容"
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-        <button className="update-chip" data-state={chipState} onClick={() => void refreshAll(true)}>
-          <Icon name={offline ? "offline" : "refresh"} size={13} />
-          <span className="num">{chipText}</span>
-        </button>
+        {hasList ? (
+          <label className="titlebar-search">
+            <Icon name="search" size={14} />
+            <input
+              ref={inputRef}
+              type="search"
+              value={query}
+              placeholder="搜索当前列表…"
+              aria-label="搜索内容"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
+        ) : null}
       </div>
 
       <div className="titlebar-side" {...overlayBlock("titlebar-side", "app:titlebar:side")}>

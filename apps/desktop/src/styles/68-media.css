@@ -1,0 +1,114 @@
+/* 影音视图:分段 tabs + 直播 hero + 无边框视频 tile
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**:
+      在 50-shortvideo.css 之后(要覆盖 `.card` / `.live-*` 的既有规则),
+      在 90-responsive.css 之前(响应式仍最后生效)。 */
+
+/* =========================================================================
+   分段 tabs(视频 / 直播 / 音频)
+   只是导航:点击换节点(tab:video|live|audio),不在这里做过滤。
+   选中用 aria-current="page"(它们是导航不是同页 tab),不另造 is-active 类。
+   ========================================================================= */
+.media-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-4) var(--sp-6) 0;
+  border-bottom: 1px solid var(--border);
+}
+.media-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  height: 34px;
+  padding-inline: var(--sp-3);
+  margin-bottom: -1px; /* 压住 .media-tabs 的下边框:选中态的下划线取代它 */
+  border-bottom: 2px solid transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-small);
+  font-weight: 520;
+  transition: color var(--dur-fast) var(--ease-in), border-color var(--dur-fast) var(--ease-in);
+}
+.media-tab:hover {
+  color: var(--text);
+}
+.media-tab[aria-current="page"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+/* =========================================================================
+   直播 hero —— 影音视图顶部的第一在播房间(selectLive top1)
+   图片块恒深:hero 在浅色主题下仍是深底(与灯箱/舞台同一规则)。
+   ========================================================================= */
+.live-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  gap: var(--sp-5);
+  align-items: center;
+  margin: var(--sp-4) var(--sp-6) 0;
+  padding: var(--sp-3);
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-1);
+  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+}
+.live-hero:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+.live-hero-media {
+  position: relative;
+  display: block;
+  /* ⚠️ MediaImage 的 fill 模式是 h-full/w-full(不吃 ratio),容器必须自己有确定高度,
+     否则高度退化成 0(图看不见)。与网格卡的 .aspect-video 同口径。 */
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--stage-bg);
+}
+.live-hero-body {
+  display: grid;
+  gap: var(--sp-2);
+  align-content: center;
+  min-width: 0;
+}
+.live-hero-title {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: 620;
+  letter-spacing: -0.01em;
+}
+.live-hero-intro {
+  font-size: var(--fs-small);
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+.live-hero-author {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+/* 窗口变窄时先收图,别让标题被挤成一列字 */
+@media (max-width: 1180px) {
+  .live-hero {
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+  }
+}
+
+/* =========================================================================
+   无边框视频 tile
+   ⚠️ 只作用于带 .video-tile 的卡(MediaMain 只对 tab:video|live|audio 传 variant)。
+      `.card` 本身不动 —— 它被全部/混合网格、短视频全屏流、热榜共用,
+      改基础类会波及整条链路。
+   ========================================================================= */
+.card.video-tile {
+  border-color: transparent;
+  background: transparent;
+}
+.card.video-tile:hover {
+  border-color: transparent;
+  background: var(--surface-1);
+}
+.card.video-tile .card-media {
+  border-radius: var(--r-md);
+}

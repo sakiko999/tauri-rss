@@ -38,10 +38,12 @@
          `var(--bs-muted)` 全部取不到 → `linear-gradient(90deg, , , )` 整条声明失效
          → 卡片透明,用户看到的是**一片空白的正文区**(实测复现)。 */
       :root {
-        --bs-surface: oklch(0.207 0.007 72);
-        --bs-muted: oklch(0.245 0.008 72);
-        --bs-line: oklch(0.285 0.009 72);
-        --bs-bg: oklch(0.168 0.006 72);
+        /* 与 10-tokens.css 的深色 ramp 同值(合流改版换成冷石墨):
+           surface-1 / surface-2 / surface-3 / bg。改主题色时两处一起改。 */
+        --bs-surface: oklch(0.192 0.008 275);
+        --bs-muted: oklch(0.223 0.012 271);
+        --bs-line: oklch(0.256 0.014 267);
+        --bs-bg: oklch(0.154 0.005 264);
         /* ⚠️ 必须把底色**应用到画布**:只定义 --bs-bg 而不用它,html/body 的背景就是
            透明的(rgba(0,0,0,0)),画布回落到浏览器默认的**白色** —— 而 styles.css 的
            `body{background:var(--bg)}` 要等 Tailwind 编译产物加载后才生效。于是深色主题下
@@ -53,16 +55,17 @@
       /* ⚠️ 首帧脚本(上面那段内联 JS)在 CSS 之前就设好了 data-theme,所以正常路径
          走下面两条即可;`html:not([data-theme])` 那条兜底「脚本被禁/尚未执行」。 */
       [data-theme="light"] {
+        /* 浅色 ramp:surface-1 / surface-2 / surface-3 / bg(同 10-tokens.css)。 */
         --bs-surface: oklch(1 0 0);
-        --bs-muted: oklch(0.965 0.005 75);
-        --bs-line: oklch(0.935 0.006 75);
-        --bs-bg: oklch(0.985 0.003 75);
+        --bs-muted: oklch(0.954 0.004 106);
+        --bs-line: oklch(0.924 0.007 106);
+        --bs-bg: oklch(0.967 0.003 106);
       }
       html:not([data-theme]) {
-        --bs-surface: light-dark(oklch(1 0 0), oklch(0.207 0.007 72));
-        --bs-muted: light-dark(oklch(0.965 0.005 75), oklch(0.245 0.008 72));
-        --bs-line: light-dark(oklch(0.935 0.006 75), oklch(0.285 0.009 72));
-        --bs-bg: light-dark(oklch(0.985 0.003 75), oklch(0.168 0.006 72));
+        --bs-surface: light-dark(oklch(1 0 0), oklch(0.192 0.008 275));
+        --bs-muted: light-dark(oklch(0.954 0.004 106), oklch(0.223 0.012 271));
+        --bs-line: light-dark(oklch(0.924 0.007 106), oklch(0.256 0.014 267));
+        --bs-bg: light-dark(oklch(0.967 0.003 106), oklch(0.154 0.005 264));
       }
 
       .boot-skeleton {

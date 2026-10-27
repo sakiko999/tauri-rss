@@ -2,8 +2,8 @@
 
 > 2026-10-19 调研。范围：crawler 请求治理的分级模型、集中式 governor、
 > LX 浏览器被动采集的可行性与 CDP 工具选型。
-> **状态**：窗口模式（§3.9）、governor（§2.7）、渠道 `passive` 属性与 xhs/bili 被动采集
-> （§3.7 / §3.8）已落地；平台等级支持「全局默认 + 平台覆盖」。
+> **状态**：窗口模式（§3.9）、governor（§2.7）、渠道 `passive` 属性与 `xhs:explore` 被动采集
+> （§3.7 / §3.8）已落地（bili 的被动采集 2026-10-19 已移除）；平台等级支持「全局默认 + 平台覆盖」。
 
 ## 0. 结论
 
@@ -19,35 +19,37 @@
 
 | 通路 | 位置 | 备注 |
 | --- | --- | --- |
-| 常规 HTTP 便捷层 | `packages/resolve/src/host.ts:15-41`（`httpGet/httpText/httpJson`） | 多数渠道的汇合点 |
+| 常规 HTTP 便捷层 | `packages/resolve/src/host.ts:23-64`（`httpGet/httpText/httpJson`） | 多数渠道的汇合点 |
 | 平台 client | `platform/{bili,weibo,douyin,douyu,xhs,youtube}/client.ts` | 最终调 `appHost.http.request` |
 | 直接调 `appHost.http` | `utils/img-size.ts:103`、`player/engines/hlsHostLoader.ts:53`、`player/engines/dashHostLoader.ts:92`、`ui/.../MediaImage.tsx:81`、`bili/danmaku-vod.ts:20`、各扫码登录 | 绕过便捷层，限流必须放在 host 后端 |
-| 页面内自定义 fetch | `resolve/src/browser/cdp.ts:67` | `Runtime.evaluate("fetch(...)")` |
-| 页面自然请求 | `cdpNavigate` / 滚动 / 点击（`browser/cdp.ts:118`、`xhs/user.ts:195-260`） | LX 允许，见 §3.1 |
+| 页面内自定义 fetch | `resolve/src/browser/cdp.ts:188-196`（`cdpFetch` 的 fetch 表达式） | `Runtime.evaluate("fetch(...)")` |
+| 页面自然请求 | `cdpNavigate` / 滚动 / 点击（`browser/cdp.ts:234`、`xhs/user.ts:132-175`） | LX 允许，见 §3.1 |
 | 弹幕 WS | `resolve/src/danmaku/stream.ts` → `appHost.ws` | 已有指数退避 + 抖动 |
 | 浏览器 / 媒体 / 图片 | 原生 `<img>`、原生 mp4、部分 HLS | 不经过 `appHost.http`，host 层理论上覆盖不到 |
 
 ### 1.2 刷新与缓存
 
-- `refreshAll` 对全部订阅无界 `Promise.allSettled`（`apps/desktop/src/store/actions/data.ts:134-145`）。
-- 同订阅串行、跨订阅并行（`packages/core/src/data-layer.ts:316-341`）。
+- `refreshAll` 对全部订阅并行 `Promise.allSettled`，每条 `withTimeout(REFRESH_TIMEOUT_MS = 45s)` 并在超时 abort（`apps/desktop/src/store/actions/data.ts:208-214`）；`loading` 期间重入直接返回（`:193`）。
+- 同订阅串行、跨订阅并行（`serialized('sub:' + id, …)`，`packages/core/src/data-layer.ts:618-643`）。
 - 无周期性后台刷新：只有启动、手动、新建订阅触发。
-- TTL 缓存命中零网络（`data-layer.ts:237-257`）；`force=true` 完全绕过 TTL。
-- `loadMore`、`previewChannel`、热搜、详情补全、播放解析均无 TTL/配额。
+- TTL 缓存命中零网络（`data-layer.ts:491-511`）；`force=true` 完全绕过 TTL。
+- `loadMore`、`previewChannel`、热搜、详情补全、播放解析都**无 TTL 缓存**；配额不豁免 —— 它们经 `appHost.http` 统一过 governor（§2.1）。
 - 一次 `fetch()` 可能扇出多个 HTTP（bili 多房间、weibo 长文 + 每图 Range）。
 
 ### 1.3 浏览器
 
-> 2026-10-22 起抓取浏览器 = Tauri 自己的 WebView2（隐藏窗口），旧的 spawn-Edge 路径已删除。
-> 生命周期契约见 `docs/architecture/crawler-topology.md`「WebView2 当抓取浏览器」；
-> 本文 §3.9 / §3.14 中涉及 `SW_HIDE`、进程树、`edge_args` 的段落是测量的历史实现细节，
-> 行为结论（隐藏窗口不渲染）仍适用于 WebView2。
+> 抓取浏览器的归属与载体见 `docs/architecture/crawler-topology.md`；本文只写风控相关的
+> 参数与行为。历史测量（Edge 时代）保留在 §3.9 作为依据，行为结论仍适用于 WebView2。
 
-- Crawler 使用独立 WebView2 profile（`%LOCALAPPDATA%/app.amoeba.desktop/webview-profile`），
-  调试端口固定 9334（`apps/src-tauri/src/webview_browser.rs`）。
-- 窗口 `visible(false)` + 屏外；启动参数禁图（`--blink-settings=imagesEnabled=false`）。
+- 抓取浏览器由 `rss --service` 持有：`service.rs` 把 `%LOCALAPPDATA%/app.amoeba.desktop/webview-profile`
+  作为 `--user-data-dir` 传给 `amoeba-browser.exe`（`apps/browser-sidecar`），CDP 端口由 sidecar
+  stdout 的 `READY <port>` 动态分配（`packages/host/src/node/browser-sidecar.ts:97-120`）。
+  Tauri 内嵌的 `webview_browser.rs`（固定 9334）只在宿主未封 `browser` 时生效，desktop 已
+  `browser:false`（`apps/desktop/src/main.tsx:17-21`），属冻结路径。
+- Tauri 内嵌路径：窗口 `visible(false)` + 屏外；启动参数禁图（`--blink-settings=imagesEnabled=false`）。
+  service 的 sidecar 默认**加载**图片（扫码二维码需要），见 §3.14。
 - `BrowserBackend` 默认连 `/json/list` 的第一个非 Edge UI page；lane 各自 `Target.createTarget`
-  （WebView2 下每个 target = 独立顶层窗口，创建后 `webview_browser_tidy` 去任务栏/按模式隐藏）。
+  （WebView2 下每个 target = 独立顶层窗口，创建后 tidy 去任务栏/按模式隐藏）。
 - 现有浏览器抓取都是导航 / 读页面 state（被动），属于 §3.1 的 ①②。
 
 ## 2. 集中式 governor
@@ -71,7 +73,8 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
      执行 → 状态码/信号 → 更新同一个冷却账本
 ```
 
-- 一个 governor、一份 `NetPolicy`、一份 `governor:state`。
+- 一个 governor、一份 `NetPolicy`、一份冷却账本（KV `governor:cooldowns`）——但按**进程**各一份：
+  抓取流量在 `rss --service`，桌面渲染进程只剩媒体/图片，两者的配额与冷却互不相通。
 - 平台由 URL host 自动推导；调用方可选传 `policy: { platform?, metered?, dedupeKey? }` 覆盖。
 - 缓存命中不经过 governor，天然不扣配额。
 
@@ -90,8 +93,8 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 ### 2.3 冷却账本（简化版）
 
 ```ts
-// governor:state
-{ cooldowns: { [platform]: { until: number, reason: string } } }
+// KV 键 governor:cooldowns
+{ cooldowns: { [platform]: { until: number, signal: string } } }
 ```
 
 规则：
@@ -99,7 +102,7 @@ RPM + 最小间隔 + 冷却     跳过 RPM/冷却
 1. 只对计量 API 生效；媒体/图片/本地 CDP 不读写冷却。
 2. 只有显式信号写冷却（429/Retry-After、412/403/418、平台风控码如 `-352/-509/4031/300011/432`）；超时、5xx、空 body、DNS 失败**一律不写**。
 3. 冷却按平台整体生效，不做 endpoint 粒度。
-4. 到期即恢复，不做 half-open 探测；冷却期内重复失败只刷新 `reason`，不叠加时间。
+4. 到期即恢复，不做 half-open 探测；冷却期内重复失败只刷新 `signal`，不叠加时间。
 
 被否决的复杂账本（不作为实现目标）：置信度、`hits`、endpoint scope、`suspect/half_open/auth_required` 状态机、审计环。理由：个人桌面工具收益低、维护成本高。
 
@@ -153,21 +156,23 @@ RSSHub 外挂实例单独成桶：core 的 rsshub source 在请求上显式声�
 正交开关（不占等级）：
 
 - **后台自动刷新**：关闭后启动/新建订阅不自动抓，只允许手动刷新。
-- **每平台传输策略**：`auto` / `browser-only`；browser-only 不减少请求，只是换通道。
+- **每平台传输策略（未实现，见 §2.7）**：`auto` / `browser-only`；browser-only 不减少请求，只是换通道。
 
 被否决的等级：缓存优先（本应用没有周期后台刷新，收益小，且更像新鲜度策略）、浏览器优先（不减少请求，不是“更保守”的等级）。
 
 ### 2.5 配置
 
 ```ts
+// 设置侧: AppSettings.netLevel / netLevels（core/types/settings.ts）
+// 宿主侧: NetPolicy（packages/host/src/net/governor.ts）
 netPolicy: {
   level: 0 | 1 | 2 | 3,             // 全局默认(不含 9)
   levels: { xhs: 3, "*": 1 },       // 平台覆盖(整表替换,0~3)
-  global: { maxConcurrent: 32 },
+  globalMaxConcurrent: 32,
   platforms: {                      // L1 基准;L2/L3 按等级缩放
     bili:   { maxConcurrent: 12, rpm: 600, minIntervalMs: 50, cooldownBaseMs: 600_000 },
     douyin: { maxConcurrent: 8,  rpm: 300, minIntervalMs: 50, cooldownBaseMs: 300_000 },
-    // xhs / weibo / youtube / apple ...
+    // xhs / weibo / youtube / apple / twitch / rsshub ...
   }
 }
 ```
@@ -183,6 +188,8 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | 微博 | 8 | 300 | 50ms | 432 10min；-100/418/403 30min |
 | YouTube | 12 | 600 | 50ms | 429 15min |
 | Apple 播客 | 8 | 300 | 50ms | 基础 5min |
+| Twitch | 6 | 120 | 100ms | 429 10min |
+| RSSHub | 4 | 120 | 100ms | 基础 5min |
 | 通用 RSS / 其它 | 8/host | 300 | 50ms | 基础 5min |
 
 全局并发上限 `32`（媒体/图片共享，不扣平台 RPM）。
@@ -191,15 +198,15 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 
 | 改动 | 位置 |
 | --- | --- |
-| governor（桶/信号量/冷却/去重） | 新增 `packages/host/src/net/governor.ts` |
+| governor（桶/信号量/冷却/去重） | `packages/host/src/net/governor.ts` |
 | 全局包装 | `packages/host/src/runtime.ts` 的 `appHost.http` 注入处 |
 | 请求元数据 | `global.d.ts` 的 `HttpRequest` 增加可选 `policy` |
 | 平台风控分类 | 各平台 client 的 `getJson/httpText`，命中后调 `reportRisk` |
-| 等级闸门 | `packages/core/src/data-layer.ts:238-260`（缓存/TTL 之后、发请求之前） |
-| 编排并发 | `apps/desktop/src/store/actions/data.ts:134-145` |
-| 浏览器节流 | `packages/resolve/src/browser/cdp.ts:23-28` 的 `withBrowserLock` |
+| 等级执行 | 唯一执行点在 host governor（`levelFor` / `effectivePlatformPolicy`，`governor.ts:141-165`）；core 只在 `doRefresh` 里 `syncNetPolicy` 同步配置（`data-layer.ts:475`），等级不改变「走不走浏览器」 |
+| 编排并发 | `apps/desktop/src/store/actions/data.ts:208-214` |
+| 浏览器节流 | `packages/resolve/src/browser/scheduler.ts`：`browserGateFor(platform)`（冷却+间隔+抖动，按平台串行）+ `withBrowserOp` 组合入口；`withBrowserLock` 只剩进程级独占（clearCookies/resetProfile） |
 | 配置 | `packages/core/src/types/settings.ts` + `DEFAULT_SETTINGS` |
-| 冷却持久化 | `packages/core/src/repo/governor-repo.ts`（新增，KV `governor:*`） |
+| 冷却持久化 | 无独立文件：账本在 `packages/host/src/net/governor.ts`，KV `governor:cooldowns`（见 §2.7） |
 
 ### 2.7 落地状态（2026-10-19）
 
@@ -212,7 +219,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | 全局包装 | `runtime.ts` 的 `setHostCaps` 用 `governedHttp(caps.http)` 包住注入后端；`appHost.net` 恒可用（CLI/浏览器宿主也有） |
 | 请求元数据 | `global.d.ts` 的 `HttpRequest.policy?: { platform?, metered?, dedupeKey? }` |
 | 播放分片 | `hlsHostLoader` / `dashHostLoader` 显式传 `policy: { metered: false }`，不靠 host/扩展名猜（原生 mp4/`<img>` 不经 `appHost.http`，仍在治理之外） |
-| 平台配额 | L1 软限制：bili/youtube 12/600/50ms，其它平台 8/300/50ms；未知 host 一 host 一桶 8/300/50。L2 = ×0.5 / 间隔 ×2，L3 = ×0.25 / 间隔 ×4。全局并发 32 |
+| 平台配额 | L1 软限制：bili/youtube 12/600/50ms，其它平台 8/300/50ms（例外：twitch 6/120/100ms、rsshub 4/120/100ms）；未知 host 一 host 一桶 8/300/50。L2 = ×0.5 / 间隔 ×2，L3 = ×0.25 / 间隔 ×4。全局并发 32（`DEFAULT_NET_POLICY`，`governor.ts:80-101`） |
 | 等级 | **全局默认 + 平台覆盖 + `"*"` 兜底**：`AppSettings.netLevel` + `netLevels`；host 的 `levelFor(platform)` 只认精确平台 → `"*"` → 全局。旧 channelKey 键启动时折叠（`foldChannelLevels`） |
 | 冷却 | `reportRisk(platform, signal)`；计量请求返回 412/418/403/429 时自动写；`governor:cooldowns` best-effort 持久化；**新建冷却打一条 `[host:net]` warn**（平台/信号/时长，冷却期内重复信号不重打） |
 | 浏览器闸门 | `net.browserGate(platform)`：CDP 操作入口的冷却 + 最小间隔 + 抖动（CDP 不经 `governedHttp`）；登录流程显式绕过冷却 |
@@ -228,12 +235,13 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 - `reportRisk` 的「只对计量生效」按**平台名**判断（localhost / 已知媒体 CDN 忽略），
   显式调用不会因 URL 未知而丢失。
 - **未实现** §2.4 的每平台传输策略 `auto / browser-only`；CDP 内部流量不经过
-  `governedHttp`。2026-10-19 补了一道显式闸门：xhs/weibo 的浏览器操作在
-  `withBrowserMode(browser, mode, fn, platform)` 入口调 `net.browserGate(platform)`
-  （平台冷却 + 最小间隔 600ms~2.4s + 0~400ms 抖动，字符串与 HTTP 冷却一致）。
+  `governedHttp`。浏览器操作统一在 `withBrowserOp` 入口经 `browserGateFor(platform)`
+  调 `net.browserGate(platform)`（平台冷却 + 最小间隔 600ms~2.4s + 0~400ms 抖动，
+  字符串与 HTTP 冷却一致；`withBrowserMode` 只是 `lane:"default"` 兼容壳）。
   ⚠️ **登录流程不要传 platform**：冷却期正是用户需要重新扫码自救的时候，登录只走
-  `withBrowserLock` 串行，不被冷却拦住。登录用 `withScanLoginLock(browser, mode, run)`
-  （2026-10-20）：三平台统一持锁 + `scanLoginActive`（刷新超时跳过 abortPending），
+  `withScanLoginLock(browser, mode, run, platform)`：跑在 `login:<platform>` 专属 lane
+  （`login:xhs/weibo/douyin`），刷新超时由 `abortTabs({keepLogin:true})` 豁免登录 lane ——
+  `scanLoginActive` 布尔与 45s 超时的平台前缀猜测已退役（`cdp.ts:115-125`、§3.13 实施注记）。
   并接受 `opts.signal` —— UI 关掉二维码弹窗即 abort，否则锁被占到 5 分钟 deadline。
   ⚠️ 窗口模式按平台选：xhs/weibo 的二维码是图片（hidden 即可），douyin 是 canvas 绘制，
   hidden 下渲染停摆画不出来，必须 interactive。
@@ -261,7 +269,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | ③ 页面自己发的请求 | 导航、点链接、滚动加载、点击后站点自己的 XHR | ✅ |
 
 ③ 的 URL、签名、cookie、时序都由页面决定，应用只导航/滚动/读取结果。
-现有 `xhs:user` 的滚动驱动翻页就是雏形（`packages/crawler/src/channels/xhs/user.ts:195-260`）。
+现有 `xhs:user` 的滚动驱动翻页就是雏形（`packages/crawler/src/channels/xhs/user.ts:132-175`，跑在 `list:xhs:user` lane 的 interactive 模式）。
 
 > 注意：LX 不等于“零流量”。之前“隐藏窗口没有机会产生流量”的说法只在“必须由用户手动产生流量”的版本成立；在允许应用导航/模拟操作的定义下不成立。
 
@@ -331,7 +339,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 | `chrome.debugger` 扩展 | 浏览器扩展 | 需配套扩展 | 不采用：只对 attach 日常浏览器有意义，且有商店政策与提示条风险 |
 | `mitmproxy` / `hudsucker` | 代理 | 独立进程 | 需要 CA/代理，只作调试兜底 |
 
-**结论**：生产不引入运行时依赖；先写 `scripts/lx-probe.ts`（复制 `scripts/ui-probe.ts` 的零依赖 CDP 客户端）验证边界。采集源固定为应用自有 Edge profile（§1.3），不 attach 用户日常浏览器。
+**结论**：生产不引入运行时依赖；先写 `scripts/lx-probe.ts`（复制 `scripts/ui-probe.ts` 的零依赖 CDP 客户端）验证边界。采集源固定为应用自有的屏外 WebView2 profile（§1.3），不 attach 用户日常浏览器。
 
 > **Tauri 自带 WebviewWindow 的边界**（2026-10-19 查 tauri 2.12.4 / wry 0.57）：
 > `visible(false)` / `skip_taskbar(true)` / `data_directory()` / `incognito()` /
@@ -361,7 +369,8 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   为空，但页面级请求有 body）。待办：用 `Network.requestWillBeSent` 逐平台确认 §3.11
   里标「推断/未确认」的页面请求；Edge 大版本升级后重跑两个探针。
 - **P1 ✅（2026-10-19）**：被动缓冲 + `fetchPassive?` 契约 + `send/onEvent` +
-  `capturePage` + `xhs:explore` / `xhs:user` 的 `fetchPassive`（§3.8）+ core 的被动闸门
+  `capturePage` + `xhs:explore` 的 `fetchPassive`（§3.8；`xhs:user` 刻意不声明 passive、也没有
+  `fetchPassive`）+ core 的被动闸门
   （只读缓冲/缓存，绝不回退 `fetch()`）。**实机验证**仍需重启应用后用真实页面跑一次
   （页面是否发目标接口未实测）；假后端自检只覆盖事件编排。
   ⚠️ `bili:popular` 的被动采集已移除（2026-10-19）：B站匿名 API 稳定，页面也不保证
@@ -380,7 +389,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
   `capturePage(browser, { platform, endpoint, match, trigger })`：`Network.enable` →
   页面自然触发 → `loadingFinished` 立即取 body → 只收文本 MIME → 写缓冲。
   调用方必须用 `withBrowserOp` 持有独占权；`trigger` 里禁止构造自定义请求。
-- ✅ 首批接入：`xhs:explore.fetchPassive()`（导航 `/explore`，从 Document 响应体解析）。
+- ✅ 首批接入：`xhs:explore.fetchPassive()`（导航 `/explore`：优先被动捕获 Document 响应，缓冲缺失时读本 lane tab 的 SSR state —— `explore.ts:181-206`）。
   ⚠️ `xhs:user` **刻意不声明 `passive`**：翻页要 interactive 滚动，不是纯导航采集；
   数据仍只读页面 `__INITIAL_STATE__`（登录态，匿名态已于 2026-10-22 移除）。
   `bili:popular` 不声明 `passive`、也不提供 `fetchPassive`（理由见 §3.7 P1）。
@@ -396,8 +405,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 
 ### 3.9 窗口模式（2026-10-19 实测）
 
-> 2026-10-22 迁移到 WebView2 后：**宿主窗口**用 Tauri 的 `hide()` + Win32
-> `ShowWindow(SW_SHOWNA)`（`webview_browser_set_mode`，不激活）；**lane 窗口**是 CDP 建的
+> 2026-10-22 迁移到 WebView2 后：**宿主窗口**直接对 HWND `ShowWindow(SW_SHOWNA)`（`webview_browser_set_mode`，显示不激活；隐藏用 `SW_HIDE`——刻意不走 Tauri `win.show()/hide()`，前者抢焦点、后者因内部可见态未同步而跳过）；**lane 窗口**是 CDP 建的
 > 独立顶层窗口，仍用 `SW_HIDE` / `SW_SHOWNA` + `WS_EX_TOOLWINDOW` 整理（`webview_browser_tidy`），
 > 关闭时按进程树收尾。**行为结论不变**：隐藏窗口下渲染管线停摆（rAF=0、IO 不回调、
 > scroll 不派发），滚动驱动页面必须 `interactive`（屏外显示 +
@@ -461,35 +469,24 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 `SetForegroundWindow` 还原」兜底；它与窗口模式无关。
 
 `interactive` **按需启用**——只在滚动/懒加载采集期间使用，其余时间维持 `hidden`，
-不要整个会话常驻（常驻渲染有 CPU/GPU 开销）。
+不要整个会话常驻（常驻渲染有 CPU/GPU 开销）。（例外：service 的 `amoeba-browser` sidecar
+启动即 interactive 屏外窗口、首个 interactive 租约释放后才切 hidden ——
+`apps/browser-sidecar/src/main.rs:14`）
 
 **实现落点（2026-10-19 起；2026-10-22 已迁移到 WebView2）**
 
 | 层 | 改动 |
 | --- | --- |
-| Rust `webview_browser.rs`（当前） | `set_mode` = Tauri `win.show()/hide()`；遮挡/节流 flag 仍**启动时常驻**（否则切 interactive 唤不醒渲染）；`open/close/reset/set_mode` 由 OP 锁串行，`close` 等到窗口销毁 + 端口释放 |
-| Rust `browser.rs`（Edge 时代，已删除） | `BrowserMode`；`browser_ensure(mode)` / `browser_set_mode`；`hide_until_stable`、`show_main_window`、`foreground_hwnd`/`restore_foreground` |
+| Rust `webview_browser.rs`（Tauri 内嵌路径；service 侧对等实现 = `apps/browser-sidecar`，stdin `mode hidden\|interactive`） | `set_mode` = 直调 `ShowWindow(SW_SHOWNA / SW_HIDE)`（不用 Tauri show/hide）；遮挡/节流 flag 仍**启动时常驻**；`open/close/reset/set_mode` 由 OP 锁串行，`close` 等到窗口销毁 + 端口释放 |
 | 宿主 | `TauriBrowserBackend.setMode` → invoke `webview_browser_set_mode`；`BrowserBackend.setMode?` 为可选能力 |
 | crawler | 统一用 `withBrowserOp(..., { mode: "interactive" })` 包装（`withRenderLease` 引用计数 + 全局串行）。滚动路径（`xhs:user` 翻页）用 interactive，SSR 读取用默认 hidden |
 | 语义 | `webview_browser_open` **只确保就绪、不改模式**（否则 `ensureConn` 会把刚切好的 interactive 打回 hidden） |
 
-- `--blink-settings=imagesEnabled=false` 保留：实测 interactive 下 rAF/IO/scroll 正常，仅图片不加载。
-- ⚠️ **隐藏判定必须看「可见性」**（2026-10-16 修）：`hide_windows_for_pids` 若对 PID 的**每个**
-  顶层窗口都计数，Chromium 那堆本来就 `vis=False` 的辅助/IPC 窗口会让 `hidden>0` 在**主框架
-  窗口创建之前**成立 —— 旧代码 `if cdp_alive && hidden>0 { return }` 于是提前返回，稍后自行
-  `ShowWindow(SW_SHOW)` 的主窗口漏藏（现象：release 下隐藏 Edge 仍**在任务栏出现图标**，
-  主进程只被 `--window-position=-32000` 挪到屏幕外）。正解两条缺一不可：① 只对
-  `IsWindowVisible` 的窗口计数；② 等「**曾见过可见窗口** + 连续数轮 0 命中」的稳定态才返回
-  （主框架比 CDP 就绪晚约 1s，不加 `seen` 门槛 0.3s 就误判藏净）。**只在 release 显现**
-  （debug 走可见分支不触发），改隐藏逻辑务必用 release 实例验证。
-- debug 构建窗口始终可见，模式切换为 no-op；`interactive` 的效果只能在 release 实例验证。
-- 健壮性：`tcp_listen_pids` **只认 LISTEN + 非 0 PID**（ALL 表里同端口的 TIME_WAIT 行
-  Owner=0，拿它当根会让切换静默失效）；模式切换失败时状态置「未知」而非成功态，
-  下次强制重试；spawn 的 CDP 未就绪路径会杀半启动进程树、关句柄并还原前台。
-- 并发模型：JS 侧 `withBrowserLock` 的 promise 链本身就是 FIFO 队列（所有 platform 共用
-  一个 Edge）；Rust 侧 `switch_lock` 只是防前端并发/退出竞态的兜底。当前不引入
-  actor/任务线程——**等 LX 需要常驻 `Network` 事件循环或真正的多平台并行时**，再把
-  「Edge + 模式状态」收进单个 browser worker（命令通道 + 单线程），那时队列才划算。
+- 禁图 `--blink-settings=imagesEnabled=false` 只对 Tauri 内嵌路径常驻：实测 interactive 下
+  rAF/IO/scroll 正常，仅图片不加载（service sidecar 默认加载图片，见 §3.14）。
+
+> 历史教训（Edge 时代，已随 `browser.rs` 删除）：隐藏窗口判据要数 `IsWindowVisible` 的顶层窗口并等稳定态；
+> 现行实现见 `webview_browser.rs` 的 OP 锁与 `browser/backend.ts` 的 lane 调度。
 
 ⚠️ `WS_EX_TOOLWINDOW` 是 Win32 壳层技巧，不是 Chromium 开关。Edge 升级或窗口重建后
 要复测任务栏与 Alt-Tab；如果失效，退路是「接受任务栏图标」或「只在采集瞬间显示」。
@@ -507,8 +504,8 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 3. **入缓冲前的裁剪**：只保留 status / mime / 最终 URL（去掉 query 中的
    `token|xsec_token|a_bogus|signature|x-s|x-t|w_rid|wts` 值）/ body；
    **永不保存** `Cookie`、`Set-Cookie`、`Authorization`。
-4. **调试导出**：仅 dev 且显式设 `LX_DUMP=1` 时把 body 写到 `tmp/lx-dump/`（gitignore），
-   发布构建无此分支。
+4. **不做调试导出**：临时抓包在 `capture.ts` 的 `passiveBuffer.push` 前临时加落盘即可，
+   不要合并进发布代码。
 5. **不做加密**：不落盘就不需要「保留期与加密策略」；真要审计，重新抓一次比翻旧档更可靠。
 
 ### 3.11 平台端点与解析复用（2026-10-19 全渠道调查）
@@ -535,9 +532,11 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 
 1. **已导出纯函数，可直接接**：`ugc()`（bili 视频）、`mblogToSocial()`（微博）、
    `noteCardToSocial()` / `noteDetailToSocial()`（小红书）、`douyinLiveItem()`、
-   虎牙 `parseProfile()`、RSS `extractArticle()`。
+   RSS `extractArticle()`。（虎牙 `parseProfile` 未导出，且在 `resolve/src/platform/huya/play.ts:47`
+   解析播放档位而非列表 payload —— 只剩写法参考价值，归第 2 档）
 2. **私有但纯，导出即可**：bili `dynamic` 的 `parseModule` / `parseItem`、
-   xhs `extractSsrNotes` / `notesToItems`、Apple `toPodcast`。
+   xhs 的 SSR 列表解析（`flatXhsStateList` 已导出，`crawler/src/channels/xhs/shared.ts:266`；
+   `notesToItems` 私有，`xhs/user.ts:105`）、Apple `toPodcast`（`apple/catalog.ts:88`，私有 const）。
 3. **完全耦合，必须先拆**：斗鱼/虎牙/抖音的全部列表与搜索、`bili:live` 的
    `fetchBiliRoom`、bili 三个搜索渠道、`bili:live:hot`、`bili:square`、`weibo:hot`。
 
@@ -547,8 +546,8 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
    浏览器导航路径已在生产使用（`explore.ts:55-71`、`user.ts:160-181`）。
    但 `user_posted` 的响应解析器**仓库里不存在**（全仓只有注释提到），
    要抓翻页 XHR 得新写 note 适配。
-2. **路线 A 的能力是新增，不是复用**：全仓 `Network.enable|getResponseBody` 零命中，
-   `browser/cdp.ts` 目前只有 evaluate / 页面内 fetch / 导航。
+2. **路线 A 的采集能力已在 §3.8 落地**（`packages/crawler/src/passive/capture.ts`：
+   `Network.enable` + `getResponseBody`）；`browser/cdp.ts` 本身仍只做 evaluate / 页面内 fetch / 导航。
 3. **`weibo:user` 现有浏览器路径属于类别②**（页面内 `cdpJson` 自定义 fetch，
    `user.ts:85`）。LX 下必须改成「导航到 `m.weibo.cn/u/{uid}` + 读页面自身请求/SSR」。
 4. **`live:douyin:search` 没有自然页面**：`www.douyin.com/search?type=live` 被
@@ -626,19 +625,6 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 > cookie 字符串拼接专项全仓 9 处逐一核对：**产品代码无分隔符缺陷**（探针脚本的
 > `;` 缺失问题未进入产品代码）。
 
-#### 现状（代码事实）
-
-- **单 page target + 一把全局锁**：`host/tauri/browser-backend.ts` 连 `/json/list` 的
-  第一个 page；`resolve/browser/cdp.ts` 的 `browserLock` 是全局 promise 链。
-- `cdpNavigate` 只在 URL 完全相同时跳过，否则整页导航；refresh 的 `forceReload`
-  本来就要重载（这部分省不掉）。
-- **抢页面的四类操作**：xhs 详情（`xhs/shared.ts` 的 resolveDetail）、三平台扫码登录、
-  同平台不同渠道（xhs:explore ↔ xhs:user）、跨平台（xhs ↔ weibo）。
-- 登录还**持锁数分钟**（`withScanLoginLock`），期间所有浏览器抓取排队。
-- `browser.rs` 的 `edge_args` 已带 `--disable-background-timer-throttling` /
-  `--disable-renderer-backgrounding`，但那只救定时器：**非激活 tab** 的
-  `visibilityState=hidden` 下 rAF / IntersectionObserver 仍停摆（与 §3.9 同一机制）。
-
 #### 粒度对比
 
 | 粒度 | 稳态 tab 数 | 能省什么 | 代价 |
@@ -689,7 +675,11 @@ cookie 是浏览器级共享的（登录完其它 lane 直接受益）；app 重
 验收：多订阅同时刷新 + 打开详情 + 扫码登录的组合下，抓取日志不应再出现「登录页/详情页
 被当列表页读取」；xhs 翻页在穿插详情后仍从原 cursor 继续（不重载、不空页）。
 
-#### 3.13.1 锁与窗口模式的配套改造（设计，未实现）
+#### 3.13.1 锁与窗口模式的配套改造（设计 2026-10-21；已随 2026-10-22 lane 化落地，见上方实施注记）
+
+> 下表「现在的实现」列是改造前状态，仅作决策依据保留；现行原语见
+> `packages/resolve/src/browser/scheduler.ts`，`withBrowserMode` / `withBrowserLock` 只是兼容壳
+> （`cdp.ts:90-134`）。
 
 结论：`withBrowserLock` / `withBrowserMode` **必须一起改**，但不能整体换成「每 lane 一把锁」——
 它们现在把四件不同粒度的东西捆在一个函数里：
@@ -718,7 +708,7 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   序列，今天安全**只因**它在全局锁里；拆锁后两条 lane 会同读同放行，最小间隔/抖动失效。
 - **interactive 用引用计数**：`withBrowserMode` 的 finally **无条件** `setMode("hidden")`
   （`cdp.ts:73`）；多 lane 下任一条 hidden 操作收尾都会把别人正在滚动的页面掐成 hidden
-  （滚动静默 0 条）。另外 Rust 每次切换都要 `restore_foreground` sleep 350ms，反复抖动很贵。
+  （滚动静默 0 条）。另外每次模式切换都要动整实例窗口（屏外定位 + show/hide），反复抖动不便宜。
 - **滚动前 `activate` 该 tab**：非激活 tab 的 rAF/IO 停摆（§3.9 同机制），activate 毫秒级、不重载。
 - **只用 tab、不开新窗口**：`main_window_for_pids` 只挑一个主框架窗口显示，多窗口时其余窗口
   仍隐藏（滚动同样是 0 条）；`PUT /json/new` 建**同窗口 tab** 可规避。禁图
@@ -787,17 +777,19 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
 
 ### 3.14 抓取浏览器实例配置与调试端口
 
-（2026-10-21 从 `CLAUDE.md` 迁入；2026-10-22 起实例 = Tauri WebView2，以下 Edge 专属参数
-已随 `commands/browser.rs` 删除，`webview_browser.rs` 的 `browser_args()` 是当前权威）
+（2026-10-21 从 `CLAUDE.md` 迁入；2026-10-22 起实例 = 屏外 WebView2。**生产路径
+（`rss --service`）的启动参数权威是 `apps/browser-sidecar/src/main.rs:293-317`**，Tauri 内嵌变体见
+`webview_browser.rs` 的 `browser_args()`（同一组 flag）；Edge 专属参数已随 `commands/browser.rs` 删除）
 
 - ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版开
   无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用 `scripts/tauri.ts` 叠的
   `tauri.conf.dev.json`（`bun run tauri` 自动带上）。
-- **抓取 WebView2 禁图（常驻）**：`browser_args()` 固定带
+- **禁图只对 Tauri 内嵌路径常驻**：`webview_browser.rs` 的 `browser_args()` 固定带
   `--blink-settings=imagesEnabled=false` —— SSR/滚动抓取只读 DOM 文本，图片纯浪费内存/带宽。
   实测该参数**不影响** `interactive` 模式的 rAF / IntersectionObserver / scroll 事件（只让
-  图片不加载），所以模式切换不需要重开浏览器。扫码不受影响：微博读远程 `img.src`（图另走
-  `appHost.http`）、小红书读 `img.qrcode-img` 的 data URL、抖音是 canvas 绘制。
+  图片不加载），所以模式切换不需要重开浏览器。⚠️ service 的 sidecar **默认加载图片**
+  （`browser-sidecar.ts:33-34`：给扫码二维码留图），要禁图必须显式传 `{ images: false }`
+  （sidecar 才加 `--no-images`，`apps/browser-sidecar/src/main.rs:317`）。
 - **抓取 WebView2 干净度**：独立 `data_directory`（`%LOCALAPPDATA%/app.amoeba.desktop/
   webview-profile`），启动参数带 `--disable-sync --disable-extensions --disable-default-apps`。
   WebView2 没有 Edge 的账户上层（不会注入 `.msn/.bing` cookie）。要清空 profile 用
@@ -809,7 +801,7 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   孤儿进程占用时先 `taskkill /T`。
   ⚠️ 抓取 webview 是**第二个窗口**：只关主窗口时 Tauri 不会自动退出（windows 集合非空），
   `lib.rs` 在 `main` 窗口 `Destroyed` 时显式 `exit(0)`。
-- **抓取实例的性能开关**（`browser_args()`，都只影响浏览器自己，不动 UA/指纹）：
+- **抓取实例的性能开关**（`browser_args()` 与 sidecar 的同一组 flag，都只影响浏览器自己，不动 UA/指纹）：
   `--js-flags=--max-old-space-size=512`、`--disk-cache-size=67108864`、
   `--disable-gpu-compositing`（合成器走软件：GPU 进程仍在、WebGL/光栅不变，只把合成搬回
   CPU —— GPU 进程 private 约 270MB 是隐藏窗口里最大的固定开销之一）、
@@ -826,10 +818,13 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
 - **字体/媒体/统计域名在 CDP 层拦**（`host/src/browser/channel.ts` 的 `armNetwork`：每次建连
   `Network.enable` + `Network.setBlockedURLs`）。⚠️ **不拦 CSS** —— 布局一变，懒加载与
   可见性判定（IntersectionObserver）可能跟着变。
-- **空闲 3 分钟自动关 Edge**（`TauriBrowserBackend.closeIfIdle`）：活跃实例约 0.9–1.0GB
-  private，而抓取是间歇性的 —— 一轮刷新结束后常驻那 1GB 对用户是实打实的代价。按「在途
-  CDP 命令数 = 0」判定，长登录/长轮询不会被打断；profile 留在磁盘上，下次用自动重启
-  （~1.5s），`tabs` 清空后 lane 句柄重建。
+- **空闲回收只在 Tauri 内嵌路径生效**（`CdpBrowserBackend.closeIfIdle`，由 driver 的
+  `idleCloseMs` 驱动，`browser/backend.ts:288-300`；Tauri driver 设 3 分钟，
+  `tauri/browser-backend.ts:86`）：活跃实例约 0.9–1.0GB private，而抓取是间歇性的 —— 一轮
+  刷新结束后常驻那 1GB 对用户是实打实的代价。按「在途 CDP 命令数 = 0」判定，长登录/长轮询
+  不会被打断；profile 留在磁盘上，下次用自动重启（~1.5s），`tabs` 清空后 lane 句柄重建。
+  ⚠️ service 的 `SidecarDriver` 未设 `idleCloseMs` —— 生产抓取浏览器随服务常驻、不会空闲回收；
+  要恢复回收得给 sidecar driver 补该字段。
 - **实测基线（Edge 155，2026-10-22，release）**：12 进程 / WS 644MB / **private commit ~1.0GB**。
   构成：1 browser 90MB · 1 GPU 101MB WS（253MB private）· 5 renderer（**1 个抓取共享** 291MB +
   **4 个 Edge UI** 127MB WS / 204MB private，其中 Copilot iframe 自己 73MB JS heap）· 4 utility
@@ -842,7 +837,7 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
      仍占 320MB，Chromium 留着复用）；现在每 tab 独立 renderer，关 tab 就真释放。
   3. profile 483MB 里 `ProvenanceData` 168MB + `Crashpad` 124MB 是纯垃圾（Crashpad 已改成
      冷启动清）；`Default` 只 84MB，其中 Code Cache 57MB。
-- **Edge 自带界面基本删不掉**（`sweepEdgeUi`）：实测 `GET /json/close/<id>` 对
+- **浏览器自带界面基本删不掉**（`sweepJunk`，`packages/host/src/browser/backend.ts:449-454`）：实测 `GET /json/close/<id>` 对
   `edge://discover-chat-v2`（type=`browser_ui`）与 Copilot iframe 都返回 "Target is closing"，
   但 2–3 秒后 target 原样回来 —— 那是 Edge 的常驻聊天面，CDP 关不掉，flags 也挡不住。
   sweep 实际只清掉过 `edge://nurturing` 这类一次性页面（≈80MB）。**不要再指望它省 200MB**；
@@ -866,7 +861,7 @@ URL→渠道映射（§3.11）、配额初值（§3.12）。剩余的是**接入
 3. 各平台风控阈值**不主动探测**：不为了「校准」去压测 412/verify-box 的边界。
    配额只从真实刷新节奏反推（§3.12），并用冷却账本的观测结果做反馈。
 
-> **范围限定**：采集源固定为应用自有 Edge profile，不 attach 用户日常浏览器（隐私边界与授权交互不再讨论）；mobile 端（无 `appHost.browser`）暂不纳入 LX，降级行为随移动端实际需求再定。
+> **范围限定**：采集源固定为应用自有的屏外 WebView2 profile（service 走 `amoeba-browser` sidecar，见 §1.3），不 attach 用户日常浏览器（隐私边界与授权交互不再讨论）；mobile 端（无 `appHost.browser`）暂不纳入 LX，降级行为随移动端实际需求再定。
 
 ## 5. 参考
 

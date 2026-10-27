@@ -1,12 +1,12 @@
 /**
  * AddSubscriptionDialog —— 添加订阅弹窗(radix Dialog + 设计系统类名)。
  *
- * 结构对齐 new_desktop 的 addSubscriptionModal/channelForm:渠道按来源分组用 chip 选,
- * 选中后出渠道摘要 + 参数表单(必填校验)+ 标题 + 归入分组 + 独立刷新间隔。
+ * 两种入口:①搜索添加(调平台搜索接口选房间/UP主)②浏览渠道(按平台分类 + 搜索的
+ * 渠道目录,选中后出摘要 + 参数表单)。两种都接标题 + 归入分组 + 独立刷新间隔。
  *
  * 渠道来自 core `dl.listChannels()`;参数表单由 `sourceInfoTpl` 动态渲染;
- * 带 `defaultInfo` 的渠道可一键订阅。提交走 store.addSubscription(内部
- * dl.addSubscription = add + refresh)。
+ * 带 `defaultInfo` 的渠道表单已预填，直接提交即可。提交走 store.addSubscription
+ * (内部 dl.addSubscription = add + refresh)。
  *
  * ⚠️ 两大块 JSX 已拆到同目录的 `AddPanels.tsx`(SearchPanel 搜索添加 / ChannelPanel
  * 按渠道配置);这里只留**表单状态与提交编排**。
@@ -56,6 +56,12 @@ export function AddSubscriptionDialog({
   const toast = useDesktop((s) => s.toast)
   const refreshIntervalMin = useDesktop((s) => s.settings?.refreshIntervalMin)
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
+  /** 各渠道已有的订阅条数：目录行显示「已订阅 N」，无参渠道据此禁用重复订阅。 */
+  const subCounts = useMemo(() => {
+    const m: Record<string, number> = {}
+    for (const s of subscriptions) m[s.channelKey] = (m[s.channelKey] ?? 0) + 1
+    return m
+  }, [subscriptions])
 
   const [mode, setMode] = useState<"search" | "manual">("search")
   /** 搜索类型:搜直播间(现有) / 搜用户订阅其投稿(2026-10-16 新增)。 */
@@ -171,14 +177,9 @@ export function AddSubscriptionDialog({
     setMode(presetKey ? "manual" : "search")
     setKeyword("")
     setSearchItems(null)
-    // 手工模式默认落「RSS 直链」(通用入口),不要取第一条带 defaultInfo 的渠道 ——
-    // 注册表首条是内置清单里的 Hacker News,会在标题框里冒出一条与当前操作无关的预填。
-    const key =
-      presetKey ??
-      channels.find((c) => c.key === "rss:url")?.key ??
-      channels.find((c) => !c.defaultInfo)?.key ??
-      channels[0]?.key ??
-      ""
+    // 不预选渠道:打开就是渠道目录。原先默认落「RSS 直链」,等于用户还没看目录,
+    // 下面那套参数表单就已经按一条他没选的渠道填好了。
+    const key = presetKey ?? ""
     const ch = channels.find((c) => c.key === key)
     setChannelKey(key)
     setValues({ ...(ch?.defaultInfo ?? {}), ...(presetKey ? presetInfo : {}) })
@@ -386,7 +387,6 @@ export function AddSubscriptionDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="添加订阅"
-      desc="搜索并选择目标后订阅，或直接按渠道参数手工配置。"
       size="wide"
       dismissable={!busy}
       footer={
@@ -394,9 +394,11 @@ export function AddSubscriptionDialog({
           <span className="t-micro t-dim flex-1">
             {searchMode
               ? targetHint || "先搜索并选中一个房间，再添加到订阅。"
-              : channel?.defaultInfo
-                ? "该渠道带默认参数，可直接订阅。"
-                : "请填写必填参数后再订阅。"}
+              : !channelKey
+                ? "先从目录里选一个渠道。"
+                : channel?.defaultInfo
+                  ? "该渠道带默认参数，可直接订阅。"
+                  : "请填写必填参数后再订阅。"}
           </span>
           <button className="btn btn-secondary" disabled={busy} onClick={() => onOpenChange(false)}>
             取消
@@ -417,7 +419,7 @@ export function AddSubscriptionDialog({
             <Icon name="search" size={14} /> 搜索添加
           </button>
           <button role="tab" aria-pressed={mode === "manual"} onClick={() => setMode("manual")}>
-            <Icon name="settings" size={14} /> 按渠道配置
+            <Icon name="layers" size={14} /> 浏览渠道
           </button>
         </span>
       </div>
@@ -463,6 +465,7 @@ export function AddSubscriptionDialog({
           targetId={manualTargetId}
           onTargetId={setManualTargetId}
           landParam={manualParam}
+          subCounts={subCounts}
         />
       )}
 

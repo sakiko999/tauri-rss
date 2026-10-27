@@ -202,6 +202,8 @@
   font-family: var(--font-serif);
   font-size: var(--article-fs);
   line-height: 1.8;
+  /* 正文比 UI 文字低一档(不是「更亮」):整屏阅读时纯白/纯黑都偏硬。 */
+  color: var(--text-body);
 }
 /* 按需补全正文时的行内提示(spinner 与文字对齐)。 */
 .article-resolving {

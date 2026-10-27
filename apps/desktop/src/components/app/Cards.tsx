@@ -7,7 +7,7 @@
 import type { AudioItem, CategoryItem, MediaItem } from "@amoeba/core"
 import { MediaImage, fmtCount } from "@amoeba/ui"
 import { Icon } from "../Icon.tsx"
-import { fmtAgo, fmtTime, httpsify, itemKey, mediaUrl, onlineOf, socialRatio } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, httpsify, isLiveNow, itemKey, mediaUrl, onlineOf, socialRatio } from "../../lib/media.ts"
 import { rememberSocialSource } from "../../lib/viewTransition.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
@@ -91,15 +91,28 @@ function QueueButton({ item, onQueue }: { item: MediaItem; onQueue: (item: Media
  *
  * ⚠️ 封面**一律 16:9 裁切**,不用条目真实比例——混排的 4:3 竖图 / 方图会让网格
  * 参差不齐(只有社交瀑布流才该保留原始比例,见 SocialCard)。
+ *
+ * `variant="video-tile"` = 影音视图的无边框变体(只有那里要「图 + 标题」的整块感)。
+ * ⚠️ 变体只**追加**一个类,`.card` 本身不动 —— 它被网格 / 短视频全屏流 / 热榜共用,
+ * 改基础类会波及整条链路。
  */
-export function MediaCard({ item, actions }: { item: MediaItem; actions: CardActions }) {
+export function MediaCard({
+  item,
+  actions,
+  variant,
+}: {
+  item: MediaItem
+  actions: CardActions
+  variant?: "video-tile"
+}) {
   const img = mediaUrl(item)
   const live = item.kind === "live"
   // ⚠️ 这张卡也会收到 article/social(混合 feed:「全部」/分组/智能订阅)。它们**没有
   // 可播流**,主操作必须是「打开原文/详情」而不是播放 —— 否则点一下必然跳到
   // 「该条目不指向可解析的视频链接」的破碎播放页。(整屏社交走 SocialCard/MasonryGrid。)
   const playable = isPlayableKind(item.kind)
-  const isLiveNow = live && (item as { liveStatus?: string }).liveStatus !== "offline"
+  // 「在播」判据只走 lib/media.ts 的 isLiveNow（offline 不算、unknown 算在播）——
+  // 以前这里内联一份，和首页区块的判据各写各的，下播房间会漏过滤。
   const dur = (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
   const online = onlineOf(item)
   const b = badged(item, actions)
@@ -120,7 +133,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
 
   return (
     <article
-      className="card"
+      className={`card${variant === "video-tile" ? " video-tile" : ""}`}
       role="button"
       tabIndex={0}
       aria-label={item.title}
@@ -143,7 +156,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
     >
       <div className="card-media aspect-video">
         <MediaImage src={img} ratio={16 / 9} fill />
-        {isLiveNow ? (
+        {isLiveNow(item) ? (
           <span className="live-pulse">
             <span className="status-dot" data-state="live" /> LIVE
           </span>
@@ -157,7 +170,7 @@ export function MediaCard({ item, actions }: { item: MediaItem; actions: CardAct
         ) : null}
         {live && online ? <span className="live-online num">{fmtCount(online)} 人在看</span> : null}
         {/* 续播进度条(看过一半的条目一眼可辨)。仅非直播、有位置与时长时。 */}
-        {!isLiveNow && dur && item.positionSec ? (
+        {!isLiveNow(item) && dur && item.positionSec ? (
           <span className="card-progress" aria-hidden>
             <span style={{ width: `${Math.min(100, (item.positionSec / dur) * 100)}%` }} />
           </span>
@@ -243,13 +256,35 @@ export function CardMini({ item, actions }: { item: MediaItem; actions: CardActi
   )
 }
 
-/** 社交瀑布流卡(图片按原始比例,不裁切)。 */
+/** 宫格最多铺几张;多出来的在最后一格标 +N,完整图集进详情看。 */
+const MOSAIC_MAX = 4
+
+/** 社交图集条目(只声明本文件用到的字段)。 */
+type SocialImg = { url: string; width?: number; height?: number; liveVideo?: string }
+
+/**
+ * 宫格分割方向:横图按列、竖图按行 —— 竖图按列切会得到细长条。
+ * ⚠️ 只决定内部怎么切,不决定**块的比例**(见 SocialCard 里的说明)。
+ */
+function mosaicOrient(count: number, ratio: number): "rows" | "cols" {
+  return count > 1 && ratio >= 1.2 ? "cols" : "rows"
+}
+
+/** 社交瀑布流卡(1-4 图宫格;块比例仍按封面原始比例,不裁切封面)。 */
 export function SocialCard({ item, actions }: { item: MediaItem; actions: CardActions }) {
-  const imgs = (item as { images?: Array<{ url: string; width?: number; height?: number; liveVideo?: string }> }).images ?? []
+  const imgs: SocialImg[] = (item as { images?: SocialImg[] }).images ?? []
   const cover = imgs[0]
   const text = (item as { content?: string }).content ?? item.summary ?? ""
   const likes = (item as { likes?: number }).likes
   const replies = (item as { replies?: number }).replies
+  // ⚠️ **块的总比例始终 = 封面比例**,图数只改内部分割。
+  // MasonryGrid 的 estimateItemHeight 只读 images[0] 的宽高(那是瀑布流追加稳定的
+  // 基准):若块比例随图数变化,追加时"估算 vs 实际"不符 → 位置修正 → 卡片跳动。
+  // 比例必须在组件层算(而不是交给 CSS 的 aspect-ratio 猜):MediaImage 的骨架与
+  // 真图同高,加载完成不跳。
+  const ratio = socialRatio(cover)
+  const tiles = imgs.slice(0, MOSAIC_MAX)
+  const extra = imgs.length - tiles.length
   return (
     <button
       className="social-card"
@@ -262,14 +297,26 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
       {...overlayBlock("social-card", `social:${itemKey(item)}`)}
     >
       {cover ? (
-        <span className="social-media" style={{ aspectRatio: socialRatio(cover) }}>
-          <MediaImage src={httpsify(cover.url)} ratio={socialRatio(cover)} loading="eager" />
-          {/* 实况图角标：封面能播一小段视频。新浪列表自带 type，小红书要进详情才知道。 */}
-          {cover.liveVideo ? (
-            <span className="social-video-badge" title="实况图">
-              <Icon name="play" size={10} /> 实况
+        <span
+          className="social-media smosaic"
+          data-count={tiles.length}
+          data-orient={mosaicOrient(tiles.length, ratio)}
+          style={{ aspectRatio: ratio }}
+        >
+          {tiles.map((img, i) => (
+            <span key={`${img.url}-${i}`} className="smosaic-item">
+              <MediaImage src={httpsify(img.url)} fill loading="eager" />
+              {/* 角标：实况图/视频动态（liveVideo 能播一小段）。新浪列表自带，小红书要进详情才知道。 */}
+              {img.liveVideo ? (
+                <span className="social-video-badge" title="可播放的视频动态">
+                  <Icon name="play" size={10} /> 实况
+                </span>
+              ) : null}
+              {extra > 0 && i === tiles.length - 1 ? (
+                <span className="smosaic-more num">+{extra}</span>
+              ) : null}
             </span>
-          ) : null}
+          ))}
         </span>
       ) : null}
       <div className="social-body">
@@ -297,7 +344,45 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
   )
 }
 
-/** 横向轨道的直播卡(比网格卡宽)。 */
-export function LiveRailCard({ item, actions }: { item: MediaItem; actions: CardActions }) {
-  return <MediaCard item={item} actions={actions} />
+/**
+ * 直播 hero —— 影音视图顶部的第一在播房间(调用方用 `selectLive(items, 1)` 算)。
+ *
+ * 只渲染「正在直播」：离线房间是 live 但不可播，放进来点开必然黑屏。
+ * 在线人数可能为 0（真有、只是没人看），0 也照写 —— 那是有效状态，不该被 truthy 吞掉。
+ */
+export function LiveHero({ item, actions }: { item: MediaItem; actions: CardActions }) {
+  const online = onlineOf(item)
+  const intro = (item as { introduction?: string }).introduction ?? item.summary
+  const play = () => actions.onPlay(item)
+  // 用 article + role="button"(不是 <button>):块里是 <div>/<span> 结构(MediaImage
+  // 自己渲染 div),<button> 的内容模型只允许短语内容。键盘行为与 MediaCard 一致。
+  return (
+    <article
+      className="live-hero"
+      role="button"
+      tabIndex={0}
+      aria-label={`播放直播：${item.title}`}
+      onClick={play}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          play()
+        }
+      }}
+      {...overlayBlock("live-hero", `live:hero:${itemKey(item)}`)}
+    >
+      <span className="live-hero-media">
+        <MediaImage src={mediaUrl(item)} ratio={16 / 9} fill loading="eager" />
+        <span className="live-pulse">
+          <span className="status-dot" data-state="live" /> LIVE
+        </span>
+        {online !== undefined ? <span className="live-online num">{fmtCount(online)} 人在看</span> : null}
+      </span>
+      <span className="live-hero-body">
+        <span className="live-hero-title clamp-2">{item.title}</span>
+        {intro ? <span className="live-hero-intro clamp-2">{intro}</span> : null}
+        {item.author?.name ? <span className="live-hero-author od-truncate">{item.author.name}</span> : null}
+      </span>
+    </article>
+  )
 }

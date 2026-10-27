@@ -27,6 +27,7 @@ export type { RefreshResult } from "./types/refresh-result.ts"
 export type {
   Subscription,
   SubscriptionGroup,
+  SubscriptionPatch,
 } from "./types/subscription.ts"
 
 /**

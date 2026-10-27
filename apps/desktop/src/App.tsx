@@ -1,6 +1,7 @@
 /**
  * App —— 应用外壳。布局形态由**节点意图**驱动(nodeMeta.type):
  *
+ *   home   → [rail | 主区(首页看板,自带滚动)]
  *   reader → [rail | 列表栏(--col) | 正文主区]
  *   media  → [rail | 主区]
  *   page   → [rail | 主区(整页)]
@@ -12,14 +13,16 @@
 import { useEffect } from "react"
 import { useNavigate, useParams } from "react-router"
 import { setNavBridge, useDesktop, useNodeMeta } from "./store/index.ts"
-import type { NodeType } from "./store/nodes.ts"
+import { LIBRARY_NODE, type NodeType } from "./store/nodes.ts"
 import { TitleBar } from "./components/app/TitleBar.tsx"
 import { Rail } from "./components/app/Rail.tsx"
 import { Toaster } from "./components/app/Toaster.tsx"
 import { ArticlePane } from "./views/library/ArticlePane.tsx"
+import { HomeView } from "./views/home/HomeView.tsx"
 import { ReaderMain } from "./views/library/ReaderMain.tsx"
 import { MediaMain } from "./views/library/MediaMain.tsx"
 import { ShortVideoView } from "./views/library/ShortVideoView.tsx"
+import { LibraryPage } from "./views/library/LibraryPage.tsx"
 import { HotPane } from "./views/library/HotPane.tsx"
 import { DiscoverPage } from "./views/discover/DiscoverPage.tsx"
 import { SettingsPage } from "./views/manage/SettingsPage.tsx"
@@ -141,6 +144,8 @@ export default function App() {
         >
           {isPlay ? (
             <PlayerPage />
+          ) : meta.type === "home" ? (
+            <HomeView />
           ) : meta.type === "reader" ? (
             <ReaderMain />
           ) : meta.type === "shortvideo" ? (
@@ -150,6 +155,8 @@ export default function App() {
               <DiscoverPage />
             ) : meta.node === "page:account" ? (
               <AccountPage />
+            ) : meta.node === LIBRARY_NODE ? (
+              <LibraryPage />
             ) : (
               <SettingsPage />
             )

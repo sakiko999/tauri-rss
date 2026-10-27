@@ -272,11 +272,10 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
         setPhase("success")
         // core 已按平台前缀写库(scanLogin 内部),这里把 UI 的 settings 同步过来,
         // 凭证卡片的输入框才会立刻显示新 cookie。
+        // ⚠️ 用**扫码返回值**而不是重读 dl.settings:镜像尚未收到 settings.changed 时
+        // 会读到旧值并把它写回去,把刚登录的 cookie 覆盖掉(WS 断连时必然命中)。
         const field = cookieFieldFor(channel.key)
-        if (field) {
-          const s = await dl.settings.get()
-          await setSetting(field, s[field])
-        }
+        if (field) await setSetting(field, r.cookie)
         toast("ok", "登录成功", `${channel.name} 的凭证已保存。`)
       })
       .catch((e) => {

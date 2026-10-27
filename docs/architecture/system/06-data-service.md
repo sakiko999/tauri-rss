@@ -13,7 +13,7 @@
 | 写权威 | 服务是 SQLite、迁移、crawler/resolve、浏览器、登录/cookie、governor、job 的唯一写者 |
 | desktop | 保留 React store/selectors/views、prefs/queue、播放器、媒体 Referer、媒体 governor；不再 `createDataLayer()`、不直开 DB、不碰抓取浏览器 |
 | 传输 | `127.0.0.1` 随机端口 HTTP/1.1 JSON + WebSocket 事件；token；loopback + Host/Origin 校验 |
-| 快照 | 全量轻量投影（实测 2,521 条 = 2.42MB 原始 / 616KB gzip）；桌面保留同步 `allItems` 镜像 |
+| 快照 | 全量轻量投影（gzip 实测见 §9）；桌面保留同步 `allItems` 镜像 |
 | 事件 | `epoch` + 连续 `rev`；合帧 = 合并成一次提交（rev 不跳号）；缺口 → 全量 resync |
 | 断线 | fail-closed：只读镜像 + 禁用全部 mutation；v1 不做 outbox |
 | 存储 | 沿用 desktop 现有库（WAL 已开）；v1 reading 仍是整 blob + 1s 合并写；行表留 v2 |
@@ -79,22 +79,19 @@
 
 ### 2.3 发现、单实例与 token
 
-- `instanceKey = sha256(canonical(dbFile) + "\0" + canonical(profileDir))`；DB 与 profile 双重身份，避免「同 DB 不同 profile」的双写者。
-- `instance.lock`：`open(..., "wx")` 原子创建，内容 `{pid, bootId, startedAt}`；启动遇锁先探活，存活且协议兼容 → `ALREADY_RUNNING <port>` 退出码 3（调用方转 attach）。
+- `instanceKey = sha256(canonical(dbFile) + "\0" + canonical(profileDir))` 只作日志标识（未按它分目录）；单实例由 `dataDir/instance.lock` 保证。
+- `instance.lock`：`open(..., "wx")` 原子创建，内容 `{pid, bootId, startedAt}`；启动遇锁先探活，存活且协议兼容 → 打印 `ALREADY_RUNNING pid=<pid> bootId=<bootId>` 并以退出码 3 退出（`server.ts:343-346`；调用方按退出码转 attach）。
 - 两种 token：
-  - **owner token**：spawn 者持有（desktop / CLI `--ephemeral`），可调 `/v1/shutdown`；
+  - **owner token**：spawn 者持有（desktop 的 `service.rs`；手动 `rss --service` 时即它自己，落在 `--token-file`），可调 `/v1/shutdown`；
   - **client token**：endpoint.json 里的只读/命令 token，CLI attach 用，不能 shutdown。
 - token 只经 `--token-file` 或 stdin 传入，**绝不进 argv、URL、日志、diagnostics**。
 - HTTP `Authorization: Bearer`；WS 首帧 `{type:"auth", token}`；1s 内未认证断开。
 
-### 2.4 CLI：attach 还是临时拉起
+### 2.4 CLI：只做 attach
 
-- 默认 `--attach auto`：按命令的 `dataDir` 算 key → 有存活服务就 attach；否则 spawn `rss --service --ephemeral --parent-pid <cli pid>`，命令结束 shutdown。
-- `--no-spawn`：只 attach，找不到就报错。
-- `--service`：前台运行服务。
-- 两个 CLI 抢锁：败者退出码 3 后重读 endpoint attach，不重复 spawn。
-- attach 到 desktop 服务时 CLI 不 shutdown；只有 owner 能 shutdown。
-- CLI 不再有进程内 `createDataLayer()` 调试模式（避免第二写者）。`fetch/item/play/dm` 也走服务。
+- CLI 只做 attach：`rss attach`、`--via-service` 探针（`probe.*`）与 `rss login` 从 `--endpoint`、`AMOEBA_SERVICE_ENDPOINT` 或 `%LOCALAPPDATA%\app.amoeba.desktop\service\endpoint.json` 读 endpoint（`apps/cli/src/commands/attach.ts:26-49`），取不到就报错提示先起桌面或手动 `rss --service`；没有自动 spawn、`--no-spawn` 或 `--ephemeral`。
+- attach 用 client token，不能 shutdown；只有 owner 能 shutdown；`rss --service` 前台运行服务。
+- 不带 `--via-service` 时 `fetch/item/play/dm` 仍是本地只读探针（自己的 `apps/cli/.data/rss.db`）；`refresh` / `hot` 仍用进程内 `createDataLayer()` 写同一份 CLI 库（`refresh.ts:23`、`hot.ts:29`），它不是桌面库，不构成第二写者。
 
 ### 2.5 退出、崩溃与孤儿
 
@@ -102,7 +99,7 @@
 - 服务优雅退出：停新命令 → 取消 job / abort CDP → 等写入链 ≤5s → 关 `amoeba-browser`（cookie flush ≤5s）→ `db.close()` → 删 endpoint/lock。
 - 硬杀：SQLite WAL 恢复；`amoeba-browser` 由 `--parent-pid` 退出；profile 命名 mutex 防双开。
 - renderer reload / HMR 不退出服务，只重连。
-- 服务崩溃：owner 重拉 3 次（0.5/1/2s 退避）；non-owner 直接 `service-unavailable`。`bootId` 变化 → 全量 resync。
+- 服务崩溃：desktop init 失败进错误页，点「重试」清 `initPromise` 重走 init（`apps/desktop/src/store/actions/data.ts` 的 `init`）；non-owner（CLI attach）直接报错。WS 事件通道断开由 `service-client` 以 500ms→10s 退避重连并全量 resync（`packages/service-client/src/index.ts:463-473`），不做进程级重拉。`bootId` 变化 → 全量 resync。
 
 ## 3. 传输与协议
 
@@ -127,7 +124,7 @@
 ### 3.3 认证与安全
 
 - 只绑 `127.0.0.1`；校验 `Host` 与 `Origin`（Tauri 生产 Origin 阶段 0 实机确认）。
-- 认证失败限速；错误不回显 token。
+- 认证失败返回 401（不做限速）；错误不回显 token。
 - 通用 CDP/evaluate 不暴露；客户端只能调 DataLayer 语义方法。
 - cookie/QR/Authorization 不落日志、diagnostics、错误消息。
 
@@ -137,7 +134,7 @@
 - 不兼容 → 426 `protocol-mismatch`；desktop 强制重启服务，CLI 拒绝 attach。
 - 同 protocol 内只做加法。
 
-## 4. API 面（39 个 DataLayer 成员）
+## 4. API 面（45 个 RPC 方法）
 
 ### 4.1 分组
 
@@ -150,9 +147,10 @@
 
 `reading.deleteBySubscription` 并入 `subscriptions.remove` 的服务端事务，不单独暴露。
 
-**实际实现（2026-10-26）**：39 个成员全部有对应 RPC（`packages/service-protocol` 的
-`RpcMethodMap`），另加 `refreshAll`、5 个 `diagnostics.*`（桌面设置页/账号页不再直连
-storage/browser；「清除凭证」也经服务浏览器）与 3 个 `probe.*`（CLI 原始探针远端路径）。
+**实际实现（2026-10-26）**：`RpcMethodMap` 共 45 个方法 = 36 个 DataLayer 语义方法
+（12 镜像读 + 14 语义命令 + 10 长任务）+ `refreshAll` + 5 个 `diagnostics.*`（桌面设置页/
+账号页不再直连 storage/browser；「清除凭证」也经服务浏览器）+ 3 个 `probe.*`（CLI 原始探针
+远端路径）；`store.patch/subscribe`（客户端本地）与 `hydrate()`（服务内部）不上线。
 `hydrate()` 是 core 新增的「只读缓存水化」，服务 boot 时调用，保证首个快照就有内容；
 desktop/移动的 init 仍走 `refreshAll(false)`。
 CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danmaku`，与订阅
@@ -162,13 +160,13 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 ### 4.2 job 语义
 
 - 所有网络型长操作 job 化；facade 保持原 Promise 签名，内部 await job 终态。
-- `refresh`/`loadMore` 按订阅单飞；`refreshAll` 是服务端单 job（统一并发/超时/汇总/取消）。
+- `refresh`/`loadMore` 按订阅单飞；`refreshAll` 是服务端单 job（统一并发/汇总/取消）。
 - **取消已实现（job 级）**：`POST /v1/jobs/:id/cancel` → `AbortSignal` 一路传到 core `refresh(…, {signal})`；
   抓取在途时 `Promise.race` 立即返回「刷新已取消」，不写 store/缓存；`refreshAll` 取消后停止遍历剩余订阅。
   客户端侧 `signal`（desktop 45s 超时）转成 `cancel(jobId)`，不再只 abort 本地 fetch。
-  桌面不再持有抓取浏览器，全局 `abortTabs` 随之退场（R5 的桌面部分已消解）。
-- HTTP 断开不取消 job；caller-only 任务（preview/detail/QR）在调用方断开后由 lease 超时回收。
-- 超时在服务内部；45s refresh 预算不再放客户端。
+  桌面不再持有抓取浏览器，desktop 侧的 `abortTabs` 调用已移除（host 仍保留该 API 供 CLI/浏览器路径；R5 的桌面部分已消解）。
+- HTTP 断开不取消 job（job 正常结束由 `jobs.delete` 回收，`server.ts:509`）；caller-only 任务没有 lease/断开回收（未实现），只能显式调 `cancel(jobId)`。
+- 超时仍在客户端：desktop 的 `REFRESH_TIMEOUT_MS = 45_000`（`apps/desktop/src/store/lib.ts:53`）经 `withTimeout` 转成 `cancel(jobId)`；服务端不另设 refresh 超时，靠客户端取消收敛。
 
 ### 4.3 幂等
 
@@ -186,7 +184,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 ### 4.5 settings 与 cookie
 
 - settings 快照**包含 cookie 字段**：`AccountPage` 直接渲染/编辑，且服务端播放解析需要；
-- cookie 同步只由服务在 boot 后 1.5s 执行；desktop 不再调用；
+- cookie 同步在服务执行：服务 boot 后 1.5s 自动跑一次（`server.ts:1209-1219`）；desktop 的 `RemoteDataLayer.syncBrowserCookies()` 直接返回 `[]`（`packages/service-client/src/index.ts:806-808`），init 后那次调用是 no-op，不触发 RPC；
 - `settings.set` 只写指定 key；服务收到后重配 governor/TTL/autoRefresh。
 
 ### 4.6 resolvePlay 归属
@@ -217,7 +215,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 
 - 客户端只接受 `rev = appliedRev + 1`；乱序/缺口 → 停止应用并全量 resync。
 - items 事件对未知 `subscriptionId` 忽略（等待 subscriptions 事件或 resync）。
-- 合帧窗口：items 100ms、subscriptions/settings 50ms、progress ≤4/s；replace/append/clear 不合帧且 FIFO。
+- 合帧只靠「一次 commit 带多条事件」（同一 rev 共享）；唯一的定时窗口是 reading 变更 1s 合批（`READING_BATCH_MS`，`server.ts:400-415`）。items/subscriptions/settings 无额外窗口，progress 不做限速；replace/append/clear 仍不合帧且 FIFO。
 - WS 积压：只丢可合并事件并制造 gap → resync；不可合并事件不丢。
 
 ### 5.4 快照
@@ -225,7 +223,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - 单读事务取 `lastRev` 与数据；`snapshot.end` 后原子替换镜像。
 - 快照包含：subscriptions/groups/settings/reading 全量 + items 轻量投影。
 - **gzip 传输**：`Accept-Encoding: gzip` 时服务端压缩（`content-encoding: gzip`，客户端 fetch 自动解压）。
-  实测 dev 库 2,521 条：原始 2.42MB → **gzip 616KB**（比率 0.25），`scripts/service-snapshot-size.ts` 可复测。
+  快照 gzip 实测见 §9（`scripts/service-snapshot-size.ts` 可复测）。
 - v1 不做窗口化（selectors 需要全量 `allItems`）；items >10k 的服务端聚合/窗口化归阶段 3。
 
 ### 5.5 断线
@@ -258,7 +256,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - `reading` 继续整 blob；服务单写者 + 位置 1s 合并写，暂停/播完/关闭立即 flush。
 - `subscriptions/groups/settings` 继续整 blob；语义命令 + 串行队列。
 - `content/body` 缓存继续 KV；服务独占。
-- tombstone 持久化（KV `removed:<subId>` 或表）；在途 fetch 完成写入前检查订阅存在性。
+- tombstone 是**内存 Set**（`data-layer.ts:237`，`load()` 时清空）：服务单写者下退订即删内容，墓碑只防同进程在途刷新写回，不跨重启持久化。
 - 行表（reading 按 item、body 拆表）只在实测超阈值后做（v2）。
 
 ### 6.4 写路径
@@ -277,8 +275,8 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   备份覆盖 → 重启，settings 回到备份时点、`_migrations` 完好。bump epoch 由重启的
   新 `bootId` 天然提供（客户端 rev gap → resync）。
 - settings 不字段合并；reading 按 `lastReadAt` 较新者胜；content/body 按 `fetchedAt` 较新者胜（未做自动合并，v1 CLI/desktop 共库）。
-- 旧 desktop 构建打开已迁移库：新增 `_migrations` 表对旧构建无害（它只读写 `kv`），
-  尚未加 schema 版本门禁。
+- 旧 desktop 构建打开已迁移库：新增 `_migrations` 表对旧构建无害（它只读写 `kv`）；
+  checksum 门禁只在执行 `STORAGE_SCHEMA.versioned` 的后端生效。
 
 ## 7. desktop 客户端改造
 
@@ -299,7 +297,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 2. `GET /v1/state`，代理流式写入镜像；
 3. `snapshot.end` 后一次性 `refreshView()`；
 4. 连事件；
-5. `refreshAll` job；
+5. `refreshAll(false)`（本地 action，逐订阅调 `refresh`，保留逐条 busy/超时 UI）；
 6. `ready=true`。
 
 ### 7.3 写与乐观更新
@@ -315,7 +313,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - `refreshView` 单槽 memo（在 `ctx.ts`）：键 = `(itemsVersion, subscriptions, node, filter[node], sort[node], page[node], query, 日桶)`，
   全按引用/原始值比较；`itemsVersion` 由 `dl.store.subscribe` 自增（`store.all()` 每次返回新数组，不能拿数组身份当键）。
   命中则**整个 set 都跳过**（不触发 React 重渲染）；「今天」用日桶代替时间戳。
-- 快照投影：dev 库实测 2,521 条 = 2.42MB 原始 / **616KB gzip**（播客 `summary` 占大头，正文已剥离）；
+- 快照投影：gzip 实测见 §9（播客 `summary` 占大头，正文已剥离）；
   两阶段渲染（元数据先到，items 每 400 条分块）。
 - 服务与 UI 并行启动；skeleton 不阻塞。
 
@@ -385,16 +383,14 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 
 ### 8.4 阶段 0 打包实测
 
-1. **已完成**：启动器全局 PATH / 缓存 / 真实 HTTPS 下载 / 本地 zip / 并发首启只下载一次 /
-   checksum 失败拒绝 / `--no-download` 失败提示；release 3.7MB。
-2. **已完成**：`service.js` 打包产物经启动器拉起，`scripts/service-runtime-check.ts` 全过。
-3. **已完成**：`tauri.conf.release.json` resources；NSIS 安装包（7.14MiB）内确认含
+1. **已完成**：阶段 0/1 的启动器与 `service.js` 实跑记录见 §11「阶段 0」。
+2. **已完成**：`tauri.conf.release.json` resources；NSIS 安装包（7.14MiB）内确认含
    `service\service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe`；DB/profile 仍写
    `%APPDATA%`/`%LOCALAPPDATA%`；服务进程用 `CREATE_NO_WINDOW`。
-4. **已完成（2026-10-26 本机实测）**：`TAURI_SIGNING_PRIVATE_KEY` 就位后 `tauri build` 产出
+3. **已完成（2026-10-26 本机实测）**：`TAURI_SIGNING_PRIVATE_KEY` 就位后 `tauri build` 产出
    `Amoeba_0.6.5_x64-setup.exe`（7.12MiB）+ `.exe.sig`，签名步骤通过（公钥已更新到
    `tauri.conf.json`，CI secret 同步）。
-5. **已完成（本机替代 clean VM）**：`/S /D=<临时目录>` 静默安装 → 五个文件落盘（exe / runtime /
+4. **已完成（本机替代 clean VM）**：`/S /D=<临时目录>` 静默安装 → 五个文件落盘（exe / runtime /
    browser / `service\service.js` / uninstall）→ 启动实机跑通（服务由**安装目录里的**
    `amoeba-runtime.exe` 拉起）→ 关主窗口后 app/runtime/browser 全退、endpoint/lock 清理 →
    静默卸载后目录、卸载注册表项、开始菜单快捷方式均无残留。硬杀主进程（模拟崩溃）也无孤儿。
@@ -418,7 +414,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 
 1. **reading 整 blob 丢更新**：服务单写者 + 语义命令 + 位置合批 + `lastReadAt` 拒绝过期写。
 2. **subscriptions/settings 覆盖**：服务串行 + 语义命令 + settings 逐 key；cookie 同步只由服务写。
-3. **游标/墓碑/TTL 分裂**：归服务；墓碑持久化；按订阅单飞；写 content 前检查订阅存在。
+3. **游标/墓碑/TTL 分裂**：归服务；墓碑（内存）；按订阅单飞；写 content 前检查订阅存在。
 4. **governor 分裂**：抓取 governor 只在服务；桌面只保留媒体 governor，平台桶不重叠。
 5. **同步镜像不一致**：epoch/rev、合帧成一次提交、缺口 resync、写失败回滚、`patchMany` 批量。
 
@@ -432,8 +428,9 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   - 服务骨架 `apps/cli/src/service/server.ts`：`/v1/hello`、`/v1/health`、`/v1/state`
     （空快照）、`/v1/events`（WS 首帧认证）、`/v1/shutdown`、`instance.lock`、token；
     自检 `scripts/service-skeleton-check.ts` 13 项全过。
-  - 阶段 0 骨架的 endpoint/lock/token 放在 `--data-dir` 下；阶段 1 起按 instanceKey
-    移到 `%LOCALAPPDATA%\app.amoeba.service\<key>\`。
+  - endpoint/lock/token 固定在 `--data-dir` 下：desktop 是 `%LOCALAPPDATA%\app.amoeba.desktop\service`，
+    裸 `rss --service` 默认 `%LOCALAPPDATA%\app.amoeba.service\default`（`server.ts:114,330-331`）；
+    未按 instanceKey 分目录，`instanceKey` 只做日志标识。
   - 运行时启动器 `apps/runtime`（`amoeba-runtime.exe`，release 3.7MB）：`AMOEBA_BUN` → PATH →
     随包 → 缓存 → 下载（SHA256/原子解压）；spawn Bun 并透传 stdio/退出码。
     已实测：全局命中、本地 zip 安装、真实 HTTPS 下载（44.6MB）、缓存命中、校验失败拒绝、
@@ -458,7 +455,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
     job 取消/并发写）。
   - `scripts/remote-data-layer-check.ts` 38 项全过（镜像读/写 RPC/事件/诊断/退订/取消/
     崩溃 fail-closed/重启快照收敛）。
-  - `scripts/service-snapshot-size.ts`：2,521 条快照 2.42MB → gzip 616KB（比率 0.25）。
+  - `scripts/service-snapshot-size.ts`：快照 gzip 实测见 §9。
   - 真机 Tauri：`remote=true`、53 订阅/2525 条目/ready=true；UI 标已读 → 服务落库；
     CLI `attach rpc reading.markRead` → 桌面事件立即变已读；反向同样可见。
   - 正常关窗：服务退出、endpoint/lock 清理、无残留进程。
@@ -482,7 +479,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - 阶段 3 才做：items >10k 的服务端聚合/窗口化、reading 行表、body 拆表、outbox、常驻 daemon。
 - `refreshAll`：服务端 job 已实现，但 desktop 仍逐订阅调 `refresh` 以保留逐条 busy/超时 UI
   （切换收益低于 UI 复杂度，暂不切）。
-- 启动器自动下载在公司代理/杀软/无签名场景的表现待观测；Bun 版本兼容闸门未设。
+- 启动器自动下载在公司代理/杀软/无签名场景的表现待观测（Bun 版本闸门 1.3 ≤ v < 2 已实现，见 `apps/runtime/src/lib.rs:31-33`）。
 
 ## 13. 验收清单
 
@@ -490,7 +487,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - [x] 双客户端并发 reading/settings 不丢更新（`service-data-check` 并发段：两条 markRead +
       一条 settings.set 同时发出，全部落库；真机双向可见另验）。
 - [x] CLI 与 desktop 看到同一订阅/已读/设置/缓存。
-- [x] 快照 ≤1MB（**gzip 传输量** 616KB / 2,521 条；原始 NDJSON 2.42MB）、首屏不白屏；
+- [x] 快照 ≤1MB（gzip 传输量，实测见 §9）、首屏不白屏；
       boot 实测 306ms（spawn → READY，含 `hydrate()`；`service-snapshot-size.ts` 可复测）。
 - [x] markAllRead <50ms（服务端 5k 条 6–7ms）。
 - [x] 服务崩溃/重启后镜像收敛：kill 进程 → status 离线 + 写 fail-closed → 同库重启 →

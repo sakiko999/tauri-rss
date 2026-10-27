@@ -3,7 +3,7 @@
  * 计时 + 条数 + 样本;--xml 看原始输出;--json 进管道配 jq;失败完整堆栈。
  */
 import pc from "picocolors"
-import { getChannel } from "@amoeba/crawler"
+import { getChannel } from "@amoeba/core/source"
 import { parseFeed } from "@amoeba/xml"
 import { buildInfo, parseKvPairs } from "../info.ts"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"

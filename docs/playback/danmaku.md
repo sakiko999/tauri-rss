@@ -9,7 +9,7 @@
 - 其余直播弹幕全是 WebSocket 长连接(bilibili/douyu/huya/douyin),统一走 **`appHost.ws`**(Rust `ws_connect` 隧道可带自定义 header;CLI/example = node `ws` 包带 header;未注入兜底原生 WS)。douyin 握手校验 UA/Cookie/Origin 完整性(残缺 cookie 417、陈旧 ttwid 415 DEVICE_BLOCKED),原生 WS 带不了 header,**必须隧道**;bili live/douyu/huya 原生无 header 可连,顺带统一接入。
 - **渲染:自研 + Canvas 2D**。B站高级弹幕(mode 7)**暂不支持**,降级普通滚动(mode 1–6 全覆盖)。
 - **时间单位坑**:seg.so proto 的 `progress` 是**毫秒**,XML 弹幕是**秒**,播放器 `currentTime` 是秒;YouTube live chat 的 `timestampUsec` 是**微秒**。
-- ✅ **落地状态(2026-10-16 复核)**:B站视频弹幕 + YouTube live chat + 四平台 WS 直播弹幕(bili live/douyu/huya/douyin)+ player `DanmakuLayer`(Canvas)已**全通**。⚠️ **接口名已更**（早期的 `DanmakuPlayable.getDanmaku` / `isDanmakuPlayable` 探测**已废弃**）：现在统一走 `resolve` 的 `getDanmakuByUrl(url, {cookie}) → DanmakuStream`（`resolve/resolver/danmaku.ts`），core `resolvePlay/resolveLivePlay` 把结果附到 `ResolvePlayback.danmaku`（`data-layer.ts:407/424`），player `DanmakuLayer` 内部订阅分流；desktop 播放页**零弹幕逻辑**（只把 resolve 交给 `PlayableMedia`，入口 `views/player/PlayerPage.tsx`）。实测开播房间全收弹幕（bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条）。`DanmakuPlayable` 仅作为 channel 的**能力标注注释**残留（`bili/popular.ts` 等），非运行接口。
+- ✅ **落地状态(2026-10-16 复核)**:B站视频弹幕 + YouTube live chat + 四平台 WS 直播弹幕(bili live/douyu/huya/douyin)+ player `DanmakuLayer`(Canvas)已**全通**。⚠️ **接口名已更**（早期的 `DanmakuPlayable.getDanmaku` / `isDanmakuPlayable` 探测**已废弃**）：现在统一走 `resolve` 的 `getDanmakuByUrl(url, {cookie}) → DanmakuStream`（`resolve/resolver/danmaku.ts`），core `resolvePlay/resolveLivePlay` 把结果附到 `ResolvePlayback.danmaku`（core `data-layer.ts` 的 `resolvePlay`/`resolveLivePlay`），player `DanmakuLayer` 内部订阅分流；desktop 播放页**零弹幕逻辑**（只把 resolve 交给 `PlayableMedia`，入口 `views/player/PlayerPage.tsx`）。实测开播房间全收弹幕（bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条）。全仓已无 `DanmakuPlayable` 接口或 channel 能力注释（只剩 core/player 的文档注释沿用旧名）。
 
 ## 一、B站视频弹幕(主链路,已实测)
 
@@ -71,7 +71,7 @@ bvid → GET /x/web-interface/view?bvid= → data.cid(匿名,复用 client.resol
 
 ### 与现有 youtube channel 的关系
 
-crawler 的 youtube channel 走 **ANDROID_VR** client(gapis `youtubei.googleapis.com`)拿直链;live chat 是**另一套**:`www.youtube.com` web client 的 InnerTube。两者共享 `liveId`(ANDROID_VR 直播解析可得),但 context/api key 各取各的。页面内嵌 JSON(`ytcfg.set` / `ytInitialData`)用 **`extractInlineJson`**(平衡括号截取,嵌套深不截断)提取,不用正则。
+crawler 的 youtube channel 拿直链走 InnerTube client 链（主力 **VISIONOS**，失败退 ANDROID_VR → WEB；细节见 `docs/platforms/youtube.md` §六）；live chat 是**另一套**:`www.youtube.com` web client 的 InnerTube。两者共享 `liveId`(直播解析可得),但 context/api key 各取各的。页面内嵌 JSON(`ytcfg.set` / `ytInitialData`)用 **`extractInlineJson`**(平衡括号截取,嵌套深不截断)提取,不用正则。
 
 ## 三、各直播平台弹幕协议(dart_simple_live 源码实证)
 
@@ -159,20 +159,18 @@ PushFrame{seqId=1, logId=2, service=3, method=4, headersList=5, payloadEncoding=
 
 ### 四平台实现要点与 ⚠️ 坑
 
-通用 WS 封装 `danmaku/ws.ts`(`createWsStream`):onopen 发认证帧 → onmessage 解码成批 `onItems` → onclose/onerror 指数退避重连(保留房号)→ 返回退订(close + 清 timer)。**四平台差异只在帧编解码**;弹幕不带 `timeMs` → 渲染层自动走 live 实时追加,player/core/desktop 零改动。
+通用 WS 封装 `danmaku/stream.ts`(`createWsStream`;同文件还有 `deferredStream` 竞态守卫):onopen 发认证帧 → onmessage 解码成批 `onItems` → onclose/onerror 指数退避重连(保留房号)→ 返回退订(close + 清 timer)。**四平台差异只在帧编解码**;弹幕不带 `timeMs` → 渲染层自动走 live 实时追加,player/core/desktop 零改动。
 
-1. **bili live**(`danmaku-live.ts`)⚠️ 认证 op=7 帧:`{"uid":<nav mid,匿名为 0>,"roomid":realRoomId,"protover":2,"buvid":<buvid3>,"platform":"web","type":2,"key":token}`。`buvid` = cookie 有则取 cookie 的 buvid3,否则**必须**取匿名指纹 `/x/frontend/finger/spi` 的 b3——**留空会被拒连**(2026-09 根因:此前误记为「匿名被 1006 拒」)。⚠️ 发 `protover:2` 时服务器回 **zlib + 明文**帧,无 brotli;**Bun 的 `DecompressionStream("br")` 不支持**(仅 deflate),故不请求 3。归一:`cmd=DANMU_MSG` → `text=info[1]`、`user=info[2][1]`、`color=intColorToHex(info[0][3])`;`SUPER_CHAT_MESSAGE` 同 chat(带边框由渲染层后续加)。
+1. **bili live**(`danmaku-live.ts`)⚠️ 认证 op=7 帧:`{"uid":<nav mid,匿名为 0>,"roomid":realRoomId,"protover":2,"buvid":<buvid3>,"platform":"web","type":2,"key":token}`。`buvid` = cookie 有则取 cookie 的 buvid3,否则**必须**取匿名指纹 `/x/frontend/finger/spi` 的 b3——**留空会被拒连**。⚠️ 发 `protover:2` 时服务器回 **zlib + 明文**帧,无 brotli;**Bun 的 `DecompressionStream("br")` 不支持**(仅 deflate),故不请求 3。归一:`cmd=DANMU_MSG` → `text=info[1]`、`user=info[2][1]`、`color=intColorToHex(info[0][3])`;`SUPER_CHAT_MESSAGE` 同 chat(带边框由渲染层后续加)。
 2. **douyu**(`danmaku.ts`)⚠️ 心跳 45s 不能省(断连限流);**STT 转义漏一处即解析错乱,写单测**。归一:`text=txt@=`、`user=nn@=`、`color=DOUYU_COLORS[col@=]`(6 色索引表)。
-3. **huya**(`danmaku.ts` + `tars.ts`)⚠️ 成本大头在 **Tars codec 必须移植**(约 200 行),协议本身简单;进房参数依赖页面数据,房间解析必须先通。归一:`text=content`、`user=nickName`、`color=fontColor(0xRRGGBB → #RRGGBB)`。
-4. **douyin**(`danmaku.ts` + `msdk-sign.ts` + `douyin-proto.ts`)⚠️ 坑最多:
+3. **huya**(`danmaku.ts` + `danmaku-tars.ts`)⚠️ 成本大头在 **Tars codec 必须移植**(约 200 行),协议本身简单;进房参数依赖页面数据,房间解析必须先通。归一:`text=content`、`user=nickName`、`color=fontColor(0xRRGGBB → #RRGGBB)`。
+4. **douyin**(`danmaku.ts` + `msdk-sign.ts` + `danmaku-proto.ts`)⚠️ 坑最多:
    - **签名脚本版本是根因(2026)**:dart 2023 提取的 kWebMsSDK(入口 `getMSSDKSignature`,1.0.0.53)已被服务端风控(415 DEVICE_BLOCKED);必须用 douyinLive(2026 维护)的 **2024-06-21 修改版 webmssdk.js**(入口 `get_sign`),`webcast_sdk_version` 用 **1.0.15**(dart 的 1.3.0 已失效)。`getMsStub` = `md5("live_id=1,aid=6383,version_code=180800,webcast_sdk_version=1.0.15,room_id={roomId},sub_room_id=,sub_channel_id=,did_rule=3,user_unique_id={userId},device_platform=web,device_type=,ac=,identity=audience")`;signature = `appHost.js.call(WEBMSSDK_ENV + kWebMsSDK, "get_sign", [msStub])`。**host 层 JS 在 Rust/Node 执行,无浏览器 CSP 限制**;含 `-` 或 `=` 的 signature 需**重新生成重试**。
    - **执行环境两个硬约束**:**遮蔽 node 特有全局**(`process`/`Buffer`/`global` 等;webmssdk 检测到 process 走 node 分支,产出服务端拒的指纹);window 必须**完整挂载**(navigator/screen/document)。每次执行前清 `window.byted_acrawler`(首次执行污染全局,二次被短路)。
    - **UA 分工**:enter 接口用 **QQBrowser** UA(Chrome 150 返空 body 200 len0),WS 签名/握手用 **Chrome 150** UA。
    - **连接必走 `appHost.ws`**(Rust ws_connect 带 header);浏览器原生 WS 带不了 header,握手必败。
    - ⚠️ dart `sendAck` 有 bug:`payloadType` 先设 `'ack'` 又被 `internalExt` 覆盖——标准 ack 应 `payloadType="ack"` + `payload=internalExt`,勿照抄。
    - 归一:`text=content`、`user=nickName`(颜色固定白,dart 未解析)。
-
-**实机验证待办**:node 侧四平台弹幕端到端已通;剩余 desktop(`bun run tauri dev`)实测 Rust ws_connect 隧道 + DanmakuLayer 渲染(B站视频按 seek/滚动窗口过滤、YouTube live chat 实时追加)。
 
 ## 五、dart_simple_live 统一消息模型(数据契约参考)
 
@@ -196,21 +194,18 @@ class LiveMessageColor {
 - **颜色归一规律**(跨平台统一 `#RRGGBB`):B站 `info[0][3]`(ARGB 十进制)、huya `fontColor`(`0xRRGGBB`)、douyu `col`(**专属 6 色索引**,需独立映射表)。
 - **superChat**(醒目留言):B站 `SUPER_CHAT_MESSAGE` → price/message/user_info;dart 用 `LiveSuperChatMessage` 单独建模(带背景色/时段)。MVP 可只显示为带边框的高亮弹幕。
 
-### 我们的 `DanmakuItem`(crawler 定义,对齐 LiveMessage + VOD 时间戳)
+### 我们的 `DanmakuItem`（`resolve/src/danmaku/types.ts` 定义，对齐 LiveMessage + VOD 时间戳）
 
 ```ts
 interface DanmakuItem {
   text: string
   user?: string            // 直播聊天必填;视频弹幕可无
-  color?: string           // #RRGGBB(crawler 各平台归一;douyu 走 6 色映射)
+  color?: string           // #RRGGBB(resolve 各平台归一;douyu 走 6 色映射)
   timeMs?: number          // VOD 绝对位置,毫秒;live 实时追加可省
   mode?: number            // B站视频专属:1滚动/4底/5顶/6逆向/7高级(VOD 渲染用)
 }
 
 /** 统一弹幕流:订阅即开始,返回退订函数。全量(VOD,带 timeMs)/增量(live)由实现方定。 */
-type DanmakuStream = (onItems: (items: DanmakuItem[]) => void) => () => void
-
-/** 统一弹幕流:订阅即开始,返回退订函数。 */
 type DanmakuStream = (onItems: (items: DanmakuItem[]) => void) => () => void
 ```
 
@@ -227,9 +222,7 @@ isPageable/isLoginable)。早期设计的「source 上挂 getDanmaku + 谓词探
 ### 架构位置:三层职责
 
 ```
-crawler(数据/元数据)  →  core(编排)  →  player(渲染)
-                   getDanmakuByUrl(url)     DanmakuLayer(player/src/danmaku/)
-                   返回 ResolvePlayback.danmaku  (内部订阅分流)
+resolve(getDanmakuByUrl)  →  core(附到 ResolvePlayback.danmaku)  →  player(DanmakuLayer 订阅分流)
 ```
 
 player 保持**平台无感**:只消费统一 `DanmakuStream`。弹幕解析收敛在 **resolve**(`getDanmakuByUrl`
@@ -266,11 +259,11 @@ relative 容器(16:9 自撑)正是覆盖层载体;`useVideoElement.state` 已提
 
 | 点 | 建议 |
 |---|---|
-| 时间单位 | `timeMs` 统一毫秒(`currentTime` 秒 ×1000);crawler 侧归一 YouTube `timestampUsec`(微秒)/B站 `progress`(毫秒) |
+| 时间单位 | `timeMs` 统一毫秒(`currentTime` 秒 ×1000);B站 `progress` 本就是毫秒;YouTube live chat 实时追加、不落 `timeMs`(`timestampUsec` 不归一) |
 | Live 对齐 | YouTube live chat 是「当前时刻」轮询,实时追加即可,**不与播放时间轴对齐**(DVR setLiveEdge 不回溯聊天) |
-| 颜色 | 各平台 crawler 侧归一为 `#RRGGBB`(复用 dart `numberToColor` 逻辑;douyu 独立 6 色表) |
+| 颜色 | 各平台 resolve 侧归一为 `#RRGGBB`(`resolve/src/danmaku/color.ts` 的 argbToHex/rgbToHex;douyu 独立 6 色表) |
 | superChat | MVP 显示为带边框高亮弹幕(不单独建模型) |
-| 依赖 | player 加 `@amoeba/crawler`(类型引用,无运行时耦合) |
+| 依赖 | player 引 `@amoeba/resolve`(类型引用,无运行时耦合)——已落地 |
 
 ## 七、弹幕渲染选型
 
@@ -336,7 +329,7 @@ DanmakuLayer (canvas 2D)
 | `client.signWeb`/`getMixinKey` | 同上 | getDanmuInfo 的 wbi 签名;弹幕接口收紧时备用 |
 | HTTP 隧道(POST 支持) | `packages/host/src/tauri/` | seg.so 无 CORS;**YouTube get_live_chat 轮询** |
 | **`extractInlineJson`** | `packages/resolve/src/utils/inline-json.ts` | 提取 ytcfg.set / ytInitialData(平衡括号,嵌套不截断) |
-| youtube channel(ANDROID_VR) | `packages/resolve/src/platform/youtube/` | 提供 liveId(直播弹幕 + live chat 共用) |
+| youtube channel(VISIONOS 主力) | `packages/resolve/src/platform/youtube/` | 提供 liveId(直播弹幕 + live chat 共用) |
 | 登录 cookie | core `settings.bilibiliCookie`(credentials provider 注入) | 带登录态更稳(视频/直播弹幕) |
 | 懒解析范式 | `resolveBiliVideoPlay`(platform/bili/video-play.ts) | 弹幕懒解析照抄(YouTube live chat 轮询起始) |
 | 播放器时间 | `useVideoElement.state.currentTime` | 弹幕时间窗口(currentTime 秒 × 1000) |

@@ -21,6 +21,7 @@ import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/medi
 import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { looksLikeHtml } from "../../lib/html.ts"
+import { Lightbox } from "./Lightbox.tsx"
 
 /**
  * 实况视频 Blob 回退路径：整段下载 → Blob URL。
@@ -133,6 +134,8 @@ export function SocialDetailModal() {
   const multi = imgs.length > 1
   /** 当前展示第几张(仅多图时有意义)。 */
   const [imgIndex, setImgIndex] = useState(0)
+  /** 灯箱是否打开。索引与详情**共用** imgIndex —— 关灯箱后详情停在同一张。 */
+  const [zoom, setZoom] = useState(false)
   /** 实况重试计数：递增触发 hook 重新拉取。 */
   const [liveRetry, setLiveRetry] = useState(0)
   /** 视频解码失败（隧道成功但编码不支持等），与隧道错误分开记。 */
@@ -147,11 +150,16 @@ export function SocialDetailModal() {
    * 曾把 useState/useEffect 放在 early return 之后:detail 为 null 时提前返回(少调),
    * 有值时多调 → React 抛「Rendered more/fewer hooks than expected」,弹窗整块崩掉打不开。
    */
-  useEffect(() => setImgIndex(0), [item?.id])
+  useEffect(() => {
+    setImgIndex(0)
+    // 换条目时灯箱必须一起关:否则它停在上一条的图上,而 indices 已归零。
+    setZoom(false)
+  }, [item?.id])
   useEffect(() => {
     // ⚠️ 只在弹窗真正打开时挂监听:本组件常驻在 App 里,无条件监听会让 ←/→ 在
     // 任何页面(阅读视图、播放页)被吞掉 —— 播放页的左右键是跳转/快进。
-    if (!detail || !multi) return
+    // 灯箱打开时也停掉:两边都监听会让一次按键翻两格(灯箱自己监听左右键)。
+    if (!detail || !multi || zoom) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") setImgIndex((i) => (i - 1 + imgs.length) % imgs.length)
       else if (e.key === "ArrowRight") setImgIndex((i) => (i + 1) % imgs.length)
@@ -160,7 +168,7 @@ export function SocialDetailModal() {
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [detail, multi, imgs.length])
+  }, [detail, multi, imgs.length, zoom])
   /**
    * 正文可能是原始 HTML(weibo 的 text 带 `<a href=…>`/`<br />`)——直接 `{text}` 会把
    * 标签当字面量显示(用户看到 `<a href="...">@xxx</a> <br />` 一串源码)。经 DOMPurify
@@ -192,6 +200,13 @@ export function SocialDetailModal() {
   /** 媒体源兼容:SocialItem 走 images[0];article 类兜 thumbnail/poster。 */
   const cover = mediaUrl(item, imgIndex)
   const stepImg = (d: number) => setImgIndex((i) => (i + d + imgs.length) % imgs.length)
+  /**
+   * 灯箱图集:优先 images 全部,没有图集时退回封面(article 类兜 thumbnail)。
+   * ⚠️ 不滤掉空 URL 的项:灯箱的 index = 详情弹窗的 imgIndex,过滤会让两者错位
+   * (翻到第 3 张时详情显示的是另一张)。
+   */
+  const lightboxImages =
+    imgs.length > 0 ? imgs.map((_, i) => ({ url: mediaUrl(item, i) ?? "" })) : cover ? [{ url: cover }] : []
   /** 当前图片真实比例。容器比例 === 图片比例时 contain 恰好填满,不留缝也不裁切。 */
   const imgRatio = (() => {
     const it = item as { aspectRatio?: number; width?: number; height?: number; images?: Array<{ width?: number; height?: number }> }
@@ -208,6 +223,7 @@ export function SocialDetailModal() {
   const resolving = detail.full === null && !detail.error && !!(item as { xsecToken?: string }).xsecToken
   const resolveFailed = !!detail.error
   return (
+    <>
     <Modal
       open
       onOpenChange={(o) => !o && close()}
@@ -296,7 +312,16 @@ export function SocialDetailModal() {
                     }}
                   />
                 ) : (
-                  <MediaImage src={cover} alt={item.title} loading="eager" contain />
+                  // 点静态图 → 灯箱(完整大图 + 左右翻页)。实况视频那一支不挂:
+                  // 它自己接管点击(暂停/续播),再套一层灯箱会两个动作抢同一次点击。
+                  <button
+                    type="button"
+                    className="social-detail-zoom"
+                    aria-label="查看大图"
+                    onClick={() => setZoom(true)}
+                  >
+                    <MediaImage src={cover} alt={item.title} loading="eager" contain />
+                  </button>
                 )}
                 {/* 自动播失败时才出现的重试入口（隧道 403/超时/过期）。 */}
                 {liveVideo && live.error && !live.loading ? (
@@ -407,5 +432,16 @@ export function SocialDetailModal() {
         </div>
       </div>
     </Modal>
+    {/* 灯箱是**兄弟**不是子节点:radix 的 DismissableLayer 把「后开的层」视为内部,
+        但把灯箱嵌在外层 Dialog.Content 的 children 里会让外层的滚动/焦点作用域多包一层。
+        索引共用 imgIndex —— 灯箱翻到第 N 张,关掉后详情也停在第 N 张。 */}
+    <Lightbox
+      open={zoom}
+      images={lightboxImages}
+      index={imgIndex}
+      onIndexChange={setImgIndex}
+      onClose={() => setZoom(false)}
+    />
+    </>
   )
 }

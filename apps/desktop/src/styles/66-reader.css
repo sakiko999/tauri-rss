@@ -1,0 +1,64 @@
+/* 阅读视图(合流改版 M4):筛选 chips + 专注阅读浮层。
+   ⚠️ 本文件由 styles.css 按序 @import —— **文件顺序即层叠顺序**,改名/调序会改变观感。 */
+
+/* =========================================================================
+   阅读筛选条:全部 / 未读 N / 收藏 N
+   ========================================================================= */
+/* 骨架沿用 40-pane 的 .filterbar(表头下的窄条),这里只补一处差异:
+   计数弱一档,别和 chip 文案抢视线;选中态回正到 chip 的前景色。 */
+.reader-filterbar .chip .num {
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.reader-filterbar .chip[aria-pressed="true"] .num {
+  color: inherit;
+}
+
+/* 文章标签(数据面暂无 tags 字段,v1 不渲染;样式先就位,免得 v2 时各写一份)。 */
+.article-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+/* =========================================================================
+   专注阅读浮层
+   ========================================================================= */
+/* Modal 没有「满屏」尺寸档,用 :has 认领本浮层(WebView2 = Chromium,:has 可用)。
+   比给 Modal 加一个只有一处用的 size 枚举更克制 —— 弹层原语不该为单个调用方长形态。
+   特异性 0,2,0 > .modal-flush 的 0,1,0,故不受 @import 顺序影响。 */
+.modal:has(.focus-reader) {
+  width: min(1080px, 94vw);
+  height: 92vh;
+  max-height: 92vh;
+}
+/* flush 弹窗的 body 不滚不 pad:滚动交给 .focus-scroll,进度条贴它的顶边。 */
+.focus-reader {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+}
+.focus-progress {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  z-index: var(--z-sticky);
+  pointer-events: none;
+}
+.focus-progress span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width var(--dur-fast) linear;
+}
+/* 行宽仍由 .article + html[data-measure] 决定,这里只管内边距。 */
+.focus-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--sp-10) var(--sp-10) var(--sp-16);
+}

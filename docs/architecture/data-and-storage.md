@@ -1,7 +1,7 @@
 # 数据 / 存储 / 订阅约定
 
-> 合并自 data-conventions.md + sqlite-storage-research.md（2026-10-21 整理）。前半是业务数据契约，后半是 SQLite 选型与迁移的落地记录。
-> 原先分别从 `CLAUDE.md` 与调研记录迁出；`CLAUDE.md` 只留「XML 是唯一通道」「id 只在订阅内唯一」两条硬契约。相关：`docs/platforms/domestic-feeds.md`。
+> 合并自 data-conventions.md + sqlite-storage-research.md（2026-10-21 整理）。本文只保留当前有效的业务数据契约与存储约定；选型/迁移过程见 git 历史。
+> 原先分别从 `CLAUDE.md` 与调研记录迁出；`CLAUDE.md` 的硬契约清单以该文件为准；本文只展开数据与存储侧。相关：`docs/platforms/domestic-feeds.md`。
 
 ## crawler → core：唯一通道是 XML
 
@@ -13,9 +13,7 @@
 就静默丢。曾只写 `tpl:kind`，导致 Live 的 `liveStatus`/`online`/`platform`、Video 的
 `channel`、Audio 的 `artist`/`album`、Social 的 `likes` **全丢**（实测 174 条 live 全
 `liveStatus="unknown"`、`online` 恒 undefined、「X 人在看」全平台不显示、YouTube 直播
-platform 被 URL 兜底误判为 bilibili）。✅ 修复后实测（2026-10-13）：观众数**全平台打通**
-—— 162 条 live 中 159 条有在线数（此前仅 15，全是抖音）—— bili 59万 / 斗鱼 303万 /
-虎牙 436万 / 抖音。
+platform 被 URL 兜底误判为 bilibili）。✅ 修复后各平台在线数恢复正常。
 
 **加新字段务必同时改 serialize + deserialize 两侧**，回归守卫
 `serialize-roundtrip.check.ts` + `serialize-contract.check.ts`。
@@ -84,18 +82,21 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 ## dev 种子与重置
 
 - **首启种子订阅**在 `apps/desktop/src/dev/seed.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS，仅
-  dev 构建动态 import）。**覆盖全部 channel**（每个 channel 一条，2026-10-20）：需登录的
+  dev 构建动态 import）。**覆盖绝大多数 channel**（每个 channel 一条，2026-10-20；之后新增的
+  `bili:live:areas` / `bili:live:area` / `live:douyin:user` 尚未补种子）：需登录的
   `bili:dynamic` / `weibo:user` 停用；关键词搜索类（`*:search` / `*:anchor` / 搜频道 /
   搜UP主）进「搜索」组且**默认停用**（启用即测）；36 条内置 RSS 直链属同一实现，只留
   `rss:hn` 代表。
-  首次写入后落 `dev:seeded` 标记 —— **重置数据/手动删空后不会再次写入**（要恢复测试种子：
-  删掉该 KV key 或整个 dev DB）。⚠️ **只在空库 + 无标记 + `import.meta.env.DEV` 下写入** ——
+  首次写入后在 `localStorage` 落 `dev:seeded` 标记（不写 SQLite：「完全重置数据」会连标记
+  一起清掉，dev 下重载即重新种；手动删空订阅则不再写入。要恢复测试种子：删该 localStorage
+  key 或整个 dev DB）。⚠️ **只在空库 + 无标记 + `import.meta.env.DEV` 下写入** ——
   之后再启动不覆盖（否则用户 CRUD 的订阅会被启动时删掉）；生产构建里种子 import 被摇掉，
   **发布版首启是空库**（走 onboarding）。⚠️ **改了种子列表存量 dev 库不会自动补** ——
   需「设置 → 存储与诊断 → 完全重置数据」或删 dev DB 再启动。
-- **存储与诊断 → 完全重置数据**（`settings/Diagnostics.tsx`）：删空 SQLite KV + 清
-  localStorage，然后整页重载；dev 下写 `dev:seeded` 防止种子回填。**不碰**浏览器
-  profile/登录态 —— 那是同页「清理浏览器数据」的职责。
+- **存储与诊断 → 完全重置数据**（`apps/desktop/src/views/manage/settings/Diagnostics.tsx`）：
+  经 `dl.diagnostics.clearAll()` 让服务删空 SQLite KV，再 `localStorage.clear()`（连
+  `dev:seeded` 标记一起清掉，dev 下空库重载会重新种），然后整页重载；生产无种子逻辑。
+  **不碰**浏览器 profile/登录态 —— 那是同页「清理浏览器数据」的职责。
 
 ## 订阅归组
 
@@ -114,19 +115,14 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 
 ## 存储层
 
-### 单写者与迁移/备份（2026-10-26）
+### 单写者与迁移（2026-10-26）
 
-- **唯一写者 = 数据服务**（`rss --service`，bun:sqlite）。desktop 默认 `injectTauriHost({storage:false})`
-  注入拒绝后端，Diagnostics/seed 都走 RPC；CLI 作为客户端不直开桌面库。任何第二写者
-  （desktop 直连、dev seed、CLI 直开 `rss.db`、旧构建）都会静默丢数据。
-- **迁移表**：`_migrations(version, name, applied_at, checksum)`，checksum = FNV-1a(DDL)。
-  已发布条目**只能追加，不能改 SQL**；checksum 不符直接拒绝启动（防两套后端漂移）。
-  权威仍是 `packages/core/src/db/schema.ts`，服务与两个 SQL 后端都执行同一份。
-- **每日备份**：服务启动时（距上次 ≥24h）`VACUUM INTO <dataDir>/backups/rss-<date>.db`，保留 7 份。
-  回滚 = 停服 → 删 `-wal`/`-shm` → 备份覆盖 `rss.db` → 重启（`settings` 回到备份时点，
-  `_migrations` 完好）。演练见 `scripts/service-data-check.ts`（§6.5）。
-- **WAL/PRAGMA**：WAL + `busy_timeout=5000` + `synchronous=NORMAL` + `foreign_keys=ON`。
-- 详见 `system/06-data-service.md` §6。
+- **唯一写者 = 数据服务**（`rss --service`，bun:sqlite）。desktop `injectTauriHost({storage:false})`
+  封死直连，Diagnostics/seed 都走 RPC；CLI `rss attach` 是其客户端。任何第二写者
+  （desktop 直连、dev seed、CLI 直开桌面库）都会静默丢数据。
+- **DDL 唯一权威 = core `db/schema.ts`**（`SCHEMA_MIGRATIONS` + `_migrations` 版本表，
+  已发布条目 checksum 变化即拒绝启动）；服务与两个 SQL 后端各执行同一份。
+- 打开门禁（PRAGMA/WAL）、每日 `VACUUM INTO` 备份与回滚演练见 `system/06-data-service.md` §6.2/§6.5。
 
 ### 内容缓存与存储形态
 
@@ -141,27 +137,32 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 就是同一 KV 表里 `content:<subId>` 的记录（`core/repo/content-cache-repo.ts`）。
 单条 value 是一条 feed 的 XML，量级可接受；真要拆表时改 repo 实现即可，接口不变。
 
-**storage 三态**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）· desktop 拒绝后端 /
+**storage 四态**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）· desktop 拒绝后端 /
 mobile `SqliteStorageBackend`（tauri-plugin-sql，进程内 DataLayer）· CLI 本地探针 / example
 （bun:sqlite / 内存版）。
 **DDL 唯一权威 = core `db/schema.ts`**（插件自带的 migration 机制不用，防漂移）。
 **执行方式（2026-10-23 起）**：core 在 `createDataLayer()` 首行调用
-`appHost.storage.setSchema?.({ table: KV_TABLE, ddl: KV_DDL, migrations: MIGRATIONS })`；
+`appHost.storage.setSchema?.(STORAGE_SCHEMA)`（`db/schema.ts` 导出：`table/ddl/migrations`
++ `versioned` 版本表与 checksum），细则见 `host-abi.md`；
 `SqliteStorageBackend` 只保存并执行注入的 schema（首次读写前未注入即抛），不再 import `@amoeba/core`。
 KV/localStorage/内存后端不实现 `setSchema`，调用是 no-op。CLI 的 `sqliteStorage` 是 app 层、
-仍直接 import core 并在构造时执行 `MIGRATIONS`（未接 `setSchema`，不构成包依赖环）。
+仍直接 import core 的 `STORAGE_SCHEMA` 并在构造时执行同一份（含 `_migrations` checksum 门禁）；
+它实现的 `setSchema` 只校验表名一致，不重复建表（不构成包依赖环）。
 
-⚠️ **DB 按运行形态隔离**（`packages/host/src/tauri/sqlite-storage-backend.ts`）：
+⚠️ **DB 按运行形态隔离**（desktop：`apps/desktop/src/store/data-source.ts:20-25` 选文件名 +
+Rust 白名单 `apps/src-tauri/src/service.rs:80`；mobile 仍用
+`packages/host/src/tauri/sqlite-storage-backend.ts`）：
 生产 `rss.db` · 普通 dev `rss.dev.db` · release debug `rss.release-debug.db`
 （`scripts/tauri.ts` 在 `--release` 时给 Vite 注入 `VITE_AMOEBA_PROFILE`）。
-release debug 仍走 Vite dev server（DEV=true），会在自己的库里写种子。
+release debug 仍走 Vite dev server（DEV=true），会在自己的服务库里写种子。
 
 > 动机：desktop 原用 webview localStorage（容量 ~5-10MB、同步阻塞、无查询能力），
-> CLI 用 file-JSON。切 SQLite 是 P6 离线内容缓存的前置，也是 `docs/ops/commands.md` §六
-> 既定路线（「file-JSON 起步，为 SQLite 切换留门」—— repo 接口隔离让这次切换 repo 实现
-> 零改动）。落地记录见下（2026-08-28）。
+> CLI 用 file-JSON。切 SQLite 是 P6 离线内容缓存的前置 —— repo 接口隔离让这次切换实现
+> 零改动。
 
-### 一、选型：desktop 用 tauri-plugin-sql？
+### 一、选型记录（2026-08；该后端现只剩 mobile 使用）
+
+> 结论回顾：desktop 走数据服务，不再实例化 `SqliteStorageBackend`；tauri-plugin-sql 只服务 mobile 的进程内 DataLayer。
 
 | 方案 | 说明 | 结论 |
 |---|---|---|
@@ -179,12 +180,12 @@ release debug 仍走 Vite dev server（DEV=true），会在自己的库里写种
 - Windows MS Store 沙箱路径问题——不走商店分发
 
 **关键取舍：migration 不用插件的（Rust 侧 `add_migrations`）**。插件的 migration 定义
-落在 Rust，CLI（bun:sqlite）就得复制一份 SQL——正是 `docs/ops/commands.md` §六禁止的
-「各写各的 SQL 导致漂移」。改为：DDL 归 **core（`packages/core/src/db/schema.ts`）**；
-desktop 由 core 在 `createDataLayer()` 里经 `storage.setSchema()` 注入后再执行，
+落在 Rust，CLI（bun:sqlite）就得复制一份 SQL——正是「各写各的 SQL 导致漂移」。改为：DDL 归
+**core（`packages/core/src/db/schema.ts`）**；
+SQL 后端由 core 在 `createDataLayer()` 里经 `storage.setSchema()` 注入后再执行，
 CLI 作为 core 的直接消费者仍在启动时执行同一份幂等 DDL（`CREATE TABLE IF NOT EXISTS`）。
-P1 schema 极简（KV 一张表），不需要版本化框架；`MIGRATIONS` 数组已就位，引入非幂等迁移时
-补版本表、两端复用同一执行逻辑。
+版本化迁移已落地：`SCHEMA_MIGRATIONS` + `_migrations(version,name,applied_at,checksum)`，
+已发布条目 checksum 变化即拒绝启动；服务与两个 SQL 后端各跑同一份。
 
 ### 二、落地形态：KV-over-SQLite（repo 零改动）
 
@@ -196,7 +197,7 @@ P1 schema 极简（KV 一张表），不需要版本化框架；`MIGRATIONS` 数
 desktop:  injectTauriHost({storage:false}) → 拒绝后端（只读服务镜像）
 mobile:   injectTauriHost → SqliteStorageBackend(tauri-plugin-sql, appData/rss.db)
 CLI:      setupHost       → sqliteStorage(bun:sqlite, apps/cli/.data/rss.db)
-共用:     core db/schema.ts 的 KV_TABLE/KV_DDL/MIGRATIONS（唯一 DDL 权威）
+共用:     core db/schema.ts 的 STORAGE_SCHEMA（唯一 DDL 权威）
 注入:     core createDataLayer → appHost.storage.setSchema?()（SQL 后端只执行）
 不动:     三 repo / DataLayer / 命令层 / UI
 ```
@@ -204,28 +205,5 @@ CLI:      setupHost       → sqliteStorage(bun:sqlite, apps/cli/.data/rss.db)
 将来需要结构化查询（阅读状态批量操作、缓存索引、全文搜索）时按 repo 逐个拆表——
 repo 接口不变，只是 KV 实现换成 SQL 实现。
 
-### 三、localStorage → SQLite 迁移（desktop，历史设计）
-
-⚠️ **现行代码没有搬迁逻辑**（`03-flows.md` §1 已按代码修正）：`SqliteStorageBackend` 首次访问时
-只惰性建连并执行 core 注入的 `schema.migrations`（进程内一次），不再遍历/删除 localStorage key。
-下面保留的是最初设计记录，不要据此推断运行时行为：
-
-1. 建 KV 表（幂等 DDL）
-2. 遍历 `subscriptions/reading/settings` 三个 localStorage key（`tauri-rss:` 前缀）：
-   sqlite 该 key **为空才写入**；随后**删除 local key**——无论哪种情况都移除，
-   杜绝双源漂移（旧 local 值不是权威，sqlite 已有值优先）
-   （未确认该设计是否曾以正式版本发布；当前 master 无对应代码）
-
-### 四、验证状态
-
-- ✅ CLI：bun:sqlite 全链（refresh 落库、幂等 update、env probe KV roundtrip、
-  `rss.db` 文件 + kv 表 + subscriptions 行实测）
-- ✅ Rust：`cargo check` 通过（插件注册 + sqlite feature 编译）
-- ✅ 前端：全仓 tsc 七项目通过（含 desktop 编译 host 源码的 plugin-sql 类型）
-- ✅ desktop 运行时：appData/rss.db 已生效（CLAUDE.md 记）
-
-### 五、遗留 / 后续
-
-- **WAL**：两端各自独立库文件（不共享），单进程顺序访问无并发诉求，暂不开
-  `journal_mode=WAL`；将来 CLI 与 desktop sidecar 指向同一库文件时再开
-  （`docs/ops/commands.md` §六设想的「打开同一个文件」互通）
+从未有过 localStorage 搬迁逻辑：`SqliteStorageBackend` 只惰性建连并执行注入的 schema。
+WAL 已开启（见 `system/06-data-service.md` §6.2）。

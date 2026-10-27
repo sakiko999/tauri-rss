@@ -101,7 +101,8 @@
   height: 28px;
   padding-inline: var(--sp-3);
   border: 1px solid var(--border);
-  border-radius: var(--r-full);
+  /* 原型 chip 是 7px 微圆角,不是胶囊;胶囊留给状态点/计数徽标。 */
+  border-radius: var(--r-chip);
   background: var(--surface-1);
   color: var(--text-muted);
   font-size: var(--fs-small);

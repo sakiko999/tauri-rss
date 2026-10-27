@@ -132,7 +132,7 @@ const danmakuLog = createLogDomain("danmaku", {
 /**
  * [crawler] 抓取失败(factory.apiFetch 统一装配点)——仅 warn 永保留。
  * (2026-08-28 log 清退:fetchStart/fetchOk/fetchMore/fetchMoreOk 已删——耗时/条数
- * 是纯数据路径,CLI `rss fetch` 给出结构化答案,见 docs/cli-plan.md §7。)
+ * 是纯数据路径,CLI `rss fetch` 给出结构化答案,见 docs/ops/commands.md。)
  */
 const crawlerLog = createLogDomain("crawler", {
   color: "#34d399", // emerald-400

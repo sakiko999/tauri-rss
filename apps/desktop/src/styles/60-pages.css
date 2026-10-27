@@ -114,19 +114,104 @@
   font-size: var(--fs-h3);
   font-weight: 600;
 }
-.channel-groups {
-  display: grid;
-  gap: var(--sp-4);
-}
 .eyebrow {
   font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.06em;
   color: var(--text-dim);
 }
-.channel-group {
+
+/* 渠道目录:分类 tab 在 AddPanels 里复用 .chip,这里是列表本身。
+   分类/搜索/分页的算法在 lib/channel-catalog.ts,样式只管行高与对齐。 */
+.cat-list {
   display: grid;
-  gap: var(--sp-2);
+  gap: var(--sp-4);
+}
+.cat-group {
+  display: grid;
+  gap: 2px;
+}
+.cat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: 6px var(--sp-2);
+  border-radius: var(--r-sm);
+  text-align: left;
+  color: inherit;
+  transition: background var(--dur-fast) var(--ease-in);
+}
+.cat-row:not([aria-disabled="true"]):hover {
+  background: var(--surface-2);
+}
+/* 已订阅的单例渠道:整行弱化并停止响应(带参数的渠道不会有这个态) */
+.cat-row[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.55;
+}
+.cat-ico {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+.cat-name {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-small);
+  color: var(--text);
+}
+.cat-go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: var(--fs-micro);
+  color: var(--text-dim);
+}
+.cat-row[aria-disabled="true"] .cat-go {
+  color: var(--success);
+}
+.cat-more {
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+.cat-more:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+/* 配置步骤的返回:比正文小一号,不跟正文抢注意力 */
+.cat-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+.cat-back:hover {
+  color: var(--text);
 }
 .channel-form {
   display: grid;
@@ -264,39 +349,6 @@
   height: auto;
   min-height: 28px;
   padding-block: 3px;
-}
-
-.cat-grid {
-  display: grid;
-  gap: var(--sp-2);
-  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
-}
-.cat-tile {
-  display: grid;
-  gap: 2px;
-  padding: var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface-1);
-  text-align: left;
-  color: inherit;
-  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
-}
-.cat-tile:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
-}
-.cat-tile[aria-pressed="true"] {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-}
-.cat-name {
-  font-size: var(--fs-small);
-  font-weight: 540;
-}
-.cat-id {
-  font-size: var(--fs-micro);
-  color: var(--text-dim);
 }
 
 .result-grid {

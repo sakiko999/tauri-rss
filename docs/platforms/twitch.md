@@ -1,8 +1,8 @@
 # Twitch 渠道一期方案（2026-10-20）
 
-> 状态：一期已实现（`twitch:live` / `twitch:hot` / `twitch:category`）；VOD / clip /
-> 聊天 / 搜索未做。调研依据见本文「实测结论」；二期/三期只做边界说明。
-> 相关：`docs/platforms/channels.md`、`docs/risk/crawler-risk-control.md`、`docs/platforms/channels.md`。
+> 状态：一期已实现（`twitch:live` / `twitch:hot` / `twitch:category` / `twitch:categories`）；
+> VOD / clip / 聊天 / 搜索未做。调研依据见本文「实测结论」；二期/三期只做边界说明。
+> 相关：`docs/platforms/channels.md`、`docs/risk/crawler-risk-control.md`。
 
 ## 1. 结论与范围
 
@@ -21,22 +21,12 @@ Twitch 匿名链路可用：公开 web Client-ID 的 GraphQL → `PlaybackAccess
 - 不做：登录、VOD、clip、聊天弹幕、关键词搜索、`passive`（浏览器被动）、cookie 字段。
   （分类榜已做成独立目录订阅 `twitch:categories`，产 `kind:"category"` 条目。）
 
-二期再考虑 VOD/clip（路由要排在频道名之前）、关键词搜索、分类榜 channel、IRC 聊天
+二期再考虑 VOD/clip（路由要排在频道名之前）、关键词搜索、IRC 聊天
 （需宿主 ws 支持 text 帧——当前 `WsLike.send(Uint8Array)` 只发 binary，实测 Twitch 不收）。
 
 ## 2. 实测结论（2026-10-20，匿名）
 
-| 能力 | 端点 | 结果 |
-| --- | --- | --- |
-| 频道元数据 | `POST https://gql.twitch.tv/gql`，`Client-Id: kimne78kx3ncx6brgo4mv6wki5h1ko` | 200；`user{login,displayName,description,stream{id,title,viewersCount,createdAt,type,game{name}}}` |
-| 离线/不存在 | 同上 | `stream = null` / `user = null` |
-| 播放 token | 同 GraphQL，persisted `PlaybackAccessToken` | 200；`signature` + `value`（约 20 分钟有效） |
-| 直播 HLS | `https://usher.ttvnw.net/api/v2/channel/hls/<login>.m3u8?...` | 200；6 档（1080p60 source → audio_only） |
-| 热门流列表 | `streams(first, options: { sort: VIEWER_COUNT })`，Android app Client-ID | 200；`edges[].node`（broadcaster / game / previewImageURL）+ `pageInfo{hasNextPage,endCursor}` |
-| 分区流列表 | `game(slug) { streams }`，Android app Client-ID | 200；同上形状；`game == null` = 分区不存在 |
-| 分类榜 | `games(first)` | 200；只给分类元数据（name/slug），**不含房间** |
-| Helix | `api.twitch.tv/helix/streams` | 401 `OAuth token is missing`（匿名不可用） |
-| 聊天 | `wss://irc-ws.chat.twitch.tv:443`，`justinfan` | 文本帧可用；binary 帧 0 条 |
+一句话结论：`gql.twitch.tv/gql` 只带公开 Client-ID 时，频道元数据/离线态/播放 token（约 20 分钟有效）/热门/分区列表全部匿名可用；官方 Helix 匿名 401 且不给播放地址（不走）；IRC 文本帧可用、binary 帧 0 条。逐端点协议细节见 §2.1-2.4。
 
 ### 2.1 GraphQL 频道查询
 
@@ -189,10 +179,9 @@ XML 且不带 cursor（core 据此判「没有更多」）。Twitch 限额 120 R
 `categoryChannel=twitch:category` + `categoryInfo={category:slug}` 预览房间 →
 表头「订阅该分区」落到 `twitch:category`。`fetchTwitchTopCategories()` 实测 30 条。
 
-⚠️ 带 `after` 时**网页 Client-ID 会触发 `IntegrityCheckFailed`**，故流列表统一用
-Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移动端 ID 也失效，
-要直接透出上游原因，避免被当成「字段缺失」。**连接字段缺失也抛错**（不能静默返回空
-页 —— 那会被 core 当成「没有更多」，表现为热门/分区永远只有首页）。
+⚠️ 流列表必须用 Android app Client-ID（理由见 §2.4）。客户端仍开 `throwOnErrors`：万一
+移动端 ID 也失效，要直接透出上游原因，避免被当成「字段缺失」。**连接字段缺失也抛错**
+（不能静默返回空页 —— 那会被 core 当成「没有更多」，表现为热门/分区永远只有首页）。
 
 ## 4. 落点
 
@@ -221,17 +210,19 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
 新增 `packages/crawler/src/channels/twitch/`：`live.ts`（频道订阅 + 流列表共用映射
 `twitchStreamToLive`）、`streams.ts`（热门/分区共用的 source 装配与游标翻页）、`hot.ts`、
 `category.ts`、`categories.ts`（分类目录订阅，`kind:"category"`）、`index.ts`；
-`register.ts` 登记四个渠道。不实现 `resolveDetail` /
+`packages/crawler/src/register.ts` 登记四个渠道。不实现 `resolveDetail` /
 `fetchPassive` / `Loginable` / `passive`。
 
 ### 4.3 类型 / 平台标签 / 设置
 
 - `packages/xml/src/types.ts`、`packages/core/src/types/live.ts`：`LivePlatformId` 加 `"twitch"`。
 - `apps/desktop/src/lib/media.ts`：`PLATFORM_LABEL.twitch = "Twitch"`。
-- `packages/core/src/data-layer.ts` / `apps/desktop/.../Network.tsx`：`platformOfChannel` 加
-  `twitch:` → `twitch`。
-- `apps/desktop/src/lib/subscriptions.ts`：`LIVE_SUB_CHANNEL.twitch = "twitch:live"`（为二期
-  搜索/发现预留；`SEARCH_CHANNEL` 一期不加）。
+- `packages/platform/src/index.ts` 的 `PLATFORMS` 登记 twitch（hosts/prefixes/label，
+  `platformOfChannelKey`/`platformOfHost` 由此派生）；`core/src/data-layer.ts` 的
+  `platformOfChannel` 只是薄封装。
+- `apps/desktop/src/lib/subscriptions.ts`：`LIVE_SUB_CHANNEL.twitch = "twitch:live"`、
+  `CATEGORY_CHANNEL.twitch = "twitch:category"`（分类目录条目预览/订阅该分区）；
+  `SEARCH_CHANNEL` 一期不加。
 - CLI：`info.ts` 的 `exampleInfo("twitch:live")`；`item.ts` 路由错误文案与 `danmakuNote`
   （一期「无（Twitch 聊天二期）」）。
 
@@ -239,7 +230,8 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
 
 `packages/host/src/net/governor.ts`：
 
-- `platformOf`：`twitch.tv` / `*.ttvnw.net` / `*.jtvnw.net` → `"twitch"`。
+- `platformOf` 委托 `@amoeba/platform` 的 `platformOfHost`；twitch 的域名归桶 =
+  `PLATFORMS.twitch.hosts`（twitch.tv / ttvnw.net / jtvnw.net）。
 - `MEDIA_CDN_SUFFIXES`：`ttvnw.net`、`jtvnw.net`（m3u8/分片/图片不扣 RPM，但仍占全局并发）。
 - `DEFAULT_NET_POLICY.platforms.twitch`：先保守 `maxConcurrent:6, rpm:120,
   minIntervalMs:100, cooldownBaseMs:600_000`。
@@ -251,10 +243,8 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
 
 | 阶段 | 内容 |
 | --- | --- |
-| 一期 | 直播频道订阅 + 元数据 + 离线态 + HLS 播放 + router/governor/标签/CLI + 自检 |
-| 一期 · 热门/分区 | ✅ 已做（2026-10-20）：`twitch:hot`（无参数，观看数降序）+ `twitch:category`（slug/目录链接，`game(slug).streams`）；两者游标翻页 |
 | 二期 A | VOD / clip 播放（路由排在频道之前） |
-| 二期 B | 关键词搜索；分类榜已做成独立目录订阅 `twitch:categories`（2026-10-20 完成） |
+| 二期 B | 关键词搜索（`twitch:categories` 已完成，见 §3.1） |
 | 二期 C | IRC 聊天弹幕（先给宿主 ws 增加 text 帧） |
 | 三期 | OAuth「我的关注」（需注册应用，不建议近期） |
 | 暂不做 | `Client-Integrity` 浏览器兜底、去广告、订阅者专属流 |
@@ -267,7 +257,7 @@ Android app Client-ID（§2.4）。客户端仍开 `throwOnErrors`：万一移�
   热门/分区改用 Android app Client-ID 规避。该 ID 是公开值，但同属未公开 API 的 ToS
   灰色地带；若上游后续也要求 integrity，最小兜底是用现有 CDP 打开页面、被动捕获
   token，成本较高，先不做。
-- master CORS 是硬约束（必须服务端拉 master）；不要把 master URL 直接交给播放器。
+- master CORS / 播放器 loader 约束见 §2.3；不要把 master URL 直接交给播放器。
 - ⚠️ **playlist 那一跳不能由 WebView 直接请求**（2026-10-21 实测）：`playlist.ttvnw.net`
   对 `Origin: http://tauri.localhost` 回 **403**（dev 的 `http://localhost:1420` 放行），
   所以「dev 能播、release 黑屏」，错误 `hls networkError manifestLoadError`。

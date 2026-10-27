@@ -12,7 +12,7 @@
   「B站」；仅渠道 key（`bili:*`）、URL、API、代码标识保留 bilibili。
 - **wbi 签名零登录可复刻**：`GET /x/web-interface/nav` 未登录（code:-101）仍返回
   `data.wbi_img`，无需 cookie/puppeteer，纯 `MD5(排序参数&wts&mixinKey)`。
-  换位表 `MIXIN_KEY_ENC_TAB` 与 live 层同源
+  换位表 `MIXIN_KEY_ENC_TAB` 只在 `resolve/platform/bili/client.ts` 一处，`signWeb` / `signSpace` / 直播 / 视频 / 广场共用。
 - **bili:dynamic**（`channels/bili/dynamic.ts`）：`GET /x/polymer/web-dynamic/v1/feed/space?host_mid={uid}`
   （⚠️ 非 dynamic_new——那个返回关注流）。**需登录 cookie**。转发展开 `orig`
   （⚠️ `module_dynamic` 在 `orig.modules.module_dynamic` 下，非 DynModule 层级）。
@@ -75,7 +75,7 @@
 - **huya**（`resolve/platform/huya/play.ts`）：数据源 `mp.huya.com/.../profileRoom` JSON API，
   flv+hls 双协议 × 多 CDN × 全档位，`multiLine[].url` 已含签名（`buildAntiCode` 已删）。
   ⚠️ **低档位只产 HLS**（`ratio=` 切档）；`ratio=` 低档 flv.js 播几秒断
-- **douyin**（`channels/douyin/index.ts`）：enter API ABogus 签名 → `stream_url`。
+- **douyin**（`crawler/src/channels/douyin/live.ts`；enter/stream_url 在 `resolve/src/platform/douyin/stream.ts`）：enter API ABogus 签名 → `stream_url`。
   ⚠️ `liveStatus ==2` 才是直播中（`==4` 是 roomId 一次性，需换 webRid）
 - ✅ **抖音号可直接当 web_rid 用**（2026-10-18 实测）：`live:douyin` 的 `roomIds`
   支持用户抖音号（`unique_id`，如 `pvcyinse`）/ 数字 short_id / 直播间 URL 的
@@ -123,10 +123,9 @@
   救不了风控 IP，排前面只为跟上上游默认。⚠️ 原计划的 `WEB_EMBEDDED_PLAYER` 纯 HTTP
   复刻被 **embedder identity** 拦（补 `encryptedHostFlags`/cookies 仍 denied）。自检
   `packages/resolve/src/example/youtube-clients.check.ts`。
-- ⚠️ **poToken 判定实验（2026-10-21）**：机房 IP 上**真浏览器 + 游客会话也是页面级
-  `LOGIN_REQUIRED`**（与 token 无关）；watch 页根本不发 `/youtubei/v1/player`、流走 SABR
-  （`pot` 在二进制请求体），embed 的 player 体也是二进制 → **「抓包取 POT」已失效**。
-  外挂 provider（bgutil）/内嵌 VM 只解**格式级 POT**，且 POT 必须与播放**同出口 IP**。
+- poToken 与机房 IP 的完整结论见 `docs/platforms/youtube.md` §6；一句话：机房 IP 上真浏览器 +
+  游客会话也被页面级 `LOGIN_REQUIRED` 拦，「读 URL 的 `pot=` / 读 JSON 的
+  `serviceIntegrityDimensions`」两条取 token 路径均已失效。
 - 渐进式只到 itag 18（360p）→ **视频 1080p 走 DASH**：adaptiveFormats 自拼 SegmentBase
   MPD（共享 `utils/mpd.ts`）。360p 不混进返回数组（默认选流会落 360p），DASH 装配失败才 fallback
 - ✅ **搜频道**（2026-10-16，`searchYouTubeChannels` / 渠道 `youtube:user`）：InnerTube
@@ -176,10 +175,8 @@
   - **WebView2**：首轮能滚到 34 → 53 → 72 → 88 条，**同一 profile 连续第二轮**撞
     `error_code=300011`「账号异常」、`rejectUrl=…/api/sns/web/v1/homefeed` + verify。
   结论：**风控是累积的，与浏览器形态无关** —— 匿名翻页最多撑一两轮；这是移除匿名态的直接原因。
-- **headless 无收益（同日实测）**：`--headless=new` + 全新 profile 首屏同样 26 条，但 UA 是
-  `HeadlessChrome/155.0.0.0`；private 943–1069 MB，与 headed 隐藏窗口的 992 MB 持平。
-  **结论：继续 headed + 隐藏窗口**（现为 Tauri WebView2，窗口 `visible(false)` + 屏外），
-  headless 既拿不到指纹一致性，也不省内存。
+- **headless 无收益**：首屏条数与 headed 相同，UA 暴露 `HeadlessChrome`，内存也不省
+  → 继续 headed + 隐藏窗口（现由数据服务侧 `amoeba-browser` WebView2 宿主承载，屏外窗口）。
 - **渠道策略（2026-10-22）**：列表 / 详情都是**被动**——导航后读页面 `__INITIAL_STATE__`
   或 Network 捕获，不构造平台 API 请求。
   - `xhs:explore` 声明 `passive`（导航 + 读 SSR + 页面自然请求）；`fetchMore` 为滚动驱动。
@@ -197,11 +194,11 @@
   - 详情：登录态导航详情页读 `noteDetailMap`；撞登录页 / 未登录统一报「重新扫码」。
     补全失败（登录失效 / 风控 / `noteDetailMap` 空）**抛错并进入弹窗失败态**，不再
     静默回退摘要（core `resolveDetail` 重新抛出，列表内容仍照常显示）。
-    ⚠️ **游客/过期会话的登录墙只拦顶层导航**（2026-10-22 实测）：同一 URL、同一
-    `xsec_token` 改成同源 `fetch(url, { credentials: "omit" })` 仍返回 200 且
-    `noteDetailMap` 有条目。该发现现在只用于解释「为什么匿名详情不能作为兜底」——
-    这层兜底已随匿名支持移除。explore/user 的详情实现收敛在 `channels/xhs/shared.ts`。
-  - 无浏览器（mobile / CLI）：HTTP SSR 必须带登录 cookie（`requireXhsCookie`）；
+    游客/过期会话的登录墙只拦顶层导航（同源 `fetch` 带 `credentials:"omit"` 仍能读到
+    `noteDetailMap`）——这只解释「为什么匿名详情不能当兜底」，该路径已随匿名支持移除。
+    explore/user 的详情实现收敛在 `channels/xhs/shared.ts`。
+  - 无浏览器（mobile / CLI）：`xhs:user` 可走 HTTP SSR（必须带登录 cookie，`requireXhsCookie`）；
+    `xhs:explore` 直接报 `XHS_EXPLORE_NEEDS_BROWSER`（登录态 HTTP SSR 只给空壳）。
     显式空串（强制匿名）直接报「需要登录」，不回落 provider。
   - 策略层入口 = `shared.ts` 的 `fetchXhsList`：导航 → 等 SSR → 风控框 → **登录闸门** →
     读列表；SSR 列表读取统一走 `readXhsStateList` / `flatXhsStateList`（逐层解 `_rawValue`
@@ -278,36 +275,12 @@
 
 ## Twitch（细节见 `docs/platforms/twitch.md`）
 
-- 匿名链路可用：公开 web Client-ID 的 **GraphQL**（`gql.twitch.tv/gql`，`Client-Id` 头）
-  → `PlaybackAccessToken`（**persisted query**）→ `usher.ttvnw.net` HLS。不需要账号 /
-  `Client-Integrity` / 浏览器。官方 **Helix 匿名 401**（且不给播放地址），故不走 Helix。
-- ⚠️ **persisted query hash 会轮换**（2025-11 曾整体替换一次）—— 集中成
-  `TWITCH_PLAYBACK_TOKEN_HASH`（`platform/twitch/live.ts`），Twitch 改版只改这一处；
-  手写 `streamPlaybackAccessToken(login:...)` 已报 `argument: channelName is required`。
-- ⚠️ **master 没有 `Access-Control-Allow-Origin`** → hls.js 不能直接加载。resolver 必须经
-  `appHost.http` 拉 master、解析后把 **variant playlist URL** 作为 `Stream.url`
-  （variant 与分片是 `ACAO: *`）。**别把 master URL 交给播放器**。
-- ⚠️ master 的 variant 顺序**不是高→低**（实测 audio_only 排第二）→ `parseTwitchMaster`
-  显式按高度/带宽降序、audio_only 最后（选流契约取 `streams[0]`）。
-- `twitch:live` 的 `roomIds` 接受裸 login / `@login` / `twitch.tv/<login>`（小写，
-  `[a-z0-9_]{3,25}`，排除站内保留字；多段路径一期不认）。离线频道仍产 `offline` item
-  （下播不空订阅），**全部频道失败才抛错**。token 的 `value` 是 JSON（`geoblock_reason` /
-  `blackout_enabled` 等）——**不进日志/错误文案**；地区/版权受限直接报错不重试。
-- `twitch:hot`（无参数，`streams(sort: VIEWER_COUNT)`）与 `twitch:category`（参数
-  `category`，接受 slug 或 `twitch.tv/directory/category/<slug>`，走
-  `game(slug).streams`）共用 `twitchStreamToLive` 映射与 `channels/twitch/streams.ts` 的
-  游标 `fetchMore`。⚠️ **首次 `fetchMore` 要两次请求**：core 首次翻页不传首页游标，渠道
-  先取首页拿 `endCursor` 再取第二页（不能直接返回首页，会与首屏重复）；首页到底则返回
-  空 XML 且无 cursor（core 判「没有更多」）。⚠️ **流列表必须用 Android app 公开
-  Client-ID**（`TWITCH_MOBILE_CLIENT_ID`）：网页 ID 从第二页起（带 `after`）返回
-  `IntegrityCheckFailed` 且 `data.streams = null`。频道元数据/播放 token 仍走网页 ID。
-  `first` 上游硬上限 30（>30 报 400），`clampFirst` 统一 clamp；`throwOnErrors` 保留，
-  移动 ID 也失效时透出原因，别当成「字段缺失」。
-- `games(first)` 分类榜匿名可用，但**分类本身没有可播房间** → 暂不做 channel（订阅后
-  只会是空列表）；发现层若要做，走「点分类 → 订阅 `twitch:category`」。
-- **聊天弹幕属二期**：IRC（`wss://irc-ws.chat.twitch.tv:443`、`justinfan`）文本帧可用，
-  但宿主 `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 二期先给宿主 ws 加 text 帧。
-  VOD / clip 路由（要排在频道名单段路径之前）、关键词搜索、分类榜 channel、登录均未做。
+- 公开 web Client-ID 的 **GraphQL**（`gql.twitch.tv/gql`）匿名可用 → `PlaybackAccessToken`
+  （persisted query）→ `usher.ttvnw.net` HLS；官方 Helix 匿名 401，不走。
+- ⚠️ **master 没有 `Access-Control-Allow-Origin`** → resolver 必须经 `appHost.http` 拉 master，
+  把 **variant playlist URL** 交给播放器；master variant 顺序不是高→低，需按高度/带宽降序。
+- ⚠️ **流列表翻页必须用 Android app 公开 Client-ID**（网页 ID 带 `after` 会 `IntegrityCheckFailed`）；
+  `twitch:categories` 目录渠道已实现，VOD / clip / 聊天弹幕 / 关键词搜索 / 登录未做。
 
 ## cookie / 登录
 
@@ -318,8 +291,9 @@
   本地手动占位 + skip-worktree」机制已移除(2026-10-21)。
   匿名行为：bili 视频列表稳定、直播 250 超清封顶；weibo 热搜列表可用但 user/词流需登录；
   **xhs 全渠道需登录（匿名态已移除）**；douyin 直播可用、原画档位需登录
-- ⚠️ **抖音渠道前缀是 `live:douyin*`**：`cookieFieldFor`（core 单一权威表，CLI /
-  AccountPage 均复用）为它写了专门分支（裸 `split(":")[0]` 得 "live" 匹配不上）
+- ⚠️ **抖音渠道前缀是 `live:douyin*`**：权威是 `@amoeba/platform` 的 `PLATFORMS` ——
+  `douyin.prefixes` 同时登记 `live:douyin` 与 `douyin`，长前缀优先
+  （`packages/platform/src/index.ts:113-126`）；core `cookieFieldFor` 只是查表包装。
 - 恢复登录：扫码（scanLogin 写 settings）或在「账号与凭证」里手填 cookie 字段；
   **勿把真实 cookie 提交进仓库**（settings 落 SQLite，不进 git）
 - ⚠️ **`clearCookies` 的域匹配必须按标签边界**（2026-10-20）：裸 `endsWith("xiaohongshu.com")`
@@ -328,14 +302,15 @@
   `emitQr` 载荷语义：`data:image/...`（浏览器路径已编码）**或**待编码文本（纯 HTTP 路径）。
   ⚠️ `opts.signal`（2026-10-20）：UI 关闭二维码弹窗必须 abort —— 登录在 `withScanLoginLock`
   （cdp.ts，xhs/weibo hidden / douyin interactive，douyin 二维码是 canvas 绘制 hidden 画不出）
-  里持全局浏览器锁直到成功/超时，没有取消通道的话关窗后所有浏览器操作都被排队卡住。
+  里跑在专属 `login:<platform>` lane（独立 tab，不持全局锁，不阻塞其它浏览器操作）；
+  关窗仍必须 abort，否则登录 tab 会一直轮询到超时，白耗风控配额。
   ⚠️ xhs 登录的**初始检测只用页面证据**（`user.loggedIn`/侧栏「我」，cookie 完全不参与）；
   轮询判据是 `user_id` **相对基线变化** —— 服务端 session 失效时残留的旧 user_id 不算登录。
   ⚠️ `cdpEvaluate` 的表达式在**页面里**执行，必须是纯 JS：写 `(n as HTMLElement)` 这类
   TS 断言 tsc 不报错，运行时炸 `SyntaxError: Unexpected identifier 'as'`（xhs 点「登录」
   按钮曾因此出不了码）。
-- **「清除凭证」会真正登出浏览器账号**（2026-10-19）：桌面 xhs/weibo/抖音抓取用的是
-  抓取浏览器（Tauri WebView2）profile 的登录态，只清 `settings.*Cookie` 等于没退。
-  账号页的清除按钮先调
-  `browser.clearCookies(<域后缀>)`（按域精确删除，不连带其它平台），再清 settings；
-  中途失败则 settings 保持不动。⚠️ 不要改成 `clearBrowserCookies`（会登出所有站点）。
+- **「清除凭证」会真正登出浏览器账号**（2026-10-19）：xhs/weibo/抖音抓取用的是
+  抓取浏览器（数据服务侧 `amoeba-browser` WebView2）profile 的登录态，只清
+  `settings.*Cookie` 等于没退。账号页先发 `dl.diagnostics.clearCookies(hosts)`
+  （服务 RPC，`AccountPage.tsx:226`），由服务侧按域精确删除（`backend.ts:549`，
+  `d === host || d.endsWith("." + host)`），成功后再清 settings；中途失败则 settings 保持不动。

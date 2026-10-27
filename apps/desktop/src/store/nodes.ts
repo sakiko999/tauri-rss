@@ -20,8 +20,8 @@ export type ContentTab = "all" | MediaKind
 export type SmartFeedId = "today" | "unread" | "starred" | "resume"
 /** 页面节点 id。 */
 export type PageId = "discover" | "settings" | "account"
-/** 视图意图:阅读三栏 / 网格 / 热搜(词条栏+词流) / 整页 / 播放页 / 短视频全屏流。 */
-export type NodeType = "reader" | "media" | "hot" | "page" | "player" | "shortvideo"
+/** 视图意图:首页看板 / 阅读三栏 / 网格 / 热搜(词条栏+词流) / 整页 / 播放页 / 短视频全屏流。 */
+export type NodeType = "home" | "reader" | "media" | "hot" | "page" | "player" | "shortvideo"
 
 export interface KindMeta {
   label: string
@@ -69,7 +69,22 @@ export const PAGES: Array<{ id: string; label: string; icon: string }> = [
   { id: "page:settings", label: "设置", icon: "settings" },
 ]
 
-export const DEFAULT_VIEW = "tab:all"
+/**
+ * 首页节点。用**裸 id** 而不是 `tab:home` / `page:home`：首页不是内容筛选，
+ * 也不是管理页，它是「看板」这一种独立视图意图（nodeMeta.type = "home"）。
+ * 不新增 `home:` 前缀，避免 isTabNode/isPageNode 的既有判定被误命中。
+ */
+export const HOME_NODE = "home"
+
+/**
+ * 片库节点。**只用于 /library 深链**（v1 不做片库，P1）：没有任何数据源产出
+ * movie/series/anime，导航位不渲染。留这个节点是为了让 `/library` 落到
+ * 「未开放」的说明页，而不是被 `*` 静默重定向回首页（用户会以为链接坏了）。
+ * 与 home 一样用裸 id，不新增 page:/tab: 前缀。
+ */
+export const LIBRARY_NODE = "library"
+
+export const DEFAULT_VIEW = HOME_NODE
 
 export function isTabNode(id: string | null): boolean {
   return !!id && id.startsWith("tab:")
@@ -112,6 +127,72 @@ export function pageIdOf(id: string): PageId | null {
   return p === "discover" || p === "settings" || p === "account" ? (p as PageId) : null
 }
 
+/**
+ * 主导航（合流改版）：首页 / 阅读 / 动态 / 影音。片库第一版不做（P1）。
+ * 只用于侧栏高亮，不参与视图分发——视图仍由 nodeMeta.type 决定。
+ */
+export type NavId = "home" | "reader" | "social" | "media"
+
+/** 内容 kind → 主导航。category 是目录条目，没有对应导航。 */
+export function navForKind(kind: MediaKind | undefined): NavId | null {
+  if (kind === "article") return "reader"
+  if (kind === "social") return "social"
+  if (kind === "video" || kind === "audio" || kind === "live") return "media"
+  return null
+}
+
+/**
+ * 侧栏主导航（§3.2）：首页 / 阅读 / 动态 / 影音。
+ *
+ * ⚠️ 后三项**复用既有内容 tab 节点**（tab:article/social/video），不新建节点 id ——
+ * 旧深链 `/v/tab:article`、`viewPath("tab:article")` 的语义完全不变；
+ * 「阅读/动态/影音」只是这一层的展示名（比「文章/社交/视频」更贴入口分组）。
+ */
+export const MAIN_NAV: Array<{ id: NavId; nodeId: string; label: string; icon: string }> = [
+  { id: "home", nodeId: HOME_NODE, label: "首页", icon: "grid" },
+  { id: "reader", nodeId: "tab:article", label: "阅读", icon: "rss" },
+  { id: "social", nodeId: "tab:social", label: "动态", icon: "message" },
+  { id: "media", nodeId: "tab:video", label: "影音", icon: "play" },
+]
+
+/**
+ * 节点 → 应高亮的主导航（无对应则 null，不强行高亮）。
+ *
+ * ⚠️ 单独一份映射而不是复用 nodeMeta.type：nodeMeta.type 是**布局**（reader/media/hot/page/…），
+ * 主导航是**入口分组**；两者不同构（tab:live 的布局是 media，但它和 tab:video 同属「影音」）。
+ * 分组节点只有成员同属一个导航时才高亮，混组不高亮——避免「高亮一个、实际混着五种内容」。
+ *
+ * ⚠️ 播放页不调用本函数：`/play/:itemId` 没有 nodeId，返回位置由 `?from=` 承载，
+ * 高亮应取 `navIdOf(from)`（这是 M2 的事，本函数先只保证映射本身可断言）。
+ */
+export function navIdOf(
+  id: string | null,
+  subscriptions: Subscription[],
+  channelKind: (channelKey: string) => MediaKind | undefined,
+): NavId | null {
+  if (!id) return null
+  if (id === "home") return "home"
+  if (isTabNode(id)) {
+    const k = id.slice(4)
+    return k === "all" ? null : navForKind(k as MediaKind)
+  }
+  if (isGroupNode(id)) {
+    const gid = groupIdOf(id)
+    if (!gid) return null
+    const navs = new Set<NavId>()
+    for (const sub of subscriptions) {
+      if (sub.groupId !== gid) continue
+      const nav = navForKind(channelKind(sub.channelKey))
+      if (nav) navs.add(nav)
+    }
+    const only = Array.from(navs)[0] ?? null
+    return navs.size === 1 ? only : null
+  }
+  if (isSmartFeed(id) || isShortNode(id) || isPageNode(id) || isPlayNode(id)) return null
+  const sub = subscriptions.find((s) => s.id === id)
+  return sub ? navForKind(channelKind(sub.channelKey)) : null
+}
+
 /** 节点固有 kind(无 kind 维度 = undefined:tab:all / smart feed / 分组 / 页面)。 */
 export function nodeKindOf(
   id: string | null,
@@ -139,7 +220,8 @@ export interface NodeMeta {
 
 /**
  * 节点 → 视图元信息。type 决定外壳布局:
- *   reader = 列表栏 + 正文主区(文章类);media = 单栏网格;page = 整页;player = 播放页。
+ *   home = 首页看板;reader = 列表栏 + 正文主区(文章类);media = 单栏网格;
+ *   page = 整页;player = 播放页;hot = 词榜 + 词流;shortvideo = 全屏流。
  */
 export function nodeMeta(
   id: string | null,
@@ -149,6 +231,11 @@ export function nodeMeta(
 ): NodeMeta {
   const n = id ?? DEFAULT_VIEW
   const base: NodeMeta = { node: n, sub: null, group: null, kind: null, title: "内容", icon: "layers", type: "media" }
+
+  // 首页是独立视图意图（不是订阅、不是 tab）—— 必须排在所有前缀判定之前，
+  // 否则裸 id 会落到最后的「按订阅查」分支。
+  if (n === HOME_NODE) return { ...base, title: "首页", icon: "grid", type: "home" }
+  if (n === LIBRARY_NODE) return { ...base, title: "片库", icon: "grid", type: "page" }
 
   if (isPlayNode(n)) return { ...base, title: "播放", icon: "play", type: "player" }
 

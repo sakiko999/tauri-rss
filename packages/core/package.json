@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./media-store": "./src/store/media-store.ts",
     "./reading": "./src/types/reading.ts",
+    "./source": "./src/source/index.ts",
     "./source/rsshub": "./src/source/rsshub.ts"
   },
   "dependencies": {

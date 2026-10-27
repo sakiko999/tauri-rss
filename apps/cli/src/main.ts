@@ -16,6 +16,9 @@
 import { cac } from "cac"
 import pc from "picocolors"
 import { cookieFieldForPlatform } from "@amoeba/core"
+// RSSHub 是运行时注册的外部 source（import 副作用）。CLI 探针与 --service 都要有它，
+// 否则 rsshub:feed 在 channels/fetch/refresh 里都是「unknown channel」。
+import "@amoeba/core/source/rsshub"
 import { setPlatformCookieLookup } from "@amoeba/resolve"
 import { closeBrowser, setupHost } from "./host/node-host.ts"
 import { loadSettings } from "./info.ts"

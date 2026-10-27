@@ -1,6 +1,6 @@
 # 04 · 新开发者指南：理解、调试与扩展
 
-> 基于 2026-10-23 的 master 快照（v0.6.5）。本文回答「动手时改哪里、必须同步什么、跑什么验证」；
+> 基于 2026-10-26 的 master 快照（v0.7.0）。本文回答「动手时改哪里、必须同步什么、跑什么验证」；
 > 数据结构与契约的完整定义在 `02-contracts.md`，端到端时序在 `03-flows.md`，这里不复述。
 > 所有 `path:line` 是阅读锚点，重构后行号会漂移，**以文件与符号名为准**。
 
@@ -23,7 +23,7 @@ flowchart LR
 
 - `RssChannel` 是纯描述（`packages/crawler/src/index.ts:165`）；`getSource(info)` 每次返回新 source
   （`packages/crawler/src/index.ts:35`），source 的最小契约只有 `fetch(): Promise<string>`——直接吐 XML，
-  **不返回类型化条目**。crawler 内部产出 `Item` 只是写出侧的中间形态（`packages/xml/src/types.ts:168`）。
+  **不返回类型化条目**。crawler 内部产出 `Item` 只是写出侧的中间形态（`packages/xml/src/types.ts:174`）。
 - 可选能力用「方法是否存在」探测，不用继承或注册标记：`Pageable`（`:115`）、`HotWordSource`（`:52`）、
   `ItemDetailSource`（`:58`）、`Loginable`（`:73`）、渠道属性 `passive`（`:191`）、`readLoginCookie`（`:197`）。
   判据函数集中在 `:135-151`，core 只依赖这些谓词。
@@ -48,7 +48,7 @@ flowchart LR
 | 边界 | 方向 | 载体 | 定义处 | 谁读 | 违规的后果 |
 | --- | --- | --- | --- | --- | --- |
 | 内容边界 | crawler → core | RSS 2.0 + `tpl:*` 字符串 | 写出 `packages/xml/src/serialize.ts:35`，读入 `packages/core/src/processing/deserialize.ts:31` | core 的 `deserializeFeed` | 字段静默退化（历史：174 条 live 全 `unknown`） |
-| 宿主边界 | 任意包 → 宿主 | `globalThis.appHost.*` | `global.d.ts:27-317`（**不是模块导出**） | crawler/core/resolve/ui/player | 运行时才暴露「未注入」或能力误判 |
+| 宿主边界 | 任意包 → 宿主 | `globalThis.appHost.*` | `global.d.ts:27-348`（**不是模块导出**） | crawler/core/resolve/ui/player | 运行时才暴露「未注入」或能力误判 |
 | 控制面边界 | core → crawler | 注册表 / 能力谓词 / 工厂函数（`registerAllChannels`、`listChannels`、`isPageable`、`httpText`） | `packages/crawler/src/index.ts:135-151`（谓词）、`:209`（惰性注册） | core 的 `data-layer.ts:11`、`source/index.ts:13-17`、`source/rsshub.ts:18` | 不属违规：`core → crawler` 是依赖矩阵允许的前向依赖；漏注册/漏挂谓词只在运行时暴露（渠道静默消失） |
 
 - XML 只承载**列表快照 + 元数据**；resolver 产出的播放流、弹幕、被动缓冲都不进 XML（`serialize.ts:4-11`）。
@@ -90,12 +90,12 @@ sequenceDiagram
   UI->>UI: player 取 streams[0]
 ```
 
-- refresh 只产元数据；`item.url` 指向平台详情页，可播流在用户点播放时才解析（`packages/core/src/data-layer.ts:628-645`）。
+- refresh 只产元数据；`item.url` 指向平台详情页，可播流在用户点播放时才解析（`packages/core/src/data-layer.ts:659-673`）。
   `Stream` 现在由 `tpl:streamJson` 全字段承载（headers/quality/rate/dashManifest，`packages/xml/src/serialize.ts:92-98`），
   但列表仍只该装快照：**不要**在 refresh 里顺手塞播放解析结果，流仍应在点播时由 resolver 产出。
 - 唯一例外是播客/音频 feed：`rss:podcast` 在 item 上带 enclosure 直链（`packages/crawler/src/channels/rss/podcast.ts:63`），
   这类 `item.url` 是网页、by-url 必失败，所以宿主必须把 `stream` 作为 `streams` prop 直给播放器
-  （`apps/desktop/src/views/player/PlayerPage.tsx:179-185`）。移动端目前只传 `resolve`，是已知缺口（见 §6）。
+  （`apps/desktop/src/views/player/PlayerPage.tsx:179-185`）。移动端只传 `resolve`，是已知缺口；mobile 已冻结（2026-10-26），不再为它补 `streams`。
 - 选流契约是 `streams[0]`，由 resolve 侧排序保证，player 不二次挑拣（`packages/player/src/hooks/streamKind.ts:65`）。
   DASH 流的 `url` 恒为空、内容在 `dashManifest`，判「可播」时必须同时看两者（`PlayableMedia.tsx:162`）。
 - 因此新增平台**不需要**动 crawler 渠道；反过来新增 crawler 渠道也不应该关心播放。
@@ -143,21 +143,21 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 | 需求 | 写法 | core 侧消费 |
 | --- | --- | --- |
-| 翻页（页码/偏移） | `pageable: { first, step }` 或手写 `fetchMore` | `isPageable` → `loadMore`（`data-layer.ts:761`） |
+| 翻页（页码/偏移） | `pageable: { first, step }` 或手写 `fetchMore` | `isPageable` → `loadMore`（`data-layer.ts:839`） |
 | 上游真实总数 | 手写 `getSource` + `apiFetch` 返回 `{ items, total }` | `tpl:total` → `totalOf` |
-| 热搜词 | source 上实现 `resolveHotWord(word)` | `isHotWordSource` → `resolveHotWord`（`:665`） |
-| 单条详情 | source 上实现 `resolveDetail(item, { passive })` | `isItemDetailSource` → `resolveDetail`（`:685`） |
-| 扫码登录 | channel 上实现 `scanLogin(emitQr, opts)` | `isLoginable` → `scanLogin`（`:831`） |
-| 被动采集 | `readonly passive = true` + source 上 `fetchPassive()` | `data-layer.ts:463-479` 只调 `fetchPassive`，**绝不回退 `fetch`** |
-| 启动 cookie 快照 | channel 上 `readLoginCookie(browser)` | `syncBrowserCookies`（`:879`） |
+| 热搜词 | source 上实现 `resolveHotWord(word)` | `isHotWordSource` → `resolveHotWord`（`:743`） |
+| 单条详情 | source 上实现 `resolveDetail(item, { passive })` | `isItemDetailSource` → `resolveDetail`（`:763`） |
+| 扫码登录 | channel 上实现 `scanLogin(emitQr, opts)` | `isLoginable` → `scanLogin`（`:919`） |
+| 被动采集 | `readonly passive = true` + source 上 `fetchPassive()` | `data-layer.ts:513-541` 只调 `fetchPassive`，**绝不回退 `fetch`** |
+| 启动 cookie 快照 | channel 上 `readLoginCookie(browser)` | `syncBrowserCookies`（`:967`） |
 
 **cookie 与参数**
 
 - 渠道只从 `info` 取参：`defaultInfo` < 调用方覆盖（UI 表单 / CLI `--kv`）。cookie 在 `fetchPage` 闭包里读一次
   `info.cookie`，显式传给平台 client；**不要**在渠道里写 channelKey→cookie 前缀表。
 - 三级语义由 `resolveCookie` 统一：显式非空 > 显式空串（强制匿名）> credentials provider
-  （`packages/resolve/src/platform/credentials.ts:41-44`）。provider 由 core 构造时注册（`data-layer.ts:179-183`），
-  CLI 在入口注册（`apps/cli/src/main.ts:43`）。
+  （`packages/resolve/src/platform/credentials.ts:41-44`）。provider 由 core 构造时注册（`data-layer.ts:201-205`），
+  CLI 在入口注册（`apps/cli/src/main.ts:50-57`）。
 - `defaultInfo` 要么不写、要么写**真实默认值**；空对象是 truthy，会让发现页把它列成「可一键订阅」
   （`docs/ops/smoke-check.md` 有案底）。
 
@@ -167,8 +167,7 @@ player 只决定怎么把 `streams[0]` 放出来。
   `new ResolveError(kind, msg)`（如登录失效 `auth`、风控码 `risk`、冷却 `rate-limit`），普通 `Error`
   只作为旧代码的过渡。
 - `item.id` 必须在渠道内稳定且唯一，不能用榜位/数组下标。
-- 新平台还要补：`core/data-layer.ts:134` 的 `cookieFieldFor`、`:289` 的 `platformOfChannel`、
-  `host/net/governor.ts:250` 的 `platformOf`、UI 的筛选/图标表。细节见 `../platforms/channels.md`。
+- 新平台只需在 `packages/platform/src/index.ts` 的 `PLATFORMS` 加一条（`id`/`label`/`hosts`/`prefixes`/`cookieField`/`browserCookieHosts`）：core 的 `cookieFieldFor`/`platformOfChannel`、governor 的 `platformOf`、账号页展示名全部转发它，**不要再手抄第二张表**（R9，`platform.check.ts` 守四组映射）。再补 `AppSettings` 的 cookie 字段与 UI 的筛选/图标表。
 
 **回归**：`bun run rss channels --kind <kind>`、`bun run rss fetch <key> --json`；有纯映射则加
 `packages/crawler/src/example/*.check.ts`。浏览器渠道在 CLI 需 `--browser` 且先
@@ -227,7 +226,7 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 **回归**：`bun packages/core/src/example/serialize-roundtrip.check.ts`（必须覆盖新字段）+
 `serialize-contract.check.ts`。后者同时扫 `setTpl(...)/setTplN(...)` 单行调用与
-`node["@_tpl:key"]` 属性直写（如 `serialize.ts` 的 `@_tpl:liveVideo`），本快照两个 check 均 exit 0。
+`node["@_tpl:key"]` 属性直写（如 `serialize.ts` 的 `@_tpl:liveVideo`）。
 用 helper 动态拼 key 的写法仍不在扫描面，新增这类写法时要先扩展守卫。
 
 ### 3.d 新增播放引擎 / 格式
@@ -252,7 +251,8 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 ### 3.e 新增视图 / 设置项（只讲数据接线）
 
-**视图**（`nodeId` 驱动的六种外壳）：
+**视图**（`nodeMeta.type` 驱动的七种外壳：home / reader / media / hot / page / player / shortvideo；
+其中 home 由根路径 `/` 承载，其余由 `/v/:nodeId`、`/play/:itemId` 承载）：
 
 1. `apps/desktop/src/store/nodes.ts`：确定 `nodeId` 语法，扩展 `NodeType` 与 `nodeMeta()`（`:144`）。
 2. `apps/desktop/src/App.tsx:133-147`：按 `meta.type` 挂新主区。注意 `main` 以 `nodeId` 为 key 重挂，
@@ -271,7 +271,7 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 | 类型 | 存哪 | 怎么写 | 何时生效 |
 | --- | --- | --- | --- |
-| 功能型（刷新/风控/cookie/播放行为） | core `AppSettings`（`appHost.storage` 的单 KV blob） | `dl.settings.set`（= `applySettings`，`data-layer.ts:823`） | 立即同步 governor 与 cookie 快照 |
+| 功能型（刷新/风控/cookie/播放行为） | core `AppSettings`（`appHost.storage` 的单 KV blob） | `dl.settings.set`（= `applySettings`，`data-layer.ts:911`） | 立即同步 governor 与 cookie 快照 |
 | 表现型（主题/密度/字号/行宽） | desktop `usePrefs`（localStorage `ui-prefs`） | `usePrefs.set` | 同步写 `<html data-*>`，首帧脚本共用 key |
 
 功能型设置步骤：`core/types/settings.ts` 加字段 + `DEFAULT_SETTINGS` → 设置页 tab（`SettingsPage.tsx` 的
@@ -297,8 +297,8 @@ player 只决定怎么把 `streams[0]` 放出来。
    已应用条目 checksum 不符要拒绝启动。KV/localStorage/内存后端不实现该方法，调用方用 `?.`，保持 no-op。
    参考 `SqliteStorageBackend` / CLI `sqliteStorage` 的 `applySchema`。
 4. 注入：加进对应 `injectXxxHost` 的 `setHostCaps` 调用。`http`/`js`/`storage` 三者必填
-   （`runtime.ts:120-130`），自定义装配也必须同时给（如 `setHostCaps({ http, js, storage })`）；
-   HTTP 会被自动包 governor（`runtime.ts:131`），不要自己再包一层。
+   （`runtime.ts:116-118`），自定义装配也必须同时给（如 `setHostCaps({ http, js, storage })`）；
+   HTTP 会被自动包 governor（`runtime.ts:128`），不要自己再包一层。
    ⚠️ desktop 服务模式下 `injectTauriHost({storage:false})` 注入的是**拒绝后端**（读写即抛），
    这是有意为之：新代码不要绕过它直连 SQLite。
 5. CLI 的 `sqliteStorage` 是 app 层、直接 import core 并执行同一份 schema（`setSchema` + checksum 校验）。
@@ -314,7 +314,7 @@ player 只决定怎么把 `streams[0]` 放出来。
    要复用桌面服务的 cookie/被动/配额，用 `--via-service`（`probe.fetch/resolve/danmaku`），
    **不要**再建第二个 DataLayer 去写桌面库（第二写者 = 静默丢数据）。
 4. CLI 默认不注入 `appHost.browser`；`--browser` / `AMOEBA_BROWSER=1` 时才注入
-   `amoeba-browser` sidecar。浏览器驱动渠道会因此忽略 `--kv cookie=`，帮助里要写清。
+   `amoeba-browser` sidecar。浏览器驱动渠道的登录态取自 profile，不靠 `--kv cookie` 注入；但显式空串仍强制匿名（xhs 直接报「需要登录」），不传 cookie 键时才用 profile 登录态，帮助里要写清。
 5. 同步 `docs/ops/commands.md` 与 `docs/ops/smoke-check.md`。
 
 **新增/修改 DataLayer 方法（必须同步数据服务）**
@@ -333,7 +333,7 @@ desktop 默认不直连 DataLayer，而是同形的 `RemoteDataLayer`。改接�
 ### 3.g 新增宿主能力 / Tauri command
 
 1. 根 `global.d.ts`：在 `AppHost` 上加字段，标明必填/可选与缺失语义（可选能力返回 `undefined`，消费侧降级）。
-2. `packages/host/src/<环境>/`：实现 backend。Tauri 侧在 `apps/src-tauri/src/commands/` 加 `#[tauri::command]`，并在 `lib.rs:12-22` 的 `generate_handler!` 注册；capability 只授权需要的窗口（`apps/src-tauri/capabilities/`）。
+2. `packages/host/src/<环境>/`：实现 backend。Tauri 侧在 `apps/src-tauri/src/commands/` 加 `#[tauri::command]`，并在 `lib.rs:27-38` 的 `generate_handler!` 注册；capability 只授权需要的窗口（`apps/src-tauri/capabilities/`）。
 3. `packages/host/src/runtime.ts`：门面 getter（必填抛错 / 可选返回 `undefined`）+ `setHostCaps` 参数；所有 `http` 会被自动包 governor，不要重复包。
 4. tauri/node/browser 三个 injector 与 CLI 自组装分别决定是否提供。跨语言契约：命令名是字符串、参数 `camelCase`、二进制走 base64、`http_get` 对 4xx/5xx 也返回成功（调用方自查 `status`）。
 5. 回归：`bun packages/host/src/example/host-check.ts`、`governor.check.ts`；CDP/窗口类无自动化，只能走 `docs/ops/smoke-check.md` 的实机清单。
@@ -347,9 +347,7 @@ desktop 默认不直连 DataLayer，而是同形的 `RemoteDataLayer`。改接�
 | `@amoeba/log` 域 | **所有包**（host / resolve+crawler / player / core / cli） | localStorage `log` / `log:<域名>` 为 `"0"` 关闭；CLI 由 `RSS_LOG=1` 放开 | 域在 emit 时读开关；`warn/error` 永不被屏蔽 |
 | `setLogSink` | 服务进程 | — | 全部级别（含 info/debug）改走 stderr，保证 stdout 只有 `READY <port>`；测试也用它收集输出 |
 
-`appHost.log` 已删除（2026-10-26）：core 是最后一个消费者，两套通道会让开关/前缀只覆盖一半。
-core 改用 `@amoeba/log` 的 `[core]` 域（`packages/core/src/log.ts`），并补了 loadMore 失败、
-被动无数据的日志点。
+日志只有一条通道：`@amoeba/log`（`appHost.log` 已删除——两套通道会让开关/前缀只覆盖一半）。core 的域在 `packages/core/src/log.ts`（含 loadMore 失败、被动无数据等事件）。
 
 新增日志域时用 `createLogDomain("子系统:名字", ...)`；resolve 的平台域集中在 `packages/resolve/src/log.ts`，
 player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面命名空间，重名会复用同一引用，务必带前缀。
@@ -382,7 +380,7 @@ player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面�
 | 入口 | 端口 | 只在何时存在 | 用途 |
 | --- | --- | --- | --- |
 | 桌面 dev 实例 CDP | 9222 | `bun run tauri`（叠 `tauri.conf.dev.json`） | `scripts/ui-probe.ts`、`ui-play-check.ts`、`__store` |
-| 抓取浏览器 CDP | 9334 | 桌面运行时按需拉起（WebView2，独立 profile） | 看 xhs/weibo 页面状态；`rss browser-reset --target desktop` 清 profile |
+| 抓取浏览器 CDP | 动态（sidecar 打印 `READY <port>`） | 数据服务启动时 spawn `amoeba-browser.exe`（profile 归服务） | 看 xhs/weibo 页面状态；`rss browser-reset --target desktop` 清服务侧 profile |
 | CLI 浏览器 sidecar CDP | 动态（`READY <port>`） | `rss ... --browser` 期间（`amoeba-browser.exe`） | CLI 的 weibo/xhs 浏览器路径；`rss browser-reset`（默认 cli）清 profile |
 | Vite dev server | 1420 / 1422 | `bun run dev` / `tauri` | 纯前端调试；mobile 走 1422 |
 
@@ -393,7 +391,7 @@ player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面�
 
 `bun run tauri:release` = `tauri dev --release`：Rust 以 release 编译、保留热重载，**不叠** `tauri.conf.dev.json`
 （即没有 9222），Vite 注入 `VITE_AMOEBA_PROFILE=release-debug` 使用独立 DB。用于验证
-`!cfg!(debug_assertions)` 才走的分支（隐藏窗口、WebView2 生命周期）。release 下要看页面只能用抓取浏览器的 9334
+`!cfg!(debug_assertions)` 才走的分支（隐藏窗口、WebView2 生命周期）。release 下要看页面只能读服务 spawn 的 `amoeba-browser` 端口（sidecar 启动时打印 `READY <port>`），
 或临时设 `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222` 直接跑 `target/release/amoeba.exe`
 （另起静态服务喂 `dist/desktop`，否则停在 `chrome-error://`）。
 
@@ -407,31 +405,22 @@ player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面�
 | 登录了仍匿名 / 空串不生效 | 漏传 `info.cookie`，或渠道自建了 cookie 前缀表 | `credentials.ts:41`；§3.a |
 | 被动渠道发起了主动请求 | `passive` 渠道内部仍调了 `fetch()`，或 `fetchPassive` 之外又补了主动请求；刷新与 `previewChannel` 已共用「有浏览器只调 `fetchPassive`、无数据报 `no-data`」的门 | `data-layer.ts` 的 `doRefresh` / `previewChannel` |
 | 所有失败都显示「需要登录」/ 403 归错类 | 不要用正则猜。用 `errorKindOf(err)` + `ERROR_KIND_LABEL`；新抛错点 `ResolveError(kind)`。403 现归 `risk`，401/cookie 才是 `auth` | `packages/resolve/src/errors.ts` |
-| 移动端「需要登录」却无入口 | 移动端没有 CDP/扫码能力（注入侧已 `browser:false`，`Loginable` 无可用的移动端实现），需 UI 明示「请在桌面登录」 | `apps/mobile/src/main.tsx:16`；§6 |
+| 移动端「需要登录」却无入口 | 移动端没有 CDP/扫码能力（注入侧已 `browser:false`，`Loginable` 无可用的移动端实现），需 UI 明示「请在桌面登录」；mobile 已冻结（2026-10-26），不再补交互 | `apps/mobile/src/main.tsx:16` |
 | 契约守卫对某个 `tpl:` 报红 | 该键确实只在一侧（属性写法已纳入扫描），先查 deserialize 是否读过、`READ_ONLY_OK` 是否需要解释 | `serialize-contract.check.ts:41-47`；§3.c |
-| 加了 rsshub 订阅却报 unknown channel | 入口没 `import "@amoeba/core/source/rsshub"`（模块副作用注册） | `core/source/rsshub.ts:97` |
-| 第二个应用实例抓取浏览器不可用 | 抓取浏览器端口固定 9334，单实例语义 | `webview_browser.rs:56` |
-| 测试/脚本里 `appHost.*` 报「not set」 | 先 `import @amoeba/host` 再注入；example 用 `injectNodeHost` | `runtime.ts:59-70` |
+| 加了 rsshub 订阅却报 unknown channel | 该进程没 `import "@amoeba/core/source/rsshub"`（模块副作用注册）。注册点是**数据服务入口**与 CLI 入口（2026-10-27 已补，`service-data-check` 钉住） | `core/source/rsshub.ts:97`、`apps/cli/src/service/server.ts` |
+| 第二个实例拿不到数据/浏览器 | 数据服务按 `dataDir/instance.lock` 单实例（`instanceKey` 只作日志标识）+ sidecar profile mutex | `apps/cli/src/service/server.ts`（instance.lock）、`packages/host/src/node/browser-sidecar.ts:11-13` |
+| 测试/脚本里 `appHost.*` 报「not set」 | 先调 `injectNodeHost()`（或 `setHostCaps(...)`）——两者内部都幂等 `initAppHost()`；`@amoeba/host` 根入口**没有 import 副作用**，只 import 不建门面 | `packages/host/src/runtime.ts:45-47`、`:111-126` |
 | 改了样式却没生效/死区 | CSS 类名跨文件叠加、合成 WheelEvent 不滚动 | `docs/ops/smoke-check.md`（本节不在本文范围） |
 
 ## 6. 第一周路线与第一个 PR
 
 | 天 | 做什么 | 产出/验收 |
 | --- | --- | --- |
-| 1 | 跑 `bun run tauri` + `bun run rss channels` + `rss fetch bili:popular --json`；读 `README.md`、`00-overview.md`、`01-packages.md` | 能说清 8 个包各自「不知道什么」 |
+| 1 | 跑 `bun run tauri` + `bun run rss channels` + `rss fetch bili:popular --json`；读 `README.md`、`00-overview.md`、`01-packages.md` | 能说清 11 个包（core/crawler/host/log/platform/player/resolve/service-client/service-protocol/ui/xml）各自「不知道什么」 |
 | 2 | 追一条渠道到 UI：`bili:popular` → `fetchPage` → XML → `deserialize` → `MediaItem` → `__store.getState()` | 能指出每个字段在哪一步被赋值 |
 | 3 | 追一次播放：`rss item <url>` → `resolveRoute` → 平台函数 → `PlayableMedia`；跑 `ui-play-check.ts` | 能解释 `streams[0]` 与 `dashManifest` |
 | 4 | 挑一个 §5 的小坑或文档漂移，按 §3 的 checklist 改 | 相关 check + tsc 全绿 |
 | 5 | 提第一个 PR：改动面 ≤ 3 个文件，附复现命令与验证输出 | 评审只需看数据和契约 |
-
-**两个低风险的第一 PR 候选**（都已在代码中复核）：
-
-1. **移动端播客直链**：`apps/mobile/src/App.tsx:213-218` 只传 `resolve`，未传 `streams`；带 enclosure 直链的
-   播客单集（audio 且有 stream）会走 by-url 解析并失败。参照桌面同场景（`PlayerPage.tsx:181-199`）补
-   `streams={item.stream ? [item.stream] : undefined}`，用 mobile 的 `rss:url` 订阅一个播客 feed 验证。
-2. **文档/注释漂移**：`packages/core/src/index.ts:64` 仍写「旧键回退」，实际 `findRecord` 只查复合键；
-   `packages/core/src/types/query.ts:10` 说排序平局按 id，`media-store.ts:67` 只按 `publishedAt`。
-   改注释 + 在 `05-risks.md` 记一笔，零运行时风险。
 
 不建议的第一个 PR：跨包加字段（要同时懂 XML 两侧与 UI）、新增播放引擎（真机验证成本高）、改动 lane/风控
 （需要 release 实例与多轮真机）。

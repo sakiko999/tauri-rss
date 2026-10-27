@@ -6,7 +6,7 @@
  */
 import pc from "picocolors"
 import { createDataLayer, ERROR_KIND_LABEL, errorKindOf, type ErrorKind, type RefreshResult } from "@amoeba/core"
-import { getChannel } from "@amoeba/crawler"
+import { getChannel } from "@amoeba/core/source"
 import { exampleInfo, parseKvPairs } from "../info.ts"
 import { fail, fmtMs, ok, printJson, startTimer, trunc } from "../ui/render.ts"
 

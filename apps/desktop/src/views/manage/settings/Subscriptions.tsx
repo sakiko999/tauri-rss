@@ -266,7 +266,7 @@ function SubscriptionTable({
   return (
     <SideCard title={`订阅 ${subscriptions.length}`} icon="rss" blockKey="settings:subscriptions">
       {subscriptions.length === 0 ? (
-        <StateBlock icon="rss" tight title="还没有订阅" text="到「发现」浏览,或点侧栏的 + 添加。" />
+        <StateBlock icon="rss" tight title="还没有订阅" text="到「发现」浏览,或点侧栏顶部的 + 添加。" />
       ) : (
         <table className="table">
           <thead>
