@@ -76,6 +76,15 @@ assert.equal(store.query({ subscriptionId: "s-dup" })[0]?.isUnread, false, "应�
 store.append("s-b", [item("b1", "s-b"), item("b2", "s-b", { publishedAt: NOW })])
 assert.deepEqual(store.query({ subscriptionId: "s-b" }).map((i) => i.id), ["b2", "b1"])
 
+// ⭐ append 对同批内部的重复 id 也去重(与 replace 对称;addedCount 只算真实新增)。
+store.append("s-append-dup", [
+  item("e1", "s-append-dup", { publishedAt: NOW }),
+  item("e2", "s-append-dup", { publishedAt: NOW - 1000 }),
+  item("e1", "s-append-dup", { publishedAt: NOW - 2000 }), // 同批重复,应被丢弃
+])
+assert.deepEqual(store.query({ subscriptionId: "s-append-dup" }).map((i) => i.id), ["e1", "e2"])
+assert.equal(store.all().filter((i) => i.subscriptionId === "s-append-dup").length, 2)
+
 // ⭐ replace 也按 id 去重(契约:id 在订阅内唯一)。
 // 案底:小红书滚动翻页后平台 state 会把同一笔记追加两次,xml 缓存 61 条里 60 唯一,
 // UI 报「Encountered two children with the same key」。

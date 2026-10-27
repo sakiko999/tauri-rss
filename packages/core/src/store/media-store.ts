@@ -79,7 +79,10 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
 
     append(subscriptionId, next) {
       const existingIds = new Set(items.filter((it) => it.subscriptionId === subscriptionId).map((it) => it.id))
-      const fresh = next.filter((it) => !existingIds.has(it.id))
+      // ⚠️ existingIds 同时当「本批已接受」集合用:同一页内部的重复 id(xhs 置顶组 +
+      // 全部组 flat 的案底同源)也不能双写 —— 与 replace 的页内去重对称,
+      // addedCount 因此是真实新增数(core 靠它判「游标前进了但 0 新增」)。
+      const fresh = next.filter((it) => !existingIds.has(it.id) && (existingIds.add(it.id), true))
       if (!fresh.length) return 0
       items = [...items, ...fresh]
       emit()
