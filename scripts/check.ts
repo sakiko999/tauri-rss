@@ -55,6 +55,7 @@ const FILES: Record<Exclude<Layer, "typecheck">, string[]> = {
     "apps/desktop/src/store/selectors.check.ts",
     "apps/desktop/src/lib/live-filter.check.ts",
     "apps/desktop/src/lib/subscriptions.check.ts",
+    "apps/desktop/src/lib/channel-catalog.check.ts",
     "apps/desktop/src/dev/ui-overlay/overlay.check.ts",
     "apps/mobile/src/html.check.ts",
   ],
