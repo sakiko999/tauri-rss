@@ -26,7 +26,7 @@ export const ApplePodcastChartChannel = makeApiChannel({
       required: false,
     },
     { key: "country", label: "国家区(如 cn / us),默认 cn", required: false },
-    { key: "limit", label: "条数(默认 20,最多 100)", required: false },
+    { key: "limit", label: "条数(默认 20,最多 200)", required: false },
   ],
   channelTitle: (info) => {
     const g = APPLE_PODCAST_GENRES.find((x) => String(x.id) === String(info.genre ?? 26))
@@ -36,8 +36,9 @@ export const ApplePodcastChartChannel = makeApiChannel({
   fetchPage: async (info): Promise<Audio[]> => {
     const genre = Number(info.genre ?? 26) || 26
     const country = String(info.country ?? "cn").trim() || "cn"
-    // 上限 100:再大 Apple 也会截断,且 Lookup 的 URL 会过长。
-    const limit = Math.min(Math.max(Number(info.limit ?? 20) || 20, 1), 100)
+    // 上限 200(2026-10-27 实测:limit=200 全量返回、300 才 400;「再大会截断」的
+    // 旧注释失实)。Lookup 走 catalog 侧分批,URL 长度可控。
+    const limit = Math.min(Math.max(Number(info.limit ?? 20) || 20, 1), 200)
 
     const podcasts = await fetchApplePodcastChart(genre, limit, country)
     const t = now()

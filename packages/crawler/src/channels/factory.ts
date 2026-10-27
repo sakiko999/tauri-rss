@@ -80,8 +80,9 @@ export interface ApiChannelSpec {
   /** 频道标题与链接(链接可为常量或按 info 生成)。 */
   channelTitle: (info: SourceInfo) => string
   channelLink: string | ((info: SourceInfo) => string)
-  /** 取第 page 页条目(页码从 1 起)。过滤空页的渠道返回 `{ items, hasMore }`(见下)。 */
-  fetchPage: (info: SourceInfo, page: number) => Promise<Item[] | { items: Item[]; hasMore?: boolean }>
+  /** 取第 page 页条目(页码从 1 起)。过滤空页的渠道返回 `{ items, hasMore }`(见下);
+   *  上游有真实总数时带 `total`(经 tpl:total 到 core 的「已加载 N / 总数」)。 */
+  fetchPage: (info: SourceInfo, page: number) => Promise<Item[] | { items: Item[]; hasMore?: boolean; total?: number }>
   /** 数值翻页(省略 = 单页无翻页)。first:首页之后的起始页;step:页步进。 */
   pageable?: { first: number; step: number }
 }
@@ -135,10 +136,10 @@ export function makeApiChannel(spec: ApiChannelSpec): RssChannel {
  * 后面的页永远取不到。这类渠道返回 `{ items, hasMore }` 让上游字段说话。
  */
 export function apiFetchMore(
-  fetchPage: (n: number) => Promise<Item[] | { items: Item[]; hasMore?: boolean }>,
+  fetchPage: (n: number) => Promise<Item[] | { items: Item[]; hasMore?: boolean; total?: number }>,
   channelOptions: () => SerializeOptions,
   opts: { first: number; step: number },
-): (cursor?: string) => Promise<{ xml: string; cursor?: string }> {
+): (cursor?: string) => Promise<{ xml: string; cursor?: string; hasMore?: boolean }> {
   return async (cursor) => {
     const n = cursor ? Number(cursor) : opts.first
     const o = channelOptions()
@@ -147,7 +148,10 @@ export function apiFetchMore(
       const r = await fetchPage(n)
       const items = Array.isArray(r) ? r : r.items
       const hasMore = Array.isArray(r) ? undefined : r.hasMore
-      const xml = serializeFeed(items, o)
+      const total = Array.isArray(r) ? undefined : r.total
+      // total 用 serializeWithTotal 透传(tpl:total):翻页不带会被 core 的
+      // 「渠道不再带 total」分支删掉刷新时的旧总数(desktop 总数指示消失)。
+      const xml = serializeWithTotal(items, o, total)
       return {
         xml,
         ...((hasMore ?? items.length > 0) ? { cursor: String(n + opts.step) } : {}),

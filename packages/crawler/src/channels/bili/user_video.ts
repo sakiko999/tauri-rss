@@ -58,6 +58,7 @@ export const BiliUserVideoChannel = makeApiChannel({
     )
     const count = data?.data?.page?.count
     const hasMore = typeof count === "number" ? page * PAGE_SIZE < count : vlist.length >= PAGE_SIZE
-    return { items, hasMore }
+    // 真实总数带上(tpl:total → core pageTotals):apiFetchMore 现已透传 total。
+    return { items, hasMore, total: typeof count === "number" ? count : undefined }
   },
 })

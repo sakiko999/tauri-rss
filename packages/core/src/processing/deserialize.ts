@@ -137,7 +137,9 @@ function baseFields(it: ParsedItem, ctx: DeserializeContext) {
     // ⚠️ guid 缺失兜底用 **link**(唯一,一篇文章一个 URL),不用 title —— 同标题条目
     // (系列文/转载/纯 RSS)会撞 id:store.patch 遍历改**所有**同 id 条目、reading map 按 id
     // 回填 → 标一条已读两条一起变、星标/续播互相覆盖。title 只作 link 也缺时的末位兜底。
-    id: it.guid ?? it.link ?? `hash-${it.title ?? ""}`,
+    // ⚠️ 用 trim()+|| 而非 ??:无属性空 `<guid></guid>` 经 asString 是 ""(不是 undefined),
+    // `??` 会放行空串直当 id —— 所有缺 guid/link 的条目共享 id="",去重后整个 feed 只剩 1 条。
+    id: it.guid?.trim() || it.link?.trim() || `hash-${it.title ?? ""}`,
     subscriptionId: ctx.subscriptionId,
     title: it.title ?? "(untitled)",
     url: it.link,

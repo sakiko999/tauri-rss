@@ -22,7 +22,10 @@ export const DouyuLiveHotChannel = makeApiChannel({
   defaultInfo: {},
   channelTitle: () => "斗鱼直播热门",
   channelLink: "https://www.douyu.com/",
-  // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;本页为空即止)。
+  // 页码游标(首页 fetch 用 page=1,翻页从 2 起步 +1;hasMore 按过滤前 rl 行数:
+  // 可 pageable 的渠道过滤条目必须显式回 hasMore,否则整页被滤空会被 core 判成
+  // 到底 —— 工厂契约;hot 的 data.pgcnt 实测恒 0 不可用,按「原始页非空」推断,
+  // 实测每页 40 条、page 170 起空页,不会死循环)。
   pageable: { first: 2, step: 1 },
   fetchPage: async (_info, page) => {
     const res = await httpJson<{ data?: { rl?: Array<Record<string, any>> } }>(
@@ -31,8 +34,9 @@ export const DouyuLiveHotChannel = makeApiChannel({
     )
     const t = now()
     const rl = Array.isArray(res?.data?.rl) ? res.data.rl : []
-    return rl
-      .filter((item) => Number(item.type) === 1) // 1=直播间(过滤广告位)
+    const items = rl
+      // 1=直播间(过滤广告位)。缺失按 1 保留(与 category 同语义:宁多勿误删)。
+      .filter((item) => Number(item.type ?? 1) === 1)
       .map((item): Live => {
         const rid = String(item.rid ?? "")
         return {
@@ -51,5 +55,6 @@ export const DouyuLiveHotChannel = makeApiChannel({
           online: parseCount(item.ol),
         }
       })
+    return { items, hasMore: rl.length > 0 }
   },
 })
