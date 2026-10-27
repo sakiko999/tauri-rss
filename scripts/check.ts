@@ -9,11 +9,12 @@
  *   service    起真实数据服务（bun:sqlite + HTTP/WS），慢但验证协议与快照
  *   typecheck  12 个 tsconfig（packages/* + apps/*）
  *
- * 新增 `.check.ts` 后把它加进对应层；分层错了会在这里暴露（CI 与本地同一入口）。
+ * 新增 `.check.ts` 后把它加进对应层；**忘了登记会直接失败**（按文件系统发现比对，
+ * 不会静默跳过）。分层错了会在这里暴露（CI 与本地同一入口）。
  * 失败输出「首行错误 + 复跑命令」，不吞退出码。
  */
 import { spawnSync } from "node:child_process"
-import { existsSync } from "node:fs"
+import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = join(import.meta.dir, "..")
@@ -106,6 +107,49 @@ const TYPECHECK_PROJECTS = [
   "apps/mobile",
 ]
 
+/** 全仓 *.check.ts（跳过 node_modules/target/点目录），路径用 `/` 分隔。 */
+function discoverChecks(): string[] {
+  const out: string[] = []
+  const walk = (rel: string) => {
+    for (const e of readdirSync(join(ROOT, rel), { withFileTypes: true })) {
+      if (e.name === "node_modules" || e.name === "target" || e.name.startsWith(".")) continue
+      const p = `${rel}/${e.name}`
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith(".check.ts")) out.push(p)
+    }
+  }
+  for (const root of ["packages", "apps"]) walk(root)
+  return out
+}
+
+/**
+ * 白名单守卫（C5）：新增 `.check.ts` 忘了登记 = 永远不跑，而且没人会发现。
+ * 这里按文件系统发现，未登记直接失败；同时要求「有 tsconfig 的项目都必须进 typecheck」。
+ */
+{
+  const registered = new Set(Object.values(FILES).flat())
+  const unregistered = discoverChecks().filter((p) => !registered.has(p))
+  if (unregistered.length) {
+    console.error("✘ 有 .check.ts 未登记，任何层都不会跑它：")
+    for (const p of unregistered) console.error(`  ${p}`)
+    console.error("  在 scripts/check.ts 的 FILES 里选一层登记（static/contract/state/service）。")
+    process.exit(1)
+  }
+  const typed = new Set(TYPECHECK_PROJECTS)
+  const untyped: string[] = []
+  for (const root of ["packages", "apps"]) {
+    for (const e of readdirSync(join(ROOT, root), { withFileTypes: true })) {
+      if (!e.isDirectory()) continue
+      const p = `${root}/${e.name}`
+      if (existsSync(join(ROOT, p, "tsconfig.json")) && !typed.has(p)) untyped.push(p)
+    }
+  }
+  if (untyped.length) {
+    console.error(`✘ 有 tsconfig 项目不在 typecheck 层：${untyped.join(", ")}`)
+    process.exit(1)
+  }
+}
+
 interface Result {
   name: string
   ok: boolean
@@ -197,6 +241,12 @@ function main(): number {
         )
       }
     }
+  }
+
+  // ⚠️ --filter 拼错时 items 为空 → 下面会打印「全部通过 · 0/0」并退 0（假绿）。
+  if (filter && results.length === 0) {
+    console.error(`\n✘ --filter "${filter}" 没有匹配任何检查项（检查拼写）`)
+    return 1
   }
 
   const failed = results.filter((r) => !r.ok)
