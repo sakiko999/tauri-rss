@@ -11,7 +11,7 @@
  */
 import { createBrowserRouter, Navigate, useNavigate, useParams, useSearchParams } from "react-router"
 import App from "./App"
-import { DEFAULT_VIEW, HOME_NODE } from "./store/nodes.ts"
+import { DEFAULT_VIEW, HOME_NODE, LIBRARY_NODE } from "./store/nodes.ts"
 import { useDesktop } from "./store/index.ts"
 
 /** `/v/{nodeId}?word={hotWord}`；首页是根路径 `/`（§3.1）。 */
@@ -19,6 +19,8 @@ export function viewPath(nodeId: string, word?: string): string {
   // 首页只有一个 URL 形态：生成 /v/home 会让同一个视图有两个地址（深链/分享/返回栈
   // 各记一份），且 `/v/home` 的 loader 还要再走一遍节点判定。
   if (nodeId === HOME_NODE) return "/"
+  // 片库同样是「一个视图一个 URL」（§3.1），不让它退化出 /v/library 两种地址。
+  if (nodeId === LIBRARY_NODE) return "/library"
   return word ? `/v/${encodeURIComponent(nodeId)}?word=${encodeURIComponent(word)}` : `/v/${encodeURIComponent(nodeId)}`
 }
 
@@ -94,13 +96,28 @@ export const router = createBrowserRouter([
       const sp = new URL(request.url).searchParams
       const word = sp.get("word")
       const st = useDesktop.getState()
-      st.select(nodeId)
+      // ⚠️ **只在节点真的变了时才 select()**：loader 在同一条路由的任何 search 变化
+      // （?filter= chips、?word=、?open=）上都会重跑，而 select() 会清掉
+      // selectedArticleKey 与视图内搜索词 —— 无条件调用时，点一下「未读」chip
+      // 右侧正在读的文章就没了、搜索框里的词也消失。
+      // 离开热搜（?word= 消失）必须清 hotWord，否则词条栏停在上一词；select() 顺带清掉。
+      if (st.selectedNodeId !== nodeId || (!word && st.hotWord)) st.select(nodeId)
       // 阅读筛选也走 URL（D10）：刷新/分享/Alt+← 能还原；没有参数 = 全部。
-      // ⚠️ 必须放在 select() 之后（select 不清 filter，但顺序固定才不会被后人改坏）。
+      // ⚠️ 放在节点同步之后：切节点时 filter 由本条 URL 决定，残留的上一节点 filter 不生效。
       const filter = sp.get("filter")
       st.setFilter(nodeId, { unreadOnly: filter === "unread", starredOnly: filter === "starred" })
       if (word) void st.loadHotWord(word)
       return { nodeId, word, filter }
+    },
+    errorElement: <RouteError />,
+  },
+  {
+    // 片库 v1 未开放（P1）：深链留一个说明页，不让它被 `*` 静默吞回首页。
+    path: "/library",
+    Component: App,
+    loader: () => {
+      useDesktop.getState().select(LIBRARY_NODE)
+      return { nodeId: LIBRARY_NODE }
     },
     errorElement: <RouteError />,
   },

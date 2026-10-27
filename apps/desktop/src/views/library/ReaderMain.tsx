@@ -52,6 +52,9 @@ export function ReaderMain() {
    *  (saveScrollRatio),那时三栏会弹回顶部 —— 而用户刚在浮层里读到文章结尾。
    *  三栏自己一滚动就清空它(见 onScroll),以 store 为准。 */
   const focusRatioRef = useRef<{ key: string; ratio: number } | null>(null)
+  /** 打开专注阅读那一刻三栏的真实滚动比例。**不能**只靠 store 的 scrollRatio:
+   *  读到 ≥95% 时 store 会刻意清掉记录(saveScrollRatio),浮层会从开头开始。 */
+  const focusStartRef = useRef<number | null>(null)
 
   // 滚动进度条(直接改 DOM 宽度,不走 React 渲染)+ 阅读进度持久化。
   // saveScrollRatio 用 ref 持最新,effect 只随条目重挂(不因回调变化重建监听)。
@@ -366,6 +369,9 @@ export function ReaderMain() {
           title="专注阅读"
           onClick={() => {
             focusRatioRef.current = null // 上一次浮层的位置不属于这一回
+            const el = scrollRef.current
+            const max = el ? el.scrollHeight - el.clientHeight : 0
+            focusStartRef.current = el && max > 0 ? Math.min(1, Math.max(0, el.scrollTop / max)) : null
             setFocusOpen(true)
           }}
         >
@@ -390,6 +396,9 @@ export function ReaderMain() {
         open={focusOpen}
         onOpenChange={setFocusOpen}
         item={item}
+        // 正文补全到达时按新高度重定位(与下面三栏的 effect 同一语义)。
+        contentVersion={hasFull ? shownContent.length : 0}
+        startRatio={focusStartRef.current}
         onRatio={(r) => {
           if (itemCacheKey) focusRatioRef.current = { key: itemCacheKey, ratio: r }
         }}

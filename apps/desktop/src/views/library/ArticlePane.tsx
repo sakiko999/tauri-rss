@@ -226,6 +226,10 @@ function EmptyState({
 }) {
   const query = useDesktop((s) => s.query)
   const offline = useDesktop((s) => s.offline)
+  // ⚠️ 「这个 tab 空了」≠「还没有订阅」：tab:article 是聚合视图、没有订阅身份
+  // (hasSub 恒 false)，但有 10 个订阅、只是没有文章时，旧文案会说谎。
+  const hasAnySub = useDesktop((s) => s.subscriptions.length > 0)
+  const refreshAll = useDesktop((s) => s.refreshAll)
   if (query) return <StateBlock icon="search" title="没有匹配的内容" text={`当前列表里没有包含「${query}」的条目。搜索覆盖标题、作者、摘要与正文。`} />
   if (offline) return <StateBlock icon="offline" title="离线模式" text="已跳过网络抓取。切回在线后再刷新。" />
   // chip 筛出来的「空」要排在节点自身的空态之前:用户刚点的就是 chip,
@@ -238,6 +242,20 @@ function EmptyState({
   if (nodeId === "starred") return <StateBlock icon="star" title="还没有星标条目" text="在列表里点星标图标收藏。" />
   if (disabled) return <StateBlock icon="lock" title="订阅已停用" text="在「设置 → 订阅」里重新启用它。" />
   if (hasSub) return <StateBlock icon="inbox" title="这个订阅还没有内容" text="点侧栏的刷新按钮抓一次,或等下一个刷新周期。" />
+  if (hasAnySub) {
+    return (
+      <StateBlock
+        icon="inbox"
+        title="这里还没有内容"
+        text="当前视图是空的：这个分类下暂时没有条目，或源的内容在其它分类里。刷新一次，或切到「全部」看看。"
+        actions={
+          <button className="btn btn-primary" onClick={() => void refreshAll(true)}>
+            <Icon name="refresh" size={14} /> 刷新
+          </button>
+        }
+      />
+    )
+  }
   return (
     <StateBlock
       icon="rss"

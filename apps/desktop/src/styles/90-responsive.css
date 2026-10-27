@@ -70,12 +70,12 @@
     height: auto;
     padding-inline: 0;
   }
-  .rail-head {
-    align-items: center;
-    padding-inline: var(--sp-2);
-  }
-  .rail-actions {
-    flex-direction: column;
+  /* 在播圆点:64px 栏里改成绝对定位,不吃横向空间 —— 否则它是图标的第二个
+     flex item(gap:0 也仍占 6px),图标整体左移 3px,与其它行对不齐。 */
+  .nav-dot {
+    position: absolute;
+    top: 4px;
+    right: 6px;
   }
   .nav-row,
   .nav-row-inner,
@@ -181,9 +181,6 @@
   }
 }
 @media (max-width: 720px) {
-  .titlebar-name {
-    display: none;
-  }
   .stat-strip {
     gap: var(--sp-5);
   }

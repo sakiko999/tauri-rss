@@ -80,7 +80,9 @@
    没有这行按钮按了和没按长得一样。 */
 .player-actions .btn[aria-pressed="true"] {
   background: var(--accent-soft);
-  color: var(--accent);
+  /* ⚠️ 用 --accent-text 而不是 --accent:accent 压在 accent-soft 上浅色只有 3.99:1
+     (13px 正文需 4.5),按下反而更难读。accent-text 浅 4.97 / 深 6.21。 */
+  color: var(--accent-text);
 }
 
 .queue-row {

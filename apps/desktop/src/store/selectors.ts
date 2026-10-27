@@ -7,7 +7,7 @@
  */
 import type { MediaItem, MediaKind, Subscription } from "@amoeba/core"
 import { isLiveNow } from "../lib/media.ts"
-import { groupIdOf, isGroupNode, isTabNode } from "./nodes.ts"
+import { HOME_NODE, LIBRARY_NODE, groupIdOf, isGroupNode, isTabNode } from "./nodes.ts"
 
 /** 视图筛选(按节点分别记忆)。 */
 export interface ViewFilter {
@@ -76,6 +76,9 @@ export function isToday(ts: number | undefined, now: number): boolean {
 /** 节点 → 未筛选的基础条目集。 */
 export function baseFor(s: StoreSlice, node: string | null, now: number): MediaItem[] {
   const n = node ?? "tab:all"
+  // 首页/片库是看板与说明页，不渲染列表。显式返回空集：否则裸 id 会落到最后的
+  // 「按 subscriptionId 过滤」兜底（永远为空），读代码的人会以为它是个订阅节点。
+  if (n === HOME_NODE || n === LIBRARY_NODE) return []
   if (isTabNode(n)) {
     const k = n.slice(4)
     return k === "all" ? s.allItems : s.allItems.filter((i) => i.kind === k)

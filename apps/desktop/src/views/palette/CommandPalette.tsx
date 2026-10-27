@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useDesktop } from "../../store/index.ts"
 import { queryView } from "../../store/selectors.ts"
-import { PAGES, SMART, TABS } from "../../store/nodes.ts"
+import { HOME_NODE, LIBRARY_NODE, PAGES, SMART, TABS } from "../../store/nodes.ts"
 import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
 import { usePrefs } from "../../store/prefs.ts"
@@ -122,6 +122,12 @@ export function CommandPalette() {
           // 窗口外的条目,与文案不符。用 queryView 放大 page 取全量(与 ArticlePane 同款),
           // 并只对真正未读的计数。
           const n = s.selectedNodeId ?? "tab:all"
+          // 首页/片库/整页/播放页没有列表：baseFor 恒空，跑下去会弹「已全部标为已读 0 条」
+          // —— 一个 0 条的成功 toast 等于在说谎。明确告诉用户去有列表的视图。
+          if (n === HOME_NODE || n === LIBRARY_NODE || n.startsWith("page:") || n.startsWith("play:")) {
+            s.toast("warn", "当前视图没有列表", "切到某个订阅或内容分类后再标记。")
+            return
+          }
           const full = queryView({ ...s, page: { ...s.page, [n]: Number.MAX_SAFE_INTEGER } }, s.selectedNodeId, Date.now()).list
           // 传**条目**(非 id):reading 键要带 subscriptionId(见 core `readingKey`)。
           const unread = full.filter((i) => i.isUnread)

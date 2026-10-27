@@ -139,4 +139,7 @@
   display: block;
   width: 100%;
   height: 100%;
+  /* 全局 :focus-visible 的 outline-offset 是 2px(环画在盒外),而父级
+     .social-detail-media 是 overflow:hidden → 焦点环会被整圈裁掉。内收进自己盒内。 */
+  outline-offset: -3px;
 }

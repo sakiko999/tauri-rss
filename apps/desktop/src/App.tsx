@@ -13,7 +13,7 @@
 import { useEffect } from "react"
 import { useNavigate, useParams } from "react-router"
 import { setNavBridge, useDesktop, useNodeMeta } from "./store/index.ts"
-import type { NodeType } from "./store/nodes.ts"
+import { LIBRARY_NODE, type NodeType } from "./store/nodes.ts"
 import { TitleBar } from "./components/app/TitleBar.tsx"
 import { Rail } from "./components/app/Rail.tsx"
 import { Toaster } from "./components/app/Toaster.tsx"
@@ -22,6 +22,7 @@ import { HomeView } from "./views/home/HomeView.tsx"
 import { ReaderMain } from "./views/library/ReaderMain.tsx"
 import { MediaMain } from "./views/library/MediaMain.tsx"
 import { ShortVideoView } from "./views/library/ShortVideoView.tsx"
+import { LibraryPage } from "./views/library/LibraryPage.tsx"
 import { HotPane } from "./views/library/HotPane.tsx"
 import { DiscoverPage } from "./views/discover/DiscoverPage.tsx"
 import { SettingsPage } from "./views/manage/SettingsPage.tsx"
@@ -154,6 +155,8 @@ export default function App() {
               <DiscoverPage />
             ) : meta.node === "page:account" ? (
               <AccountPage />
+            ) : meta.node === LIBRARY_NODE ? (
+              <LibraryPage />
             ) : (
               <SettingsPage />
             )
