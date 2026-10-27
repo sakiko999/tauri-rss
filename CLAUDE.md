@@ -272,4 +272,8 @@ live 按平台二次聚合的 UI 侧。
   快照见 `docs/audit/doc-backlog-2026-10-27.md`）：
   分批按 `docs/audit/refactor-candidates.md` 排期；下一批优先 A1（服务端 diagnostics 归位）、
   A4（取消时 abortTabs）、A0b（runJob abort race），再做 B 段性能
+- [ ] 渠道翻页/去重审计（2026-10-27，55 渠道 + core 语义，快照
+  `docs/audit/pagination-dedupe-audit-2026-10-27.md`）：行动项 19。
+  下一批优先 A1 bili:dynamic offset 翻页 + A2 YouTube channel continuation（两个 high），
+  再 B1 xhs notesToItems 去重 / B3 season sort_by=desc / B2 append 页内去重 / A5+A8 huya rows
 <!-- cc-todo:end -->

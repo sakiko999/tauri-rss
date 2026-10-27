@@ -71,5 +71,6 @@
 | `audit/findings.md` | 审计结论（故意不改 / 误报证伪）+ 兼容补丁清单 + 破坏性变更 |
 | `audit/refactor-candidates.md` | 重构候选分档（A 建议做 / B 改到再动 / C 明确不改 / D 已核实） |
 | `audit/doc-backlog-2026-10-27.md` | docs 遗留问题全量核对快照（120 条：open/stale/fixed/decision + 下一批建议） |
+| `audit/pagination-dedupe-audit-2026-10-27.md` | 渠道翻页/去重全量审计快照（55 渠道 + core 语义；行动项 19 + 合理取舍 26，逐条反驳验证） |
 
 > 2026-10-21 的文档重组与合并/删除记录见当次 git 提交；本索引只列现存文档。
