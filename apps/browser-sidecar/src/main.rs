@@ -43,10 +43,11 @@ mod windows_impl {
 
     use webview2_com::Microsoft::Web::WebView2::Win32::*;
     use webview2_com::{
-        CoreWebView2EnvironmentOptions, CreateCoreWebView2ControllerCompletedHandler,
-        CreateCoreWebView2EnvironmentCompletedHandler, ProcessFailedEventHandler,
+        BrowserProcessExitedEventHandler, CoreWebView2EnvironmentOptions,
+        CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
+        ProcessFailedEventHandler,
     };
-    use windows::core::{w, BOOL, PCWSTR};
+    use windows::core::{w, Interface, BOOL, PCWSTR};
     use windows::Win32::Foundation::{
         CloseHandle, E_POINTER, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WAIT_ABANDONED,
         WAIT_OBJECT_0, WPARAM,
@@ -664,28 +665,50 @@ mod windows_impl {
             // sidecar。宿主 `SidecarDriver.ensureReady` 只看 sidecar 进程是否存活，
             // 浏览器进程死掉时它会一直返回死端口 —— 自愈的唯一出口就是本进程退出
             // （对照桌面载具 webview_browser.rs 的「每次 open 前 cdp_alive 探活」）。
-            // ⚠️ 只拦 BROWSER_PROCESS_EXITED：ProcessFailed 还包括渲染进程失败
-            // （WebView2 会自建进程），泛化处理会把在途抓取一起打断。
-            let handler = ProcessFailedEventHandler::create(Box::new(|_sender, args| {
-                let Some(args) = args else { return Ok(()) };
-                let mut kind = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
-                // SAFETY: COM 接口调用，args 由 WebView2 在回调线程传入且本次调用内有效。
-                if unsafe { args.ProcessFailedKind(&mut kind) }.is_err() {
-                    return Ok(());
+            // 主路用环境级 BrowserProcessExited：只对浏览器进程退出触发，不碰渲染进程。
+            // 旧 WebView2 Runtime（< 88）没有 Environment5，降级到 WebView 级
+            // ProcessFailed + kind 过滤（它也含渲染进程失败，必须过滤，否则打断在途抓取）。
+            let exited_handler = BrowserProcessExitedEventHandler::create(Box::new(|_sender, _args| {
+                // 主动关闭路径（idle/EOF/Ctrl+C → controller.Close）也会走到这里，
+                // SHUTDOWN 已置位时不重复打日志。
+                if !SHUTDOWN.load(Ordering::SeqCst) {
+                    eprintln!("[sidecar] 浏览器进程意外退出 → 自行关闭，等待宿主重启");
                 }
-                if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED {
-                    // 主动关闭路径（idle/EOF/Ctrl+C → controller.Close）也会走到这里，
-                    // SHUTDOWN 已置位时不重复打日志。
-                    if !SHUTDOWN.load(Ordering::SeqCst) {
-                        eprintln!("[sidecar] 浏览器进程意外退出 → 自行关闭，等待宿主重启");
-                    }
-                    request_shutdown();
-                }
+                request_shutdown();
                 Ok(())
             }));
             let mut token = 0i64;
-            if let Err(e) = unsafe { webview.add_ProcessFailed(&handler, &mut token) } {
-                eprintln!("[sidecar] add_ProcessFailed 失败（浏览器崩溃后只能等父进程兜底）: {e}");
+            match env.cast::<ICoreWebView2Environment5>() {
+                Ok(env5) => {
+                    if let Err(e) = unsafe { env5.add_BrowserProcessExited(&exited_handler, &mut token) }
+                    {
+                        eprintln!("[sidecar] add_BrowserProcessExited 失败（浏览器崩溃后只能等父进程兜底）: {e}");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[sidecar] 无 ICoreWebView2Environment5（{e}），回退 ProcessFailed");
+                    let failed_handler = ProcessFailedEventHandler::create(Box::new(|_sender, args| {
+                        let Some(args) = args else { return Ok(()) };
+                        let mut kind = COREWEBVIEW2_PROCESS_FAILED_KIND::default();
+                        // SAFETY: COM 接口调用，args 由 WebView2 在回调线程传入且本次调用内有效。
+                        if unsafe { args.ProcessFailedKind(&mut kind) }.is_err() {
+                            return Ok(());
+                        }
+                        if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED {
+                            if !SHUTDOWN.load(Ordering::SeqCst) {
+                                eprintln!("[sidecar] 浏览器进程意外退出 → 自行关闭，等待宿主重启");
+                            }
+                            request_shutdown();
+                        }
+                        Ok(())
+                    }));
+                    let mut fallback_token = 0i64;
+                    if let Err(e) =
+                        unsafe { webview.add_ProcessFailed(&failed_handler, &mut fallback_token) }
+                    {
+                        eprintln!("[sidecar] add_ProcessFailed 失败（浏览器崩溃后只能等父进程兜底）: {e}");
+                    }
+                }
             }
 
             self.environment = Some(env);

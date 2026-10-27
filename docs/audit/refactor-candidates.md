@@ -178,9 +178,11 @@ case 写类型谓词，收益为负。
   500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
   `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
   → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。桌面载具已有同款兜底（`webview_browser.rs:414`）。
-  ✅ 已修（2026-10-27）：`add_ProcessFailed` 只拦 `BROWSER_PROCESS_EXITED` → `request_shutdown()`
-  让 sidecar 自行退出、由宿主 `ensureReady` 重启整载具；渲染进程失败 WebView2 会自建进程，不拦，
-  避免打断在途抓取。真机验证：杀 sidecar 的 msedgewebview2 子进程 → sidecar 干净退出（exitCode 0）。
+  ✅ 已修（2026-10-27）：主路 `ICoreWebView2Environment5::add_BrowserProcessExited` →
+  `request_shutdown()`，sidecar 自行退出、由宿主 `ensureReady` 重启整载具；旧 Runtime（< 88）
+  没有 Environment5 才降级 `add_ProcessFailed` + 只拦 `BROWSER_PROCESS_EXITED`（渲染进程失败
+  WebView2 会自建，泛化会打断在途抓取）。真机验证：杀 sidecar 的 msedgewebview2 子进程 →
+  sidecar 干净退出（exitCode 0）。
 - **A0b `rss --service` 的 job 表可能残留**（`apps/cli/src/service/server.ts:488-514`）：`runJob` 的
   `jobs.delete` 只在 `finally`，被 cancel 但底层 await 未返回时条目与 AbortController 一直挂着。
   **2026-10-27 复核**：实际等待有界（core refresh 自带 abort race、CDP 命令 30s、HTTP 超时），

@@ -72,9 +72,10 @@
 ## open · high（0）
 
 - ~~**[high/medium]** A0 browser-sidecar 未接 WebView2 浏览器进程退出事件~~
-  ✅ 已修（2026-10-27，追加）：`apps/browser-sidecar/src/main.rs` 注册 `add_ProcessFailed`，
-  只拦 `BROWSER_PROCESS_EXITED` → `request_shutdown()` 让 sidecar 自行退出、宿主
-  `ensureReady` 重启；渲染进程失败不拦（WebView2 自建进程，避免打断在途抓取）。
+  ✅ 已修（2026-10-27，追加）：`apps/browser-sidecar/src/main.rs` 主路注册
+  `ICoreWebView2Environment5::add_BrowserProcessExited` → `request_shutdown()` 让 sidecar 自行退出、
+  宿主 `ensureReady` 重启；旧 Runtime（< 88）无 Environment5 才降级 `add_ProcessFailed` + 只拦
+  `BROWSER_PROCESS_EXITED`（渲染进程失败不拦，WebView2 自建进程，避免打断在途抓取）。
   真机验证：杀 sidecar 的 msedgewebview2 子进程 → sidecar 干净退出（exitCode 0）。
 
 
