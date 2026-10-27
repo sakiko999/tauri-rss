@@ -17,6 +17,7 @@ import type {
   ResolvePlayback,
   Subscription,
   SubscriptionGroup,
+  SubscriptionPatch,
 } from "@amoeba/core"
 
 /** 协议整数：不兼容变更才 +1；同版本内只做加法。 */
@@ -131,7 +132,7 @@ export interface RpcMethodMap {
   "subscriptions.get": { params: { id: string }; result: Subscription | undefined }
   "subscriptions.add": { params: { subscription: Subscription }; result: void }
   "subscriptions.update": {
-    params: { id: string; patch: Partial<Omit<Subscription, "id">> }
+    params: { id: string; patch: SubscriptionPatch }
     result: Subscription | undefined
   }
   "subscriptions.remove": { params: { id: string }; result: void }

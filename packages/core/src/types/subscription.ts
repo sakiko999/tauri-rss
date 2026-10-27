@@ -22,6 +22,17 @@ export interface Subscription {
   refreshIntervalSec?: number
 }
 
+/**
+ * 订阅更新补丁。
+ *
+ * ⚠️ 可选字段的「清除」必须用 `null` 表达：更新走 RPC 的 JSON，`undefined`
+ * 会在序列化时被丢掉 → 服务端收到「没有这个键」→ 旧值保留（「把 TTL 改回 0」
+ * 静默失败）。repo 侧把 `null` 当作「删掉该键」。
+ */
+export type SubscriptionPatch = Partial<Omit<Subscription, "id" | "refreshIntervalSec">> & {
+  refreshIntervalSec?: number | null
+}
+
 /** 一个用户自定义分组(follow 树节点)。 */
 export interface SubscriptionGroup {
   id: string

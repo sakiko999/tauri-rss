@@ -13,6 +13,7 @@ import type {
   ResolvePlayback,
   Subscription,
   SubscriptionGroup,
+  SubscriptionPatch,
 } from "@amoeba/core"
 import type { SortMode, ViewFilter, ViewResult } from "./selectors.ts"
 
@@ -194,7 +195,7 @@ export interface DesktopState {
     info: Record<string, string>,
     meta?: { groupId?: string | null; refreshIntervalSec?: number },
   ): Promise<string | null>
-  updateSubscription(id: string, patch: Partial<Omit<Subscription, "id">>): Promise<void>
+  updateSubscription(id: string, patch: SubscriptionPatch): Promise<void>
   removeSubscription(id: string): Promise<void>
   toggleSubEnabled(id: string): Promise<void>
   addGroup(title: string): Promise<string | null>

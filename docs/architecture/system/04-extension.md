@@ -407,7 +407,7 @@ player 的五个域在 `packages/player/src/log/index.ts`。域是全局平面�
 | 所有失败都显示「需要登录」/ 403 归错类 | 不要用正则猜。用 `errorKindOf(err)` + `ERROR_KIND_LABEL`；新抛错点 `ResolveError(kind)`。403 现归 `risk`，401/cookie 才是 `auth` | `packages/resolve/src/errors.ts` |
 | 移动端「需要登录」却无入口 | 移动端没有 CDP/扫码能力（注入侧已 `browser:false`，`Loginable` 无可用的移动端实现），需 UI 明示「请在桌面登录」；mobile 已冻结（2026-10-26），不再补交互 | `apps/mobile/src/main.tsx:16` |
 | 契约守卫对某个 `tpl:` 报红 | 该键确实只在一侧（属性写法已纳入扫描），先查 deserialize 是否读过、`READ_ONLY_OK` 是否需要解释 | `serialize-contract.check.ts:41-47`；§3.c |
-| 加了 rsshub 订阅却报 unknown channel | 入口没 `import "@amoeba/core/source/rsshub"`（模块副作用注册） | `core/source/rsshub.ts:97` |
+| 加了 rsshub 订阅却报 unknown channel | 该进程没 `import "@amoeba/core/source/rsshub"`（模块副作用注册）。注册点是**数据服务入口**与 CLI 入口（2026-10-27 已补，`service-data-check` 钉住） | `core/source/rsshub.ts:97`、`apps/cli/src/service/server.ts` |
 | 第二个实例拿不到数据/浏览器 | 数据服务按 `dataDir/instance.lock` 单实例（`instanceKey` 只作日志标识）+ sidecar profile mutex | `apps/cli/src/service/server.ts`（instance.lock）、`packages/host/src/node/browser-sidecar.ts:11-13` |
 | 测试/脚本里 `appHost.*` 报「not set」 | 先调 `injectNodeHost()`（或 `setHostCaps(...)`）——两者内部都幂等 `initAppHost()`；`@amoeba/host` 根入口**没有 import 副作用**，只 import 不建门面 | `packages/host/src/runtime.ts:45-47`、`:111-126` |
 | 改了样式却没生效/死区 | CSS 类名跨文件叠加、合成 WheelEvent 不滚动 | `docs/ops/smoke-check.md`（本节不在本文范围） |

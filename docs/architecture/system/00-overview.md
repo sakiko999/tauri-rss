@@ -51,7 +51,11 @@
 形态差异会造成可观测的行为差异，排查时必须先定位端：
 
 - **被动采集**：`passiveMode = channel.passive && !!appHost.browser`（`packages/core/src/data-layer.ts:518`）。数据服务进程与 CLI `--browser`（sidecar）时为真；desktop/mobile 因显式 `browser:false` 为假；CLI 未开 `--browser` 时为假——后两者回落主动抓取。
-- **RSSHub**：`rsshub` provider 靠 `import "@amoeba/core/source/rsshub"` 的模块副作用注册（`packages/core/src/source/rsshub.ts:97`）。desktop/mobile 入口都 import；CLI 没有，所以 `rsshub:*` 在 CLI 里表现为「渠道不存在」。
+- **RSSHub**：`rsshub` provider 靠 `import "@amoeba/core/source/rsshub"` 的模块副作用注册（`packages/core/src/source/rsshub.ts:97`）。
+  **DataLayer 跑在数据服务进程**，所以注册点在服务入口（`apps/cli/src/service/server.ts`）与 CLI 入口
+  （`apps/cli/src/main.ts`）；desktop 渲染进程不再持有 DataLayer（保留 import 无害）。
+  漏掉服务入口时 `rsshub:*` 订阅刷新会 `NoChannelError` —— `scripts/service-data-check.ts` 已钉住
+  `channels.list` 含 `rsshub:feed`。
 - **自动更新与 cookie 对齐**：只有 desktop 注入 updater；cookie 快照对齐只在服务 READY 后 1.5s 自动跑一次（`apps/cli/src/service/server.ts:1209-1219`）；desktop 的 `syncBrowserCookies()` 在 `RemoteDataLayer` 里直接返回 `[]`（`packages/service-client/src/index.ts:806-808`），不触发 RPC。
 - **数据库隔离**：dev / `tauri dev --release` / 生产分别用 `rss.dev.db` / `rss.release-debug.db` / `rss.db`（桌面选名 `apps/desktop/src/store/data-source.ts:20-25`，服务端白名单 `apps/src-tauri/src/service.rs:80`）；CLI 另有 `apps/cli/.data/rss.db`。四者互不共享。
 
