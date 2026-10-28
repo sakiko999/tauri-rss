@@ -114,21 +114,10 @@
 
 | 兼容点 | 旧形态 → 现行为 | 位置 |
 | --- | --- | --- |
-| 单房间 → 多房间 | 旧订阅只有 `info.roomId` → `parseRoomIds` 优先 `roomIds`，为空回退 `roomId`；4 个直播渠道的标题/链接也用 `info.roomIds ?? info.roomId` | `packages/resolve/src/utils/room-ids.ts:11-17`、`channels/{bili,douyu,huya,douyin}/live.ts` |
-| 内置 RSS 旧订阅 | 旧订阅只存 channel key、`info.url` 为空 → 用构造期 `defaultUrl` 兜底（`defaultInfo` 一键订阅能力本身也依赖它） | `packages/crawler/src/channels/rss/raw.ts:38-50` |
-| 抖音存量渠道 | `live:douyin:user` 不再出现在新建入口，但**仍注册**，旧订阅照常刷新；同时是 Discover 页「用户直播间」能力的判据 | `packages/crawler/src/register.ts:146`、`apps/desktop/src/views/discover/DiscoverPage.tsx:105-108` |
-| 旧正文格式 | 无 `tpl:contentFormat` → `content ? "html" : undefined`，RSS 文章本来就可能不写该字段 | `packages/core/src/processing/deserialize.ts:173` |
-
-**不能删的几处**：
-
-- `parseRoomIds` 与 4 个直播渠道的标题回退：**CLI 当前仍以 `{roomId}` 建订阅**
-  （`apps/cli/src/info.ts:18,26-28`，`rss refresh` 会落库）。要删先把 CLI 改成
-  `roomIds`。
-- 内置 RSS 的 `defaultUrl` 兜底：`apps/desktop/src/dev/seed.ts:43-52` 仍以
-  `info:{}` 建 `rss:hn`；改成显式写 url 后才可删。
-- `live:douyin:user` 的注册：`DiscoverPage.tsx:105` 用它判断是否渲染「用户直播间」
-  入口，删掉是功能回退，不是清理旧数据。
-- `contentFormat` 推断：属于当前 RSS 文章的常态兜底。
+| ~~单房间 → 多房间~~ | **已删（2026-10-28）**：只认 `info.roomIds`（逗号分隔）；CLI 示例参数改 `roomIds`，5 个直播渠道的标题/链接去掉 `?? info.roomId` 回退 | `packages/resolve/src/utils/room-ids.ts`、`channels/{bili,douyu,huya,douyin,twitch}/live.ts`、`apps/cli/src/info.ts` |
+| ~~内置 RSS 旧订阅~~ | **已删（2026-10-28）**：`fetchXml` 只认 `info.url`（`defaultUrl` 仅保留给 `defaultInfo` 一键订阅）；dev seed 显式写 url | `packages/crawler/src/channels/rss/raw.ts`、`apps/desktop/src/dev/seed.ts` |
+| ~~抖音存量渠道~~ | **已删（2026-10-28）**：`live:douyin:user` 渠道删除（主页链接解析本就在 `live:douyin`）；Discover「用户直播间」入口改用显式常量 `USER_ROOM_PLATFORMS` 判据 | `channels/douyin/`、`register.ts`、`DiscoverPage.tsx` |
+| 旧正文格式 | **保留**：无 `tpl:contentFormat` → `content ? "html" : undefined`，属当前 RSS 文章的常态兜底（不是旧数据兼容） | `packages/core/src/processing/deserialize.ts:173` |
 
 ## 六、旧输入归一化
 

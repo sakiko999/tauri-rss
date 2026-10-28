@@ -140,7 +140,7 @@ export class TwitchLiveChannel implements RssChannel {
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    const label = String(info.roomIds ?? info.roomId ?? "")
+    const label = String(info.roomIds ?? "")
     const first = normalizeTwitchLogin(parseRoomIds(info)[0])
     return {
       channelTitle: `Twitch 直播 ${label}`,

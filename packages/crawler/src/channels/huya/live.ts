@@ -82,8 +82,8 @@ export class HuyaLiveChannel implements RssChannel {
   }
   private channelOptions(info: SourceInfo): SerializeOptions {
     return {
-      channelTitle: `虎牙直播 ${String(info.roomIds ?? info.roomId ?? "")}`,
-      channelLink: `https://www.huya.com/${String(info.roomIds ?? info.roomId ?? "")}`,
+      channelTitle: `虎牙直播 ${String(info.roomIds ?? "")}`,
+      channelLink: `https://www.huya.com/${String(info.roomIds ?? "")}`,
     }
   }
 }

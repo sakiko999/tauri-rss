@@ -99,14 +99,8 @@ export function AddSubscriptionDialog({
   //   `rss:podcast` = 播客 RSS(解 enclosure → kind:audio,条目可播)。
   // 原先把整个 `rss:` 前缀都滤掉,导致**手工加外部 feed / 订阅一个播客都没有入口**。
   const RSS_GENERIC = new Set(["rss:url", "rss:podcast"])
-  // live:douyin:user 是存量渠道：新建订阅统一走 live:douyin(roomIds 已支持主页链接)，
-  // 这里不再列出，避免同一件事出现两个入口；渠道本身仍注册，旧订阅照常刷新。
-  const LEGACY_CHANNELS = new Set(["live:douyin:user"])
   const builtins = channels.filter(
-    (c) =>
-      !c.key.startsWith("rsshub:") &&
-      !LEGACY_CHANNELS.has(c.key) &&
-      (!c.key.startsWith("rss:") || RSS_GENERIC.has(c.key)),
+    (c) => !c.key.startsWith("rsshub:") && (!c.key.startsWith("rss:") || RSS_GENERIC.has(c.key)),
   )
   // 36 条内置 RSS 直链(Hacker News / V2EX 等)不铺成 chip(太噪),单独用下拉暴露。
   // 它们带 defaultInfo,选中即可直接订阅。

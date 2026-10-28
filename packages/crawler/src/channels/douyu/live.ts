@@ -80,8 +80,8 @@ export class DouyuLiveChannel implements RssChannel {
 
   private channelOptions(info: SourceInfo): SerializeOptions {
     return {
-      channelTitle: `斗鱼直播 ${String(info.roomIds ?? info.roomId ?? "")}`,
-      channelLink: `${BASE}/${String(info.roomIds ?? info.roomId ?? "")}`,
+      channelTitle: `斗鱼直播 ${String(info.roomIds ?? "")}`,
+      channelLink: `${BASE}/${String(info.roomIds ?? "")}`,
     }
   }
 }

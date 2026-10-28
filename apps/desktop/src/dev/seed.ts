@@ -12,8 +12,7 @@
  *   - 关键词搜索类渠道(`*:search` / `*:anchor` / `searchBiliUsers` 等)放进「搜索」组,
  *     默认**停用**(它们是发现页入口,不该当常驻订阅;启用即测);
  *   - 36 条内置 RSS 直链属**同一实现**(`rss:hn` 代表),不逐一建订阅,避免糊满列表;
- *   - 旧渠道 `live:douyin:user` 保留给存量订阅,新入口用 `live:douyin`(主页链接),
- *     种子不重复。
+ *   - 抖音直播种子走 `live:douyin`(roomIds,支持主页链接)。
  *
  * 数据供给以内置 crawler 为主:youtube/bili 视频、播客、直播、分区目录全走 crawler 渠道。
  *
@@ -49,7 +48,8 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     title: "Hacker News",
     enabled: true,
     groupId: "g-article",
-    info: {},
+    // 显式写 url（2026-10-28 起 fetch 不再用渠道 defaultUrl 兜底订阅参数）。
+    info: { url: "https://hnrss.org/frontpage" },
   },
   // ── 视频 ────────────────────────────────────────────────────────────────
   {

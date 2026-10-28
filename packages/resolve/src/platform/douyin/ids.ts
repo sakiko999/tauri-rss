@@ -6,7 +6,7 @@
  * 直接粘贴「抖音号」「直播间链接」或 `@抖音号`，这里统一收敛。
  *
  * 本模块只做**标识归一**（主页链接 → sec_uid），不调网络；sec_uid → `unique_id`
- * 需要匿名资料 API，见 `profile.ts` / 渠道 `live:douyin:user`。
+ * 需要匿名资料 API，见 `profile.ts` / 渠道 `live:douyin`。
  */
 
 /** 是否抖音用户主页链接（含 `share/user` 旧路径）。 */
@@ -53,7 +53,7 @@ export function parseDouyinSecUid(raw: string): string {
  * 其余原样返回（裸抖音号 / 短 ID / web_rid）。
  *
  * ⚠️ 主页链接会原样返回；调用方先用 `isDouyinProfileUrl` 拦住，再交给资料 API
- * 解析成 web_rid（`live:douyin` 与存量 `live:douyin:user` 共用）。
+ * 解析成 web_rid（`live:douyin` 渠道内完成）。
  */
 export function normalizeDouyinRoomId(raw: string): string {
   let s = raw.trim()

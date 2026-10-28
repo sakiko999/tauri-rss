@@ -99,7 +99,7 @@ export class BiliLiveChannel implements RssChannel {
 
   private channelOptions(info: SourceInfo): SerializeOptions {
     return {
-      channelTitle: `B站直播 ${String(info.roomIds ?? info.roomId ?? "")}`,
+      channelTitle: `B站直播 ${String(info.roomIds ?? "")}`,
       channelLink: "https://live.bilibili.com/",
     }
   }

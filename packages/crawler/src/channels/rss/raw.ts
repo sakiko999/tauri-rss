@@ -51,7 +51,10 @@ export class RawRssChannel implements RssChannel {
   }
 
   private async fetchXml(info: SourceInfo): Promise<string> {
-    const url = info.url ?? this.defaultUrl ?? ""
+    // ⚠️ 2026-10-28 删 `info.url ?? defaultUrl` 旧订阅兜底（全新安装为前提）。
+    // defaultUrl / defaultInfo 仍保留：内置源「一键订阅」的默认参数由 defaultInfo 提供，
+    // 订阅落库时 info 里已是显式 url。
+    const url = info.url ?? ""
     if (!url) throw new Error(`raw rss channel "${this.key}": url is required`)
     return httpText(url, { "user-agent": UA })
   }

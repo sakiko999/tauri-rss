@@ -12,7 +12,7 @@
  *
  * `roomIds` 接受 抖音号(unique_id) / 数字 short_id / 直播间链接 / 用户主页链接,
  * 归一后当 web_rid 用(2026-10-18 实测)。主页链接会先经匿名资料 API 换 sec_uid →
- * 抖音号,再走 enter;`live:douyin:user` 保留给存量订阅。
+ * 抖音号,再走 enter（`live:douyin:user` 渠道已于 2026-10-28 删除，能力并入本渠道）。
  */
 
 import { formatError } from "@amoeba/log"
@@ -79,7 +79,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
     const raw = parseRoomIds(info)
     if (!raw.length) throw new Error("live:douyin 需要 roomIds")
     // 允许抖音号 / 短 ID / 直播间 URL / 用户主页 / @抖音号 / 「抖音号：xxx」。
-    // 主页链接先匿名解析成抖音号(web_rid),与 live:douyin:user 用同一条资料 API;
+    // 主页链接先匿名解析成抖音号(web_rid)（与已删除的 live:douyin:user 同一条资料 API）;
     // 解析失败只跳过该条,全部失败时下面统一报错,不会静默清空内容。
     const profileErrors: string[] = []
     const resolved = await Promise.all(
@@ -124,7 +124,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    const raw = String(info.roomIds ?? info.roomId ?? "")
+    const raw = String(info.roomIds ?? "")
     const firstRaw = raw.split(/[,，\s]+/)[0] ?? ""
     // 主页链接这里拿不到解析后的 web_rid(channelOptions 是同步的),用通用标题兜底。
     const first = isDouyinProfileUrl(firstRaw) ? "" : normalizeDouyinRoomId(firstRaw)
@@ -137,7 +137,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
 
 /**
  * enter API 响应 → Live item。
- * `live:douyin` 单房间抓取与 `live:douyin:user` 共用（后者已把 sec_uid 换成 web_rid）。
+ * `live:douyin` 单房间抓取与主页链接解析（sec_uid → web_rid）共用。
  */
 export function douyinLiveItem(res: Record<string, any>, webRid: string, sourceId: string, fetchedAt = now()): Live {
   const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>

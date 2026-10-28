@@ -24,6 +24,13 @@ import { BoardList } from "./BoardList.tsx"
 import { PlatformBrowser } from "./PlatformBrowser.tsx"
 import { type Cap, CAP_LABEL, CAPS, PLATFORMS } from "./platforms.ts"
 
+/**
+ * 支持「用户主页 → 直播间」入口的平台（目前只有抖音）。
+ * 落地点统一 `live:<platform>`（roomIds 接受主页链接）；2026-10-28 起不再依赖
+ * `live:<platform>:user` 渠道注册（该渠道已删除，旧订阅不再兼容）。
+ */
+const USER_ROOM_PLATFORMS = new Set(["douyin"])
+
 export function DiscoverPage() {
   const dl = useDesktop((s) => s.dl)
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
@@ -98,13 +105,12 @@ export function DiscoverPage() {
               {PLATFORMS.map((p) => {
                 const c = caps[p.id]
                 // 用户主页 → 直播间的入口（目前只有抖音）。落地点统一用 live:<platform>
-                // （roomIds 已支持主页链接），这样新订阅能和搜索添加/并入已有共用一条渠道；
-                // live:douyin:user 只保留给存量订阅。
-                const userCh = channels.find((ch) => ch.key === `live:${p.id}:user`)
-                const userSubKey = userCh ? (channels.find((ch) => ch.key === `live:${p.id}`)?.key ?? userCh.key) : ""
+                // （roomIds 已支持主页链接）。能力判据是显式常量而不是渠道注册表：
+                // 2026-10-28 已删除 live:douyin:user 渠道（旧订阅不再兼容）。
+                const userSubKey = USER_ROOM_PLATFORMS.has(p.id) ? `live:${p.id}` : ""
                 const supported = CAPS.filter((k) => c[k])
                 // 没有任何入口的平台（如微博/小红书）不摆一张空卡；它们的内容走「可订阅榜单」。
-                if (supported.length === 0 && !userCh) return null
+                if (supported.length === 0 && !userSubKey) return null
                 return (
                   <div
                     className="platform-card"
@@ -153,7 +159,7 @@ export function DiscoverPage() {
                           {CAP_LABEL.anchor}
                         </button>
                       ) : null}
-                      {userCh ? (
+                      {userSubKey ? (
                         <button className="chip chip-sm" onClick={() => setUserDialogKey(userSubKey)}>
                           用户直播间
                         </button>
