@@ -63,6 +63,22 @@ export function videoReferrerFor(url: string): string | undefined {
  */
 export const XHR_ORIGIN_RULES: Array<[string, string]> = [["playlist.ttvnw.net", "https://www.twitch.tv/"]]
 
+/**
+ * 媒体直链需要**去掉 ` Edg/<ver>` UA 段**的 host 后缀（Rust 侧改写）。
+ *
+ * 喜马拉雅 CDN（`aod.cos.tx.xmcdn.com`）的 WAF 把含 `Edg/156.0.0.0` 的完整 UA 串
+ * 列进了黑名单，回 **403 text/html**；403 又被 ORB 拦成 `ERR_BLOCKED_BY_ORB`，媒体元素
+ * 只报 `Format error`（表象像解码问题，实为 UA 黑名单）。2026-10-29 实测：
+ * `Edg/156` 恒 403，`Edg/155` / `Edg/157` / `Chrome/156` / 无 UA 全部 206 合法音频。
+ *
+ * 只去掉 ` Edg/<ver>` 一段（保留真实 Chrome 版本），不硬编码 UA 串 —— WebView2
+ * 升级后版本号自动跟随。
+ *
+ * 本表**无 JS 消费方**：Rust（`media_referer.rs`）按它改写；TS 持有只为「平台知识
+ * 单一权威在 resolve + parity 守护」。
+ */
+export const MEDIA_UA_STRIP_HOSTS: string[] = ["xmcdn.com", "ximalaya.com"]
+
 /** XHR 请求 url 命中规则 → 应改写成的站内 Origin;未命中返回 undefined。 */
 export function xhrOriginFor(url: string): string | undefined {
   const m = url.match(/^https?:\/\/([^/]+)/)

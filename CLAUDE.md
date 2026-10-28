@@ -283,7 +283,8 @@ live 按平台二次聚合的 UI 侧。
   （三批 `c3eb177` / `765771f` / `0c0a802`）；余 A6 RSS 入站上限 / A9 搜索候选翻页 /
   A10 youtube:playlist InnerTube 化单独立项，B7/B8/B9 low 留观
 - [ ] 修 huya 403 时发现根 tsconfig.app.json 的 `types:["vite/client"]` 靠 vite 根提升才成立（2026-10-28 起已改为根 package.json 显式声明 vite ^8.1.5）；若未来再动 workspace 布局，注意 player/ui tsc 会先断
-- [!] 媒体加载统一策略（2026-10-28）：平台知识只在 resolve 规则表，Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
+- [!] 媒体加载统一策略（2026-10-28）：平台知识只在 resolve 规则表，Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin、MEDIA 去 Edge UA 品牌），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
+- [!] **媒体 403 的表象是 `Format error`**（2026-10-29）：CDN 的 403 text/html 被 ORB 拦成 `net::ERR_BLOCKED_BY_ORB`，`<audio>/<video>` 只报 `MEDIA_ELEMENT_ERROR: Format error`，看着像解码失败。喜马拉雅 CDN（`xmcdn.com`）的 WAF 把含 `Edg/156.0.0.0` 的 UA 串列黑（`Chrome/156`、`Edg/155`、`Edg/157` 全放行）——`UA_STRIP_EDG_HOSTS` 在 Rust 侧只删 ` Edg/<ver>` 段，不硬编码 UA。排查先看 CDP `Network.loadingFailed` 的 `ERR_BLOCKED_BY_ORB` + 原始状态码，别往解码器上找。
 - [!] 微博匿名只给首页 10 条，翻页（page/since_id/weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录
 - [ ] 登录微博后复验 `weibo:user` 首屏自动预加载第二页真正落地（本次改动只验到匿名态）
 - [!] 补全（`resolveDetail`）**不保证纯文本**：feed 自带全文时 `raw.ts` 原样返回 HTML（contentFormat=html）；桌面镜像剥掉 article 的 content，所以阅读器必走补全 —— 消费侧必须按返回体的 contentFormat 渲染

@@ -149,6 +149,9 @@ export function PlayerPage() {
   // 听视频(?mode=listen):只对点播视频有意义 —— live 无独立音轨、audio 本来就是听的。
   // 流是 DASH 才真能听(bili/youtube);durl 回退流剥不出音轨时播放器自动照常播视频。
   const listening = mode === "listen" && !isLive && item.kind === "video"
+  // 音频版式:播客单集(kind=audio 且有直链)与视频的「听」模式共用一套
+  // 封面 + 音频控件页(原型的 pod 播放页子集:进度/±15-30/倍速/睡眠定时)。
+  const audioMode = listening || (item.kind === "audio" && !!(item as { stream?: MediaStream }).stream)
   // 弹幕:设置总开关 × 播放页临时覆盖。关掉时 resolve 结果里的 danmaku 不交给播放器。
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
 
@@ -183,16 +186,18 @@ export function PlayerPage() {
           <div {...overlayBlock("player-main-col", "player:main-col")}>
             <div
               className="stage"
-              data-listen={listening ? "on" : undefined}
+              data-audio={audioMode ? "on" : undefined}
               {...overlayBlock("player-stage", "player:stage")}
             >
               {/* PlayableMedia/VideoShell 自带 relative + aspect-ratio 容器与控件层。
                   ⚠️ **播放器无圆角**(常见播放器都是满幅方角设计)——player 包方角,
                   这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。 */}
-              {listening && mediaUrl(item) ? (
-                /* 听视频没有画面:封面当 artwork(约稿原型的 pod-stage 形态),音频条在其下。 */
-                <div className="listen-art" {...overlayBlock("listen-art", "player:listen-art")}>
-                  <MediaImage src={mediaUrl(item)} ratio={1} fill />
+              {audioMode && mediaUrl(item) ? (
+                /* 音频页没有画面:封面当 artwork(原型 pod-stage 的形态),控件在其下。
+                   ⚠️ 不要传 fill:那会给 h-full 且不带 aspect-ratio,而 .audio-art 只定宽度
+                   → 高度塌成 0(封面不显示)。ratio=1 由 MediaImage 自己撑出正方形。 */
+                <div className="audio-art" {...overlayBlock("audio-art", "player:audio-art")}>
+                  <MediaImage src={mediaUrl(item)} ratio={1} alt="" />
                 </div>
               ) : null}
               <PlayableMedia
@@ -278,10 +283,13 @@ export function PlayerPage() {
                     </Button>
                   )
                 ) : null}
-                {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。 */}
-                <Button variant="quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
-                  <Icon name="monitor" size={14} /> 剧场模式
-                </Button>
+                {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。
+                    音频页没有画面,剧场模式无意义。 */}
+                {audioMode ? null : (
+                  <Button variant="quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
+                    <Icon name="monitor" size={14} /> 剧场模式
+                  </Button>
+                )}
                 <Button variant="quiet" onClick={() => addToQueue(item)}>
                   <Icon name="queue" size={14} /> 加入队列
                 </Button>

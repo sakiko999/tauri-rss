@@ -25,9 +25,12 @@
   governor 是 host 内建能力，未注入 http 也恒可用；CDP 操作必须过 `browserGate` ——
   等级/冷却/统计见 `docs/risk/crawler-risk-control.md`
 - **防盗链注入不暴露门面**：Windows 桌面 Rust 在 WebView2 网络层改写请求头（图片/
-  视频 Referer、XHR/fetch Origin，`apps/src-tauri/src/media_referer.rs`），消费侧
-  （`MediaImage`、实况视频）无感知、恒直连——`nativeMediaReferer` 能力探测已删
-  （2026-10-28），见 `docs/ui/ui-conventions.md`
+  视频 Referer、XHR/fetch Origin、媒体 UA 去 Edge 品牌，`apps/src-tauri/src/media_referer.rs`），
+  消费侧（`MediaImage`、实况视频、播客音频）无感知、恒直连——`nativeMediaReferer`
+  能力探测已删（2026-10-28），见 `docs/ui/ui-conventions.md`
+- **媒体 403 的表象是 `Format error`**：被 ORB 拦掉的 403 text/html 在 `<audio>/<video>`
+  上只报 `MEDIA_ELEMENT_ERROR: Format error`，看起来像解码失败。排查先看 CDP
+  `Network.loadingFailed` 的 `net::ERR_BLOCKED_BY_ORB` 与原始响应状态，再查规则表。
 
 **storage 四态（2026-10-26）**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）·
 desktop 拒绝后端（`injectTauriHost({storage:false})`，读写即抛）· mobile `SqliteStorageBackend`

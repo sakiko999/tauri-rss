@@ -8,7 +8,7 @@
  *
  * 渲染分发(单流,stream 由 useStreamSelection 选出):
  *   - mp4/webm → VideoShell 原生 <video>;  m3u8/flv/dash → VideoShell + useMediaStream;
- *   - mp3/aac/ogg → AudioShell 原生 <audio>(无画面,保留浏览器控件);
+ *   - mp3/aac/ogg/m4a → AudioShell(无画面,自绘控件);
  *   - rtmp:// 协议 → 浏览器播不了,占位提示。
  *
  * 注意:原生 <video>/<audio> 无法带自定义 header(如 bilibili 直链的 referer)。
@@ -242,10 +242,12 @@ export function PlayableMedia({
   // 流媒体驱动(hls/flv/dash)→ useMediaStream 接管 video;原生 src 由 VideoShell 写。
   const needsStreamPlayer = !!playStream && isStreamingStream(playStream)
   const videoRef = useRef<HTMLVideoElement | null>(null)
-  // 听视频分支的媒体元素(dash.js attachView 收 HTMLMediaElement,<audio> 可直接挂)。
+  // 音频分支的媒体元素(听视频的 dash.js attachView 收 HTMLMediaElement;<audio> 可直接挂)。
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  /** 当前模式实际承载播放的元素(续播/进度/播完监听都挂它)。 */
-  const mediaEl = () => (listenMode ? audioRef.current : videoRef.current)
+  /** 音频承载元素：听视频(DASH)与渐进式音频(播客)都用 <audio>,其余走 video。 */
+  const audioElMode = listenMode || (!!stream && !needsStreamPlayer && isProgressiveAudio(stream))
+  /** 当前承载播放的元素(续播/进度/播完监听都挂它)。 */
+  const mediaEl = () => (audioElMode ? audioRef.current : videoRef.current)
 
   // autoPlay 语义:用户点过「播放」(resolved !== null)→ 自动带声起播;初始流未点击不自动播。
   // ⚠️ props 已带可播流(播客直链,免 resolve)时 resolved 恒 null,但流已在手 → 也应自动播。
@@ -291,6 +293,25 @@ export function PlayableMedia({
     el.addEventListener("canplay", attemptUnmuted, { once: true })
     return () => el.removeEventListener("canplay", attemptUnmuted)
   }, [autoPlay, isNativeStream, stream?.url])
+
+  // 渐进式音频(播客)的自动播放:AudioShell 的 <audio> 是 preload="metadata",没人
+  // play() 就永远不起播。见下方 effect。
+  const isNativeAudio = !!stream && !needsStreamPlayer && isProgressiveAudio(stream)
+
+  useEffect(() => {
+    if (!autoPlay || !isNativeAudio) return
+    const el = audioRef.current
+    if (!el) return
+    // ⚠️ 两处与视频分支**故意不同**：
+    // 1) 直接 play()，不等 canplay —— preload 非 auto 时 canplay 未必派发（0.8.0 实测：
+    //    metadata 到手、时长正确，但 paused 恒 true），play() 自己会启动加载。
+    // 2) 不走 attemptPlayWithMuteFallback —— 纯音频的「静音降级」= 进度在走却一点声没有，
+    //    与坏了无法区分。被 autoplay policy 拦就留在暂停态，等用户按播放键（手势内恒放行）。
+    void el.play().catch((e: unknown) => {
+      if ((e as { name?: string })?.name !== "NotAllowedError") log.playFailed({ err: e })
+    })
+    // stream?.url 变化 = 换条目/换源，重新起播。
+  }, [autoPlay, isNativeAudio, stream?.url])
 
   // ── 续播:起播跳转 + 进度上报 ──────────────────────────────────────────────
   // 跳转只做**一次**(resumedRef;≤3s 视为「从头看」不跳 —— 否则片头几秒的进度会被
@@ -466,13 +487,10 @@ export function PlayableMedia({
     return <MediaState title="无法直接播放" detail="该流为 rtmp 协议,当前浏览器无法直接播放。" />
   }
 
-  // 听视频:audio-only DASH 挂 <audio>(useMediaStream 里 dash.js attachView 收
-  // HTMLMediaElement)。保留原生控件 —— 与 AudioShell 同哲学:音频不套自定义壳。
-  // 档位条不出现:各档 MPD 剥完音轨相同,切档在听的模式下无意义。
+  // 听视频:audio-only DASH 交 AudioShell(自绘控件),dash.js 经 useMediaStream
+  // attach 到它内部的 <audio>。档位条不出现 —— 各档 MPD 剥完音轨相同,切档无意义。
   if (listenMode) {
-    return (
-      <audio ref={audioRef} controls autoPlay={autoPlay} className={["w-full", className].filter(Boolean).join(" ")} />
-    )
+    return <AudioShell mediaRef={audioRef} className={className} onError={(e) => setPlayError(e)} />
   }
 
   // 渐进式视频 / HLS / FLV / DASH → VideoShell 外壳(自定义控件)。
@@ -497,23 +515,18 @@ export function PlayableMedia({
     )
   }
 
-  // 渐进式音频(mp3/aac/ogg)→ AudioShell 原生 <audio>。
+  // 渐进式音频(播客单集:mp3/m4a/aac/ogg…)→ AudioShell 自绘控件。
+  // 续播/进度/播完由本组件的 mediaEl() 统一挂(mediaEl 在音频模式下返回 audioRef)。
   if (isProgressiveAudio(stream)) {
     return (
       <AudioShell
+        mediaRef={audioRef}
         src={stream.url}
-        autoPlay={autoPlay}
-        startAtSec={startAtSec}
-        onProgress={onProgress}
-        onEnded={onEnded}
+        className={className}
         onError={(e) => {
           setPlayError(e)
           onError?.(e)
         }}
-        qualityOptions={qualityOptions}
-        activeQuality={stream.rate}
-        onQuality={switchQuality}
-        className={className}
       />
     )
   }

@@ -17,12 +17,12 @@
 
 use tauri::{Manager, Runtime};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2Controller, ICoreWebView2WebResourceRequestedEventArgs,
+    ICoreWebView2Controller, ICoreWebView2Settings2, ICoreWebView2WebResourceRequestedEventArgs,
     COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE,
     COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST,
 };
 use webview2_com::WebResourceRequestedEventHandler;
-use windows::core::{HSTRING, PWSTR};
+use windows::core::{Interface, HSTRING, PWSTR};
 use windows_sys::Win32::System::Com::CoTaskMemFree;
 
 /// 图片防盗链规则(host 后缀 → 站内 Referer)。与 TS `MEDIA_REFERRERS` 同步。
@@ -39,6 +39,17 @@ const VIDEO_REFERRERS: &[(&str, &str)] = &[
 /// Twitch playlist 域对页面源 Origin(`*.tauri.localhost`)回 403,hls.js 的 manifest
 /// 请求(JS 禁改 Origin)只能在这层改写 —— 详见 resolve/media-referrer.ts 注释。
 const XHR_ORIGIN_RULES: &[(&str, &str)] = &[("playlist.ttvnw.net", "https://www.twitch.tv/")];
+
+/// 媒体请求**去 Edge 品牌**(host 后缀)。与 TS `MEDIA_UA_STRIP_HOSTS` 同步。
+///
+/// 喜马拉雅 CDN 的 WAF 对含 `Edg/156.0.0.0` 的完整 UA 串回 **403 text/html**
+/// (2026-10-29 实测:`Edg/156` 403 ×4,而 `Edg/155`/`Edg/157`/`Chrome/156`/
+/// 无 UA 全部 206 合法 MP4A)。403 又被 ORB 拦成 `net::ERR_BLOCKED_BY_ORB`,
+/// 媒体元素只报 `MEDIA_ELEMENT_ERROR: Format error` —— 表象像解码问题,实为 UA 黑名单。
+///
+/// 处理:只把 ` Edg/<ver>` 一段去掉(保留真实 Chrome 版本),不硬编码 UA 串 ——
+/// 宿主升级 WebView2 后版本号自动跟随,不必维护。
+const UA_STRIP_EDG_HOSTS: &[&str] = &["xmcdn.com", "ximalaya.com"];
 
 /// 在 `setup` 阶段调用一次。失败只打日志，不影响应用启动(前端回退 blob 隧道)。
 pub fn install<R: Runtime>(app: &tauri::App<R>) {
@@ -61,9 +72,27 @@ pub fn install<R: Runtime>(app: &tauri::App<R>) {
 unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Result<()> {
     let core = controller.CoreWebView2()?;
 
+    // 去品牌 UA 在安装期算一次(回调里不能做字符串查找外的活)。取 Settings 里的 UA
+    // (默认即 WebView2 真实 UA)而不是请求头:拦截发生时 UA 还没由网络栈写入请求头。
+    // ⚠️ UserAgent 访问器在 **Settings2**(WebView2 ≥ 1.0.864);旧运行时不支持 → None,
+    // 那种环境本来也不会跑到这里(整包要求现代 WebView2),静默不改写即可。
+    let debranded_ua: Option<String> = (|| {
+        let settings = core.Settings().ok()?.cast::<ICoreWebView2Settings2>().ok()?;
+        let mut ua = PWSTR::null();
+        settings.UserAgent(&mut ua).ok()?;
+        let ua_ptr = ua.0 as *const core::ffi::c_void;
+        let full = ua.to_string().unwrap_or_default();
+        if !ua_ptr.is_null() {
+            // SAFETY: 出参所有权已随 out-param 转移给本作用域。
+            unsafe { CoTaskMemFree(ua_ptr) };
+        }
+        let stripped = strip_edge_brand(&full);
+        (stripped != full).then_some(stripped)
+    })();
+
     // 事件回调只做 URI 解析 + 一次 SetHeader；禁止网络/async/大分配。
     let handler = WebResourceRequestedEventHandler::create(Box::new(
-        |_sender, args: Option<ICoreWebView2WebResourceRequestedEventArgs>| {
+        move |_sender, args: Option<ICoreWebView2WebResourceRequestedEventArgs>| {
             let Some(args) = args else { return Ok(()) };
             let request = args.Request()?;
             let mut uri = PWSTR::null();
@@ -95,11 +124,18 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
                 }
                 return Ok(());
             }
-            let rules = if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA {
-                VIDEO_REFERRERS
-            } else {
-                IMAGE_REFERRERS
-            };
+            let is_media = context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA;
+            // 媒体去 Edge 品牌(喜马拉雅 CDN 的 UA 黑名单,见 UA_STRIP_EDG_HOSTS)。
+            // ⚠️ 与 Referer 规则**互不依赖**:命中 UA 规则但没 Referer 规则的域(如
+            // xmcdn.com 音频)也必须改写,所以先处理 UA 再按需设 Referer。
+            if is_media {
+                if let Some(ua) = debranded_ua.as_deref() {
+                    if host_matches(UA_STRIP_EDG_HOSTS, &host) {
+                        headers.SetHeader(&HSTRING::from("User-Agent"), &HSTRING::from(ua))?;
+                    }
+                }
+            }
+            let rules = if is_media { VIDEO_REFERRERS } else { IMAGE_REFERRERS };
             let Some(referrer) = suffix_rule_for(rules, &host) else {
                 return Ok(());
             };
@@ -141,6 +177,21 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
             }
         }
     }
+    // 只改 UA 的域(音频 CDN 等)按 MEDIA context 注册。
+    for host in UA_STRIP_EDG_HOSTS {
+        for scheme in ["https", "http"] {
+            for pattern in [
+                format!("{scheme}://{host}/*"),
+                format!("{scheme}://*.{host}/*"),
+            ] {
+                let pattern = HSTRING::from(pattern);
+                let _ = core.AddWebResourceRequestedFilter(
+                    &pattern,
+                    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA,
+                );
+            }
+        }
+    }
     // XHR/fetch 域(hls.js manifest 等)单独按请求 context 注册。
     for (host, _) in XHR_ORIGIN_RULES {
         for scheme in ["https", "http"] {
@@ -168,11 +219,32 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
 fn suffix_rule_for(rules: &'static [(&'static str, &'static str)], host: &str) -> Option<&'static str> {
     rules
         .iter()
-        .find(|(suffix, _)| {
-            host == *suffix
-                || host
-                    .strip_suffix(suffix)
-                    .is_some_and(|prefix| prefix.ends_with('.'))
-        })
+        .find(|(suffix, _)| host_matches_one(suffix, host))
         .map(|(_, referrer)| *referrer)
+}
+
+/// host 是否命中后缀列表(精确或 `.suffix` 边界)。
+fn host_matches(suffixes: &[&str], host: &str) -> bool {
+    suffixes.iter().any(|s| host_matches_one(s, host))
+}
+
+fn host_matches_one(suffix: &str, host: &str) -> bool {
+    host == suffix
+        || host
+            .strip_suffix(suffix)
+            .is_some_and(|prefix| prefix.ends_with('.'))
+}
+
+/// 去掉 UA 里的 ` Edg/<ver>` 段(`Mozilla/5.0 … Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0`
+/// → `… Safari/537.36`)。没命中返回原串(调用方据此判断要不要注册改写)。
+fn strip_edge_brand(ua: &str) -> String {
+    let Some(start) = ua.find(" Edg/") else {
+        return ua.to_string();
+    };
+    let after = &ua[start + 1..];
+    let end = after.find(' ').map_or(ua.len(), |i| start + 1 + i);
+    let mut out = String::with_capacity(ua.len());
+    out.push_str(ua[..start].trim_end());
+    out.push_str(&ua[end..]);
+    out
 }

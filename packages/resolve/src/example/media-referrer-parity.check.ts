@@ -9,7 +9,7 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
-import { MEDIA_REFERRERS, VIDEO_REFERRERS, XHR_ORIGIN_RULES } from "../media-referrer.ts"
+import { MEDIA_REFERRERS, MEDIA_UA_STRIP_HOSTS, VIDEO_REFERRERS, XHR_ORIGIN_RULES } from "../media-referrer.ts"
 
 const RUST = "apps/src-tauri/src/media_referer.rs"
 
@@ -22,10 +22,24 @@ function rustRules(name: RuleName): Array<[string, string]> {
   return [...block!.matchAll(/\("([^"]+)",\s*"([^"]+)"\)/g)].map((m) => [m[1]!, m[2]!])
 }
 
+/** 字符串列表型规则(host 后缀):Rust 写法 `const X: &[&str] = &["a", "b"];`。 */
+function rustHostList(name: string): string[] {
+  const src = readFileSync(RUST, "utf8")
+  const block = src.match(new RegExp(`const ${name}:[^=]*=\\s*&\\[([\\s\\S]*?)\\];`))?.[1]
+  assert.ok(block, `Rust 里找不到 ${name}`)
+  return [...block!.matchAll(/"([^"]+)"/g)].map((m) => m[1]!)
+}
+
 const sorted = (rows: Array<[string, string]>) => [...rows].sort(([a], [b]) => a.localeCompare(b))
+const sortedList = (rows: string[]) => [...rows].sort((a, b) => a.localeCompare(b))
 
 assert.deepEqual(sorted(rustRules("IMAGE_REFERRERS")), sorted(MEDIA_REFERRERS), "图片 Referer 规则两边不一致")
 assert.deepEqual(sorted(rustRules("VIDEO_REFERRERS")), sorted(VIDEO_REFERRERS), "视频 Referer 规则两边不一致")
 assert.deepEqual(sorted(rustRules("XHR_ORIGIN_RULES")), sorted(XHR_ORIGIN_RULES), "XHR Origin 规则两边不一致")
+assert.deepEqual(
+  sortedList(rustHostList("UA_STRIP_EDG_HOSTS")),
+  sortedList(MEDIA_UA_STRIP_HOSTS),
+  "UA 去品牌 host 规则两边不一致",
+)
 
-console.log("✔ Referer/Origin 规则一致性通过（TS resolve/media-referrer.ts ↔ Rust media_referer.rs）")
+console.log("✔ Referer/Origin/UA 规则一致性通过（TS resolve/media-referrer.ts ↔ Rust media_referer.rs）")

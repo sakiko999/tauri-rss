@@ -27,23 +27,20 @@
   max-width: calc((100dvh - 300px) / 0.5625);
   margin-inline: auto;
 }
-/* 听视频(只播 DASH 音轨):没有 16:9 黑舞台 —— 封面当 artwork,原生音频条在其下,
-   竖排居中(形态参考原型的 pod-stage,取其最小子集:artwork + 音频条)。 */
-.stage[data-listen="on"] {
+/* 音频页(播客单集 / 听视频):没有 16:9 黑舞台 —— 封面当 artwork,音频控件在其下,
+   竖排居中(原型的 pod-stage 最小子集:artwork + 进度/±15-30/倍速/睡眠定时)。 */
+.stage[data-audio="on"] {
   max-width: none;
   display: grid;
   justify-items: center;
   gap: var(--sp-5);
   padding-block: var(--sp-6);
 }
-.listen-art {
+.audio-art {
   width: min(300px, 68%);
   border-radius: var(--r-lg);
   overflow: hidden;
   box-shadow: var(--shadow-pop, none);
-}
-.stage[data-listen="on"] audio {
-  width: min(560px, 100%);
 }
 /* 极矮窗口下(如横屏小窗)保证舞台仍有最小可视高度,不被压成一条 */
 @media (max-height: 520px) {

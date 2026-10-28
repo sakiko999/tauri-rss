@@ -1,163 +1,240 @@
 /**
- * AudioShell —— 原生音频外壳(mp3/aac/ogg)。
+ * AudioShell —— 音频播放外壳（播客单集 / 听视频），**自绘控件**。
  *
- * 与 VideoShell 对偶:audio 无画面,保留浏览器原生 `<audio controls>` 控件,
- * 不套自定义外壳(控件层 + 自动隐藏只对视频有意义)。壳负责:
- *   - 原生 <audio> + autoPlay(已解锁时带声起播,与视频分支对称);
- *   - 多档位切换条(直播多清晰度,douyu 等);
- *   - referer 头提示(带 headers 的原生直链可能 403,浏览器无法带自定义 header)。
+ * 2026-10-29 从「原生 `<audio controls>`」升级（对齐原型的 pod 播放页）：
+ * 进度条 + 播放/暂停 + 后退 15s / 前进 30s + 倍速 + 睡眠定时。
+ *
+ * ⚠️ 只管**界面与元素操作**：媒体元素的生命周期（引擎 attach、续播跳转、进度上报、
+ * 播完回调）全部留给 PlayableMedia —— 它把 `mediaRef` 传进来。续播/进度/播完只有
+ * 一份实现（重构候选 B3 说的就是这段曾被两处各写一遍）。
+ *
+ * ⚠️ 配色写死黑底白字（与 VideoShell/MediaState 同契约）：这是播放器表面，不随主题
+ * 翻——浅色主题下白底控件贴在纯黑面板上会割裂。也**不带圆角**（播放器一贯方角）。
  */
 
-import { useEffect, useRef } from "react"
+import { useEffect, useState } from "react"
 
+import { PauseIcon, PlayIcon } from "./icons.tsx"
 import { log } from "./log/index.ts"
-import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
+
+/** 倍速档位。 */
+const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
+/** 睡眠定时档位（分钟，0 = 关闭）。 */
+const SLEEPS = [0, 15, 30, 60]
+
+/** 秒 → `m:ss` / `h:mm:ss`。 */
+function fmt(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return "0:00"
+  const s = Math.floor(sec % 60)
+  const m = Math.floor((sec / 60) % 60)
+  const h = Math.floor(sec / 3600)
+  return `${h > 0 ? `${h}:${String(m).padStart(2, "0")}` : String(m)}:${String(s).padStart(2, "0")}`
+}
 
 export function AudioShell({
+  mediaRef,
   src,
-  autoPlay,
-  onError,
-  qualityOptions,
-  activeQuality,
-  onQuality,
   className,
-  startAtSec,
-  onProgress,
-  onEnded,
+  onError,
 }: {
-  src: string
-  autoPlay?: boolean
-  /** 起播失败(policy 拦且降级也失败)时上报——对齐视频分支的 onError。 */
-  onError?: (e: unknown) => void
-  /** 多档位列表;length < 2 不显示。 */
-  qualityOptions: { rate: number; quality: string }[]
-  activeQuality?: number
-  onQuality: (rate: number) => void
+  /** 由 PlayableMedia 持有并接线（引擎/续播/进度/播完都在那边）。 */
+  mediaRef: React.RefObject<HTMLAudioElement | null>
+  /** 渐进式直链；DASH（听视频）由 PlayableMedia 的 useMediaStream attach，这里不传。 */
+  src?: string
   className?: string
-  /** 起播跳转秒数(续播;播客长音频常用)。 */
-  startAtSec?: number
-  /** 播放进度回调(秒)。 */
-  onProgress?: (currentSec: number, durationSec: number) => void
-  /**
-   * 播放结束。⚠️ 必须挂在**自己的 audioRef** 上 —— 播客(audio)走 AudioShell,
-   * 不经过 PlayableMedia 的 videoRef,只挂那边的话音频播完永远不会触发下一条。
-   */
-  onEnded?: () => void
+  onError?: (e: unknown) => void
 }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  // onError 用 ref 持最新(与 useMediaStream 的 onErrorRef 同模式):父组件每次渲染
-  // 传新函数,但起播 effect 不该因它重跑——否则 onError 变化会重建 canplay 监听,
-  // 错过已派发的 canplay 事件导致起播丢失。
-  const onErrorRef = useRef(onError)
-  onErrorRef.current = onError
+  const [playing, setPlaying] = useState(false)
+  const [current, setCurrent] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [rate, setRate] = useState(1)
+  const [menu, setMenu] = useState<null | "speed" | "sleep">(null)
+  const [sleepMin, setSleepMin] = useState(0)
+  const [sleepLeft, setSleepLeft] = useState(0)
 
-  // 原生 audio 的自动播放:与视频分支对齐,等 canplay(媒体可播)后带声 play。
-  // ⚠️ 不能 src 刚设就立即 play:此时媒体未加载,带声 play 易被拦 → 降级静音。
-  // 被拦降级静音(保底可播);StrictMode 双挂载:第一个 audio 被移除,检查 isConnected。
+  // 元素事件 → 本地状态。DASH 由 dash.js 挂 MSE，事件照常派发。
   useEffect(() => {
-    if (!autoPlay) return
-    const el = audioRef.current
-    if (!el) return
-    const attemptUnmuted = () => {
-      if (!el.isConnected) return
-      el.muted = false
-      attemptPlayWithMuteFallback(el, () => el.play(), { autoPlay, onFail: onErrorRef.current })
+    const a = mediaRef.current
+    if (!a) return
+    const sync = () => {
+      setCurrent(a.currentTime)
+      setDuration(Number.isFinite(a.duration) ? a.duration : 0)
     }
-    el.addEventListener("canplay", attemptUnmuted, { once: true })
-    // ⚠️ `preload="none"` 时**没有任何东西触发加载**:只挂 canplay 监听 → 浏览器不预载
-    // 也不 play → canplay 永不来(死锁,readyState 恒 0、永久 paused、不报错)。
-    // 显式 load() 启动加载,canplay 才会派发。autoPlay 属性在被 policy 拦时不解决此问题。
-    el.load()
-    return () => el.removeEventListener("canplay", attemptUnmuted)
-  }, [autoPlay, src])
+    const onPlay = () => setPlaying(true)
+    const onPause = () => setPlaying(false)
+    const onErr = () => {
+      log.mediaError({ code: a.error?.code, msg: a.error?.message ?? "" })
+      onError?.(new Error(a.error?.message ?? `audio error(code=${a.error?.code ?? "?"})`))
+    }
+    a.addEventListener("timeupdate", sync)
+    a.addEventListener("durationchange", sync)
+    a.addEventListener("loadedmetadata", sync)
+    a.addEventListener("play", onPlay)
+    a.addEventListener("pause", onPause)
+    a.addEventListener("error", onErr)
+    return () => {
+      a.removeEventListener("timeupdate", sync)
+      a.removeEventListener("durationchange", sync)
+      a.removeEventListener("loadedmetadata", sync)
+      a.removeEventListener("play", onPlay)
+      a.removeEventListener("pause", onPause)
+      a.removeEventListener("error", onErr)
+    }
+    // onError 用 ref 会在播放器包里引入更多样板；这里按 src 重建监听即可（换流频率低）。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src])
 
-  // 续播:起播跳转(≤3s 不跳)+ 进度上报。与 PlayableMedia 视频分支同语义。
-  // ⚠️ 不随 src 变化重置 resumedRef(切档/换流会重跳回去;换条目由 key 重挂)。
-  const resumedRef = useRef(false)
+  // 倍速要在元素（重新）挂载后重新应用一次：切听/看会换元素。
   useEffect(() => {
-    const at = startAtSec ?? 0
-    if (resumedRef.current || at <= 3) return
-    const el = audioRef.current
-    if (!el) return
-    const apply = () => {
-      if (resumedRef.current) return
-      resumedRef.current = true
-      try {
-        el.currentTime = at
-      } catch {
-        /* 未就绪时忽略 */
+    const a = mediaRef.current
+    if (a) a.playbackRate = rate
+  }, [rate, src, mediaRef])
+
+  // 睡眠定时：到点暂停并复位；切档/关闭时清掉上一轮的计时。
+  useEffect(() => {
+    if (!sleepMin) {
+      setSleepLeft(0)
+      return
+    }
+    const end = Date.now() + sleepMin * 60_000
+    setSleepLeft(sleepMin * 60)
+    const t = setInterval(() => {
+      const left = Math.max(0, Math.round((end - Date.now()) / 1000))
+      setSleepLeft(left)
+      if (left <= 0) {
+        clearInterval(t)
+        mediaRef.current?.pause()
+        setSleepMin(0)
       }
-    }
-    if (el.readyState >= 1) apply()
-    else el.addEventListener("loadedmetadata", apply, { once: true })
-    return () => el.removeEventListener("loadedmetadata", apply)
-  }, [src, startAtSec])
+    }, 1000)
+    return () => clearInterval(t)
+  }, [sleepMin, mediaRef])
 
-  const onProgressRef = useRef(onProgress)
-  onProgressRef.current = onProgress
-  useEffect(() => {
-    if (!onProgress) return
-    const el = audioRef.current
-    if (!el) return
-    const handle = () => {
-      const dur = Number.isFinite(el.duration) ? el.duration : 0
-      if (dur <= 0) return
-      onProgressRef.current?.(el.currentTime, dur)
-    }
-    el.addEventListener("timeupdate", handle)
-    return () => el.removeEventListener("timeupdate", handle)
-  }, [src])
+  const toggle = () => {
+    const a = mediaRef.current
+    if (!a) return
+    if (a.paused) void a.play().catch(() => {})
+    else a.pause()
+  }
+  const skip = (delta: number) => {
+    const a = mediaRef.current
+    if (!a) return
+    const max = Number.isFinite(a.duration) ? Math.max(0, a.duration - 0.25) : Number.POSITIVE_INFINITY
+    a.currentTime = Math.max(0, Math.min(max, a.currentTime + delta))
+  }
+  const seek = (t: number) => {
+    const a = mediaRef.current
+    if (a && Number.isFinite(t)) a.currentTime = t
+  }
+  const setSpeed = (r: number) => {
+    setRate(r)
+    const a = mediaRef.current
+    if (a) a.playbackRate = r
+    setMenu(null)
+  }
 
-  // 播完上报(自动播下一条)。⚠️ 挂 audioRef,不是 PlayableMedia 的 videoRef。
-  const onEndedRef = useRef(onEnded)
-  onEndedRef.current = onEnded
-  useEffect(() => {
-    if (!onEnded) return
-    const el = audioRef.current
-    if (!el) return
-    const handle = () => onEndedRef.current?.()
-    el.addEventListener("ended", handle)
-    return () => el.removeEventListener("ended", handle)
-  }, [src])
+  const ctrl = "rounded-full border border-white/25 px-3 py-1 text-xs tabular-nums transition hover:bg-white/10"
+  const menuBtn = "block w-full px-3 py-1.5 text-left hover:bg-white/15"
 
   return (
-    <div className="space-y-1">
-      {qualityOptions.length >= 2 && (
-        <div className="flex flex-wrap gap-1">
-          {qualityOptions.map(({ rate, quality }) => {
-            const active = activeQuality === rate
-            return (
-              <button
-                key={rate}
-                type="button"
-                onClick={() => onQuality(rate)}
-                className={[
-                  "rounded px-2 py-0.5 text-xs",
-                  active ? "bg-blue-600 text-white" : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100",
-                ].join(" ")}
-              >
-                {quality}
-              </button>
-            )
-          })}
-        </div>
-      )}
-      <audio
-        ref={audioRef}
-        src={src}
-        controls
-        autoPlay={autoPlay}
-        preload="none"
-        // audio 加载失败(403/断流/格式不支持)→ 上报(起播 onFail 只管 play() reject,
-        // 媒体加载失败 canplay 永不触发,只能靠 error 事件)。
-        onError={() => {
-          const el = audioRef.current
-          log.mediaError({ code: el?.error?.code, msg: el?.error?.message ?? "" })
-          onErrorRef.current?.(new Error(el?.error?.message ?? `audio error(code=${el?.error?.code ?? "?"})`))
-        }}
-        // audio 无画面:不要黑底(mediaClass 含 bg-black 是给 video 的)。
-        className={["w-full", className].filter(Boolean).join(" ")}
+    <div className={["w-full max-w-[560px] bg-black px-5 py-4 text-white", className].filter(Boolean).join(" ")}>
+      {/* preload=metadata：起播由 PlayableMedia 直接 play() 驱动，这里只求总时长/进度条
+          立刻有值（none 要等 play 才出时长，页面先空一段）。 */}
+      <audio ref={mediaRef} src={src} preload="metadata" className="hidden" />
+
+      {/* 进度（原生 range，键盘可达；accent-color 让轨道跟随文字色） */}
+      <input
+        type="range"
+        min={0}
+        max={duration > 0 ? duration : 0}
+        step={1}
+        value={Math.min(current, duration || 0)}
+        onChange={(e) => seek(Number(e.currentTarget.value))}
+        aria-label="播放进度"
+        className="w-full accent-white"
       />
+      <div className="mt-1 flex justify-between text-[11px] text-white/60 tabular-nums">
+        <span>{fmt(current)}</span>
+        <span>{duration > 0 ? `-${fmt(Math.max(0, duration - current))}` : "--:--"}</span>
+      </div>
+
+      <div className="mt-3 flex items-center justify-center gap-4">
+        <button type="button" className={ctrl} onClick={() => skip(-15)} aria-label="后退 15 秒">
+          −15
+        </button>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={playing ? "暂停" : "播放"}
+          className="grid h-14 w-14 place-items-center rounded-full bg-white text-black transition hover:bg-white/85"
+        >
+          {playing ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6 translate-x-0.5" />}
+        </button>
+        <button type="button" className={ctrl} onClick={() => skip(30)} aria-label="前进 30 秒">
+          +30
+        </button>
+      </div>
+
+      <div className="relative mt-3 flex items-center justify-center gap-2 text-xs">
+        <button
+          type="button"
+          className={ctrl}
+          aria-haspopup="menu"
+          aria-expanded={menu === "speed"}
+          onClick={() => setMenu((m) => (m === "speed" ? null : "speed"))}
+        >
+          {rate}×
+        </button>
+        <button
+          type="button"
+          className={ctrl}
+          aria-haspopup="menu"
+          aria-expanded={menu === "sleep"}
+          onClick={() => setMenu((m) => (m === "sleep" ? null : "sleep"))}
+        >
+          {sleepMin ? `定时 ${fmt(sleepLeft)}` : "定时"}
+        </button>
+
+        {menu ? (
+          <>
+            {/* 透明遮罩：点空白处关闭（与 VideoShell 的档位菜单同款） */}
+            <button className="fixed inset-0 z-40 cursor-default" aria-hidden onClick={() => setMenu(null)} />
+            <div
+              role="menu"
+              className="absolute bottom-9 left-1/2 z-50 w-28 -translate-x-1/2 rounded-md border border-white/15 bg-black/95 py-1 text-xs shadow-xl"
+            >
+              {menu === "speed"
+                ? SPEEDS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={s === rate}
+                      className={menuBtn}
+                      onClick={() => setSpeed(s)}
+                    >
+                      {s}×{s === rate ? " ✓" : ""}
+                    </button>
+                  ))
+                : SLEEPS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={m === sleepMin}
+                      className={menuBtn}
+                      onClick={() => {
+                        setSleepMin(m)
+                        setMenu(null)
+                      }}
+                    >
+                      {m === 0 ? "关闭定时" : `${m} 分钟`}
+                    </button>
+                  ))}
+            </div>
+          </>
+        ) : null}
+      </div>
     </div>
   )
 }
