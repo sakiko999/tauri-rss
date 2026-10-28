@@ -204,6 +204,9 @@
   line-height: 1.8;
   /* 正文比 UI 文字低一档(不是「更亮」):整屏阅读时纯白/纯黑都偏硬。 */
   color: var(--color-body);
+  /* 源站正文里的长 URL / 无空格串会顶穿阅读栏(横向溢出把整栏撑宽);代码块自己
+     有 `overflow-x:auto`,这里只兜纯文本行。 */
+  overflow-wrap: break-word;
 }
 /* 按需补全正文时的行内提示(spinner 与文字对齐)。 */
 .article-resolving {

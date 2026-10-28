@@ -25,9 +25,18 @@ import { usePrefs } from "../../store/prefs.ts"
 /** 正文最大宽度(阅读舒适度档位)。 */
 const MEASURE_LABEL: Record<string, string> = { narrow: "窄", comfortable: "适中", wide: "宽" }
 
+/** 补全正文 + 它的格式(`html` 来自 feed 原样透传,`text` 来自原文页提取,两者都可能)。 */
+interface FullBody {
+  /** 复合键(itemKey):同一个 body 只对位同一订阅下的同一条目。 */
+  id: string
+  content: string
+  /** 按 HTML 渲染(消毒后 innerHTML),否则纯文本保留换行。 */
+  html: boolean
+}
+
 /** 会话级正文缓存:同一条目来回打开不重复抓原文页(内存,刷新即失效)。
  *  ponytail: 简单 LRU-ish(超限弃最旧);要跨会话持久再落 KV。 */
-const bodyCache = new Map<string, string>()
+const bodyCache = new Map<string, FullBody>()
 const BODY_CACHE_MAX = 64
 
 export function ReaderMain() {
@@ -102,7 +111,7 @@ export function ReaderMain() {
   const curContent = item?.kind === "article" ? (item.content ?? "") : ""
   /** 可见文本长度(<400 触补全;用可见长度而非原始 HTML——图片密集摘要会虚高)。 */
   const curVisible = visibleLength(curContent)
-  const [full, setFull] = useState<{ id: string; content: string } | null>(null)
+  const [full, setFull] = useState<FullBody | null>(null)
   /** 渲染期读缓存:命中则直接用(无闪屏);未命中交给 effect 抓。 */
   const cached = itemCacheKey ? bodyCache.get(itemCacheKey) : undefined
   /** 补全进行中(界面提示用)。⚠️ 用显式态而非 `!full`:补全返回与摘要等长的内容时
@@ -121,11 +130,21 @@ export function ReaderMain() {
     void dl
       .resolveDetail(subId, itemId)
       .then((d) => {
-        const text = d?.kind === "article" ? (d.content ?? "") : ""
+        if (d?.kind !== "article") return
+        const text = d.content ?? ""
         if (live && text.length > curContent.length) {
+          // ⚠️ 格式随正文一起存:`resolveDetail` **不保证纯文本**——feed 已带全文时
+          // raw.ts 原样返回条目(content 是 HTML、contentFormat="html")。按「补全恒为
+          // 纯文本」写死 → 阮一峰这类自带全文的 Atom 源在正文区显示 `<p>…` 标签源码
+          // (桌面镜像会剥掉 article 的 content,所以这条补全路径每次都会走)。
+          const body: FullBody = {
+            id: itemCacheKey!,
+            content: text,
+            html: d.contentFormat === "html" || (d.contentFormat === undefined && looksLikeHtml(text)),
+          }
           if (bodyCache.size >= BODY_CACHE_MAX) bodyCache.delete(bodyCache.keys().next().value as string)
-          bodyCache.set(itemCacheKey, text)
-          setFull({ id: itemCacheKey, content: text })
+          bodyCache.set(itemCacheKey!, body)
+          setFull(body)
         }
       })
       .catch(() => {}) // 补全失败静默:原文页抓不到就照常显示摘要
@@ -140,17 +159,17 @@ export function ReaderMain() {
 
   const article = item?.kind === "article" ? item : null
   /** 展示用正文:补全结果优先(同 itemId),其次会话缓存,最后 feed 自带。
-   *  ⚠️ 补全结果**不走 store.patch**(只在本地 full/cache),故判定格式必须依据**当前
-   *  展示的那段文本**,而不是 item.contentFormat —— 后者是 store 里的原始摘要格式,
-   *  对补全的纯文本恒错(曾据此写 `contentFormat==="text"` 但当保护从未生效)。 */
-  const shownContent = full && full.id === itemCacheKey ? full.content : (cached ?? curContent)
+   *  ⚠️ 补全结果**不走 store.patch**(只在本地 full/cache),故格式判定跟着 `complete`
+   *  走(见上),不能读 item.contentFormat —— 那是 store 里(被镜像剥过 content 的)条目。
+   */
+  const complete = full && full.id === itemCacheKey ? full : cached
+  const shownContent = complete?.content ?? curContent
   /** 本条目是否已拿到补全正文(对位复合键,不是「任意条目补全过」)。 */
-  const hasFull = full?.id === itemCacheKey || !!cached
-  // ⚠️ 补全正文恒为**纯文本**(raw.ts 强制 contentFormat="text"),hasFull 时直接按纯文本
-  // 渲染,不再猜格式——否则补全文本里的裸 `<`(数学/代码/`<https://…>`)会被 looksLikeHtml
-  // 命中而走 innerHTML,把内容当标签吞掉且丢段落换行。仅未补全时才依据 store 的
-  // contentFormat / 标签探测决定。
-  const html = !hasFull && (article?.contentFormat === "html" || looksLikeHtml(shownContent))
+  const hasFull = !!complete
+  // 补全结果按它自带的格式渲染;未补全时才依据 store 的 contentFormat / 标签探测决定。
+  // ⚠️ 补全结果若是纯文本,不能靠 looksLikeHtml 猜:文本里的裸 `<`(数学/代码/
+  // `<https://…>`)会被命中而走 innerHTML,把内容当标签吞掉且丢段落换行。
+  const html = complete ? complete.html : article?.contentFormat === "html" || looksLikeHtml(shownContent)
   const cleanHtml = useMemo(
     () => (article && html ? DOMPurify.sanitize(shownContent) : ""),
     [article, html, shownContent],
