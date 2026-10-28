@@ -28,8 +28,6 @@ apps/
   runtime/     amoeba-runtime：小体积 Bun 启动器（Rust）。解析顺序
                AMOEBA_BUN → 全局 PATH → 随包 → 缓存 → 下载固定版本（SHA256/原子解压），
                然后 spawn 入口并透传 stdio/退出码。stdout 只留 READY，日志全走 stderr
-  new_desktop/ 纯静态 JS 原型（window.OD + 内置假数据），只作界面参考；
-               不在 workspaces、不参与构建
 packages/
   xml/         ★ RSS 2.0 + tpl: 编解码（fast-xml-parser v5）。唯一持有该依赖
   host/        ★ 宿主后端 + 全局 appHost 门面（runtime.ts）。node/browser/tauri 三态；
@@ -268,4 +266,5 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 修 huya 403 时发现根 tsconfig.app.json 的 `types:["vite/client"]` 靠 vite 根提升才成立（2026-10-28 起已改为根 package.json 显式声明 vite ^8.1.5）；若未来再动 workspace 布局，注意 player/ui tsc 会先断
 - [ ] release 复验 twitch XHR Origin 改写（media_referer.rs 的 SetHeader("Origin") 是否生效）；dev 环境的 localhost:1420 Origin 被 CDN 放行，验证不了生产场景，失败则回滚 useMediaStream 的 pLoader 特判
 - [!] 媒体加载统一策略（2026-10-28）：平台知识只在 resolve 规则表，Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
+- [ ] 跑 `bun run fmt` 做全仓格式化收口（含 CRLF→LF），单独 commit；之后把 fmt:check/lint 并入 `bun run check` 并在 CI job 中启用
 <!-- cc-todo:end -->

@@ -9,12 +9,5 @@ semi = false
 singleQuote = false
 tabWidth = 2
 trailingComma = "all"
-# 文档（md）与「不参与构建」的目录人工维护，不做自动重排。
-ignorePatterns = [
-  "tmp/",
-  "apps/new_desktop/",
-  "dist/",
-  "target/",
-  ".claude/",
-  "**/*.md",
-]
+# 文档（md）与参考项目目录人工维护，不做自动重排。
+ignorePatterns = ["tmp/", "dist/", "target/", ".claude/", "**/*.md"]

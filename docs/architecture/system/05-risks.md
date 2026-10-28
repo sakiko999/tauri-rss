@@ -97,7 +97,7 @@
 | host 根入口仍是聚合 barrel | `packages/host/src/index.ts` 静态 re-export 全部 node/browser/tauri 后端；根入口已无 import 副作用，环境入口拆到 `./node\|tauri\|browser` | 应用/CLI 已走子路径；新代码若仍 import 根入口，会把三套后端拉进模块图（可发现、非静默错误） |
 | host ↔ core | `packages/host/package.json` 已删 `@amoeba/core`；core 把 `host` 放 `devDependencies`，并在运行时经 `appHost.storage.setSchema?()` 注入 `StorageSchema` | 反向依赖已消除；剩余风险是**初始化顺序**：SQL 后端在 `setSchema` 前读写会抛，`createDataLayer` 必须早于任何 storage 访问。CLI 的 `sqliteStorage` 仍是 app 层直接 import core（不构成环） |
 | resolve 边界 | `packages/resolve/src/index.ts:10-11` 声明「类型自持、不依赖 crawler」——成立；运行时只依赖 log/ramda，另有 xml 的类型依赖 | 「不依赖上游」**不等于**「无跨包依赖」；改包前先看矩阵，不要只读文件头 |
-| workspace | 根 `workspaces` 收 3 apps + 11 packages（含 platform / service-protocol / service-client；数据服务拓扑见 [06-data-service.md](06-data-service.md)）；`apps/new_desktop` 无 `package.json` 也不在列表、不被 `scripts/tauri.ts` 引用 | 仓库里存在第二套不可构建的桌面 UI，依赖审计容易漏它 |
+| workspace | 根 `workspaces` 收 3 apps + 11 packages（含 platform / service-protocol / service-client；数据服务拓扑见 [06-data-service.md](06-data-service.md)） | 新增目录不声明 `workspace:*` 就游离在依赖审计外（2026-10-28 已删 `apps/new_desktop` 原型） |
 
 ## 3. 错误与降级风险
 

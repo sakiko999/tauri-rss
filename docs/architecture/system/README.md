@@ -4,7 +4,7 @@
 
 ## 这套文档回答什么
 
-- 11 个库包 + 3 个 TypeScript 应用 + 3 个 Rust crate（`src-tauri` / `browser-sidecar` / `runtime`）；另有不参与构建的 `apps/new_desktop` 原型——为什么这样切分，边界由哪条契约维持（`01-packages.md`）。
+- 11 个库包 + 3 个 TypeScript 应用 + 3 个 Rust crate（`src-tauri` / `browser-sidecar` / `runtime`）——为什么这样切分，边界由哪条契约维持（`01-packages.md`）。
 - 跨包流动的数据结构、类型与协议：`Item`、`MediaItem`、`tpl:*`、`RssChannel`、`DataLayer`、`MediaStream`、`AppHost`（`02-contracts.md`）。
 - 数据从哪产生、经哪些步骤、最终落到哪：抓取、缓存重放、翻页、播放解析、登录与凭证（`03-flows.md`）。
 - 新增渠道/平台/播放入口的完整改动面（`04-extension.md`）；显式约束、隐式约定、耦合与演进风险（`05-risks.md`）。

@@ -6,7 +6,7 @@
 > 数据服务（`service-protocol`/`service-client`）的进程/协议/打包以 `06-data-service.md` 为准，
 > 平台表 `platform` 见 §1.2；`apps/mobile` 自 2026-10-26 冻结，下列 mobile 行按历史快照阅读。
 
-规模基准（2026-10-27 实测）：`packages/` 下 **11** 个 `@amoeba/*` 包（core/crawler/host/log/platform/player/resolve/service-client/service-protocol/ui/xml）；`apps/` 下 3 个 TypeScript 应用（desktop/mobile/cli）+ 3 个 Rust crate（`src-tauri`/`browser-sidecar`/`runtime`，同属根 `Cargo.toml` workspace）+ 不参与构建的静态原型（`new_desktop`）。根 `package.json` 的 `workspaces` 只收 3 个 app 与 11 个包，`new_desktop`、`src-tauri`、`browser-sidecar`、`runtime` 不在其中。
+规模基准（2026-10-28 实测）：`packages/` 下 **11** 个 `@amoeba/*` 包（core/crawler/host/log/platform/player/resolve/service-client/service-protocol/ui/xml）；`apps/` 下 3 个 TypeScript 应用（desktop/mobile/cli）+ 3 个 Rust crate（`src-tauri`/`browser-sidecar`/`runtime`，同属根 `Cargo.toml` workspace）。根 `package.json` 的 `workspaces` 只收 3 个 app 与 11 个包，`src-tauri`、`browser-sidecar`、`runtime` 不在其中。
 
 ## 1. 依赖矩阵
 
@@ -327,12 +327,6 @@ graph LR
 - **定位**：Rust crate `amoeba-browser`（`apps/browser-sidecar/Cargo.toml`），无 Tauri 依赖的 WebView2 宿主（屏外窗口 + CDP），CLI 的抓取浏览器就是它。
 - **接线**：CLI `--browser` 时由 `packages/host/src/node/browser-sidecar.ts` spawn；与桌面共用 `@amoeba/host/cdp` 的 lane/超时/拦截语义。
 - **契约**：stdout 只留一行 `READY <port>`，端口默认动态取空闲口（不写死 9334），日志全走 stderr（`main.rs:162-168`）。
-
-### 3.6 new_desktop — 设计参考
-
-- **定位**：纯静态 JS 原型（`window.OD` + IIFE），用于界面/交互参照，**不参与构建**：不在根 `workspaces`，无 `package.json`、无 import 关系、无 Vite 配置。
-- **自持状态**：`js/store.js:6` 用自己的 `localStorage` 键 `od-rss:v1` 与内置 `content.js` 假数据，与正式端 `ui-prefs`/KV 存储无关。
-- **可借鉴面**：视图划分、布局原语（`index.html` 的 `od-layout` 层）；不可当作运行时依赖。
 
 ## 4. 分层规则
 

@@ -29,7 +29,6 @@
 - **播放器不做平台判断与二次选流**：不接收 `item.kind`，不重排 `streams`（`packages/player/src/PlayableMedia.tsx:1-16`）。
 - **UI 视觉/样式不在系统文档范围**：只在与数据、状态、公共接口相关处提及。
 
-`apps/new_desktop` 是未进 workspaces 的静态 JS 原型，不参与构建，不属于本系统（`package.json:6-18`）。
 
 ## 2. 五种运行时形态
 

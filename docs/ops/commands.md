@@ -145,7 +145,7 @@ bun run fmt:check                      # 只检查不写（收口后用作 CI �
 - linter = `oxlint`（Bun 内置 `bun lint` 在 1.4.x 尚未发布；升级后可直接替换本行命令）。
 - 2026-10-28 接入时**未跑全仓格式化**：`bun run fmt:check` 仍报约 489 个文件待格式化（基线），
   格式化收口后再把 `fmt:check`（以及 `lint`）并入 `bun run check` 的统一入口。
-- 文档（`**/*.md`）与 `apps/new_desktop/`、`tmp/` 不在格式化范围内（bunfig.toml 的 ignorePatterns）。
+- 文档（`**/*.md`）与 `tmp/` 不在格式化范围内（bunfig.toml 的 ignorePatterns）。
 
 ## UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 由 dev 配置开启）
 

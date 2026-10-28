@@ -2,10 +2,11 @@
 /**
  * 统一检查入口 —— `bun run check [--layer <csv>] [--filter <substr>] [--list] [--verbose]`
  *
- * 分层（默认跑前三层 + typecheck；service 慢，显式 `--layer service|all`）：
+ * 分层（默认跑 static/contract/state/style + typecheck；service 慢，显式 `--layer service|all`）：
  *   static     纯解析/算法/UI 工具（无 IO、无网络）
  *   contract   跨包契约：XML 边界、凭据三级语义、平台表、二维码、路由错误分类
  *   state      存储/并发/编排：DataLayer、缓存、退订、被动模式、浏览器 lane
+ *   style      oxlint + bun fmt --check（代码风格门禁；配置见 bunfig.toml）
  *   service    起真实数据服务（bun:sqlite + HTTP/WS），慢但验证协议与快照
  *   typecheck  12 个 tsconfig（packages/* + apps/*）
  *
@@ -17,11 +18,11 @@ import { existsSync } from "node:fs"
 import { join } from "node:path"
 
 const ROOT = join(import.meta.dir, "..")
-type Layer = "static" | "contract" | "state" | "service" | "typecheck"
-const ALL_LAYERS: Layer[] = ["static", "contract", "state", "service", "typecheck"]
-const DEFAULT_LAYERS: Layer[] = ["static", "contract", "state", "typecheck"]
+type Layer = "static" | "contract" | "state" | "style" | "service" | "typecheck"
+const ALL_LAYERS: Layer[] = ["static", "contract", "state", "style", "service", "typecheck"]
+const DEFAULT_LAYERS: Layer[] = ["static", "contract", "state", "style", "typecheck"]
 
-const FILES: Record<Exclude<Layer, "typecheck">, string[]> = {
+const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
   static: [
     "packages/log/src/example/log.check.ts",
     "packages/xml/src/example/opml.check.ts",
@@ -84,11 +85,7 @@ const FILES: Record<Exclude<Layer, "typecheck">, string[]> = {
     "packages/crawler/src/example/passive-capture.check.ts",
     "packages/crawler/src/example/xhs-strategy.check.ts",
   ],
-  service: [
-    "scripts/service-skeleton-check.ts",
-    "scripts/service-data-check.ts",
-    "scripts/remote-data-layer-check.ts",
-  ],
+  service: ["scripts/service-skeleton-check.ts", "scripts/service-data-check.ts", "scripts/remote-data-layer-check.ts"],
 }
 
 const TYPECHECK_PROJECTS = [
@@ -160,7 +157,12 @@ function main(): number {
 
   if (list) {
     for (const layer of ALL_LAYERS) {
-      const items = layer === "typecheck" ? TYPECHECK_PROJECTS.map((p) => `${p} (tsc)`) : FILES[layer]
+      const items =
+        layer === "typecheck"
+          ? TYPECHECK_PROJECTS.map((p) => `${p} (tsc)`)
+          : layer === "style"
+            ? ["oxlint（bun run lint）", "fmt --check（bun run fmt:check）"]
+            : FILES[layer]
       console.log(`\n${layer} (${items.length})`)
       for (const item of items) console.log(`  ${item}`)
     }
@@ -174,6 +176,27 @@ function main(): number {
   const t0 = performance.now()
 
   for (const layer of layers) {
+    // style 层是两条整仓命令（不走 FILES 文件列表；--filter 不适用）。
+    if (layer === "style") {
+      console.log(`\n${layer}`)
+      const steps = [
+        { cmd: [process.execPath, "run", "lint"], name: "oxlint", rerun: "bun run lint" },
+        { cmd: [process.execPath, "run", "fmt:check"], name: "fmt --check", rerun: "bun run fmt:check" },
+      ]
+      for (const s of steps) {
+        const r = run(s.cmd, s.name)
+        results.push(r)
+        console.log(`  ${r.ok ? "✓" : "✘"} ${s.name} ${Math.round(r.ms)}ms`)
+        if (verbose && r.ok) {
+          for (const line of r.out.split(/\r?\n/).filter(Boolean).slice(0, 20)) console.log(`    ${line}`)
+        }
+        if (!r.ok) {
+          console.log(excerpt(r.out))
+          console.log(`    复跑: ${s.rerun}`)
+        }
+      }
+      continue
+    }
     const isTsc = layer === "typecheck"
     const items = (isTsc ? TYPECHECK_PROJECTS : FILES[layer]).filter((x) => !filter || x.includes(filter))
     if (!items.length) continue
@@ -190,11 +213,7 @@ function main(): number {
       }
       if (!r.ok) {
         console.log(excerpt(r.out))
-        console.log(
-          layer === "typecheck"
-            ? `    复跑: ./node_modules/.bin/tsc -p ${item}`
-            : `    复跑: bun ${item}`,
-        )
+        console.log(layer === "typecheck" ? `    复跑: ./node_modules/.bin/tsc -p ${item}` : `    复跑: bun ${item}`)
       }
     }
   }
