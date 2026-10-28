@@ -267,4 +267,6 @@ live 按平台二次聚合的 UI 侧。
 - [ ] release 复验 twitch XHR Origin 改写（media_referer.rs 的 SetHeader("Origin") 是否生效）；dev 环境的 localhost:1420 Origin 被 CDN 放行，验证不了生产场景，失败则回滚 useMediaStream 的 pLoader 特判
 - [!] 媒体加载统一策略（2026-10-28）：平台知识只在 resolve 规则表，Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
 - [ ] 跑 `bun run fmt` 做全仓格式化收口（含 CRLF→LF），单独 commit；之后把 fmt:check/lint 并入 `bun run check` 并在 CI job 中启用
+- [!] 微博匿名只给首页 10 条，翻页（page/since_id/weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录
+- [ ] 登录微博后复验 `weibo:user` 首屏自动预加载第二页真正落地（本次改动只验到匿名态）
 <!-- cc-todo:end -->
