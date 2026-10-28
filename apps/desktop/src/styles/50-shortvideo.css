@@ -374,8 +374,11 @@
 .card-play {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  /* flex 而非 grid:视频卡有「播放 + 只听声音」两个钮,横排居中,间距一档。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
   opacity: 0;
   transition: opacity var(--dur-base) var(--ease-in);
   background: oklch(0.12 0.01 264 / 34%);

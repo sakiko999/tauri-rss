@@ -23,6 +23,8 @@ export interface CardActions {
   onOpenFeed?: (item: MediaItem) => void
   /** 条目是一条**分区目录**(而非房间)时的主操作:预览该分区的真实内容。 */
   onOpenCategory?: (item: MediaItem) => void
+  /** 听视频(video 专属):只播 DASH 音轨。非 video 由 usePlayerNav 回落 onPlay。 */
+  onListen?: (item: MediaItem) => void
 }
 
 function badged(item: MediaItem, actions: CardActions) {
@@ -181,12 +183,27 @@ export function MediaCard({
         ) : null}
         {/* .card-play 是 pointer-events:none(整卡可点),内层要自己接管点击,
             否则「播放」按钮形同虚设。article/social 没有可播流 → 不摆播放按钮。
-            播客 feed 条目也没有流(点它 = 订阅),同样不摆。 */}
+            播客 feed 条目也没有流(点它 = 订阅),同样不摆。
+            视频卡多一个「只听声音」:封面右下的音频入口(听视频 = 只播 DASH 音轨)。 */}
         {playable && !feed ? (
           <span className="card-play">
             <span onClick={b.onSelect} role="presentation" className="pointer-events-auto">
               <Icon name="play" size={18} />
             </span>
+            {item.kind === "video" && actions.onListen ? (
+              <span
+                onClick={(e) => {
+                  e.stopPropagation()
+                  actions.onListen?.(item)
+                }}
+                role="presentation"
+                title="只听声音"
+                aria-label="只听声音"
+                className="pointer-events-auto"
+              >
+                <Icon name="music" size={18} />
+              </span>
+            ) : null}
           </span>
         ) : null}
       </div>

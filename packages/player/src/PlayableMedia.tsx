@@ -32,6 +32,7 @@ import { SpinnerIcon } from "./icons.tsx"
 import { log } from "./log/index.ts"
 import type { EngineStats } from "./stats.ts"
 import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
+import { audioOnlyMpd } from "./utils/audioOnlyMpd.ts"
 import { VideoShell } from "./VideoShell.tsx"
 
 /**
@@ -123,6 +124,7 @@ export function PlayableMedia({
   startAtSec,
   onProgress,
   onEnded,
+  audioOnly = false,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -149,6 +151,12 @@ export function PlayableMedia({
    * 裸 `<video>` 没有 VideoShell,只挂 state 会漏掉那条路径。直播不触发(无 duration)。
    */
   onEnded?: () => void
+  /**
+   * 听视频:对 DASH 流(bili/youtube 音视频分离)只播音轨 —— 把选流的 MPD 剥成
+   * audio-only 后喂 dash.js(挂 `<audio>`)。剥不动(无音轨/非 DASH,如 durl 回退的
+   * 混合轨 mp4)则照常播视频,不报错。封面/标题排版归宿主。
+   */
+  audioOnly?: boolean
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -210,12 +218,24 @@ export function PlayableMedia({
   // 选流 + 档位。
   const { stream, qualityOptions, switchQuality } = useStreamSelection(playStreams)
 
+  // ── 听视频(audioOnly):把选出的流的 MPD 剥成 audio-only ──────────────────────
+  // 各档 MPD 内嵌同一条最高码率音轨(resolve/utils/mpd.ts 的装配契约),取哪档剥都
+  // 一样,所以仍用选流结果(=streams[0],硬契约不动),不另设选流规则。剥不动 →
+  // listenMode=false,整条链路回到视频行为(回退流没有可播的独立音轨)。
+  const listenMpd = audioOnly && stream?.dashManifest ? audioOnlyMpd(stream.dashManifest) : null
+  const listenMode = !!listenMpd
+  const playStream = listenMode && stream ? { ...stream, dashManifest: listenMpd! } : stream
+
   // 引擎/档位(统计信息面板)。HLS/FLV/DASH 由 useMediaStream 上报;原生 mp4 在这里定。
   const [engineStats, setEngineStats] = useState<EngineStats | null>(null)
 
   // 流媒体驱动(hls/flv/dash)→ useMediaStream 接管 video;原生 src 由 VideoShell 写。
-  const needsStreamPlayer = !!stream && isStreamingStream(stream)
+  const needsStreamPlayer = !!playStream && isStreamingStream(playStream)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  // 听视频分支的媒体元素(dash.js attachView 收 HTMLMediaElement,<audio> 可直接挂)。
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  /** 当前模式实际承载播放的元素(续播/进度/播完监听都挂它)。 */
+  const mediaEl = () => (listenMode ? audioRef.current : videoRef.current)
 
   // autoPlay 语义:用户点过「播放」(resolved !== null)→ 自动带声起播;初始流未点击不自动播。
   // ⚠️ props 已带可播流(播客直链,免 resolve)时 resolved 恒 null,但流已在手 → 也应自动播。
@@ -223,8 +243,8 @@ export function PlayableMedia({
   const autoPlay = resolved !== null || hasPropStreams
 
   useMediaStream({
-    stream: needsStreamPlayer ? stream : null,
-    videoRef,
+    stream: needsStreamPlayer ? playStream : null,
+    videoRef: listenMode ? audioRef : videoRef,
     autoPlay,
     // retryKey 变化强制 useMediaStream 重建播放实例(错误重试)。
     retryKey,
@@ -272,7 +292,7 @@ export function PlayableMedia({
   useEffect(() => {
     const at = startAtSec ?? 0
     if (!stream || resumedRef.current || at <= 3) return
-    const el = videoRef.current
+    const el = mediaEl()
     if (!el) return
     const apply = () => {
       if (resumedRef.current) return
@@ -287,23 +307,46 @@ export function PlayableMedia({
     if (el.readyState >= 1) apply()
     else el.addEventListener("loadedmetadata", apply, { once: true })
     return () => el.removeEventListener("loadedmetadata", apply)
-  }, [stream, startAtSec])
+  }, [stream, startAtSec, listenMode])
+
+  // 听/看切换(audioOnly 翻转)会**换媒体元素**(<audio> ⇄ <video>),新元素从 0 开始。
+  // 把最后上报的进度带过去 —— 否则听了 20 分钟切回视频又从头播。
+  const lastPosRef = useRef(0)
+  const listenModeRef = useRef(listenMode)
+  useEffect(() => {
+    const changed = listenModeRef.current !== listenMode
+    listenModeRef.current = listenMode
+    if (!changed) return
+    const el = mediaEl()
+    if (!el || lastPosRef.current <= 3) return
+    const apply = () => {
+      try {
+        el.currentTime = lastPosRef.current
+      } catch {
+        /* 未就绪时忽略 */
+      }
+    }
+    if (el.readyState >= 1) apply()
+    else el.addEventListener("loadedmetadata", apply, { once: true })
+    return () => el.removeEventListener("loadedmetadata", apply)
+  }, [listenMode])
 
   // 进度上报:timeupdate(4Hz)触发,宿主侧决定节流/落库。直播无义(duration 0)不报。
   const onProgressRef = useRef(onProgress)
   onProgressRef.current = onProgress
   useEffect(() => {
     if (!onProgress) return
-    const el = videoRef.current
+    const el = mediaEl()
     if (!el) return
     const handle = () => {
       const dur = Number.isFinite(el.duration) ? el.duration : 0
-      if (dur <= 0) return
-      onProgressRef.current?.(el.currentTime, dur)
+      if (dur > 0) onProgressRef.current?.(el.currentTime, dur)
+      // 听/看切换要带走的进度以这里为准(上一元素最后的 timeupdate)。
+      lastPosRef.current = el.currentTime
     }
     el.addEventListener("timeupdate", handle)
     return () => el.removeEventListener("timeupdate", handle)
-  }, [stream?.url])
+  }, [stream?.url, listenMode])
 
   // 播完上报(自动播下一条)。与 onProgress 同款:直接听元素事件,覆盖全部播放分支
   // (含没有 VideoShell 的兜底裸 <video>)。ref 存回调,避免每次渲染重挂监听。
@@ -311,12 +354,12 @@ export function PlayableMedia({
   onEndedRef.current = onEnded
   useEffect(() => {
     if (!onEnded) return
-    const el = videoRef.current
+    const el = mediaEl()
     if (!el) return
     const handle = () => onEndedRef.current?.()
     el.addEventListener("ended", handle)
     return () => el.removeEventListener("ended", handle)
-  }, [stream?.url])
+  }, [stream?.url, listenMode])
 
   // 解析失败展示。
   if (error) {
@@ -411,6 +454,15 @@ export function PlayableMedia({
   // 真 rtmp 播不了。
   if (isRtmp(stream)) {
     return <MediaState title="无法直接播放" detail="该流为 rtmp 协议,当前浏览器无法直接播放。" />
+  }
+
+  // 听视频:audio-only DASH 挂 <audio>(useMediaStream 里 dash.js attachView 收
+  // HTMLMediaElement)。保留原生控件 —— 与 AudioShell 同哲学:音频不套自定义壳。
+  // 档位条不出现:各档 MPD 剥完音轨相同,切档在听的模式下无意义。
+  if (listenMode) {
+    return (
+      <audio ref={audioRef} controls autoPlay={autoPlay} className={["w-full", className].filter(Boolean).join(" ")} />
+    )
   }
 
   // 渐进式视频 / HLS / FLV / DASH → VideoShell 外壳(自定义控件)。

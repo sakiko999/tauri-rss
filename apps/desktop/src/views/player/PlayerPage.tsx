@@ -26,7 +26,7 @@ import { useDesktop } from "../../store/index.ts"
 import { KIND_META } from "../../store/nodes.ts"
 
 export function PlayerPage() {
-  const { itemId, from, sub } = usePlayParams()
+  const { itemId, from, sub, mode } = usePlayParams()
   const allItems = useDesktop((s) => s.allItems)
   const previewDetail = useDesktop((s) => s.previewDetail)
   const queue = useDesktop((s) => s.queue)
@@ -146,6 +146,9 @@ export function PlayerPage() {
   const isLive = item.kind === "live"
   const online = onlineOf(item)
   const platform = platformOf(item)
+  // 听视频(?mode=listen):只对点播视频有意义 —— live 无独立音轨、audio 本来就是听的。
+  // 流是 DASH 才真能听(bili/youtube);durl 回退流剥不出音轨时播放器自动照常播视频。
+  const listening = mode === "listen" && !isLive && item.kind === "video"
   // 弹幕:设置总开关 × 播放页临时覆盖。关掉时 resolve 结果里的 danmaku 不交给播放器。
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
 
@@ -178,10 +181,20 @@ export function PlayerPage() {
       <div className="scroll-area player-scroll" {...overlayBlock("player-scroll", "player:scroll")}>
         <div className="player-layout" {...overlayBlock("player-layout", "player:layout")}>
           <div {...overlayBlock("player-main-col", "player:main-col")}>
-            <div className="stage" {...overlayBlock("player-stage", "player:stage")}>
+            <div
+              className="stage"
+              data-listen={listening ? "on" : undefined}
+              {...overlayBlock("player-stage", "player:stage")}
+            >
               {/* PlayableMedia/VideoShell 自带 relative + aspect-ratio 容器与控件层。
                   ⚠️ **播放器无圆角**(常见播放器都是满幅方角设计)——player 包方角,
                   这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。 */}
+              {listening && mediaUrl(item) ? (
+                /* 听视频没有画面:封面当 artwork(约稿原型的 pod-stage 形态),音频条在其下。 */
+                <div className="listen-art" {...overlayBlock("listen-art", "player:listen-art")}>
+                  <MediaImage src={mediaUrl(item)} ratio={1} fill />
+                </div>
+              ) : null}
               <PlayableMedia
                 key={itemKey(item)}
                 // 统一传 item.id：core 的 findItemUrl 按 (subscriptionId, id) 命中并取
@@ -207,12 +220,13 @@ export function PlayerPage() {
                 // 续播:非直播才有位置语义(item.positionSec 由 core 从 reading 回填)。
                 startAtSec={isLive ? undefined : item.positionSec}
                 onProgress={(sec, dur) => savePosition(item, sec, dur)}
+                audioOnly={listening}
                 // 播完自动下一条:仅当设置开着**且**队列里确实有下一条时。播过的当前条
                 // 同时出队(与「播放队列」的语义一致 —— 它是待播列表,不是播放历史)。
                 onEnded={() => {
                   if (!(settings?.autoPlayNext ?? true)) return
                   removeFromQueue(item)
-                  if (nextInQueue) playTo(nextInQueue, from)
+                  if (nextInQueue) playTo(nextInQueue, from, listening ? "listen" : undefined)
                 }}
                 onError={(err) => {
                   const kind = errorKindOf(err)
@@ -252,6 +266,18 @@ export function PlayerPage() {
                 <span className="player-time">{fmtAgo(item.publishedAt)}</span>
               </div>
               <div className="player-actions">
+                {/* 听/看切换(点播视频):同一份解析结果换元素播,不重解析;进度由播放器带过去。 */}
+                {item.kind === "video" && !isLive ? (
+                  listening ? (
+                    <Button variant="quiet" onClick={() => playTo(item, from)}>
+                      <Icon name="monitor" size={14} /> 看视频
+                    </Button>
+                  ) : (
+                    <Button variant="quiet" onClick={() => playTo(item, from, "listen")}>
+                      <Icon name="music" size={14} /> 只听声音
+                    </Button>
+                  )
+                ) : null}
                 {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。 */}
                 <Button variant="quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
                   <Icon name="monitor" size={14} /> 剧场模式
@@ -260,7 +286,7 @@ export function PlayerPage() {
                   <Icon name="queue" size={14} /> 加入队列
                 </Button>
                 {nextInQueue ? (
-                  <Button variant="quiet" onClick={() => playTo(nextInQueue, from)}>
+                  <Button variant="quiet" onClick={() => playTo(nextInQueue, from, listening ? "listen" : undefined)}>
                     <Icon name="skipForward" size={14} /> 下一条：{nextInQueue.title.slice(0, 16)}
                   </Button>
                 ) : null}

@@ -138,6 +138,23 @@ export function usePlayerNav(): CardActions {
     [openSocialDetail, openArticle, onOpenCategory],
   )
 
+  /**
+   * 听视频:kind=video 只播 DASH 音轨(bili/youtube 音视频分离),当播客听。
+   * audio 本来就是听的、live 无独立音轨、其余 kind 不可播 —— 一律回落 onPlay,
+   * 与 onPlay 同一收口(硬契约:「播放」入口全部经 usePlayerNav)。
+   */
+  const onListen = useCallback(
+    (item: MediaItem) => {
+      if (item.kind !== "video") {
+        onPlay(item)
+        return
+      }
+      unlockAudioPlayback()
+      navigateToPlay(item, undefined, "listen")
+    },
+    [onPlay, navigateToPlay],
+  )
+
   const onQueue = useCallback(
     (item: MediaItem) => {
       addToQueue(item)
@@ -147,7 +164,7 @@ export function usePlayerNav(): CardActions {
   )
 
   return useMemo(
-    () => ({ onPlay, onOpen, onQueue, onOpenFeed, onOpenCategory }),
-    [onPlay, onOpen, onQueue, onOpenFeed, onOpenCategory],
+    () => ({ onPlay, onOpen, onQueue, onOpenFeed, onOpenCategory, onListen }),
+    [onPlay, onOpen, onQueue, onOpenFeed, onOpenCategory, onListen],
   )
 }

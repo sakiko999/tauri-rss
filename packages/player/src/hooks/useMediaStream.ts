@@ -34,7 +34,11 @@ export function useMediaStream({
 }: {
   /** 当前要播的 m3u8/flv 流;null / 非流媒体时 no-op。 */
   stream: MediaStream | null
-  videoRef: React.RefObject<HTMLVideoElement | null>
+  /**
+   * 挂引擎的媒体元素。类型放宽到 HTMLMediaElement:听视频(audio-only DASH)挂
+   * `<audio>`,dash.js 的 attachView 本就收 HTMLMediaElement(hls/flv 仍只喂 video)。
+   */
+  videoRef: React.RefObject<HTMLMediaElement | null>
   onError?: (err: unknown) => void
   /** 引擎/档位上报(播放器「统计信息」面板);切流/重建时先报 null。 */
   onStats?: (stats: EngineStats | null) => void

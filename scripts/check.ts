@@ -50,6 +50,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/crawler/src/example/hot-channels.check.ts",
     "packages/player/src/hooks/useStreamSelection.check.ts",
     "packages/player/src/hooks/player-stats.check.ts",
+    "packages/player/src/utils/audio-only-mpd.check.ts",
     "apps/desktop/src/lib/opml.check.ts",
     "apps/desktop/src/lib/ime.check.ts",
     "apps/desktop/src/lib/rail-nav.check.ts",

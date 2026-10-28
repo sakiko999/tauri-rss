@@ -42,10 +42,14 @@ export function previewPath(nodeId: string, itemId: string): string {
  * `from` 只负责「返回位置」，`sub` 才是条目的订阅身份：聚合节点（tab:all 等）下
  * `from` 是节点 id，不是 subscriptionId，不能拿它当身份用。
  */
-export function playPath(itemId: string, from?: string | null, sub?: string | null): string {
+/** 播放模式:`listen` = 只播 DASH 音轨(听视频);缺省 = 正常播。 */
+export type PlayMode = "listen"
+
+export function playPath(itemId: string, from?: string | null, sub?: string | null, mode?: PlayMode): string {
   const q = new URLSearchParams()
   if (from) q.set("from", from)
   if (sub) q.set("sub", sub)
+  if (mode) q.set("mode", mode)
   const qs = q.toString()
   return `/play/${encodeURIComponent(itemId)}${qs ? `?${qs}` : ""}`
 }
@@ -66,17 +70,32 @@ export function useSettingsNavigate(): (tab: string) => void {
  * 导航到播放页。收**条目**而非裸 id：播放页必须同时拿到 `subscriptionId`，
  * 否则跨订阅同 id 时会定位到另一订阅的条目。
  */
-export function usePlayNavigate(): (item: { id: string; subscriptionId: string }, from?: string | null) => void {
+export function usePlayNavigate(): (
+  item: { id: string; subscriptionId: string },
+  from?: string | null,
+  mode?: PlayMode,
+) => void {
   const navigate = useNavigate()
   const nodeId = useDesktop((s) => s.selectedNodeId)
-  return (item, from) => navigate(playPath(item.id, from ?? nodeId, item.subscriptionId))
+  return (item, from, mode) => navigate(playPath(item.id, from ?? nodeId, item.subscriptionId, mode))
 }
 
 /** 当前播放页参数。 */
-export function usePlayParams(): { itemId: string | null; from: string | null; sub: string | null } {
+export function usePlayParams(): {
+  itemId: string | null
+  from: string | null
+  sub: string | null
+  mode: PlayMode | null
+} {
   const params = useParams()
   const [sp] = useSearchParams()
-  return { itemId: params.itemId ?? null, from: sp.get("from"), sub: sp.get("sub") }
+  const mode = sp.get("mode")
+  return {
+    itemId: params.itemId ?? null,
+    from: sp.get("from"),
+    sub: sp.get("sub"),
+    mode: mode === "listen" ? "listen" : null,
+  }
 }
 
 export const router = createBrowserRouter([

@@ -53,6 +53,24 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   （`rounded-xl`/`rounded-b-lg`/`rounded`）互相错位，且给画面套圆角本就不符合播放器惯例。
   播放器内嵌到任意容器都不该假定圆角档位。
 
+## 听视频（audio-only DASH，2026-10-28）
+
+「听视频」= 对 `kind=video` 条目只播 DASH 音轨（B站/YouTube 音视频分离），当播客听。
+
+- **实现位置全在 player/desktop 侧，零协议改动**：音轨 URL 本来就在每档流的
+  `dashManifest` 里（resolve `utils/mpd.ts` 的 buildMpd 给每档嵌同一条最高码率 AAC）。
+  `audioOnlyMpd()`（`player/src/utils/audioOnlyMpd.ts`）把选流的 MPD 剥掉 video
+  AdaptationSet，仍走 dash.js + DashHostLoader 隧道。dash.js 的 `attachView` 收
+  `HTMLMediaElement`，直接挂 `<audio>`（已真播实证：起播/推进/时长/隧道 headers 全过）。
+- **入口收口**：URL `/play/:itemId?mode=listen`；`usePlayerNav.onListen` 是唯一入口
+  （卡片封面右下的音符钮 + 播放页「只听声音/看视频」切换都经它/`usePlayNavigate`）。
+- **选流契约不动**：仍取 `streams[0]`（各档 MPD 剥完音轨相同，听的模式下不渲染档位条）。
+- **回退**：MPD 剥不出音轨（如 bili durl 回退的混合轨 mp4）→ `listenMode` 不成立，
+  照常播视频，不报错。
+- **进度共享**：听/看与观看共用同一个续播键（`savePosition`）；听⇄看切换是**换媒体元素**，
+  `PlayableMedia` 会把最后的 `currentTime` 带到新元素（否则又从头播）。队列自动下一条
+  透传当前模式。
+
 ## 统计信息（仿 YouTube 右键）
 
 `VideoShell` 右键菜单 → `PlayerStatsOverlay`（`packages/player/src/PlayerStatsOverlay.tsx`）。
