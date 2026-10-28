@@ -7,6 +7,7 @@
  * 锁定:①三级语义(显式 > 空串强制匿名 > provider);②bili sign 家族同接(签名与
  * 请求同 cookie);③douyin 兜底序(登录 cookie > 匿名 ttwid jar);④xhs 空串退出。
  */
+
 import assert from "node:assert/strict"
 
 import { biliClient } from "../platform/bili/client.ts"

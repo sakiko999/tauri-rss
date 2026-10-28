@@ -7,6 +7,7 @@
  * 中列表头的搜索框是**全局条目搜索**(store.query),作用于当前视图;
  * 播放页/设置页等整页视图下搜索框仍可用(切回库视图生效)。
  */
+
 import { useEffect, useRef } from "react"
 
 import { overlayBlock } from "../../lib/uiOverlay.ts"
@@ -14,6 +15,7 @@ import { useViewNavigate } from "../../router.tsx"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
 import { viewTitleFor } from "../../store/nodes.ts"
 import { usePrefs } from "../../store/prefs.ts"
+import { IconButton } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 
 export function TitleBar() {
@@ -65,43 +67,35 @@ export function TitleBar() {
       </div>
 
       <div className="titlebar-side" {...overlayBlock("titlebar-side", "app:titlebar:side")}>
-        <button
-          className="icon-btn"
-          title="命令面板 (Ctrl+K)"
-          aria-label="命令面板"
-          onClick={() => setPaletteOpen(true)}
-        >
+        <IconButton title="命令面板 (Ctrl+K)" aria-label="命令面板" onClick={() => setPaletteOpen(true)}>
           <Icon name="command" />
-        </button>
-        <button
-          className="icon-btn"
+        </IconButton>
+        <IconButton
           aria-pressed={offline}
           title={offline ? "切回在线" : "切到离线"}
           aria-label="离线模式"
           onClick={() => setOffline(!offline)}
         >
           <Icon name="offline" />
-        </button>
-        <button
-          className="icon-btn"
+        </IconButton>
+        <IconButton
           aria-pressed={railCollapsed}
           title="折叠侧栏 (Ctrl+\)"
           aria-label="折叠侧栏"
           onClick={() => setPrefs({ railCollapsed: !railCollapsed })}
         >
           <Icon name="panelLeft" />
-        </button>
-        <button
-          className="icon-btn"
+        </IconButton>
+        <IconButton
           title="切换主题"
           aria-label="切换主题"
           onClick={() => setPrefs({ theme: theme === "dark" ? "light" : "dark" })}
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
-        </button>
-        <button className="icon-btn" title="设置" aria-label="设置" onClick={() => go("page:settings")}>
+        </IconButton>
+        <IconButton title="设置" aria-label="设置" onClick={() => go("page:settings")}>
           <Icon name="settings" />
-        </button>
+        </IconButton>
       </div>
     </header>
   )

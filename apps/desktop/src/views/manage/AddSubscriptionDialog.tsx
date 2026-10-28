@@ -14,6 +14,7 @@ import type { MediaItem } from "@amoeba/core"
  */
 import { useEffect, useMemo, useState } from "react"
 
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Modal, Select } from "../../components/Modal.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
@@ -397,16 +398,15 @@ export function AddSubscriptionDialog({
                   ? "该渠道带默认参数，可直接订阅。"
                   : "请填写必填参数后再订阅。"}
           </span>
-          <button className="btn btn-secondary" disabled={busy} onClick={() => onOpenChange(false)}>
+          <Button variant="secondary" disabled={busy} onClick={() => onOpenChange(false)}>
             取消
-          </button>
-          <button
-            className="btn btn-primary"
+          </Button>
+          <Button
             disabled={busy || (searchMode ? !candidateValue || !subChKey : !channelKey)}
             onClick={() => void submit()}
           >
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="plus" size={14} />} 添加订阅
-          </button>
+          </Button>
         </>
       }
     >

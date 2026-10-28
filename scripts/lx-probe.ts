@@ -11,6 +11,7 @@
  * 用法：bun scripts/lx-probe.ts
  * 输出：一份 JSON 报告（stdout）。
  */
+
 import { rm } from "node:fs/promises"
 import { gzipSync } from "node:zlib"
 

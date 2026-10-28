@@ -8,6 +8,7 @@
  * `void appHost.openExternal(url)` 把这些变成静默的 unhandled rejection:点了没反应
  * 且没有任何提示。这里统一兜住并给用户可见的失败反馈。
  */
+
 import { useDesktop } from "../store/index.ts"
 
 export function openExternalSafely(url: string | undefined | null): void {

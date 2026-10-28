@@ -4,6 +4,7 @@
  * `ugc` 把 API 返回的原始视频对象归一成 Video item(kind=video,stream 留空——
  * playurl 直链由下游懒解析)。播放解析在 resolve 的 platform/bili/video-play.ts。
  */
+
 import type { Video } from "@amoeba/xml"
 
 export const API = "https://api.bilibili.com"

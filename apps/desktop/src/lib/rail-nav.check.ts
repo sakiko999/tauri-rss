@@ -2,6 +2,7 @@
  * rail-nav 自检 —— 侧栏订阅树的按键映射(无框架,本地 assert)。
  * 跑:bun apps/desktop/src/lib/rail-nav.check.ts
  */
+
 import { navAction, type RowCtx } from "./rail-nav.ts"
 
 function assert(cond: unknown, msg: string) {

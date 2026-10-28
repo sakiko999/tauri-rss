@@ -5,6 +5,7 @@
  * 验证：READY、token 认证、/v1/hello、/v1/state、WS 首帧认证、单实例锁、shutdown 清理。
  * 不写业务 DB；临时 dataDir 结束后删除。
  */
+
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

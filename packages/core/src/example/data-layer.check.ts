@@ -7,6 +7,7 @@
  * 最小断言(非框架):仓库没有测试基础设施。用内存存储 + 假 channel 注入,
  * 不触网 —— 判的是编排逻辑,不是抓取。
  */
+
 import assert from "node:assert/strict"
 
 import { registerAllChannels } from "@amoeba/crawler"

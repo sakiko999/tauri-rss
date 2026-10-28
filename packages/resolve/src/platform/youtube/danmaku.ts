@@ -12,6 +12,7 @@
  * 只 warn 一次,不回调 onItems;轮询连续失败前 3 次 warn、之后静默指数退避,
  * 直播结束时直接终止循环。
  */
+
 import { formatError } from "@amoeba/log"
 
 import type { DanmakuItem } from "../../danmaku"

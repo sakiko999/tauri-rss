@@ -2,6 +2,7 @@
  * 播放器内联 SVG 图标(随 UI 包自包含,不依赖图标库)。
  * 统一 `viewBox="0 0 24 24"` + `fill/stroke=currentColor`,由调用方设色。
  */
+
 import type { SVGProps } from "react"
 
 export function PlayIcon(props: SVGProps<SVGSVGElement>) {

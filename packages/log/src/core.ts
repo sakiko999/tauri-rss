@@ -13,6 +13,7 @@
  * warn/error 永保留。
  * 环境:浏览器(WebView devtools)走 %c CSS 着色;node/bun 终端走 ANSI 256 色。
  */
+
 import { isBrowser, readSwitch } from "./env.ts"
 import { formatError } from "./format.ts"
 

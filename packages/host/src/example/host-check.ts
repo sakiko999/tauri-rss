@@ -2,6 +2,7 @@
  * 宿主门面自检 —— 覆盖本轮新增/改动的字段:openExternal / dataSaver。
  * 跑:`bun packages/host/src/example/host-check.ts`
  */
+
 import assert from "node:assert/strict"
 
 import { injectBrowserHost, injectNodeHost } from "../index.ts"

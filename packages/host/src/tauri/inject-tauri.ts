@@ -8,6 +8,7 @@
  *   - updater: TauriUpdaterBackend(自动更新;仅桌面,移动端不注册插件)
  *   - now:     Date.now
  */
+
 import { openUrl } from "@tauri-apps/plugin-opener"
 
 import { initAppHost, setHostCaps } from "../runtime.ts"

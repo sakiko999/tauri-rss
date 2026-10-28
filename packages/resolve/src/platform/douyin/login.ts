@@ -16,6 +16,7 @@
  * 二维码载荷:HTTP 路径上游给 base64 png → 补上 data URL 前缀;browser 路径读到的
  * 本就是 data URL。两条路径 emitQr 推的都是 `data:image/...`(QrImage 直接当 img 用)。
  */
+
 import { formatError } from "@amoeba/log"
 
 import { cdpEvaluate, cdpNavigate, withScanLoginLock } from "../../browser/cdp.ts"

@@ -7,6 +7,7 @@
  *
  * 用内存宿主 + 假渠道，不触网。
  */
+
 import assert from "node:assert/strict"
 
 import { registerAllChannels, registerChannel } from "@amoeba/crawler"

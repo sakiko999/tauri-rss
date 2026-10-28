@@ -4,6 +4,7 @@
  * 钉三处：分类计数不受搜索影响、分类顺序稳定（RSS 收尾）、分页永远至少出一组。
  * 这三条错了都不会报错，只会让「显示更多」变成死按钮或让 tab 数字乱跳。
  */
+
 import assert from "node:assert/strict"
 
 import type { ChannelInfo } from "@amoeba/core"

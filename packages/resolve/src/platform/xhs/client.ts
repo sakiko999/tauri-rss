@@ -10,6 +10,7 @@
  * cookie 由 core 层经 info.cookie / credentials provider(settings)注入;
  * 显式空串 = 强制匿名 —— 匿名态已移除,渠道层会直接报「需要登录」。
  */
+
 import type { Social, SocialImage } from "@amoeba/xml"
 
 import { cdpEvaluate } from "../../browser/cdp.ts"

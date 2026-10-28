@@ -2,6 +2,7 @@
  * CommandPalette —— ⌘/Ctrl+K 命令面板。搜索范围:内容类型 / 智能订阅 / 页面 /
  * 订阅源 / 条目标题;输入为空时列出命令。
  */
+
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Icon } from "../../components/Icon.tsx"

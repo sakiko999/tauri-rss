@@ -6,6 +6,7 @@
  * `varint()` 在 p 到底后不再前进 → 循环条件永真 → **同步死循环,冻结整个事件循环**
  * (实测 120s+ 未返回,连 setTimeout 逃生定时器都不触发)。已修:clamp end + 未前进即 break。
  */
+
 import { decodeDanmakuSeg } from "../platform/bili/danmaku-proto.ts"
 
 let fails = 0

@@ -3,6 +3,7 @@
  *
  * 独立可组合:只读 `state.paused`,点按调 `ops.togglePlay`。自带 aria-label。
  */
+
 import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 import { PauseIcon, PlayIcon } from "../icons.tsx"
 

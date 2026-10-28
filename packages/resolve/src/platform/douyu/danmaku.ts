@@ -8,6 +8,7 @@
  *   `type@=chatmsg` → txt/nn/col(col 是斗鱼专属 6 色索引,非真 hex)。
  * 心跳 `type@=mrkl/`(45s);进房 loginreq + joingroup。
  */
+
 import { createWsStream } from "../../danmaku"
 import type { DanmakuItem, DanmakuStream } from "../../danmaku"
 

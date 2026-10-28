@@ -17,6 +17,7 @@ import { isCategoryItem, isFeedItem, LiveHero, MediaCard, SocialCard } from "../
 import { LoadMoreFooter } from "../../components/app/LoadMoreFooter.tsx"
 import { MasonryGrid } from "../../components/app/MasonryGrid.tsx"
 import { GridSkeleton } from "../../components/BootSkeleton.tsx"
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { PreviewSkeleton } from "../../components/PreviewSkeleton.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
@@ -161,9 +162,9 @@ export function MediaMain() {
           title={container.kind === "category" ? "读不到该分区的内容" : "读不到该节目的单集"}
           text={previewCurrent.error}
           actions={
-            <button className="btn btn-secondary" onClick={() => void openPreview(container, { force: true })}>
+            <Button variant="secondary" onClick={() => void openPreview(container, { force: true })}>
               <Icon name="refresh" size={14} /> 重试
-            </button>
+            </Button>
           }
         />,
       )
@@ -175,9 +176,9 @@ export function MediaMain() {
           title={container.kind === "category" ? "该分区当前没有内容" : "这个节目暂时没有单集"}
           text="可能暂时没有内容；稍后重试或换一个条目。"
           actions={
-            <button className="btn btn-secondary" onClick={() => void openPreview(container, { force: true })}>
+            <Button variant="secondary" onClick={() => void openPreview(container, { force: true })}>
               <Icon name="refresh" size={14} /> 重新获取
-            </button>
+            </Button>
           }
         />,
       )
@@ -194,9 +195,9 @@ export function MediaMain() {
           title="这条内容已被刷新替换"
           text="目录订阅刷新后原来的条目可能不在了，返回列表重新选择。"
           actions={
-            <button className="btn btn-secondary" onClick={() => go(nodeId ?? "tab:all")}>
+            <Button variant="secondary" onClick={() => go(nodeId ?? "tab:all")}>
               <Icon name="back" size={14} /> 返回列表
-            </button>
+            </Button>
           }
         />
       </div>
@@ -236,9 +237,9 @@ export function MediaMain() {
             title={`热搜「${hotWord.word}」加载失败`}
             text={hotWord.error}
             actions={
-              <button className="btn btn-secondary" onClick={retry}>
+              <Button variant="secondary" onClick={retry}>
                 <Icon name="refresh" size={14} /> 重试
-              </button>
+              </Button>
             }
           />
         ) : (
@@ -247,9 +248,9 @@ export function MediaMain() {
             title={`「${hotWord.word}」暂无内容`}
             text="这个词下没有取到微博,换个词或稍后再试。"
             actions={
-              <button className="btn btn-secondary" onClick={retry}>
+              <Button variant="secondary" onClick={retry}>
                 <Icon name="refresh" size={14} /> 重新获取
-              </button>
+              </Button>
             }
           />
         )}
@@ -504,14 +505,15 @@ function PreviewHead({ item, count }: { item: MediaItem; count: number }) {
 
   return (
     <div className="grid-head" {...overlayBlock("preview-head", `preview:${item.subscriptionId}:${item.id}`)}>
-      <button className="btn btn-quiet btn-sm" onClick={() => navigate(viewPath(item.subscriptionId))}>
+      <Button variant="quiet" size="sm" onClick={() => navigate(viewPath(item.subscriptionId))}>
         <Icon name="back" size={13} /> 返回
-      </button>
+      </Button>
       <span className="grid-title od-truncate">{item.title}</span>
       <span className="grid-sub">{count} 条（预览，不写入订阅）</span>
       <span className="spacer" />
-      <button
-        className="btn btn-secondary btn-sm"
+      <Button
+        variant="secondary"
+        size="sm"
         disabled={subscribing || alreadySubscribed}
         onClick={() => void subscribe()}
       >
@@ -523,7 +525,7 @@ function PreviewHead({ item, count }: { item: MediaItem; count: number }) {
           <Icon name="plus" size={13} />
         )}
         {alreadySubscribed ? "已订阅" : kind === "feed" ? "订阅该节目" : "订阅该分区"}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -575,9 +577,9 @@ function MediaEmpty({
       title="这里还没有内容"
       text="从「发现」浏览平台分区,或点侧栏的 + 添加一个源。"
       actions={
-        <button className="btn btn-primary" onClick={() => onGo("page:discover")}>
+        <Button onClick={() => onGo("page:discover")}>
           <Icon name="compass" size={14} /> 去发现
-        </button>
+        </Button>
       }
     />
   )

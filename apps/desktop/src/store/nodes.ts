@@ -12,6 +12,7 @@
  * nodeMeta 返回的 type 驱动外壳布局(reader 三栏 / media 网格 / page 整页),
  * 对应 new_desktop 的 store.js nodeMeta。
  */
+
 import type { MediaItem, MediaKind, Subscription, SubscriptionGroup } from "@amoeba/core"
 
 /** 内容 tab:all 显示全部,其余按 kind 过滤。 */

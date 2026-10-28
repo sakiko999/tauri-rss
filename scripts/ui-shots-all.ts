@@ -2,6 +2,7 @@
  * ui-shots-all —— 全模块截图(含所有设置 tab、各类弹窗与状态)。
  * 逐张人工/模型复核用。用法: bun scripts/ui-shots-all.ts [outDir]
  */
+
 import { mkdirSync } from "node:fs"
 
 const PORT = Number(process.env.CDP_PORT ?? 9222)

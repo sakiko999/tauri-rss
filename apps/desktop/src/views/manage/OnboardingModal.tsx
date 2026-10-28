@@ -1,3 +1,4 @@
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
@@ -21,9 +22,7 @@ export function OnboardingModal() {
       footer={
         <>
           <span className="spacer" />
-          <button className="btn btn-primary" onClick={() => setPrefs({ onboarded: true })}>
-            开始使用
-          </button>
+          <Button onClick={() => setPrefs({ onboarded: true })}>开始使用</Button>
         </>
       }
     >

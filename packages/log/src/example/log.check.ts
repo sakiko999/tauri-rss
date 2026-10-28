@@ -7,6 +7,7 @@
  *   3. sink 接管（服务进程靠它把全部级别写 stderr —— stdout 只留 READY）；
  *   4. 错误文本（Error 取 message，不落成 [object Object]）。
  */
+
 import { createLogDomain, formatError, getLogDomain, resetLogDomains, setLogSink } from "../index.ts"
 
 let failed = 0

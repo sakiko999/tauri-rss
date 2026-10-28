@@ -9,6 +9,7 @@
  * ⚠️ 启动检查必须**完全静默**:首个版本、离线、GitHub 404 都不该弹错误——
  * 用户没主动要求检查,打断使用比漏报更糟。
  */
+
 import { useDesktop } from "../store/index.ts"
 
 export type UpdatePhase =

@@ -17,6 +17,7 @@
  * ⚠️ 原生 `<img>` / 原生 mp4 / 部分 HLS 不经过 `appHost.http`,governor 管不到,
  * 不要假设它能限住全部媒体流量。
  */
+
 import { platformOfHost } from "@amoeba/platform"
 
 import { netLog } from "../log.ts"

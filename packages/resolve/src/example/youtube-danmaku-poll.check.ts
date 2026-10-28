@@ -4,6 +4,7 @@
  * 回归背景(2026-10-26 日志审计):轮询失败原来在 `.finally` 里无条件按 5s 重排,
  * 断网或直播结束后每 5s 一条 warn 永不停止;直播结束也不会终止轮询。
  */
+
 import assert from "node:assert/strict"
 
 import { isChatEndedError, nextPollDelay } from "../platform/youtube/danmaku.ts"

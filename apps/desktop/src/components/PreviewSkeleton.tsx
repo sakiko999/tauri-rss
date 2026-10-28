@@ -8,6 +8,7 @@
  *
  * 类名复用 `.bs-*`(纯装饰样式,无结构契约);条数独立于启动骨架(index.html 契约)。
  */
+
 import { useMemo } from "react"
 
 const ROWS = 8

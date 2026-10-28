@@ -6,6 +6,7 @@
  * 或 kind→导航的映射漂移，侧栏高亮会静默错位（不报错、只是亮错行）。
  * 本文件把「节点 → 导航」钉死；`navForKind` 与 `navIdOf` 都是纯函数。
  */
+
 import assert from "node:assert/strict"
 
 import type { MediaKind, Subscription } from "@amoeba/core"

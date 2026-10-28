@@ -5,6 +5,7 @@
  * douyin 自由 info、bili:login 无 events),grep 一次登录得试三种措辞。现在各域
  * spread 同一份 `LOGIN_EVENTS` / `DANMAKU_EVENTS`,本文件把「同形」钉死。
  */
+
 import assert from "node:assert/strict"
 
 import { setLogSink } from "@amoeba/log"

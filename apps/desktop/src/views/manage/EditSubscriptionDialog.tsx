@@ -10,6 +10,7 @@ import type { Subscription } from "@amoeba/core"
  */
 import { useState } from "react"
 
+import { Button } from "../../components/Button.tsx"
 import { Modal, Select, Switch } from "../../components/Modal.tsx"
 import { isImeComposing } from "../../lib/ime.ts"
 import { useDesktop } from "../../store/index.ts"
@@ -68,12 +69,12 @@ export function EditSubscriptionDialog({ sub, onClose }: { sub: Subscription | n
       footer={
         <>
           <span className="spacer" />
-          <button className="btn btn-secondary" disabled={busy} onClick={onClose}>
+          <Button variant="secondary" disabled={busy} onClick={onClose}>
             取消
-          </button>
-          <button className="btn btn-primary" disabled={busy} onClick={() => void save()}>
+          </Button>
+          <Button disabled={busy} onClick={() => void save()}>
             保存
-          </button>
+          </Button>
         </>
       }
     >

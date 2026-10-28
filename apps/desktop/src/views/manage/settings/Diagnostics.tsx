@@ -2,6 +2,7 @@ import { ERROR_KIND_LABEL } from "@amoeba/core"
 /** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile / 完全重置 + 最近抓取错误。 */
 import { useState } from "react"
 
+import { Button } from "../../../components/Button.tsx"
 import { Icon } from "../../../components/Icon.tsx"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
 import { useDesktop } from "../../../store/index.ts"
@@ -120,17 +121,17 @@ export function Diagnostics() {
           </div>
         </div>
         <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
-          <button className="btn btn-secondary" onClick={() => void measureCache()}>
+          <Button variant="secondary" onClick={() => void measureCache()}>
             <Icon name="database" size={14} /> 统计内容缓存
-          </button>
-          <button className="btn btn-danger" onClick={() => void clearCache()}>
+          </Button>
+          <Button variant="danger" onClick={() => void clearCache()}>
             <Icon name="trash" size={14} /> 清空内容缓存
-          </button>
+          </Button>
         </div>
         <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
-          <button className="btn btn-secondary" onClick={() => void clearBrowserProfile()}>
+          <Button variant="secondary" onClick={() => void clearBrowserProfile()}>
             <Icon name="offline" size={14} /> 清理浏览器数据
-          </button>
+          </Button>
         </div>
         <p className="setting-help">订阅、阅读状态与内容缓存都存本地。清理浏览器数据后，微博/小红书需重新登录。</p>
       </SideCard>
@@ -141,9 +142,9 @@ export function Diagnostics() {
           抓取用的浏览器登录态不在此列。
         </p>
         <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
-          <button className="btn btn-danger" onClick={() => void resetAll()}>
+          <Button variant="danger" onClick={() => void resetAll()}>
             <Icon name="trash" size={14} /> 完全重置数据
-          </button>
+          </Button>
         </div>
       </SideCard>
 

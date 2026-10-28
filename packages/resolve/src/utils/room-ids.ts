@@ -4,6 +4,7 @@
  * live channel 统一支持多房间订阅:`info.roomIds`(逗号分隔,可多个)优先,
  * 兼容旧订阅的 `info.roomId`(单房间)。空则返回 []。
  */
+
 import type { SourceInfo } from "../index.ts"
 
 /** 解析订阅信息里的房间列表:优先 roomIds(逗号分隔),兼容旧 roomId 单房间。 */

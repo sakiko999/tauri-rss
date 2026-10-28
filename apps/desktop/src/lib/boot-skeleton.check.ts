@@ -10,6 +10,7 @@
  *
  * 这条自检把「两份字面量必须相等」钉死:它读**真实源码文本**比对,不跑浏览器。
  */
+
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 

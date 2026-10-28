@@ -3,6 +3,7 @@
  *
  * 与动作文件分开:这些函数不碰 store 状态,可独立阅读与复用。
  */
+
 import type { AppSettings } from "@amoeba/core"
 
 /** 播放队列的 localStorage key(与 prefs 分开存:队列是功能性状态)。 */

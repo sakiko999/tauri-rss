@@ -2,6 +2,7 @@
  * RemoteDataLayer 自检：真服务 + 本地 RSS，验证镜像读/写 RPC/WS 事件/诊断。
  *   bun scripts/remote-data-layer-check.ts
  */
+
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

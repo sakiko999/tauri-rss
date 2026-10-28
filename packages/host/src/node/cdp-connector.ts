@@ -5,6 +5,7 @@
  * 且需要明确区分 binary/text（二进制帧直接忽略）。Node 的 `ws` 默认不发 Origin，
  * 所以 WebView2 不需要 `--remote-allow-origins=*`。
  */
+
 import WebSocket, { type RawData } from "ws"
 
 import type { CdpConnector, CdpTransport, CdpTransportHandlers } from "../browser/transport.ts"

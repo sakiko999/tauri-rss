@@ -3,11 +3,13 @@
  *
  * 操作区常驻占位(只切 opacity)以避免行宽跳动。
  */
+
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
 
 import { excerptOf, fmtAgo, itemKey, mediaUrl, ratioOf } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { IconButton } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 
 export function ListRow({
@@ -71,8 +73,8 @@ export function ListRow({
       ) : null}
       <span className="list-actions">
         {onToggleStar ? (
-          <button
-            className="icon-btn sm"
+          <IconButton
+            size="sm"
             aria-label={item.isStarred ? "取消星标" : "星标"}
             aria-pressed={!!item.isStarred}
             onClick={(e) => {
@@ -81,11 +83,11 @@ export function ListRow({
             }}
           >
             <Icon name="star" size={14} />
-          </button>
+          </IconButton>
         ) : null}
         {onToggleRead ? (
-          <button
-            className="icon-btn sm"
+          <IconButton
+            size="sm"
             aria-label={read ? "标为未读" : "标为已读"}
             onClick={(e) => {
               e.stopPropagation()
@@ -93,7 +95,7 @@ export function ListRow({
             }}
           >
             <Icon name={read ? "eyeOff" : "eye"} size={14} />
-          </button>
+          </IconButton>
         ) : null}
       </span>
     </div>

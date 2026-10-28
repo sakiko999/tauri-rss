@@ -11,6 +11,7 @@
  * onOpen(undefined) 会导致认证帧/心跳发不出)——握手成功即连接就绪,connect resolve
  * 后主动触发 onOpen。见下方注释。
  */
+
 import { Channel, invoke } from "@tauri-apps/api/core"
 
 /** 与 Rust `commands/ws.rs` 的 `WsEvent`(serde tag/content)对齐。 */

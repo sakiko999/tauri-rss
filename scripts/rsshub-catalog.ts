@@ -24,6 +24,7 @@
  * 设计约束（CLAUDE.md）：scripts 走纯 node tsconfig（lib: ESNext），不拖 DOM；
  * 零运行时依赖——只读文件系统，用 bun 自带 API。
  */
+
 import { readdir, readFile, stat } from "node:fs/promises"
 import { join, sep } from "node:path"
 

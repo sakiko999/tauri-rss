@@ -11,6 +11,7 @@
  * 扫码登录 → 页脚「账号与凭证」页；刷新全部 → 页脚「同步订阅」。
  * 顶栏 update-chip 同步移除，状态只留这一处，避免两个同义按钮各自显示不同新鲜度。
  */
+
 import { useMemo, useState } from "react"
 
 import { fmtAgo, isLiveNow } from "../../lib/media.ts"
@@ -21,6 +22,7 @@ import { HOME_NODE, MAIN_NAV, navIdOf, PAGES, SHORT_MODES, SMART, TABS } from ".
 import { usePrefs } from "../../store/prefs.ts"
 import { kindCounts } from "../../store/selectors.ts"
 import { AddSubscriptionDialog } from "../../views/manage/AddSubscriptionDialog.tsx"
+import { IconButton } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 import { NavRow, RailSection } from "../NavRow.tsx"
 import { RailGroupTree } from "./RailGroupTree.tsx"
@@ -109,14 +111,15 @@ export function Rail() {
             <span className="rail-brand-sub">HELIU</span>
           </span>
         </button>
-        <button
-          className="icon-btn sm rail-brand-add"
+        <IconButton
+          className="rail-brand-add"
+          size="sm"
           aria-label="添加订阅"
           title="添加订阅"
           onClick={() => setAddOpen(true)}
         >
           <Icon name="plus" size={14} />
-        </button>
+        </IconButton>
       </div>
 
       <nav className="rail-main" aria-label="主导航" {...overlayBlock("rail-main", "app:rail:main")}>
@@ -175,14 +178,9 @@ export function Rail() {
           title="订阅"
           action={
             <span className="rail-section-actions">
-              <button
-                className="icon-btn sm"
-                aria-label="管理分组"
-                title="管理分组"
-                onClick={() => goSettings("subscriptions")}
-              >
+              <IconButton size="sm" aria-label="管理分组" title="管理分组" onClick={() => goSettings("subscriptions")}>
                 <Icon name="settings" size={13} />
-              </button>
+              </IconButton>
             </span>
           }
         >

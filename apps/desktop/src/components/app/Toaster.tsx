@@ -5,12 +5,14 @@
  * CSS 退场动画;动画结束(或兜底超时)后才 `removeToast` 真正卸载。直接过滤会当场
  * 卸载,动画一秒都看不到。兜底超时防「动画被 CSS 关掉/时长令牌变 0」时元素卡住不消失。
  */
+
 import { useEffect } from "react"
 import { createPortal } from "react-dom"
 
 import { motionDurationMs } from "../../lib/motion.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { type Toast, useDesktop } from "../../store/index.ts"
+import { IconButton } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 
 const ICON: Record<string, string> = {
@@ -58,9 +60,9 @@ function ToastItem({ t }: { t: Toast }) {
           {t.action.label}
         </button>
       ) : null}
-      <button className="icon-btn sm" aria-label="关闭提示" onClick={() => dismiss(t.id)}>
+      <IconButton size="sm" aria-label="关闭提示" onClick={() => dismiss(t.id)}>
         <Icon name="close" size={13} />
-      </button>
+      </IconButton>
     </div>
   )
 }

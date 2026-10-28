@@ -7,6 +7,7 @@
  *
  * ⚠️ 同平台的分区列房(`second/getList`)需登录态,未做——见 docs/capability-gaps.md。
  */
+
 import { searchBiliRooms } from "@amoeba/resolve"
 
 import { makeApiChannel } from "../factory.ts"

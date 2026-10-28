@@ -14,6 +14,7 @@
  *   3. **别和入场动画叠** —— `.modal` 有 `modal-in`(scale),VT 自己在做形变,两者同跑会抖。
  *      过渡期间把它停掉。
  */
+
 import { flushSync } from "react-dom"
 
 import { prefersReducedMotion } from "./motion.ts"

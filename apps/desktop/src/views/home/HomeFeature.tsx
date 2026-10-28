@@ -4,9 +4,11 @@
  * ⚠️ 无图时**显式退化为纯文字块**（.home-feature-text）：留一块空的玻璃板
  * 会让用户以为图加载失败了，而这里根本没有图。
  */
+
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
 
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { excerptOf, fmtAgo, mediaUrl } from "../../lib/media.ts"
 
@@ -40,16 +42,17 @@ export function HomeFeature({
           {item.publishedAt ? <span>{fmtAgo(item.publishedAt)}</span> : null}
         </div>
         <div className="home-feature-actions">
-          <button className="btn btn-primary btn-sm" onClick={() => onRead(item)}>
+          <Button size="sm" onClick={() => onRead(item)}>
             <Icon name="rss" size={13} /> 阅读
-          </button>
-          <button
-            className="btn btn-secondary btn-sm"
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
             aria-pressed={item.isStarred ? true : undefined}
             onClick={() => onLater(item)}
           >
             <Icon name="star" size={13} /> {item.isStarred ? "已稍后看" : "稍后看"}
-          </button>
+          </Button>
         </div>
       </div>
     </section>

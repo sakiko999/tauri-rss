@@ -4,6 +4,7 @@
  * 规则:播放中鼠标静止 AUTOHIDE_MS 隐藏;移动/触摸/暂停/缓冲立即显示;悬停控件栏不隐藏。
  * 缓冲(waiting)另延迟 BUFFER_MS 显示 spinner,恢复立即消失。
  */
+
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import type { VideoPlayState } from "./useVideoElement.ts"

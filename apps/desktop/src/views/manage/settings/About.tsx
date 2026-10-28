@@ -7,8 +7,10 @@
  * ⚠️ 检查/下载状态不放组件内:切 tab 会卸载本组件,状态与进度必须由
  * lib/update.ts 的模块 store 持有(见那里的注释)。
  */
+
 import { useEffect, useState, useSyncExternalStore } from "react"
 
+import { Button } from "../../../components/Button.tsx"
 import { Icon } from "../../../components/Icon.tsx"
 import { SideCard } from "../../../components/StateBlock.tsx"
 import { getUpdatePhase, installUpdate, manualCheck, relaunchApp, subscribeUpdatePhase } from "../../../lib/update.ts"
@@ -50,9 +52,9 @@ export function About() {
           }
         >
           {updater ? (
-            <button className="btn btn-secondary" onClick={() => void manualCheck()} disabled={busy}>
+            <Button variant="secondary" onClick={() => void manualCheck()} disabled={busy}>
               <Icon name="refresh" size={14} /> {phase.kind === "checking" ? "检查中…" : "检查更新"}
-            </button>
+            </Button>
           ) : (
             <span className="tag">不支持</span>
           )}
@@ -77,9 +79,9 @@ export function About() {
             </div>
             {phase.info.date ? <span className="t-micro t-dim">发布于 {phase.info.date.slice(0, 10)}</span> : null}
             {phase.info.body ? <p className="update-notes">{phase.info.body}</p> : null}
-            <button className="btn btn-primary" onClick={() => void installUpdate(phase.info)}>
+            <Button onClick={() => void installUpdate(phase.info)}>
               <Icon name="download" size={14} /> 下载并安装
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -116,21 +118,21 @@ export function About() {
               <span className="update-title">v{phase.info.version} 已安装</span>
             </div>
             <p className="setting-help">若应用没有自动重启，点下面的按钮加载新版本。</p>
-            <button className="btn btn-secondary" onClick={relaunchApp}>
+            <Button variant="secondary" onClick={relaunchApp}>
               <Icon name="refresh" size={14} /> 重启应用
-            </button>
+            </Button>
           </div>
         ) : null}
       </SideCard>
 
       <SideCard title="项目" icon="layers">
         <Row label="源码与问题反馈" help="发布包与更新源都托管在 GitHub。">
-          <button
-            className="btn btn-secondary"
+          <Button
+            variant="secondary"
             onClick={() => void globalThis.appHost.openExternal("https://github.com/sakiko999/tauri-rss")}
           >
             <Icon name="external" size={14} /> 打开仓库
-          </button>
+          </Button>
         </Row>
       </SideCard>
     </>

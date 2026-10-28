@@ -9,6 +9,7 @@
  * 第二条是给**新增渠道**的守卫:名字里带「热搜/热点」的渠道若声明成 article,
  * 会以同样的方式静默污染阅读流 —— 这里直接拦下。
  */
+
 import { listChannels } from "../index.ts"
 
 let fails = 0

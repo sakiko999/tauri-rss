@@ -5,6 +5,7 @@
  * 调用，在 `apps/src-tauri/src/media_referer.rs` 保留一份常量。两边漏改一边 =
  * 「前端直连了、宿主没加头」→ 图片静默 403。此脚本锁住两份规则一致。
  */
+
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 

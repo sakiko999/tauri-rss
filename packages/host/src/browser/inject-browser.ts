@@ -6,6 +6,7 @@
  *   - js:      FunctionJsBackend(new Function,CSP 放开时)
  *   - now:     Date.now
  */
+
 import { initAppHost, setHostCaps } from "../runtime.ts"
 import { FunctionJsBackend } from "../tauri/function-js-backend.ts"
 import { LocalStorageBackend } from "../tauri/local-storage-backend.ts"

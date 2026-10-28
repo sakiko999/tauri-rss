@@ -5,6 +5,7 @@
  * ⚠️ 类名用 `.home-rail` 而不是通用的 `.media-rail`：影音视图那条横向轨由 M6 落地，
  * 两边共用改名会让后续样式互相覆盖（仓库有 132px 侧栏的同型事故）。
  */
+
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
 

@@ -1,6 +1,7 @@
 /**
  * ReadingRepository — 阅读状态(read/续播/滚动)持久化,走全局 appHost.storage。
  */
+
 import type { ReadingMap, ReadRecord } from "../types/reading.ts"
 import { findRecord, readingKey } from "../types/reading.ts"
 

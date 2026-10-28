@@ -14,6 +14,7 @@
  * 跑:`bun packages/core/src/example/cookie-sync.check.ts`
  * 用内存存储 + 假 browser.getCookies,不触网、不启动浏览器。
  */
+
 import assert from "node:assert/strict"
 
 import { injectNodeHost } from "@amoeba/host/node"

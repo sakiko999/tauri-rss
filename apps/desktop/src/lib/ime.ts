@@ -11,6 +11,7 @@
  * `keyCode === 229` 是组合中的兜底 —— 部分输入法在「上屏那一下」keydown 里
  * `isComposing` 已是 false。
  */
+
 import type { KeyboardEvent as ReactKeyboardEvent } from "react"
 
 /** React 合成事件与原生事件都收(命令面板挂在 window 上,拿的是原生事件)。 */

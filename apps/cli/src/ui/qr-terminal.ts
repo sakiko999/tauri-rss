@@ -13,6 +13,7 @@
  * colorType 0(灰度)/2(RGB)/3(调色板)/6(RGBA)。16-bit 与 Adam7 直接报错
  * —— 已知上限，二维码生成器不用这些形态。
  */
+
 import { inflateSync } from "node:zlib"
 
 import jsQR from "jsqr"

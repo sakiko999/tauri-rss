@@ -11,6 +11,7 @@ import DOMPurify from "dompurify"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { FocusReader } from "../../components/app/FocusReader.tsx"
+import { Button, IconButton } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
@@ -296,13 +297,13 @@ export function ReaderMain() {
       ) : null}
 
       <div className="article-foot">
-        <button className="btn btn-secondary" onClick={() => toggleStar(item)}>
+        <Button variant="secondary" onClick={() => toggleStar(item)}>
           <Icon name="star" size={14} /> {item.isStarred ? "取消星标" : "星标"}
-        </button>
+        </Button>
         {item.url ? (
-          <button className="btn btn-quiet" onClick={openExternal}>
+          <Button variant="quiet" onClick={openExternal}>
             <Icon name="external" size={14} /> 打开原文
-          </button>
+          </Button>
         ) : null}
       </div>
     </>
@@ -314,43 +315,44 @@ export function ReaderMain() {
         <span ref={barRef} />
       </div>
       <header className="detail-head" {...overlayBlock("reader-head", "reader:head")}>
-        <button
-          className="icon-btn sm narrow-only"
+        <IconButton
+          size="sm"
+          className="narrow-only"
           aria-label="返回列表"
           onClick={() => useDesktop.getState().selectArticle(null)}
         >
           <Icon name="back" size={15} />
-        </button>
+        </IconButton>
         <span className="spacer" />
-        <button
-          className="icon-btn sm"
+        <IconButton
+          size="sm"
           aria-label={item.isStarred ? "取消星标" : "星标"}
           aria-pressed={!!item.isStarred}
           onClick={() => toggleStar(item)}
         >
           <Icon name="star" size={15} />
-        </button>
-        <button className="icon-btn sm" aria-label="复制链接" title="复制链接" onClick={() => void copyLink()}>
+        </IconButton>
+        <IconButton size="sm" aria-label="复制链接" title="复制链接" onClick={() => void copyLink()}>
           <Icon name="bookmark" size={15} />
-        </button>
-        <button
-          className="icon-btn sm"
+        </IconButton>
+        <IconButton
+          size="sm"
           aria-label="减小字号"
           disabled={fontSize <= 13}
           onClick={() => setPrefs({ fontSize: fontSize - 1 })}
         >
           <span style={{ fontSize: 11, fontWeight: 650 }}>A−</span>
-        </button>
-        <button
-          className="icon-btn sm"
+        </IconButton>
+        <IconButton
+          size="sm"
           aria-label="增大字号"
           disabled={fontSize >= 24}
           onClick={() => setPrefs({ fontSize: fontSize + 1 })}
         >
           <span style={{ fontSize: 13, fontWeight: 650 }}>A+</span>
-        </button>
-        <button
-          className="icon-btn sm"
+        </IconButton>
+        <IconButton
+          size="sm"
           aria-label={`阅读宽度:${MEASURE_LABEL[measure] ?? measure}`}
           title={`阅读宽度：${MEASURE_LABEL[measure] ?? measure}`}
           onClick={() =>
@@ -360,9 +362,9 @@ export function ReaderMain() {
           }
         >
           <Icon name="type" size={15} />
-        </button>
-        <button
-          className="icon-btn sm"
+        </IconButton>
+        <IconButton
+          size="sm"
           aria-label="专注阅读"
           title="专注阅读"
           onClick={() => {
@@ -371,11 +373,11 @@ export function ReaderMain() {
           }}
         >
           <Icon name="fullscreen" size={15} />
-        </button>
+        </IconButton>
         {item.url ? (
-          <button className="icon-btn sm" aria-label="打开原文" title="打开原文" onClick={openExternal}>
+          <IconButton size="sm" aria-label="打开原文" title="打开原文" onClick={openExternal}>
             <Icon name="external" size={15} />
-          </button>
+          </IconButton>
         ) : null}
       </header>
 

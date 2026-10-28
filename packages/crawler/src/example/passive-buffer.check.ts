@@ -2,6 +2,7 @@
  * PassiveBuffer 自检 —— `bun packages/crawler/src/example/passive-buffer.check.ts`
  * 覆盖：URL 归一化 / 同键覆盖 / TTL 过期 / 单条上限 / 总量淘汰 / getLatest / clear。
  */
+
 import { canonicalUrl, PassiveBuffer } from "../passive/buffer.ts"
 
 let fails = 0

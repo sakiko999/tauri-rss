@@ -9,6 +9,7 @@
  * 其余全部收敛到标准字段:thumbnail→media:thumbnail、media[]→enclosure+
  * media:content、author→author、summary→description。
  */
+
 import { XMLBuilder } from "fast-xml-parser"
 
 import type { Attachment, Item, Stream } from "./types.ts"

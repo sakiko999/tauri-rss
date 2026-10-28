@@ -12,6 +12,7 @@ import { browserCookieHostsOf, LOGIN_PLATFORMS, platformDef } from "@amoeba/plat
  */
 import { useEffect, useMemo, useRef, useState } from "react"
 
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
 import { QrImage } from "../../components/QrImage.tsx"
@@ -183,8 +184,7 @@ function CredentialCard({
       </div>
 
       <div className="inline-row" style={{ paddingTop: "var(--sp-3)" }}>
-        <button
-          className="btn btn-primary"
+        <Button
           disabled={!dirty || busy}
           onClick={async () => {
             setBusy(true)
@@ -200,14 +200,14 @@ function CredentialCard({
           }}
         >
           <Icon name="check" size={14} /> 保存
-        </button>
+        </Button>
         {canScan ? (
-          <button className="btn btn-secondary" onClick={onScan}>
+          <Button variant="secondary" onClick={onScan}>
             <Icon name="qr" size={14} /> 扫码登录
-          </button>
+          </Button>
         ) : null}
-        <button
-          className="btn btn-quiet"
+        <Button
+          variant="quiet"
           disabled={!configured || busy}
           onClick={async () => {
             const hosts = COOKIE_HOSTS[platform] ?? []
@@ -229,7 +229,7 @@ function CredentialCard({
           }}
         >
           <Icon name="trash" size={14} /> 清除
-        </button>
+        </Button>
       </div>
     </SideCard>
   )
@@ -301,9 +301,9 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
       footer={
         <>
           <span className="spacer" />
-          <button className="btn btn-secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={onClose}>
             {phase === "success" ? "完成" : "关闭"}
-          </button>
+          </Button>
         </>
       }
     >

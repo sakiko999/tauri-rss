@@ -12,6 +12,7 @@ import { Virtuoso } from "react-virtuoso"
 import { ListRow } from "../../components/app/ListRow.tsx"
 import { LoadMoreFooter } from "../../components/app/LoadMoreFooter.tsx"
 import { GridSkeleton } from "../../components/BootSkeleton.tsx"
+import { Button, IconButton } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Menu, MenuItem } from "../../components/Modal.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
@@ -127,20 +128,20 @@ export function ArticlePane() {
           </div>
         </div>
         <div className="pane-tools">
-          <button
-            className="icon-btn sm"
+          <IconButton
+            size="sm"
             title="全部标为已读"
             aria-label="全部标为已读"
             disabled={!unreadItems.length}
             onClick={() => markAllRead(unreadItems)}
           >
             <Icon name="check" size={14} />
-          </button>
+          </IconButton>
           <Menu
             trigger={
-              <button className="icon-btn sm" title="排序" aria-label="排序">
+              <IconButton size="sm" title="排序" aria-label="排序">
                 <Icon name="more" size={14} />
-              </button>
+              </IconButton>
             }
           >
             <MenuItem icon="clock" checked={mode === "new"} onSelect={() => setSort(nodeId ?? "", "new")}>
@@ -265,9 +266,9 @@ function EmptyState({
       title="还没有订阅"
       text="从「发现」浏览平台分区,或点侧栏的 + 手动添加一个源。"
       actions={
-        <button className="btn btn-primary" onClick={() => onGo("page:discover")}>
+        <Button onClick={() => onGo("page:discover")}>
           <Icon name="compass" size={14} /> 去发现
-        </button>
+        </Button>
       }
     />
   )

@@ -12,6 +12,7 @@
  * ⚠️ 不能像 player 那样 spread 平铺——crawler 各域都是同名 `warn`,平铺会互相覆盖
  * (前缀全变成最后一个域)。故按 channel 分组命名空间:`log.bili.warn(...)`。
  */
+
 import { createLogDomain, type LogEvent } from "@amoeba/log"
 
 /** URL 统一截断显示(防超长 query 刷屏;登录导航事件用)。 */

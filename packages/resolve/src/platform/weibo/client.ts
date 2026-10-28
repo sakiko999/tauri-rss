@@ -5,6 +5,7 @@
  * (含 SUB,半登录态 SUBP 会被 432 限流)。cookie 由 core 层经 info.cookie 注入。
  * 参考 RSSHub `routes/weibo/` 的 container/getIndex 两步流程。
  */
+
 import type { Social } from "@amoeba/xml"
 
 import { httpGet, now } from "../../host.ts"

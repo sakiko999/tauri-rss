@@ -1,4 +1,3 @@
-import { resolveRoute } from "@amoeba/resolve"
 /**
  * align — 验证「crawler 输出与 rsshub 对齐」(收编原 core example/verify-alignment.ts)。
  *
@@ -9,6 +8,8 @@ import { resolveRoute } from "@amoeba/resolve"
  * deserializeFeed 不在 core 公共面(收敛内部);CLI 作为 monorepo 内部观测面
  * 走相对路径引用,不发包。
  */
+
+import { resolveRoute } from "@amoeba/resolve"
 import { serializeFeed } from "@amoeba/xml"
 
 import { deserializeFeed } from "../../../../packages/core/src/processing/deserialize.ts"

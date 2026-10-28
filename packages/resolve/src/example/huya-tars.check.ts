@@ -7,6 +7,7 @@
  *
  * 用「STRUCT_BEGIN 后无 STRUCT_END」的截断帧复现:修复前此脚本**永不返回**(需强杀)。
  */
+
 import assert from "node:assert/strict"
 
 import { decodeHuyaDanmakuFrame, TarsReader, TarsWriter } from "../platform/huya/danmaku-tars.ts"

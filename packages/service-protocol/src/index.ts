@@ -4,6 +4,7 @@
  * 传输：`127.0.0.1` HTTP/1.1 + WS；token 走 Authorization / WS 首帧，绝不进 URL。
  * 版本：`protocol` 整数（不兼容才 +1），`serviceVersion` 为语义版本；同版本只做加法。
  */
+
 import type {
   AppSettings,
   ChannelInfo,

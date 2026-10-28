@@ -12,6 +12,7 @@ import * as SwitchPrimitive from "@radix-ui/react-switch"
 import type { ReactNode } from "react"
 
 import { overlayBlock } from "../lib/uiOverlay.ts"
+import { IconButton } from "./Button.tsx"
 import { Icon } from "./Icon.tsx"
 
 export function Modal({
@@ -62,8 +63,10 @@ export function Modal({
               <Dialog.Title className="modal-title">{title}</Dialog.Title>
               {desc ? <Dialog.Description className="modal-desc">{desc}</Dialog.Description> : null}
             </div>
-            <Dialog.Close className="icon-btn sm" aria-label="关闭">
-              <Icon name="close" size={15} />
+            <Dialog.Close asChild>
+              <IconButton size="sm" aria-label="关闭">
+                <Icon name="close" size={15} />
+              </IconButton>
             </Dialog.Close>
           </div>
           <div className="modal-body" {...overlayBlock("modal-body", title ? `modal:body:${title}` : undefined)}>

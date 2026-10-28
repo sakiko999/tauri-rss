@@ -26,6 +26,7 @@
  * 没有可传递的 abort 信号 —— 只能"丢弃结果",不能"取消请求"。世代号是这个约束下的
  * 最短路径(2 处重复实现收敛于此,见 docs/smoke-check.md)。
  */
+
 import { useMemo, useRef } from "react"
 
 export interface LatestOnly {

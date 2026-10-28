@@ -11,6 +11,7 @@
  * 优先用源返回的宽高(B站 API 的 pics width/height、小红书 SSR cover),缺省才
  * 预取——fetchImageSize 单张,fillImageSizes 批量(瀑布流 channel 共用)。
  */
+
 import type { SocialImage } from "@amoeba/xml"
 
 import { mediaReferrerFor } from "../media-referrer.ts"

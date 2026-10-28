@@ -3,6 +3,7 @@
  * SPA 空页返回 null）。仓库无测试基建，用最小断言。
  *   bun packages/crawler/src/example/extract.check.ts
  */
+
 import { decodeEntities, extractArticle, visibleTextLength } from "../channels/rss/extract.ts"
 
 let failed = 0

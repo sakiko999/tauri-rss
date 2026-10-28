@@ -1,7 +1,5 @@
 # bun fmt 配置（formatter = Bun 内置，Prettier 兼容）。
 # 风格对齐现有代码：120 列、无分号、双引号、2 空格、尾逗号 all。
-# ⚠️ 不开 sortImports / sortPackageJson：import 分组与 package.json 字段序
-# 带手工语义（分组注释、依赖分组），自动重排会产生无意义的大 diff。
 
 [fmt]
 printWidth = 120
@@ -9,11 +7,16 @@ semi = false
 singleQuote = false
 tabWidth = 2
 trailingComma = "all"
-# import 排序不移动副作用 import（如 main.tsx 的 "@amoeba/core/source/rsshub"）。
-sortImports = true
 sortPackageJson = true
 # 文档（md）与参考项目目录人工维护，不做自动重排。
 ignorePatterns = ["tmp/", "dist/", "target/", ".claude/", "**/*.md"]
+
+# import 排序：不移动副作用 import（如 main.tsx 的 "@amoeba/core/source/rsshub"）。
+# partitionByComment：注释是排序分区边界——文件头注释紧贴第一个 import 时会被
+# 当成它的 leading comment 随 import 移动（2026-10-28 align.ts 实测：头注释被夹到
+# 两个 import 之间）。开分区后注释前后的 import 各自排序、互不跨越。
+[fmt.sortImports]
+partitionByComment = true
 
 # Tailwind 类名排序（Tailwind 4：以 desktop 的入口 styles.css 为样式表来源，
 # 它 @import 了 packages/ui 的 theme.css，令牌链路完整）。

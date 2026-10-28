@@ -5,6 +5,7 @@
  * 与 new_desktop 的 store.js 派生段同构,但条目与阅读态改由 core 提供
  * (MediaItem.isUnread / isStarred 已是权威,不再另存 read/starred 映射)。
  */
+
 import type { MediaItem, MediaKind, Subscription } from "@amoeba/core"
 
 import { isLiveNow } from "../lib/media.ts"

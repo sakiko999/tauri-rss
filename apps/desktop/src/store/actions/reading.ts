@@ -3,6 +3,7 @@
  *
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 reading 判据。
  */
+
 import { findItem, positionDecision, readingKey } from "@amoeba/core"
 
 import type { DesktopState, StoreCtx } from "../types.ts"

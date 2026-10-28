@@ -9,6 +9,7 @@
  *   rss attach refresh <id...> | --all [--no-force]
  *   rss attach rpc <method> [json] [--json]
  */
+
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
 

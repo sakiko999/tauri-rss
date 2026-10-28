@@ -19,6 +19,7 @@ import { looksLikeHtml } from "../../lib/html.ts"
 import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useDesktop } from "../../store/index.ts"
+import { Button } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 import { Modal } from "../Modal.tsx"
 import { Lightbox } from "./Lightbox.tsx"
@@ -156,14 +157,14 @@ export function SocialDetailModal() {
               原按钮点了不生效却弹「已加入播放队列」(说谎)。这里不摆队列按钮。 */}
             {item.url ? (
               /* ⚠️ 走宿主门面(WebView 拦 window.open)。 */
-              <button className="btn btn-quiet" onClick={() => openExternalSafely(item.url)}>
+              <Button variant="quiet" onClick={() => openExternalSafely(item.url)}>
                 <Icon name="external" size={14} /> 打开原文
-              </button>
+              </Button>
             ) : null}
             <span className="spacer" />
-            <button className="btn btn-secondary" onClick={close}>
+            <Button variant="secondary" onClick={close}>
               关闭
-            </button>
+            </Button>
           </>
         }
       >
@@ -241,12 +242,14 @@ export function SocialDetailModal() {
                   )}
                   {/* 直连失败时才出现的重试入口（403/网络抖动/签名过期）。 */}
                   {liveVideo && live.failed ? (
-                    <button
-                      className="btn btn-secondary btn-sm social-detail-live"
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="social-detail-live"
                       onClick={() => setLiveRetry((n) => n + 1)}
                     >
                       <Icon name="refresh" size={13} /> 重试
-                    </button>
+                    </Button>
                   ) : null}
                 </span>
               ) : (

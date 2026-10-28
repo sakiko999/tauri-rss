@@ -4,6 +4,7 @@
  * 为什么单列:两个 app(desktop/mobile)的 savePosition 都依赖这两条判据,写反/阈值写成
  * 「且」都不会报错,只会表现为「看完重开跳结尾」或「SQLite 被 4Hz 写打爆」。这里钉住行为。
  */
+
 import assert from "node:assert/strict"
 
 import { positionDecision } from "./reading-position.ts"

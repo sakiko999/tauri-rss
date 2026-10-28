@@ -11,6 +11,7 @@
  *
  * base.js 缓存:player 文件大(~1MB)且函数提取慢,缓存一次(带签名时间戳校验)。
  */
+
 import { now } from "../../host.ts"
 
 /** 缓存:player js URL → { code, fetchedAt, key },避免重复下载。 */

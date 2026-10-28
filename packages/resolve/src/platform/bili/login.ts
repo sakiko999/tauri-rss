@@ -12,6 +12,7 @@
  * 二维码本身由调用方渲染:generate 返回的 `url` 就是二维码内容(非图片),
  * 用任意 QR 库编码即可;本模块只负责协议。
  */
+
 import { httpJson } from "../../host.ts"
 import type { LoginResult } from "../../index.ts"
 import { log } from "../../log.ts"

@@ -4,6 +4,7 @@
  * 优先放到元素外侧；空间不足时才放内侧。所有候选位置都会 clamp 到视口内，
  * 并避开已放置的标签/工具栏。
  */
+
 import type { Box } from "./types.ts"
 
 const GAP = 3

@@ -14,6 +14,7 @@ import { MediaImage } from "@amoeba/ui"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 
+import { Button, IconButton } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { SideCard, StateBlock } from "../../components/StateBlock.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
@@ -130,9 +131,9 @@ export function PlayerPage() {
             title="找不到这条内容"
             text="它可能已被刷新替换。回到列表重新选择。"
             actions={
-              <button className="btn btn-secondary" onClick={() => navigate(backTo())}>
+              <Button variant="secondary" onClick={() => navigate(backTo())}>
                 <Icon name="back" size={14} /> 返回列表
-              </button>
+              </Button>
             }
           />
         </div>
@@ -155,21 +156,21 @@ export function PlayerPage() {
       {...overlayBlock("player-view", "player:view")}
     >
       <header className="detail-head" {...overlayBlock("player-head", "player:head")}>
-        <button className="icon-btn sm" aria-label="返回" onClick={() => navigate(backTo())}>
+        <IconButton size="sm" aria-label="返回" onClick={() => navigate(backTo())}>
           <Icon name="back" size={15} />
-        </button>
+        </IconButton>
         <span className="titlebar-path od-truncate min-w-0 flex-1">{item.title}</span>
-        <button className="icon-btn sm" aria-label="加入队列" onClick={() => addToQueue(item)} title="加入队列">
+        <IconButton size="sm" aria-label="加入队列" onClick={() => addToQueue(item)} title="加入队列">
           <Icon name="queue" size={15} />
-        </button>
-        <button
-          className="icon-btn sm"
+        </IconButton>
+        <IconButton
+          size="sm"
           aria-label={item.isStarred ? "取消星标" : "星标"}
           aria-pressed={!!item.isStarred}
           onClick={() => toggleStar(item)}
         >
           <Icon name="star" size={15} />
-        </button>
+        </IconButton>
       </header>
 
       <div className="scroll-area player-scroll" {...overlayBlock("player-scroll", "player:scroll")}>
@@ -250,21 +251,21 @@ export function PlayerPage() {
               </div>
               <div className="player-actions">
                 {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。 */}
-                <button className="btn btn-quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
+                <Button variant="quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
                   <Icon name="monitor" size={14} /> 剧场模式
-                </button>
-                <button className="btn btn-quiet" onClick={() => addToQueue(item)}>
+                </Button>
+                <Button variant="quiet" onClick={() => addToQueue(item)}>
                   <Icon name="queue" size={14} /> 加入队列
-                </button>
+                </Button>
                 {nextInQueue ? (
-                  <button className="btn btn-quiet" onClick={() => playTo(nextInQueue, from)}>
+                  <Button variant="quiet" onClick={() => playTo(nextInQueue, from)}>
                     <Icon name="skipForward" size={14} /> 下一条：{nextInQueue.title.slice(0, 16)}
-                  </button>
+                  </Button>
                 ) : null}
                 {item.url ? (
-                  <button className="btn btn-quiet" onClick={() => openExternalSafely(item.url)}>
+                  <Button variant="quiet" onClick={() => openExternalSafely(item.url)}>
                     <Icon name="external" size={14} /> 打开原文
-                  </button>
+                  </Button>
                 ) : null}
               </div>
             </div>
@@ -311,9 +312,9 @@ export function PlayerPage() {
                     </button>
                   ))}
                   <div style={{ padding: "var(--sp-2)" }}>
-                    <button className="btn btn-quiet btn-block btn-sm" onClick={clearQueue}>
+                    <Button variant="quiet" block size="sm" onClick={clearQueue}>
                       <Icon name="trash" size={13} /> 清空队列
-                    </button>
+                    </Button>
                   </div>
                 </>
               )}

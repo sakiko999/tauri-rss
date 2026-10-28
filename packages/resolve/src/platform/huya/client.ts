@@ -6,6 +6,7 @@
  * `mp.huya.com/.../profileRoom`(见 play.ts / channels/huya/live.ts,
  * 2026-09 迁移——此前爬 HTML 的 HNF_GLOBAL_INIT 路径已删除)。
  */
+
 import { httpText } from "../../host.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 import { huyaDanmakuStream } from "./danmaku.ts"

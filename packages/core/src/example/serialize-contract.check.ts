@@ -14,6 +14,7 @@
  * 旧实现只扫前者，`tpl:liveVideo` 因此被误报为「读不写」——守卫常红会让真正的
  * 漏写失去信号，所以属性形式必须纳入。
  */
+
 import { readFileSync } from "node:fs"
 
 const SER = "packages/xml/src/serialize.ts"

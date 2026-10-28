@@ -13,6 +13,7 @@
  * ⚠️ 结构回退的稳定性取决于 DOM 结构；这是没有业务 id 时的已知上限（JSON 里
  * `stable: false` 标出）。
  */
+
 import type { Candidate } from "./types.ts"
 
 interface ReactMeta {

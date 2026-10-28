@@ -5,6 +5,7 @@
  * 半块渲染尺寸。二维码识别失败是「画出一张扫不动的图」这种静默错误,
  * 只能在 CPU 上守住。
  */
+
 import { deflateSync } from "node:zlib"
 
 import jsQR from "jsqr"

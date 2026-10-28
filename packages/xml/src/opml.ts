@@ -7,6 +7,7 @@
  *
  * 数据层无关:core.Subscription ↔ OpmlFeed 的映射在 apps/desktop(`lib/opml.ts`)。
  */
+
 import { XMLBuilder, XMLParser } from "fast-xml-parser"
 
 export interface OpmlFeed {

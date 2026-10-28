@@ -5,6 +5,7 @@
  * 事件帧只来自本连接的 target，abortPending 只掐本连接。
  * 传输差异（Tauri 隧道 / Node ws）由 CdpConnector 吸收，本文件只认文本帧。
  */
+
 import { browserLog } from "../log.ts"
 import type { CdpConnector, CdpTransport } from "./transport.ts"
 

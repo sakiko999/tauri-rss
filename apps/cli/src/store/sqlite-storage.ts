@@ -5,6 +5,7 @@
  * `sqliteStorage(path?)` 允许数据服务打开 desktop 的库；CLI 默认仍是
  * `apps/cli/.data/rss.db`（gitignore）。
  */
+
 import { Database } from "bun:sqlite"
 import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"

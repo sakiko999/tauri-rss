@@ -10,6 +10,7 @@
  *    只从 `@amoeba/core/media-store` 与 `@amoeba/core/reading` 取实现，
  *    其余 domain 类型全部 `import type`。
  */
+
 import type {
   AppSettings,
   ChannelInfo,

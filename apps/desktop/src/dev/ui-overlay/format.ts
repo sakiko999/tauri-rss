@@ -1,4 +1,5 @@
 /** 条目格式化（纯函数）—— 文本清单 / 精简 JSON。 */
+
 import type { OverlayEntry, PublicEntry } from "./types.ts"
 
 export function toPublicEntry(e: OverlayEntry): PublicEntry {

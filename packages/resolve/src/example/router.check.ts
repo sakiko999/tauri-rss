@@ -2,6 +2,7 @@
  * 路由表自检 —— `bun packages/resolve/src/example/router.check.ts`
  * 守护:host 边界(伪造子串域名不误命中) + 各平台正例命中 + 提取 id 正确。
  */
+
 import { resolveRoute } from "../resolver/router.ts"
 
 let fails = 0

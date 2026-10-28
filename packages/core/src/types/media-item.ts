@@ -9,6 +9,7 @@
  * 图片进 `ArticleItem.media[]` 作为附件。`category` 是「分区目录」条目:本身不可播,
  * `categoryChannel`/`categoryInfo` 指向点开后的目标渠道实例。
  */
+
 import type { LivePlatformId, LiveStatus } from "./live.ts"
 
 /** 渲染层认识的媒体种类。 */

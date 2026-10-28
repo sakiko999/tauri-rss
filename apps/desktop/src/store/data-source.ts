@@ -7,6 +7,7 @@
  * ⚠️ 远端模式失败**不回退本地库**（fail-closed）：否则会出现第二写者，静默丢更新。
  * 桌面进程内回退（旧 `VITE_DATA_SERVICE=0`）已删除，见 main.tsx 的注入注释。
  */
+
 import type { DataLayer } from "@amoeba/core"
 import { createRemoteDataLayer, type RemoteHooks } from "@amoeba/service-client"
 import type { EndpointInfo } from "@amoeba/service-protocol"

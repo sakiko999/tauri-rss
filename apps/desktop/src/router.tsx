@@ -9,9 +9,11 @@
  *
  * 数据不在 loader 里加载(数据在 zustand + DataLayer);路由只定「位置」。
  */
+
 import { createBrowserRouter, Navigate, useNavigate, useParams, useSearchParams } from "react-router"
 
 import App from "./App"
+import { Button } from "./components/Button.tsx"
 import { useDesktop } from "./store/index.ts"
 import { DEFAULT_VIEW, HOME_NODE } from "./store/nodes.ts"
 
@@ -122,9 +124,9 @@ function RouteError() {
   return (
     <div className="state-block">
       <p className="state-title">视图渲染出错了</p>
-      <button className="btn btn-secondary" onClick={() => navigate("/")}>
+      <Button variant="secondary" onClick={() => navigate("/")}>
         回到首页
-      </button>
+      </Button>
     </div>
   )
 }

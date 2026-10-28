@@ -10,6 +10,7 @@
  *
  * 放在 core(它拥有 deserialize 侧 + xml 依赖):任一侧加了新字段而另一侧没跟上,这里立刻红。
  */
+
 import { serializeFeed } from "@amoeba/xml"
 import type { Item } from "@amoeba/xml"
 

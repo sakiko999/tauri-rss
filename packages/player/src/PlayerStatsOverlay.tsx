@@ -10,6 +10,7 @@
  * ⚠️ 面板 `pointer-events-none`:不挡画面点击/控件;内容只读。
  * ⚠️ 不用桌面端 StateBlock/Menu:player 是独立包,不能反向依赖 desktop。
  */
+
 import { useEffect, useRef, useState } from "react"
 
 import {

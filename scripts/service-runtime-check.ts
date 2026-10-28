@@ -6,6 +6,7 @@
  * token/health 可用 → shutdown 后启动器透传退出码 0。
  * 启动器的解析日志必须全在 stderr，不能污染 READY。
  */
+
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"

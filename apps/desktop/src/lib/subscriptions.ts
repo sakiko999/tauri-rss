@@ -4,6 +4,7 @@
  * 候选值一律取自本机订阅库里已抓到的真实条目,派生不出就返回空数组由界面降级为手填
  * ——绝不编造 uid / 房号。
  */
+
 import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/core"
 import { platformOfChannelKey } from "@amoeba/platform"
 

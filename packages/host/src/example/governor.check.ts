@@ -4,6 +4,7 @@
  *
  * 用假后端 + 短 minInterval(20~40ms),不碰真实网络。
  */
+
 import assert from "node:assert/strict"
 
 import { setLogSink } from "@amoeba/log"

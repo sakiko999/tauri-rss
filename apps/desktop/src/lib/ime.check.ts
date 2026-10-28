@@ -5,6 +5,7 @@
  * 真正的失败模式是「keyCode 兜底被删掉」或「nativeEvent 取值取错」—— 两者都
  * 不会让 tsc 报错,只会让中文输入法用户偶尔建出垃圾数据,所以留断言。
  */
+
 import { isImeComposing } from "./ime.ts"
 
 let failed = 0

@@ -11,6 +11,7 @@
  * localStorage shim 默认 log="0"(warn/error 永保留),RSS_LOG=1 放开——
  * CLI 的观测面是探针本身的结构化输出,不是散装 log(docs/cli-plan.md §七)。
  */
+
 import { createSidecarBrowser, locateSidecarBinary, nodeBackend, nodeJsBackend, nodeWsBackend } from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
 

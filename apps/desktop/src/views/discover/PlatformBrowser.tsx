@@ -15,6 +15,7 @@ import type { ChannelInfo, MediaItem } from "@amoeba/core"
  */
 import { useEffect, useMemo, useState } from "react"
 
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"
 import { isImeComposing } from "../../lib/ime.ts"
@@ -253,12 +254,12 @@ export function PlatformBrowser({
               }}
             />
           ))}
-          <button className="btn btn-primary" disabled={busy} onClick={() => void run()}>
+          <Button disabled={busy} onClick={() => void run()}>
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="search" size={14} />} 取数据
-          </button>
-          <button className="btn btn-secondary" onClick={openSubscribe}>
+          </Button>
+          <Button variant="secondary" onClick={openSubscribe}>
             <Icon name="plus" size={14} /> 订阅该{VIEW_LABEL[view]}
-          </button>
+          </Button>
         </div>
       )}
 
@@ -293,8 +294,8 @@ export function PlatformBrowser({
               <div className="pick-action">
                 <span className="t-small t-muted od-truncate">已选中「{selectedCand.label}」</span>
                 {subKey && landParam ? (
-                  <button
-                    className="btn btn-primary btn-sm"
+                  <Button
+                    size="sm"
                     disabled={subscribing || subscribed.has(selectedCand.value)}
                     onClick={() => void subscribeSelected()}
                   >
@@ -304,7 +305,7 @@ export function PlatformBrowser({
                       <Icon name="plus" size={13} />
                     )}
                     {subscribed.has(selectedCand.value) ? "已订阅" : "订阅这个房间"}
-                  </button>
+                  </Button>
                 ) : (
                   <span className="t-micro t-dim">该平台没有可直接落地为订阅的直播渠道</span>
                 )}

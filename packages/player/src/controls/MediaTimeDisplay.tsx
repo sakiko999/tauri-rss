@@ -2,6 +2,7 @@
  * MediaTimeDisplay —— 时间显示(当前时间 / 总时长,直播显示 ●LIVE)。
  * MediaChrome `<media-time-display>` / `<media-duration-display>` 的 React 合并版。
  */
+
 import type { VideoPlayState } from "../hooks/useVideoElement.ts"
 import { formatTime } from "../utils/time.ts"
 

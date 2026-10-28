@@ -12,6 +12,7 @@
  * 与 xhs 的差别:二维码不是 data URL、也不需要点登录按钮;登录态判定用 `SUB`
  * (微博会话 cookie,HttpOnly → 只能经 CDP Network.getAllCookies 读)。
  */
+
 import { cdpEvaluate, cdpNavigate, withScanLoginLock } from "../../browser/cdp.ts"
 import type { LoginResult } from "../../index.ts"
 import { log } from "../../log.ts"

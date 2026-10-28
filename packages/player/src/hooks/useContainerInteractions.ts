@@ -5,6 +5,7 @@
  * Home/End 起终点、数字 0-9 跳 10% 档(live 除外)。忽略焦点在输入/按钮等可编辑目标。
  * 状态经 ref 持有,避免 timeupdate(4Hz)重渲染导致监听反复重绑。
  */
+
 import { useCallback, useEffect, useRef } from "react"
 
 import type { VideoOps, VideoPlayState } from "./useVideoElement.ts"

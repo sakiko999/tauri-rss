@@ -18,6 +18,7 @@ import { useDesktop } from "../../store/index.ts"
 import { KIND_META } from "../../store/nodes.ts"
 import { type Health, healthOf } from "../../store/selectors.ts"
 import { EditSubscriptionDialog } from "../../views/manage/EditSubscriptionDialog.tsx"
+import { IconButton } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 import { Menu, MenuItem, MenuSeparator } from "../Modal.tsx"
 
@@ -348,9 +349,9 @@ function SubRow({
       <div className="sub-more" onClick={(e) => e.stopPropagation()}>
         <Menu
           trigger={
-            <button className="icon-btn sm" aria-label={`${sub.title} 的管理菜单`} title="更多操作">
+            <IconButton size="sm" aria-label={`${sub.title} 的管理菜单`} title="更多操作">
               <Icon name="more" size={13} />
-            </button>
+            </IconButton>
           }
         >
           <MenuItem icon="refresh" onSelect={() => void refresh(sub.id)}>

@@ -2,6 +2,7 @@
  * 终端渲染辅助 —— 计时/截断/两列表。picocolors 即够,不上表格库。
  * 可观测性约定(docs/cli-plan.md §四):每个探针默认给耗时,错误打完整堆栈。
  */
+
 import pc from "picocolors"
 
 /** ms → 人读时长(≥1s 显示秒,否则 ms)。 */

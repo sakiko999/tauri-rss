@@ -2,6 +2,7 @@
  * 自检 —— 抖音用户/直播间标识归一（纯函数，无网络）。
  * 跑：bun packages/resolve/src/example/douyin-user.check.ts
  */
+
 import { isDouyinProfileUrl, normalizeDouyinRoomId, parseDouyinSecUid } from "../platform/douyin/ids.ts"
 
 function assert(cond: unknown, msg: string) {

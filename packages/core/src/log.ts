@@ -8,6 +8,7 @@
  * 事件只保留排障必须的：失败/降级（refresh/cache/detail/cookie 同步）。
  * 正常刷新/条数/耗时属于数据路径，观测走 CLI 探针（docs/ops/commands.md）。
  */
+
 import { createLogDomain, formatError } from "@amoeba/log"
 
 /** 异常 → 日志文本（非 Error reject 不会退化成 `[object Object]`）。 */

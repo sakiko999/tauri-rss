@@ -5,6 +5,7 @@
  * 只控制「是否把弹幕流交给渲染层」,不负责解析/建连 —— 那是 PlayableMedia 的
  * showDanmaku 语义。control 缺失时不渲染(无弹幕流 / 全局设置已关闭)。
  */
+
 import { DanmakuIcon, DanmakuOffIcon } from "../icons.tsx"
 
 export interface DanmakuControl {

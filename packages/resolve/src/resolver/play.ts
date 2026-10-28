@@ -9,6 +9,7 @@
  * 未显式传的平台由各平台 client 经 credentials provider 回落 settings 登录态
  * (douyin 的 stream/profile 解析内部 await douyinCookie(),已 provider 感知)。
  */
+
 import type { Stream } from "@amoeba/xml"
 
 import { ResolveError } from "../errors.ts"

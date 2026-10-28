@@ -7,6 +7,7 @@
  *      否则一屏控件很多时，重要的结构区块会被挤掉。
  *   3. 返回的 shown 仍按视觉顺序（y→x）排列，供定位用。
  */
+
 import type { Box } from "./types.ts"
 
 export interface LabelCandidate {

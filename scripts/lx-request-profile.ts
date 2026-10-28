@@ -8,6 +8,7 @@
  * 用法：bun scripts/lx-request-profile.ts [渠道 key ...]
  * 不带参数跑 DEFAULT_CHANNELS。
  */
+
 import { setupHost } from "../apps/cli/src/host/node-host.ts"
 
 const DEFAULT_CHANNELS = [

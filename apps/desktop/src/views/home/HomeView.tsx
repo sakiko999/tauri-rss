@@ -13,6 +13,7 @@ import type { MediaItem } from "@amoeba/core"
  */
 import { useMemo } from "react"
 
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { mediaUrl } from "../../lib/media.ts"
@@ -82,11 +83,7 @@ export function HomeView() {
           icon="offline"
           title="离线模式"
           text="已跳过网络抓取，当前镜像里没有内容。切回在线后刷新一次。"
-          actions={
-            <button className="btn btn-primary" onClick={() => setOffline(false)}>
-              切回在线
-            </button>
-          }
+          actions={<Button onClick={() => setOffline(false)}>切回在线</Button>}
         />
       </div>
     )
@@ -99,9 +96,9 @@ export function HomeView() {
           title="还没有订阅"
           text="去发现页挑一个源，或粘贴 RSS 地址添加订阅。订阅之后，今天的更新、直播和继续观看会汇到这里。"
           actions={
-            <button className="btn btn-primary" onClick={() => go("page:discover")}>
+            <Button onClick={() => go("page:discover")}>
               <Icon name="compass" size={14} /> 去发现页添加订阅
-            </button>
+            </Button>
           }
         />
       </div>
@@ -116,12 +113,12 @@ export function HomeView() {
           text="可能是源暂时为空，或首轮抓取失败。刷新一次；若持续为空，检查该源是否已停用。"
           actions={
             <>
-              <button className="btn btn-primary" onClick={() => void refreshAll(true)}>
+              <Button onClick={() => void refreshAll(true)}>
                 <Icon name="refresh" size={14} /> 刷新
-              </button>
-              <button className="btn btn-secondary" onClick={() => go("page:discover")}>
+              </Button>
+              <Button variant="secondary" onClick={() => go("page:discover")}>
                 去发现页添加订阅
-              </button>
+              </Button>
             </>
           }
         />

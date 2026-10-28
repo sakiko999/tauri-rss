@@ -13,6 +13,7 @@
  * 跑:`bun packages/core/src/example/passive-mode.check.ts`
  * 最小断言(非框架):内存存储 + 假 channel,不触网 —— 判的是编排逻辑,不是抓取。
  */
+
 import assert from "node:assert/strict"
 
 import { getChannel, registerAllChannels, registerChannel } from "@amoeba/crawler"

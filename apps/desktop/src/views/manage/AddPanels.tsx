@@ -11,6 +11,7 @@ import { MediaImage } from "@amoeba/ui"
  */
 import { useMemo, useState } from "react"
 
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Select } from "../../components/Modal.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
@@ -178,10 +179,10 @@ export function SearchPanel(f: SearchPanelProps) {
           />
         </div>
         <div className="inline-row">
-          <button className="btn btn-secondary btn-sm" disabled={f.searching || !f.keyword.trim()} onClick={f.onSearch}>
+          <Button variant="secondary" size="sm" disabled={f.searching || !f.keyword.trim()} onClick={f.onSearch}>
             {f.searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />}{" "}
             搜索
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -407,8 +408,9 @@ export function ChannelPanel(f: ChannelPanelProps) {
           <p className="t-small t-dim">{query.trim() ? `没有匹配「${query.trim()}」的渠道。` : "没有可用渠道。"}</p>
           {/* 在某个分类里搜空是最常见的死路：给一条出路，而不是让用户自己切 tab 重搜 */}
           {query.trim() ? (
-            <button
-              className="btn btn-secondary btn-sm"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => {
                 if (cat !== "all") {
                   setCat("all")
@@ -417,7 +419,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
               }}
             >
               {cat !== "all" ? "在全部渠道中搜索" : "清除搜索"}
-            </button>
+            </Button>
           ) : null}
         </div>
       ) : (

@@ -4,6 +4,7 @@
  * 36 条:27 迁移自 App.tsx + 9 catalog 实测 200。crawler 用它们批量注册
  * RawRssChannel(key 形如 "rss:{id}")。
  */
+
 import type { Kind } from "@amoeba/xml"
 
 export interface BuiltinRssFeed {

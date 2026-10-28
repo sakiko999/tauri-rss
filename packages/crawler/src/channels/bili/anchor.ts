@@ -5,6 +5,7 @@
  * 分页:页码制(page 从 1 起)。⚠️ 该接口**无 `page_size`**(与搜房间相异),
  * 服务端固定每页条数。
  */
+
 import { searchBiliAnchors } from "@amoeba/resolve"
 
 import { makeApiChannel } from "../factory.ts"

@@ -4,12 +4,14 @@
  * 结构照 new_desktop 的 components.js(mediaCard/cardMini/socialCard),但图片走
  * ui 包的 MediaImage(自带防盗链隧道 + 骨架 + 失败占位),不再自己写 <img>。
  */
+
 import type { AudioItem, CategoryItem, MediaItem } from "@amoeba/core"
 import { fmtCount, MediaImage } from "@amoeba/ui"
 
 import { fmtAgo, fmtTime, httpsify, isLiveNow, itemKey, mediaUrl, onlineOf, socialRatio } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { rememberSocialSource } from "../../lib/viewTransition.ts"
+import { IconButton } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 
 /** 播放器回调:交给宿主(MediaMain/PlayerPage)决定如何开播。 */
@@ -73,8 +75,8 @@ export function isCategoryItem(item: MediaItem): item is CategoryItem {
  */
 function QueueButton({ item, onQueue }: { item: MediaItem; onQueue: (item: MediaItem) => void }) {
   return (
-    <button
-      className="icon-btn sm"
+    <IconButton
+      size="sm"
       aria-label="加入播放队列"
       title="加入播放队列"
       onClick={(e) => {
@@ -83,7 +85,7 @@ function QueueButton({ item, onQueue }: { item: MediaItem; onQueue: (item: Media
       }}
     >
       <Icon name="plus" size={13} />
-    </button>
+    </IconButton>
   )
 }
 

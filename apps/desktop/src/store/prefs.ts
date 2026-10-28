@@ -7,6 +7,7 @@
  *
  * 存储 key 与首帧脚本(index.html)`ui-prefs` 共用,勿改。
  */
+
 import { create } from "zustand"
 
 export type ThemeMode = "light" | "dark" | "system"

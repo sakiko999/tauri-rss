@@ -97,6 +97,18 @@
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
   --radius-xl: var(--r-xl);
+
+  /* 工具类令牌（CVA 组件用）：
+     字号用 --text-ui* 而非 --text-small/body —— --color-body 已生成 text-body
+     颜色类，同名的字号类会与之冲突。
+     ⚠️ --duration-* / --scale-* 不在 Tailwind 4 的 theme 命名空间（2026-10-15
+     实测 + 2026-10-28 构建产物复核：注册了也不生成工具类），组件里用
+     `duration-[120ms]` / `scale-[0.98]` 任意值表达精确视觉。 */
+  --text-ui: 13px;
+  --text-ui-sm: 11px;
+  --spacing-control: 34px;
+  --spacing-control-sm: 28px;
+  --font-weight-ui: 550;
 }
 
 /* 默认（深色）语义开关；浅色块只覆盖颜色变量。 */

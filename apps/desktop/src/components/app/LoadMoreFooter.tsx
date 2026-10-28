@@ -6,10 +6,12 @@
  *   2. **本地窗口**(聚合视图 tab:today/unread/starred/group 超过 PAGE_SIZE 条)
  *      → `growPage()` 放开本地切片窗口,不发网络请求。
  */
+
 import { useEffect, useRef } from "react"
 
 import { useDesktop } from "../../store/index.ts"
 import { isSmartFeed, isTabNode } from "../../store/nodes.ts"
+import { Button } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 
 export function LoadMoreFooter() {
@@ -62,9 +64,9 @@ export function LoadMoreFooter() {
       ) : channelPaging && loadingMore ? (
         <Icon name="loader" size={16} className="t-dim animate-spin" />
       ) : (
-        <button className="btn btn-secondary btn-sm" onClick={trigger}>
+        <Button variant="secondary" size="sm" onClick={trigger}>
           加载更多
-        </button>
+        </Button>
       )}
     </div>
   )

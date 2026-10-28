@@ -2,6 +2,7 @@ import type { Subscription, SubscriptionGroup } from "@amoeba/core"
 /** 订阅与分组 tab:OPML 导入导出 + 分组 CRUD + 订阅总表。 */
 import { useState } from "react"
 
+import { Button, IconButton } from "../../../components/Button.tsx"
 import { Icon } from "../../../components/Icon.tsx"
 import { Menu, MenuItem, MenuSeparator, Switch } from "../../../components/Modal.tsx"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
@@ -101,11 +102,11 @@ function SideCardOPML({
   return (
     <SideCard title="OPML 导入/导出" icon="rss">
       <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
-        <button className="btn btn-secondary" onClick={() => void onImportOpml()} disabled={importing}>
+        <Button variant="secondary" onClick={() => void onImportOpml()} disabled={importing}>
           <Icon name="download" size={14} /> {importing ? "导入中…" : "导入 OPML"}
-        </button>
-        <button
-          className="btn btn-secondary"
+        </Button>
+        <Button
+          variant="secondary"
           onClick={() => {
             exportOpmlFile(doExportOpml())
             toast("ok", "已导出 OPML", `共 ${shareable} 条带 URL 的订阅,含分组层级。`)
@@ -113,7 +114,7 @@ function SideCardOPML({
           disabled={shareable === 0}
         >
           <Icon name="folder" size={14} /> 导出 OPML
-        </button>
+        </Button>
       </div>
       <p className="setting-help">
         导入按 OPML 的分组层级建分组、逐条落成 RSS 直链（同一地址已订阅则跳过）； 导出只含 RSS
@@ -166,9 +167,9 @@ function SideCardGroups({
           「视频/直播/社交/播客/文章」,带撤销。 */}
       {orphanCount > 0 ? (
         <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => void autoGroupByKind()}>
+          <Button variant="secondary" size="sm" onClick={() => void autoGroupByKind()}>
             <Icon name="sparkle" size={14} /> 把 {orphanCount} 条未分组按类型归类
-          </button>
+          </Button>
           <span className="t-micro t-dim">可撤销</span>
         </div>
       ) : null}
@@ -201,8 +202,7 @@ function SideCardGroups({
               <span className="t-micro t-dim num" title="组内订阅数">
                 {n} 个订阅
               </span>
-              <button
-                className="icon-btn"
+              <IconButton
                 aria-label="删除分组"
                 onClick={() => {
                   if (window.confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`))
@@ -210,7 +210,7 @@ function SideCardGroups({
                 }}
               >
                 <Icon name="trash" />
-              </button>
+              </IconButton>
             </span>
           </div>
         )
@@ -229,8 +229,8 @@ function SideCardGroups({
             }
           }}
         />
-        <button
-          className="btn btn-secondary"
+        <Button
+          variant="secondary"
           disabled={!newGroup.trim()}
           onClick={() => {
             void addGroup(newGroup.trim())
@@ -238,7 +238,7 @@ function SideCardGroups({
           }}
         >
           <Icon name="plus" size={14} /> 新建
-        </button>
+        </Button>
       </div>
     </SideCard>
   )
@@ -283,31 +283,33 @@ function SubscriptionTable({
                     td 是 display:block + maxWidth 260,会小于列宽(40%)→ 行分隔线在
                     该列断开,右半截成空白条。td 保持 table-cell 撑满列宽。 */}
                 <td style={{ maxWidth: 0 }}>
-                  <button
-                    className="btn btn-quiet btn-sm od-truncate"
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    className="od-truncate"
                     style={{ maxWidth: "100%" }}
                     onClick={() => go(s.id)}
                     title={s.title}
                   >
                     {s.title}
-                  </button>
+                  </Button>
                 </td>
                 <td className="t-micro t-dim mono">{s.channelKey}</td>
                 <td className="t-small t-muted">{groups.find((g) => g.id === s.groupId)?.title ?? "未分组"}</td>
                 <td>{s.enabled ? <span className="tag tag-ok">启用</span> : <span className="tag">停用</span>}</td>
                 <td>
                   <div className="cell-actions">
-                    <button className="icon-btn sm" aria-label="刷新" onClick={() => void refresh(s.id)}>
+                    <IconButton size="sm" aria-label="刷新" onClick={() => void refresh(s.id)}>
                       <Icon name="refresh" size={14} />
-                    </button>
-                    <button className="icon-btn sm" aria-label="编辑" onClick={() => setEditing(s)}>
+                    </IconButton>
+                    <IconButton size="sm" aria-label="编辑" onClick={() => setEditing(s)}>
                       <Icon name="edit" size={14} />
-                    </button>
+                    </IconButton>
                     <Menu
                       trigger={
-                        <button className="icon-btn sm" aria-label="更多">
+                        <IconButton size="sm" aria-label="更多">
                           <Icon name="more" size={14} />
-                        </button>
+                        </IconButton>
                       }
                     >
                       <MenuItem icon="rss" onSelect={() => toggleSubEnabled(s.id)}>

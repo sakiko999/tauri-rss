@@ -8,6 +8,7 @@
  * (restartAfterInstall 默认 true),所以安装成功后前端不应假设还能继续操作;
  * relaunch() 主要为 macOS/Linux 兜底,Windows 走安装器自带的重启。
  */
+
 import { getVersion } from "@tauri-apps/api/app"
 import { invoke } from "@tauri-apps/api/core"
 import { relaunch } from "@tauri-apps/plugin-process"

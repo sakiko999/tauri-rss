@@ -10,6 +10,7 @@
  * URL 是「视图位置」权威(nodeId 来自 path,router loader 同步 store);
  * 本组件只读 store 渲染。侧栏在播放页也保留(与 new_desktop 一致)。
  */
+
 import { useEffect } from "react"
 import { useNavigate, useParams } from "react-router"
 
@@ -18,6 +19,7 @@ import { SocialDetailModal } from "./components/app/SocialDetailModal.tsx"
 import { TitleBar } from "./components/app/TitleBar.tsx"
 import { Toaster } from "./components/app/Toaster.tsx"
 import { GridSkeleton } from "./components/BootSkeleton.tsx"
+import { Button } from "./components/Button.tsx"
 import { useGlobalShortcuts } from "./lib/shortcuts.ts"
 import { overlayBlock } from "./lib/uiOverlay.ts"
 import { scheduleStartupCheck } from "./lib/update.ts"
@@ -100,9 +102,7 @@ export default function App() {
           <p className="state-title">应用数据初始化失败</p>
           <p className="state-text">{initError}</p>
           <div className="state-actions">
-            <button className="btn btn-primary" onClick={() => void init()}>
-              重试
-            </button>
+            <Button onClick={() => void init()}>重试</Button>
           </div>
         </div>
       </div>
@@ -118,9 +118,9 @@ export default function App() {
       {!serviceOnline && serviceError ? (
         <div className="service-banner" role="status">
           <span>数据服务断开：{serviceError}（当前为只读镜像，写操作会失败）</span>
-          <button className="btn btn-secondary" onClick={() => window.location.reload()}>
+          <Button variant="secondary" onClick={() => window.location.reload()}>
             重连
-          </button>
+          </Button>
         </div>
       ) : null}
       <div

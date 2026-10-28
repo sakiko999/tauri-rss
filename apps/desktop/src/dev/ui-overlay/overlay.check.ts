@@ -2,6 +2,7 @@
  * Numbered UI Overlay 纯逻辑自检（无 DOM）。
  * 跑：bun apps/desktop/src/dev/ui-overlay/overlay.check.ts
  */
+
 import { DEFAULT_HOTKEY, formatHotkey, matchHotkey, parseHotkey } from "./hotkey.ts"
 import { selectLabels } from "./labels.ts"
 import { chooseLabelPosition } from "./layout.ts"

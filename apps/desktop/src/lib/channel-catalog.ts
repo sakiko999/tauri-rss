@@ -6,6 +6,7 @@
  * 分类计数、搜索过滤、分页边界（首组永远要显示，否则「显示更多」点下去还是 0 行）。
  * 回归 `channel-catalog.check.ts`。
  */
+
 import type { ChannelInfo } from "@amoeba/core"
 import { platformDef } from "@amoeba/platform"
 

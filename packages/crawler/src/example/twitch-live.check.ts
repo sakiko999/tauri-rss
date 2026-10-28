@@ -8,6 +8,7 @@
  *     缩略图回落模板、坏 login 丢弃、坏 createdAt。
  * 不需要网络 / 浏览器。
  */
+
 import type { TwitchStreamNode, TwitchUser } from "@amoeba/resolve"
 
 import { twitchLiveItem, twitchStreamToLive } from "../channels/twitch/live.ts"

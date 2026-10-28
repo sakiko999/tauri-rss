@@ -2,6 +2,7 @@
  * ui-shot —— 给运行中的 dev 实例的各个模块截图存档(Review 用)。
  * 用法: bun scripts/ui-shot.ts [outDir]
  */
+
 import { mkdirSync } from "node:fs"
 
 const PORT = Number(process.env.CDP_PORT ?? 9222)

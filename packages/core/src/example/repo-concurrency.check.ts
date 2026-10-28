@@ -9,6 +9,7 @@
  * 用「每次 get/set 之间插入一个事件循环让位」的假存储放大交错窗口,复现真实竞态:
  * 不串行化时 N 次并发 patch 全部读到同一份旧 map → 只有最后一次生效。
  */
+
 import assert from "node:assert/strict"
 
 import { createReadingRepository } from "../repo/reading-repo.ts"

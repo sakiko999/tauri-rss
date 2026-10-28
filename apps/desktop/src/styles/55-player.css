@@ -76,13 +76,6 @@
   gap: var(--sp-2);
   flex-wrap: wrap;
 }
-/* 剧场模式开关的按下态 —— .btn 本身没有 aria-pressed 样式(只有 .icon-btn/.chip 有),
-   没有这行按钮按了和没按长得一样。 */
-.player-actions .btn[aria-pressed="true"] {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
 .queue-row {
   display: flex;
   align-items: center;
