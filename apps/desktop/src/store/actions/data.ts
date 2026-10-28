@@ -67,10 +67,11 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           // 刷新后恢复的选中节点(router /v/:id)在 dl 就绪前 select 会跳过 canLoadMore——补查。
           const nodeId = get().selectedNodeId
           if (isRealSub(nodeId)) queryCanLoadMore(nodeId)
-          // init 自动刷新走 TTL 缓存(命中零网络,启动秒开)。
-          await get().refreshAll(false)
-          // ⚠️ ready 放在**最后**:此时首轮刷新已跑完(`loading` 已落回 false)、
-          // items 也已就位,`showSkeleton` 一步从 true 变 false —— 全程只翻转一次。
+          // 首屏 TTL 刷新**不阻塞 ready**:快照 + 缓存已可显示(有内容即收骨架);
+          // TTL 过期的订阅在后台抓取(顶栏 loading 转圈),完成后事件回流自然重绘。
+          // 空库首启由 showSkeleton 第二段(「空库且在抓」)继续盖骨架 ——
+          // refreshAll 的同步段先置 loading,ready 置位时骨架判定已正确接管。
+          void get().refreshAll(false)
           set({ ready: true })
         } catch (e) {
           // 初始化失败(宿主未注入 / 库损坏):置错误态由 App 渲染错误页,不让整页白屏。
@@ -191,13 +192,25 @@ export function createDataActions(ctx: StoreCtx): DataActions {
       // 重入防护:刷新按钮在 loading 期间未禁用(顶栏 chip / rail 刷新键),连点会并发
       // 发起多轮全量抓取 —— 反爬源被打 + 界面状态互相覆盖。
       if (get().loading) return
-      const subs = await dl.subscriptions.list()
-      set({ loading: true, busy: Object.fromEntries(subs.map((s) => [s.id, true])) })
+      // ⚠️ 先声明 loading 再读订阅列表:① 手动刷新点击即反馈;② init 的后台首轮
+      // 刷新在**同步段**就置位 —— ready 先行置位时,showSkeleton 第二段(「空库且
+      // 在抓」)能正确接管,不会闪一帧空视图再盖回骨架。
+      set({ loading: true })
       const errors: Record<string, string> = {}
       const kinds: Record<string, ErrorKind> = {}
       type RefreshOutcome = Awaited<ReturnType<typeof dl.refresh>>
       let results: PromiseSettledResult<RefreshOutcome>[] = []
+      let subs: Awaited<ReturnType<typeof dl.subscriptions.list>> = []
       try {
+        try {
+          subs = await dl.subscriptions.list()
+        } catch (e) {
+          // 列表都读不到(服务断连):断线状态由 WS 层的横幅负责,这里不 toast 不抛
+          // (finally 仍会清 loading/busy)。
+          console.warn("[refreshAll] subscriptions.list failed", e)
+          return
+        }
+        set({ busy: Object.fromEntries(subs.map((s) => [s.id, true])) })
         // ⚠️ 必须 allSettled + 逐条超时 + finally:
         //   - 用 Promise.all 时,任一 reject 会让下面的 set({loading:false}) **永不执行**
         //     → 顶栏「更新中」永久转圈(且 Promise.all 会丢结果,其余订阅的白抓);
