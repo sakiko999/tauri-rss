@@ -34,30 +34,64 @@ function colsForWidth(w: number): number {
 }
 
 /**
- * 单 item 高度估算:封面比例 + 列宽 + 文本行数粗算。
- * 贴近 SocialCard 实际结构:卡片 p-3(24) + 底栏(30) + gap(图↔文本 10)+ 余量(6)。
- * ⚠️ 只算**封面**——SocialCard 只渲染封面(多图在详情弹窗看);按全部图累加会普遍
- * 高估 → 测量修正频繁触发 → 同列后续 cell 位置抖动。比例走 socialRatio(含竖图下限)。
- * 无图不占图高(纯文本卡不被高估)。
- * ⚠️ 此估算只作**首帧占位**——渲染后「测量修正」读真实 offsetHeight 覆盖,偏差被吸收,
- * 但估算越准,测量修正的重排幅度越小,视觉越稳。
+ * SocialCard 的几何常量 —— 逐项对齐 CSS(`50-shortvideo.css` 的 `.social-card` /
+ * `.social-body` / `.social-foot`,`15-base.css` 的 `.clamp-3`)。
+ *
+ * ⚠️ 估算**就是落位结果**:masonic 按估算排位置,真实高度只有渲染后回填(见下方测量
+ * 修正)。估算与真实差多少,同列后来的卡片就被重排多少 —— 所以这里不留任何「余量」,
+ * 而是照 CSS 算;只剩文本行数(1~3 行)是估算,偏差由测量修正吸收。
  */
-function estimateItemHeight(it: MediaItem, colW: number): number {
+const CARD_BORDER = 2 // .social-card border:1px × 2
+const BODY_PAD_TOP = 12 // .social-body padding-top → --sp-3
+const BODY_GAP = 8 // .social-body gap → --sp-2
+const FOOT_H = 20 // .social-foot 高度 = .social-avatar 20px(固定,不随密度变)
+const TITLE_LINE_H = 19.5 // .social-title:13px(--fs-small)× line-height 1.5
+const TITLE_MAX_LINES = 3 // .social-title 用 .clamp-3
+
+/** 标题单字符渲染宽(13px 字号):全角/emoji ≈ 1em,半角 ≈ 0.5em,空白更窄。 */
+function charWidth(ch: string): number {
+  const cp = ch.codePointAt(0)!
+  if (cp === 0x0a || cp === 0x20 || cp === 0x09) return 3.3
+  return cp > 0xffff || /[一-鿿　-〿＀-￯]/.test(ch) ? 13 : 6.7
+}
+
+/**
+ * 单 item 高度估算 = 边框 + 封面高 + 正文块(上内边距 + 标题行 + 间距 + 底栏 + 下内边距)。
+ *
+ * ⚠️ 只算**封面**——SocialCard 只渲染封面(多图在详情弹窗看);块的总比例恒等于封面
+ * 比例,按全部图累加会普遍高估。比例走 socialRatio(含竖图下限)。无图不占图高。
+ * 标题行数取 clamp-3 上限(卡片实际只露 3 行)。
+ */
+function estimateItemHeight(it: MediaItem, colW: number, cardPad: number): number {
+  const inner = Math.max(1, colW - CARD_BORDER)
   const cover = ((it as { images?: Array<{ width?: number; height?: number }> }).images ?? [])[0]
-  const imgH = cover ? colW / socialRatio(cover) : 0
-  const content = (it as { content?: string }).content ?? ""
-  // 文本渲染宽粗算:中文/全角/emoji(码点>0xFFFF,微博正文常见)≈ 14px(14px 字号)、
-  // 英文/数字/空格 ≈ 7.7px;line-clamp-6 截断。
-  // ⚠️ 不做行保险:估偏大 → 测量修正普遍触发 → positioner.update 重排同列后续 → 底部
-  // 卡片位置变化。估算贴近真实 → 测量修正几乎不触发(±1px 才 update)→ 位置稳定;
-  // 折行等残余偏差由「渲染后测量修正」兜底(高度变准,不重叠)。
-  const textW = [...content].reduce(
-    (w, ch) => w + (ch.codePointAt(0)! > 0xffff || /[一-鿿　-〿＀-￯]/.test(ch) ? 14 : 7.7),
-    0,
-  )
-  const lines = content ? Math.min(6, Math.max(1, Math.ceil(textW / colW))) : 0
-  const gap = cover && lines > 0 ? 10 : 0
-  return imgH + lines * 23 + 24 + 30 + gap + 6
+  const imgH = cover ? inner / socialRatio(cover) : 0
+  // 与 SocialCard 同口径:content ?? summary,空则回退 title。
+  const raw = (it as { content?: string; summary?: string }).content ?? it.summary ?? ""
+  const text = raw || it.title || ""
+  const lines = text ? Math.min(TITLE_MAX_LINES, Math.max(1, Math.ceil(textWidth(text) / (inner - cardPad * 2)))) : 0
+  return imgH + CARD_BORDER + BODY_PAD_TOP + lines * TITLE_LINE_H + BODY_GAP + FOOT_H + cardPad
+}
+
+function textWidth(text: string): number {
+  let w = 0
+  for (const ch of text) w += charWidth(ch)
+  return Math.max(1, w)
+}
+
+/**
+ * 卡片内边距(px)。随密度档变(`[data-density]` 改 `--card-pad`:20/16/12),
+ * 差 4px 就足以让「估算 vs 真实」超阈值、每张卡都触发一次测量重排 —— 所以照实读,
+ * 按档位缓存(滚动重渲染每帧都会走这里,不能每次 getComputedStyle)。
+ */
+let padCache: { key: string; value: number } | null = null
+function cardPadPx(): number {
+  const key = document.documentElement.dataset.density ?? ""
+  if (padCache?.key === key) return padCache.value
+  const v = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--card-pad"))
+  const value = Number.isFinite(v) ? v : 16
+  padCache = { key, value }
+  return value
 }
 
 /** 水平 padding(滚动容器 px-4 = 两侧各 1rem)——positioner 宽度按内容宽算,否则列溢出。 */
@@ -155,10 +189,11 @@ export function MasonryGrid({
   // 列宽 + 平均高度估算(给 masonic itemHeightEstimate——新 item 落位用)。
   const colCount = size.width ? colsForWidth(size.width) : 1
   const colW = Math.max(1, (size.width - (colCount - 1) * 16) / colCount)
+  const cardPad = cardPadPx()
   const estHeight = useMemo(() => {
     if (!items.length) return 320
-    return items.reduce((sum, it) => sum + estimateItemHeight(it, colW), 0) / items.length
-  }, [items, colW])
+    return items.reduce((sum, it) => sum + estimateItemHeight(it, colW, cardPad), 0) / items.length
+  }, [items, colW, cardPad])
 
   // ⚠️ 预置新增 item 到 positioner(per-item 估算高):masonic 的 fresh batch 对未测量
   // cell 用「无定位样式」(只 width+absolute,无 top/left)渲染 → 堆叠容器顶部 → 视口
@@ -175,12 +210,12 @@ export function MasonryGrid({
     let changed = false
     for (let i = 0; i < items.length; i++) {
       if (positioner.get(i) === undefined) {
-        positioner.set(i, estimateItemHeight(items[i], colW))
+        positioner.set(i, estimateItemHeight(items[i], colW, cardPad))
         changed = true
       }
     }
     if (changed) forceUpdate()
-  }, [items, positioner, colW, forceUpdate])
+  }, [items, positioner, colW, cardPad, forceUpdate])
 
   // ── 渲染后测量修正 ──────────────────────────────────────────────
   // 预置把 cell 高度固定为估算 → 估算偏差(文本折行/字号)导致「累积列高失真」→ 后续

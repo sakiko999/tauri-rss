@@ -89,26 +89,39 @@ export function parseWeiboDate(s: unknown): number | undefined {
   return Number.isFinite(t) ? t : undefined
 }
 
-/** 去 HTML 标签(搜索结果等无 text_raw 的 mblog,text 是 HTML)。 */
+/**
+ * 去 HTML 标签(无 text_raw 的 mblog 的 text / 长文 longTextContent 都是 HTML)。
+ * ⚠️ `content` 是**纯文本字段**(UI 直接当文本渲染,瀑布流还按字数估高),任何 HTML
+ * 进来都会原样显示成 `<a href=...>` 源码 —— 微博长文的 longTextContent 就是这种 HTML。
+ */
 function stripHtml(s: string): string {
-  return s
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
+  return (
+    s
+      // `<br>` 是长文的**段落分隔**(`<br /><br />`),先落成换行再剥标签,否则整段
+      // 长文挤成一行(详情弹窗 pre-wrap 直接可读)。
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, "&")
+      .replace(/[ \t]+/g, " ")
+      .replace(/ *\n */g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  )
 }
 
 /**
  * mblog(m.weibo.cn 微博 JSON)→ Social Item。
- * content/title 取 text_raw(纯文本);无 text_raw 时 text 是 HTML → stripHtml 兜底
- * (避免 title 含 `<a>` 标签破坏 serialize 的 XML)。images = pics 原图(宽高未知,
+ * content/title 取 text_raw(纯文本);无 text_raw 时 text 是 HTML → 统一过 stripHtml
+ * 兜底(避免 title 含 `<a>` 标签破坏 serialize 的 XML)。images = pics 原图(宽高未知,
  * 调用方兜底);转评赞 = attitudes/reposts/comments_count。raw 存 mblogId/isLongText 供 extend。
  */
 export function mblogToSocial(m: any, sourceId: string, t: number): Social {
   const id = String(m?.id ?? "")
-  const rawText = String(m?.text_raw ?? "").trim()
-  const htmlText = String(m?.text ?? "")
-  const text = rawText || stripHtml(htmlText)
+  const text = stripHtml(String(m?.text_raw ?? "").trim() || String(m?.text ?? ""))
   const images = (m?.pics ?? [])
     .map((p: any) => {
       const url = String(p?.large?.url ?? p?.url ?? "")
@@ -140,7 +153,9 @@ export function mblogToSocial(m: any, sourceId: string, t: number): Social {
   }
 }
 
-/** 长微博展开:isLongText 时调 /statuses/extend 拿完整正文(原地改 content)。 */
+/** 长微博展开:isLongText 时调 /statuses/extend 拿完整正文(原地改 content)。
+ *  longTextContent 是**带标签的 HTML**(`<a>`/`<br />`)→ 必须 stripHtml,否则卡片里
+ *  显示的是标签源码。 */
 export async function expandLongText(it: Social, cookie?: string): Promise<void> {
   const raw = (it.raw ?? {}) as { mblogId?: string; isLongText?: boolean }
   if (!raw.isLongText || !raw.mblogId) return
@@ -148,7 +163,7 @@ export async function expandLongText(it: Social, cookie?: string): Promise<void>
     Referer: `${WB_BASE}/status/${raw.mblogId}`,
   })
   const longText = e.body?.data?.longTextContent
-  if (typeof longText === "string") it.content = longText.trim()
+  if (typeof longText === "string") it.content = stripHtml(longText)
 }
 
 /**

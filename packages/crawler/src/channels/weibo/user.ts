@@ -19,6 +19,7 @@ import {
   cdpNavigate,
   mblogCardsToItems,
   readWeiboLoginCookie,
+  ResolveError,
   WB_BASE,
   weiboClient,
   weiboScanLogin,
@@ -123,7 +124,7 @@ export class WeiboUserChannel implements RssChannel, Loginable {
   private async getIndex(
     uid: string,
     sinceId: string | undefined,
-    fetchJson: (url: string) => Promise<{ ok?: number; msg?: string; data?: any }>,
+    fetchJson: (url: string) => Promise<{ ok?: number; msg?: string; url?: string; data?: any }>,
   ): Promise<{ data?: { cards?: any[]; cardlistInfo?: { total?: number } } }> {
     const s1 = await fetchJson(`${WB_BASE}/api/container/getIndex?type=uid&value=${uid}`)
     if (s1?.ok !== 1) throw new Error(`weibo 用户信息失败: ${s1?.msg ?? "未知错误"}`)
@@ -132,7 +133,14 @@ export class WeiboUserChannel implements RssChannel, Loginable {
     const s2 = await fetchJson(
       `${WB_BASE}/api/container/getIndex?type=uid&value=${uid}&containerid=${containerId}${sinceId ? `&since_id=${sinceId}` : ""}`,
     )
-    if (s2?.ok !== 1) throw new Error(`weibo 微博列表失败: ${s2?.msg ?? "未知错误"}`)
+    if (s2?.ok !== 1) {
+      // ⚠️ 未登录时首页照给(10 条),**翻页一律** `ok:-100` + passport 跳转地址。按 auth
+      // 归类,UI 才会提示「需要登录」而不是含糊的「未知错误」(自动预加载会打到这一条)。
+      if (typeof s2?.url === "string" && s2.url.includes("passport.weibo.com")) {
+        throw new ResolveError("auth", "weibo: 需要登录(匿名只有首页,翻页/更多内容要登录态)")
+      }
+      throw new Error(`weibo 微博列表失败: ${s2?.msg ?? "未知错误"}`)
+    }
     return s2
   }
 
