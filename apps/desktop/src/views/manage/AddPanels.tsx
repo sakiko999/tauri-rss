@@ -1,3 +1,5 @@
+import type { ChannelInfo } from "@amoeba/core"
+import { MediaImage } from "@amoeba/ui"
 /**
  * AddPanels —— 「添加订阅」弹窗的两块功能件。
  *
@@ -8,16 +10,15 @@
  * 「浏览渠道」是查渠道目录再填参数。
  */
 import { useMemo, useState } from "react"
-import type { ChannelInfo } from "@amoeba/core"
-import { KIND_META } from "../../store/nodes.ts"
-import { Banner } from "../../components/StateBlock.tsx"
+
 import { Icon } from "../../components/Icon.tsx"
 import { Select } from "../../components/Modal.tsx"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
-import { MediaImage } from "@amoeba/ui"
-import { platformOf, SEARCH_CHANNEL, USER_SEARCH_CHANNEL, valueList, type Candidate } from "../../lib/subscriptions.ts"
-import { isImeComposing } from "../../lib/ime.ts"
+import { Banner } from "../../components/StateBlock.tsx"
 import { CATALOG_PAGE, catalogView, isSingleton } from "../../lib/channel-catalog.ts"
+import { isImeComposing } from "../../lib/ime.ts"
+import { type Candidate, platformOf, SEARCH_CHANNEL, USER_SEARCH_CHANNEL, valueList } from "../../lib/subscriptions.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { KIND_META } from "../../store/nodes.ts"
 
 /** 渠道 → 平台图标名(与 Dialog 里那份是同一张表,提出来给两块面板共用)。 */
 export const PLATFORM_ICON: Record<string, string> = {

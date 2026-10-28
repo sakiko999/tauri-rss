@@ -1,3 +1,4 @@
+import { mblogToSocial } from "../platform/weibo/client.ts"
 /**
  * 实况图（Live Photo）映射自检 —— `bun packages/resolve/src/example/live-photo.check.ts`
  *
@@ -9,7 +10,6 @@
  * - 微博 `pics[].type === "livephoto"` + `pics[].videoSrc`（302 包装器）。
  */
 import { noteDetailToSocial } from "../platform/xhs/client.ts"
-import { mblogToSocial } from "../platform/weibo/client.ts"
 
 let failed = 0
 const ok = (cond: boolean, msg: string): void => {

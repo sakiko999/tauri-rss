@@ -2,7 +2,7 @@
  * mobile html 自检 —— `bun apps/mobile/src/html.check.ts`
  * 覆盖:HTML 探测不误判裸 `<` / 块标签转段落换行 / 脚本丢弃 / 实体解码 / 纯文本原样。
  */
-import { htmlToText, displayBody, looksLikeHtml } from "./html.ts"
+import { displayBody, htmlToText, looksLikeHtml } from "./html.ts"
 
 let fails = 0
 const ok = (c: unknown, l: string) => {

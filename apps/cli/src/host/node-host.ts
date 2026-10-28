@@ -13,6 +13,7 @@
  */
 import { createSidecarBrowser, locateSidecarBinary, nodeBackend, nodeJsBackend, nodeWsBackend } from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
+
 import { sqliteStorage } from "../store/sqlite-storage.ts"
 
 /**

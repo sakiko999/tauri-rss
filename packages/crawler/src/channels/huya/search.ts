@@ -1,3 +1,5 @@
+import { searchHuyaRooms } from "@amoeba/resolve"
+
 /**
  * huya 搜索 —— 按关键词搜直播间(`search.cdn.huya.com`,**零鉴权**)。
  *
@@ -9,7 +11,6 @@
  * 不声明 Pageable(避免下游翻页拿到重复结果)。
  */
 import { makeApiChannel } from "../factory.ts"
-import { searchHuyaRooms } from "@amoeba/resolve"
 
 const PAGE = 20
 

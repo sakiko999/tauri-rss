@@ -1,3 +1,4 @@
+import { fetchTwitchTopStreams } from "@amoeba/resolve"
 /**
  * twitch:hot —— Twitch 热门直播(匿名 GraphQL,按观看数降序)。
  *
@@ -5,8 +6,8 @@
  * 播放走 resolver by-url。不实现 fetchPassive / Loginable / passive。
  */
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { fetchTwitchTopStreams } from "@amoeba/resolve"
 import { createTwitchStreamsSource } from "./streams.ts"
 
 export class TwitchHotChannel implements RssChannel {

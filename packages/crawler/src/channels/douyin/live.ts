@@ -1,3 +1,17 @@
+import { formatError } from "@amoeba/log"
+import {
+  douyinOnline,
+  douyinScanLogin,
+  fetchDouyinUserLive,
+  fetchRoom,
+  isDouyinProfileUrl,
+  log,
+  normalizeDouyinRoomId,
+  now,
+  parseRoomIds,
+  strOr,
+  toInt,
+} from "@amoeba/resolve"
 /**
  * douyin 直播房间 channel —— HTTP + ABogus 签名(host.js)。
  *
@@ -16,19 +30,9 @@
  */
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
-import type { LoginResult, Loginable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+
+import type { Loginable, LoginResult, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { formatError } from "@amoeba/log"
-import { log } from "@amoeba/resolve"
-import { toInt } from "@amoeba/resolve"
-import { parseRoomIds } from "@amoeba/resolve"
-import { strOr } from "@amoeba/resolve"
-import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
-import { douyinOnline } from "@amoeba/resolve"
-import { douyinScanLogin } from "@amoeba/resolve"
-import { isDouyinProfileUrl } from "@amoeba/resolve"
-import { normalizeDouyinRoomId } from "@amoeba/resolve"
 
 const LIVE = "https://live.douyin.com"
 

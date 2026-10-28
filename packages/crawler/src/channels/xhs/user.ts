@@ -1,3 +1,4 @@
+import { extractInitialState, log, noteCardToSocial, now, withBrowserOp, XHS_BASE, xhsClient } from "@amoeba/resolve"
 /**
  * xhs:user —— 小红书用户笔记 channel(kind: social)。
  *
@@ -19,10 +20,10 @@
  */
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
+
 import type { ItemDetailSource, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { XHS_BASE, extractInitialState, log, noteCardToSocial, now, xhsClient } from "@amoeba/resolve"
-import { withBrowserOp } from "@amoeba/resolve"
+import { XhsChannelBase } from "./base.ts"
 import {
   ensureXhsPageReady,
   fetchXhsList,
@@ -35,7 +36,6 @@ import {
   XHS_FETCH_MORE_WINDOW,
   XHS_LOGIN_REQUIRED,
 } from "./shared.ts"
-import { XhsChannelBase } from "./base.ts"
 
 export class XhsUserChannel extends XhsChannelBase implements RssChannel {
   readonly key = "xhs:user"

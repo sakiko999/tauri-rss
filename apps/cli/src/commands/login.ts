@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs"
 /**
  * login — 扫码登录平台账号（经数据服务）。
  *
@@ -14,11 +15,12 @@
  */
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { writeFileSync } from "node:fs"
-import pc from "picocolors"
-import { LOGIN_PLATFORMS, cookieFieldOf, platformOfChannelKey } from "@amoeba/platform"
+
 import { isLoginable, listChannels, type Loginable, type RssChannel } from "@amoeba/crawler"
+import { cookieFieldOf, LOGIN_PLATFORMS, platformOfChannelKey } from "@amoeba/platform"
 import { createRemoteDataLayer } from "@amoeba/service-client"
+import pc from "picocolors"
+
 import { matrixFromEmit, pngBytesFromDataUrl, printQr } from "../ui/qr-terminal.ts"
 import { fmtMs, ok, printJson, startTimer } from "../ui/render.ts"
 import { resolveEndpoint } from "./attach.ts"

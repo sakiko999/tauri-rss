@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+
 /**
  * bilibili 直播弹幕 —— getDanmuInfo(wbi 签名) → wss → op=7 认证 → 心跳 → op=5 弹幕。
  *
@@ -22,10 +24,9 @@
  */
 import { argbToHex, createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuItem, DanmakuStream } from "../../danmaku"
-import { biliClient } from "./client.ts"
-import { extractCookie } from "../../utils/cookie.ts"
-import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
+import { extractCookie } from "../../utils/cookie.ts"
+import { biliClient } from "./client.ts"
 
 /** 编解码复用单例(每帧热路径,共享安全)。 */
 const TE = new TextEncoder()

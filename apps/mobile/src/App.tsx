@@ -1,3 +1,6 @@
+import type { MediaItem } from "@amoeba/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
 /**
  * Mobile App —— 极简「看内容」闭环:未读列表 → 点开播放/阅读。
  *
@@ -6,11 +9,9 @@
  * 播放器控件 —— 那些归 desktop 工作台。
  */
 import { useEffect, useState } from "react"
-import { PlayableMedia } from "@amoeba/player"
-import { MediaImage } from "@amoeba/ui"
-import type { MediaItem } from "@amoeba/core"
-import { useMobile, isPlayable } from "./store.ts"
+
 import { displayBody } from "./html.ts"
+import { isPlayable, useMobile } from "./store.ts"
 
 export function App() {
   const dl = useMobile((s) => s.dl)

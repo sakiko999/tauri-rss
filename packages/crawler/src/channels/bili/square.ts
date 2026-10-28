@@ -1,3 +1,4 @@
+import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:square —— bilibili 热搜(social channel)。
  *
@@ -9,7 +10,7 @@
  * credentials provider 兜底(签名与请求同 cookie,见 bili client)。
  */
 import type { Item, Social } from "@amoeba/xml"
-import { biliClient, now } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 import { API } from "./video-common.ts"
 

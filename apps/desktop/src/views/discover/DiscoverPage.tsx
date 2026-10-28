@@ -1,3 +1,4 @@
+import type { ChannelInfo } from "@amoeba/core"
 /**
  * DiscoverPage —— 发现页:平台能力矩阵 + 分区浏览 + 搜索,全部接真实渠道。
  *
@@ -12,15 +13,15 @@
  * `platforms.ts`(共用常量)。本文件保留能力矩阵与三块 section 的布局。
  */
 import { useEffect, useMemo, useState } from "react"
-import type { ChannelInfo } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
+
 import { Icon } from "../../components/Icon.tsx"
-import { CAPS, PLATFORMS, CAP_LABEL, type Cap } from "./platforms.ts"
 import { CATEGORY_CHANNEL, SEARCH_CHANNEL } from "../../lib/subscriptions.ts"
-import { PlatformBrowser } from "./PlatformBrowser.tsx"
-import { BoardList } from "./BoardList.tsx"
-import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useDesktop } from "../../store/index.ts"
+import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
+import { BoardList } from "./BoardList.tsx"
+import { PlatformBrowser } from "./PlatformBrowser.tsx"
+import { type Cap, CAP_LABEL, CAPS, PLATFORMS } from "./platforms.ts"
 
 export function DiscoverPage() {
   const dl = useDesktop((s) => s.dl)

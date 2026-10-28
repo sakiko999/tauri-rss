@@ -9,5 +9,13 @@ semi = false
 singleQuote = false
 tabWidth = 2
 trailingComma = "all"
+# import 排序不移动副作用 import（如 main.tsx 的 "@amoeba/core/source/rsshub"）。
+sortImports = true
+sortPackageJson = true
 # 文档（md）与参考项目目录人工维护，不做自动重排。
 ignorePatterns = ["tmp/", "dist/", "target/", ".claude/", "**/*.md"]
+
+# Tailwind 类名排序（Tailwind 4：以 desktop 的入口 styles.css 为样式表来源，
+# 它 @import 了 packages/ui 的 theme.css，令牌链路完整）。
+[fmt.sortTailwindcss]
+stylesheet = "./apps/desktop/src/styles.css"

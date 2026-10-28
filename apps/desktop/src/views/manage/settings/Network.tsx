@@ -1,7 +1,7 @@
+import { Select, Switch } from "../../../components/Modal.tsx"
+import { SideCard } from "../../../components/StateBlock.tsx"
 /** 网络与风控 tab:全局等级 / 平台覆盖 / 后台自动刷新(docs/crawler-risk-control.md §2.4)。 */
 import { useDesktop } from "../../../store/index.ts"
-import { SideCard } from "../../../components/StateBlock.tsx"
-import { Select, Switch } from "../../../components/Modal.tsx"
 import { Row } from "./Row.tsx"
 
 type Level = 0 | 1 | 2 | 3

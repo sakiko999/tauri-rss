@@ -7,9 +7,10 @@
  *      → `growPage()` 放开本地切片窗口,不发网络请求。
  */
 import { useEffect, useRef } from "react"
-import { Icon } from "../Icon.tsx"
+
 import { useDesktop } from "../../store/index.ts"
 import { isSmartFeed, isTabNode } from "../../store/nodes.ts"
+import { Icon } from "../Icon.tsx"
 
 export function LoadMoreFooter() {
   const selectedNodeId = useDesktop((s) => s.selectedNodeId)
@@ -59,7 +60,7 @@ export function LoadMoreFooter() {
       {channelPaging && ended ? (
         <span className="t-micro t-dim">已加载全部</span>
       ) : channelPaging && loadingMore ? (
-        <Icon name="loader" size={16} className="animate-spin t-dim" />
+        <Icon name="loader" size={16} className="t-dim animate-spin" />
       ) : (
         <button className="btn btn-secondary btn-sm" onClick={trigger}>
           加载更多

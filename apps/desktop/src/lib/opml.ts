@@ -7,7 +7,7 @@
  *   同 xmlUrl 已存在则跳过(不重复订阅)。
  */
 import type { Subscription, SubscriptionGroup } from "@amoeba/core"
-import { serializeOpml, type OpmlDoc, type OpmlFeed } from "@amoeba/xml"
+import { type OpmlDoc, type OpmlFeed, serializeOpml } from "@amoeba/xml"
 
 /** 订阅 → 上游 feed URL(可分享的订阅才有)。 */
 function feedUrlOf(sub: Subscription): string | undefined {

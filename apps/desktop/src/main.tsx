@@ -1,7 +1,8 @@
+import { injectTauriHost } from "@amoeba/host/tauri"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { RouterProvider } from "react-router/dom"
-import { injectTauriHost } from "@amoeba/host/tauri"
+
 import { router } from "./router"
 import { useDesktop } from "./store/index"
 import { showSkeleton } from "./store/selectors.ts"

@@ -1,3 +1,5 @@
+import { serializeCookieDict } from "../../utils/cookie.ts"
+import type { LoginCookieSnapshot } from "../types.ts"
 /**
  * 小红书登录 cookie 快照 —— 应用启动时从抓取浏览器 profile **只读**取一份。
  *
@@ -14,8 +16,6 @@
  * 有没有登录材料」。失效由下一次抓取如实报错,不在启动期额外访问平台。
  */
 import { XHS_BASE } from "./client.ts"
-import { serializeCookieDict } from "../../utils/cookie.ts"
-import type { LoginCookieSnapshot } from "../types.ts"
 
 export async function readXhsLoginCookie(browser: BrowserBackend): Promise<LoginCookieSnapshot | null> {
   const cookies = await browser.getCookies(XHS_BASE)

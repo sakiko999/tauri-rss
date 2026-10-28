@@ -3,10 +3,11 @@
  *
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 DataLayer。
  */
-import { ERROR_KIND_LABEL, errorKindOf, type ErrorKind } from "@amoeba/core"
-import { PAGE_SIZE } from "../selectors.ts"
-import { applyRuntimeSettings, REFRESH_TIMEOUT_MS, withTimeout } from "../lib.ts"
+import { ERROR_KIND_LABEL, type ErrorKind, errorKindOf } from "@amoeba/core"
+
 import { createDesktopDataLayer } from "../data-source.ts"
+import { applyRuntimeSettings, REFRESH_TIMEOUT_MS, withTimeout } from "../lib.ts"
+import { PAGE_SIZE } from "../selectors.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
 
 type DataActions = Pick<DesktopState, "init" | "syncBrowserCookies" | "refresh" | "refreshAll" | "loadMore">

@@ -12,10 +12,11 @@
  * ⚠️ profile 与桌面严格分开（`%LOCALAPPDATA%/app.amoeba.cli/browser-profile`），
  *    同一个 profile 只能有一个 environment，否则 CDP 端口会互相覆盖。
  */
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process"
+import { type ChildProcessWithoutNullStreams, spawn, spawnSync } from "node:child_process"
 import { existsSync, rmSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
-import { CdpBrowserBackend, type BrowserDriver, type CdpTargetInfo } from "../browser/backend.ts"
+
+import { type BrowserDriver, CdpBrowserBackend, type CdpTargetInfo } from "../browser/backend.ts"
 import { nodeCdpConnector } from "./cdp-connector.ts"
 
 /** sidecar 从拉起至 READY 的上限。冷启动实测 1–3s，给足余量。 */

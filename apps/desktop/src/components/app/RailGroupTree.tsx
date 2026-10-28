@@ -1,3 +1,5 @@
+import type { Subscription, SubscriptionGroup } from "@amoeba/core"
+import * as Accordion from "@radix-ui/react-accordion"
 /**
  * RailGroupTree —— 侧栏的**订阅分组树**(业务件:读 store、吃 domain 类型)。
  *
@@ -10,15 +12,14 @@
  * ⚠️ 只负责树本身 —— 分节标题在外层用 `<RailSection>` 包(那里要放「管理分组」按钮)。
  */
 import { useCallback, useMemo, useRef, useState } from "react"
-import * as Accordion from "@radix-ui/react-accordion"
-import type { Subscription, SubscriptionGroup } from "@amoeba/core"
+
+import { navAction, type RowCtx } from "../../lib/rail-nav.ts"
 import { useDesktop } from "../../store/index.ts"
 import { KIND_META } from "../../store/nodes.ts"
-import { healthOf, type Health } from "../../store/selectors.ts"
+import { type Health, healthOf } from "../../store/selectors.ts"
+import { EditSubscriptionDialog } from "../../views/manage/EditSubscriptionDialog.tsx"
 import { Icon } from "../Icon.tsx"
 import { Menu, MenuItem, MenuSeparator } from "../Modal.tsx"
-import { EditSubscriptionDialog } from "../../views/manage/EditSubscriptionDialog.tsx"
-import { navAction, type RowCtx } from "../../lib/rail-nav.ts"
 
 const HEALTH_ICON: Partial<Record<Health, string>> = { error: "alert", stale: "warning" }
 

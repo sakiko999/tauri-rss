@@ -7,7 +7,9 @@
  * 本文件把「节点 → 导航」钉死；`navForKind` 与 `navIdOf` 都是纯函数。
  */
 import assert from "node:assert/strict"
+
 import type { MediaKind, Subscription } from "@amoeba/core"
+
 import { navForKind, navIdOf } from "./nodes.ts"
 
 const sub = (id: string, channelKey: string, groupId?: string | null): Subscription =>

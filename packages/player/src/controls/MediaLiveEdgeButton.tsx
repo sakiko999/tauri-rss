@@ -14,7 +14,7 @@ export function MediaLiveEdgeButton({ state, ops }: { state: VideoPlayState; ops
     <button
       type="button"
       onClick={ops.setLiveEdge}
-      className="shrink-0 rounded border border-white/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wide hover:bg-white/20"
+      className="shrink-0 rounded border border-white/30 px-1.5 py-0.5 text-[10px] tracking-wide uppercase hover:bg-white/20"
     >
       回直播
     </button>

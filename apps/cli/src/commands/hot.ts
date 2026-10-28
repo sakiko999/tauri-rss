@@ -1,3 +1,4 @@
+import { createDataLayer } from "@amoeba/core"
 /**
  * hot — 热搜词下微博流探针(收编 core example/verify-new-channels.ts 的 resolveHotWord 部分)。
  *
@@ -9,7 +10,7 @@
  * 依赖:dl.resolveHotWord(subscriptionId, word) 返回 MediaItem[](social,不写 store)。
  */
 import pc from "picocolors"
-import { createDataLayer } from "@amoeba/core"
+
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface HotOptions {

@@ -8,6 +8,7 @@
  *   - `normalizeYoutubePlaylistId`:裸 ID / 三种 URL / 私有列表拒收。
  */
 import { normalizeYoutubeLiveCategory, parseYoutubeLiveShelves, youtubeShelfSlug } from "@amoeba/resolve"
+
 import { normalizeYoutubePlaylistId } from "../channels/youtube/refs.ts"
 
 let fails = 0

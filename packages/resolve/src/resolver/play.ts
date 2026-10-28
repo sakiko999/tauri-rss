@@ -10,15 +10,16 @@
  * (douyin 的 stream/profile 解析内部 await douyinCookie(),已 provider 感知)。
  */
 import type { Stream } from "@amoeba/xml"
-import type { SourceInfo } from "../index.ts"
+
 import { ResolveError } from "../errors.ts"
-import { resolveRoute, type ResolvePlatform } from "./router.ts"
+import type { SourceInfo } from "../index.ts"
 import { resolveBiliLivePlay, resolveBiliVideoPlay } from "../platform/bili"
 import { douyinResolveStreams } from "../platform/douyin"
 import { douyuResolveStreams } from "../platform/douyu"
 import { resolveHuyaLivePlay } from "../platform/huya"
 import { resolveTwitchLivePlay } from "../platform/twitch"
 import { resolveYoutubeStreams } from "../platform/youtube"
+import { type ResolvePlatform, resolveRoute } from "./router.ts"
 
 /** resolver 解析参数:复用 SourceInfo(含 cookie),必要时扩展。 */
 export type ResolveInfo = SourceInfo & { cookie?: string }

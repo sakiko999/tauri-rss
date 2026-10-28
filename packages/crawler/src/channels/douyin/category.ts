@@ -1,3 +1,5 @@
+import { fetchDouyinPartitionRooms } from "@amoeba/resolve"
+
 /**
  * douyin 分区房间 —— 按分区列直播间(参数化 `partition` + `partition_type`)。
  *
@@ -9,7 +11,6 @@
  * `resolve/platform/douyin/discover.ts`(`fetchDouyinCategories`)。
  */
 import { makeApiChannel } from "../factory.ts"
-import { fetchDouyinPartitionRooms } from "@amoeba/resolve"
 
 const COUNT = 15
 

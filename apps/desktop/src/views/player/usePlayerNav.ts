@@ -1,3 +1,5 @@
+import type { MediaItem } from "@amoeba/core"
+import { unlockAudioPlayback } from "@amoeba/player"
 /**
  * usePlayerNav —— 卡片/列表的「播放入口」回调收敛处。
  *
@@ -17,13 +19,12 @@
  */
 import { useCallback, useMemo } from "react"
 import { useNavigate } from "react-router"
-import type { MediaItem } from "@amoeba/core"
-import { unlockAudioPlayback } from "@amoeba/player"
-import { nodeTypeOf, useDesktop } from "../../store/index.ts"
-import { previewPath, usePlayNavigate, viewPath } from "../../router.tsx"
+
+import { type CardActions, isFeedItem } from "../../components/app/Cards.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
 import { openSocialDetailWithTransition } from "../../lib/viewTransition.ts"
-import { isFeedItem, type CardActions } from "../../components/app/Cards.tsx"
+import { previewPath, usePlayNavigate, viewPath } from "../../router.tsx"
+import { nodeTypeOf, useDesktop } from "../../store/index.ts"
 
 export function usePlayerNav(): CardActions {
   const navigateToPlay = usePlayNavigate()

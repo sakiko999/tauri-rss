@@ -8,10 +8,11 @@
  * 请求同 cookie);③douyin 兜底序(登录 cookie > 匿名 ttwid jar);④xhs 空串退出。
  */
 import assert from "node:assert/strict"
-import { setPlatformCookieLookup } from "../platform/credentials.ts"
+
 import { biliClient } from "../platform/bili/client.ts"
-import { weiboClient } from "../platform/weibo/client.ts"
+import { setPlatformCookieLookup } from "../platform/credentials.ts"
 import { douyinClient, douyinCookie } from "../platform/douyin/client.ts"
+import { weiboClient } from "../platform/weibo/client.ts"
 import { xhsClient } from "../platform/xhs/client.ts"
 
 interface Captured {

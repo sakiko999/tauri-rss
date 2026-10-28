@@ -1,3 +1,4 @@
+import { douyinClient, douyinOnline, now } from "@amoeba/resolve"
 /**
  * douyin 直播热门 —— partition/detail/room/v2 + ABogus,支持分页加载更多。
  *
@@ -8,10 +9,8 @@
  * 翻页(本页为空 = 没有更多)。
  */
 import type { Live } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { douyinClient } from "@amoeba/resolve"
-import { douyinOnline } from "@amoeba/resolve"
 
 const LIVE = "https://live.douyin.com"
 const COUNT = 15

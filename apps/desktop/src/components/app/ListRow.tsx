@@ -5,9 +5,10 @@
  */
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
-import { Icon } from "../Icon.tsx"
+
 import { excerptOf, fmtAgo, itemKey, mediaUrl, ratioOf } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { Icon } from "../Icon.tsx"
 
 export function ListRow({
   item,

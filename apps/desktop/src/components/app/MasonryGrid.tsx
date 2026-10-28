@@ -1,3 +1,5 @@
+import type { MediaItem } from "@amoeba/core"
+import { useMasonry, usePositioner } from "masonic"
 /**
  * MasonryGrid — social 瀑布流(masonic 虚拟化)。
  *
@@ -16,12 +18,11 @@
  *    见下方预置/测量段(不是「一次到位无需二次校准」)。
  */
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react"
-import { useMasonry, usePositioner } from "masonic"
-import type { MediaItem } from "@amoeba/core"
-import { LoadMoreFooter } from "./LoadMoreFooter.tsx"
+
+import { itemKey, socialRatio } from "../../lib/media.ts"
 import { useDesktop } from "../../store/index.ts"
 import { isSmartFeed, isTabNode } from "../../store/nodes.ts"
-import { itemKey, socialRatio } from "../../lib/media.ts"
+import { LoadMoreFooter } from "./LoadMoreFooter.tsx"
 
 /** CSS columns 列数(按容器宽度断点,与网格断点一致)。 */
 function colsForWidth(w: number): number {

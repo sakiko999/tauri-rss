@@ -1,3 +1,4 @@
+import { describeElement, reactMeta, stableKey } from "./key.ts"
 /**
  * 可交互元素扫描。
  *
@@ -10,7 +11,6 @@
  *   - 用户自定义选择器（工具栏）
  */
 import type { Box, Candidate } from "./types.ts"
-import { describeElement, reactMeta, stableKey } from "./key.ts"
 
 const BASE_SELECTOR = [
   "button",

@@ -1,3 +1,5 @@
+import type { YoutubeLiveHit } from "@amoeba/resolve"
+import { fetchYoutubeLiveShelves, normalizeYoutubeLiveCategory, now } from "@amoeba/resolve"
 /**
  * youtube:live-hot / youtube:live-category —— YouTube 直播页栏目订阅。
  *
@@ -11,9 +13,8 @@
  * ⚠️ 按观看数降序(契约:列表顺序由渠道负责,默认选流/展示不依赖上游顺序)。
  */
 import type { Item, Live } from "@amoeba/xml"
-import type { YoutubeLiveHit } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
-import { fetchYoutubeLiveShelves, normalizeYoutubeLiveCategory, now } from "@amoeba/resolve"
 
 /** 直播页条目 → Live item(`youtube:live-search` 也用它)。 */
 export function youtubeLiveHitToLive(sourceId: string, hit: YoutubeLiveHit, t: number): Live {

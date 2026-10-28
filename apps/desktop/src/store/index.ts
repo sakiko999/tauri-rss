@@ -20,15 +20,16 @@
  * 本文件只保留初始状态、组合与「节点元信息」便捷函数。
  */
 import { create } from "zustand"
-import { nodeKindOf, nodeMeta, subscriptionIdsOfGroup, type NodeMeta, type NodeType } from "./nodes.ts"
-import { usePrefs } from "./prefs.ts"
-import { loadQueue } from "./lib.ts"
-import { createCtx } from "./ctx.ts"
+
 import { createDataActions } from "./actions/data.ts"
-import { createViewActions } from "./actions/view.ts"
-import { createSubsActions } from "./actions/subs.ts"
 import { createReadingActions } from "./actions/reading.ts"
+import { createSubsActions } from "./actions/subs.ts"
 import { createUiActions } from "./actions/ui.ts"
+import { createViewActions } from "./actions/view.ts"
+import { createCtx } from "./ctx.ts"
+import { loadQueue } from "./lib.ts"
+import { nodeKindOf, type NodeMeta, nodeMeta, type NodeType, subscriptionIdsOfGroup } from "./nodes.ts"
+import { usePrefs } from "./prefs.ts"
 import type { DesktopState } from "./types.ts"
 
 export const useDesktop = create<DesktopState>()((set, get) => {

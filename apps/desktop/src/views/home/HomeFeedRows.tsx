@@ -6,6 +6,7 @@
  * （空源不该在首页占一块位置）。
  */
 import type { Subscription } from "@amoeba/core"
+
 import type { SubFeed } from "../../store/selectors.ts"
 import { HomeSection } from "./HomeSection.tsx"
 

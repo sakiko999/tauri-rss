@@ -1,3 +1,5 @@
+import { now } from "./lib.ts"
+import { isSmartFeed } from "./nodes.ts"
 /**
  * createCtx —— 动作工厂共享的 set/get + 派生操作。
  *
@@ -5,8 +7,6 @@
  * syncSubscriptions 被订阅 CRUD/刷新编排共用),放这里避免各写一份。
  */
 import { queryView } from "./selectors.ts"
-import { isSmartFeed } from "./nodes.ts"
-import { now } from "./lib.ts"
 import type { StoreCtx, StoreGet, StoreSet } from "./types.ts"
 
 export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {

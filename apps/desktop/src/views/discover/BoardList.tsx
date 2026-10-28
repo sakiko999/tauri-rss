@@ -1,3 +1,4 @@
+import type { ChannelInfo } from "@amoeba/core"
 /**
  * BoardList —— 可订阅榜单(无参渠道一键订阅)。
  *
@@ -5,11 +6,11 @@
  * key 正则缩范围,只排除原生 RSS 直链)。
  */
 import { useState } from "react"
-import type { ChannelInfo } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
+
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useDesktop } from "../../store/index.ts"
 
 export function BoardList({ boards }: { boards: ChannelInfo[] }) {
   const subscriptions = useDesktop((s) => s.subscriptions)

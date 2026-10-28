@@ -5,12 +5,12 @@
  * 各平台弹幕函数。kind(vod 视频弹幕 / live 直播聊天)从路由推断。
  */
 import type { DanmakuStream } from "../danmaku/types.ts"
-import { resolveRoute } from "./router.ts"
 import { biliClient } from "../platform/bili"
 import { douyinClient } from "../platform/douyin"
 import { douyuClient } from "../platform/douyu"
 import { huyaClient } from "../platform/huya"
 import { youtubeClient } from "../platform/youtube"
+import { resolveRoute } from "./router.ts"
 
 export interface DanmakuInfo {
   cookie?: string

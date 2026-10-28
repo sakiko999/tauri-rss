@@ -2,7 +2,7 @@
  * SettingsRepository — app 设置持久化,走全局 appHost.storage。
  * 无存储内容时加载 DEFAULT_SETTINGS。
  */
-import { DEFAULT_SETTINGS, type AppSettings, type NetLevel } from "../types/settings.ts"
+import { type AppSettings, DEFAULT_SETTINGS, type NetLevel } from "../types/settings.ts"
 
 const STORAGE_KEY = "settings"
 

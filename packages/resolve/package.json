@@ -1,7 +1,7 @@
 {
   "name": "@amoeba/resolve",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -9,12 +9,12 @@
     "./errors": "./src/errors.ts",
     "./media-referrer": "./src/media-referrer.ts"
   },
+  "scripts": {},
   "dependencies": {
     "@amoeba/log": "workspace:*",
     "@amoeba/xml": "workspace:*",
     "ramda": "^0.32.0"
   },
-  "scripts": {},
   "devDependencies": {
     "@types/ramda": "^0.32.0"
   }

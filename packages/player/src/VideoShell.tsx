@@ -1,3 +1,4 @@
+import type { DanmakuStream } from "@amoeba/resolve"
 /**
  * VideoShell —— 播放器外壳:视频画面 + 控件层。
  *
@@ -8,16 +9,16 @@
  *   - useVideoElement       媒体状态 + 操作
  */
 import { useEffect, useRef, useState } from "react"
-import type { DanmakuStream } from "@amoeba/resolve"
-import { bindFullscreen, type FullscreenApi, useVideoElement } from "./hooks/useVideoElement.ts"
+
+import type { DanmakuControl } from "./controls/index.ts"
+import { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
 import { useAutoHideControls } from "./hooks/useAutoHideControls.ts"
 import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"
+import { bindFullscreen, type FullscreenApi, useVideoElement } from "./hooks/useVideoElement.ts"
+import { PlayIcon, SpinnerIcon } from "./icons.tsx"
 import { PlayerControls } from "./PlayerControls.tsx"
 import { PlayerStatsOverlay } from "./PlayerStatsOverlay.tsx"
 import type { EngineStats } from "./stats.ts"
-import type { DanmakuControl } from "./controls/index.ts"
-import { PlayIcon, SpinnerIcon } from "./icons.tsx"
-import { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
 
 export function VideoShell({
   videoRef,
@@ -163,7 +164,7 @@ export function VideoShell({
             e.stopPropagation()
             ops.togglePlay()
           }}
-          className="absolute inset-0 m-auto flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white opacity-0 backdrop-blur transition hover:bg-black/60 group-hover:opacity-100"
+          className="absolute inset-0 m-auto flex h-16 w-16 items-center justify-center rounded-full bg-black/40 text-white opacity-0 backdrop-blur transition group-hover:opacity-100 hover:bg-black/60"
         >
           <PlayIcon className="h-8 w-8 translate-x-0.5" />
         </button>

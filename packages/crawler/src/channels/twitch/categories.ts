@@ -1,3 +1,4 @@
+import { fetchTwitchTopCategories, now } from "@amoeba/resolve"
 /**
  * twitch:categories —— Twitch 分类目录**订阅**。
  *
@@ -9,8 +10,8 @@
  * ⚠️ `games(first)` 匿名可用,实测 30 个分类(slug/name/观看数/封面)。
  */
 import type { Category, Item } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { fetchTwitchTopCategories, now } from "@amoeba/resolve"
 
 export const TwitchCategoriesChannel = makeApiChannel({
   key: "twitch:categories",

@@ -1,3 +1,4 @@
+import { now, searchYouTubeChannels } from "@amoeba/resolve"
 /**
  * youtube:user —— 搜频道(搜索渠道,不直接订阅)。
  *
@@ -9,8 +10,8 @@
  * 只作「搜索添加」的取数源。
  */
 import type { Video } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { now, searchYouTubeChannels } from "@amoeba/resolve"
 
 export const YoutubeUserChannel = makeApiChannel({
   key: "youtube:user",

@@ -10,9 +10,10 @@
  * 数据不在 loader 里加载(数据在 zustand + DataLayer);路由只定「位置」。
  */
 import { createBrowserRouter, Navigate, useNavigate, useParams, useSearchParams } from "react-router"
+
 import App from "./App"
-import { DEFAULT_VIEW, HOME_NODE } from "./store/nodes.ts"
 import { useDesktop } from "./store/index.ts"
+import { DEFAULT_VIEW, HOME_NODE } from "./store/nodes.ts"
 
 /** `/v/{nodeId}?word={hotWord}`；首页是根路径 `/`（§3.1）。 */
 export function viewPath(nodeId: string, word?: string): string {

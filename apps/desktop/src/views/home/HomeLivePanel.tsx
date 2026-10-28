@@ -6,6 +6,7 @@
  */
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
+
 import { fmtNum, itemKey, mediaUrl, onlineOf } from "../../lib/media.ts"
 import { HomeSection } from "./HomeSection.tsx"
 

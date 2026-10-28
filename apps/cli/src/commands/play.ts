@@ -4,6 +4,7 @@
  * --open 自动跳到首个非 dash 档(docs/cli-plan.md §一)。
  */
 import pc from "picocolors"
+
 import { printResolved, resolveByUrl } from "./item.ts"
 import { probeResolve } from "./probe.ts"
 

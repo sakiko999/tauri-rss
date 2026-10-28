@@ -11,9 +11,10 @@
  * 输入框内不拦截(j/k 等)。
  */
 import { useEffect, useRef } from "react"
+
+import { useViewNavigate } from "../router.tsx"
 import { useDesktop } from "../store/index.ts"
 import { usePrefs } from "../store/prefs.ts"
-import { useViewNavigate } from "../router.tsx"
 import { itemKey } from "./media.ts"
 
 export function useGlobalShortcuts(): void {

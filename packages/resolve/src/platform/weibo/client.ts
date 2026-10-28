@@ -6,12 +6,13 @@
  * 参考 RSSHub `routes/weibo/` 的 container/getIndex 两步流程。
  */
 import type { Social } from "@amoeba/xml"
+
 import { httpGet, now } from "../../host.ts"
-import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { fillImageSizes } from "../../utils/img-size.ts"
+import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { toInt } from "../../utils/number.ts"
-import { toHttps } from "../../utils/url.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
+import { toHttps } from "../../utils/url.ts"
 import { resolveCookie } from "../credentials.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 

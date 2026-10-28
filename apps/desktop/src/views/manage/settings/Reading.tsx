@@ -1,10 +1,11 @@
 /** 阅读与缓存 tab:功能型设置(core dl.settings,SQLite)+ RSSHub 实例地址。 */
 import { useState } from "react"
-import { useDesktop } from "../../../store/index.ts"
-import { SideCard } from "../../../components/StateBlock.tsx"
+
 import { Switch } from "../../../components/Modal.tsx"
-import { Row } from "./Row.tsx"
+import { SideCard } from "../../../components/StateBlock.tsx"
 import { isImeComposing } from "../../../lib/ime.ts"
+import { useDesktop } from "../../../store/index.ts"
+import { Row } from "./Row.tsx"
 
 export function Reading() {
   const settings = useDesktop((s) => s.settings)

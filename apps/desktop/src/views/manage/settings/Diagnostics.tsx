@@ -1,9 +1,10 @@
+import { ERROR_KIND_LABEL } from "@amoeba/core"
 /** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile / 完全重置 + 最近抓取错误。 */
 import { useState } from "react"
-import { ERROR_KIND_LABEL } from "@amoeba/core"
-import { useDesktop } from "../../../store/index.ts"
-import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
+
 import { Icon } from "../../../components/Icon.tsx"
+import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
+import { useDesktop } from "../../../store/index.ts"
 
 export function Diagnostics() {
   const allItems = useDesktop((s) => s.allItems)

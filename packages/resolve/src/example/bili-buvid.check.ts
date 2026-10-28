@@ -7,6 +7,7 @@
  * 曾因此在扫码登录后从可用变成 352(全局 L0 也照报,因为 --352 是平台返回,不是冷却)。
  */
 import assert from "node:assert/strict"
+
 import { biliClient } from "../platform/bili/client.ts"
 
 interface Captured {

@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+
 /**
  * huya 弹幕 —— wss://cdnws.api.huya.com + Tars 编解码(probe 实测原生握手可连)。
  *
@@ -9,10 +11,9 @@
  */
 import { createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuStream } from "../../danmaku"
-import { decodeHuyaDanmakuFrame, TarsWriter } from "./danmaku-tars.ts"
-import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
-import { M_HUYA, huyaClient } from "./client.ts"
+import { huyaClient, M_HUYA } from "./client.ts"
+import { decodeHuyaDanmakuFrame, TarsWriter } from "./danmaku-tars.ts"
 
 const WS_URL = "wss://cdnws.api.huya.com"
 /** 心跳间隔,ms(固定字节,60s)。 */

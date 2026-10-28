@@ -1,3 +1,4 @@
+import { now, searchBiliUsers } from "@amoeba/resolve"
 /**
  * bili:user —— 搜 UP主(搜索渠道,不直接订阅)。
  *
@@ -10,9 +11,9 @@
  */
 import type { Item, Video } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { now, searchBiliUsers } from "@amoeba/resolve"
 
 export class BiliUserChannel implements RssChannel {
   readonly key = "bili:user"

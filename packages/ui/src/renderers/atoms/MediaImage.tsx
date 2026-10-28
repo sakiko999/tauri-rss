@@ -21,8 +21,9 @@
  * 不做 Folo 的 proxy/blurhash/fitContent —— 无代理部署场景下是死代码。
  */
 import { useEffect, useState } from "react"
-import { Skeleton } from "./Skeleton.tsx"
+
 import { ImageOffIcon } from "./Icons.tsx"
+import { Skeleton } from "./Skeleton.tsx"
 
 /** 成功/失败 URL 集合的 LRU 上限(防虚拟化滚动大量图导致集合无限增长)。
  *  Set 迭代序 = 插入序,超限删最早插入——够用即可,不必精确 LRU(淘汰后重挂走浏览器 HTTP 缓存)。 */

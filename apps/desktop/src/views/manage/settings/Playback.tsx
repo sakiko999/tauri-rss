@@ -1,7 +1,7 @@
+import { Switch } from "../../../components/Modal.tsx"
+import { SideCard } from "../../../components/StateBlock.tsx"
 /** 播放 tab:自动播放 / 省流 / 画质(锁档)+ 弹幕开关。 */
 import { useDesktop } from "../../../store/index.ts"
-import { SideCard } from "../../../components/StateBlock.tsx"
-import { Switch } from "../../../components/Modal.tsx"
 import { Row } from "./Row.tsx"
 
 export function Playback() {

@@ -33,10 +33,11 @@
  * 残留缺口:分区树只到「大类」粒度,`美食`(属「生活」)这类三级词仍无直接命中。
  */
 import type { Item, Live } from "@amoeba/xml"
+
 import { httpJson, httpText, now } from "../../host.ts"
 import { UA_ENTER } from "./abogus.ts"
-import { douyinClient } from "./client.ts"
 import { douyinOnline } from "./audience.ts"
+import { douyinClient } from "./client.ts"
 
 const LIVE = "https://live.douyin.com"
 

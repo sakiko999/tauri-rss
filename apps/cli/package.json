@@ -1,14 +1,14 @@
 {
   "name": "@amoeba/cli",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "exports": {
     ".": "./src/main.ts"
   },
   "dependencies": {
-    "@amoeba/crawler": "workspace:*",
     "@amoeba/core": "workspace:*",
+    "@amoeba/crawler": "workspace:*",
     "@amoeba/host": "workspace:*",
     "@amoeba/log": "workspace:*",
     "@amoeba/platform": "workspace:*",

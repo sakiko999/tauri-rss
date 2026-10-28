@@ -12,13 +12,13 @@
  *      （不同页面的“12 号”才有意义）；隐藏/显示覆盖层不会重置。
  */
 import { isImeComposing } from "../../lib/ime.ts"
-import { scanCandidates } from "./scan.ts"
-import { selectLabels } from "./labels.ts"
-import { NumberRegistry } from "./registry.ts"
-import { OverlayView } from "./render.ts"
 import { copyText } from "./clipboard.ts"
 import { formatText, toJsonItem, toPublicEntry } from "./format.ts"
 import { DEFAULT_HOTKEY, formatHotkey, matchHotkey, parseHotkey } from "./hotkey.ts"
+import { selectLabels } from "./labels.ts"
+import { NumberRegistry } from "./registry.ts"
+import { OverlayView } from "./render.ts"
+import { scanCandidates } from "./scan.ts"
 import type { OverlayEntry, OverlayStats, PublicEntry, UiOverlayApi } from "./types.ts"
 
 declare global {

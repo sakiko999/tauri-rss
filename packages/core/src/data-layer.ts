@@ -13,8 +13,8 @@ import { cookieFieldForChannelKey, cookieFieldOf, platformOfChannelKey } from "@
 import {
   errorKindOf,
   getDanmakuByUrl,
-  ResolveError,
   parseCookieDict,
+  ResolveError,
   resolveLivePlayByUrl as resolveLiveByUrl,
   resolvePlayByUrl as resolveVideoByUrl,
   serializeCookieDict,
@@ -22,25 +22,26 @@ import {
   withBrowserGlobal,
   withBrowserOpSlot,
 } from "@amoeba/resolve"
-import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { serializeFeed } from "@amoeba/xml"
-import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
-import { NoChannelError } from "./errors.ts"
+
 import { STORAGE_SCHEMA } from "./db/schema.ts"
-import type { ChannelInfo } from "./types/channel-info.ts"
-import type { ResolvePlayback } from "./types/playback.ts"
-import type { RefreshResult } from "./types/refresh-result.ts"
-import type { MediaQuery } from "./types/query.ts"
-import type { MediaItem, MediaKind } from "./types/media-item.ts"
-import { findRecord } from "./types/reading.ts"
-import { DEFAULT_SETTINGS, type AppSettings, type NetLevel } from "./types/settings.ts"
-import { createSubscriptionRepository, type SubscriptionRepository } from "./repo/subscription-repo.ts"
-import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
+import { NoChannelError } from "./errors.ts"
+import { coreLog, formatError } from "./log.ts"
+import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
+import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
+import { createSubscriptionRepository, type SubscriptionRepository } from "./repo/subscription-repo.ts"
+import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { createMediaStore } from "./store/media-store.ts"
-import { coreLog, formatError } from "./log.ts"
+import type { ChannelInfo } from "./types/channel-info.ts"
+import type { MediaItem, MediaKind } from "./types/media-item.ts"
+import type { ResolvePlayback } from "./types/playback.ts"
+import type { MediaQuery } from "./types/query.ts"
+import { findRecord } from "./types/reading.ts"
+import type { RefreshResult } from "./types/refresh-result.ts"
+import { type AppSettings, DEFAULT_SETTINGS, type NetLevel } from "./types/settings.ts"
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。

@@ -8,6 +8,7 @@
  */
 import type { ChannelInfo } from "@amoeba/core"
 import { platformDef } from "@amoeba/platform"
+
 import { platformOf } from "./subscriptions.ts"
 
 /** 分类展示顺序：视频/直播平台在前，通用 RSS 与 RSSHub 收尾。 */

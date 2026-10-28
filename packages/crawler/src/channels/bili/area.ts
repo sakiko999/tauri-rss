@@ -1,3 +1,4 @@
+import { fetchBiliAreaRooms, now } from "@amoeba/resolve"
 /**
  * bili:live:area —— 按分区列直播间(参数化 parentAreaId + areaId,页码翻页)。
  *
@@ -7,8 +8,8 @@
  * 字段映射照 hot.ts(getListByArea 同形:roomId/title/uname/cover/online)。
  */
 import type { Live } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { fetchBiliAreaRooms, now } from "@amoeba/resolve"
 
 export const BiliLiveAreaChannel = makeApiChannel({
   key: "bili:live:area",

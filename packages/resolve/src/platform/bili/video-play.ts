@@ -6,6 +6,7 @@
  * info 携带 core 层注入的登录 cookie → 解锁更高档位(登录 1080P+);无则零登录。
  */
 import type { Stream } from "@amoeba/xml"
+
 import type { SourceInfo } from "../../index.ts"
 import { biliClient } from "./index.ts"
 

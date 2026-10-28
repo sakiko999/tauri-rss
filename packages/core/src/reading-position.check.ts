@@ -5,6 +5,7 @@
  * 「且」都不会报错,只会表现为「看完重开跳结尾」或「SQLite 被 4Hz 写打爆」。这里钉住行为。
  */
 import assert from "node:assert/strict"
+
 import { positionDecision } from "./reading-position.ts"
 
 const dur = 100

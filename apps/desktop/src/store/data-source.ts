@@ -8,9 +8,9 @@
  * 桌面进程内回退（旧 `VITE_DATA_SERVICE=0`）已删除，见 main.tsx 的注入注释。
  */
 import type { DataLayer } from "@amoeba/core"
-import { invoke } from "@tauri-apps/api/core"
-import type { EndpointInfo } from "@amoeba/service-protocol"
 import { createRemoteDataLayer, type RemoteHooks } from "@amoeba/service-client"
+import type { EndpointInfo } from "@amoeba/service-protocol"
+import { invoke } from "@tauri-apps/api/core"
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window

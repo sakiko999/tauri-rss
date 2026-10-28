@@ -1,4 +1,6 @@
 #!/usr/bin/env bun
+import { cookieFieldForPlatform } from "@amoeba/core"
+import { setPlatformCookieLookup } from "@amoeba/resolve"
 /**
  * rss — crawler/resolve/core 的正式观测面(docs/cli-plan.md,2026-08-27 定稿)。
  *
@@ -15,24 +17,23 @@
  */
 import { cac } from "cac"
 import pc from "picocolors"
-import { cookieFieldForPlatform } from "@amoeba/core"
-import { setPlatformCookieLookup } from "@amoeba/resolve"
+
+import { runAlign } from "./commands/align.ts"
+import { runAttach } from "./commands/attach.ts"
+import { runBrowserReset } from "./commands/browser-reset.ts"
+import { runChannels } from "./commands/channels.ts"
+import { runDetail } from "./commands/detail.ts"
+import { runDm } from "./commands/dm.ts"
+import { runEnv } from "./commands/env.ts"
+import { runFetch } from "./commands/fetch.ts"
+import { runHot } from "./commands/hot.ts"
+import { runItem } from "./commands/item.ts"
+import { runLogin } from "./commands/login.ts"
+import { runPlay } from "./commands/play.ts"
+import { runRefresh } from "./commands/refresh.ts"
+import { runSug } from "./commands/sug.ts"
 import { closeBrowser, setupHost } from "./host/node-host.ts"
 import { loadSettings } from "./info.ts"
-import { runChannels } from "./commands/channels.ts"
-import { runFetch } from "./commands/fetch.ts"
-import { runItem } from "./commands/item.ts"
-import { runPlay } from "./commands/play.ts"
-import { runDm } from "./commands/dm.ts"
-import { runAlign } from "./commands/align.ts"
-import { runEnv } from "./commands/env.ts"
-import { runRefresh } from "./commands/refresh.ts"
-import { runHot } from "./commands/hot.ts"
-import { runSug } from "./commands/sug.ts"
-import { runDetail } from "./commands/detail.ts"
-import { runBrowserReset } from "./commands/browser-reset.ts"
-import { runAttach } from "./commands/attach.ts"
-import { runLogin } from "./commands/login.ts"
 
 // --service 必须在 setupHost / loadSettings 之前分流：服务不读 CLI settings，
 // 也不走命令注册。阶段 1 会把服务入口拆成独立模块，避免连带加载全部命令。

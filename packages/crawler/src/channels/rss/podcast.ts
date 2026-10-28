@@ -1,3 +1,4 @@
+import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
 /**
  * RssPodcastChannel — 播客 RSS,产 AudioItem(kind=audio)。
  *
@@ -6,10 +7,9 @@
  * 让 core 能按 tpl:kind=audio 正确解析。
  */
 import type { Audio } from "@amoeba/xml"
+import { type ParsedItem, parseFeed } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { httpText, now } from "@amoeba/resolve"
-import { parseFeed, type ParsedItem } from "@amoeba/xml"
-import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
 
 const UA = DESKTOP_CHROME_UA
 

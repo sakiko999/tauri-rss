@@ -6,11 +6,12 @@
  * 卸载,动画一秒都看不到。兜底超时防「动画被 CSS 关掉/时长令牌变 0」时元素卡住不消失。
  */
 import { useEffect } from "react"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { createPortal } from "react-dom"
-import { useDesktop, type Toast } from "../../store/index.ts"
-import { Icon } from "../Icon.tsx"
+
 import { motionDurationMs } from "../../lib/motion.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { type Toast, useDesktop } from "../../store/index.ts"
+import { Icon } from "../Icon.tsx"
 
 const ICON: Record<string, string> = {
   ok: "checkCircle",

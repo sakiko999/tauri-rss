@@ -1,3 +1,11 @@
+import {
+  DESKTOP_CHROME_UA,
+  fetchYoutubeChannelVideos,
+  getYoutubeLiveMeta,
+  httpText,
+  now,
+  type YoutubeChannelVideo,
+} from "@amoeba/resolve"
 /**
  * youtube channel —— YouTube 频道(官方 RSS),产 Video Item。
  *
@@ -6,12 +14,10 @@
  * videoId → watch URL,产 Video Item。
  */
 import type { Item, Video } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
+import { type ParsedItem, parseFeed, type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { httpText, now, getYoutubeLiveMeta, fetchYoutubeChannelVideos, type YoutubeChannelVideo } from "@amoeba/resolve"
-import { parseFeed, type ParsedItem } from "@amoeba/xml"
-import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
 
 const UA = DESKTOP_CHROME_UA
 

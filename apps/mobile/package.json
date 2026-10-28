@@ -1,7 +1,7 @@
 {
   "name": "@amoeba/mobile",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,14 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2",
     "@amoeba/core": "workspace:*",
+    "@amoeba/crawler": "workspace:*",
     "@amoeba/host": "workspace:*",
     "@amoeba/player": "workspace:*",
-    "@amoeba/ui": "workspace:*",
-    "@amoeba/crawler": "workspace:*",
     "@amoeba/resolve": "workspace:*",
+    "@amoeba/ui": "workspace:*",
     "@amoeba/xml": "workspace:*",
+    "@tauri-apps/api": "^2",
     "react": "^19",
     "react-dom": "^19",
     "zustand": "^5"
@@ -27,7 +27,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5",
     "tailwindcss": "^4.3.3",
-    "vite": "^8.1.5",
-    "typescript": "~7.0.2"
+    "typescript": "~7.0.2",
+    "vite": "^8.1.5"
   }
 }

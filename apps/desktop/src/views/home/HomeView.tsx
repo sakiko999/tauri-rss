@@ -1,3 +1,4 @@
+import type { MediaItem } from "@amoeba/core"
 /**
  * HomeView —— 「合流」首页看板（M3，业务件：读 store、吃 domain 类型）。
  *
@@ -11,20 +12,20 @@
  *    不能把 Date.now() 直接写进依赖（每帧都变，memo 永远失效）。
  */
 import { useMemo } from "react"
-import type { MediaItem } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
-import { groupedBySub, isToday, picksMix, resumeWithPct, selectLive, todayCounts } from "../../store/selectors.ts"
+
+import { Icon } from "../../components/Icon.tsx"
+import { StateBlock } from "../../components/StateBlock.tsx"
 import { mediaUrl } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
-import { StateBlock } from "../../components/StateBlock.tsx"
-import { Icon } from "../../components/Icon.tsx"
 import { useViewNavigate } from "../../router.tsx"
+import { useDesktop } from "../../store/index.ts"
+import { groupedBySub, isToday, picksMix, resumeWithPct, selectLive, todayCounts } from "../../store/selectors.ts"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
 import { HomeFeature } from "./HomeFeature.tsx"
-import { HomeLivePanel } from "./HomeLivePanel.tsx"
-import { HomeResumeRail } from "./HomeResumeRail.tsx"
 import { HomeFeedRows } from "./HomeFeedRows.tsx"
+import { HomeLivePanel } from "./HomeLivePanel.tsx"
 import { HomePicks } from "./HomePicks.tsx"
+import { HomeResumeRail } from "./HomeResumeRail.tsx"
 
 function greetingOf(hour: number): string {
   if (hour < 12) return "早上好"

@@ -6,6 +6,7 @@
  * 状态经 ref 持有,避免 timeupdate(4Hz)重渲染导致监听反复重绑。
  */
 import { useCallback, useEffect, useRef } from "react"
+
 import type { VideoOps, VideoPlayState } from "./useVideoElement.ts"
 
 /** 键盘应忽略的焦点目标(输入/按钮/slider 自带键盘交互)。 */

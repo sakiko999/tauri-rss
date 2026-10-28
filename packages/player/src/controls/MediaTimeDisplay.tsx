@@ -8,13 +8,13 @@ import { formatTime } from "../utils/time.ts"
 export function MediaTimeDisplay({ state }: { state: VideoPlayState }) {
   if (state.live) {
     return (
-      <span className="shrink-0 px-1 text-xs tabular-nums text-white/85">
+      <span className="shrink-0 px-1 text-xs text-white/85 tabular-nums">
         <span className="text-red-400">● LIVE</span>
       </span>
     )
   }
   return (
-    <span className="shrink-0 px-1 text-xs tabular-nums text-white/85">
+    <span className="shrink-0 px-1 text-xs text-white/85 tabular-nums">
       {formatTime(state.currentTime)}
       <span className="text-white/50"> / {formatTime(state.duration)}</span>
     </span>

@@ -1,3 +1,4 @@
+import { fetchTwitchCategoryStreams, normalizeTwitchCategory } from "@amoeba/resolve"
 /**
  * twitch:category —— Twitch 分区直播(匿名 GraphQL `game(slug).streams`)。
  *
@@ -7,8 +8,8 @@
  * 分类目录另见 `categories.ts`(`twitch:categories`,产 kind:"category" 条目)。
  */
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
-import { fetchTwitchCategoryStreams, normalizeTwitchCategory } from "@amoeba/resolve"
 import { createTwitchStreamsSource } from "./streams.ts"
 
 export class TwitchCategoryChannel implements RssChannel {

@@ -1,8 +1,8 @@
-import { resolveLog } from "./resolve.ts"
-import { engineLog } from "./engine.ts"
-import { playLog } from "./play.ts"
-import { loaderLog } from "./loader.ts"
 import { danmakuLog } from "./danmaku.ts"
+import { engineLog } from "./engine.ts"
+import { loaderLog } from "./loader.ts"
+import { playLog } from "./play.ts"
+import { resolveLog } from "./resolve.ts"
 
 /**
  * 统一 log 对象 —— 5 域方法平铺,调用形式 `log.resolveFailed()` 等(贴近旧 utils/log.ts)。

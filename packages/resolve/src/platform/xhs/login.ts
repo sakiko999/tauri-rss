@@ -1,3 +1,6 @@
+import { cdpEvaluate, cdpNavigate, waitUntil, withScanLoginLock } from "../../browser/cdp.ts"
+import type { LoginResult } from "../../index.ts"
+import { log } from "../../log.ts"
 /**
  * xhs 扫码登录 —— 浏览器路径(CDP 附加真实 Edge)。
  *
@@ -12,9 +15,6 @@
  * 页面已渲染的 data URL(非截屏),登录态检测是页面 loggedIn + CDP cookie 轮询。
  */
 import { XHS_BASE, xhsDomLoggedIn, xhsPageLoggedIn } from "./client.ts"
-import { cdpEvaluate, cdpNavigate, waitUntil, withScanLoginLock } from "../../browser/cdp.ts"
-import { log } from "../../log.ts"
-import type { LoginResult } from "../../index.ts"
 
 export interface XhsScanLoginOptions {
   /** 总超时(默认 5 分钟;xhs 二维码约 4 分钟有效,留余量)。 */

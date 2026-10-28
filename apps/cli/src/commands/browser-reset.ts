@@ -1,3 +1,7 @@
+import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
+import { join } from "node:path"
+
+import { defaultSidecarProfileDir } from "@amoeba/host/node"
 /**
  * browser-reset — 清掉抓取浏览器 profile。
  *
@@ -13,9 +17,7 @@
  * 用法:`bun run rss browser-reset [--target cli|desktop|all]`
  */
 import pc from "picocolors"
-import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
-import { join } from "node:path"
-import { defaultSidecarProfileDir } from "@amoeba/host/node"
+
 import { fail, ok, row } from "../ui/render.ts"
 
 /** 与 apps/src-tauri/src/webview_browser.rs 的 `PORT` 对齐。 */

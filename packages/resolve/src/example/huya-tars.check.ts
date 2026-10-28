@@ -8,7 +8,8 @@
  * 用「STRUCT_BEGIN 后无 STRUCT_END」的截断帧复现:修复前此脚本**永不返回**(需强杀)。
  */
 import assert from "node:assert/strict"
-import { TarsWriter, TarsReader, decodeHuyaDanmakuFrame } from "../platform/huya/danmaku-tars.ts"
+
+import { decodeHuyaDanmakuFrame, TarsReader, TarsWriter } from "../platform/huya/danmaku-tars.ts"
 
 /** Tars struct 的 BEGIN/END 头字节(type=10/11,tag 放高 4 位)。 */
 const begin = (tag: number): number => ((tag << 4) | 10) & 0xff

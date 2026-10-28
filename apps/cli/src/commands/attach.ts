@@ -11,9 +11,11 @@
  */
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { join } from "node:path"
+
 import { createRemoteDataLayer, ServiceClient } from "@amoeba/service-client"
 import type { EndpointInfo, RpcMethod, RpcParams } from "@amoeba/service-protocol"
 import pc from "picocolors"
+
 import { fail, fmtMs, ok, printJson, startTimer } from "../ui/render.ts"
 
 export interface AttachOptions {

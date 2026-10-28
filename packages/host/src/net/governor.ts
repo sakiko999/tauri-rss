@@ -18,6 +18,7 @@
  * 不要假设它能限住全部媒体流量。
  */
 import { platformOfHost } from "@amoeba/platform"
+
 import { netLog } from "../log.ts"
 
 /**

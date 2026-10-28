@@ -1,3 +1,5 @@
+import { resolveLivePlayByUrl, resolvePlayByUrl, type ResolveRoute, resolveRoute } from "@amoeba/resolve"
+import type { Stream } from "@amoeba/xml"
 /**
  * item — by-url 一站式探针(★ 高频)。
  * resolveRoute 命中 → streams 全档位表(format/quality/rate/headers/dashManifest)
@@ -7,8 +9,7 @@
  * url 域手抄注入表(旧表缺 douyin;CLI 入口 main.ts 已注册同源 provider)。
  */
 import pc from "picocolors"
-import type { Stream } from "@amoeba/xml"
-import { resolveLivePlayByUrl, resolvePlayByUrl, resolveRoute, type ResolveRoute } from "@amoeba/resolve"
+
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 import { probeResolve } from "./probe.ts"
 

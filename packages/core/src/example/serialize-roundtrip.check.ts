@@ -12,6 +12,7 @@
  */
 import { serializeFeed } from "@amoeba/xml"
 import type { Item } from "@amoeba/xml"
+
 import { deserializeFeed } from "../processing/deserialize.ts"
 
 let fails = 0

@@ -1,3 +1,4 @@
+import type { DouyinCategory, DouyuCategory, HuyaSubCategory } from "@amoeba/resolve"
 /**
  * 分区目录条目自检 —— `bun packages/crawler/src/example/category-directory.check.ts`
  *
@@ -6,7 +7,7 @@
  * `partitionType`（应为 4，曾默认成子分区的 1 → 取不到数据）。
  */
 import type { Category } from "@amoeba/xml"
-import type { DouyinCategory, DouyuCategory, HuyaSubCategory } from "@amoeba/resolve"
+
 import { douyinCategoryItems } from "../channels/douyin/categories.ts"
 import { douyuCategoryItems } from "../channels/douyu/categories.ts"
 import { huyaCategoryItems } from "../channels/huya/categories.ts"

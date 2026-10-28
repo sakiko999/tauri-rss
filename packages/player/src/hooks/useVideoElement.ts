@@ -15,8 +15,9 @@
  *     非流媒体(原生 mp4/audio)用 `duration !== Infinity` 区分(VOD),无限时长视为 live。
  */
 import { useCallback, useEffect, useRef, useState } from "react"
-import { playableDuration } from "../utils/buffer.ts"
+
 import { log } from "../log/index.ts"
+import { playableDuration } from "../utils/buffer.ts"
 
 export interface BufferedRange {
   start: number

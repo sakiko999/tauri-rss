@@ -1,3 +1,4 @@
+import type { Subscription } from "@amoeba/core"
 /**
  * EditSubscriptionDialog —— 编辑一条订阅(标题 / 分组 / 独立刷新间隔 / 启用)。
  *
@@ -8,10 +9,10 @@
  * `<EditSubscriptionDialog sub={s} onClose={...} />` 就能用。
  */
 import { useState } from "react"
-import type { Subscription } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
+
 import { Modal, Select, Switch } from "../../components/Modal.tsx"
 import { isImeComposing } from "../../lib/ime.ts"
+import { useDesktop } from "../../store/index.ts"
 
 export function EditSubscriptionDialog({ sub, onClose }: { sub: Subscription | null; onClose: () => void }) {
   const groups = useDesktop((s) => s.groups)

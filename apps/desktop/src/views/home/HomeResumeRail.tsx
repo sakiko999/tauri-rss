@@ -7,6 +7,7 @@
  */
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
+
 import { itemKey, mediaUrl } from "../../lib/media.ts"
 import type { ResumeEntry } from "../../store/selectors.ts"
 import { HomeSection } from "./HomeSection.tsx"

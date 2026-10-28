@@ -1,3 +1,14 @@
+import {
+  apiHeaders,
+  cdpJson,
+  cdpNavigate,
+  mblogCardsToItems,
+  readWeiboLoginCookie,
+  WB_BASE,
+  weiboClient,
+  weiboScanLogin,
+  withBrowserOp,
+} from "@amoeba/resolve"
 /**
  * weibo:user —— 微博用户主页 channel(kind: social)。
  *
@@ -12,27 +23,18 @@
  * 用浏览器页面 fetch 打 m.weibo.cn——自动带 Edge profile 登录态,绕开冷 cookie
  * 时效问题(微博 cookie 几分钟就失效)。未注入时降级现有 HTTP + cookie 路径。
  */
-import type { Item } from "@amoeba/xml"
-import type { SerializeOptions } from "@amoeba/xml"
+import type { Item, SerializeOptions } from "@amoeba/xml"
+
 import type {
+  Loginable,
   LoginCookieSnapshot,
   LoginResult,
-  Loginable,
   Pageable,
   RssChannel,
   RssSource,
   SourceInfo,
 } from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
-import {
-  WB_BASE,
-  apiHeaders,
-  mblogCardsToItems,
-  readWeiboLoginCookie,
-  weiboClient,
-  weiboScanLogin,
-} from "@amoeba/resolve"
-import { cdpJson, cdpNavigate, withBrowserOp } from "@amoeba/resolve"
 
 export class WeiboUserChannel implements RssChannel, Loginable {
   readonly key = "weibo:user"

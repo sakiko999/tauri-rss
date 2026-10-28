@@ -11,11 +11,12 @@
  * 显式空串 = 强制匿名 —— 匿名态已移除,渠道层会直接报「需要登录」。
  */
 import type { Social, SocialImage } from "@amoeba/xml"
-import { httpJson, httpText } from "../../host.ts"
+
 import { cdpEvaluate } from "../../browser/cdp.ts"
+import { httpJson, httpText } from "../../host.ts"
+import { parseCount } from "../../utils/count.ts"
 import { extractInlineJson } from "../../utils/inline-json.ts"
 import { toHttps } from "../../utils/url.ts"
-import { parseCount } from "../../utils/count.ts"
 import { resolveCookie } from "../credentials.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 

@@ -1,3 +1,21 @@
+import {
+  cdpEvaluate,
+  cdpNavigate,
+  extractInitialState,
+  extractNoteDetail,
+  isXhsLoggedIn,
+  isXhsOrigin,
+  noteDetailStateExpr,
+  noteDetailToSocial,
+  now,
+  rawOf,
+  reportXhsRisk,
+  resolveCookie,
+  waitUntil,
+  withBrowserOp,
+  XHS_BASE,
+  xhsClient,
+} from "@amoeba/resolve"
 /**
  * xhs 渠道共享的**浏览器策略层**。
  *
@@ -17,23 +35,9 @@
  * **不是 `web_session`** —— 小红书对游客也会立即签发 web_session。
  */
 import type { Item } from "@amoeba/xml"
-import { capturePage } from "../../passive/capture.ts"
+
 import { passiveBuffer } from "../../passive/buffer.ts"
-import {
-  XHS_BASE,
-  extractInitialState,
-  extractNoteDetail,
-  isXhsLoggedIn,
-  isXhsOrigin,
-  noteDetailStateExpr,
-  noteDetailToSocial,
-  now,
-  rawOf,
-  reportXhsRisk,
-  resolveCookie,
-  xhsClient,
-} from "@amoeba/resolve"
-import { cdpEvaluate, cdpNavigate, waitUntil, withBrowserOp } from "@amoeba/resolve"
+import { capturePage } from "../../passive/capture.ts"
 
 /** 滚动翻页每次返回的窗口大小(仅 `xhs:user`;explore 一次整批返回)。 */
 export const XHS_FETCH_MORE_WINDOW = 30

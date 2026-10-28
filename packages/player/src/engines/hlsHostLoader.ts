@@ -8,17 +8,17 @@
  *
  * 用法:hls.config.loader = HlsHostLoader
  */
-import Hls from "hls.js"
-import {
-  LoadStats,
+import Hls, {
   type Loader,
   type LoaderCallbacks,
   type LoaderConfiguration,
   type LoaderContext,
   type LoaderStats,
+  LoadStats,
 } from "hls.js"
-import { toArrayBuffer } from "../utils/buffer.ts"
+
 import { log } from "../log/index.ts"
+import { toArrayBuffer } from "../utils/buffer.ts"
 
 /** hls.js 的 Loader 类型作为类实现(`new (config: HlsConfig) => Loader<LoaderContext>`)。 */
 export class HlsHostLoader implements Loader<LoaderContext> {

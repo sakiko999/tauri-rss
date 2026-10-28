@@ -5,7 +5,7 @@
  * 统一暴露带平台签名/UA/cookie 的请求 + 弹幕流能力。归一/流解析等平台特有
  * 能力保留各平台导出,不塞进统一接口(避免 all-optional 垃圾接口)。
  */
-import type { DanmakuStream, DanmakuOptions } from "../danmaku"
+import type { DanmakuOptions, DanmakuStream } from "../danmaku"
 
 export interface PlatformRequestOptions {
   /** 登录 cookie(平台 API 需要登录态/风控放行)。 */

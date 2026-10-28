@@ -1,3 +1,12 @@
+import {
+  fetchTwitchUsers,
+  log,
+  normalizeTwitchLogin,
+  now,
+  parseRoomIds,
+  type TwitchStreamNode,
+  type TwitchUser,
+} from "@amoeba/resolve"
 /**
  * twitch:live —— Twitch 直播频道订阅 channel(一期)。
  *
@@ -11,17 +20,9 @@
  */
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import {
-  fetchTwitchUsers,
-  log,
-  normalizeTwitchLogin,
-  now,
-  parseRoomIds,
-  type TwitchStreamNode,
-  type TwitchUser,
-} from "@amoeba/resolve"
 
 /** 缩略图模板(Twitch 预览图;离线频道也返回占位图)。 */
 function thumbnailFor(login: string): string {

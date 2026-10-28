@@ -1,3 +1,4 @@
+import { resolveRoute } from "@amoeba/resolve"
 /**
  * align — 验证「crawler 输出与 rsshub 对齐」(收编原 core example/verify-alignment.ts)。
  *
@@ -9,8 +10,8 @@
  * 走相对路径引用,不发包。
  */
 import { serializeFeed } from "@amoeba/xml"
+
 import { deserializeFeed } from "../../../../packages/core/src/processing/deserialize.ts"
-import { resolveRoute } from "@amoeba/resolve"
 
 /** RSSHub 侧标准 RSS 2.0 fixture(与外部实例输出同构,含 media:* 增强)。 */
 function rsshubXml(): string {

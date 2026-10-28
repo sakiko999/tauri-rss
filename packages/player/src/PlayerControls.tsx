@@ -1,3 +1,15 @@
+import {
+  MediaDanmakuButton,
+  MediaFullscreenButton,
+  MediaLiveEdgeButton,
+  MediaPlayButton,
+  MediaQualityButton,
+  MediaRateButton,
+  MediaTimeDisplay,
+  MediaTimeRange,
+  MediaVolumeSlider,
+} from "./controls/index.ts"
+import type { DanmakuControl } from "./controls/index.ts"
 /**
  * PlayerControls —— 控件栏(默认组合,MediaChrome `<media-control-bar>` 的 React 版)。
  *
@@ -12,19 +24,7 @@
  * `.stage`)决定圆角与裁切。曾在此写死 `rounded-b-xl`,导致播放器内嵌到任何非圆角
  * 容器时控件条比画面更圆、底部两角错位。容器圆角 = 播放器外观,不归播放器管。
  */
-import type { VideoOps, VideoPlayState, FullscreenApi } from "./hooks/useVideoElement.ts"
-import {
-  MediaDanmakuButton,
-  MediaFullscreenButton,
-  MediaLiveEdgeButton,
-  MediaPlayButton,
-  MediaQualityButton,
-  MediaRateButton,
-  MediaTimeDisplay,
-  MediaTimeRange,
-  MediaVolumeSlider,
-} from "./controls/index.ts"
-import type { DanmakuControl } from "./controls/index.ts"
+import type { FullscreenApi, VideoOps, VideoPlayState } from "./hooks/useVideoElement.ts"
 
 export function PlayerControls({
   state,
@@ -46,7 +46,7 @@ export function PlayerControls({
   danmakuControl?: DanmakuControl
 }) {
   return (
-    <div className="flex flex-col gap-1 bg-linear-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4 text-white">
+    <div className="flex flex-col gap-1 bg-linear-to-t from-black/80 to-transparent px-2 pt-4 pb-1.5 text-white">
       {/* Seek(直播只显示缓冲状态,不可拖拽;带「回直播」按钮) */}
       <div className="flex items-center gap-2">
         <MediaLiveEdgeButton state={state} ops={ops} />

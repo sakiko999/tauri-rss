@@ -1,3 +1,4 @@
+import { now, searchYouTubeLive } from "@amoeba/resolve"
 /**
  * youtube:live-search —— 按关键词搜**正在直播**的视频(InnerTube 直播过滤器)。
  *
@@ -10,8 +11,8 @@
  * 预览也不需要精确在线数,`online` 取搜索结果里的 watching 数)。
  */
 import type { Item } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { now, searchYouTubeLive } from "@amoeba/resolve"
 import { youtubeLiveHitToLive } from "./live-shelf.ts"
 
 export const YoutubeLiveSearchChannel = makeApiChannel({

@@ -1,7 +1,7 @@
 {
   "name": "@amoeba/host",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -13,17 +13,17 @@
     "./browser": "./src/browser/index.ts",
     "./cdp": "./src/browser/cdp.ts"
   },
+  "scripts": {},
   "dependencies": {
+    "@amoeba/log": "workspace:*",
+    "@amoeba/platform": "workspace:*",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2.7.1",
     "@tauri-apps/plugin-process": "^2",
     "@tauri-apps/plugin-sql": "^2",
     "@tauri-apps/plugin-updater": "^2",
-    "@amoeba/log": "workspace:*",
-    "@amoeba/platform": "workspace:*",
     "ws": "^8.21.3"
   },
-  "scripts": {},
   "devDependencies": {
     "@types/ws": "^8.18.1"
   }

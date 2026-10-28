@@ -5,7 +5,9 @@
  * 这三条错了都不会报错，只会让「显示更多」变成死按钮或让 tab 数字乱跳。
  */
 import assert from "node:assert/strict"
+
 import type { ChannelInfo } from "@amoeba/core"
+
 import { CATALOG_PAGE, catalogView, isSingleton } from "./channel-catalog.ts"
 
 const ch = (key: string, name: string, need?: string[]): ChannelInfo =>

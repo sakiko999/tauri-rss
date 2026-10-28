@@ -1,3 +1,5 @@
+import { fetchDouyuCategoryRooms } from "@amoeba/resolve"
+
 /**
  * douyu 分区房间 —— 按二级分区列直播间(`areaId` = cate2Id)。
  *
@@ -7,7 +9,6 @@
  * 分页:页码制(page 在 path 里,从 1 起);服务端每页固定条数。
  */
 import { makeApiChannel } from "../factory.ts"
-import { fetchDouyuCategoryRooms } from "@amoeba/resolve"
 
 export const DouyuCategoryChannel = makeApiChannel({
   key: "live:douyu:category",

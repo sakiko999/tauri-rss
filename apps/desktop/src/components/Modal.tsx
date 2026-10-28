@@ -1,3 +1,7 @@
+import * as Dialog from "@radix-ui/react-dialog"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import * as SelectPrimitive from "@radix-ui/react-select"
+import * as SwitchPrimitive from "@radix-ui/react-switch"
 /**
  * Modal / Menu —— 浮层原语(radix primitive + 设计系统类名)。
  *
@@ -6,12 +10,9 @@
  * 只把外观换成 .scrim/.modal/.menu 类。
  */
 import type { ReactNode } from "react"
-import * as Dialog from "@radix-ui/react-dialog"
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
-import * as SelectPrimitive from "@radix-ui/react-select"
-import * as SwitchPrimitive from "@radix-ui/react-switch"
-import { Icon } from "./Icon.tsx"
+
 import { overlayBlock } from "../lib/uiOverlay.ts"
+import { Icon } from "./Icon.tsx"
 
 export function Modal({
   open,

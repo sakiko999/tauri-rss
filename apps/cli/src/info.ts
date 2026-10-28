@@ -7,7 +7,7 @@
  *   - 订阅级 `--kv cookie=` 覆盖:键存在即尊重,**空串 = 强制匿名探针**
  *     (渠道把 info.cookie 显式传给 client,client 侧空串不回落 provider)。
  */
-import { createSettingsRepository, type AppSettings } from "@amoeba/core"
+import { type AppSettings, createSettingsRepository } from "@amoeba/core"
 import { getChannel, type SourceInfo } from "@amoeba/crawler"
 
 /** 各 channel 的示例参数(收编自 crawler example/backend.ts;无参 channel 空)。 */

@@ -1,3 +1,4 @@
+import type { MediaItem } from "@amoeba/core"
 /**
  * FocusReader —— 专注阅读浮层(合流改版 M4)。
  *
@@ -15,11 +16,11 @@
  */
 import { useEffect, useRef } from "react"
 import type { ReactNode } from "react"
-import type { MediaItem } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
-import { Modal } from "../Modal.tsx"
+
 import { itemKey } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useDesktop } from "../../store/index.ts"
+import { Modal } from "../Modal.tsx"
 
 export function FocusReader({
   open,

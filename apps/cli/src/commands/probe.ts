@@ -6,8 +6,9 @@
  * 规则、同一 governor 配额（桌面服务的），适合验证「应用真实路径」而不是 CLI 直连。
  */
 import type { DanmakuItem, ResolveRoute } from "@amoeba/resolve"
-import type { Stream } from "@amoeba/xml"
 import { ServiceClient } from "@amoeba/service-client"
+import type { Stream } from "@amoeba/xml"
+
 import { resolveEndpoint } from "./attach.ts"
 
 export interface ProbeOptions {

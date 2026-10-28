@@ -16,6 +16,7 @@
  * 视频/直播/弹幕仍由 crawler/resolver 按 item.url 统一解析。
  */
 import { httpText } from "@amoeba/crawler"
+
 import { registerSourceProvider, type RssChannel, type SourceInfo, type SourceInfoField } from "./index.ts"
 
 /** 公网 RSSHub 实例兜底(settings.rsshubBaseUrl 缺失时用的默认外挂)。 */

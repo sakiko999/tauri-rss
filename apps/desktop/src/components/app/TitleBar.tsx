@@ -8,12 +8,13 @@
  * 播放页/设置页等整页视图下搜索框仍可用(切回库视图生效)。
  */
 import { useEffect, useRef } from "react"
-import { useDesktop, useNodeMeta } from "../../store/index.ts"
-import { usePrefs } from "../../store/prefs.ts"
-import { viewTitleFor } from "../../store/nodes.ts"
-import { Icon } from "../Icon.tsx"
-import { useViewNavigate } from "../../router.tsx"
+
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useViewNavigate } from "../../router.tsx"
+import { useDesktop, useNodeMeta } from "../../store/index.ts"
+import { viewTitleFor } from "../../store/nodes.ts"
+import { usePrefs } from "../../store/prefs.ts"
+import { Icon } from "../Icon.tsx"
 
 export function TitleBar() {
   const nodeId = useDesktop((s) => s.selectedNodeId)

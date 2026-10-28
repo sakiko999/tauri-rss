@@ -10,7 +10,7 @@
  * 让 tsc 在编译期兜底，零运行时成本。
  * 数据层(data-layer.ts)只经本模块取渠道,不直接碰 crawler 注册表。
  */
-import { listChannels as listCrawlerChannels, getChannel as getCrawlerChannel } from "@amoeba/crawler"
+import { getChannel as getCrawlerChannel, listChannels as listCrawlerChannels } from "@amoeba/crawler"
 import type { RssChannel } from "@amoeba/crawler"
 
 export type { LoginCookieSnapshot, RssChannel, RssSource, SourceInfo, SourceInfoField } from "@amoeba/crawler"

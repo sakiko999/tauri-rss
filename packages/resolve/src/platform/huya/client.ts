@@ -7,8 +7,8 @@
  * 2026-09 迁移——此前爬 HTML 的 HNF_GLOBAL_INIT 路径已删除)。
  */
 import { httpText } from "../../host.ts"
-import { huyaDanmakuStream } from "./danmaku.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
+import { huyaDanmakuStream } from "./danmaku.ts"
 
 const M_HUYA = "https://m.huya.com"
 const UA_MOBILE =

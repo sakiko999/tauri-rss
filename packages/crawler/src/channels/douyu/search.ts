@@ -1,3 +1,5 @@
+import { searchDouyuRooms } from "@amoeba/resolve"
+
 /**
  * douyu 搜索 —— 按关键词搜直播间(`japi/search/api/searchShow`,匿名可用)。
  *
@@ -5,7 +7,6 @@
  * 分页:页码制(page 从 1 起,pageSize 真消费→可分页)。
  */
 import { makeApiChannel } from "../factory.ts"
-import { searchDouyuRooms } from "@amoeba/resolve"
 
 const PAGE = 20
 

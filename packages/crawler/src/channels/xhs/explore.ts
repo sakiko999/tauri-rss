@@ -1,3 +1,4 @@
+import { noteCardToSocial, now, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
 /**
  * xhs:explore —— 小红书发现页(推荐内容)channel(kind: social)。
  *
@@ -12,10 +13,10 @@
  */
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
+
 import type { ItemDetailSource, Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { XHS_BASE, noteCardToSocial, now } from "@amoeba/resolve"
-import { withBrowserOp } from "@amoeba/resolve"
+import { XhsChannelBase } from "./base.ts"
 import {
   ensureXhsPageReady,
   fetchXhsList,
@@ -28,7 +29,6 @@ import {
   waitXhsListNonEmpty,
   XHS_LOGIN_REQUIRED,
 } from "./shared.ts"
-import { XhsChannelBase } from "./base.ts"
 
 /**
  * 无浏览器(CLI / mobile)时 discover 页不可抓。

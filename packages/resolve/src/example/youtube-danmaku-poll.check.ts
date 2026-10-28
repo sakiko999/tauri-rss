@@ -5,6 +5,7 @@
  * 断网或直播结束后每 5s 一条 warn 永不停止;直播结束也不会终止轮询。
  */
 import assert from "node:assert/strict"
+
 import { isChatEndedError, nextPollDelay } from "../platform/youtube/danmaku.ts"
 
 // 正常间隔:前两次沿用服务端 timeoutMs(首轮 + 首次失败)。

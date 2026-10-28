@@ -10,6 +10,7 @@
  * media:content、author→author、summary→description。
  */
 import { XMLBuilder } from "fast-xml-parser"
+
 import type { Attachment, Item, Stream } from "./types.ts"
 
 export interface SerializeOptions {

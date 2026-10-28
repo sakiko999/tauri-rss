@@ -1,3 +1,4 @@
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 /**
  * MediaRateButton —— 倍速菜单按钮(MediaChrome `<media-playback-rate-button>` 的 React 版)。
  *
@@ -5,7 +6,7 @@
  * 菜单用 radix DropdownMenu(键盘导航 / ESC / 焦点管理)。
  */
 import { useState } from "react"
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+
 import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 
 export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]

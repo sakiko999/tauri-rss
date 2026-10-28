@@ -1,3 +1,4 @@
+import { now } from "../../host.ts"
 /**
  * YouTube 直播页(Live tab)匿名解析 —— 直播热门 / 栏目分区 / 栏目目录。
  *
@@ -23,7 +24,6 @@
  */
 import type { YoutubeLiveHit } from "./client.ts"
 import { youtubeBrowse } from "./client.ts"
-import { now } from "../../host.ts"
 
 /** 直播页 browseId(YouTube 官方的 Live tab 频道)。 */
 const LIVE_PAGE_BROWSE_ID = "UC4R8DWoMoI7CAwX8_LjQHig"

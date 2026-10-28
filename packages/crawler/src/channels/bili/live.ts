@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+import { biliClient, log, now, parseRoomIds } from "@amoeba/resolve"
 /**
  * bili:live —— bilibili 直播房间 channel。
  *
@@ -10,13 +12,9 @@
  */
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { formatError } from "@amoeba/log"
-import { log } from "@amoeba/resolve"
-import { parseRoomIds } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
 
 const API_LIVE = "https://api.live.bilibili.com"
 

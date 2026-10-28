@@ -18,8 +18,9 @@ import { Database } from "bun:sqlite"
 import { mkdirSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { createReadingRepository } from "../packages/core/src/repo/reading-repo.ts"
+
 import { deserializeFeed } from "../packages/core/src/processing/deserialize.ts"
+import { createReadingRepository } from "../packages/core/src/repo/reading-repo.ts"
 
 const KV_DDL = "CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
 

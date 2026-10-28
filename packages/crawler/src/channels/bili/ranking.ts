@@ -4,6 +4,7 @@
  * `/x/web-interface/ranking/v2` 分区榜。rid 支持英文分区名(见 RID_TABLE)或数字。
  */
 import { biliClient, now } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 import { API, ugc } from "./video-common.ts"
 

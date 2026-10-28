@@ -1,3 +1,4 @@
+import { biliClient, fillImageSizes, now, toHttps } from "@amoeba/resolve"
 /**
  * bilibili 用户动态类 channel(bili:dynamic)。
  *
@@ -18,12 +19,9 @@
  */
 import type { Item, Social, SocialImage } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { biliClient } from "@amoeba/resolve"
-import { fillImageSizes } from "@amoeba/resolve"
-import { toHttps } from "@amoeba/resolve"
 
 const API = "https://api.bilibili.com"
 

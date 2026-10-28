@@ -8,7 +8,8 @@
  * 走 resolve 直连(无 cookie/无 DataLayer)——联想的输入只有前缀,无订阅语义。
  */
 import { fetchDouyinSuggestions } from "@amoeba/resolve"
-import { printJson, startTimer, fmtMs, trunc } from "../ui/render.ts"
+
+import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface SugOptions {
   json?: boolean

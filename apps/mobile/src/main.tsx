@@ -1,7 +1,8 @@
+import { injectBrowserHost } from "@amoeba/host/browser"
+import { injectTauriHost } from "@amoeba/host/tauri"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { injectTauriHost } from "@amoeba/host/tauri"
-import { injectBrowserHost } from "@amoeba/host/browser"
+
 import { App } from "./App.tsx"
 import { useMobile } from "./store.ts"
 import "./styles.css"

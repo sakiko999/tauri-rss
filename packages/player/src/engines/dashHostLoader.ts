@@ -13,8 +13,9 @@
  * DashHostLoader 是工厂函数,返回 { load, abort, reset, resetInitialSettings }。
  */
 import { type URLLoader } from "dashjs"
-import { toArrayBuffer } from "../utils/buffer.ts"
+
 import { log } from "../log/index.ts"
+import { toArrayBuffer } from "../utils/buffer.ts"
 
 interface DashLoadConfig {
   request?: {

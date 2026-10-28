@@ -1,3 +1,4 @@
+import { httpJson, mblogCardsToItems, now, PC_UA, WB_BASE, weiboClient } from "@amoeba/resolve"
 /**
  * weibo:hot —— 微博实时热搜 channel(kind: social)。
  *
@@ -8,10 +9,9 @@
  */
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { HotWordSource, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { httpJson, now } from "@amoeba/resolve"
-import { PC_UA, WB_BASE, mblogCardsToItems, weiboClient } from "@amoeba/resolve"
 
 export class WeiboHotChannel implements RssChannel {
   readonly key = "weibo:hot"

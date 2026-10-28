@@ -7,8 +7,8 @@
  *   - now:     Date.now
  */
 import { initAppHost, setHostCaps } from "../runtime.ts"
-import { LocalStorageBackend } from "../tauri/local-storage-backend.ts"
 import { FunctionJsBackend } from "../tauri/function-js-backend.ts"
+import { LocalStorageBackend } from "../tauri/local-storage-backend.ts"
 
 /** 浏览器 fetch 实现的 HttpBackend(CORS 受限)。 */
 function browserBackend(): HttpBackend {

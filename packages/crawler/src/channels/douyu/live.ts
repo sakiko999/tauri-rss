@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+import { douyuRoomInfo, log, now, parseRoomIds, strOr, toInt } from "@amoeba/resolve"
 /**
  * douyu 直播房间 channel —— HTTP + CryptoJS 签名(host.js)。
  *
@@ -13,15 +15,9 @@
  */
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { now } from "@amoeba/resolve"
-import { formatError } from "@amoeba/log"
-import { log } from "@amoeba/resolve"
-import { toInt } from "@amoeba/resolve"
-import { parseRoomIds } from "@amoeba/resolve"
-import { strOr } from "@amoeba/resolve"
-import { douyuRoomInfo } from "@amoeba/resolve"
 
 const BASE = "https://www.douyu.com"
 

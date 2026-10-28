@@ -1,3 +1,4 @@
+import { DESKTOP_CHROME_UA, httpText } from "@amoeba/resolve"
 /**
  * RawRssChannel — 原生 RSS/Atom feed 直链,fetch 直接透传上游 XML(无需 serialize)。
  *
@@ -9,9 +10,8 @@
  * (deserialize 兜底)。
  */
 import type { Item } from "@amoeba/xml"
-import type { Kind, RssChannel, RssSource, SourceInfo, ItemDetailSource } from "../../index.ts"
-import { httpText } from "@amoeba/resolve"
-import { DESKTOP_CHROME_UA } from "@amoeba/resolve"
+
+import type { ItemDetailSource, Kind, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { extractArticle, visibleTextLength } from "./extract.ts"
 
 const UA = DESKTOP_CHROME_UA

@@ -12,9 +12,10 @@
  * pointerup 释放。用 pointer capture 保证拖出元素仍跟手。
  */
 import { useCallback, useRef, useState } from "react"
+
 import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
-import { formatTime } from "../utils/time.ts"
 import { playableDuration } from "../utils/buffer.ts"
+import { formatTime } from "../utils/time.ts"
 
 const STEP_SEC = 5
 const PAGE_RATIO = 0.1
@@ -141,7 +142,7 @@ export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: Vid
           向上平移 100% 高度 + 8px 间距,与 hover 点正对。 */}
       {shownPct !== null && !state.live && (
         <div
-          className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded bg-black/80 px-1.5 py-0.5 text-[10px] tabular-nums text-white"
+          className="pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded bg-black/80 px-1.5 py-0.5 text-[10px] text-white tabular-nums"
           style={{ left: `${shownPct}%` }}
         >
           {formatTime((shownPct / 100) * duration)}

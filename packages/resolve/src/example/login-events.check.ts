@@ -6,7 +6,9 @@
  * spread 同一份 `LOGIN_EVENTS` / `DANMAKU_EVENTS`,本文件把「同形」钉死。
  */
 import assert from "node:assert/strict"
+
 import { setLogSink } from "@amoeba/log"
+
 import { log } from "../log.ts"
 
 const lines: string[] = []

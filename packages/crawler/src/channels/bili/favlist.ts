@@ -1,3 +1,4 @@
+import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:favlist —— B 站收藏夹订阅。
  *
@@ -9,10 +10,10 @@
  * ⚠️ 收藏夹页 URL 的 `fid` 与 API 的 `media_id` 是同一个值。
  */
 import type { Item } from "@amoeba/xml"
-import { biliClient, now } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
-import { API, ugc } from "./video-common.ts"
 import { parseBiliFavlistRef } from "./refs.ts"
+import { API, ugc } from "./video-common.ts"
 
 /** 官方文档 `ps` 上限 20(实测 40 也返回过,不依赖)。 */
 const PAGE_SIZE = 20

@@ -7,6 +7,7 @@
  * node/bun 类型，而本文件用 `node:assert`。只给 check 注入，不污染播放器生产代码。
  */
 import assert from "node:assert/strict"
+
 import {
   bufferedAhead,
   engineLabel,

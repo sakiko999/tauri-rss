@@ -1,3 +1,4 @@
+import { extractNoteDetail, noteDetailToSocial, resolveCookie, XHS_BASE, xhsClient } from "@amoeba/resolve"
 /**
  * detail — xhs 单条详情探针(登录态 noteDetail 补全;bili/weibo 列表已完整)。
  *
@@ -10,7 +11,7 @@
  * (登录态 HTTP SSR 是空壳),所以旧的 `--latest` 已删除 —— URL 请从列表项复制。
  */
 import pc from "picocolors"
-import { XHS_BASE, noteDetailToSocial, extractNoteDetail, resolveCookie, xhsClient } from "@amoeba/resolve"
+
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 
 export interface DetailOptions {

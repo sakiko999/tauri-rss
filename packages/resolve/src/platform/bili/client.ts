@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+import type { Stream } from "@amoeba/xml"
 /**
  * BilibiliClient — crawler 版 bili 共享客户端(HTTP + wbi 签名 + buvid)。
  *
@@ -13,17 +15,16 @@
  * 零登录:nav 未登录(`code:-101`)仍返回 wbi_img → MD5 即可签名。
  */
 import * as R from "ramda"
-import type { Stream } from "@amoeba/xml"
-import { formatError } from "@amoeba/log"
-import { log } from "../../log.ts"
+
+import type { DanmakuOptions, DanmakuStream } from "../../danmaku"
 import { httpJson, now } from "../../host.ts"
+import { log } from "../../log.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { buildMpd, type MpdAudioRep, type MpdVideoRep } from "../../utils/mpd.ts"
 import { strOr } from "../../utils/str.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 import { resolveCookie } from "../credentials.ts"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
-import type { DanmakuOptions, DanmakuStream } from "../../danmaku"
 import { biliLiveDanmakuStream } from "./danmaku-live.ts"
 import { biliVodDanmakuStream } from "./danmaku-vod.ts"
 

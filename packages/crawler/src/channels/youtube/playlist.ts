@@ -1,3 +1,4 @@
+import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
 /**
  * youtube:playlist —— YouTube 播放列表订阅(官方 Atom feed)。
  *
@@ -9,12 +10,12 @@
  * ⚠️ 输入归一化在 refs.ts:`RD`/`WL`/`LL`/`LM` 前缀拒收(动态/私有/需登录)。
  */
 import type { Item } from "@amoeba/xml"
+import { parseFeed } from "@amoeba/xml"
+
 import type { SourceInfo } from "../../index.ts"
 import { makeApiChannel } from "../factory.ts"
-import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
-import { parseFeed } from "@amoeba/xml"
-import { normalizeYoutubePlaylistId } from "./refs.ts"
 import { entryToVideo } from "./channel.ts"
+import { normalizeYoutubePlaylistId } from "./refs.ts"
 
 /** 频道标题与链接共用:归一化失败时退回原串(与原 channelOptions 一致)。 */
 function playlistIdOf(info: SourceInfo): string {

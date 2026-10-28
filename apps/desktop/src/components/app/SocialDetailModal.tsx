@@ -1,3 +1,5 @@
+import { fmtCount, MediaImage } from "@amoeba/ui"
+import DOMPurify from "dompurify"
 /**
  * SocialDetailModal —— 社交条目详情弹窗(点瀑布流卡片打开)。
  *
@@ -11,15 +13,14 @@
  * 同一可用高度,不再按源比例撑高把正文挤到图片下方。
  */
 import { useEffect, useMemo, useState } from "react"
-import DOMPurify from "dompurify"
-import { useDesktop } from "../../store/index.ts"
-import { Modal } from "../Modal.tsx"
-import { Icon } from "../Icon.tsx"
-import { MediaImage, fmtCount } from "@amoeba/ui"
-import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
+
 import { openExternalSafely } from "../../lib/host.ts"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { looksLikeHtml } from "../../lib/html.ts"
+import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useDesktop } from "../../store/index.ts"
+import { Icon } from "../Icon.tsx"
+import { Modal } from "../Modal.tsx"
 import { Lightbox } from "./Lightbox.tsx"
 
 /**

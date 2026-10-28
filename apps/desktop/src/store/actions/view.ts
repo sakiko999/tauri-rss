@@ -5,9 +5,10 @@
  * 从 store/index.ts 拆出;只依赖 StoreCtx。
  */
 import type { AudioItem, CategoryItem } from "@amoeba/core"
-import { PAGE_SIZE } from "../selectors.ts"
-import { now } from "../lib.ts"
+
 import { itemKey } from "../../lib/media.ts"
+import { now } from "../lib.ts"
+import { PAGE_SIZE } from "../selectors.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
 
 /** 二级预览的复用窗口：进出切换不重复拉；过期后再点开会重抓。 */

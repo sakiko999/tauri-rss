@@ -8,10 +8,11 @@
  * lib/update.ts 的模块 store 持有(见那里的注释)。
  */
 import { useEffect, useState, useSyncExternalStore } from "react"
+
 import { Icon } from "../../../components/Icon.tsx"
 import { SideCard } from "../../../components/StateBlock.tsx"
-import { Row } from "./Row.tsx"
 import { getUpdatePhase, installUpdate, manualCheck, relaunchApp, subscribeUpdatePhase } from "../../../lib/update.ts"
+import { Row } from "./Row.tsx"
 
 /** 字节数 → 人类可读(只用于进度文案)。 */
 function fmtBytes(n: number): string {

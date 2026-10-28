@@ -1,3 +1,4 @@
+import { getYoutubeLiveMeta, now } from "@amoeba/resolve"
 /**
  * youtube:live —— YouTube 直播订阅 channel。
  *
@@ -11,8 +12,8 @@
  * (iOS client hlsManifestUrl,失败降级 web 页)。
  */
 import type { Live } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { now, getYoutubeLiveMeta } from "@amoeba/resolve"
 
 // 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→watch?v=)。
 export const YoutubeLiveChannel = makeApiChannel({

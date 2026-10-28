@@ -5,6 +5,7 @@
  * key/name/kind/sourceInfoTpl/defaultInfo,不感知 crawler 的 source 装配。
  */
 import type { SourceInfoField } from "@amoeba/crawler"
+
 import type { MediaKind } from "./media-item.ts"
 
 export interface ChannelInfo {

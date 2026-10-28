@@ -1,3 +1,5 @@
+import { parseOpml } from "@amoeba/xml"
+
 /**
  * opml 映射自检(desktop 侧)—— `bun apps/desktop/src/lib/opml.check.ts`
  *
@@ -5,7 +7,6 @@
  * 导入去重(同 xmlUrl 跳过)。
  */
 import { exportOpml, pendingImports } from "./opml.ts"
-import { parseOpml } from "@amoeba/xml"
 
 let fails = 0
 const ok = (cond: unknown, label: string) => {

@@ -1,3 +1,5 @@
+import { readXhsLoginCookie, xhsScanLogin } from "@amoeba/resolve"
+
 /**
  * xhs 渠道公共基类。
  *
@@ -7,7 +9,6 @@
  * 拆出来后 user/explore 可以安全地先拿基类、再用 shared 的函数。
  */
 import type { Loginable, LoginCookieSnapshot, LoginResult } from "../../index.ts"
-import { readXhsLoginCookie, xhsScanLogin } from "@amoeba/resolve"
 
 export class XhsChannelBase implements Loginable {
   // ⚠️ `passive` 不下放在基类：xhs:user 的翻页要 interactive 滚动，不是纯导航

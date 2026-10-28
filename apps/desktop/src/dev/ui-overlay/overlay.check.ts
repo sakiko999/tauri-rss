@@ -3,9 +3,9 @@
  * 跑：bun apps/desktop/src/dev/ui-overlay/overlay.check.ts
  */
 import { DEFAULT_HOTKEY, formatHotkey, matchHotkey, parseHotkey } from "./hotkey.ts"
-import { NumberRegistry } from "./registry.ts"
-import { chooseLabelPosition } from "./layout.ts"
 import { selectLabels } from "./labels.ts"
+import { chooseLabelPosition } from "./layout.ts"
+import { NumberRegistry } from "./registry.ts"
 
 function assert(cond: unknown, msg: string) {
   if (!cond) throw new Error(`FAIL: ${msg}`)

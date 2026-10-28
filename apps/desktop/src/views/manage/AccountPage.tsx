@@ -1,3 +1,5 @@
+import { type ChannelInfo, cookieFieldFor } from "@amoeba/core"
+import { browserCookieHostsOf, LOGIN_PLATFORMS, platformDef } from "@amoeba/platform"
 /**
  * AccountPage —— 账号与凭证。
  *
@@ -9,15 +11,14 @@
  * refresh 时按 channelKey 前缀自动注入。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { cookieFieldFor, type ChannelInfo } from "@amoeba/core"
-import { LOGIN_PLATFORMS, browserCookieHostsOf, platformDef } from "@amoeba/platform"
-import { useDesktop } from "../../store/index.ts"
-import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
+
 import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
 import { QrImage } from "../../components/QrImage.tsx"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { platformOf } from "../../lib/subscriptions.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useDesktop } from "../../store/index.ts"
 
 type PlatformMeta = {
   label: string
@@ -309,7 +310,7 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
       <div className="qr-wrap">
         {phase === "idle" ? (
           <>
-            <Icon name="loader" size={40} className="animate-spin t-dim" />
+            <Icon name="loader" size={40} className="t-dim animate-spin" />
             <p className="t-small t-muted">正在准备二维码…</p>
           </>
         ) : null}

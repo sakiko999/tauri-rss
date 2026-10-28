@@ -1,3 +1,5 @@
+import { MediaImage } from "@amoeba/ui"
+import DOMPurify from "dompurify"
 /**
  * ReaderMain —— 阅读视图的主区:工具栏 + 正文。
  *
@@ -7,17 +9,16 @@
  * 滚动进度条按主区绝对定位(styles.css 里 .main-region position:relative)。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import DOMPurify from "dompurify"
-import { useDesktop } from "../../store/index.ts"
-import { StateBlock } from "../../components/StateBlock.tsx"
-import { Icon } from "../../components/Icon.tsx"
+
 import { FocusReader } from "../../components/app/FocusReader.tsx"
-import { MediaImage } from "@amoeba/ui"
-import { fmtDate, heroWidth, itemKey, mediaUrl, ratioOf } from "../../lib/media.ts"
+import { Icon } from "../../components/Icon.tsx"
+import { StateBlock } from "../../components/StateBlock.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
 import { looksLikeHtml, visibleLength } from "../../lib/html.ts"
-import { usePrefs } from "../../store/prefs.ts"
+import { fmtDate, heroWidth, itemKey, mediaUrl, ratioOf } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useDesktop } from "../../store/index.ts"
+import { usePrefs } from "../../store/prefs.ts"
 
 /** 正文最大宽度(阅读舒适度档位)。 */
 const MEASURE_LABEL: Record<string, string> = { narrow: "窄", comfortable: "适中", wide: "宽" }

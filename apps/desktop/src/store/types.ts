@@ -1,10 +1,3 @@
-/**
- * store 的共享类型:视图状态形状 + 动作契约 + 动作工厂上下文。
- *
- * 拆出来是为了让 `actions/*` 不依赖 store 入口文件(避免环形 import),
- * 同时让各动作文件的返回类型能用 `Pick<DesktopState, ...>` 做完整性检查。
- */
-import type { StoreApi } from "zustand"
 import type {
   AppSettings,
   DataLayer,
@@ -14,6 +7,14 @@ import type {
   Subscription,
   SubscriptionGroup,
 } from "@amoeba/core"
+/**
+ * store 的共享类型:视图状态形状 + 动作契约 + 动作工厂上下文。
+ *
+ * 拆出来是为了让 `actions/*` 不依赖 store 入口文件(避免环形 import),
+ * 同时让各动作文件的返回类型能用 `Pick<DesktopState, ...>` 做完整性检查。
+ */
+import type { StoreApi } from "zustand"
+
 import type { SortMode, ViewFilter, ViewResult } from "./selectors.ts"
 
 /** social 详情弹窗载荷(点击卡片打开;xhs 异步补全 full)。 */

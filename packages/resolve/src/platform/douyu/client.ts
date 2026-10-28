@@ -1,3 +1,4 @@
+import { formatError } from "@amoeba/log"
 /**
  * douyu 平台客户端 —— CryptoJS 签名 + H5Play 拉流 + 房间信息。
  *
@@ -5,13 +6,13 @@
  * 下沉(原 channel 私有方法)。签名脚本 CRYPTO_JS 经 host.js 执行。
  */
 import type { Stream } from "@amoeba/xml"
+
 import { httpGet, httpJson, now } from "../../host.ts"
-import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
 import { toInt } from "../../utils/number.ts"
+import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 import { CRYPTO_JS } from "./cryptojs.ts"
 import { douyuDanmakuStream } from "./danmaku.ts"
-import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
 
 const BASE = "https://www.douyu.com"
 const UA =

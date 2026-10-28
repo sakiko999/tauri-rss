@@ -4,9 +4,9 @@
  * ws:nodeWsBackend(ws 包带 header)——example 测 douyin 弹幕握手需要。
  */
 import { initAppHost, setHostCaps } from "../runtime.ts"
+import { memStorage } from "./mem-storage.ts"
 import { nodeBackend } from "./node-backend.ts"
 import { nodeJsBackend } from "./node-js.ts"
-import { memStorage } from "./mem-storage.ts"
 import { nodeWsBackend } from "./node-ws.ts"
 
 export function injectNodeHost(): void {

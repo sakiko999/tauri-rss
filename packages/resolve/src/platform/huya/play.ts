@@ -18,8 +18,9 @@
  *
  */
 import type { Stream } from "@amoeba/xml"
+
 import { httpJson } from "../../host.ts"
-import { M_HUYA, HUYA_UA } from "./client.ts"
+import { HUYA_UA, M_HUYA } from "./client.ts"
 
 /** 播放 FLV 用的 UA(HYSDK PC 端,dart 同款)。 */
 export const HUYA_PLAY_UA = "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"

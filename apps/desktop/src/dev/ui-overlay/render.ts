@@ -5,9 +5,9 @@
  * 压不过 toast 60 / 启动骨架 999）。样式运行时注入，生产包不含这份 CSS。
  */
 import { isImeComposing } from "../../lib/ime.ts"
-import { chooseLabelPosition } from "./layout.ts"
-import { formatEntry, toJsonItem } from "./format.ts"
 import { copyText } from "./clipboard.ts"
+import { formatEntry, toJsonItem } from "./format.ts"
+import { chooseLabelPosition } from "./layout.ts"
 import type { Box, OverlayEntry } from "./types.ts"
 
 export interface OverlayViewCallbacks {

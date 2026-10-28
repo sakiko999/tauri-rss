@@ -1,3 +1,6 @@
+import type { MediaItem } from "@amoeba/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
 /**
  * ShortVideoView —— 第三模式：短视频全屏上下滑流。
  *
@@ -13,16 +16,14 @@
  *   但「保留实例只暂停」需给它加命令式 pause API（当前没有，不做）。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { PlayableMedia } from "@amoeba/player"
-import { MediaImage } from "@amoeba/ui"
-import type { MediaItem } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
+
 import { Icon } from "../../components/Icon.tsx"
-import { useViewNavigate } from "../../router.tsx"
+import { openExternalSafely } from "../../lib/host.ts"
 import { itemKey } from "../../lib/media.ts"
 import { scrollBehavior } from "../../lib/motion.ts"
-import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useViewNavigate } from "../../router.tsx"
+import { useDesktop } from "../../store/index.ts"
 
 /** 单个 slide。active=false 时只渲染 poster 占位（不挂播放器）。 */
 function Slide({

@@ -12,17 +12,18 @@
  * 顶栏 update-chip 同步移除，状态只留这一处，避免两个同义按钮各自显示不同新鲜度。
  */
 import { useMemo, useState } from "react"
-import { useDesktop } from "../../store/index.ts"
-import { usePrefs } from "../../store/prefs.ts"
-import { HOME_NODE, MAIN_NAV, PAGES, SHORT_MODES, SMART, TABS, navIdOf } from "../../store/nodes.ts"
-import { kindCounts } from "../../store/selectors.ts"
+
 import { fmtAgo, isLiveNow } from "../../lib/media.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { usePlayParams, useSettingsNavigate, useViewNavigate } from "../../router.tsx"
+import { useDesktop } from "../../store/index.ts"
+import { HOME_NODE, MAIN_NAV, navIdOf, PAGES, SHORT_MODES, SMART, TABS } from "../../store/nodes.ts"
+import { usePrefs } from "../../store/prefs.ts"
+import { kindCounts } from "../../store/selectors.ts"
+import { AddSubscriptionDialog } from "../../views/manage/AddSubscriptionDialog.tsx"
 import { Icon } from "../Icon.tsx"
 import { NavRow, RailSection } from "../NavRow.tsx"
-import { usePlayParams, useSettingsNavigate, useViewNavigate } from "../../router.tsx"
-import { AddSubscriptionDialog } from "../../views/manage/AddSubscriptionDialog.tsx"
 import { RailGroupTree } from "./RailGroupTree.tsx"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /**
  * 内容类型段（§3.2 只留三项）：全部 / 音频 / 直播。

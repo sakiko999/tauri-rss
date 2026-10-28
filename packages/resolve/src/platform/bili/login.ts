@@ -13,8 +13,8 @@
  * 用任意 QR 库编码即可;本模块只负责协议。
  */
 import { httpJson } from "../../host.ts"
-import { log } from "../../log.ts"
 import type { LoginResult } from "../../index.ts"
+import { log } from "../../log.ts"
 
 const PASSPORT = "https://passport.bilibili.com/x/passport-login/web/qrcode"
 const UA =

@@ -1,3 +1,11 @@
+import {
+  createDataLayer,
+  type DataLayer,
+  findItem,
+  type MediaItem,
+  positionDecision,
+  type Subscription,
+} from "@amoeba/core"
 /**
  * Mobile store —— 复用 core DataLayer(订阅/抓取/阅读态),只做移动端需要的薄视图状态。
  *
@@ -7,14 +15,6 @@
  * 内置 crawler 形态(见 CLAUDE.md):移动端不接爬虫服务,仅用有限平台(SSR/HTTP)。
  */
 import { create } from "zustand"
-import {
-  createDataLayer,
-  findItem,
-  positionDecision,
-  type DataLayer,
-  type MediaItem,
-  type Subscription,
-} from "@amoeba/core"
 
 import "@amoeba/core/source/rsshub"
 

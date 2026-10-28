@@ -1,3 +1,7 @@
+import type { MediaStream } from "@amoeba/core"
+import * as dashjs from "dashjs"
+import flvjs from "flv.js"
+import Hls from "hls.js"
 /**
  * useMediaStream —— hls.js / flv.js 生命周期 hook(一个 hook 管两种流)。
  *
@@ -9,16 +13,12 @@
  * 重跑时先销毁旧实例再建新。
  */
 import { useEffect, useRef } from "react"
-import Hls from "hls.js"
-import flvjs from "flv.js"
-import * as dashjs from "dashjs"
-import type { MediaStream } from "@amoeba/core"
-import { HlsHostLoader } from "../engines/hlsHostLoader.ts"
+
 import { DashHostLoader } from "../engines/dashHostLoader.ts"
-import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
+import { HlsHostLoader } from "../engines/hlsHostLoader.ts"
 import { log } from "../log/index.ts"
 import type { EngineStats } from "../stats.ts"
-
+import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
 // ⚠️ 判据在 `streamKind.ts`(纯函数、不 import 引擎)——本模块 import 了
 // hls.js/flv.js/dashjs,加载即要 window,判据留在这里会让 node 侧自检跑不了。
 import { isDashStream, isFlvStream, isHlsStream } from "./streamKind.ts"

@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+
 /**
  * douyin 弹幕 —— 签名(WebMSSDK get_sign) → wss + signature → PushFrame hb → gzip → protobuf。
  *
@@ -16,12 +18,11 @@
  */
 import { createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuStream } from "../../danmaku"
-import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "./danmaku-proto.ts"
-import { md5Hex } from "../../utils/md5.ts"
 import { httpJson } from "../../host.ts"
-import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
-import { DEFAULT_TTWID, UA_ENTER, enterRoomParams, signDouyinUrl } from "./abogus.ts"
+import { md5Hex } from "../../utils/md5.ts"
+import { DEFAULT_TTWID, enterRoomParams, signDouyinUrl, UA_ENTER } from "./abogus.ts"
+import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "./danmaku-proto.ts"
 import { kWebMsSDK } from "./msdk-sign.ts"
 
 const LIVE = "https://live.douyin.com"

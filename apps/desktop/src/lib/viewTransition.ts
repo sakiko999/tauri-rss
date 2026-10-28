@@ -15,6 +15,7 @@
  *      过渡期间把它停掉。
  */
 import { flushSync } from "react-dom"
+
 import { prefersReducedMotion } from "./motion.ts"
 
 /** VT 名字。**全页唯一** —— 重名会让浏览器静默忽略整个过渡。 */

@@ -1,3 +1,5 @@
+import type { MediaStream, ResolvePlayback } from "@amoeba/core"
+import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
 /**
  * PlayableMedia —— 可播放媒体容器(video/audio/live 共用)。
  *
@@ -15,10 +17,9 @@
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
 import { useEffect, useRef, useState } from "react"
-import type { MediaStream, ResolvePlayback } from "@amoeba/core"
-import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
+
+import { AudioShell } from "./AudioShell.tsx"
 import { useMediaStream } from "./hooks/useMediaStream.ts"
-import type { EngineStats } from "./stats.ts"
 import {
   isProgressiveAudio,
   isProgressiveVideo,
@@ -26,11 +27,11 @@ import {
   isStreamingStream,
   useStreamSelection,
 } from "./hooks/useStreamSelection.ts"
-import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
-import { log } from "./log/index.ts"
-import { AudioShell } from "./AudioShell.tsx"
-import { VideoShell } from "./VideoShell.tsx"
 import { SpinnerIcon } from "./icons.tsx"
+import { log } from "./log/index.ts"
+import type { EngineStats } from "./stats.ts"
+import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
+import { VideoShell } from "./VideoShell.tsx"
 
 /**
  * 状态块内的次要按钮。

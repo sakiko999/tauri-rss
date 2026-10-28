@@ -10,7 +10,9 @@
  * ⚠️ 三斜线只给本文件注入 bun 类型（player tsconfig 的 types 只有 vite/client）。
  */
 import assert from "node:assert/strict"
+
 import type { MediaStream } from "@amoeba/core"
+
 import { pickDefaultStream } from "./streamKind.ts"
 
 const s = (format: string, url: string): MediaStream => ({ url, format }) as MediaStream

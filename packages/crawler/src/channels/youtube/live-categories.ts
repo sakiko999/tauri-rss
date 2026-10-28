@@ -1,3 +1,4 @@
+import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
 /**
  * youtube:live-categories —— YouTube 直播栏目目录**订阅**。
  *
@@ -9,8 +10,8 @@
  * 被 LIVE badge 过滤成空栏目的(Recent/Upcoming)也不列入。
  */
 import type { Category, Item } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
 
 export const YoutubeLiveCategoriesChannel = makeApiChannel({
   key: "youtube:live-categories",

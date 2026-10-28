@@ -6,8 +6,10 @@
  * 只能在 CPU 上守住。
  */
 import { deflateSync } from "node:zlib"
+
 import jsQR from "jsqr"
 import QRCode from "qrcode"
+
 import { contentFromDataUrl, decodePng, matrixFromEmit, matrixOf, renderHalfBlocks } from "./qr-terminal.ts"
 
 let failed = 0

@@ -9,12 +9,13 @@
  *   - now:     Date.now
  */
 import { openUrl } from "@tauri-apps/plugin-opener"
+
 import { initAppHost, setHostCaps } from "../runtime.ts"
+import { TauriBrowserBackend } from "./browser-backend.ts"
+import { FunctionJsBackend } from "./function-js-backend.ts"
+import { SqliteStorageBackend } from "./sqlite-storage-backend.ts"
 import { TauriHttpBackend } from "./tauri-http-backend.ts"
 import { TauriWsBackend } from "./tauri-ws-backend.ts"
-import { SqliteStorageBackend } from "./sqlite-storage-backend.ts"
-import { FunctionJsBackend } from "./function-js-backend.ts"
-import { TauriBrowserBackend } from "./browser-backend.ts"
 import { TauriUpdaterBackend } from "./updater-backend.ts"
 
 /**

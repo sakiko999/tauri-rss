@@ -6,12 +6,13 @@
  * 用词条 item 的 author.name 承载热度值(weibo:hot 渠道的既有约定)。
  */
 import { useMemo } from "react"
-import { useDesktop } from "../../store/index.ts"
-import { baseFor } from "../../store/selectors.ts"
+
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
-import { useViewNavigate } from "../../router.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useViewNavigate } from "../../router.tsx"
+import { useDesktop } from "../../store/index.ts"
+import { baseFor } from "../../store/selectors.ts"
 
 export function HotPane() {
   const view = useDesktop((s) => s.view)

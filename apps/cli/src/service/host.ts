@@ -1,3 +1,7 @@
+import { Database } from "bun:sqlite"
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs"
+import { join } from "node:path"
+
 /**
  * 数据服务宿主注入。
  *
@@ -10,9 +14,7 @@
 import { createSidecarBrowser, locateSidecarBinary, nodeBackend, nodeJsBackend, nodeWsBackend } from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
 import { setLogSink } from "@amoeba/log"
-import { Database } from "bun:sqlite"
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs"
-import { join } from "node:path"
+
 import { sqliteStorage } from "../store/sqlite-storage.ts"
 
 export interface ServiceHostOptions {

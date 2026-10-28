@@ -6,6 +6,7 @@
  */
 import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/core"
 import { platformOfChannelKey } from "@amoeba/platform"
+
 import { mediaUrl } from "./media.ts"
 
 /** 逗号分隔、可把候选**并入**已有订阅的列表型参数(直播房间号)。 */

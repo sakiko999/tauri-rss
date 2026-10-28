@@ -8,8 +8,9 @@
  *   - referer 头提示(带 headers 的原生直链可能 403,浏览器无法带自定义 header)。
  */
 import { useEffect, useRef } from "react"
-import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
+
 import { log } from "./log/index.ts"
+import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
 
 export function AudioShell({
   src,

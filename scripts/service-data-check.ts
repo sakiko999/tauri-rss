@@ -11,6 +11,7 @@ import { Database } from "bun:sqlite"
 import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+
 import type { ServiceEvent } from "@amoeba/service-protocol"
 
 const ROOT = process.cwd()

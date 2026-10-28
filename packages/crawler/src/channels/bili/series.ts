@@ -1,3 +1,4 @@
+import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:series —— B 站「视频列表 / 系列」订阅。
  *
@@ -11,11 +12,11 @@
  */
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems, apiFetchMore } from "../factory.ts"
-import { biliClient, now } from "@amoeba/resolve"
-import { API, ugc } from "./video-common.ts"
 import { parseBiliSeriesRef } from "./refs.ts"
+import { API, ugc } from "./video-common.ts"
 
 /** 上游固定 20/页(传 50 也只给 20)。 */
 const PAGE_SIZE = 20

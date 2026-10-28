@@ -8,10 +8,11 @@
  * 用内存宿主 + 假渠道，不触网。
  */
 import assert from "node:assert/strict"
-import { injectNodeHost } from "@amoeba/host/node"
+
 import { registerAllChannels, registerChannel } from "@amoeba/crawler"
-import { ERROR_KIND_LABEL, ResolveError, errorKindOf } from "../index.ts"
-import { createDataLayer } from "../index.ts"
+import { injectNodeHost } from "@amoeba/host/node"
+
+import { createDataLayer, ERROR_KIND_LABEL, errorKindOf, ResolveError } from "../index.ts"
 import type { Subscription } from "../types/subscription.ts"
 
 injectNodeHost()

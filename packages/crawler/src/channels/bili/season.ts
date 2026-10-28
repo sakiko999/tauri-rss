@@ -1,3 +1,4 @@
+import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:season —— B 站视频合集(`ugc_season`)订阅。
  *
@@ -12,11 +13,11 @@
  */
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems, apiFetchMore } from "../factory.ts"
-import { biliClient, now } from "@amoeba/resolve"
-import { API, ugc } from "./video-common.ts"
 import { parseBiliSeasonRef } from "./refs.ts"
+import { API, ugc } from "./video-common.ts"
 
 const PAGE_SIZE = 30
 

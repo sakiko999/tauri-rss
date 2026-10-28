@@ -1,3 +1,4 @@
+import { biliClient, biliQrGenerate, biliScanLogin, now } from "@amoeba/resolve"
 /**
  * bili:popular —— bilibili 综合热门(video channel)。
  *
@@ -8,9 +9,9 @@
  * provider 注入)。
  */
 import type { Item } from "@amoeba/xml"
+
 import type { LoginResult } from "../../index.ts"
 import { makeApiChannel } from "../factory.ts"
-import { biliClient, biliQrGenerate, biliScanLogin, now } from "@amoeba/resolve"
 import { API, ugc } from "./video-common.ts"
 
 /** `/x/web-interface/popular` 的响应形状（只取用到的字段）。 */

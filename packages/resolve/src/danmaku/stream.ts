@@ -1,3 +1,6 @@
+import { formatError } from "@amoeba/log"
+
+import { log } from "../log.ts"
 /**
  * stream —— 弹幕流原语:异步 setup 竞态守卫(deferredStream)+ WS 连接管理(createWsStream)。
  *
@@ -16,8 +19,6 @@
  * 走宿主。两形态在内部归一成 WsLike 抽象(send/close/readyState)。
  */
 import type { DanmakuItem, DanmakuStream } from "./types.ts"
-import { formatError } from "@amoeba/log"
-import { log } from "../log.ts"
 
 export interface WsStreamOptions {
   /** 连接地址。传函数 = 每次建连重新求值(重连时 host/token 可能已变)。 */

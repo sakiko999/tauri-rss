@@ -1,3 +1,4 @@
+import type { MediaItem } from "@amoeba/core"
 /**
  * AddSubscriptionDialog —— 添加订阅弹窗(radix Dialog + 设计系统类名)。
  *
@@ -12,29 +13,29 @@
  * 按渠道配置);这里只留**表单状态与提交编排**。
  */
 import { useEffect, useMemo, useState } from "react"
-import type { MediaItem } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
-import { Modal, Select } from "../../components/Modal.tsx"
+
 import { Icon } from "../../components/Icon.tsx"
+import { Modal, Select } from "../../components/Modal.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
 import {
+  type Candidate,
   candidatesFromSearch,
   candidatesFromUsers,
   LIVE_SUB_CHANNEL,
-  SEARCH_CHANNEL,
-  searchChannelOf,
   mergeValues,
   multiParamOf,
+  SEARCH_CHANNEL,
+  searchChannelOf,
   splitValues,
   subsOfChannel,
   USER_SEARCH_CHANNEL,
   USER_SUB_CHANNEL,
   USER_SUB_PARAM,
   valueList,
-  type Candidate,
 } from "../../lib/subscriptions.ts"
-import { ChannelPanel, SearchPanel } from "./AddPanels.tsx"
 import { useLatestOnly } from "../../lib/useLatestOnly.ts"
+import { useDesktop } from "../../store/index.ts"
+import { ChannelPanel, SearchPanel } from "./AddPanels.tsx"
 
 export function AddSubscriptionDialog({
   open,

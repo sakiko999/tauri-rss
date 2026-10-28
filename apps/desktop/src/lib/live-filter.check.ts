@@ -6,7 +6,9 @@
  * 标题带「离线」），而区块筛选只看 kind，于是把离线房间算进了「正在直播」。
  */
 import assert from "node:assert/strict"
+
 import type { MediaItem } from "@amoeba/core"
+
 import { isLiveNow } from "./media.ts"
 
 const live = (liveStatus: "live" | "offline" | "unknown"): MediaItem =>

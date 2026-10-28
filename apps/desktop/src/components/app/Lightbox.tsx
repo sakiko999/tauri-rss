@@ -1,3 +1,4 @@
+import { MediaImage } from "@amoeba/ui"
 /**
  * Lightbox —— 社交图集灯箱(从详情弹窗点图打开)。
  *
@@ -10,11 +11,11 @@
  * 哪张 —— 两个视图共用一份「当前第几张」,不各记一份。
  */
 import { useEffect } from "react"
-import { MediaImage } from "@amoeba/ui"
-import { Modal } from "../Modal.tsx"
-import { Icon } from "../Icon.tsx"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
+
 import { httpsify } from "../../lib/media.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { Icon } from "../Icon.tsx"
+import { Modal } from "../Modal.tsx"
 
 export interface LightboxImage {
   url: string

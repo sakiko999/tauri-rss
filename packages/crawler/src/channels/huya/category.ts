@@ -1,3 +1,4 @@
+import { httpJson, now } from "@amoeba/resolve"
 /**
  * huya 分区房间 —— 按二级分区列直播间(`gameId` = bussLive 的 gid)。
  *
@@ -7,8 +8,8 @@
  * 分页:页码制(page 递增),服务端每页固定 ~120 条(不接受 pageSize)。
  */
 import type { Live } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { httpJson, now } from "@amoeba/resolve"
 
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"

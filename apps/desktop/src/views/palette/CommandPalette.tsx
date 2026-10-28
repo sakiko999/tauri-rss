@@ -3,15 +3,16 @@
  * 订阅源 / 条目标题;输入为空时列出命令。
  */
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useDesktop } from "../../store/index.ts"
-import { queryView } from "../../store/selectors.ts"
-import { PAGES, SMART, TABS } from "../../store/nodes.ts"
+
 import { Icon } from "../../components/Icon.tsx"
-import { useViewNavigate } from "../../router.tsx"
-import { usePrefs } from "../../store/prefs.ts"
-import { usePlayerNav } from "../player/usePlayerNav.ts"
 import { isImeComposing } from "../../lib/ime.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useViewNavigate } from "../../router.tsx"
+import { useDesktop } from "../../store/index.ts"
+import { PAGES, SMART, TABS } from "../../store/nodes.ts"
+import { usePrefs } from "../../store/prefs.ts"
+import { queryView } from "../../store/selectors.ts"
+import { usePlayerNav } from "../player/usePlayerNav.ts"
 
 interface Entry {
   id: string

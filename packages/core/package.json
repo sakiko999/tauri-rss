@@ -1,7 +1,7 @@
 {
   "name": "@amoeba/core",
-  "private": true,
   "version": "0.1.0",
+  "private": true,
   "type": "module",
   "main": "src/index.ts",
   "exports": {
@@ -10,6 +10,7 @@
     "./reading": "./src/types/reading.ts",
     "./source/rsshub": "./src/source/rsshub.ts"
   },
+  "scripts": {},
   "dependencies": {
     "@amoeba/crawler": "workspace:*",
     "@amoeba/log": "workspace:*",
@@ -17,7 +18,6 @@
     "@amoeba/resolve": "workspace:*",
     "@amoeba/xml": "workspace:*"
   },
-  "scripts": {},
   "devDependencies": {
     "@amoeba/host": "workspace:*"
   }

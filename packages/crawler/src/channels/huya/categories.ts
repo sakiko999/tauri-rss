@@ -1,3 +1,4 @@
+import { fetchHuyaSubCategories, HUYA_TOP_CATEGORIES, type HuyaSubCategory, now } from "@amoeba/resolve"
 /**
  * live:huya:categories —— 虎牙分区目录**订阅**。
  *
@@ -7,9 +8,9 @@
  */
 import type { Category, Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { fetchHuyaSubCategories, HUYA_TOP_CATEGORIES, now, type HuyaSubCategory } from "@amoeba/resolve"
 
 /** 二级分区 → 目录条目(纯函数,便于自检)。 */
 export function huyaCategoryItems(sourceId: string, t: number, subs: HuyaSubCategory[]): Item[] {

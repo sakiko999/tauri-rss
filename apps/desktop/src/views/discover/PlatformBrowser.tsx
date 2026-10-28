@@ -1,3 +1,4 @@
+import type { ChannelInfo, MediaItem } from "@amoeba/core"
 /**
  * PlatformBrowser —— 发现页的「分区浏览 / 搜索 / 搜主播」面板。
  *
@@ -13,23 +14,23 @@
  * `candidatesFromSearch`；不再用 CardMini 网格(信息少、还要再点进弹窗才能订阅)。
  */
 import { useEffect, useMemo, useState } from "react"
-import type { ChannelInfo, MediaItem } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
+
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"
-import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
-import { CandidateList } from "../manage/AddPanels.tsx"
-import { useLatestOnly } from "../../lib/useLatestOnly.ts"
 import { isImeComposing } from "../../lib/ime.ts"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
 import {
+  type Candidate,
   candidatesFromSearch,
   LIVE_SUB_CHANNEL,
   subsOfChannel,
   valueList,
-  type Candidate,
 } from "../../lib/subscriptions.ts"
-import { VIEW_LABEL, type Cap } from "./platforms.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useLatestOnly } from "../../lib/useLatestOnly.ts"
+import { useDesktop } from "../../store/index.ts"
+import { CandidateList } from "../manage/AddPanels.tsx"
+import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
+import { type Cap, VIEW_LABEL } from "./platforms.ts"
 
 export function PlatformBrowser({
   platform,

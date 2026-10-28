@@ -7,6 +7,7 @@
  * 本自检锁定:signSpace 输出含全部 dm_* 参数、签名覆盖它们、wts 为秒级。
  */
 import assert from "node:assert/strict"
+
 import { biliClient, MIXIN_KEY_ENC_TAB } from "../platform/bili/client.ts"
 import { md5Hex } from "../utils/md5.ts"
 

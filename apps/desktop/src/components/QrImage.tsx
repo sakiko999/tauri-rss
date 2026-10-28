@@ -1,3 +1,4 @@
+import QRCode from "qrcode"
 /**
  * QrImage —— 把 `scanLogin` 推回来的字符串渲染成二维码。
  *
@@ -7,7 +8,7 @@
  * 编码放在这里而不是 crawler:这是展示关切,也免得把 QR 库拖进抓取层。
  */
 import { useEffect, useState } from "react"
-import QRCode from "qrcode"
+
 import { Icon } from "./Icon.tsx"
 
 export function QrImage({ payload, size = 200 }: { payload: string; size?: number }) {

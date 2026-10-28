@@ -3,7 +3,8 @@
  * 跑:`bun packages/host/src/example/host-check.ts`
  */
 import assert from "node:assert/strict"
-import { injectNodeHost, injectBrowserHost } from "../index.ts"
+
+import { injectBrowserHost, injectNodeHost } from "../index.ts"
 
 // ── node 后端:未注入 openExternal → 兜底(此处只断言不抛) ──
 injectNodeHost()

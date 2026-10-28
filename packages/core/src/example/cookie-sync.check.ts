@@ -15,8 +15,10 @@
  * 用内存存储 + 假 browser.getCookies,不触网、不启动浏览器。
  */
 import assert from "node:assert/strict"
+
 import { injectNodeHost } from "@amoeba/host/node"
 import { resolveCookie, XHS_BASE } from "@amoeba/resolve"
+
 import { createDataLayer } from "../index.ts"
 import type { Subscription } from "../types/subscription.ts"
 

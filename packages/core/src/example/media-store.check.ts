@@ -5,6 +5,7 @@
  * 用最小断言(非框架):仓库没有测试基础设施,这里只做「谁的逻辑坏了就先炸」的那一层。
  */
 import assert from "node:assert/strict"
+
 import { createMediaStore } from "../store/media-store.ts"
 import type { MediaItem } from "../types/media-item.ts"
 

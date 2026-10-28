@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+import type { Stream } from "@amoeba/xml"
 /**
  * douyin 流解析 —— enter → reflow → HTML 三级降级拉直播直链。
  *
@@ -11,9 +13,8 @@
  * 每次 resolve 独立取新鲜签名直链(带过期时间)。
  */
 import * as R from "ramda"
-import type { Stream } from "@amoeba/xml"
+
 import { httpJson, httpText } from "../../host.ts"
-import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
 import { parseJsonSafe } from "../../utils/inline-json.ts"
 import { toInt } from "../../utils/number.ts"

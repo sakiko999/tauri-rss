@@ -10,8 +10,9 @@
  *   5. abortTabs 不跨 lane(keepLogin 跳过 login:*)。
  */
 import assert from "node:assert/strict"
-import { withLane, withRenderLease, withBrowserGlobal } from "../browser/scheduler.ts"
+
 import { withBrowserOp } from "../browser/cdp.ts"
+import { withBrowserGlobal, withLane, withRenderLease } from "../browser/scheduler.ts"
 import { setPlatformCookieLookup } from "../platform/credentials.ts"
 setPlatformCookieLookup(null)
 

@@ -7,6 +7,7 @@
  */
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
+
 import { MEDIA_REFERRERS, VIDEO_REFERRERS, XHR_ORIGIN_RULES } from "../media-referrer.ts"
 
 const RUST = "apps/src-tauri/src/media_referer.rs"

@@ -11,15 +11,16 @@
  * ⚠️ 不用桌面端 StateBlock/Menu:player 是独立包,不能反向依赖 desktop。
  */
 import { useEffect, useRef, useState } from "react"
+
 import {
   bufferedAhead,
   engineLabel,
+  type EngineStats,
   formatBytes,
   formatDropped,
   formatFps,
   formatLevel,
   formatVolume,
-  type EngineStats,
 } from "./stats.ts"
 
 interface LiveInfo {
@@ -122,7 +123,7 @@ export function PlayerStatsOverlay({
   const resolution = live ? `${live.resolution}${stats?.height ? ` / ${stats.height}p` : ""}` : "—"
 
   return (
-    <div className="pointer-events-none absolute left-2 top-2 z-20 max-w-[min(24rem,90%)] rounded bg-black/80 p-2 font-mono text-[11px] leading-5 text-white/90 shadow-lg">
+    <div className="pointer-events-none absolute top-2 left-2 z-20 max-w-[min(24rem,90%)] rounded bg-black/80 p-2 font-mono text-[11px] leading-5 text-white/90 shadow-lg">
       <div className="mb-1 text-xs font-semibold text-white">统计信息</div>
       <Line label="引擎" value={stats ? engineLabel(stats.engine) : "—"} />
       <Line label="档位" value={stats ? formatLevel(stats) : "—"} />

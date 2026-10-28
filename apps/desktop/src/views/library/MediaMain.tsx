@@ -1,3 +1,4 @@
+import type { CategoryItem, MediaItem } from "@amoeba/core"
 /**
  * MediaMain —— 非文章节点的网格主区。按内容形态分发:
  *   social 独占   → 筛选 chips + MasonryGrid 瀑布流
@@ -8,25 +9,25 @@
  * 网格保留 VirtuosoGrid 虚拟化(比 new_desktop 的 page-cap 全量渲染更适合大库)。
  * 点击卡片 → 播放入口(手势内 unlockAudioPlayback,见 usePlayerNav)。
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router"
 import { VirtuosoGrid } from "react-virtuoso"
-import type { CategoryItem, MediaItem } from "@amoeba/core"
+
+import { isCategoryItem, isFeedItem, LiveHero, MediaCard, SocialCard } from "../../components/app/Cards.tsx"
+import { LoadMoreFooter } from "../../components/app/LoadMoreFooter.tsx"
+import { MasonryGrid } from "../../components/app/MasonryGrid.tsx"
+import { GridSkeleton } from "../../components/BootSkeleton.tsx"
+import { Icon } from "../../components/Icon.tsx"
+import { PreviewSkeleton } from "../../components/PreviewSkeleton.tsx"
+import { StateBlock } from "../../components/StateBlock.tsx"
 import { isLiveNow, itemKey } from "../../lib/media.ts"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { useViewNavigate, viewPath } from "../../router.tsx"
 import { useDesktop, useNodeMeta } from "../../store/index.ts"
+import { sameInfo } from "../../store/lib.ts"
 import { isTabNode, viewTitleFor } from "../../store/nodes.ts"
 import { healthOf, matchesQuery, selectLive } from "../../store/selectors.ts"
-import { sameInfo } from "../../store/lib.ts"
-import { isCategoryItem, isFeedItem, LiveHero, MediaCard, SocialCard } from "../../components/app/Cards.tsx"
-import { GridSkeleton } from "../../components/BootSkeleton.tsx"
-import { PreviewSkeleton } from "../../components/PreviewSkeleton.tsx"
-import { MasonryGrid } from "../../components/app/MasonryGrid.tsx"
-import { LoadMoreFooter } from "../../components/app/LoadMoreFooter.tsx"
-import { StateBlock } from "../../components/StateBlock.tsx"
-import { Icon } from "../../components/Icon.tsx"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
-import { useViewNavigate, viewPath } from "../../router.tsx"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /**
  * Virtuoso 网格的列宽/间距全部走 CSS —— `listClassName="media-grid"`(grid 列模板)
@@ -339,7 +340,7 @@ export function MediaMain() {
           // ⚠️ MasonryGrid 自带内层滚动容器(overflow-y-auto),外面不能再套
           // scroll-area,否则出现双重滚动条。头部**传进去**(而不是放外面):
           // 在外面就是滚动死区,而且头不会跟着滚走 —— 用户要的是整体一起滚。
-          <div className="flex-1 min-h-0" {...overlayBlock("social-grid", "media:social-grid")}>
+          <div className="min-h-0 flex-1" {...overlayBlock("social-grid", "media:social-grid")}>
             <MasonryGrid
               items={socialFiltered}
               renderItem={(it) => <SocialCard item={it} actions={actions} />}
@@ -386,7 +387,7 @@ export function MediaMain() {
         {/* ⚠️ 滚动器由 VirtuosoGrid 自己持有(className 给它),头/尾走 components,
             不要再包一层 overflow 容器。 */}
         <VirtuosoGrid
-          className="scroll-area flex-1 min-h-0"
+          className="scroll-area min-h-0 flex-1"
           data={restItems}
           listClassName="media-grid"
           itemClassName="media-card-item"
@@ -404,7 +405,7 @@ export function MediaMain() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <VirtuosoGrid
-        className="scroll-area flex-1 min-h-0"
+        className="scroll-area min-h-0 flex-1"
         data={items}
         listClassName="media-grid"
         itemClassName="media-card-item"

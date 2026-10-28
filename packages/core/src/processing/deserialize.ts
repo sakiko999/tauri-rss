@@ -1,3 +1,6 @@
+import { type ParsedItem, parseFeed } from "@amoeba/xml"
+
+import type { LivePlatformId, LiveStatus } from "../types/live.ts"
 /**
  * deserializeFeed — RSS 2.0 XML → MediaItem[]。
  *
@@ -21,8 +24,6 @@ import type {
   SocialImage,
   StreamingFormat,
 } from "../types/media-item.ts"
-import type { LivePlatformId, LiveStatus } from "../types/live.ts"
-import { parseFeed, type ParsedItem } from "@amoeba/xml"
 
 /** 反序列化上下文:app 层语义由调用方注入。 */
 export interface DeserializeContext {

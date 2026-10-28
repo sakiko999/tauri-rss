@@ -1,73 +1,73 @@
+import { ApplePodcastChartChannel, ApplePodcastSearchChannel } from "./channels/apple/index.ts"
+import {
+  BiliAnchorChannel,
+  BiliDynamicChannel,
+  BiliFavlistChannel,
+  BiliLiveAreaChannel,
+  BiliLiveAreasChannel,
+  BiliLiveChannel,
+  BiliLiveHotChannel,
+  BiliPopularChannel,
+  BiliPreciousChannel,
+  BiliRankingChannel,
+  BiliSearchChannel,
+  BiliSeasonChannel,
+  BiliSeriesChannel,
+  BiliSquareChannel,
+  BiliUserChannel,
+  BiliUserVideoChannel,
+  BiliWeeklyChannel,
+} from "./channels/bili/index.ts"
+import {
+  DouyinCategoriesChannel,
+  DouyinCategoryChannel,
+  DouyinLiveChannel,
+  DouyinLiveHotChannel,
+  DouyinPartitionSearchChannel,
+  DouyinTrendChannel,
+  DouyinUserLiveChannel,
+} from "./channels/douyin/index.ts"
+import {
+  DouyuAnchorChannel,
+  DouyuCategoriesChannel,
+  DouyuCategoryChannel,
+  DouyuLiveChannel,
+  DouyuLiveHotChannel,
+  DouyuSearchChannel,
+} from "./channels/douyu/index.ts"
+import {
+  HuyaAnchorChannel,
+  HuyaCategoriesChannel,
+  HuyaCategoryChannel,
+  HuyaLiveChannel,
+  HuyaLiveHotChannel,
+  HuyaSearchChannel,
+} from "./channels/huya/index.ts"
+import { RawRssChannel, RSS_BUILTIN_FEEDS, RssPodcastChannel } from "./channels/rss/index.ts"
+import {
+  TwitchCategoriesChannel,
+  TwitchCategoryChannel,
+  TwitchHotChannel,
+  TwitchLiveChannel,
+} from "./channels/twitch/index.ts"
+import { WeiboHotChannel, WeiboUserChannel } from "./channels/weibo/index.ts"
+import { XhsExploreChannel, XhsUserChannel } from "./channels/xhs/index.ts"
+import {
+  YoutubeChannel,
+  YoutubeLiveCategoriesChannel,
+  YoutubeLiveCategoryChannel,
+  YoutubeLiveChannel,
+  YoutubeLiveHotChannel,
+  YoutubeLiveSearchChannel,
+  YoutubePlaylistChannel,
+  YoutubeUserChannel,
+} from "./channels/youtube/index.ts"
 /**
  * 内置 channel 登记函数(无幂等守卫,由 index.ts 的惰性注册调用)。
  *
  * 新增渠道:在对应平台目录实现 class,然后在这里登记。
  */
 import { registerChannel } from "./index.ts"
-import { RawRssChannel, RssPodcastChannel, RSS_BUILTIN_FEEDS } from "./channels/rss/index.ts"
-import {
-  BiliSquareChannel,
-  BiliPopularChannel,
-  BiliPreciousChannel,
-  BiliRankingChannel,
-  BiliWeeklyChannel,
-  BiliUserVideoChannel,
-  BiliLiveChannel,
-  BiliDynamicChannel,
-  BiliLiveHotChannel,
-  BiliLiveAreasChannel,
-  BiliLiveAreaChannel,
-  BiliSearchChannel,
-  BiliAnchorChannel,
-  BiliUserChannel,
-  BiliSeasonChannel,
-  BiliSeriesChannel,
-  BiliFavlistChannel,
-} from "./channels/bili/index.ts"
-import {
-  YoutubeChannel,
-  YoutubeLiveChannel,
-  YoutubeLiveSearchChannel,
-  YoutubeUserChannel,
-  YoutubeLiveHotChannel,
-  YoutubeLiveCategoryChannel,
-  YoutubeLiveCategoriesChannel,
-  YoutubePlaylistChannel,
-} from "./channels/youtube/index.ts"
-import {
-  HuyaLiveChannel,
-  HuyaLiveHotChannel,
-  HuyaCategoryChannel,
-  HuyaCategoriesChannel,
-  HuyaSearchChannel,
-  HuyaAnchorChannel,
-} from "./channels/huya/index.ts"
-import {
-  DouyuLiveChannel,
-  DouyuLiveHotChannel,
-  DouyuCategoryChannel,
-  DouyuCategoriesChannel,
-  DouyuSearchChannel,
-  DouyuAnchorChannel,
-} from "./channels/douyu/index.ts"
-import {
-  DouyinLiveChannel,
-  DouyinLiveHotChannel,
-  DouyinCategoryChannel,
-  DouyinCategoriesChannel,
-  DouyinPartitionSearchChannel,
-  DouyinUserLiveChannel,
-  DouyinTrendChannel,
-} from "./channels/douyin/index.ts"
-import {
-  TwitchCategoryChannel,
-  TwitchCategoriesChannel,
-  TwitchHotChannel,
-  TwitchLiveChannel,
-} from "./channels/twitch/index.ts"
-import { WeiboUserChannel, WeiboHotChannel } from "./channels/weibo/index.ts"
-import { XhsUserChannel, XhsExploreChannel } from "./channels/xhs/index.ts"
-import { ApplePodcastChartChannel, ApplePodcastSearchChannel } from "./channels/apple/index.ts"
 
 /** 注册所有内置 channel。无守卫——由调用方(index.ts)保证幂等。 */
 export function registerBuiltinChannels(): void {

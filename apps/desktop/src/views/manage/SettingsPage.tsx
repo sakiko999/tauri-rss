@@ -9,15 +9,16 @@
  */
 import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router"
+
 import { Icon } from "../../components/Icon.tsx"
+import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { About } from "./settings/About.tsx"
 import { Appearance } from "./settings/Appearance.tsx"
-import { Reading } from "./settings/Reading.tsx"
+import { Diagnostics } from "./settings/Diagnostics.tsx"
 import { Network } from "./settings/Network.tsx"
 import { Playback } from "./settings/Playback.tsx"
+import { Reading } from "./settings/Reading.tsx"
 import { Subscriptions } from "./settings/Subscriptions.tsx"
-import { Diagnostics } from "./settings/Diagnostics.tsx"
-import { About } from "./settings/About.tsx"
-import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 type Tab = "appearance" | "reading" | "network" | "playback" | "subscriptions" | "diagnostics" | "about"
 

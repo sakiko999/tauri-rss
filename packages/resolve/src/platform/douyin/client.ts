@@ -1,3 +1,7 @@
+import { formatError } from "@amoeba/log"
+
+import { deferredStream } from "../../danmaku"
+import type { DanmakuOptions } from "../../danmaku"
 /**
  * douyin 平台客户端 —— ABogus 签名 + ttwid warmup + JSON 请求。
  *
@@ -6,14 +10,11 @@
  * 从 DouyinLiveChannel 下沉(原 channel 私有 getJson/ensureCookie/abogusUrl)。
  */
 import { httpJson } from "../../host.ts"
-import { deferredStream } from "../../danmaku"
-import { formatError } from "@amoeba/log"
 import { log } from "../../log.ts"
 import { platformCookie } from "../credentials.ts"
-import { UA_ENTER, DEFAULT_TTWID, signDouyinUrl, enterRoomParams } from "./abogus.ts"
-import { douyinDanmakuStream } from "./danmaku.ts"
-import type { DanmakuOptions } from "../../danmaku"
 import type { PlatformClient, PlatformRequestOptions } from "../types.ts"
+import { DEFAULT_TTWID, enterRoomParams, signDouyinUrl, UA_ENTER } from "./abogus.ts"
+import { douyinDanmakuStream } from "./danmaku.ts"
 
 const LIVE = "https://live.douyin.com"
 

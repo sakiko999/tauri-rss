@@ -1,3 +1,4 @@
+import { type DouyuCategory, fetchDouyuCategories, now } from "@amoeba/resolve"
 /**
  * live:douyu:categories —— 斗鱼分区目录**订阅**。
  *
@@ -5,8 +6,8 @@
  * 点开用 `live:douyu:category` + `{areaId}` 预览该分区房间,并可按同一份参数订阅。
  */
 import type { Category, Item } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { fetchDouyuCategories, now, type DouyuCategory } from "@amoeba/resolve"
 
 /** 分区树 → 目录条目(纯函数):只列二级分区。 */
 export function douyuCategoryItems(sourceId: string, t: number, tree: DouyuCategory[]): Item[] {

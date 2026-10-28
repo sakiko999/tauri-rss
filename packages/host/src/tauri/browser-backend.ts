@@ -13,8 +13,9 @@
  * ⚠️ 默认通道不能取「第一个 page」：实测 Edge 155 的 /json/list 首项是
  * `edge://nurturing/`，不是启动参数里的 about:blank。
  */
-import { invoke, Channel } from "@tauri-apps/api/core"
-import { CdpBrowserBackend, type BrowserDriver, type CdpTargetInfo } from "../browser/backend.ts"
+import { Channel, invoke } from "@tauri-apps/api/core"
+
+import { type BrowserDriver, CdpBrowserBackend, type CdpTargetInfo } from "../browser/backend.ts"
 import type { CdpConnector, CdpTransport, CdpTransportHandlers } from "../browser/transport.ts"
 
 /** 与 ws.rs WsEvent(tag/content)对齐;CDP 走 Text 帧。 */

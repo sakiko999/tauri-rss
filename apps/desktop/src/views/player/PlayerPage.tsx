@@ -1,3 +1,6 @@
+import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream } from "@amoeba/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
 /**
  * PlayerPage —— 播放页。
  *
@@ -10,16 +13,14 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
-import { PlayableMedia } from "@amoeba/player"
-import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream } from "@amoeba/core"
-import { useDesktop } from "../../store/index.ts"
-import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
+
 import { Icon } from "../../components/Icon.tsx"
-import { StateBlock, SideCard } from "../../components/StateBlock.tsx"
-import { MediaImage } from "@amoeba/ui"
-import { fmtAgo, fmtTime, itemKey, mediaUrl, onlineOf, platformOf, PLATFORM_LABEL } from "../../lib/media.ts"
+import { SideCard, StateBlock } from "../../components/StateBlock.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
+import { fmtAgo, fmtTime, itemKey, mediaUrl, onlineOf, PLATFORM_LABEL, platformOf } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
+import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
+import { useDesktop } from "../../store/index.ts"
 
 export function PlayerPage() {
   const { itemId, from, sub } = usePlayParams()
@@ -157,7 +158,7 @@ export function PlayerPage() {
         <button className="icon-btn sm" aria-label="返回" onClick={() => navigate(backTo())}>
           <Icon name="back" size={15} />
         </button>
-        <span className="titlebar-path od-truncate flex-1 min-w-0">{item.title}</span>
+        <span className="titlebar-path od-truncate min-w-0 flex-1">{item.title}</span>
         <button className="icon-btn sm" aria-label="加入队列" onClick={() => addToQueue(item)} title="加入队列">
           <Icon name="queue" size={15} />
         </button>

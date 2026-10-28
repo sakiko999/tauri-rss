@@ -4,8 +4,9 @@
  * 不只是「暂无数据」。
  */
 import type { ReactNode } from "react"
-import { Icon } from "./Icon.tsx"
+
 import { overlayBlock } from "../lib/uiOverlay.ts"
+import { Icon } from "./Icon.tsx"
 
 export function StateBlock({
   icon = "layers",

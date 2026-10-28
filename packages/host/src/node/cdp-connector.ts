@@ -6,6 +6,7 @@
  * 所以 WebView2 不需要 `--remote-allow-origins=*`。
  */
 import WebSocket, { type RawData } from "ws"
+
 import type { CdpConnector, CdpTransport, CdpTransportHandlers } from "../browser/transport.ts"
 
 /** RawData → utf8 文本（ws 的 message 可能是 Buffer / ArrayBuffer / Buffer[]）。 */

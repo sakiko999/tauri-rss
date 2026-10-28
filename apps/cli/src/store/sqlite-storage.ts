@@ -6,9 +6,10 @@
  * `apps/cli/.data/rss.db`（gitignore）。
  */
 import { Database } from "bun:sqlite"
-import { STORAGE_SCHEMA } from "@amoeba/core"
 import { mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
+
+import { STORAGE_SCHEMA } from "@amoeba/core"
 
 /** 数据目录(apps/cli/.data/,gitignore)。本文件在 src/store/,上两级即包根。 */
 export const DATA_DIR = join(import.meta.dir, "../../.data")

@@ -6,6 +6,7 @@
  * 服务端固定每页条数。
  */
 import { searchBiliAnchors } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 
 export const BiliAnchorChannel = makeApiChannel({

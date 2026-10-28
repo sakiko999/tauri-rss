@@ -6,6 +6,7 @@
  */
 import type { MediaItem } from "@amoeba/core"
 import { MediaImage } from "@amoeba/ui"
+
 import { Icon } from "../../components/Icon.tsx"
 import { excerptOf, fmtAgo, mediaUrl } from "../../lib/media.ts"
 

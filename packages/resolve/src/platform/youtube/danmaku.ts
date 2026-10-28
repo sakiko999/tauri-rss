@@ -13,10 +13,11 @@
  * 直播结束时直接终止循环。
  */
 import { formatError } from "@amoeba/log"
+
 import type { DanmakuItem } from "../../danmaku"
 import { httpText } from "../../host.ts"
-import { extractInlineJson } from "../../utils/inline-json.ts"
 import { log } from "../../log.ts"
+import { extractInlineJson } from "../../utils/inline-json.ts"
 import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 
 const YOUTUBE = "https://www.youtube.com"

@@ -1,3 +1,5 @@
+import { formatError } from "@amoeba/log"
+import { log } from "@amoeba/resolve"
 /**
  * source 装配辅助。
  *
@@ -10,8 +12,7 @@
  */
 import type { Item, SerializeOptions } from "@amoeba/xml"
 import { serializeFeed } from "@amoeba/xml"
-import { formatError } from "@amoeba/log"
-import { log } from "@amoeba/resolve"
+
 import type { Kind, Loginable, Pageable, RssChannel, RssSource, SourceInfo, SourceInfoField } from "../index.ts"
 
 /** serializeFeed + 可选 total(翻页渠道真实总数,经 tpl:total 带出)。apiFetch / fetchMore 共用。 */

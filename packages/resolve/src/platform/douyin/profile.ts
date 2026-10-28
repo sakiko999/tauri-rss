@@ -12,7 +12,7 @@
  * ⚠️ `live_status`：1=直播中，0=未开播（与 enter `room.status==2` 对应）。
  */
 import { httpJson } from "../../host.ts"
-import { UA_ENTER, signDouyinUrl } from "./abogus.ts"
+import { signDouyinUrl, UA_ENTER } from "./abogus.ts"
 import { douyinCookie } from "./client.ts"
 import { parseDouyinSecUid } from "./ids.ts"
 

@@ -1,3 +1,4 @@
+import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili 直播热门 —— getListByArea(wbi 签名),支持分页加载更多。
  *
@@ -10,7 +11,7 @@
  * crawler/resolver(按 item.url→live.bilibili.com/{roomId} 路由)。翻页(Pageable)保留。
  */
 import type { Live } from "@amoeba/xml"
-import { biliClient, now } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 
 const API_LIVE = "https://api.live.bilibili.com"

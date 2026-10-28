@@ -14,9 +14,10 @@
  * —— 已知上限，二维码生成器不用这些形态。
  */
 import { inflateSync } from "node:zlib"
+
 import jsQR from "jsqr"
-import QRCode from "qrcode"
 import pc from "picocolors"
+import QRCode from "qrcode"
 
 export interface Bitmap {
   width: number

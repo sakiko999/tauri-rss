@@ -1,3 +1,4 @@
+import { type BiliCategory, fetchBiliCategories, now } from "@amoeba/resolve"
 /**
  * bili:live:areas —— B站直播分区目录**订阅**。
  *
@@ -8,8 +9,8 @@
  * ⚠️ 目录本身匿名可读;点进的分区列房**需登录**(见 area.ts)。
  */
 import type { Category, Item } from "@amoeba/xml"
+
 import { makeApiChannel } from "../factory.ts"
-import { fetchBiliCategories, now, type BiliCategory } from "@amoeba/resolve"
 
 /** 分区树 → 目录条目(纯函数,便于自检);跳过空 id 子分区。 */
 export function biliCategoryItems(sourceId: string, t: number, tree: BiliCategory[]): Item[] {

@@ -14,10 +14,12 @@
  * 最小断言(非框架):内存存储 + 假 channel,不触网 —— 判的是编排逻辑,不是抓取。
  */
 import assert from "node:assert/strict"
-import { injectNodeHost } from "@amoeba/host/node"
-import { levelFor } from "@amoeba/host/governor"
+
 import { getChannel, registerAllChannels, registerChannel } from "@amoeba/crawler"
+import { levelFor } from "@amoeba/host/governor"
+import { injectNodeHost } from "@amoeba/host/node"
 import { serializeFeed } from "@amoeba/xml"
+
 import { createDataLayer } from "../index.ts"
 import type { Subscription } from "../types/subscription.ts"
 

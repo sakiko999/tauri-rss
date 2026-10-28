@@ -13,8 +13,8 @@
  * (微博会话 cookie,HttpOnly → 只能经 CDP Network.getAllCookies 读)。
  */
 import { cdpEvaluate, cdpNavigate, withScanLoginLock } from "../../browser/cdp.ts"
-import { log } from "../../log.ts"
 import type { LoginResult } from "../../index.ts"
+import { log } from "../../log.ts"
 
 /** passport 登录页(disp=popup 是内嵌登录页,布局稳定,含独立二维码 img)。 */
 const LOGIN_URL =

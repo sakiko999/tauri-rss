@@ -1,3 +1,4 @@
+import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
 /**
  * 抖音用户直播间 —— 输入**用户主页链接 / sec_uid**，解析并订阅该用户的直播间。
  *
@@ -19,9 +20,9 @@
  */
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
+
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
-import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
 import { douyinLiveItem } from "./live.ts"
 
 /**

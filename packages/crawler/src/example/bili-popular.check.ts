@@ -5,6 +5,7 @@
  * 锁住字段映射（不需要真实网络 / 浏览器）。
  */
 import type { Video } from "@amoeba/xml"
+
 import { parsePopularItems } from "../channels/bili/popular.ts"
 
 const FIXED = 1_700_000_000_000
