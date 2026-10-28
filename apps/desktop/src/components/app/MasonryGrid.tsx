@@ -97,8 +97,9 @@ function cardPadPx(): number {
 /** 水平 padding(滚动容器 px-4 = 两侧各 1rem)——positioner 宽度按内容宽算,否则列溢出。 */
 const H_PADDING = 32
 /** 预加载边距:渲染窗口距已加载末尾不足该 cell 数即触发 loadMore(列/网格还有空间可填)。
- * 取大(≈2 屏)让追加点远离视口底部——追加在可视区外,滚动到时内容已就绪,不闪不空白。 */
-const PRELOAD_MARGIN = 16
+ * 取大(≈4 屏)让追加点远离视口底部——追加在可视区外,滚动到时内容已就绪,不闪不空白。
+ * 微博这类「一页 10–20 条」的源,余量太小会在快速滚动时见底(buffer 跟不上)。 */
+const PRELOAD_MARGIN = 32
 
 export function MasonryGrid({
   items,

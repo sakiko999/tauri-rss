@@ -17,7 +17,7 @@
 
 import type { MediaStream, ResolvePlayback } from "@amoeba/core"
 import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { AudioShell } from "./AudioShell.tsx"
 import { useMediaStream } from "./hooks/useMediaStream.ts"
@@ -222,9 +222,19 @@ export function PlayableMedia({
   // 各档 MPD 内嵌同一条最高码率音轨(resolve/utils/mpd.ts 的装配契约),取哪档剥都
   // 一样,所以仍用选流结果(=streams[0],硬契约不动),不另设选流规则。剥不动 →
   // listenMode=false,整条链路回到视频行为(回退流没有可播的独立音轨)。
-  const listenMpd = audioOnly && stream?.dashManifest ? audioOnlyMpd(stream.dashManifest) : null
+  //
+  // ⚠️ **必须 memo**:useMediaStream 的 effect 依赖 `stream` 的**对象引用**。若每次
+  // 渲染 `{ ...stream }` 造新对象,effect 每次重跑 → dash.js 反复重建 → onStats/onError
+  // 又触发渲染 → 死循环,页面直接卡死(0.8.0 实测就是这么卡的)。
+  const listenMpd = useMemo(
+    () => (audioOnly && stream?.dashManifest ? audioOnlyMpd(stream.dashManifest) : null),
+    [audioOnly, stream, stream?.dashManifest],
+  )
   const listenMode = !!listenMpd
-  const playStream = listenMode && stream ? { ...stream, dashManifest: listenMpd! } : stream
+  const playStream = useMemo(
+    () => (listenMode && stream ? { ...stream, dashManifest: listenMpd! } : stream),
+    [listenMode, stream, listenMpd],
+  )
 
   // 引擎/档位(统计信息面板)。HLS/FLV/DASH 由 useMediaStream 上报;原生 mp4 在这里定。
   const [engineStats, setEngineStats] = useState<EngineStats | null>(null)

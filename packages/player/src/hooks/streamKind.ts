@@ -34,11 +34,18 @@ export function isProgressiveVideo(stream: MediaStream): boolean {
   return /\.(mp4|webm)(\?|#|$)/i.test(stream.url)
 }
 
-/** 渐进式音频(mp3/aac/ogg)→ 原生 <audio>。 */
+/**
+ * 渐进式音频 → 原生 <audio>。
+ *
+ * ⚠️ 播客 enclosure 的 `format` 存的是 **MIME**(crawler `enclosureMime` 原样写,
+ * 如 `audio/x-m4a`、`audio/mpeg`),不是 mp3/aac 这类短词;URL 还常带查询串
+ * (`.m4a?...`)。只认三个短词会把播客全判成「未知流」→ 掉进兜底 `<video>` 黑框。
+ * 所以:MIME 族 + 常见扩展名都收,`.mp4` 仍归视频(不与 isProgressiveVideo 抢)。
+ */
 export function isProgressiveAudio(stream: MediaStream): boolean {
-  const f = stream.format?.toLowerCase()
-  if (f === "mp3" || f === "aac" || f === "ogg") return true
-  return /\.(mp3|aac|ogg)(\?|#|$)/i.test(stream.url)
+  const f = (stream.format ?? "").toLowerCase()
+  if (f.startsWith("audio/")) return true
+  return /^(mp3|aac|ogg|m4a|opus|flac|wav)$/.test(f) || /\.(mp3|aac|ogg|m4a|opus|flac|wav)(\?|#|$)/i.test(stream.url)
 }
 
 /** 真 rtmp 协议(rtmp://),浏览器 / flv.js 都播不了。 */

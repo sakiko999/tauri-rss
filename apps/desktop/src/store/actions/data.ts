@@ -320,17 +320,27 @@ export function createDataActions(ctx: StoreCtx): DataActions {
       if (!dl || !id || !isRealSub(id) || get().loadingMore) return
       set({ loadingMore: true })
       try {
-        const r = await dl.loadMore(id)
+        // ⚠️ 微博一页只有 10–20 条:一次触底只翻一页,快速滚动立刻「滚出 buffer」
+        // (列表见底空白 / 回弹)。小页渠道连翻到 ≥20 条(最多 3 页);xhs 一页 20–30、
+        // bili 一页 20+,一轮即止 —— 不为了凑数多打请求(风控/耗时都在请求上)。
+        let added = 0
+        let hasMore = false
+        for (let round = 0; round < 3; round++) {
+          const r = await dl.loadMore(id)
+          added += r.addedCount
+          hasMore = !!r.hasMore
+          if (!hasMore || added >= 20) break
+        }
         const total = dl.totalOf(id)
-        // ⚠️ 必须同时**放开本地窗口**(page[id] += 本页新增):渠道翻页把新条目 append
+        // ⚠️ 必须同时**放开本地窗口**(page[id] += 本轮新增):渠道翻页把新条目 append
         // 进 store,但 view.list 被 page[id](初始 PAGE_SIZE=60)切片 → 新追加的看不见,
         // 用户点「加载更多」页面毫无变化(只是多抓了一次网络)。LoadingMoreFooter 在
         // 渠道分页时不会走 localPaging(那是二选一),所以必须在这里同步放窗口。
         set((s) => ({
           loadingMore: false,
-          page: { ...s.page, [id]: (s.page[id] || PAGE_SIZE) + r.addedCount },
+          page: { ...s.page, [id]: (s.page[id] || PAGE_SIZE) + added },
           ...(total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}),
-          loadMoreEnded: r.hasMore ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: true },
+          loadMoreEnded: hasMore ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: true },
         }))
         refreshView()
       } catch (e) {
