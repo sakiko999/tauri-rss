@@ -300,7 +300,7 @@ export class CdpBrowserBackend implements BrowserBackend {
       this.touch()
       return
     }
-    browserLog.idleClose({ minutes: (this.driver.idleCloseMs ?? 0) / 60_000 })
+    browserLog.idleClose({ minutes: Number(((this.driver.idleCloseMs ?? 0) / 60_000).toFixed(1)) })
     await this.close().catch(() => {})
   }
 

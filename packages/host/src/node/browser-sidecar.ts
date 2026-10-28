@@ -25,6 +25,15 @@ const READY_TIMEOUT_MS = 20_000
 /** 优雅关闭（stdin close → 等浏览器退出并 flush cookie）的上限。 */
 const CLOSE_TIMEOUT_MS = 5_000
 
+/**
+ * 空闲关闭：抓取浏览器整树活跃时实测约 472MB private（WebView2 sidecar，2026-10-22
+ * 基线；关图后更少），而抓取是间歇性的。零在途 CDP 命令满 3 分钟就整树关掉
+ * （profile/登录态留盘），下次抓取自动重启（~1.5s，backend 的 target 自愈会重建）。
+ * ⚠️ 与 Tauri 载具同一档（tauri/browser-backend.ts:88）；10 分钟太长——一轮刷新结束
+ * 之后通常就没事了，常驻的几百 MB 对用户是实打实的。
+ */
+const IDLE_CLOSE_MS = 3 * 60_000
+
 const SIDECAR_NAME = "amoeba-browser.exe"
 
 export interface SidecarBrowserOptions {
@@ -32,8 +41,13 @@ export interface SidecarBrowserOptions {
   binary: string
   /** WebView2 user data dir。默认 `%LOCALAPPDATA%/app.amoeba.cli/browser-profile`。 */
   profileDir?: string
-  /** 关闭图片加载（默认开：xhs 扫码二维码是图片）。 */
+  /**
+   * 关闭图片加载（默认**开**：CLI 探针要看图调试）。生产 service host 传 false。
+   * 登录不受影响：二维码走 img.src 属性 / canvas.toDataURL / 纯 HTTP，不依赖图片渲染。
+   */
   images?: boolean
+  /** 空闲回收毫秒（0 = 不回收）。默认 3 分钟；调小值用于生命周期回归。 */
+  idleCloseMs?: number
 }
 
 /** 与 sidecar 默认值一致；CLI 显式传参时以调用方为准。 */
@@ -77,12 +91,15 @@ interface RunningSidecar {
 }
 
 class SidecarDriver implements BrowserDriver {
+  /** 空闲回收(backend.closeIfIdle 读这个字段)——生产路径的「闲时归零」就靠它。 */
+  readonly idleCloseMs: number
   private running: RunningSidecar | null = null
   private starting: Promise<number> | null = null
   private readonly profileDir: string
 
   constructor(private readonly opts: SidecarBrowserOptions) {
     this.profileDir = opts.profileDir ?? defaultSidecarProfileDir()
+    this.idleCloseMs = opts.idleCloseMs ?? IDLE_CLOSE_MS
   }
 
   async ensureReady(): Promise<number> {

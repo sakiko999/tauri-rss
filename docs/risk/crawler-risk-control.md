@@ -818,13 +818,17 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
 - **字体/媒体/统计域名在 CDP 层拦**（`host/src/browser/channel.ts` 的 `armNetwork`：每次建连
   `Network.enable` + `Network.setBlockedURLs`）。⚠️ **不拦 CSS** —— 布局一变，懒加载与
   可见性判定（IntersectionObserver）可能跟着变。
-- **空闲回收只在 Tauri 内嵌路径生效**（`CdpBrowserBackend.closeIfIdle`，由 driver 的
-  `idleCloseMs` 驱动，`browser/backend.ts:288-300`；Tauri driver 设 3 分钟，
-  `tauri/browser-backend.ts:86`）：活跃实例约 0.9–1.0GB private，而抓取是间歇性的 —— 一轮
-  刷新结束后常驻那 1GB 对用户是实打实的代价。按「在途 CDP 命令数 = 0」判定，长登录/长轮询
-  不会被打断；profile 留在磁盘上，下次用自动重启（~1.5s），`tabs` 清空后 lane 句柄重建。
-  ⚠️ service 的 `SidecarDriver` 未设 `idleCloseMs` —— 生产抓取浏览器随服务常驻、不会空闲回收；
-  要恢复回收得给 sidecar driver 补该字段。
+- **空闲回收：两条路径都生效（2026-10-28 补齐生产侧）**（`CdpBrowserBackend.closeIfIdle`，
+  由 driver 的 `idleCloseMs` 驱动，`browser/backend.ts:288-305`）。Tauri 内嵌载具设 3 分钟
+  （`tauri/browser-backend.ts:88`）；**sidecar 载具 2026-10-28 起同样 3 分钟**
+  （`node/browser-sidecar.ts` 的 `IDLE_CLOSE_MS`，可用 `idleCloseMs` 覆盖以便回归）——
+  此前生产侧没设、抓取浏览器随服务常驻不回收。按「在途 CDP 命令数 = 0」判定，长登录/
+  长轮询不会被打断；profile 留在磁盘上，下次用自动重启（实测重建 ~0.3s，`tabs` 清空后
+  lane 句柄自愈重建）。回归：连续 3 轮「起 → 空闲 8s 进程归零 → 再起」（`idleCloseMs=5s`）。
+- **service 侧浏览器默认关图**（`--no-images` → `--blink-settings=imagesEnabled=false`，
+  2026-10-28）：`imagesEnabled` 只禁 `<img>` 加载/渲染，不动 DOM 属性与 canvas 2D；
+  抓取只要 SSR DOM/接口状态，登录二维码走 img.src 属性 / canvas.toDataURL / 纯 HTTP，
+  不依赖图片渲染。CLI 探针宿主保持开图（调试截图）。
 - **实测基线（Edge 155，2026-10-22，release）**：12 进程 / WS 644MB / **private commit ~1.0GB**。
   构成：1 browser 90MB · 1 GPU 101MB WS（253MB private）· 5 renderer（**1 个抓取共享** 291MB +
   **4 个 Edge UI** 127MB WS / 204MB private，其中 Copilot iframe 自己 73MB JS heap）· 4 utility

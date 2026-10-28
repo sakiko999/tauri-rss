@@ -242,7 +242,10 @@ live 按平台二次聚合的 UI 侧。
 
 - [ ] **CI 工作流暂缓（2026-10-26 定）**：`.github/workflows/ci.yml` 未建；统一入口 `bun run check`
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
-- [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
+- [x] 空闲回收 + 自动重建（2026-10-28）：sidecar 载具补 `idleCloseMs=3min`（此前生产侧不回收），
+  连续 3 轮「起 → 空闲 8s 进程归零 → 再起」实测通过，重建 ~0.3s（`idleCloseMs=5s` 回归）
+- [ ] WebView2 生命周期剩余：LRU 驱逐（`/json/close`）后 renderer 不残留；`/json/new` 已不用
+  （统一 `Target.createTarget` + 屏外坐标）
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
 - [ ] `xhs:explore` 手动刷新命中 `passiveBuffer`（未命中走页面 SSR 兜底）
 - [ ] 实况图验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图

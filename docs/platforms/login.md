@@ -159,8 +159,9 @@ boot（`READY`）后 1.5s 由服务进程跑 `DataLayer.syncBrowserCookies()`（
   `setIfUnchanged` 原子比对（比对与写入同一串行临界区），期间用户保存/扫码写过就放弃。
 - **存储边界**：快照写入服务自己的 settings；CLI 本地探针（自带 `apps/cli/.data/rss.db`）
   与已冻结的 mobile 各持独立 settings，拿不到这份快照。
-- 代价：有启用的 xhs/weibo 订阅时，服务启动会拉起一次隐藏 WebView2（约 1GB，空闲 3 分钟
-  回收）；只有停用/无订阅的平台不会拉起。
+- 代价：有启用的 xhs/weibo 订阅时，服务启动会拉起一次隐藏 WebView2（活跃约 472MB private，
+  关图后更低；空闲 3 分钟整树回收，`node/browser-sidecar.ts` 的 `IDLE_CLOSE_MS`，下次抓取
+  ~0.3s 重建）；只有停用/无订阅的平台不会拉起。
 - 自检：`bun packages/core/src/example/cookie-sync.check.ts`。
 
 ---
