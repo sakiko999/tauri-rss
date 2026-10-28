@@ -29,7 +29,7 @@ body {
 }
 
 a {
-  color: var(--accent);
+  color: var(--color-primary);
   text-decoration: none;
 }
 a:hover {
@@ -40,7 +40,7 @@ a:hover {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: var(--r-xs);
 }
@@ -48,7 +48,7 @@ a:hover {
   outline: none;
 }
 ::selection {
-  background: var(--accent-soft);
+  background: var(--color-primary-soft);
 }
 
 .skip-link {
@@ -57,8 +57,8 @@ a:hover {
   top: -60px;
   z-index: 100;
   padding: var(--sp-2) var(--sp-4);
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
   border-radius: var(--r-md);
   transition: top var(--dur-base) var(--ease-in);
 }
@@ -136,8 +136,8 @@ a:hover {
   letter-spacing: 0.04em;
 }
 .t-muted {
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .t-dim {
-  color: var(--text-dim);
+  color: var(--color-dim);
 }

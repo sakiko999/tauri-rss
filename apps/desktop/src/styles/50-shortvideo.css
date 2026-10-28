@@ -43,7 +43,7 @@
   width: 100%;
   height: 100%;
   color: oklch(1 0 0 / 40%);
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 /* 底部信息 + 右侧操作（压在画面上，带可读性底衬）。 */
 .sv-overlay {
@@ -88,7 +88,7 @@
   height: 42px;
   border-radius: var(--r-full);
   background: oklch(0.12 0.01 264 / 62%);
-  color: var(--on-media);
+  color: var(--color-on-media);
   transition: background var(--dur-fast) var(--ease-in);
 }
 .sv-act:hover {
@@ -103,7 +103,7 @@
   padding: 3px 10px;
   border-radius: var(--r-full);
   background: oklch(0.12 0.01 264 / 62%);
-  color: var(--on-media);
+  color: var(--color-on-media);
   pointer-events: none;
 }
 .sv-empty {
@@ -113,7 +113,7 @@
   justify-content: center;
   gap: var(--sp-3);
   height: 100%;
-  color: var(--text-dim);
+  color: var(--color-dim);
   text-align: center;
 }
 
@@ -124,8 +124,8 @@
   height: var(--header-h);
   flex: none;
   padding-inline: var(--sp-4);
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
 }
 
 /* 阅读 */
@@ -149,7 +149,7 @@
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-small);
-  color: var(--text-dim);
+  color: var(--color-dim);
   flex-wrap: wrap;
 }
 .article-title {
@@ -163,7 +163,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding-bottom: var(--sp-5);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
 }
 .article-avatar {
   display: grid;
@@ -172,10 +172,10 @@
   width: 34px;
   height: 34px;
   border-radius: var(--r-full);
-  background: var(--surface-3);
+  background: var(--color-surface-3);
   font-size: var(--fs-small);
   font-weight: 600;
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .article-byline-text {
   display: grid;
@@ -188,7 +188,7 @@
 .article-hero {
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .article-hero img {
   width: 100%;
@@ -203,7 +203,7 @@
   font-size: var(--article-fs);
   line-height: 1.8;
   /* 正文比 UI 文字低一档(不是「更亮」):整屏阅读时纯白/纯黑都偏硬。 */
-  color: var(--text-body);
+  color: var(--color-body);
 }
 /* 按需补全正文时的行内提示(spinner 与文字对齐)。 */
 .article-resolving {
@@ -216,13 +216,13 @@
   margin-top: var(--sp-5);
 }
 .article-body .lede {
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .article-body pre {
   overflow-x: auto;
   padding: var(--sp-3);
   border-radius: var(--r-md);
-  background: var(--surface-2);
+  background: var(--color-surface-2);
   font-family: var(--font-mono);
   font-size: var(--fs-small);
 }
@@ -231,7 +231,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding-top: var(--sp-6);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
 }
 
 .progress-bar {
@@ -248,7 +248,7 @@
   display: block;
   height: 100%;
   width: 0;
-  background: var(--accent);
+  background: var(--color-primary);
   transition: width var(--dur-fast) linear;
 }
 
@@ -267,7 +267,7 @@
 }
 .grid-sub {
   font-size: var(--fs-small);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 
 /* virtuoso 的 List 元素(columns 由这里决定;只写 padding-inline,
@@ -294,8 +294,8 @@
   grid-template-rows: auto 1fr;
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
   color: inherit;
   text-align: left;
   transition:
@@ -303,13 +303,13 @@
     background var(--dur-fast) var(--ease-in);
 }
 .card:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-2);
 }
 .card-media {
   position: relative;
   display: block;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
   overflow: hidden;
 }
 .card-media img {
@@ -324,7 +324,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .card-badge,
 .card-play {
@@ -337,7 +337,7 @@
   padding: 1px 6px;
   border-radius: var(--r-xs);
   background: oklch(0.12 0.01 264 / 78%);
-  color: var(--on-media);
+  color: var(--color-on-media);
   font-size: var(--fs-micro);
   font-weight: 560;
 }
@@ -350,7 +350,7 @@
   padding: 1px 7px;
   border-radius: var(--r-full);
   background: oklch(0.12 0.01 264 / 76%);
-  color: var(--warning);
+  color: var(--color-warning);
   font-size: var(--fs-micro);
   font-weight: 600;
   pointer-events: none;
@@ -366,7 +366,7 @@
 .card-progress > span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--color-primary);
 }
 .card-play {
   position: absolute;
@@ -401,7 +401,7 @@
   font-weight: 560;
   line-height: 1.42;
   letter-spacing: -0.005em;
-  color: var(--text);
+  color: var(--color-foreground);
   /* 固定 2 行占位:标题长短不一时卡片等高,网格不会参差。 */
   min-height: calc(2 * 1.42em);
 }
@@ -414,14 +414,14 @@
 .card-time {
   margin-left: auto;
   flex: none;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .card-meta {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
   flex-wrap: wrap;
   min-height: 1.35em;
 }
@@ -430,7 +430,7 @@
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
   min-height: 28px;
 }
 
@@ -476,7 +476,7 @@
   gap: 5px;
   padding: 2px 8px;
   border-radius: var(--r-full);
-  background: var(--live);
+  background: var(--color-live);
   color: oklch(0.99 0 0);
   font-size: var(--fs-micro);
   font-weight: 600;
@@ -484,7 +484,7 @@
 /* 徽标本身是 --live 底；状态点若继续用 --live 就与底色重合（看起来是空白）。
    这里改用 on-media 白点，保留 pulse 动画。 */
 .live-pulse .status-dot[data-state="live"] {
-  background: var(--on-media);
+  background: var(--color-on-media);
 }
 .live-online {
   position: absolute;
@@ -493,7 +493,7 @@
   padding: 2px 8px;
   border-radius: var(--r-full);
   background: oklch(0.12 0.01 264 / 72%);
-  color: var(--on-media);
+  color: var(--color-on-media);
   font-size: var(--fs-micro);
   font-weight: 550;
 }
@@ -506,20 +506,20 @@
   color: inherit;
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--surface-1);
-  border: 1px solid var(--border);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
   transition:
     border-color var(--dur-fast) var(--ease-in),
     background var(--dur-fast) var(--ease-in);
 }
 .social-card:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-2);
 }
 .social-media {
   position: relative;
   display: block;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .social-media img {
   width: 100%;
@@ -536,7 +536,7 @@
   padding: 2px 8px;
   border-radius: var(--r-full);
   background: oklch(0.12 0.01 264 / 76%);
-  color: var(--on-media);
+  color: var(--color-on-media);
   font-size: var(--fs-micro);
   font-weight: 560;
 }
@@ -548,7 +548,7 @@
 .social-title {
   font-size: var(--fs-small);
   line-height: 1.5;
-  color: var(--text);
+  color: var(--color-foreground);
   font-weight: 520;
 }
 .social-tags {
@@ -561,7 +561,7 @@
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .social-author {
   display: flex;
@@ -576,17 +576,17 @@
   border-radius: var(--r-full);
   object-fit: cover;
   flex: none;
-  background: var(--surface-3);
+  background: var(--color-surface-3);
 }
 .social-avatar-letter {
   display: grid;
   place-items: center;
   font-size: 9px;
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .social-author-name {
   font-size: var(--fs-micro);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .social-stats {
   display: flex;
@@ -613,13 +613,13 @@
   transition: background var(--dur-fast) var(--ease-in);
 }
 .hot-row:hover {
-  background: var(--surface-1);
+  background: var(--color-card);
 }
 .hot-row[aria-current="true"] {
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .hot-row > svg {
-  color: var(--text-dim);
+  color: var(--color-dim);
   flex: none;
 }
 .hot-rank {
@@ -628,10 +628,10 @@
   text-align: center;
   font-size: var(--fs-small);
   font-weight: 650;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .hot-rank[data-top="true"] {
-  color: var(--live);
+  color: var(--color-live);
 }
 .hot-body {
   display: grid;
@@ -645,5 +645,5 @@
 }
 .hot-heat {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }

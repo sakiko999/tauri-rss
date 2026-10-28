@@ -63,7 +63,7 @@
   display: grid;
   place-items: center;
   background: oklch(0.12 0.01 264 / 58%);
-  color: var(--on-media);
+  color: var(--color-on-media);
   font-size: var(--fs-h2);
   font-weight: 600;
 }
@@ -94,7 +94,7 @@
   height: 100%;
   min-height: 0;
   /* 媒体块恒深(与 hero/舞台一致):浅色主题下看照片也不该垫一块亮底。 */
-  background: var(--stage-bg);
+  background: var(--color-stage);
 }
 .lightbox-stage {
   position: relative;
@@ -120,7 +120,7 @@
   width: 30px;
   height: 30px;
   border-radius: var(--r-full);
-  color: var(--on-media);
+  color: var(--color-on-media);
   transition: background var(--dur-fast) var(--ease-in);
 }
 .lightbox-arrow:hover {
@@ -128,7 +128,7 @@
 }
 .lightbox-count {
   padding-inline: 4px;
-  color: var(--on-media);
+  color: var(--color-on-media);
   font-size: var(--fs-micro);
   font-weight: 560;
   white-space: nowrap;

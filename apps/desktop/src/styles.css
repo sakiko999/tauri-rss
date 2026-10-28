@@ -1,6 +1,4 @@
 @import "tailwindcss";
-/* ui 包设计令牌(唯一来源) */
-@import "../../../packages/ui/src/styles/theme.css";
 
 /* 关键:monorepo 必须显式扫 ui/player 包源码,否则其 tailwind 类不生效 */
 @source "../../../packages/ui/src";

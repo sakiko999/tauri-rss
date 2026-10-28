@@ -127,10 +127,10 @@
      隐藏/样式清单必须逐项一致,曾因漏项复发过两次)。 */
   .group-head[data-active="true"] .nav-row-inner svg,
   .group-head[data-active="true"] .nav-row-inner .nav-label {
-    color: var(--text);
+    color: var(--color-foreground);
   }
   [data-row-expanded="true"] .group-icon {
-    color: var(--text-muted);
+    color: var(--color-muted-foreground);
   }
   .rail-empty {
     display: none;

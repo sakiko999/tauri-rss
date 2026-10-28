@@ -13,7 +13,7 @@
   align-items: center;
   gap: var(--sp-1);
   padding: var(--sp-4) var(--sp-6) 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
 }
 .media-tab {
   display: inline-flex;
@@ -23,7 +23,7 @@
   padding-inline: var(--sp-3);
   margin-bottom: -1px; /* 压住 .media-tabs 的下边框:选中态的下划线取代它 */
   border-bottom: 2px solid transparent;
-  color: var(--text-dim);
+  color: var(--color-dim);
   font-size: var(--fs-small);
   font-weight: 520;
   transition:
@@ -31,11 +31,11 @@
     border-color var(--dur-fast) var(--ease-in);
 }
 .media-tab:hover {
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .media-tab[aria-current="page"] {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+  color: var(--color-foreground);
+  border-bottom-color: var(--color-primary);
 }
 
 /* =========================================================================
@@ -50,16 +50,16 @@
   margin: var(--sp-4) var(--sp-6) 0;
   padding: var(--sp-3);
   text-align: left;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-lg);
-  background: var(--surface-1);
+  background: var(--color-card);
   transition:
     border-color var(--dur-fast) var(--ease-in),
     background var(--dur-fast) var(--ease-in);
 }
 .live-hero:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-2);
 }
 .live-hero-media {
   position: relative;
@@ -69,7 +69,7 @@
   aspect-ratio: 16 / 9;
   border-radius: var(--r-md);
   overflow: hidden;
-  background: var(--stage-bg);
+  background: var(--color-stage);
 }
 .live-hero-body {
   display: grid;
@@ -86,11 +86,11 @@
 .live-hero-intro {
   font-size: var(--fs-small);
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .live-hero-author {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 /* 窗口变窄时先收图,别让标题被挤成一列字 */
 @media (max-width: 1180px) {
@@ -111,7 +111,7 @@
 }
 .card.video-tile:hover {
   border-color: transparent;
-  background: var(--surface-1);
+  background: var(--color-card);
 }
 .card.video-tile .card-media {
   border-radius: var(--r-md);

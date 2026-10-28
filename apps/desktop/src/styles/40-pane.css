@@ -9,8 +9,8 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
+  background: var(--color-background);
+  border-right: 1px solid var(--color-border);
 }
 .pane > .scroll-area {
   flex: 1 1 auto;
@@ -22,7 +22,7 @@
   height: var(--header-h);
   flex: none;
   padding-inline: var(--sp-4);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
 }
 .pane-head-main {
   display: grid;
@@ -40,7 +40,7 @@
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .pane-tools {
   display: flex;
@@ -55,8 +55,8 @@
   gap: var(--sp-2);
   padding: var(--sp-2) var(--sp-4);
   flex: none;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-1);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-card);
 }
 .rail-chips {
   display: flex;
@@ -91,10 +91,10 @@
   transition: background var(--dur-fast) var(--ease-in);
 }
 .list-row:hover {
-  background: var(--surface-1);
+  background: var(--color-card);
 }
 .list-row[aria-current="true"] {
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .list-body {
   display: grid;
@@ -107,22 +107,22 @@
   font-weight: 560;
   line-height: 1.45;
   letter-spacing: -0.005em;
-  color: var(--text);
+  color: var(--color-foreground);
 }
 /* 已读态:压低到 --text-dim(曾经的 --text-muted 太接近正文,读过的和没读过的
    看着差不多,「未读」这个信息就白给了)。 */
 .list-row[data-read="true"] .list-title {
-  color: var(--text-dim);
+  color: var(--color-dim);
   font-weight: 480;
 }
 .list-excerpt {
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .list-kind {
   display: inline-flex;
   align-items: center;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 /* 元信息不再是「作者 · 时间」的一串,而是标签在左、时间贴右的编排。 */
 .list-author {
@@ -134,14 +134,14 @@
 .list-time {
   margin-left: auto;
   flex: none;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .list-meta {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
   /* 不换行:作者名超长时省略,时间靠右固定 —— 换行会让行高不齐、列表失去节奏。 */
   min-width: 0;
 }
@@ -151,7 +151,7 @@
   aspect-ratio: 16 / 9;
   border-radius: var(--r-md);
   overflow: hidden;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .list-thumb img {
   width: 100%;
@@ -180,7 +180,7 @@
   width: 6px;
   height: 6px;
   border-radius: var(--r-full);
-  background: var(--accent);
+  background: var(--color-primary);
   flex: none;
   margin-top: 8px;
 }

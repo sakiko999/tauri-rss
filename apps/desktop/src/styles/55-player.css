@@ -64,11 +64,11 @@
   gap: var(--sp-3);
   flex-wrap: wrap;
   font-size: var(--fs-small);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .player-time {
   margin-left: auto;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .player-actions {
   display: flex;
@@ -79,8 +79,8 @@
 /* 剧场模式开关的按下态 —— .btn 本身没有 aria-pressed 样式(只有 .icon-btn/.chip 有),
    没有这行按钮按了和没按长得一样。 */
 .player-actions .btn[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
 .queue-row {
@@ -95,24 +95,24 @@
   transition: background var(--dur-fast) var(--ease-in);
 }
 .queue-row:hover {
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .queue-row[aria-current="true"] {
-  background: var(--accent-soft);
+  background: var(--color-primary-soft);
 }
 .queue-rank {
   flex: none;
   width: 18px;
   text-align: center;
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .queue-row[aria-current="true"] .queue-rank {
-  color: var(--accent);
+  color: var(--color-primary);
 }
 .queue-flag {
   flex: none;
-  color: var(--accent);
+  color: var(--color-primary);
   display: grid;
   place-items: center;
 }
@@ -122,7 +122,7 @@
   aspect-ratio: 16 / 9;
   border-radius: var(--r-sm);
   overflow: hidden;
-  background: var(--surface-3);
+  background: var(--color-surface-3);
 }
 .queue-thumb img {
   width: 100%;
@@ -142,5 +142,5 @@
 }
 .queue-sub {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }

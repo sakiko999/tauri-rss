@@ -19,7 +19,7 @@
 .scrim {
   position: fixed;
   inset: 0;
-  background: var(--scrim);
+  background: var(--color-scrim);
   animation: fade var(--dur-base) var(--ease-in);
   display: grid;
   place-items: center;
@@ -37,8 +37,8 @@
   max-height: 86vh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  background: var(--surface-1);
-  border: 1px solid var(--border-strong);
+  background: var(--color-card);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--r-xl);
   /* 弹层用大投影(负扩散收在边缘内);--shadow-2 留给卡片/分段控件。 */
   box-shadow: var(--shadow-pop);
@@ -58,7 +58,7 @@
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-5);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
 }
 .modal-head-text {
   display: grid;
@@ -73,7 +73,7 @@
 }
 .modal-desc {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .modal-body {
   padding: var(--sp-5);
@@ -86,7 +86,7 @@
   align-items: center;
   gap: var(--sp-2);
   padding: var(--sp-4) var(--sp-5);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
 }
 
 /* 下拉菜单(radix DropdownMenu + .menu 类名)。
@@ -107,8 +107,8 @@
   max-height: var(--radix-dropdown-menu-content-available-height, 70vh);
   overflow-y: auto;
   padding: var(--sp-1);
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-2);
   /* 只动 opacity —— 位移交给 wrapper 的 transform,两条 translate 会叠加(菜单会从
@@ -129,7 +129,7 @@
   cursor: pointer;
 }
 .menu-item[data-highlighted] {
-  background: var(--surface-hover);
+  background: var(--color-surface-hover);
 }
 .menu-item[data-disabled] {
   opacity: 0.45;
@@ -141,17 +141,17 @@
 }
 .menu-item .check {
   flex: none;
-  color: var(--accent);
+  color: var(--color-primary);
 }
 .menu-item .menu-hint {
   flex: none;
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .menu-sep {
   height: 1px;
   margin: var(--sp-1) 0;
-  background: var(--border);
+  background: var(--color-border);
 }
 
 .palette {
@@ -159,8 +159,8 @@
   max-height: 70vh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  background: var(--surface-1);
-  border: 1px solid var(--border-strong);
+  background: var(--color-card);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-pop);
   overflow: hidden;
@@ -170,10 +170,10 @@
   align-items: center;
   gap: var(--sp-3);
   padding: var(--sp-4) var(--sp-5);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
 }
 .palette-input svg {
-  color: var(--text-dim);
+  color: var(--color-dim);
   flex: none;
 }
 .palette-input input {
@@ -184,7 +184,7 @@
   font-size: var(--fs-h3);
 }
 .palette-input input::placeholder {
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .palette-list {
   overflow-y: auto;
@@ -201,10 +201,10 @@
   color: inherit;
 }
 .palette-item[data-active="true"] {
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .palette-item svg {
-  color: var(--text-dim);
+  color: var(--color-dim);
   flex: none;
 }
 .palette-item-body {
@@ -219,23 +219,23 @@
 }
 .palette-item-sub {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .palette-group {
   padding: var(--sp-3) var(--sp-3) var(--sp-1);
   font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.05em;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .palette-hint {
   display: flex;
   align-items: center;
   gap: var(--sp-4);
   padding: var(--sp-2) var(--sp-4);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 kbd {
   display: inline-grid;
@@ -243,13 +243,13 @@ kbd {
   min-width: 20px;
   height: 20px;
   padding-inline: 5px;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--color-border-strong);
   border-bottom-width: 2px;
   border-radius: var(--r-xs);
-  background: var(--surface-2);
+  background: var(--color-surface-2);
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 
 .toast-root {
@@ -272,16 +272,16 @@ kbd {
   height: 26px;
   padding-inline: var(--sp-3);
   border-radius: var(--r-sm);
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-2);
+  color: var(--color-foreground);
   font-size: var(--fs-small);
   font-weight: 560;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-in);
 }
 .toast-action:hover {
-  background: var(--surface-3);
+  background: var(--color-surface-3);
 }
 .toast {
   display: flex;
@@ -293,8 +293,8 @@ kbd {
      的 overflow-wrap 才能让长链接换行。 */
   min-width: 0;
   padding: var(--sp-3) var(--sp-4);
-  background: var(--surface-2);
-  border: 1px solid var(--border-strong);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border-strong);
   border-radius: var(--r-md);
   box-shadow: var(--shadow-pop);
   font-size: var(--fs-small);
@@ -313,26 +313,26 @@ kbd {
   pointer-events: none;
 }
 .toast[data-tone="ok"] {
-  border-color: var(--success);
+  border-color: var(--color-success);
 }
 .toast[data-tone="warn"] {
-  border-color: var(--warning);
+  border-color: var(--color-warning);
 }
 .toast[data-tone="error"] {
-  border-color: var(--danger);
+  border-color: var(--color-destructive);
 }
 .toast svg {
   flex: none;
   margin-top: 2px;
 }
 .toast[data-tone="ok"] svg {
-  color: var(--success);
+  color: var(--color-success);
 }
 .toast[data-tone="warn"] svg {
-  color: var(--warning);
+  color: var(--color-warning);
 }
 .toast[data-tone="error"] svg {
-  color: var(--danger);
+  color: var(--color-destructive);
 }
 .toast-body {
   display: grid;
@@ -344,7 +344,7 @@ kbd {
   overflow-wrap: anywhere;
 }
 .toast-text {
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
   font-size: var(--fs-micro);
   line-height: 1.55;
   /* 错误里常带完整 URL / 平台消息，必须允许任意断行，不能撑破 max-width。 */
@@ -395,7 +395,7 @@ kbd {
   align-items: center;
   gap: var(--sp-3);
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .qr-step-num {
   display: grid;
@@ -404,20 +404,20 @@ kbd {
   height: 20px;
   flex: none;
   border-radius: var(--r-full);
-  background: var(--surface-3);
+  background: var(--color-surface-3);
   font-size: var(--fs-micro);
   font-weight: 620;
 }
 .qr-step[data-state="active"] {
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .qr-step[data-state="active"] .qr-step-num {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
 }
 .qr-step[data-state="done"] .qr-step-num {
-  background: var(--success-soft);
-  color: var(--success);
+  background: var(--color-success-soft);
+  color: var(--color-success);
 }
 .qr-success {
   display: grid;
@@ -508,7 +508,7 @@ kbd {
   aspect-ratio: clamp(0.5, var(--detail-media-ratio, 0.8), 1.9);
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .social-detail-media img {
   width: 100%;
@@ -543,7 +543,7 @@ kbd {
 }
 .social-detail-count {
   padding: 0 4px;
-  color: var(--on-media);
+  color: var(--color-on-media);
   font-size: var(--fs-micro);
   font-weight: 560;
   white-space: nowrap;
@@ -554,7 +554,7 @@ kbd {
   width: 28px;
   height: 28px;
   border-radius: var(--r-full);
-  color: var(--on-media);
+  color: var(--color-on-media);
   transition: background var(--dur-fast) var(--ease-in);
 }
 .social-detail-nav:hover {
@@ -575,7 +575,7 @@ kbd {
   height: 56px;
   border-radius: var(--r-sm);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   opacity: 0.6;
   transition:
     opacity var(--dur-fast) var(--ease-in),
@@ -586,8 +586,8 @@ kbd {
 }
 .social-detail-thumb[aria-selected="true"] {
   opacity: 1;
-  border-color: var(--accent-line);
-  box-shadow: 0 0 0 1px var(--accent-line);
+  border-color: var(--color-primary-line);
+  box-shadow: 0 0 0 1px var(--color-primary-line);
 }
 /* 信息列自己滚:超长正文在列内滚动,不撑开 modal-body、不顶破弹窗上限 */
 .social-detail-info {
@@ -608,7 +608,7 @@ kbd {
 .social-detail-text {
   font-size: var(--fs-body);
   line-height: 1.75;
-  color: var(--text);
+  color: var(--color-foreground);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -622,7 +622,7 @@ kbd {
   display: flex;
   gap: var(--sp-6);
   padding-top: var(--sp-3);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
 }
 /* 源站补全说明:降级为脚注,不再占用与正文同等权重的整块横幅 */
 .social-detail-note {
@@ -630,10 +630,10 @@ kbd {
   align-items: flex-start;
   gap: var(--sp-2);
   padding-top: var(--sp-3);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
   font-size: var(--fs-micro);
   line-height: 1.6;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .social-detail-note svg {
   flex: none;
@@ -651,7 +651,7 @@ kbd {
   gap: var(--sp-3);
   align-items: flex-start;
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
   line-height: 1.6;
 }
 .steps-list li::before {
@@ -663,8 +663,8 @@ kbd {
   width: 22px;
   height: 22px;
   border-radius: var(--r-full);
-  background: var(--surface-3);
-  color: var(--text);
+  background: var(--color-surface-3);
+  color: var(--color-foreground);
   font-size: var(--fs-micro);
   font-weight: 620;
 }

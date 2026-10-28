@@ -25,7 +25,7 @@
 }
 .home-date {
   font-size: var(--fs-small);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .home-summary {
   display: flex;
@@ -34,7 +34,7 @@
   flex-wrap: wrap;
   margin-top: var(--sp-2);
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 
 /* ── 区块标题（HomeSection） ─────────────────────────────────────────── */
@@ -55,7 +55,7 @@
 }
 .home-sec-sub {
   font-size: var(--fs-small);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 
 /* ── 今日焦点 hero ─────────────────────────────────────────────────────
@@ -67,15 +67,15 @@
   min-height: 260px;
   overflow: hidden;
   border-radius: var(--r-card);
-  background: var(--stage-bg);
-  color: var(--on-media);
+  background: var(--color-stage);
+  color: var(--color-on-media);
 }
 /* 无图：显式退化成纯文字块 —— 不留一块空玻璃板假装图还在加载。 */
 .home-feature-text {
   grid-template-columns: minmax(0, 1fr);
-  background: var(--surface-1);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: var(--color-card);
+  color: var(--color-foreground);
+  border: 1px solid var(--color-border);
 }
 .home-feature-media {
   position: relative;
@@ -94,12 +94,12 @@
   font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.08em;
-  color: var(--accent-text);
+  color: var(--color-primary-text);
 }
 /* 图片 hero 的底恒为 --stage-bg(浅色主题也不翻白),所以 kicker 不能用随主题翻的
    --accent-text(浅色那支压深底只有 2.7:1)。纯文字 hero 的底是 surface-1,仍走主题色。 */
 .home-feature:not(.home-feature-text) .home-kicker {
-  color: var(--accent-on-stage);
+  color: var(--color-primary-on-stage);
 }
 .home-feature-title {
   font-size: var(--fs-h1);
@@ -110,7 +110,7 @@
 .home-feature-excerpt {
   font-size: var(--fs-small);
   line-height: 1.65;
-  color: color-mix(in oklch, var(--on-media) 72%, transparent);
+  color: color-mix(in oklch, var(--color-on-media) 72%, transparent);
 }
 .home-feature-meta {
   display: flex;
@@ -118,7 +118,7 @@
   gap: var(--sp-2);
   min-width: 0;
   font-size: var(--fs-micro);
-  color: color-mix(in oklch, var(--on-media) 62%, transparent);
+  color: color-mix(in oklch, var(--color-on-media) 62%, transparent);
 }
 /* 分隔点跟随父级文字色：深色舞台里的 --text-dim 在浅色主题下是深灰，会消失。 */
 .home-feature-meta .dot-sep {
@@ -127,7 +127,7 @@
 }
 .home-feature-text .home-feature-excerpt,
 .home-feature-text .home-feature-meta {
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .home-feature-actions {
   display: flex;
@@ -153,7 +153,7 @@
   transition: background var(--dur-fast) var(--ease-heliu);
 }
 .home-live-row:hover {
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .home-live-thumb {
   flex: none;
@@ -169,14 +169,14 @@
 .home-live-title {
   font-size: var(--fs-small);
   font-weight: 560;
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .home-live-meta {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 
 /* ── 继续观看横滑轨 ────────────────────────────────────────────────────
@@ -203,7 +203,7 @@
   display: block;
   border-radius: var(--r-tile);
   overflow: hidden;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .home-resume-pct {
   position: absolute;
@@ -219,20 +219,20 @@
 .home-resume-title {
   font-size: var(--fs-small);
   line-height: 1.45;
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .home-resume-bar {
   display: block;
   height: 3px;
   border-radius: var(--r-full);
-  background: var(--border);
+  background: var(--color-border);
   overflow: hidden;
 }
 .home-resume-bar > span {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--accent);
+  background: var(--color-primary);
 }
 
 /* ── 订阅更新 ─────────────────────────────────────────────────────────── */
@@ -248,33 +248,33 @@
   gap: var(--sp-3);
   min-width: 0;
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-md);
-  background: var(--surface-1);
+  background: var(--color-card);
   text-align: left;
   transition:
     background var(--dur-fast) var(--ease-heliu),
     border-color var(--dur-fast) var(--ease-heliu);
 }
 .home-feed-row:hover {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
+  background: var(--color-surface-2);
+  border-color: var(--color-border-strong);
 }
 .home-feed-source {
   font-size: var(--fs-small);
   font-weight: 580;
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .home-feed-latest {
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .home-feed-unread {
   min-width: 20px;
   padding: 1px 6px;
   border-radius: var(--r-full);
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
   font-size: var(--fs-micro);
   font-weight: 600;
   text-align: center;
@@ -291,22 +291,22 @@
   grid-template-rows: auto 1fr;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-tile);
-  background: var(--surface-1);
+  background: var(--color-card);
   text-align: left;
   transition:
     background var(--dur-fast) var(--ease-heliu),
     border-color var(--dur-fast) var(--ease-heliu);
 }
 .home-pick:hover {
-  background: var(--surface-2);
-  border-color: var(--border-strong);
+  background: var(--color-surface-2);
+  border-color: var(--color-border-strong);
 }
 .home-pick-media {
   display: block;
   overflow: hidden;
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .home-pick-body {
   display: grid;
@@ -318,11 +318,11 @@
   font-size: var(--fs-small);
   font-weight: 560;
   line-height: 1.45;
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .home-pick-meta {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 
 /* 窗口变窄：先把首页的左右留白收回，网格列数由 auto-fill 自己降。 */

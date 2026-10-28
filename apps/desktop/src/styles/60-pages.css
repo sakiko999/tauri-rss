@@ -27,7 +27,7 @@
 }
 .page-lead {
   font-size: var(--fs-body);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
   max-width: 68ch;
   margin-top: var(--sp-2);
   line-height: 1.7;
@@ -53,7 +53,7 @@
 }
 .section-desc {
   font-size: var(--fs-small);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 
 .chip-row {
@@ -78,9 +78,9 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding: var(--card-pad);
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-lg);
-  background: var(--surface-1);
+  background: var(--color-card);
 }
 .platform-card > .chip-row {
   margin-top: auto;
@@ -97,8 +97,8 @@
   width: 34px;
   height: 34px;
   border-radius: var(--r-md);
-  background: var(--surface-3);
-  color: var(--text-muted);
+  background: var(--color-surface-3);
+  color: var(--color-muted-foreground);
 }
 .platform-mark-sm {
   width: 28px;
@@ -118,7 +118,7 @@
   font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.06em;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 
 /* 渠道目录:分类 tab 在 AddPanels 里复用 .chip,这里是列表本身。
@@ -149,7 +149,7 @@
   transition: background var(--dur-fast) var(--ease-in);
 }
 .cat-row:not([aria-disabled="true"]):hover {
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 /* 已订阅的单例渠道:整行弱化并停止响应(带参数的渠道不会有这个态) */
 .cat-row[aria-disabled="true"] {
@@ -163,8 +163,8 @@
   width: 28px;
   height: 28px;
   border-radius: var(--r-sm);
-  background: var(--surface-3);
-  color: var(--text-muted);
+  background: var(--color-surface-3);
+  color: var(--color-muted-foreground);
 }
 .cat-name {
   display: flex;
@@ -173,7 +173,7 @@
   flex: 1;
   min-width: 0;
   font-size: var(--fs-small);
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .cat-go {
   flex: none;
@@ -181,10 +181,10 @@
   align-items: center;
   gap: 3px;
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .cat-row[aria-disabled="true"] .cat-go {
-  color: var(--success);
+  color: var(--color-success);
 }
 .cat-more {
   justify-self: center;
@@ -192,14 +192,14 @@
   align-items: center;
   gap: var(--sp-1);
   padding: var(--sp-2) var(--sp-3);
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--color-border);
   border-radius: var(--r-md);
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .cat-more:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--color-surface-2);
+  color: var(--color-foreground);
 }
 /* 配置步骤的返回:比正文小一号,不跟正文抢注意力 */
 .cat-back {
@@ -208,15 +208,15 @@
   align-items: center;
   gap: var(--sp-1);
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .cat-back:hover {
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .channel-form {
   display: grid;
   gap: var(--sp-5);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--color-border);
   padding-top: var(--sp-5);
 }
 .channel-summary {
@@ -240,9 +240,9 @@
   gap: var(--sp-3);
   margin-top: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-lg);
-  background: var(--surface-2);
+  background: var(--color-surface-2);
   box-shadow: 0 6px 20px oklch(0 0 0 / 18%);
 }
 .pick-action .t-small {
@@ -254,9 +254,9 @@
 .cand-list {
   display: grid;
   gap: 2px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-md);
-  background: var(--surface-1);
+  background: var(--color-card);
   padding: var(--sp-1);
 }
 .cand {
@@ -271,7 +271,7 @@
   transition: background var(--dur-fast) var(--ease-in);
 }
 .cand:hover {
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 /* 缩略图取真实封面;无封面时用平台标识占位,两者同尺寸,行高不跳 */
 .cand-thumb {
@@ -280,12 +280,12 @@
   height: 40px;
   border-radius: var(--r-sm);
   overflow: hidden;
-  background: var(--surface-3);
+  background: var(--color-surface-3);
 }
 .cand-thumb-plain {
   display: grid;
   place-items: center;
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .cand-main {
   display: grid;
@@ -295,11 +295,11 @@
 }
 .cand-label {
   font-size: var(--fs-small);
-  color: var(--text);
+  color: var(--color-foreground);
 }
 .cand-sub {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .cand-meta {
   display: flex;
@@ -309,8 +309,8 @@
 .cand-chip {
   padding: 0 6px;
   border-radius: var(--r-xs);
-  background: var(--surface-3);
-  color: var(--text-muted);
+  background: var(--color-surface-3);
+  color: var(--color-muted-foreground);
   font-size: var(--fs-micro);
   line-height: 17px;
 }
@@ -319,18 +319,18 @@
   place-items: center;
   flex: none;
   width: 18px;
-  color: var(--accent);
+  color: var(--color-primary);
   opacity: 0;
 }
 .cand[aria-selected="true"] {
-  background: var(--accent-soft);
+  background: var(--color-primary-soft);
 }
 .cand[aria-selected="true"] .cand-check {
   opacity: 1;
 }
 .cand[aria-selected="true"] .cand-label {
   font-weight: 560;
-  color: var(--accent);
+  color: var(--color-primary);
 }
 /* 「添加到」是单选组,沿用 chip 外观但用 aria-checked 表达选中。
    ⚠️ 不能复用 [aria-pressed]/[data-active] 的选中样式:搜索渠道 chip 用 aria-pressed,
@@ -339,9 +339,9 @@
   cursor: pointer;
 }
 .chip[role="radio"][aria-checked="true"] {
-  background: var(--accent-soft);
-  border-color: var(--accent-line);
-  color: var(--accent);
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-line);
+  color: var(--color-primary);
   font-weight: 560;
 }
 /* 计数徽标比 chip 行高更高,固定 28px 会把行撑破 */
@@ -360,9 +360,9 @@
   display: grid;
   gap: 2px;
   padding: var(--sp-3);
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-md);
-  background: var(--surface-1);
+  background: var(--color-card);
   text-align: left;
   color: inherit;
   transition:
@@ -370,12 +370,12 @@
     background var(--dur-fast) var(--ease-in);
 }
 .cat-tile:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-2);
 }
 .cat-tile[aria-pressed="true"] {
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+  border-color: var(--color-primary-line);
+  background: var(--color-primary-soft);
 }
 .cat-name {
   font-size: var(--fs-small);
@@ -383,7 +383,7 @@
 }
 .cat-id {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 
 .result-grid {
@@ -403,12 +403,12 @@
   font-size: var(--fs-micro);
   font-weight: 650;
   letter-spacing: 0.05em;
-  color: var(--text-dim);
-  border-bottom: 1px solid var(--border);
+  color: var(--color-dim);
+  border-bottom: 1px solid var(--color-border);
 }
 .table td {
   padding: var(--sp-3) var(--sp-2);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
 }
 .table tr:last-child td {
@@ -432,9 +432,9 @@
   gap: var(--sp-2);
   margin-top: var(--sp-3);
   padding: var(--sp-4);
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   border-radius: var(--r-lg);
-  background: var(--surface-2);
+  background: var(--color-surface-2);
 }
 .update-head {
   display: flex;
@@ -451,20 +451,20 @@
   margin: 0;
   white-space: pre-wrap;
   font-size: var(--fs-small);
-  color: var(--text-muted);
+  color: var(--color-muted-foreground);
 }
 .update-progress {
   height: 4px;
   overflow: hidden;
   border-radius: 999px;
-  background: var(--border);
+  background: var(--color-border);
 }
 .update-progress > span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--color-primary);
   transition: width var(--dur-fast) linear;
 }
 .update-error {
-  color: var(--danger);
+  color: var(--color-destructive);
 }

@@ -8,7 +8,7 @@
    计数弱一档,别和 chip 文案抢视线;选中态回正到 chip 的前景色。 */
 .reader-filterbar .chip .num {
   font-size: var(--fs-micro);
-  color: var(--text-dim);
+  color: var(--color-dim);
 }
 .reader-filterbar .chip[aria-pressed="true"] .num {
   color: inherit;
@@ -39,7 +39,7 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--bg);
+  background: var(--color-background);
 }
 .focus-progress {
   position: absolute;
@@ -53,7 +53,7 @@
   display: block;
   height: 100%;
   width: 0;
-  background: var(--accent);
+  background: var(--color-primary);
   transition: width var(--dur-fast) linear;
 }
 /* 行宽仍由 .article + html[data-measure] 决定,这里只管内边距。 */

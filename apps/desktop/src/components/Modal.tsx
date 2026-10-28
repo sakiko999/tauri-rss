@@ -131,7 +131,7 @@ export function MenuItem({
       className="menu-item"
       disabled={disabled}
       onSelect={onSelect}
-      style={danger ? { color: "var(--danger)" } : undefined}
+      style={danger ? { color: "var(--color-destructive)" } : undefined}
     >
       {icon ? <Icon name={icon} size={14} /> : null}
       <span className="flex-1">{children}</span>
