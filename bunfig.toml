@@ -1,0 +1,20 @@
+# bun fmt 配置（formatter = Bun 内置，Prettier 兼容）。
+# 风格对齐现有代码：120 列、无分号、双引号、2 空格、尾逗号 all。
+# ⚠️ 不开 sortImports / sortPackageJson：import 分组与 package.json 字段序
+# 带手工语义（分组注释、依赖分组），自动重排会产生无意义的大 diff。
+
+[fmt]
+printWidth = 120
+semi = false
+singleQuote = false
+tabWidth = 2
+trailingComma = "all"
+# 文档（md）与「不参与构建」的目录人工维护，不做自动重排。
+ignorePatterns = [
+  "tmp/",
+  "apps/new_desktop/",
+  "dist/",
+  "target/",
+  ".claude/",
+  "**/*.md",
+]

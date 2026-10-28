@@ -1,0 +1,4 @@
+# 仓库统一 LF 换行。
+# 与 bun fmt（bunfig.toml 的 endOfLine 默认 "lf"）和跨平台 CI 一致；
+# 覆盖本地 core.autocrlf=true 的 CRLF 检出（eol=lf 优先于 autocrlf）。
+* text=auto eol=lf
