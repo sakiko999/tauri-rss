@@ -22,7 +22,11 @@ const CHANNEL_HOSTS = new Set(["twitch.tv", "www.twitch.tv", "m.twitch.tv"])
 
 /** host 是否是频道页所在的 Twitch 域(大小写不敏感)。 */
 export function isTwitchChannelHost(host: string | null | undefined): boolean {
-  return CHANNEL_HOSTS.has(String(host ?? "").trim().toLowerCase())
+  return CHANNEL_HOSTS.has(
+    String(host ?? "")
+      .trim()
+      .toLowerCase(),
+  )
 }
 
 /**
@@ -102,7 +106,9 @@ export function normalizeTwitchLogin(input: string | null | undefined): string |
  * 与 `normalizeTwitchLogin` 同一套字符集 + 保留字规则,只是不做大小写/URL 归一。
  */
 export function isTwitchLogin(value: string | null | undefined): boolean {
-  const login = String(value ?? "").trim().toLowerCase()
+  const login = String(value ?? "")
+    .trim()
+    .toLowerCase()
   return LOGIN_RE.test(login) && !RESERVED.has(login)
 }
 

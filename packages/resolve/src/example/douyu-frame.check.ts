@@ -37,7 +37,10 @@ const chat = (txt: string, nn: string, col = 0) => `type@=chatmsg/txt@=${txt}/nn
 
 console.log("单包:")
 const one = parseDouyuFrame(mkPacket(chat("hello", "userA")))
-ok(one.length === 1 && one[0]?.text === "hello" && one[0]?.user === "userA", `单包解出 1 条(得 ${JSON.stringify(one)}）`)
+ok(
+  one.length === 1 && one[0]?.text === "hello" && one[0]?.user === "userA",
+  `单包解出 1 条(得 ${JSON.stringify(one)}）`,
+)
 
 console.log("多包粘帧(核心回归):")
 const p1 = mkPacket(chat("第一条", "A"))

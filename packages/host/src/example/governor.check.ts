@@ -279,9 +279,7 @@ console.log("── 并发上限:平台 / 全局 ──")
       return { status: 200, headers: {}, body: "ok" }
     },
   })
-  await Promise.all(
-    Array.from({ length: 6 }, (_, i) => http.request({ url: `https://conc.test/${i}` })),
-  )
+  await Promise.all(Array.from({ length: 6 }, (_, i) => http.request({ url: `https://conc.test/${i}` })))
   assert.equal(peak, 2, `平台并发应封顶 2(实际 ${peak})`)
   assert.equal(active, 0)
 
@@ -346,4 +344,6 @@ configureNetwork({ level: 1, levels: {} })
   assert.ok(s.network.bytes > 0, "应累计响应体大小")
 }
 
-console.log("✔ NetworkGovernor 自检通过(分类 / L0 直通 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限 / 浏览器闸门 / 统计)")
+console.log(
+  "✔ NetworkGovernor 自检通过(分类 / L0 直通 / 平台覆盖 / 去重 / 冷却 / 等级分档 / 并发上限 / 浏览器闸门 / 统计)",
+)

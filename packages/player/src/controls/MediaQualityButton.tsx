@@ -8,7 +8,8 @@ import { useState } from "react"
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 
 const MENU_CONTENT_CLS = "z-50 min-w-24 rounded-md border border-white/15 bg-black/95 py-1 text-xs text-white shadow-xl"
-const MENU_ITEM_CLS = "flex w-full select-none items-center justify-center px-3 py-1.5 text-left outline-none hover:bg-white/15 focus:bg-white/15"
+const MENU_ITEM_CLS =
+  "flex w-full select-none items-center justify-center px-3 py-1.5 text-left outline-none hover:bg-white/15 focus:bg-white/15"
 
 export function MediaQualityButton({
   qualityOptions,
@@ -40,9 +41,7 @@ export function MediaQualityButton({
                 onQuality(rate)
                 setOpen(false)
               }}
-              className={`${MENU_ITEM_CLS} ${
-                rate === activeQuality ? "text-blue-400" : "text-white/90"
-              }`}
+              className={`${MENU_ITEM_CLS} ${rate === activeQuality ? "text-blue-400" : "text-white/90"}`}
             >
               {quality}
             </DropdownMenu.Item>

@@ -141,7 +141,9 @@ async function main() {
         })()`)
         if (!box || (box as any).__err) throw new Error(`找不到目标: ${sel} ${text ?? ""}`)
         await sleep(200)
-        const b2 = await evaluate(`(() => { const els=[...document.querySelectorAll(${JSON.stringify(sel)})]; const el=${cmd === "clickText" ? `els.find(e => (e.textContent||'').includes(${JSON.stringify(text)}))` : "els[0]"}; const r=el.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2} })()`)
+        const b2 = await evaluate(
+          `(() => { const els=[...document.querySelectorAll(${JSON.stringify(sel)})]; const el=${cmd === "clickText" ? `els.find(e => (e.textContent||'').includes(${JSON.stringify(text)}))` : "els[0]"}; const r=el.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2} })()`,
+        )
         await clickAt(send, (b2 as any).x, (b2 as any).y)
         await sleep(800)
         emit(await evaluate(`JSON.stringify({ path: location.pathname + location.search })`))

@@ -104,8 +104,14 @@ function be8(n: number): number[] {
   const hi = Math.floor(n / 0x100000000)
   const lo = n >>> 0
   return [
-    (hi >> 24) & 0xff, (hi >> 16) & 0xff, (hi >> 8) & 0xff, hi & 0xff,
-    (lo >> 24) & 0xff, (lo >> 16) & 0xff, (lo >> 8) & 0xff, lo & 0xff,
+    (hi >> 24) & 0xff,
+    (hi >> 16) & 0xff,
+    (hi >> 8) & 0xff,
+    hi & 0xff,
+    (lo >> 24) & 0xff,
+    (lo >> 16) & 0xff,
+    (lo >> 8) & 0xff,
+    lo & 0xff,
   ]
 }
 
@@ -308,4 +314,3 @@ export function decodeHuyaDanmakuFrame(data: Uint8Array): DanmakuItem[] {
   if (!text) return []
   return [{ text, user, color }]
 }
-

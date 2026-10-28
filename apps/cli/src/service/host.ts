@@ -7,13 +7,7 @@
  * stdout 契约：除 `READY <port>` 外不写任何东西；日志一律 stderr（宿主 console
  * logger 默认写 stdout，必须替换）。
  */
-import {
-  createSidecarBrowser,
-  locateSidecarBinary,
-  nodeBackend,
-  nodeJsBackend,
-  nodeWsBackend,
-} from "@amoeba/host/node"
+import { createSidecarBrowser, locateSidecarBinary, nodeBackend, nodeJsBackend, nodeWsBackend } from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
 import { setLogSink } from "@amoeba/log"
 import { Database } from "bun:sqlite"
@@ -76,10 +70,8 @@ export function setupServiceHost(opts: ServiceHostOptions): ServiceHost {
   // 改走 stderr。此前只有 core 的宿主 Logger 做了这件事，其它包的 console.info 会漏到 stdout。
   setLogSink((level, text) => console.error(`[${level}] ${text}`))
   const storage = sqliteStorage(opts.dbFile)
-  const binary = opts.browser === false ? undefined : opts.browserSidecar ?? locateSidecarBinary()
-  const browser = binary
-    ? createSidecarBrowser({ binary, profileDir: opts.profileDir })
-    : undefined
+  const binary = opts.browser === false ? undefined : (opts.browserSidecar ?? locateSidecarBinary())
+  const browser = binary ? createSidecarBrowser({ binary, profileDir: opts.profileDir }) : undefined
   if (!browser) {
     console.error("[service] browser sidecar not found; browser channels will fail")
   }

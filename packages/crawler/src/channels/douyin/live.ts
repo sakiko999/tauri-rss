@@ -55,10 +55,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
    * 解锁原画档位。纯 HTTP(sso 通行证)优先,被 TLS 风控拦时在 resolve 侧回退
    * CDP 浏览器路径(同 xhs 模式)。同平台多 channel 共享 settings.douyinCookie。
    */
-  scanLogin(
-    emitQr: (qr: string | null) => void,
-    opts?: { timeoutMs?: number },
-  ): Promise<LoginResult> {
+  scanLogin(emitQr: (qr: string | null) => void, opts?: { timeoutMs?: number }): Promise<LoginResult> {
     return douyinScanLogin(emitQr, opts)
   }
 
@@ -66,7 +63,10 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
   // fetch 支持多房间(roomIds 逗号分隔)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
     }
   }
 
@@ -134,12 +134,7 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
  * enter API 响应 → Live item。
  * `live:douyin` 单房间抓取与 `live:douyin:user` 共用（后者已把 sec_uid 换成 web_rid）。
  */
-export function douyinLiveItem(
-  res: Record<string, any>,
-  webRid: string,
-  sourceId: string,
-  fetchedAt = now(),
-): Live {
+export function douyinLiveItem(res: Record<string, any>, webRid: string, sourceId: string, fetchedAt = now()): Live {
   const room = (res?.data?.data?.[0] ?? res?.data?.room ?? {}) as Record<string, any>
   const user = (res?.data?.data?.[0]?.user ?? res?.data?.user ?? {}) as Record<string, any>
   const streamUrl = (room.stream_url ?? {}) as Record<string, any>

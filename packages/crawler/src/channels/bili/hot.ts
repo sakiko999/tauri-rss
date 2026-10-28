@@ -26,10 +26,7 @@ export const BiliLiveHotChannel = makeApiChannel({
   pageable: { first: 2, step: 1 },
   fetchPage: async (info, page) => {
     const base = `${API_LIVE}/xlive/web-interface/v1/second/getListByArea`
-    const signed = await biliClient.signWeb(
-      `platform=web&sort=online&page_size=${PAGE_SIZE}&page=${page}`,
-      info.cookie,
-    )
+    const signed = await biliClient.signWeb(`platform=web&sort=online&page_size=${PAGE_SIZE}&page=${page}`, info.cookie)
     const res = await biliClient.getJson<{ data?: { list?: Array<Record<string, any>> } }>(`${base}?${signed}`, {
       referer: "https://live.bilibili.com/",
       // ⚠️ 必须带 buvid3(匿名也可):getListByArea 对**无 buvid 的请求**直接返回

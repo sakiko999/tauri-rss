@@ -10,12 +10,7 @@ const GAP = 3
 const PAD = 1
 
 function overlaps(a: Box, b: Box): boolean {
-  return !(
-    a.x + a.w + PAD <= b.x ||
-    b.x + b.w + PAD <= a.x ||
-    a.y + a.h + PAD <= b.y ||
-    b.y + b.h + PAD <= a.y
-  )
+  return !(a.x + a.w + PAD <= b.x || b.x + b.w + PAD <= a.x || a.y + a.h + PAD <= b.y || b.y + b.h + PAD <= a.y)
 }
 
 function clamp(v: number, min: number, max: number): number {

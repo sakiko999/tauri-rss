@@ -36,11 +36,7 @@ export async function httpGet(
 }
 
 /** 便捷 GET:text 响应,非 2xx 抛错。 */
-export async function httpText(
-  url: string,
-  headers?: Record<string, string>,
-  opts?: HttpOptions,
-): Promise<string> {
+export async function httpText(url: string, headers?: Record<string, string>, opts?: HttpOptions): Promise<string> {
   const res = await httpGet(url, headers, opts)
   if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}: ${url}`)
   return res.bodyText

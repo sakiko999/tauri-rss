@@ -15,7 +15,10 @@ const ok = (c: unknown, l: string) => {
 
 const hit = (url: string, platform: string, kind: string, id: string) => {
   const r = resolveRoute(url)
-  ok(r?.platform === platform && r?.kind === kind && r?.id === id, `${url} → ${platform}/${kind}/${id}（得 ${JSON.stringify(r)}）`)
+  ok(
+    r?.platform === platform && r?.kind === kind && r?.id === id,
+    `${url} → ${platform}/${kind}/${id}（得 ${JSON.stringify(r)}）`,
+  )
 }
 const miss = (url: string, why: string) => ok(resolveRoute(url) === null, `${url} 不命中（${why}）`)
 

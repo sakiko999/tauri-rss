@@ -56,8 +56,7 @@ export function PlayerPage() {
   //   ④ 最后才退回裸 id(理论上只剩「订阅已被删」的兜底)。
   const item = useMemo(() => {
     if (!itemId) return null
-    const inPreview =
-      previewDetail?.nodeId === from ? previewDetail.items.find((i) => i.id === itemId) : undefined
+    const inPreview = previewDetail?.nodeId === from ? previewDetail.items.find((i) => i.id === itemId) : undefined
     const bySub = sub ? known.find((i) => i.id === itemId && i.subscriptionId === sub) : undefined
     const byFrom = from ? known.find((i) => i.id === itemId && i.subscriptionId === from) : undefined
     // 有 sub 时**不再**退回裸 id：那会命中另一订阅的同 id 条目，正是本次要消除的行为。
@@ -77,7 +76,8 @@ export function PlayerPage() {
     return queue.map((k) => byKey.get(k)).filter((x): x is MediaItem => !!x)
   }, [queue, known])
   const related = useMemo(
-    () => (item ? allItems.filter((i) => i.subscriptionId === item.subscriptionId && i.id !== item.id).slice(0, 6) : []),
+    () =>
+      item ? allItems.filter((i) => i.subscriptionId === item.subscriptionId && i.id !== item.id).slice(0, 6) : [],
     [allItems, item],
   )
 
@@ -86,9 +86,10 @@ export function PlayerPage() {
   // ⚠️ 只有**当前这条确实来自预览**才回 `?open=`;previewDetail 不会被清空,
   // 只比 nodeId 的话,同一订阅下播普通条目按返回会被送回上次的预览页。
   const fromPreview = useMemo(
-    () => !!item && !!previewDetail && previewDetail.items.some(
-      (i) => i.id === item.id && i.subscriptionId === item.subscriptionId,
-    ),
+    () =>
+      !!item &&
+      !!previewDetail &&
+      previewDetail.items.some((i) => i.id === item.id && i.subscriptionId === item.subscriptionId),
     [item, previewDetail],
   )
   const backTo = useCallback(() => {
@@ -156,15 +157,8 @@ export function PlayerPage() {
         <button className="icon-btn sm" aria-label="返回" onClick={() => navigate(backTo())}>
           <Icon name="back" size={15} />
         </button>
-        <span className="titlebar-path od-truncate flex-1 min-w-0">
-          {item.title}
-        </span>
-        <button
-          className="icon-btn sm"
-          aria-label="加入队列"
-          onClick={() => addToQueue(item)}
-          title="加入队列"
-        >
+        <span className="titlebar-path od-truncate flex-1 min-w-0">{item.title}</span>
+        <button className="icon-btn sm" aria-label="加入队列" onClick={() => addToQueue(item)} title="加入队列">
           <Icon name="queue" size={15} />
         </button>
         <button
@@ -190,7 +184,9 @@ export function PlayerPage() {
                 // item.url（预览条目不在库内时传 url 走兜底）。
                 // ⚠️ refresh 已带直链时(feed enclosure,如播客)直接给 streams —— 这类
                 // item.url 是**网页**(不可 by-url 路由),靠 resolve 必失败。
-                streams={(item as { stream?: MediaStream }).stream ? [(item as { stream: MediaStream }).stream] : undefined}
+                streams={
+                  (item as { stream?: MediaStream }).stream ? [(item as { stream: MediaStream }).stream] : undefined
+                }
                 resolve={() => {
                   // ⚠️ 预览条目(二级订阅)不在库里,core 的 findItemUrl 按 subscriptionId 查不到 →
                   // 传 url 走它「入参本身是 URL」的兜底;否则会误报「不指向可解析的视频链接」。
@@ -253,11 +249,7 @@ export function PlayerPage() {
               </div>
               <div className="player-actions">
                 {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。 */}
-                <button
-                  className="btn btn-quiet"
-                  aria-pressed={theater}
-                  onClick={() => setTheater((v) => !v)}
-                >
+                <button className="btn btn-quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
                   <Icon name="monitor" size={14} /> 剧场模式
                 </button>
                 <button className="btn btn-quiet" onClick={() => addToQueue(item)}>

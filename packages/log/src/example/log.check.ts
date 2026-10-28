@@ -74,7 +74,10 @@ const other = createLogDomain("t:other", { color: "#000", ansi: 3 })
 a.info("core-hidden")
 other.info("other-visible")
 ok(!lines.some((l) => l.text.includes("core-hidden")), "按域开关关闭本域 info")
-ok(lines.some((l) => l.text.includes("[t:other] other-visible")), "其它域不受影响")
+ok(
+  lines.some((l) => l.text.includes("[t:other] other-visible")),
+  "其它域不受影响",
+)
 
 // sink：Error 走 formatError，不落成 {}
 setLs({})

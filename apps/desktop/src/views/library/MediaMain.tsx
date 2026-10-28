@@ -97,7 +97,7 @@ export function MediaMain() {
   // ⚠️ 从 allItems 查而不是 view.list —— 目录订阅可能有几百条，view.list 只是窗口。
   const openId = searchParams.get("open")
   const openItem = useMemo(
-    () => (openId ? allItems.find((i) => i.subscriptionId === nodeId && i.id === openId) ?? null : null),
+    () => (openId ? (allItems.find((i) => i.subscriptionId === nodeId && i.id === openId) ?? null) : null),
     [allItems, nodeId, openId],
   )
   // 容器条目 → 拉它的二级内容。结果只存 store 的 previewDetail（不落库/不建订阅）。
@@ -119,8 +119,7 @@ export function MediaMain() {
   const socialOnly = items.length > 0 && items.every((i) => i.kind === "social")
   // 影音三段(视频/直播/音频)才出 tabs。**订阅节点不出** —— 在某个视频源的页面里摆
   // 全局三段,点一下跳到公共 tab,容易让人以为是在切这个订阅的视图。
-  const mediaSection =
-    isTabNode(nodeId) && (meta.kind === "video" || meta.kind === "live" || meta.kind === "audio")
+  const mediaSection = isTabNode(nodeId) && (meta.kind === "video" || meta.kind === "live" || meta.kind === "audio")
   // 筛选谓词按 id 查表(而不是在 state 里存函数):state 只存可序列化的枚举值。
   const socialFiltered =
     socialOnly && socialFilter !== "all"
@@ -224,7 +223,11 @@ export function MediaMain() {
       <div className="flex min-h-0 flex-1 flex-col" {...overlayBlock("media-main", "media:main")}>
         <GridHead title={viewTitleFor(meta, hotWord)} />
         {hotWord.loading ? (
-          <StateBlock icon="loader" title={`正在取「${hotWord.word}」下的微博…`} text="热搜词流需要登录；若失败会给出提示。" />
+          <StateBlock
+            icon="loader"
+            title={`正在取「${hotWord.word}」下的微博…`}
+            text="热搜词流需要登录；若失败会给出提示。"
+          />
         ) : hotWord.error ? (
           <StateBlock
             tone="error"
@@ -270,7 +273,14 @@ export function MediaMain() {
       )
     }
     const empty = (
-      <MediaEmpty nodeId={nodeId} query={query} offline={offline} hasSub={!!meta.sub} disabled={meta.sub ? !meta.sub.enabled : false} onGo={go} />
+      <MediaEmpty
+        nodeId={nodeId}
+        query={query}
+        offline={offline}
+        hasSub={!!meta.sub}
+        disabled={meta.sub ? !meta.sub.enabled : false}
+        onGo={go}
+      />
     )
     // 空态也要留 tabs:否则「直播这个段是空的」会让人只能回侧栏才能换段。
     if (!mediaSection) return empty
@@ -475,7 +485,9 @@ function PreviewHead({ item, count }: { item: MediaItem; count: number }) {
   // ⚠️ 判重必须与 `addSubscription` 用同一套判据(`sameInfo`:键序无关、空值同义)。
   // 自己写 `===` 会在参数被归一化过(如 Twitch 分类填目录链接)时判成「未订阅」→
   // 点一下建出第二条同内容订阅;空 info 时 `every()` 又恒真 → 永远显示「已订阅」。
-  const alreadySubscribed = subscriptions.some((s) => s.channelKey === target.channelKey && sameInfo(s.info ?? {}, target.info))
+  const alreadySubscribed = subscriptions.some(
+    (s) => s.channelKey === target.channelKey && sameInfo(s.info ?? {}, target.info),
+  )
 
   async function subscribe() {
     if (!target.channelKey || alreadySubscribed) return
@@ -490,17 +502,18 @@ function PreviewHead({ item, count }: { item: MediaItem; count: number }) {
   }
 
   return (
-    <div
-      className="grid-head"
-      {...overlayBlock("preview-head", `preview:${item.subscriptionId}:${item.id}`)}
-    >
+    <div className="grid-head" {...overlayBlock("preview-head", `preview:${item.subscriptionId}:${item.id}`)}>
       <button className="btn btn-quiet btn-sm" onClick={() => navigate(viewPath(item.subscriptionId))}>
         <Icon name="back" size={13} /> 返回
       </button>
       <span className="grid-title od-truncate">{item.title}</span>
       <span className="grid-sub">{count} 条（预览，不写入订阅）</span>
       <span className="spacer" />
-      <button className="btn btn-secondary btn-sm" disabled={subscribing || alreadySubscribed} onClick={() => void subscribe()}>
+      <button
+        className="btn btn-secondary btn-sm"
+        disabled={subscribing || alreadySubscribed}
+        onClick={() => void subscribe()}
+      >
         {subscribing ? (
           <Icon name="loader" size={13} className="animate-spin" />
         ) : alreadySubscribed ? (
@@ -552,7 +565,8 @@ function MediaEmpty({
         text="点侧栏的刷新按钮抓一次;若持续为空,可能是该房间未开播或需要登录。"
       />
     )
-  if (nodeId === "starred") return <StateBlock icon="star" title="还没有星标条目" text="在列表或卡片上点星标图标收藏。" />
+  if (nodeId === "starred")
+    return <StateBlock icon="star" title="还没有星标条目" text="在列表或卡片上点星标图标收藏。" />
   if (nodeId === "unread") return <StateBlock icon="checkCircle" tone="ok" title="全部已读" text="没有未读条目了。" />
   return (
     <StateBlock

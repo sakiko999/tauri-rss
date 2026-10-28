@@ -163,10 +163,18 @@ export function ArticlePane() {
           >
             全部
           </button>
-          <button className="chip chip-sm" aria-pressed={!!f.unreadOnly} onClick={() => setChip({ unreadOnly: true, starredOnly: false })}>
+          <button
+            className="chip chip-sm"
+            aria-pressed={!!f.unreadOnly}
+            onClick={() => setChip({ unreadOnly: true, starredOnly: false })}
+          >
             <Icon name="eye" size={12} /> 未读 <span className="num">{chipCounts.unread}</span>
           </button>
-          <button className="chip chip-sm" aria-pressed={!!f.starredOnly} onClick={() => setChip({ starredOnly: true, unreadOnly: false })}>
+          <button
+            className="chip chip-sm"
+            aria-pressed={!!f.starredOnly}
+            onClick={() => setChip({ starredOnly: true, unreadOnly: false })}
+          >
             <Icon name="star" size={12} /> 收藏 <span className="num">{chipCounts.starred}</span>
           </button>
         </div>
@@ -226,18 +234,30 @@ function EmptyState({
 }) {
   const query = useDesktop((s) => s.query)
   const offline = useDesktop((s) => s.offline)
-  if (query) return <StateBlock icon="search" title="没有匹配的内容" text={`当前列表里没有包含「${query}」的条目。搜索覆盖标题、作者、摘要与正文。`} />
+  if (query)
+    return (
+      <StateBlock
+        icon="search"
+        title="没有匹配的内容"
+        text={`当前列表里没有包含「${query}」的条目。搜索覆盖标题、作者、摘要与正文。`}
+      />
+    )
   if (offline) return <StateBlock icon="offline" title="离线模式" text="已跳过网络抓取。切回在线后再刷新。" />
   // chip 筛出来的「空」要排在节点自身的空态之前:用户刚点的就是 chip,
   // 这时说「这个订阅还没有内容」是错的(内容在,只是被筛掉了)。
-  if (unreadOnly) return <StateBlock icon="checkCircle" tone="ok" title="这里没有未读" text="切到「全部」看已读条目,或换一个订阅。" />
-  if (starredOnly) return <StateBlock icon="star" title="这里没有收藏" text="在列表行上点星标即可收藏;切到「全部」看不带筛选的列表。" />
+  if (unreadOnly)
+    return <StateBlock icon="checkCircle" tone="ok" title="这里没有未读" text="切到「全部」看已读条目,或换一个订阅。" />
+  if (starredOnly)
+    return (
+      <StateBlock icon="star" title="这里没有收藏" text="在列表行上点星标即可收藏;切到「全部」看不带筛选的列表。" />
+    )
   // ⚠️ 智能订阅的「空」优先于 hasSub:点「全部标为已读」后列表清空,说「还没有内容」
   // 是错的,应该告诉用户「全部读完」。
   if (nodeId === "unread") return <StateBlock icon="checkCircle" tone="ok" title="全部已读" text="没有未读条目了。" />
   if (nodeId === "starred") return <StateBlock icon="star" title="还没有星标条目" text="在列表里点星标图标收藏。" />
   if (disabled) return <StateBlock icon="lock" title="订阅已停用" text="在「设置 → 订阅」里重新启用它。" />
-  if (hasSub) return <StateBlock icon="inbox" title="这个订阅还没有内容" text="点侧栏的刷新按钮抓一次,或等下一个刷新周期。" />
+  if (hasSub)
+    return <StateBlock icon="inbox" title="这个订阅还没有内容" text="点侧栏的刷新按钮抓一次,或等下一个刷新周期。" />
   return (
     <StateBlock
       icon="rss"
@@ -251,4 +271,3 @@ function EmptyState({
     />
   )
 }
-

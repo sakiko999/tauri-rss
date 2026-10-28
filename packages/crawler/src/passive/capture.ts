@@ -28,8 +28,7 @@ export interface CaptureOptions {
 }
 
 /** 只保留可当文本解析的响应；图片/视频/字体等直接跳过。 */
-const TEXT_MIME =
-  /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|application\/[^;]+\+(json|xml))/i
+const TEXT_MIME = /^(text\/|application\/(json|xml|javascript|x-www-form-urlencoded)|application\/[^;]+\+(json|xml))/i
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 

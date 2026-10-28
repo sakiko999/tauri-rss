@@ -89,7 +89,11 @@ export function parseWeiboDate(s: unknown): number | undefined {
 
 /** 去 HTML 标签(搜索结果等无 text_raw 的 mblog,text 是 HTML)。 */
 function stripHtml(s: string): string {
-  return s.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim()
+  return s
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 /**
@@ -109,7 +113,8 @@ export function mblogToSocial(m: any, sourceId: string, t: number): Social {
       if (!url) return { url: "" }
       // 实况图：m.weibo.cn 用 pics[].type + pics[].videoSrc（顶层 live_photo[] 与 pics
       // 下标不对应，别拿它配对）。videoSrc 是 302 包装器，去掉 token 也会现场重签。
-      const video = p?.type === "livephoto" ? (typeof p?.videoSrc === "string" ? p.videoSrc : p?.videoSrc?.url) : undefined
+      const video =
+        p?.type === "livephoto" ? (typeof p?.videoSrc === "string" ? p.videoSrc : p?.videoSrc?.url) : undefined
       return video ? { url, liveVideo: toHttps(String(video)) } : { url }
     })
     .filter((img: { url: string }) => !!img.url)

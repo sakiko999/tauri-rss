@@ -41,7 +41,7 @@ export async function runHot(word: string, opts: HotOptions): Promise<void> {
 
   console.log(`热搜词「${word}」— ${items.length} 条,${fmtMs(ms)}${pc.dim(`  (sub:${subId})`)}`)
   for (const it of items.slice(0, n)) {
-    const imgCount = it.kind === "social" ? it.images?.length ?? 0 : "-"
+    const imgCount = it.kind === "social" ? (it.images?.length ?? 0) : "-"
     const likes = it.kind === "social" && it.likes !== undefined ? `${it.likes} 赞` : ""
     console.log(`  · ${trunc(it.title ?? "(untitled)", 52)}${pc.dim(`  图:${imgCount} ${likes}`)}`)
   }

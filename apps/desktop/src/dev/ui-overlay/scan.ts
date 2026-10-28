@@ -66,10 +66,7 @@ function isHidden(el: Element, cache: Map<Element, boolean>): boolean {
     if (hidden === undefined) {
       const cs = getComputedStyle(a)
       hidden =
-        cs.display === "none" ||
-        cs.visibility === "hidden" ||
-        cs.visibility === "collapse" ||
-        Number(cs.opacity) === 0
+        cs.display === "none" || cs.visibility === "hidden" || cs.visibility === "collapse" || Number(cs.opacity) === 0
       cache.set(a, hidden)
     }
     if (hidden) return true
@@ -170,9 +167,7 @@ export function scanCandidates(extraSelector: string): Candidate[] {
       key,
       stable,
       rect,
-      ...(block
-        ? { block: true, blockName: el.getAttribute("data-ui-overlay-block") || undefined }
-        : {}),
+      ...(block ? { block: true, blockName: el.getAttribute("data-ui-overlay-block") || undefined } : {}),
       ...describeElement(el, meta),
     })
   }

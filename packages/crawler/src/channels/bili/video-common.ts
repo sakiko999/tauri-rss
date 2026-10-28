@@ -24,21 +24,25 @@ function isPaywalled(rights: unknown): boolean {
 }
 
 /** bilibili UGC 视频 → Video(kind=video)。stream 留空——playurl 直链由下游懒解析。 */
-export function ugc(sourceId: string, t: number, v: {
-  title: unknown
-  pic?: unknown
-  desc?: unknown
-  pubdate?: unknown
-  aid?: unknown
-  bvid?: unknown
-  owner?: { name?: string } | undefined
-  forceBvid?: boolean
-  duration?: unknown
-  /** 原始 `rights` 对象（多数列表接口都有；没有就不标记）。 */
-  rights?: unknown
-  /** 充电专属（space 投稿接口的 `is_charging_arc`；与 rights.ugc_pay 同义）。 */
-  charging?: unknown
-}): Video {
+export function ugc(
+  sourceId: string,
+  t: number,
+  v: {
+    title: unknown
+    pic?: unknown
+    desc?: unknown
+    pubdate?: unknown
+    aid?: unknown
+    bvid?: unknown
+    owner?: { name?: string } | undefined
+    forceBvid?: boolean
+    duration?: unknown
+    /** 原始 `rights` 对象（多数列表接口都有；没有就不标记）。 */
+    rights?: unknown
+    /** 充电专属（space 投稿接口的 `is_charging_arc`；与 rights.ugc_pay 同义）。 */
+    charging?: unknown
+  },
+): Video {
   const pubdate = Number(v.pubdate ?? 0)
   const aid = Number(v.aid ?? 0)
   const bvid = v.bvid ? String(v.bvid) : undefined

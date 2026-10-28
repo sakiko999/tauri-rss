@@ -45,15 +45,20 @@ export function initAppHost(): void {
   if (globalThis.appHost) return
   globalThis.appHost = {
     get http(): HttpBackend {
-      if (!_http) throw new Error("appHost.http not set — 请在应用启动时注入宿主,或 example 用 injectNodeHost/injectBrowserHost")
+      if (!_http)
+        throw new Error("appHost.http not set — 请在应用启动时注入宿主,或 example 用 injectNodeHost/injectBrowserHost")
       return _http
     },
     get js(): JsBackend {
-      if (!_js) throw new Error("appHost.js not set — 请在应用启动时注入宿主,或 example 用 injectNodeHost/injectBrowserHost")
+      if (!_js)
+        throw new Error("appHost.js not set — 请在应用启动时注入宿主,或 example 用 injectNodeHost/injectBrowserHost")
       return _js
     },
     get storage(): StorageBackend {
-      if (!_storage) throw new Error("appHost.storage not set — 请在应用启动时注入宿主,或 example 用 injectNodeHost/injectBrowserHost")
+      if (!_storage)
+        throw new Error(
+          "appHost.storage not set — 请在应用启动时注入宿主,或 example 用 injectNodeHost/injectBrowserHost",
+        )
       return _storage
     },
     get now(): () => number {

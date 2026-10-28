@@ -14,14 +14,10 @@ export function openExternalSafely(url: string | undefined | null): void {
   if (!url) return
   try {
     void Promise.resolve(globalThis.appHost.openExternal(url)).catch((e) => {
-      useDesktop
-        .getState()
-        .toast("error", "打开外链失败", e instanceof Error ? e.message : String(e))
+      useDesktop.getState().toast("error", "打开外链失败", e instanceof Error ? e.message : String(e))
     })
   } catch (e) {
     // 宿主未注入时访问门面会同步抛错。
-    useDesktop
-      .getState()
-      .toast("error", "打开外链失败", e instanceof Error ? e.message : String(e))
+    useDesktop.getState().toast("error", "打开外链失败", e instanceof Error ? e.message : String(e))
   }
 }

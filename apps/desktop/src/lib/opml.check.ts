@@ -51,7 +51,10 @@ const equiv = parseOpml(`<?xml version="1.0"?>
   <outline type="rss" text="新源3" xmlUrl="https://new.com/rss"/>
 </body></opml>`)
 const e2 = pendingImports(equiv, subs as any)
-ok(e2.feeds.length === 1 && e2.feeds[0].xmlUrl === "https://new.com/rss/", "尾斜杠+大小写归一后判重(新源2 保留,新源3 视为同一条)")
+ok(
+  e2.feeds.length === 1 && e2.feeds[0].xmlUrl === "https://new.com/rss/",
+  "尾斜杠+大小写归一后判重(新源2 保留,新源3 视为同一条)",
+)
 ok(e2.skipped === 2, `等价归一 + 批内去重:跳过 2(得 ${e2.skipped})`)
 
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)

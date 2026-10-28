@@ -37,8 +37,7 @@ export interface SidecarBrowserOptions {
 /** 与 sidecar 默认值一致；CLI 显式传参时以调用方为准。 */
 export function defaultSidecarProfileDir(): string {
   const base =
-    process.env.LOCALAPPDATA ??
-    join(process.env.HOME ?? process.env.USERPROFILE ?? process.cwd(), ".local", "share")
+    process.env.LOCALAPPDATA ?? join(process.env.HOME ?? process.env.USERPROFILE ?? process.cwd(), ".local", "share")
   return join(base, "app.amoeba.cli", "browser-profile")
 }
 
@@ -210,18 +209,12 @@ function readReady(child: ChildProcessWithoutNullStreams, stderrTail: string[]):
     }
     const onExit = (code: number | null) => {
       cleanup()
-      reject(
-        new Error(
-          `sidecar 启动即退出 (code ${code})${stderr() ? `:\n${stderr()}` : "（无 stderr）"}`,
-        ),
-      )
+      reject(new Error(`sidecar 启动即退出 (code ${code})${stderr() ? `:\n${stderr()}` : "（无 stderr）"}`))
     }
     const timer = setTimeout(() => {
       cleanup()
       reject(
-        new Error(
-          `sidecar ${READY_TIMEOUT_MS / 1000}s 内未 READY${stderr() ? `:\n${stderr()}` : "（无 stderr）"}`,
-        ),
+        new Error(`sidecar ${READY_TIMEOUT_MS / 1000}s 内未 READY${stderr() ? `:\n${stderr()}` : "（无 stderr）"}`),
       )
     }, READY_TIMEOUT_MS)
 

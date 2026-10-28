@@ -65,7 +65,9 @@ export async function runLogin(platform: string, opts: LoginOptions): Promise<vo
     layer = await createRemoteDataLayer(endpoint)
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e)
-    throw new Error(`连不上数据服务 127.0.0.1:${endpoint.port}：${reason}\n${pc.dim("服务可能刚退出，重新启动后再试。")}`)
+    throw new Error(
+      `连不上数据服务 127.0.0.1:${endpoint.port}：${reason}\n${pc.dim("服务可能刚退出，重新启动后再试。")}`,
+    )
   }
 
   const controller = new AbortController()
@@ -120,9 +122,7 @@ export async function runLogin(platform: string, opts: LoginOptions): Promise<vo
 
     const who = result.user_id ? pc.dim(` · user_id ${result.user_id}`) : ""
     console.log(
-      result.alreadyLoggedIn
-        ? `${ok("已登录")} ${platform}${who}`
-        : `${ok("登录成功")} ${platform}${who} ${fmtMs(ms)}`,
+      result.alreadyLoggedIn ? `${ok("已登录")} ${platform}${who}` : `${ok("登录成功")} ${platform}${who} ${fmtMs(ms)}`,
     )
     console.log(pc.dim("cookie 已写入数据服务设置；桌面刷新与 --via-service 探针会直接使用。"))
   } finally {

@@ -153,7 +153,11 @@ function FeedRow({ item }: { item: MediaItem }) {
   const openItem = useMobile((s) => s.openItem)
   return (
     <li className="row" onClick={() => openItem(item)}>
-      {item.thumbnail ? <MediaImage src={item.thumbnail} className="row-thumb" ratio={1} /> : <span className="row-thumb ph" />}
+      {item.thumbnail ? (
+        <MediaImage src={item.thumbnail} className="row-thumb" ratio={1} />
+      ) : (
+        <span className="row-thumb ph" />
+      )}
       <span className="row-main">
         <span className="row-title">{item.title}</span>
         <span className="row-sub">
@@ -180,7 +184,7 @@ function Detail({ item }: { item: MediaItem }) {
   const closeItem = useMobile((s) => s.closeItem)
   const dl = useMobile((s) => s.dl)
   const savePosition = useMobile((s) => s.savePosition)
-  const [body, setBody] = useState(item.kind === "article" ? item.content ?? "" : "")
+  const [body, setBody] = useState(item.kind === "article" ? (item.content ?? "") : "")
   const [resolving, setResolving] = useState(false)
 
   // 文章正文按需补全(feed 只带摘要时抓原文页;core 侧有 KV 持久缓存)。
@@ -192,7 +196,8 @@ function Detail({ item }: { item: MediaItem }) {
     void dl
       .resolveDetail(item.subscriptionId, item.id)
       .then((d) => {
-        if (live && d?.kind === "article" && (d.content ?? "").length > (item.content ?? "").length) setBody(d.content ?? "")
+        if (live && d?.kind === "article" && (d.content ?? "").length > (item.content ?? "").length)
+          setBody(d.content ?? "")
       })
       .catch(() => {})
       .finally(() => live && setResolving(false))
@@ -212,7 +217,11 @@ function Detail({ item }: { item: MediaItem }) {
       {playable && dl ? (
         <PlayableMedia
           className="stage"
-          resolve={() => (item.kind === "live" ? dl.resolveLivePlay(item.subscriptionId, item.id) : dl.resolvePlay(item.subscriptionId, item.id))}
+          resolve={() =>
+            item.kind === "live"
+              ? dl.resolveLivePlay(item.subscriptionId, item.id)
+              : dl.resolvePlay(item.subscriptionId, item.id)
+          }
           startAtSec={item.kind === "live" ? undefined : item.positionSec}
           onProgress={(sec, dur) => savePosition(item, sec, dur)}
         />
@@ -229,9 +238,7 @@ function Detail({ item }: { item: MediaItem }) {
       ) : item.kind === "article" ? (
         // ⚠️ 正文可能是 HTML(feed 带全文)—— 按纯文本渲染会露出 <p>/<a> 标签。
         // displayBody 判 HTML 则剥标签(mobile 无 sanitizer,富文本让位安全)。
-        <div className="article-body">
-          {displayBody(body) || item.summary || "（这条只带了标题，打开原文查看）"}
-        </div>
+        <div className="article-body">{displayBody(body) || item.summary || "（这条只带了标题，打开原文查看）"}</div>
       ) : null}
       {/* 打开原文:正文取不到时(SPA/反爬占位页)的兜底出口。⚠️ 走 appHost.openExternal
           (Tauri opener)——WebView 会拦 window.open(桌面同理),点了没反应。 */}

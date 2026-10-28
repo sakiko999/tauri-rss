@@ -150,20 +150,12 @@ cli
 cli
   .command("item <url>", "★ by-url 一站式:路由 + streams 全档位 + 弹幕元信息")
   .option("--json", "JSON 输出")
-  .action(
-    guard((url: string, opts: { json?: boolean; viaService?: boolean; endpoint?: string }) =>
-      runItem(url, opts),
-    ),
-  )
+  .action(guard((url: string, opts: { json?: boolean; viaService?: boolean; endpoint?: string }) => runItem(url, opts)))
 
 cli
   .command("play <url>", "解析直链;--open 丢系统播放器实测直链活性")
   .option("--open", "用系统默认播放器打开首选(非 dash)直链")
-  .action(
-    guard((url: string, opts: { open?: boolean; viaService?: boolean; endpoint?: string }) =>
-      runPlay(url, opts),
-    ),
-  )
+  .action(guard((url: string, opts: { open?: boolean; viaService?: boolean; endpoint?: string }) => runPlay(url, opts)))
 
 cli
   .command("dm <url>", "弹幕探针:VOD 样本 / 直播窗口统计")
@@ -172,16 +164,12 @@ cli
   .option("--json", "JSON 输出")
   .action(
     guard(
-      (
-        url: string,
-        opts: { n?: number; seconds?: number; json?: boolean; viaService?: boolean; endpoint?: string },
-      ) => runDm(url, opts),
+      (url: string, opts: { n?: number; seconds?: number; json?: boolean; viaService?: boolean; endpoint?: string }) =>
+        runDm(url, opts),
     ),
   )
 
-cli
-  .command("align", "crawler XML 与 rsshub 同构消费断言(收编 verify-alignment)")
-  .action(guard(() => runAlign()))
+cli.command("align", "crawler XML 与 rsshub 同构消费断言(收编 verify-alignment)").action(guard(() => runAlign()))
 
 cli
   .command("hot <word>", "★ 热搜词下微博流(weibo:hot resolveHotWord,收编 verify-new-channels)")
@@ -227,16 +215,19 @@ cli
         arg1: string | undefined,
         arg2: string | undefined,
         opts: { endpoint?: string; json?: boolean; all?: boolean; force?: boolean },
-      ) => runAttach(action, [arg1, arg2].filter((v): v is string => !!v), opts),
+      ) =>
+        runAttach(
+          action,
+          [arg1, arg2].filter((v): v is string => !!v),
+          opts,
+        ),
     ),
   )
 
 cli
   .command("browser-reset", "清掉抓取浏览器 profile(默认 CLI sidecar;--target desktop|all)")
   .option("--target <target>", "cli|desktop|all(默认 cli)")
-  .action(
-    guard((opts: { target?: "cli" | "desktop" | "all" }) => runBrowserReset(opts)),
-  )
+  .action(guard((opts: { target?: "cli" | "desktop" | "all" }) => runBrowserReset(opts)))
 
 cli
   .command("env", "appHost 门面自检(http/js/storage/ws 注入状态)")

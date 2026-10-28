@@ -25,7 +25,17 @@ import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 
 /** 单个 slide。active=false 时只渲染 poster 占位（不挂播放器）。 */
-function Slide({ item, index, active, onClose }: { item: MediaItem; index: number; active: boolean; onClose: () => void }) {
+function Slide({
+  item,
+  index,
+  active,
+  onClose,
+}: {
+  item: MediaItem
+  index: number
+  active: boolean
+  onClose: () => void
+}) {
   const resolvePlay = useDesktop((s) => s.resolvePlay)
   const resolveLivePlay = useDesktop((s) => s.resolveLivePlay)
   const savePosition = useDesktop((s) => s.savePosition)
@@ -43,7 +53,11 @@ function Slide({ item, index, active, onClose }: { item: MediaItem; index: numbe
         <PlayableMedia
           key={itemKey(item)}
           className="sv-media"
-          streams={(item as { stream?: import("@amoeba/core").MediaStream }).stream ? [(item as { stream: import("@amoeba/core").MediaStream }).stream] : undefined}
+          streams={
+            (item as { stream?: import("@amoeba/core").MediaStream }).stream
+              ? [(item as { stream: import("@amoeba/core").MediaStream }).stream]
+              : undefined
+          }
           resolve={() =>
             isLive ? resolveLivePlay(item.subscriptionId, item.id) : resolvePlay(item.subscriptionId, item.id)
           }
@@ -124,7 +138,9 @@ export function ShortVideoView() {
   // 键盘：↑/↓ 切上下条（滚动到对应屏）；Esc 退出短视频。
   const scrollTo = (i: number) => {
     const clamped = Math.max(0, Math.min(items.length - 1, i))
-    containerRef.current?.querySelectorAll<HTMLElement>(".sv-slide")[clamped]?.scrollIntoView({ behavior: scrollBehavior() })
+    containerRef.current
+      ?.querySelectorAll<HTMLElement>(".sv-slide")
+      [clamped]?.scrollIntoView({ behavior: scrollBehavior() })
   }
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

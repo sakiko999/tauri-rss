@@ -159,10 +159,7 @@ declare global {
    */
   interface BrowserTab {
     readonly key: string
-    evaluate<T = unknown>(
-      expression: string,
-      opts?: { awaitPromise?: boolean; returnByValue?: boolean },
-    ): Promise<T>
+    evaluate<T = unknown>(expression: string, opts?: { awaitPromise?: boolean; returnByValue?: boolean }): Promise<T>
     /** 读 cookie(浏览器级;任何 tab 连接都能读)。 */
     getCookies(url?: string): Promise<Record<string, string>>
     /** 原始 CDP 命令(被动采集 capturePage 用;绑定本 tab 的连接)。 */
@@ -188,10 +185,7 @@ declare global {
    *   - close: 关闭浏览器进程(应用退出时)。
    */
   interface BrowserBackend {
-    evaluate<T = unknown>(
-      expression: string,
-      opts?: { awaitPromise?: boolean; returnByValue?: boolean },
-    ): Promise<T>
+    evaluate<T = unknown>(expression: string, opts?: { awaitPromise?: boolean; returnByValue?: boolean }): Promise<T>
     /** 读指定域 cookie(name → value,含 HttpOnly)。传 url 只取该域(Network.getCookies urls),
      *  不传取全部(getAllCookies)。
      *  ⚠️ document.cookie 读不到 HttpOnly(如 xhs web_session),登录态检测/取 cookie 必须走这里。 */
@@ -269,9 +263,7 @@ declare global {
   }
 
   /** 键值批量写的一步（`StorageBackend.batch`）。 */
-  type StorageOp =
-    | { type: "set"; key: string; value: string }
-    | { type: "delete"; key: string }
+  type StorageOp = { type: "set"; key: string; value: string } | { type: "delete"; key: string }
 
   /** 键值持久化(订阅配置 / 阅读状态 / 设置)。 */
   interface StorageBackend {

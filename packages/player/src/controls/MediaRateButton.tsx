@@ -11,7 +11,8 @@ import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
 const MENU_CONTENT_CLS = "z-50 min-w-16 rounded-md border border-white/15 bg-black/95 py-1 text-xs text-white shadow-xl"
-const MENU_ITEM_CLS = "flex w-full select-none items-center justify-center px-3 py-1.5 text-left outline-none hover:bg-white/15 focus:bg-white/15"
+const MENU_ITEM_CLS =
+  "flex w-full select-none items-center justify-center px-3 py-1.5 text-left outline-none hover:bg-white/15 focus:bg-white/15"
 
 export function MediaRateButton({
   state,

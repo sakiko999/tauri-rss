@@ -29,12 +29,13 @@ export function Reading() {
     <>
       <SideCard title="阅读与缓存" icon="type">
         <Row label="打开即标已读" help="在列表里点开条目就标记为已读。">
-          <Switch checked={settings.markReadOnOpen} label="打开即标已读" onChange={(v) => void setSetting("markReadOnOpen", v)} />
+          <Switch
+            checked={settings.markReadOnOpen}
+            label="打开即标已读"
+            onChange={(v) => void setSetting("markReadOnOpen", v)}
+          />
         </Row>
-        <Row
-          label="自动刷新间隔"
-          help="两次抓取的最短间隔。间隔内刷新直接复用已抓到的内容，不会重复访问源站。"
-        >
+        <Row label="自动刷新间隔" help="两次抓取的最短间隔。间隔内刷新直接复用已抓到的内容，不会重复访问源站。">
           <div className="range">
             <input
               type="range"

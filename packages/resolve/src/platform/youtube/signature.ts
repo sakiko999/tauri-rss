@@ -163,7 +163,10 @@ function fixupFunction(fn: string): string {
   const argM = fn.match(/=\s*function\s*\(\s*([^)]*)\s*\)/)
   const firstArg = argM?.[1]?.split(",")[0]?.trim()
   if (!firstArg) return fn
-  const re = new RegExp(`;\\s*if\\s*\\(\\s*typeof\\s+[a-zA-Z0-9_\\$]+\\s*===?\\s*(["'])undefined\\1\\s*\\)\\s*return\\s+${firstArg.replace(/[$]/g, "\\$&")}\\s*;`, "g")
+  const re = new RegExp(
+    `;\\s*if\\s*\\(\\s*typeof\\s+[a-zA-Z0-9_\\$]+\\s*===?\\s*(["'])undefined\\1\\s*\\)\\s*return\\s+${firstArg.replace(/[$]/g, "\\$&")}\\s*;`,
+    "g",
+  )
   return fn.replace(re, ";")
 }
 

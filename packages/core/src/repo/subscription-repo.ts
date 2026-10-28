@@ -25,10 +25,7 @@ export interface SubscriptionRepository {
   removeGroup(id: string): Promise<void>
 }
 
-export function createSubscriptionRepository(
-  storage: StorageBackend,
-  now: () => number,
-): SubscriptionRepository {
+export function createSubscriptionRepository(storage: StorageBackend, now: () => number): SubscriptionRepository {
   /**
    * 读-改-写串行化:订阅树是单个 KV blob,任意两个并发变更(快速连点编辑 /
    * add 撞上 toggle / 删除分组时批量迁移成员)都会各自读到同一份旧快照,后写者

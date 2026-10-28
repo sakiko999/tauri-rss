@@ -65,7 +65,9 @@ export function Modal({
               <Icon name="close" size={15} />
             </Dialog.Close>
           </div>
-          <div className="modal-body" {...overlayBlock("modal-body", title ? `modal:body:${title}` : undefined)}>{children}</div>
+          <div className="modal-body" {...overlayBlock("modal-body", title ? `modal:body:${title}` : undefined)}>
+            {children}
+          </div>
           {footer ? <div className="modal-foot">{footer}</div> : null}
         </Dialog.Content>
       </Dialog.Portal>
@@ -143,7 +145,15 @@ export function MenuSeparator() {
 }
 
 /** 开关(radix Switch：内建键盘/ARIA/受控语义，样式仍是我们的 .switch)。 */
-export function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+export function Switch({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  label: string
+}) {
   return (
     <SwitchPrimitive.Root className="switch" checked={checked} onCheckedChange={onChange} aria-label={label}>
       <SwitchPrimitive.Thumb className="switch-thumb" />
@@ -194,12 +204,7 @@ export function Select({
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
       <SelectPrimitive.Portal>
-        <SelectPrimitive.Content
-          className="select-pop"
-          position="popper"
-          sideOffset={4}
-          collisionPadding={8}
-        >
+        <SelectPrimitive.Content className="select-pop" position="popper" sideOffset={4} collisionPadding={8}>
           <SelectPrimitive.Viewport>
             {options.map((o) => (
               <SelectPrimitive.Item

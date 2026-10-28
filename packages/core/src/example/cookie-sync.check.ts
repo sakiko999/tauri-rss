@@ -72,7 +72,11 @@ let fields = await dl.syncBrowserCookies()
 assert.deepEqual([...fields].sort(), ["weiboCookie", "xhsCookie"], "两个平台都应更新")
 let s = await dl.settings.get()
 assert.equal(s.xhsCookie, "a1=a1-1; id_token=id-1; web_session=ws-1", "xhs 快照应按 key 排序")
-assert.equal(s.weiboCookie, "SUBP=subp-m; SUB=sub-m; _T_WM=wm".split("; ").sort().join("; "), "weibo 用 m.weibo.cn 的 cookie")
+assert.equal(
+  s.weiboCookie,
+  "SUBP=subp-m; SUB=sub-m; _T_WM=wm".split("; ").sort().join("; "),
+  "weibo 用 m.weibo.cn 的 cookie",
+)
 assert.equal(xhsReads, 1, "同一 cookie 字段只读一次(xhs 两个渠道去重)")
 assert.equal(weiboMobileReads, 1, "weibo 首选 m.weibo.cn")
 assert.equal(weiboDesktopReads, 0, "m.weibo.cn 有 SUB 时不应再读 weibo.com")
@@ -92,7 +96,11 @@ fields = await dl.syncBrowserCookies()
 assert.deepEqual(fields, [], "无登录标记不应写入")
 s = await dl.settings.get()
 assert.equal(s.xhsCookie, "a1=a1-1; id_token=id-1; web_session=ws-1", "无标记不能清空 xhs 快照")
-assert.equal(resolveCookie(undefined, "weibo"), "SUBP=subp-m; SUB=sub-m; _T_WM=wm".split("; ").sort().join("; "), "无标记不能清空 weibo 快照")
+assert.equal(
+  resolveCookie(undefined, "weibo"),
+  "SUBP=subp-m; SUB=sub-m; _T_WM=wm".split("; ").sort().join("; "),
+  "无标记不能清空 weibo 快照",
+)
 
 // ── 4. 读浏览器期间用户手改同字段 → compare-and-set 放弃 ──────────────────
 fakeXhs = { id_token: "id-2", a1: "a1-2" }

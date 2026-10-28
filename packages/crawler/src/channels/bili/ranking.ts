@@ -8,10 +8,27 @@ import { makeApiChannel } from "../factory.ts"
 import { API, ugc } from "./video-common.ts"
 
 const RID_TABLE: Record<string, string> = {
-  all: "0", anime: "1", guochuang: "4", documentary: "3", movie: "2", tv: "5", variety: "7",
-  douga: "1005", game: "1008", kichiku: "1007", music: "1003", dance: "1004", cinephile: "1001",
-  ent: "1002", knowledge: "1010", tech: "1012", food: "1020", car: "1013", fashion: "1014",
-  sports: "1018", animal: "1024",
+  all: "0",
+  anime: "1",
+  guochuang: "4",
+  documentary: "3",
+  movie: "2",
+  tv: "5",
+  variety: "7",
+  douga: "1005",
+  game: "1008",
+  kichiku: "1007",
+  music: "1003",
+  dance: "1004",
+  cinephile: "1001",
+  ent: "1002",
+  knowledge: "1010",
+  tech: "1012",
+  food: "1020",
+  car: "1013",
+  fashion: "1014",
+  sports: "1018",
+  animal: "1024",
 }
 
 export const BiliRankingChannel = makeApiChannel({

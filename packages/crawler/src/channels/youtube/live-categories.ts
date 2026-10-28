@@ -24,19 +24,17 @@ export const YoutubeLiveCategoriesChannel = makeApiChannel({
     const t = now()
     return shelves
       .filter((s) => s.slug !== "hot" && s.hits.length > 0)
-      .map(
-        (s): Category => ({
-          id: `youtube-shelf:${s.slug}`,
-          sourceId: "youtube:live-categories",
-          kind: "category",
-          title: s.title.replace(/^live now\s*-\s*/i, ""),
-          url: "https://www.youtube.com/live",
-          summary: `${s.hits.length} 个直播`,
-          thumbnail: s.hits[0]?.thumb,
-          fetchedAt: t,
-          categoryChannel: "youtube:live-category",
-          categoryInfo: { category: s.slug },
-        }),
-      )
+      .map((s): Category => ({
+        id: `youtube-shelf:${s.slug}`,
+        sourceId: "youtube:live-categories",
+        kind: "category",
+        title: s.title.replace(/^live now\s*-\s*/i, ""),
+        url: "https://www.youtube.com/live",
+        summary: `${s.hits.length} 个直播`,
+        thumbnail: s.hits[0]?.thumb,
+        fetchedAt: t,
+        categoryChannel: "youtube:live-category",
+        categoryInfo: { category: s.slug },
+      }))
   },
 })

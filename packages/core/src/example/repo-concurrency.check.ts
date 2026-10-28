@@ -91,8 +91,24 @@ function laggyStorage() {
   const storage = laggyStorage()
   const now = () => 1
   const repo = createSubscriptionRepository(storage, now)
-  await repo.add({ id: "s1", channelKey: "bili:popular", title: "x", enabled: true, info: {}, createdAt: 1, updatedAt: 1 })
-  await repo.add({ id: "s2", channelKey: "bili:popular", title: "y", enabled: true, info: {}, createdAt: 1, updatedAt: 1 })
+  await repo.add({
+    id: "s1",
+    channelKey: "bili:popular",
+    title: "x",
+    enabled: true,
+    info: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
+  await repo.add({
+    id: "s2",
+    channelKey: "bili:popular",
+    title: "y",
+    enabled: true,
+    info: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
 
   // 并发改两条不同记录的标题 + 加一个分组:三者都要活下来。
   await Promise.all([
@@ -105,14 +121,26 @@ function laggyStorage() {
   const groups = await repo.listGroups()
   assert.equal(subs.find((s) => s.id === "s1")?.title, "T1", "并发 update 丢了 s1 的改动")
   assert.equal(subs.find((s) => s.id === "s2")?.title, "T2", "并发 update 丢了 s2 的改动")
-  assert.deepEqual(groups.map((g) => g.id), ["g1"], "并发 addGroup 被订阅写入覆盖")
+  assert.deepEqual(
+    groups.map((g) => g.id),
+    ["g1"],
+    "并发 addGroup 被订阅写入覆盖",
+  )
 }
 
 // ── subscriptions:update 不允许把 channelKey 改空 ───────────────────────────
 {
   const storage = laggyStorage()
   const repo = createSubscriptionRepository(storage, () => 1)
-  await repo.add({ id: "s1", channelKey: "bili:popular", title: "x", enabled: true, info: {}, createdAt: 1, updatedAt: 1 })
+  await repo.add({
+    id: "s1",
+    channelKey: "bili:popular",
+    title: "x",
+    enabled: true,
+    info: {},
+    createdAt: 1,
+    updatedAt: 1,
+  })
   const next = await repo.update("s1", { channelKey: "" })
   assert.equal(next?.channelKey, "bili:popular", "channelKey 被改空 —— 该订阅会静默失效")
 }

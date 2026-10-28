@@ -131,9 +131,7 @@ export function Diagnostics() {
             <Icon name="offline" size={14} /> 清理浏览器数据
           </button>
         </div>
-        <p className="setting-help">
-          订阅、阅读状态与内容缓存都存本地。清理浏览器数据后，微博/小红书需重新登录。
-        </p>
+        <p className="setting-help">订阅、阅读状态与内容缓存都存本地。清理浏览器数据后，微博/小红书需重新登录。</p>
       </SideCard>
 
       <SideCard title="完全重置" icon="alert">

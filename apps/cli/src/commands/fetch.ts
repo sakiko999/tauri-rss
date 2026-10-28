@@ -26,9 +26,7 @@ export async function runFetch(key: string, opts: FetchOptions): Promise<void> {
   const info = await buildInfo(key, parseKvPairs(opts.kv))
 
   const elapsed = startTimer()
-  const xml = opts.viaService
-    ? (await probeFetch(key, info, opts.endpoint)).xml
-    : await ch.getSource(info).fetch()
+  const xml = opts.viaService ? (await probeFetch(key, info, opts.endpoint)).xml : await ch.getSource(info).fetch()
   const ms = elapsed()
 
   if (opts.xml) {

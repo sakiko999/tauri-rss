@@ -22,13 +22,7 @@
 // ── 浏览器操作调度(lane 化,风控 §3.13/§3.13.1)────────────────────────────────
 // 互斥/窗口模式/平台准入/进程级操作四种粒度分别由 scheduler 的四个原语承担;
 // 本模块只提供 withBrowserOp 这一个组合入口(顺序:gate → op lane → renderLease)。
-import {
-  browserGateFor,
-  withBrowserGlobal,
-  withBrowserOpSlot,
-  withLane,
-  withRenderLease,
-} from "./scheduler.ts"
+import { browserGateFor, withBrowserGlobal, withBrowserOpSlot, withLane, withRenderLease } from "./scheduler.ts"
 
 /** withBrowserOp 的选项。 */
 export interface BrowserOpOptions {
@@ -161,8 +155,10 @@ async function evalWithNavRetry<T>(
     } catch (e) {
       const msg = String(e)
       const navTransient =
-        msg.includes("Execution context was destroyed") || msg.includes("Cannot find context") ||
-        msg.includes("Cannot find execution context") || msg.includes("most likely because of a navigation")
+        msg.includes("Execution context was destroyed") ||
+        msg.includes("Cannot find context") ||
+        msg.includes("Cannot find execution context") ||
+        msg.includes("most likely because of a navigation")
       if (!navTransient || i >= retries) throw e
       await new Promise((r) => setTimeout(r, 300))
     }
@@ -212,11 +208,7 @@ export async function cdpEvaluate<T = unknown>(browser: BrowserBackend, expressi
 }
 
 /** cdpFetch + 2xx 校验 + JSON.parse(对齐 host.ts httpJson:空 body 返回 null)。 */
-export async function cdpJson<T = unknown>(
-  browser: BrowserBackend,
-  url: string,
-  init?: CdpFetchInit,
-): Promise<T> {
+export async function cdpJson<T = unknown>(browser: BrowserBackend, url: string, init?: CdpFetchInit): Promise<T> {
   const res = await cdpFetch(browser, url, init)
   if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}: ${url.slice(0, 80)}`)
   const text = res.bodyText

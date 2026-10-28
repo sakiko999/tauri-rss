@@ -98,12 +98,7 @@ export function TitleBar() {
         >
           <Icon name={theme === "dark" ? "sun" : "moon"} />
         </button>
-        <button
-          className="icon-btn"
-          title="设置"
-          aria-label="设置"
-          onClick={() => go("page:settings")}
-        >
+        <button className="icon-btn" title="设置" aria-label="设置" onClick={() => go("page:settings")}>
           <Icon name="settings" />
         </button>
       </div>

@@ -131,9 +131,7 @@ export function createDataActions(ctx: StoreCtx): DataActions {
             // 抬到至少覆盖它(用户翻过的更大窗口保留)。
             // ⚠️ 默认窗口是 PAGE_SIZE,不是 0:停用订阅的 refresh 不抓取(停用路径返回
             // itemCount 0),用 0 当种子会把 page[id] 写成 0 → slice(0,0) 清空整个视图。
-            page: result.error
-              ? s.page
-              : { ...s.page, [id]: Math.max(s.page[id] || PAGE_SIZE, result.itemCount) },
+            page: result.error ? s.page : { ...s.page, [id]: Math.max(s.page[id] || PAGE_SIZE, result.itemCount) },
             refreshErrors: result.error
               ? { ...s.refreshErrors, [id]: result.error }
               : (() => {
@@ -209,7 +207,9 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         results = await Promise.allSettled(
           subs.map((s, i) => {
             const ac = controllers[i]!
-            return withTimeout(dl.refresh(s.id, { force, signal: ac.signal }), REFRESH_TIMEOUT_MS, s.id, () => ac.abort())
+            return withTimeout(dl.refresh(s.id, { force, signal: ac.signal }), REFRESH_TIMEOUT_MS, s.id, () =>
+              ac.abort(),
+            )
           }),
         )
         results.forEach((r, i) => {

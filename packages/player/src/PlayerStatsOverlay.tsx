@@ -42,8 +42,7 @@ function readHost(): { latency: string; network: string } {
     const net = stats?.network
     return {
       latency: l ? `${l.ms} ms（${l.platform}）` : "—",
-      network:
-        net && net.requests > 0 ? `≈ ${formatBytes(net.bytes)} / ${net.requests} 次` : "—",
+      network: net && net.requests > 0 ? `≈ ${formatBytes(net.bytes)} / ${net.requests} 次` : "—",
     }
   } catch {
     return { latency: "—", network: "—" }
@@ -54,8 +53,7 @@ function readAudio(video: HTMLVideoElement): string {
   // Chromium 未实现 audioTracks(只有 Safari 有),退回解码字节数判断「有没有声音」。
   const tracks = (video as HTMLVideoElement & { audioTracks?: { length: number } }).audioTracks
   if (tracks && tracks.length) return `${tracks.length} 条`
-  const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number })
-    .webkitAudioDecodedByteCount
+  const decoded = (video as HTMLVideoElement & { webkitAudioDecodedByteCount?: number }).webkitAudioDecodedByteCount
   return decoded && decoded > 0 ? "有" : "—"
 }
 
@@ -121,9 +119,7 @@ export function PlayerStatsOverlay({
   }, [videoRef])
 
   // 「当前 / 最佳分辨率」:元素实际解码尺寸 / 引擎声明的档位高度。
-  const resolution = live
-    ? `${live.resolution}${stats?.height ? ` / ${stats.height}p` : ""}`
-    : "—"
+  const resolution = live ? `${live.resolution}${stats?.height ? ` / ${stats.height}p` : ""}` : "—"
 
   return (
     <div className="pointer-events-none absolute left-2 top-2 z-20 max-w-[min(24rem,90%)] rounded bg-black/80 p-2 font-mono text-[11px] leading-5 text-white/90 shadow-lg">

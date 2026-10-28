@@ -36,7 +36,8 @@ export function DiscoverPage() {
   const caps = useMemo(() => {
     const m: Record<string, Record<Cap, ChannelInfo | undefined>> = {}
     for (const p of PLATFORMS) {
-      const find = (suffix: string) => channels.find((c) => c.key === `${p.id}:${suffix}` || c.key === `live:${p.id}:${suffix}`)
+      const find = (suffix: string) =>
+        channels.find((c) => c.key === `${p.id}:${suffix}` || c.key === `live:${p.id}:${suffix}`)
       // 搜索渠道 key 不一定叫 `<platform>:search`(如 youtube:live-search),
       // 以 SEARCH_CHANNEL 映射为准,再回退旧的命名约定。
       const search = channels.find((c) => c.key === SEARCH_CHANNEL[p.id]) ?? find("search")
@@ -49,10 +50,7 @@ export function DiscoverPage() {
   }, [channels])
 
   /** 有任意分区/搜索能力的平台才进入「分区浏览与搜索」平台条。 */
-  const discoverable = useMemo(
-    () => PLATFORMS.filter((p) => CAPS.some((k) => caps[p.id][k])),
-    [caps],
-  )
+  const discoverable = useMemo(() => PLATFORMS.filter((p) => CAPS.some((k) => caps[p.id][k])), [caps])
 
   /** 切平台时把视图落到该平台**实际支持的第一个能力**，避免停在空视图。 */
   const pickPlatform = (id: string) => {
@@ -79,9 +77,7 @@ export function DiscoverPage() {
   const boards = useMemo(
     () =>
       channels.filter(
-        (c) =>
-          !c.key.startsWith("rss:") &&
-          (!!c.defaultInfo || !(c.sourceInfoTpl ?? []).some((f) => f.required)),
+        (c) => !c.key.startsWith("rss:") && (!!c.defaultInfo || !(c.sourceInfoTpl ?? []).some((f) => f.required)),
       ),
     [channels],
   )
@@ -103,14 +99,16 @@ export function DiscoverPage() {
                 // （roomIds 已支持主页链接），这样新订阅能和搜索添加/并入已有共用一条渠道；
                 // live:douyin:user 只保留给存量订阅。
                 const userCh = channels.find((ch) => ch.key === `live:${p.id}:user`)
-                const userSubKey = userCh
-                  ? (channels.find((ch) => ch.key === `live:${p.id}`)?.key ?? userCh.key)
-                  : ""
+                const userSubKey = userCh ? (channels.find((ch) => ch.key === `live:${p.id}`)?.key ?? userCh.key) : ""
                 const supported = CAPS.filter((k) => c[k])
                 // 没有任何入口的平台（如微博/小红书）不摆一张空卡；它们的内容走「可订阅榜单」。
                 if (supported.length === 0 && !userCh) return null
                 return (
-                  <div className="platform-card" key={p.id} {...overlayBlock("platform-card", `discover:platform:${p.id}`)}>
+                  <div
+                    className="platform-card"
+                    key={p.id}
+                    {...overlayBlock("platform-card", `discover:platform:${p.id}`)}
+                  >
                     <div className="platform-head">
                       <span className="platform-mark">
                         <Icon name={p.icon} size={17} />

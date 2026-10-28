@@ -17,8 +17,11 @@
   font-size: var(--fs-small);
   font-weight: 550;
   white-space: nowrap;
-  transition: background var(--dur-fast) var(--ease-in), border-color var(--dur-fast) var(--ease-in),
-    color var(--dur-fast) var(--ease-in), scale var(--dur-fast) var(--ease-in);
+  transition:
+    background var(--dur-fast) var(--ease-in),
+    border-color var(--dur-fast) var(--ease-in),
+    color var(--dur-fast) var(--ease-in),
+    scale var(--dur-fast) var(--ease-in);
 }
 .btn:active:not(:disabled) {
   scale: 0.98;
@@ -75,7 +78,9 @@
   flex: none;
   border-radius: var(--r-md);
   color: var(--text-muted);
-  transition: background var(--dur-fast) var(--ease-in), color var(--dur-fast) var(--ease-in);
+  transition:
+    background var(--dur-fast) var(--ease-in),
+    color var(--dur-fast) var(--ease-in);
 }
 .icon-btn:hover {
   background: var(--surface-2);
@@ -107,7 +112,9 @@
   color: var(--text-muted);
   font-size: var(--fs-small);
   white-space: nowrap;
-  transition: background var(--dur-fast) var(--ease-in), color var(--dur-fast) var(--ease-in),
+  transition:
+    background var(--dur-fast) var(--ease-in),
+    color var(--dur-fast) var(--ease-in),
     border-color var(--dur-fast) var(--ease-in);
 }
 .chip:hover {
@@ -301,7 +308,9 @@
   border-radius: var(--r-md);
   color: var(--text);
   font-size: var(--fs-small);
-  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+  transition:
+    border-color var(--dur-fast) var(--ease-in),
+    background var(--dur-fast) var(--ease-in);
 }
 .textarea {
   height: auto;
@@ -424,7 +433,9 @@
   background: var(--surface-3);
   border: 1px solid var(--border);
   cursor: pointer;
-  transition: background var(--dur-base) var(--ease-in), border-color var(--dur-base) var(--ease-in);
+  transition:
+    background var(--dur-base) var(--ease-in),
+    border-color var(--dur-base) var(--ease-in);
 }
 .switch:focus-visible {
   outline: none;
@@ -437,7 +448,9 @@
   border-radius: var(--r-full);
   background: var(--text-muted);
   translate: 2px 0;
-  transition: translate var(--dur-base) var(--ease-in), background var(--dur-base) var(--ease-in);
+  transition:
+    translate var(--dur-base) var(--ease-in),
+    background var(--dur-base) var(--ease-in);
 }
 .switch[data-state="checked"] {
   background: var(--accent);
@@ -467,7 +480,9 @@
   border-radius: var(--r-sm);
   font-size: var(--fs-small);
   color: var(--text-muted);
-  transition: background var(--dur-fast) var(--ease-in), color var(--dur-fast) var(--ease-in);
+  transition:
+    background var(--dur-fast) var(--ease-in),
+    color var(--dur-fast) var(--ease-in);
 }
 .segmented button:hover {
   color: var(--text);
@@ -736,4 +751,3 @@
   display: flex;
   align-items: center;
 }
-

@@ -52,7 +52,10 @@ function sttParse(str: string): Record<string, string> {
     if (!field) continue
     const i = field.indexOf("@=")
     if (i < 0) continue
-    obj[field.slice(0, i)] = field.slice(i + 2).replace(/@S/g, "/").replace(/@A/g, "@")
+    obj[field.slice(0, i)] = field
+      .slice(i + 2)
+      .replace(/@S/g, "/")
+      .replace(/@A/g, "@")
   }
   return obj
 }

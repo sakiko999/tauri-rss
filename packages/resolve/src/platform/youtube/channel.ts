@@ -141,9 +141,7 @@ function fromVideoRenderer(vr: Record<string, any>): YoutubeChannelVideo | null 
     thumb: maxThumb(vr?.thumbnail),
     viewsText: textOf(vr?.viewCountText),
     publishedText: textOf(vr?.publishedTimeText),
-    membersOnly: badges.some(
-      (b: any) => b?.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_MEMBERS_ONLY",
-    ),
+    membersOnly: badges.some((b: any) => b?.metadataBadgeRenderer?.style === "BADGE_STYLE_TYPE_MEMBERS_ONLY"),
   }
 }
 

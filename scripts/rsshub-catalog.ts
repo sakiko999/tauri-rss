@@ -138,7 +138,12 @@ function parseFeatures(block: string): RouteFeatures | undefined {
   const rcArray = /\brequireConfig:\s*\[/.test(f)
   return {
     requireConfig: rcFalse ? false : rcArray ? "array" : undefined,
-    requirePuppeteer: !isFalse("requirePuppeteer") && /\brequirePuppeteer:\s*true/.test(f) ? true : isFalse("requirePuppeteer") ? false : undefined,
+    requirePuppeteer:
+      !isFalse("requirePuppeteer") && /\brequirePuppeteer:\s*true/.test(f)
+        ? true
+        : isFalse("requirePuppeteer")
+          ? false
+          : undefined,
     antiCrawler: /\bantiCrawler:\s*true/.test(f) ? true : isFalse("antiCrawler") ? false : undefined,
     supportBT: /\bsupportBT:\s*true/.test(f) || undefined,
     supportPodcast: /\bsupportPodcast:\s*true/.test(f) || undefined,
@@ -228,7 +233,9 @@ function isSimple(f?: RouteFeatures): boolean {
 
 async function main() {
   const limit = parseLimitFlag() // 调试用：截断处理的 namespace 数量
-  const exists = await stat(RSSHUB_ROOT).then(() => true).catch(() => false)
+  const exists = await stat(RSSHUB_ROOT)
+    .then(() => true)
+    .catch(() => false)
   if (!exists) {
     console.error(`❌ 找不到 ${RSSHUB_ROOT}（请确认 RSSHub 已 clone 到 tmp/RSSHub）`)
     process.exit(1)
@@ -345,7 +352,9 @@ async function writeMarkdown(c: Catalog) {
 
   // 原生 feed 直传（最值得直接接现有 RssSource）
   const native = c.byCategory
-  const nativeFlat = Object.values(native).flat().filter((r) => r.nativeFeedUrl)
+  const nativeFlat = Object.values(native)
+    .flat()
+    .filter((r) => r.nativeFeedUrl)
   if (nativeFlat.length) {
     lines.push("## ⭐ 原生 feed 直传（最易复刻）")
     lines.push("")

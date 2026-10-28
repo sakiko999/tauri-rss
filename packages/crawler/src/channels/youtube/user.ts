@@ -16,9 +16,7 @@ export const YoutubeUserChannel = makeApiChannel({
   key: "youtube:user",
   name: "YouTube 搜频道",
   kind: "video",
-  sourceInfoTpl: [
-    { key: "keyword", label: "频道关键词", placeholder: "如:MKBHD", required: true },
-  ],
+  sourceInfoTpl: [{ key: "keyword", label: "频道关键词", placeholder: "如:MKBHD", required: true }],
   channelTitle: (info) => `YouTube 搜频道 ${info.keyword ?? ""}`,
   channelLink: "https://www.youtube.com/",
   fetchPage: async (info) => {

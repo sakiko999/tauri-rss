@@ -365,7 +365,9 @@
   background: var(--surface-1);
   text-align: left;
   color: inherit;
-  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+  transition:
+    border-color var(--dur-fast) var(--ease-in),
+    background var(--dur-fast) var(--ease-in);
 }
 .cat-tile:hover {
   border-color: var(--border-strong);
@@ -466,4 +468,3 @@
 .update-error {
   color: var(--danger);
 }
-

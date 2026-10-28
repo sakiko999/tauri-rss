@@ -27,16 +27,15 @@ import type { DanmakuOptions, DanmakuStream } from "../../danmaku"
 import { biliLiveDanmakuStream } from "./danmaku-live.ts"
 import { biliVodDanmakuStream } from "./danmaku-vod.ts"
 
-
 export const BILIBILI_UA = DESKTOP_CHROME_UA
 
 const API_MAIN = "https://api.bilibili.com"
 const DEFAULT_REFERER = "https://www.bilibili.com/"
 
 export const MIXIN_KEY_ENC_TAB = [
-  46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42,
-  19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51,
-  30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52,
+  46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41,
+  13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34,
+  44, 52,
 ]
 
 /**
@@ -49,7 +48,10 @@ export interface BilibiliDanmakuOptions extends DanmakuOptions {
 
 export interface BilibiliClient extends PlatformClient {
   /** GET JSON,统一 UA/status/code 检查;cookie 三级:opts.cookie 显式 > 空串强制匿名 > provider(credentials);opts.buvid 时补匿名指纹,opts.referer 覆盖默认。`riskSignal:false` = 该端点的 -352 由调用方按语义处理(w_webid 过期可重取),不写平台冷却。 */
-  getJson<T = Record<string, any>>(url: string, opts?: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean; riskSignal?: boolean }): Promise<T>
+  getJson<T = Record<string, any>>(
+    url: string,
+    opts?: PlatformRequestOptions & { allowCodeError?: boolean; buvid?: boolean; riskSignal?: boolean },
+  ): Promise<T>
   /** web 签名:`...&w_rid&wts`(wbi key 取自 cookie 对应 nav;cookie 未传时回落 provider)。 */
   signWeb(query: string, cookie?: string): Promise<string>
   /** space 系 wbi 签名:在 signWeb 基础上补 `dm_*` 客户端指纹参数(缺了 WAF 直接 412/-352)。 */
@@ -385,9 +387,7 @@ function dashStreamsWithMpd(data: Record<string, any>, headers: Record<string, s
 
   // filter(可播 avc) → map(每档一条带 MPD 的 Stream)。for/continue/push 消掉。
   return R.pipe(
-    R.filter(
-      (v: Record<string, any>) => !!v?.baseUrl && /avc1|avc/i.test(String(v?.codecs ?? "")),
-    ),
+    R.filter((v: Record<string, any>) => !!v?.baseUrl && /avc1|avc/i.test(String(v?.codecs ?? ""))),
     R.map((v: Record<string, any>): Stream => {
       const qn = Number(v?.id ?? 0)
       // 每档 MPD **只含该档 Representation**(+公共音轨)——dash.js 无档可选,

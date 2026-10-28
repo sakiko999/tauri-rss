@@ -23,14 +23,12 @@ const ok = (c: unknown, label: string) => {
 console.log("合集:")
 ok(parseBiliSeasonRef("2974525")?.seasonId === "2974525", "裸 seasonId")
 ok(
-  parseBiliSeasonRef("https://space.bilibili.com/1557073149/channel/collectiondetail?sid=2974525")?.seasonId === "2974525",
+  parseBiliSeasonRef("https://space.bilibili.com/1557073149/channel/collectiondetail?sid=2974525")?.seasonId ===
+    "2974525",
   "collectiondetail?sid=",
 )
 ok(parseBiliSeasonRef("bilibili.com/x?season_id=2974525")?.seasonId === "2974525", "season_id=（无 scheme）")
-ok(
-  parseBiliSeasonRef("https://www.bilibili.com/video/BV1Tb421b7mi")?.videoId === "BV1Tb421b7mi",
-  "视频链接 → videoId",
-)
+ok(parseBiliSeasonRef("https://www.bilibili.com/video/BV1Tb421b7mi")?.videoId === "BV1Tb421b7mi", "视频链接 → videoId")
 ok(parseBiliSeasonRef("BV1Tb421b7mi")?.videoId === "BV1Tb421b7mi", "裸 BV 号 → videoId")
 ok(parseBiliSeasonRef("av12345")?.videoId === "av12345", "av 号 → videoId")
 ok(parseBiliSeasonRef("https://example.com/video/BV1Tb421b7mi") === null, "非 B 站 host → null")
@@ -47,17 +45,15 @@ ok(
   parseBiliSeriesRef("https://space.bilibili.com/1557073149/channel/seriesdetail?sid=358495")?.seriesId === "358495",
   "seriesdetail?sid=",
 )
-ok(
-  parseBiliSeriesRef("https://www.bilibili.com/list/1557073149?sid=358495")?.seriesId === "358495",
-  "list/<mid>?sid=",
-)
+ok(parseBiliSeriesRef("https://www.bilibili.com/list/1557073149?sid=358495")?.seriesId === "358495", "list/<mid>?sid=")
 ok(parseBiliSeriesRef("space.bilibili.com/1557073149/lists/abc") === null, "非数字 sid → null")
 ok(parseBiliSeriesRef("https://example.com/lists/358495") === null, "非 B 站 host → null")
 
 console.log("收藏夹:")
 ok(parseBiliFavlistRef("1052622027")?.mediaId === "1052622027", "裸 mediaId")
 ok(
-  parseBiliFavlistRef("https://space.bilibili.com/686127/favlist?fid=1052622027&ftype=create")?.mediaId === "1052622027",
+  parseBiliFavlistRef("https://space.bilibili.com/686127/favlist?fid=1052622027&ftype=create")?.mediaId ===
+    "1052622027",
   "favlist?fid=",
 )
 ok(parseBiliFavlistRef("bilibili.com/x?media_id=1052622027")?.mediaId === "1052622027", "media_id=（无 scheme）")
@@ -72,7 +68,10 @@ console.log("会员/充电专属:")
   ok(ugc("bili:user_video", 0, { ...base, charging: true }).membersOnly === true, "is_charging_arc=true → membersOnly")
   ok(ugc("bili:user_video", 0, { ...base, charging: false }).membersOnly === undefined, "非充电不出标记")
   ok(ugc("bili:user_video", 0, { ...base, rights: { ugc_pay: 1 } }).membersOnly === true, "rights.ugc_pay 仍生效")
-  ok(ugc("bili:user_video", 0, { ...base, rights: { pay: 0, arc_pay: 0 } }).membersOnly === undefined, "rights 全 0 不误标")
+  ok(
+    ugc("bili:user_video", 0, { ...base, rights: { pay: 0, arc_pay: 0 } }).membersOnly === undefined,
+    "rights 全 0 不误标",
+  )
 }
 
 console.log(fails === 0 ? "\n全部通过" : `\n${fails} 项失败`)

@@ -98,11 +98,7 @@ if (inStore) {
   mode = "empty"
   const second = await dl.refresh("chk-empty", { force: true })
   assert.ok(second.error, "解析出 0 条应如实报错,不能当成功")
-  assert.equal(
-    dl.store.query({ subscriptionId: "chk-empty" }).length,
-    1,
-    "空抓取覆盖掉了已有内容(数据丢失)",
-  )
+  assert.equal(dl.store.query({ subscriptionId: "chk-empty" }).length, 1, "空抓取覆盖掉了已有内容(数据丢失)")
   await dl.subscriptions.remove("chk-empty")
 }
 
@@ -119,7 +115,16 @@ if (inStore) {
     getSource: () => ({
       fetch: async () =>
         serializeFeed(
-          [{ id: "ra-1", sourceId: "chk-readat", kind: "article", title: "回填", url: "https://example.com/r", fetchedAt: Date.now() }],
+          [
+            {
+              id: "ra-1",
+              sourceId: "chk-readat",
+              kind: "article",
+              title: "回填",
+              url: "https://example.com/r",
+              fetchedAt: Date.now(),
+            },
+          ],
           { channelTitle: "回填源" },
         ),
     }),
@@ -149,7 +154,16 @@ if (inStore) {
       fetch: async () => {
         await gate // 挂住,直到 remove 之后才放行
         return serializeFeed(
-          [{ id: "slow-1", sourceId: "chk:slow", kind: "article", title: "迟到内容", url: "https://example.com/s", fetchedAt: Date.now() }],
+          [
+            {
+              id: "slow-1",
+              sourceId: "chk:slow",
+              kind: "article",
+              title: "迟到内容",
+              url: "https://example.com/s",
+              fetchedAt: Date.now(),
+            },
+          ],
           { channelTitle: "慢源" },
         )
       },

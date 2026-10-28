@@ -82,11 +82,7 @@ const EVENT_LOG_LIMIT = 512
 const MAX_RPC_BYTES = 16 * 1024 * 1024
 const SNAPSHOT_CHUNK = 400
 
-type StateEventInput = StateEvent extends infer T
-  ? T extends StateEvent
-    ? Omit<T, "rev">
-    : never
-  : never
+type StateEventInput = StateEvent extends infer T ? (T extends StateEvent ? Omit<T, "rev"> : never) : never
 
 interface WsData {
   authed: boolean
@@ -242,7 +238,10 @@ function originAllowed(req: Request): boolean {
 
 function hostAllowed(req: Request): boolean {
   const host = req.headers.get("host") ?? ""
-  const name = host.replace(/^\[|\]$/g, "").split(":")[0]?.toLowerCase()
+  const name = host
+    .replace(/^\[|\]$/g, "")
+    .split(":")[0]
+    ?.toLowerCase()
   return name === "127.0.0.1" || name === "localhost"
 }
 
@@ -416,10 +415,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
 
   async function subsEvent(): Promise<StateEventInput> {
     const layer = dataLayer()
-    const [subscriptions, groups] = await Promise.all([
-      layer.subscriptions.list(),
-      layer.subscriptions.listGroups(),
-    ])
+    const [subscriptions, groups] = await Promise.all([layer.subscriptions.list(), layer.subscriptions.listGroups()])
     return { type: "subscriptions.changed", subscriptions, groups }
   }
 
@@ -602,10 +598,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       case "reading.getAll":
         return layer.reading.getAll()
       case "reading.get":
-        return layer.reading.get(
-          asString(p.subscriptionId, "subscriptionId"),
-          asString(p.itemId, "itemId"),
-        )
+        return layer.reading.get(asString(p.subscriptionId, "subscriptionId"), asString(p.itemId, "itemId"))
 
       case "settings.get":
         return layer.settings.get()
@@ -645,14 +638,10 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         await layer.subscriptions.remove(id)
         // 不能先删 lastItems：diff 需要旧快照才能识别「清空」。
         const itemEvent = diffItems(id)
-        commit(
-          await subsEvent(),
-          ...(itemEvent ? [itemEvent] : []),
-          {
-            type: "reading.changed",
-            records: Object.fromEntries(removedKeys.map((k) => [k, null])),
-          },
-        )
+        commit(await subsEvent(), ...(itemEvent ? [itemEvent] : []), {
+          type: "reading.changed",
+          records: Object.fromEntries(removedKeys.map((k) => [k, null])),
+        })
         return undefined
       }
       case "subscriptions.addGroup": {
@@ -813,11 +802,10 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         const channelKey = asString(p.channelKey, "channelKey")
         const timeoutMs = typeof p.timeoutMs === "number" ? p.timeoutMs : undefined
         const result = await runJob(jobId, (signal) =>
-          layer.scanLogin(
-            channelKey,
-            (qrDataUrl) => progress(jobId, { phase: "qr", qrDataUrl }),
-            { ...(timeoutMs ? { timeoutMs } : {}), signal },
-          ),
+          layer.scanLogin(channelKey, (qrDataUrl) => progress(jobId, { phase: "qr", qrDataUrl }), {
+            ...(timeoutMs ? { timeoutMs } : {}),
+            signal,
+          }),
         )
         commit(await settingsEvent())
         return result
@@ -887,17 +875,12 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         const channel = crawlerGetChannel(asString(p.channelKey, "channelKey"))
         if (!channel) throw new ServiceError("bad-request", 404, "未知渠道")
         const settings = await layer.settings.get()
-        const info = mergeProbeInfo(
-          channel.key,
-          (p.info ?? {}) as Record<string, string>,
-          settings,
-        )
+        const info = mergeProbeInfo(channel.key, (p.info ?? {}) as Record<string, string>, settings)
         const source = channel.getSource(info) as {
           fetch(): Promise<string>
           fetchPassive?(): Promise<string | null>
         }
-        const passive =
-          p.passive !== false && channel.passive === true && !!globalThis.appHost.browser
+        const passive = p.passive !== false && channel.passive === true && !!globalThis.appHost.browser
         const started = Date.now()
         const xml = passive ? ((await source.fetchPassive?.()) ?? null) : await source.fetch()
         if (!xml) throw new ServiceError("no-data", 502, "无可用数据")
@@ -908,10 +891,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         const route = resolveRoute(url)
         if (!route) throw new ServiceError("bad-request", 404, "url 未命中 resolver 路由")
         const started = Date.now()
-        const { streams } =
-          route.kind === "live"
-            ? await resolveLiveByUrl(url)
-            : await resolveVideoByUrl(url)
+        const { streams } = route.kind === "live" ? await resolveLiveByUrl(url) : await resolveVideoByUrl(url)
         return { route, streams, tookMs: Date.now() - started }
       }
       case "probe.danmaku": {
@@ -958,14 +938,9 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     if (!body || typeof body.method !== "string") {
       return errorResponse(req, 400, "bad-request", "缺少 method")
     }
-    const jobId =
-      typeof body.jobId === "string" && body.jobId
-        ? body.jobId
-        : `j-${randomBytes(6).toString("hex")}`
+    const jobId = typeof body.jobId === "string" && body.jobId ? body.jobId : `j-${randomBytes(6).toString("hex")}`
     try {
-      const result = await opRun(body.opId, () =>
-        dispatch(body.method as RpcMethod, body.params, { role, jobId }),
-      )
+      const result = await opRun(body.opId, () => dispatch(body.method as RpcMethod, body.params, { role, jobId }))
       return json(req, { ok: true, result, rev } satisfies RpcResponse)
     } catch (e) {
       const status = e instanceof ServiceError ? e.status : 500
@@ -988,9 +963,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     await dl.hydrate()
     seedLastItems()
   } catch (e) {
-    console.error(
-      `[service] bootstrap failed: ${e instanceof Error ? e.stack ?? e.message : String(e)}`,
-    )
+    console.error(`[service] bootstrap failed: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`)
     await host?.close().catch(() => {})
     rmSync(lockPath, { force: true })
     return 1
@@ -1010,11 +983,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       const auth = req.headers.get("authorization") ?? ""
       const token = auth.startsWith("Bearer ") ? auth.slice(7) : ""
       const role =
-        token && tokenEquals(token, ownerToken)
-          ? "owner"
-          : token && tokenEquals(token, clientToken)
-            ? "client"
-            : null
+        token && tokenEquals(token, ownerToken) ? "owner" : token && tokenEquals(token, clientToken) ? "client" : null
 
       if (url.pathname === "/v1/events") {
         if (srv.upgrade(req, { data: { authed: false, role: null, subscribed: false } })) {
@@ -1101,63 +1070,63 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         // ⚠️ 回调抛错会逃出 Bun.serve 的 try(发生在另一个 tick),本机任意进程一帧
         // 畸形 JSON 就能打死整个数据服务。协议错误只该断这条连接。
         try {
-        let msg: WsClientMessage = { type: "ping" }
-        try {
-          msg = JSON.parse(String(raw)) as WsClientMessage
-        } catch {
-          return
-        }
-        if (!ws.data.authed) {
-          if (msg.type !== "auth" || typeof msg.token !== "string" || !msg.token) {
-            ws.close(4001, "unauthorized")
+          let msg: WsClientMessage = { type: "ping" }
+          try {
+            msg = JSON.parse(String(raw)) as WsClientMessage
+          } catch {
             return
           }
-          const role = tokenEquals(msg.token, ownerToken)
-            ? "owner"
-            : tokenEquals(msg.token, clientToken)
-              ? "client"
-              : null
-          if (!role) {
-            ws.close(4001, "unauthorized")
+          if (!ws.data.authed) {
+            if (msg.type !== "auth" || typeof msg.token !== "string" || !msg.token) {
+              ws.close(4001, "unauthorized")
+              return
+            }
+            const role = tokenEquals(msg.token, ownerToken)
+              ? "owner"
+              : tokenEquals(msg.token, clientToken)
+                ? "client"
+                : null
+            if (!role) {
+              ws.close(4001, "unauthorized")
+              return
+            }
+            ws.data.authed = true
+            ws.data.role = role
+            const helloSelf: WsServerMessage = {
+              type: "hello",
+              data: {
+                protocol: SERVICE_PROTOCOL,
+                minClientProtocol: SERVICE_PROTOCOL,
+                serviceVersion: SERVICE_VERSION,
+                bootId,
+                pid: process.pid,
+                rev,
+                features: [...SERVICE_FEATURES],
+                clientToken: role === "client",
+              },
+            }
+            ws.send(JSON.stringify(helloSelf))
             return
           }
-          ws.data.authed = true
-          ws.data.role = role
-          const helloSelf: WsServerMessage = {
-            type: "hello",
-            data: {
-              protocol: SERVICE_PROTOCOL,
-              minClientProtocol: SERVICE_PROTOCOL,
-              serviceVersion: SERVICE_VERSION,
-              bootId,
-              pid: process.pid,
-              rev,
-              features: [...SERVICE_FEATURES],
-              clientToken: role === "client",
-            },
-          }
-          ws.send(JSON.stringify(helloSelf))
-          return
-        }
-        if (msg.type === "subscribe") {
-          ws.data.subscribed = true
-          const since = typeof msg.sinceRev === "number" ? msg.sinceRev : undefined
-          if (since === undefined) return
-          const first = eventLog[0]?.rev
-          // 日志起点晚于 since → 中间事件已丢，只能让客户端全量快照收敛。
-          if (since > rev || (first !== undefined && first > since)) {
-            ws.send(JSON.stringify({ type: "resync", reason: "event gap" } satisfies WsServerMessage))
+          if (msg.type === "subscribe") {
+            ws.data.subscribed = true
+            const since = typeof msg.sinceRev === "number" ? msg.sinceRev : undefined
+            if (since === undefined) return
+            const first = eventLog[0]?.rev
+            // 日志起点晚于 since → 中间事件已丢，只能让客户端全量快照收敛。
+            if (since > rev || (first !== undefined && first > since)) {
+              ws.send(JSON.stringify({ type: "resync", reason: "event gap" } satisfies WsServerMessage))
+              return
+            }
+            // ⚠️ 用 `>=` ：一次 commit 的多条事件共享同一个 rev，而客户端只能记住
+            // 「已应用到哪个 rev」。断线时若只应用了该 rev 的一部分，`>` 会把剩余事件
+            // 永久丢掉（gap 检测也发现不了）。事件应用本身是幂等的，重放安全。
+            for (const event of eventLog) {
+              if (event.rev >= since) ws.send(JSON.stringify({ type: "event", event } satisfies WsServerMessage))
+            }
             return
           }
-          // ⚠️ 用 `>=` ：一次 commit 的多条事件共享同一个 rev，而客户端只能记住
-          // 「已应用到哪个 rev」。断线时若只应用了该 rev 的一部分，`>` 会把剩余事件
-          // 永久丢掉（gap 检测也发现不了）。事件应用本身是幂等的，重放安全。
-          for (const event of eventLog) {
-            if (event.rev >= since) ws.send(JSON.stringify({ type: "event", event } satisfies WsServerMessage))
-          }
-          return
-        }
-        if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" } satisfies WsServerMessage))
+          if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" } satisfies WsServerMessage))
         } catch (e) {
           console.error(`[service] ws message failed: ${formatError(e)}`)
           try {
@@ -1278,7 +1247,7 @@ export async function runServiceFromArgv(argv = process.argv.slice(2)): Promise<
   try {
     return await runService(opts)
   } catch (e) {
-    console.error(`[service] fatal: ${e instanceof Error ? e.stack ?? e.message : String(e)}`)
+    console.error(`[service] fatal: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`)
     return 1
   }
 }

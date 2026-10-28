@@ -69,10 +69,7 @@ export function Network() {
   return (
     <>
       <SideCard title="网络与风控" icon="shield">
-        <Row
-          label="默认等级"
-          help="所有未单独设置平台的默认档。L1 只兜极端情况；L2/L3 才是主动防御档。L0 仅供调试。"
-        >
+        <Row label="默认等级" help="所有未单独设置平台的默认档。L1 只兜极端情况；L2/L3 才是主动防御档。L0 仅供调试。">
           <Select
             value={String(globalLevel)}
             onChange={(v) => void setSetting("netLevel", toLevel(v))}

@@ -19,13 +19,7 @@ import { playableDuration } from "../utils/buffer.ts"
 const STEP_SEC = 5
 const PAGE_RATIO = 0.1
 
-export function MediaTimeRange({
-  state,
-  ops,
-}: {
-  state: VideoPlayState
-  ops: VideoOps
-}) {
+export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: VideoOps }) {
   const [hoverPct, setHoverPct] = useState<number | null>(null)
   const [dragging, setDragging] = useState(false)
   const trackRef = useRef<HTMLDivElement | null>(null)
@@ -107,7 +101,7 @@ export function MediaTimeRange({
     ops.seek(next)
   }
 
-  const shownPct = dragging ? hoverPct ?? pct : hoverPct ?? null
+  const shownPct = dragging ? (hoverPct ?? pct) : (hoverPct ?? null)
 
   return (
     <div
@@ -130,9 +124,7 @@ export function MediaTimeRange({
       {/* 轨道 */}
       <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/25 transition-[height] group-hover:h-1.5">
         {/* 已缓冲段 */}
-        {bufferPct > 0 && (
-          <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: `${bufferPct}%` }} />
-        )}
+        {bufferPct > 0 && <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: `${bufferPct}%` }} />}
         {/* 已播放段 */}
         <div className="absolute inset-y-0 left-0 bg-white" style={{ width: `${pct}%` }} />
         {/* 悬停位置细线 */}

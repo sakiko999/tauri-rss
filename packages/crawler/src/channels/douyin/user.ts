@@ -43,7 +43,10 @@ export class DouyinUserLiveChannel implements RssChannel {
 
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
     }
   }
 

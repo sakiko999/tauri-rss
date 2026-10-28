@@ -20,11 +20,7 @@ export function MediaFullscreenButton({
       onClick={fullscreen.toggle}
       className={className}
     >
-      {fullscreen.isFullscreen ? (
-        <FullscreenExitIcon className="h-5 w-5" />
-      ) : (
-        <FullscreenIcon className="h-5 w-5" />
-      )}
+      {fullscreen.isFullscreen ? <FullscreenExitIcon className="h-5 w-5" /> : <FullscreenIcon className="h-5 w-5" />}
     </button>
   )
 }

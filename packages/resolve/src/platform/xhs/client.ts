@@ -35,11 +35,7 @@ export const XHS_UA =
  * 主分支不维护签名 API → 所有签名 API(user_posted 等)当前不可用;
  * explore/user 走 SSR(要求登录)。若需恢复签名,合并 feat/xhs-rustpython 分支。
  */
-export function signApiHeaders(
-  _cookie: string,
-  _uri: string,
-  _params: Record<string, string>,
-): Record<string, string> {
+export function signApiHeaders(_cookie: string, _uri: string, _params: Record<string, string>): Record<string, string> {
   throw new Error("xhs 签名已降级:签名库在 feat/xhs-rustpython 分支,主分支不维护")
 }
 
@@ -313,7 +309,7 @@ export function extractNoteDetail(html: string, noteId: string): any {
   const noteMap = rawOf(extractInitialState(html)?.note)?.noteDetailMap
   if (!noteMap) return null
   const entry = noteMap[noteId]
-  return entry ? rawOf(entry.note) ?? rawOf(entry) : null
+  return entry ? (rawOf(entry.note) ?? rawOf(entry)) : null
 }
 
 /**
@@ -393,7 +389,9 @@ export function noteDetailToSocial(note: any, sourceId: string, t: number): Soci
     likes: parseCount(interact.likedCount),
     reposts: parseCount(interact.shareCount),
     replies: parseCount(interact.commentCount),
-    author: user.nickname ? { name: String(user.nickname), avatar: user.avatar ? String(user.avatar) : undefined } : undefined,
+    author: user.nickname
+      ? { name: String(user.nickname), avatar: user.avatar ? String(user.avatar) : undefined }
+      : undefined,
     publishedAt: toEpochMs(note?.time),
     fetchedAt: t,
     xsecToken: note?.xsecToken ?? undefined,

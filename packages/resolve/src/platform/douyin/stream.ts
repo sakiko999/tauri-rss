@@ -114,7 +114,13 @@ function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
   // level 降序(dart: qualities 按 level 从高到低;手写 sort 语义等价 R.sortWith descend)。
   const sorted = R.sortWith([R.descend((q: Record<string, any>) => toInt(q?.level) ?? 0)], qualities)
   // stream_data 可能缺失或非 JSON → 走 flv_pull_url 兜底。
-  const streamData = parseJsonSafe(String(pullData?.stream_data ?? "").trimStart().startsWith("{") ? String(pullData?.stream_data) : "")
+  const streamData = parseJsonSafe(
+    String(pullData?.stream_data ?? "")
+      .trimStart()
+      .startsWith("{")
+      ? String(pullData?.stream_data)
+      : "",
+  )
 
   // 每档 quality → 一条 Stream(flv 优先,hls 兜底)。两条来源路径产出同一 shape:
   //   主路径:data[sdk_key].main.{flv,hls}(运行时动态键,sdk_key 来自 quality);
@@ -126,7 +132,8 @@ function parseDouyinStreams(streamUrl: Record<string, any>): Stream[] {
         const level = toInt(q?.level) ?? 0
         const flv = String(main?.flv ?? "")
         const hls = String(main?.hls ?? "")
-        if (flv) return [{ url: flv, format: "flv", headers: { ...headers, authority: LIVE }, quality: name, rate: level }]
+        if (flv)
+          return [{ url: flv, format: "flv", headers: { ...headers, authority: LIVE }, quality: name, rate: level }]
         if (hls) return [{ url: hls, format: "hls", headers, quality: name, rate: level }]
         return []
       }
@@ -218,7 +225,7 @@ function parseReflowStreams(streamUrl: Record<string, any>): Stream[] {
   // ⚠️ reflow 的 HLS 字段名是 `hls_pull_url_map`(参照 pure_live douyin_site.dart:699;
   // 本文件 fallback 路径也用 `hls_pull_url_map`)。旧代码读 `hls_pull_url`(无 _map)→ 恒
   // undefined → flv 缺失的房间 HLS 兜底静默丢。两键都试以防上游形态差异。
-  const hlsPull = ((streamUrl?.hls_pull_url_map ?? streamUrl?.hls_pull_url) ?? {}) as Record<string, string>
+  const hlsPull = (streamUrl?.hls_pull_url_map ?? streamUrl?.hls_pull_url ?? {}) as Record<string, string>
   // 按清晰度键名顺序返回(蓝光/高清优先);每档 flv 优先,hls 兜底。rate = 档位序号(高→低)。
   for (const [idx, q] of QUALITY_ORDER.entries()) {
     const flv = String(flvPull[q] ?? "")

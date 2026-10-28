@@ -84,7 +84,8 @@ export function VideoShell({
   // 未起播 → 大播放键(autoPlay 起播瞬间不闪);播放中暂停 → 悬停播放键。
   // started(video 已起播过):autoPlay 起播等待期(paused 但从未 playing)不显示任何
   // 播放键——否则大屏打开时 resolve 结束的 spin 会闪现播放按钮再缓冲 spin。
-  const showBigPlay = !autoPlay && !state.started && state.paused && !state.ended && !state.waiting && state.currentTime === 0
+  const showBigPlay =
+    !autoPlay && !state.started && state.paused && !state.ended && !state.waiting && state.currentTime === 0
   const showPausedOverlay = state.paused && !showBigPlay && !state.ended && state.started
 
   // ⚠️ video 只填容器(比例由容器管):给 video 加 aspect-ratio 会与 h-full/w-full
@@ -130,7 +131,9 @@ export function VideoShell({
 
       {/* 弹幕层:video 之上、控件之下。有 timeMs 的按 currentTime 窗口发射(点播),
           无 timeMs 的实时追加(live);点播暂停冻结,live 暂停照收。 */}
-      {danmaku && <DanmakuLayer danmaku={danmaku} currentTime={state.currentTime} live={state.live} paused={state.paused} />}
+      {danmaku && (
+        <DanmakuLayer danmaku={danmaku} currentTime={state.currentTime} live={state.live} paused={state.paused} />
+      )}
 
       {showSpinner && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/20">

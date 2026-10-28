@@ -13,18 +13,16 @@ import { fetchHuyaSubCategories, HUYA_TOP_CATEGORIES, now, type HuyaSubCategory 
 
 /** 二级分区 → 目录条目(纯函数,便于自检)。 */
 export function huyaCategoryItems(sourceId: string, t: number, subs: HuyaSubCategory[]): Item[] {
-  return subs.map(
-    (s): Category => ({
-      id: `huya-game:${s.id}`,
-      sourceId,
-      kind: "category",
-      title: s.name,
-      summary: s.parentName,
-      fetchedAt: t,
-      categoryChannel: "live:huya:category",
-      categoryInfo: { gameId: s.id },
-    }),
-  )
+  return subs.map((s): Category => ({
+    id: `huya-game:${s.id}`,
+    sourceId,
+    kind: "category",
+    title: s.name,
+    summary: s.parentName,
+    fetchedAt: t,
+    categoryChannel: "live:huya:category",
+    categoryInfo: { gameId: s.id },
+  }))
 }
 
 /**
@@ -38,7 +36,12 @@ export class HuyaCategoriesChannel implements RssChannel {
   readonly defaultInfo = {}
 
   getSource(): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()) }
+    return {
+      fetch: apiFetchItems(
+        () => this.fetchItems(),
+        () => this.channelOptions(),
+      ),
+    }
   }
 
   private async fetchItems(): Promise<Item[]> {

@@ -53,26 +53,28 @@ export async function fetchDouyuCategoryRooms(areaId: string, page = 1): Promise
   )
   const t = now()
   const list = Array.isArray(res?.data?.rl) ? res.data.rl : []
-  return list
-    // type != 1 是广告/推荐位,不是真实房间。
-    .filter((item) => Number(item.type ?? 1) === 1)
-    .map((item): Live => {
-      const rid = String(item.rid ?? "")
-      return {
-        id: `douyu:${rid}`,
-        sourceId: "live:douyu:category",
-        kind: "live",
-        title: String(item.rn ?? ""),
-        url: `https://www.douyu.com/${rid}`,
-        thumbnail: item.rs16 ? String(item.rs16) : undefined,
-        author: item.nn ? { name: String(item.nn) } : undefined,
-        fetchedAt: t,
-        platform: "douyu",
-        roomId: rid,
-        liveStatus: "live",
-        online: Number(item.ol ?? 0),
-      }
-    })
+  return (
+    list
+      // type != 1 是广告/推荐位,不是真实房间。
+      .filter((item) => Number(item.type ?? 1) === 1)
+      .map((item): Live => {
+        const rid = String(item.rid ?? "")
+        return {
+          id: `douyu:${rid}`,
+          sourceId: "live:douyu:category",
+          kind: "live",
+          title: String(item.rn ?? ""),
+          url: `https://www.douyu.com/${rid}`,
+          thumbnail: item.rs16 ? String(item.rs16) : undefined,
+          author: item.nn ? { name: String(item.nn) } : undefined,
+          fetchedAt: t,
+          platform: "douyu",
+          roomId: rid,
+          liveStatus: "live",
+          online: Number(item.ol ?? 0),
+        }
+      })
+  )
 }
 
 /** 搜索房间(匿名可用)。分页 page 从 1 起。 */

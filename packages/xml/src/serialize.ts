@@ -84,7 +84,8 @@ function itemToTree(item: Item): Record<string, unknown> {
 
   // audio/video 直链 stream → enclosure(可播直链,标准语义)。
   const streamEnc = streamEnclosure(item)
-  if (streamEnc && !tree.enclosure) tree.enclosure = { "@_url": streamEnc.url, "@_type": streamEnc.type ?? "application/octet-stream" }
+  if (streamEnc && !tree.enclosure)
+    tree.enclosure = { "@_url": streamEnc.url, "@_type": streamEnc.type ?? "application/octet-stream" }
 
   // tpl: kind(deserialize kind 判别核心)+ 各 kind 的扩展字段。
   setTpl(tree, "kind", item.kind)
@@ -170,7 +171,8 @@ function itemMediaNodes(item: Item): Array<Record<string, unknown>> {
     // `@_medium` 是标准字段；`@_tpl:kind` 是精确回读依据（audio/live 无法由 medium
     // 唯一表达）。两者都写，外部阅读器忽略 tpl 即可。
     if (m.kind) {
-      node["@_medium"] = m.kind === "image" ? "image" : m.kind === "video" ? "video" : m.kind === "audio" ? "audio" : "video"
+      node["@_medium"] =
+        m.kind === "image" ? "image" : m.kind === "video" ? "video" : m.kind === "audio" ? "audio" : "video"
       node["@_tpl:kind"] = m.kind
     }
     if (m.title) node["@_title"] = m.title
@@ -183,7 +185,8 @@ function itemMediaNodes(item: Item): Array<Record<string, unknown>> {
     nodes.push(node)
   }
   // social images → media:content(medium=image)。瀑布流图不丢(用户选标准 RSS,但图是社交核心)。
-  const images = (item as { images?: Array<{ url: string; width?: number; height?: number; liveVideo?: string }> }).images ?? []
+  const images =
+    (item as { images?: Array<{ url: string; width?: number; height?: number; liveVideo?: string }> }).images ?? []
   for (const img of images) {
     if (!img.url) continue
     const node: Record<string, unknown> = { "@_url": img.url, "@_medium": "image" }
@@ -208,7 +211,15 @@ function enclosure(item: Item): { url: string; type?: string } | undefined {
 /** video/audio 的 stream 直链 → 标准 enclosure(可播直链)。 */
 function streamEnclosure(item: Item): { url: string; type?: string } | undefined {
   const s = (item as { stream?: Stream }).stream
-  if (s?.url) return { url: s.url, type: s.format ? (s.format.startsWith("audio/") || s.format.startsWith("video/") ? s.format : undefined) : undefined }
+  if (s?.url)
+    return {
+      url: s.url,
+      type: s.format
+        ? s.format.startsWith("audio/") || s.format.startsWith("video/")
+          ? s.format
+          : undefined
+        : undefined,
+    }
   return undefined
 }
 

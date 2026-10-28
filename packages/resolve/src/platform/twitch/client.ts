@@ -164,9 +164,7 @@ export async function twitchGql<T = Record<string, unknown>>(
  */
 export async function fetchTwitchUsers(logins: string[]): Promise<Array<TwitchUser | null>> {
   if (!logins.length) return []
-  const fields = logins
-    .map((login, i) => `u${i}: user(login: ${JSON.stringify(login)}) { ${USER_FIELDS} }`)
-    .join(" ")
+  const fields = logins.map((login, i) => `u${i}: user(login: ${JSON.stringify(login)}) { ${USER_FIELDS} }`).join(" ")
   const data = await twitchGql<Record<string, TwitchUser | null>>({ query: `query { ${fields} }` })
   return logins.map((_, i) => data[`u${i}`] ?? null)
 }
@@ -212,9 +210,7 @@ export async function fetchTwitchTopCategories(first = 30): Promise<TwitchCatego
     { throwOnErrors: true, clientId: TWITCH_MOBILE_CLIENT_ID },
   )
   if (!data.games) throw new Error("twitch gql: 分类列表缺少 games")
-  return (data.games.edges ?? [])
-    .map((e) => e?.node)
-    .filter((n): n is TwitchCategoryNode => !!n && !!n.slug)
+  return (data.games.edges ?? []).map((e) => e?.node).filter((n): n is TwitchCategoryNode => !!n && !!n.slug)
 }
 
 /**
@@ -222,11 +218,7 @@ export async function fetchTwitchTopCategories(first = 30): Promise<TwitchCatego
  * `normalizeTwitchCategory`),这里只做 JSON 转义,防止拼进查询串。
  * ⚠️ 同样必须用移动端 Client-ID(理由见 `TWITCH_MOBILE_CLIENT_ID`)。
  */
-export async function fetchTwitchCategoryStreams(
-  slug: string,
-  first = 30,
-  after?: string,
-): Promise<TwitchStreamPage> {
+export async function fetchTwitchCategoryStreams(slug: string, first = 30, after?: string): Promise<TwitchStreamPage> {
   const args = [`first: ${clampFirst(first)}`]
   if (after) args.push(`after: ${JSON.stringify(after)}`)
   const data = await twitchGql<{

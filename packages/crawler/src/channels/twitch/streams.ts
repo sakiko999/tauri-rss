@@ -22,9 +22,7 @@ export interface TwitchStreamsSourceOptions {
   fetchPage: (after?: string) => Promise<TwitchStreamPage>
 }
 
-export function createTwitchStreamsSource(
-  opts: TwitchStreamsSourceOptions,
-): RssSource & Partial<Pageable> {
+export function createTwitchStreamsSource(opts: TwitchStreamsSourceOptions): RssSource & Partial<Pageable> {
   const toXml = (page: TwitchStreamPage, o: SerializeOptions): string => {
     const fetchedAt = now()
     const items = page.streams

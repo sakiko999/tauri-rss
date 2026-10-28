@@ -116,9 +116,9 @@ export function platformDef(id: string): PlatformDef | undefined {
  * （抖音直播渠道），`live:douyin:` 永远匹配不到它 —— 那样 cookie 注入、netLevels 折叠、
  * `rss login douyin`、账号页扫码入口会一起静默失灵。
  */
-const PREFIX_ENTRIES = PLATFORMS.flatMap((p) =>
-  p.prefixes.map((prefix) => ({ prefix, platform: p.id })),
-).sort((a, b) => b.prefix.length - a.prefix.length)
+const PREFIX_ENTRIES = PLATFORMS.flatMap((p) => p.prefixes.map((prefix) => ({ prefix, platform: p.id }))).sort(
+  (a, b) => b.prefix.length - a.prefix.length,
+)
 
 /** channelKey → 平台名；未登记的前缀返回 undefined（rss: 直链等）。 */
 export function platformOfChannelKey(channelKey: string): string | undefined {

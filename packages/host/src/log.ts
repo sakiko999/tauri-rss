@@ -93,7 +93,8 @@ export const netLog = createLogDomain("host:net", {
     cooldownSet: {
       level: "warn",
       text: (ctx: { platform: string; signal: string; ms: number }) => {
-        const dur = ctx.ms >= 60_000 ? `${Math.round(ctx.ms / 60_000)} 分钟` : `${Math.max(1, Math.round(ctx.ms / 1000))} 秒`
+        const dur =
+          ctx.ms >= 60_000 ? `${Math.round(ctx.ms / 60_000)} 分钟` : `${Math.max(1, Math.round(ctx.ms / 1000))} 秒`
         return `平台进入冷却 ${ctx.platform}: 信号 ${ctx.signal || "?"}, ${dur}(该平台 HTTP 与浏览器操作都暂停)`
       },
     },

@@ -8,13 +8,7 @@
 import { deflateSync } from "node:zlib"
 import jsQR from "jsqr"
 import QRCode from "qrcode"
-import {
-  contentFromDataUrl,
-  decodePng,
-  matrixFromEmit,
-  matrixOf,
-  renderHalfBlocks,
-} from "./qr-terminal.ts"
+import { contentFromDataUrl, decodePng, matrixFromEmit, matrixOf, renderHalfBlocks } from "./qr-terminal.ts"
 
 let failed = 0
 const ok = (cond: unknown, msg: string): void => {
@@ -107,7 +101,10 @@ ok(decoded === content, "1-bit PNG 识别还原内容")
 const total = matrix.size + 4
 const lines = renderHalfBlocks(matrix).split("\n")
 ok(lines.length === Math.ceil(total / 2), "半块行数 = ceil((size+4)/2)")
-ok(lines.every((l) => l.length === total), "每行宽度 = size+4")
+ok(
+  lines.every((l) => l.length === total),
+  "每行宽度 = size+4",
+)
 ok(matrixFromEmit(content).size === matrix.size, "内容类 emit 与 data URL 同矩阵")
 
 // 4) 非 PNG data URL 明确报错（不静默画错图）
@@ -132,8 +129,10 @@ try {
   ok(e instanceof Error && /仅 PNG/.test(e.message), "非 PNG data URL 载荷报错")
 }
 // 内容本身就是链接（bili）必须照常编码 —— 不能把 http(s) 一律当图片。
-ok(matrixFromEmit("https://passport.bilibili.com/x/passport-login/web/qrcode?qrcode_key=abc").size > 0,
-  "链接型二维码内容照常编码")
+ok(
+  matrixFromEmit("https://passport.bilibili.com/x/passport-login/web/qrcode?qrcode_key=abc").size > 0,
+  "链接型二维码内容照常编码",
+)
 
 console.log(failed ? `\n${failed} 项失败` : "\n全部通过")
 process.exit(failed ? 1 : 0)

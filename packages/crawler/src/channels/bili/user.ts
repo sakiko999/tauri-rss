@@ -19,12 +19,15 @@ export class BiliUserChannel implements RssChannel {
   readonly name = "B站搜UP主"
   readonly kind = "video" as const
   // ⚠️ 刻意不声明 defaultInfo(防误入发现页「一键订阅」榜单,同 bili:search)。
-  readonly sourceInfoTpl = [
-    { key: "keyword", label: "UP主关键词", placeholder: "如:半佛仙人", required: true },
-  ]
+  readonly sourceInfoTpl = [{ key: "keyword", label: "UP主关键词", placeholder: "如:半佛仙人", required: true }]
 
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return {
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
+    }
   }
 
   private async fetchItems(info: SourceInfo): Promise<Item[]> {

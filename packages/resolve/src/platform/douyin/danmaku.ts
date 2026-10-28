@@ -26,8 +26,7 @@ import { kWebMsSDK } from "./msdk-sign.ts"
 
 const LIVE = "https://live.douyin.com"
 /** WS 弹幕连接 UA(对齐 douyinLive 现代 Chrome;webmssdk 签名环境也用这套)。 */
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+const UA = "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 /** 2026 WS 域名(douyinLive 兜底;webcast3/5 已废弃)。 */
 const WS_BASE = "wss://webcast100-ws-web-lf.douyin.com/webcast/im/push/v2/"
 /** douyinLive webcast_sdk_version(签名 msStub 字段;dart 的 1.3.0 已失效)。 */
@@ -138,8 +137,7 @@ function douyinSignature(roomId: string, userId: string): string {
 /** 拼 WS URL(参数复刻 douyinLive websocket_params.go QueryString + signature)。 */
 function buildWsUrl(roomId: string, userId: string, ua: string): string {
   const nowMs = Date.now()
-  const internalExt =
-    `internal_src:dim|wss_push_room_id:${roomId}|wss_push_did:${userId}|first_req_ms:${nowMs}|fetch_time:${nowMs}|seq:1|wss_info:0-${nowMs}-0-0|wrds_v:7382620942951772256`
+  const internalExt = `internal_src:dim|wss_push_room_id:${roomId}|wss_push_did:${userId}|first_req_ms:${nowMs}|fetch_time:${nowMs}|seq:1|wss_info:0-${nowMs}-0-0|wrds_v:7382620942951772256`
   const cursor = `d-1_u-1_fh-7383731312643626035_t-${nowMs}_r-1`
   const params: Array<[string, string]> = [
     ["app_name", "douyin_web"],
@@ -184,7 +182,11 @@ function buildWsUrl(roomId: string, userId: string, ua: string): string {
  * ⚠️ 两者都必需:dart 随机 12 位 userId 已失效,真实 pushID 参与签名。
  * 失败返回空(兜底:长号用 web_rid,userId 用 web_rid 尾部——尽力而为)。
  */
-async function resolveRoomIds(webRid: string, ua: string, cookie?: string): Promise<{ roomId: string; pushId: string }> {
+async function resolveRoomIds(
+  webRid: string,
+  ua: string,
+  cookie?: string,
+): Promise<{ roomId: string; pushId: string }> {
   try {
     const base = `${LIVE}/webcast/room/web/enter/`
     const json = await httpJson<{
@@ -193,15 +195,12 @@ async function resolveRoomIds(webRid: string, ua: string, cookie?: string): Prom
         user?: { id_str?: string }
         room?: { owner?: { id_str?: string } }
       }
-    }>(
-      signDouyinUrl(`${base}?${enterRoomParams(webRid)}`, ua),
-      {
-        "user-agent": ua,
-        referer: `${LIVE}/${webRid}`,
-        authority: "live.douyin.com",
-        cookie: cookie || DEFAULT_TTWID,
-      },
-    )
+    }>(signDouyinUrl(`${base}?${enterRoomParams(webRid)}`, ua), {
+      "user-agent": ua,
+      referer: `${LIVE}/${webRid}`,
+      authority: "live.douyin.com",
+      cookie: cookie || DEFAULT_TTWID,
+    })
     const roomId = String(json?.data?.data?.[0]?.id_str ?? "")
     const pushId = String(
       json?.data?.user?.id_str ?? json?.data?.data?.[0]?.owner_user_id_str ?? json?.data?.room?.owner?.id_str ?? "",
@@ -239,10 +238,7 @@ export function douyinDanmakuStream(roomId: string, cookie?: string): DanmakuStr
         heartbeatMs: HEARTBEAT_MS,
         // 断线告警由通用层(danmaku 域 wsClosed)统一打,这里只补房间号,避免一次断线两条 warn。
         onClose: (code, reason) => log.douyin.debug(`弹幕 WS 关闭(code=${code} reason=${reason}, room=${room})`),
-        onMessage: (data, ws) =>
-          decodeDouyinPushFrame(new Uint8Array(data), (ack) =>
-            ws.send(ack),
-          ),
+        onMessage: (data, ws) => decodeDouyinPushFrame(new Uint8Array(data), (ack) => ws.send(ack)),
       })(onItems)
     },
     (e) => log.douyin.danmakuInitFailed({ error: formatError(e) }),

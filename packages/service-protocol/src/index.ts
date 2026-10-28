@@ -63,13 +63,7 @@ export interface HealthResponse {
 }
 
 /** 本服务实际支持的方法名（客户端可据此做能力探测）。 */
-export const SERVICE_FEATURES = [
-  "snapshot",
-  "events",
-  "jobs",
-  "refreshAll",
-  "diagnostics",
-] as const
+export const SERVICE_FEATURES = ["snapshot", "events", "jobs", "refreshAll", "diagnostics"] as const
 
 /* ────────────────────────────── RPC ────────────────────────────── */
 
@@ -176,10 +170,10 @@ export interface RpcMethodMap {
   "store.all": { params: Record<string, never>; result: MediaItem[] }
   "store.query": { params: { query?: MediaQuery }; result: MediaItem[] }
 
-  "canLoadMore": { params: { subscriptionId: string }; result: boolean }
-  "totalOf": { params: { subscriptionId: string }; result: number | undefined }
+  canLoadMore: { params: { subscriptionId: string }; result: boolean }
+  totalOf: { params: { subscriptionId: string }; result: number | undefined }
 
-  "addSubscription": {
+  addSubscription: {
     params: {
       channelKey: string
       title: string
@@ -188,34 +182,34 @@ export interface RpcMethodMap {
     }
     result: AddSubscriptionResult
   }
-  "previewChannel": {
+  previewChannel: {
     params: { channelKey: string; info: Record<string, string> }
     result: PreviewResult
   }
-  "refresh": { params: { subscriptionId: string; force?: boolean }; result: RefreshResult }
-  "refreshAll": { params: { force?: boolean }; result: RefreshAllResult }
-  "loadMore": { params: { subscriptionId: string }; result: LoadMoreResult }
-  "resolveDetail": {
+  refresh: { params: { subscriptionId: string; force?: boolean }; result: RefreshResult }
+  refreshAll: { params: { force?: boolean }; result: RefreshAllResult }
+  loadMore: { params: { subscriptionId: string }; result: LoadMoreResult }
+  resolveDetail: {
     params: { subscriptionId: string; itemId: string }
     result: MediaItem | null
   }
-  "resolvePlay": {
+  resolvePlay: {
     params: { subscriptionId: string; itemId: string }
     result: ResolvePlayback
   }
-  "resolveLivePlay": {
+  resolveLivePlay: {
     params: { subscriptionId: string; roomId: string }
     result: ResolvePlayback
   }
-  "resolveHotWord": {
+  resolveHotWord: {
     params: { subscriptionId: string; word: string }
     result: MediaItem[]
   }
-  "scanLogin": {
+  scanLogin: {
     params: { channelKey: string; timeoutMs?: number }
     result: LoginResult
   }
-  "syncBrowserCookies": {
+  syncBrowserCookies: {
     params: Record<string, never>
     result: Array<keyof AppSettings>
   }
@@ -288,12 +282,7 @@ export interface SnapshotEnd {
 }
 
 export type SnapshotLine =
-  | SnapshotMeta
-  | SnapshotSubscriptions
-  | SnapshotSettings
-  | SnapshotReading
-  | SnapshotItems
-  | SnapshotEnd
+  SnapshotMeta | SnapshotSubscriptions | SnapshotSettings | SnapshotReading | SnapshotItems | SnapshotEnd
 
 /* ───────────────────────────── Events ──────────────────────────── */
 
@@ -370,10 +359,7 @@ export type WsServerMessage =
 
 /** WS 上行。 */
 export type WsClientMessage =
-  | { type: "auth"; token: string }
-  | { type: "subscribe"; sinceRev?: number }
-  | { type: "ping" }
-  | { type: "pong" }
+  { type: "auth"; token: string } | { type: "subscribe"; sinceRev?: number } | { type: "ping" } | { type: "pong" }
 
 /** 认证失败的统一形状（HTTP 401 / WS close）。 */
 export interface AuthError {

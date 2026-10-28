@@ -131,9 +131,7 @@ export function AudioShell({
                 onClick={() => onQuality(rate)}
                 className={[
                   "rounded px-2 py-0.5 text-xs",
-                  active
-                    ? "bg-blue-600 text-white"
-                    : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100",
+                  active ? "bg-blue-600 text-white" : "border border-zinc-300 text-zinc-600 hover:bg-zinc-100",
                 ].join(" ")}
               >
                 {quality}

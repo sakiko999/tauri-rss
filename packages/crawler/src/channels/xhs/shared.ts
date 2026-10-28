@@ -67,10 +67,7 @@ export async function isXhsLoginPage(browser: BrowserBackend): Promise<boolean> 
  * 失效会话跳登录页时,页面里的 loggedIn 可能仍是残留的 true;只信登录位会把
  * 登录页的空 SSR 当成正常数据(静默 0 条)。先判登录页,再判真实登录态。
  */
-export async function assertXhsLoggedIn(
-  browser: BrowserBackend,
-  message: string = XHS_LOGIN_REQUIRED,
-): Promise<void> {
+export async function assertXhsLoggedIn(browser: BrowserBackend, message: string = XHS_LOGIN_REQUIRED): Promise<void> {
   if (await isXhsLoginPage(browser)) throw new Error(message)
   if (!(await isXhsLoggedIn(browser))) throw new Error(message)
 }
@@ -81,10 +78,7 @@ export async function assertXhsLoggedIn(
  * `explicit` 原样交给 credentials 语义:显式非空 > 显式空串(强制匿名,现在会
  * 直接报错)> provider(settings 登录态)。返回**可用的 cookie**,后续请求必须带上。
  */
-export function requireXhsCookie(
-  explicit: string | undefined,
-  message: string = XHS_LOGIN_REQUIRED,
-): string {
+export function requireXhsCookie(explicit: string | undefined, message: string = XHS_LOGIN_REQUIRED): string {
   const cookie = resolveCookie(explicit, "xhs")
   if (!cookie) throw new Error(message)
   return cookie
@@ -122,13 +116,16 @@ export async function scrollXhsUntilGrown(
   for (let round = 0; round < 3; round++) {
     await assertXhsNotBlocked(browser)
     const hBefore = await cdpEvaluate<number>(browser, `document.body.scrollHeight`)
-    await cdpEvaluate(browser, `(async () => {
+    await cdpEvaluate(
+      browser,
+      `(async () => {
       const dist = document.body.scrollHeight - window.scrollY;
       for (let i = 1; i <= 3; i++) {
         window.scrollTo(0, window.scrollY + dist * (i / 3));
         await new Promise((r) => setTimeout(r, 400 + Math.random() * 200));
       }
-    })()`)
+    })()`,
+    )
     // 轮询等待列表增长(平台网络+渲染耗时 > 固定 sleep,实测 1.4~2.4s 不够)。
     // 只读数量,确认到位后再由调用方完整读一次状态。
     let grown = false
@@ -193,10 +190,7 @@ export async function ensureXhsPageReady(
  * 页面内读 SSR state 的某个列表路径(如 `["feed","feeds"]` / `["user","notes"]`)。
  * 逐层解 `_rawValue` + flat —— explore/user 共用,避免各自手写解包表达式漂移。
  */
-export async function readXhsStateList(
-  browser: BrowserBackend,
-  path: string[],
-): Promise<any[]> {
+export async function readXhsStateList(browser: BrowserBackend, path: string[]): Promise<any[]> {
   const p = JSON.stringify(path)
   const list = await cdpEvaluate<any[]>(
     browser,
@@ -222,11 +216,7 @@ export async function readXhsStateList(
  *
  * 尽力而为:超时不抛错(列表可能真的为空),由调用方按 0 条处理。
  */
-export async function waitXhsListNonEmpty(
-  browser: BrowserBackend,
-  path: string[],
-  timeoutMs = 8_000,
-): Promise<void> {
+export async function waitXhsListNonEmpty(browser: BrowserBackend, path: string[], timeoutMs = 8_000): Promise<void> {
   const p = JSON.stringify(path)
   await waitUntil(
     browser,
@@ -242,10 +232,7 @@ export async function waitXhsListNonEmpty(
 }
 
 /** 只读列表长度(滚动轮询用:整棵 state 序列化只为判增长太贵)。 */
-export async function readXhsStateListCount(
-  browser: BrowserBackend,
-  path: string[],
-): Promise<number> {
+export async function readXhsStateListCount(browser: BrowserBackend, path: string[]): Promise<number> {
   const p = JSON.stringify(path)
   const n = await cdpEvaluate<number>(
     browser,
@@ -285,11 +272,7 @@ export interface XhsListPage<T> {
  * `lane`:列表 lane 名(如 `list:xhs:explore`)——lane 化后按 channelKey 分 tab,
  * 保住翻页累积 state(详情/登录在各自 lane,不再把列表页导航走)。
  */
-export async function fetchXhsList<T>(
-  browser: BrowserBackend,
-  page: XhsListPage<T>,
-  lane: string,
-): Promise<T> {
+export async function fetchXhsList<T>(browser: BrowserBackend, page: XhsListPage<T>, lane: string): Promise<T> {
   return withBrowserOp(browser, { lane, platform: "xhs" }, async (b) => {
     await cdpNavigate(b, page.url, true)
     await waitXhsSsr(b, "xhs SSR 状态未挂载")

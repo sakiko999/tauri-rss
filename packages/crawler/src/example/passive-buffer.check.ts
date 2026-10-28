@@ -28,11 +28,25 @@ let t = 0
 const buf = new PassiveBuffer({ ttlMs: 1000, maxEntryBytes: 100, maxTotalBytes: 1000, now: () => t })
 
 ok(
-  buf.push({ platform: "xhs", endpoint: "explore", url: "https://a.com/x?wts=1", status: 200, mime: "text/html", body: "v1" }),
+  buf.push({
+    platform: "xhs",
+    endpoint: "explore",
+    url: "https://a.com/x?wts=1",
+    status: 200,
+    mime: "text/html",
+    body: "v1",
+  }),
   "push 成功",
 )
 t = 10
-buf.push({ platform: "xhs", endpoint: "explore", url: "https://a.com/x?wts=2", status: 200, mime: "text/html", body: "v2" })
+buf.push({
+  platform: "xhs",
+  endpoint: "explore",
+  url: "https://a.com/x?wts=2",
+  status: 200,
+  mime: "text/html",
+  body: "v2",
+})
 const got = buf.get("xhs", "explore", "https://a.com/x?wts=3")
 ok(got?.body === "v2", "同键覆盖：不同签名参数命中同一份，取最新")
 ok(buf.stats().count === 1, "同键覆盖后只有 1 条")
@@ -46,7 +60,10 @@ ok(buf.stats().count === 0, "过期条目被清掉")
 
 // ── 单条上限 ────────────────────────────────────────────────────────────────
 const small = new PassiveBuffer({ ttlMs: 1000, maxEntryBytes: 10, maxTotalBytes: 100, now: () => t })
-ok(!small.push({ platform: "p", endpoint: "e", url: "https://a.com/1", status: 200, mime: "t", body: "x".repeat(11) }), "超单条上限拒绝")
+ok(
+  !small.push({ platform: "p", endpoint: "e", url: "https://a.com/1", status: 200, mime: "t", body: "x".repeat(11) }),
+  "超单条上限拒绝",
+)
 ok(small.stats().count === 0, "拒绝后不占空间")
 
 // ── 总量淘汰最旧 ────────────────────────────────────────────────────────────
@@ -61,9 +78,33 @@ ok(evict.stats().bytes === 6, "stats 字节数正确")
 // ── getLatest ───────────────────────────────────────────────────────────────
 let tl = 0
 const latest = new PassiveBuffer({ ttlMs: 1000, now: () => tl })
-latest.push({ platform: "xhs", endpoint: "explore", url: "https://a.com/1", status: 200, mime: "t", body: "one", at: 5 })
-latest.push({ platform: "xhs", endpoint: "explore", url: "https://a.com/2", status: 200, mime: "t", body: "two", at: 6 })
-latest.push({ platform: "bili", endpoint: "explore", url: "https://a.com/3", status: 200, mime: "t", body: "other", at: 7 })
+latest.push({
+  platform: "xhs",
+  endpoint: "explore",
+  url: "https://a.com/1",
+  status: 200,
+  mime: "t",
+  body: "one",
+  at: 5,
+})
+latest.push({
+  platform: "xhs",
+  endpoint: "explore",
+  url: "https://a.com/2",
+  status: 200,
+  mime: "t",
+  body: "two",
+  at: 6,
+})
+latest.push({
+  platform: "bili",
+  endpoint: "explore",
+  url: "https://a.com/3",
+  status: 200,
+  mime: "t",
+  body: "other",
+  at: 7,
+})
 ok(latest.getLatest("xhs", "explore")?.body === "two", "getLatest 取该平台/接口最新")
 ok(latest.getLatest("nope", "explore") === null, "getLatest 无匹配返回 null")
 

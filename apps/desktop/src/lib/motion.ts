@@ -30,4 +30,3 @@ export function motionDurationMs(level: "fast" | "base" | "slow"): number {
   if (!Number.isFinite(n)) return { fast: 120, base: 180, slow: 260 }[level]
   return raw.endsWith("ms") ? n : n * 1000
 }
-

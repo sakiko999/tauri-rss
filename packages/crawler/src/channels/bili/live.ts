@@ -54,9 +54,7 @@ async function fetchBiliRoom(roomId: string, cookie?: string): Promise<Live | nu
       introduction: ri["description"] ? String(ri["description"]) : undefined,
       // ⚠️ live_start_time 是 **epoch 秒**(如 1728800000),不是展示串——直接 String()
       // 会写出「1728800000」这种原始数字。转 ISO 供 UI 直接展示。
-      showTime: ri["live_start_time"]
-        ? new Date(Number(ri["live_start_time"]) * 1000).toISOString()
-        : undefined,
+      showTime: ri["live_start_time"] ? new Date(Number(ri["live_start_time"]) * 1000).toISOString() : undefined,
     }
   } catch (e) {
     log.biliLive.warn(`房间 ${roomId} 拉取失败:`, formatError(e))
@@ -80,7 +78,10 @@ export class BiliLiveChannel implements RssChannel {
   // 仅输出 Live item;流/弹幕统一走 crawler/resolver(按 item.url)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
     }
   }
 
@@ -98,6 +99,9 @@ export class BiliLiveChannel implements RssChannel {
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `B站直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: "https://live.bilibili.com/" }
+    return {
+      channelTitle: `B站直播 ${String(info.roomIds ?? info.roomId ?? "")}`,
+      channelLink: "https://live.bilibili.com/",
+    }
   }
 }

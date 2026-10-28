@@ -252,7 +252,9 @@
   border-radius: var(--r-md);
   background: var(--surface-1);
   text-align: left;
-  transition: background var(--dur-fast) var(--ease-heliu), border-color var(--dur-fast) var(--ease-heliu);
+  transition:
+    background var(--dur-fast) var(--ease-heliu),
+    border-color var(--dur-fast) var(--ease-heliu);
 }
 .home-feed-row:hover {
   background: var(--surface-2);
@@ -293,7 +295,9 @@
   border-radius: var(--r-tile);
   background: var(--surface-1);
   text-align: left;
-  transition: background var(--dur-fast) var(--ease-heliu), border-color var(--dur-fast) var(--ease-heliu);
+  transition:
+    background var(--dur-fast) var(--ease-heliu),
+    border-color var(--dur-fast) var(--ease-heliu);
 }
 .home-pick:hover {
   background: var(--surface-2);

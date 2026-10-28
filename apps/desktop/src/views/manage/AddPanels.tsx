@@ -178,7 +178,8 @@ export function SearchPanel(f: SearchPanelProps) {
         </div>
         <div className="inline-row">
           <button className="btn btn-secondary btn-sm" disabled={f.searching || !f.keyword.trim()} onClick={f.onSearch}>
-            {f.searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />} 搜索
+            {f.searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />}{" "}
+            搜索
           </button>
         </div>
       </div>
@@ -196,11 +197,22 @@ export function SearchPanel(f: SearchPanelProps) {
             添加到
           </span>
           <div className="chip-row" role="radiogroup" aria-labelledby="lbl-target">
-            <button className="chip" role="radio" aria-checked={f.targetId === "new"} onClick={() => f.onTargetId("new")}>
+            <button
+              className="chip"
+              role="radio"
+              aria-checked={f.targetId === "new"}
+              onClick={() => f.onTargetId("new")}
+            >
               <Icon name="plus" size={13} /> 新建订阅
             </button>
             {f.targets.map((s) => (
-              <button key={s.id} className="chip" role="radio" aria-checked={f.targetId === s.id} onClick={() => f.onTargetId(s.id)}>
+              <button
+                key={s.id}
+                className="chip"
+                role="radio"
+                aria-checked={f.targetId === s.id}
+                onClick={() => f.onTargetId(s.id)}
+              >
                 {s.title}
                 <span className="cand-chip">{valueList(s as never, f.landParam).length} 房</span>
               </button>
@@ -260,10 +272,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
   // loginable 是**channel 级**能力，但登录态是**平台级**的（同平台共用一个 cookie）。
   // 先按平台聚合，避免「B站只有综合热门有标记、其余三个没有」这种不可解释的差异。
   // 用 QR 小标记而不是「可扫码登录」文字 tag：目录行里的小字读不懂、还像警告。
-  const loginPlatforms = useMemo(
-    () => new Set(all.filter((c) => c.loginable).map((c) => platformOf(c.key))),
-    [all],
-  )
+  const loginPlatforms = useMemo(() => new Set(all.filter((c) => c.loginable).map((c) => platformOf(c.key))), [all])
 
   /* ── 配置步骤:选中的渠道 ──────────────────────────────────────────── */
   if (f.channel) {
@@ -327,30 +336,30 @@ export function ChannelPanel(f: ChannelPanelProps) {
             </div>
           ) : null}
 
-          {f.fields.length > 0 ? (
-            f.fields.map((fd) => (
-              <div className="field" key={fd.key}>
-                <label className="field-label" htmlFor={`add-${fd.key}`}>
-                  {fd.label}
-                  {fd.required ? <span className="field-req">*</span> : <span className="t-micro t-dim">选填</span>}
-                </label>
-                <input
-                  id={`add-${fd.key}`}
-                  className="input"
-                  value={f.values[fd.key] ?? ""}
-                  placeholder={fd.placeholder}
-                  aria-required={fd.required || undefined}
-                  aria-invalid={f.missing.includes(fd.key) || undefined}
-                  onChange={(e) => f.onValue(fd.key, e.target.value)}
-                />
-                {f.missing.includes(fd.key) ? (
-                  <span className="field-error">
-                    <Icon name="alert" size={12} />「{fd.label}」为必填项，请填写后再提交。
-                  </span>
-                ) : null}
-              </div>
-            ))
-          ) : null}
+          {f.fields.length > 0
+            ? f.fields.map((fd) => (
+                <div className="field" key={fd.key}>
+                  <label className="field-label" htmlFor={`add-${fd.key}`}>
+                    {fd.label}
+                    {fd.required ? <span className="field-req">*</span> : <span className="t-micro t-dim">选填</span>}
+                  </label>
+                  <input
+                    id={`add-${fd.key}`}
+                    className="input"
+                    value={f.values[fd.key] ?? ""}
+                    placeholder={fd.placeholder}
+                    aria-required={fd.required || undefined}
+                    aria-invalid={f.missing.includes(fd.key) || undefined}
+                    onChange={(e) => f.onValue(fd.key, e.target.value)}
+                  />
+                  {f.missing.includes(fd.key) ? (
+                    <span className="field-error">
+                      <Icon name="alert" size={12} />「{fd.label}」为必填项，请填写后再提交。
+                    </span>
+                  ) : null}
+                </div>
+              ))
+            : null}
         </div>
       </div>
     )
@@ -394,9 +403,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
 
       {view.groups.length === 0 ? (
         <div className="field">
-          <p className="t-small t-dim">
-            {query.trim() ? `没有匹配「${query.trim()}」的渠道。` : "没有可用渠道。"}
-          </p>
+          <p className="t-small t-dim">{query.trim() ? `没有匹配「${query.trim()}」的渠道。` : "没有可用渠道。"}</p>
           {/* 在某个分类里搜空是最常见的死路：给一条出路，而不是让用户自己切 tab 重搜 */}
           {query.trim() ? (
             <button

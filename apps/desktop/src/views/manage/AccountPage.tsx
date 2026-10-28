@@ -95,9 +95,7 @@ export function AccountPage() {
       <div className="scroll-area page-scroll" {...overlayBlock("account-scroll", "page:account:scroll")}>
         <div className="page-wrap" {...overlayBlock("account-wrap", "page:account:wrap")}>
           <h1 className="page-title">账号与凭证</h1>
-          <p className="page-lead">
-            凭证只存本地，也只会随对应平台的请求发出。填了凭证就自动应用到同平台的所有订阅。
-          </p>
+          <p className="page-lead">凭证只存本地，也只会随对应平台的请求发出。填了凭证就自动应用到同平台的所有订阅。</p>
 
           <Banner tone="info" icon="info">
             <span className="banner-title">凭证到期了怎么办</span>
@@ -212,12 +210,8 @@ function CredentialCard({
           disabled={!configured || busy}
           onClick={async () => {
             const hosts = COOKIE_HOSTS[platform] ?? []
-            const extra = hosts.length
-              ? "会同时退出抓取浏览器里该平台的登录态（无法撤销）。\n\n"
-              : ""
-            const after = meta.needsLogin
-              ? "相关订阅会因未登录而无法刷新。"
-              : "相关订阅会退回匿名档位。"
+            const extra = hosts.length ? "会同时退出抓取浏览器里该平台的登录态（无法撤销）。\n\n" : ""
+            const after = meta.needsLogin ? "相关订阅会因未登录而无法刷新。" : "相关订阅会退回匿名档位。"
             if (!window.confirm(`清除 ${meta.label} 凭证？\n\n${extra}${after}`)) return
             setBusy(true)
             try {
@@ -261,11 +255,15 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
     // ⚠️ 关闭弹窗必须 abort:登录持全局浏览器锁直到成功/超时(最长 5 分钟),不取消的话
     // 关窗后所有 xhs/weibo 浏览器操作都被排队卡住,重开弹窗也出不了码。
     const ac = new AbortController()
-    dl.scanLogin(channel.key, (dataUrl) => {
-      if (!mounted.current || !dataUrl) return
-      setQr(dataUrl)
-      setPhase("qr")
-    }, { signal: ac.signal })
+    dl.scanLogin(
+      channel.key,
+      (dataUrl) => {
+        if (!mounted.current || !dataUrl) return
+        setQr(dataUrl)
+        setPhase("qr")
+      },
+      { signal: ac.signal },
+    )
       .then(async (r) => {
         if (!mounted.current) return
         setAlready(r.alreadyLoggedIn === true)
@@ -329,9 +327,12 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
             <p className="t-small">{already ? `${label}已登录（无需重复扫码）` : `${label} 已登录,凭证已保存`}</p>
           </div>
         ) : null}
-        {phase === "error" ? <Banner tone="error" icon="alert">{error}</Banner> : null}
+        {phase === "error" ? (
+          <Banner tone="error" icon="alert">
+            {error}
+          </Banner>
+        ) : null}
       </div>
     </Modal>
   )
 }
-

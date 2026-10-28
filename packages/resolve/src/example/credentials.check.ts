@@ -32,7 +32,12 @@ const SUB_KEY = "b".repeat(32)
       const body = req.url.includes("/x/web-interface/nav")
         ? {
             code: 0,
-            data: { wbi_img: { img_url: `https://i0.hdslb.com/bfs/wbi/${IMG_KEY}.png`, sub_url: `https://i0.hdslb.com/bfs/wbi/${SUB_KEY}.png` } },
+            data: {
+              wbi_img: {
+                img_url: `https://i0.hdslb.com/bfs/wbi/${IMG_KEY}.png`,
+                sub_url: `https://i0.hdslb.com/bfs/wbi/${SUB_KEY}.png`,
+              },
+            },
           }
         : { code: 0, data: {} }
       return { status: 200, headers: {}, body: JSON.stringify(body) }
@@ -62,12 +67,18 @@ setPlatformCookieLookup((p) => (p === "bili" ? "SESSDATA=PROVIDER" : undefined))
   captured.length = 0
   await biliClient.signWeb("mid=1")
   const navCookie = captured.find((c) => c.url.includes("/x/web-interface/nav"))?.headers["cookie"]
-  assert.match(navCookie ?? "", /SESSDATA=PROVIDER/, "signWeb 必须与请求同源回落 provider(签名/请求 cookie 错配会认证错 mid)")
+  assert.match(
+    navCookie ?? "",
+    /SESSDATA=PROVIDER/,
+    "signWeb 必须与请求同源回落 provider(签名/请求 cookie 错配会认证错 mid)",
+  )
 
   captured.length = 0
   await biliClient.signSpace("mid=1", "")
-  assert.ok(!captured.some((c) => c.url.includes("/x/web-interface/nav") && (c.headers["cookie"] ?? "").includes("PROVIDER")),
-    "signSpace 空串必须强制匿名")
+  assert.ok(
+    !captured.some((c) => c.url.includes("/x/web-interface/nav") && (c.headers["cookie"] ?? "").includes("PROVIDER")),
+    "signSpace 空串必须强制匿名",
+  )
 }
 
 // ── ③ douyin:登录 cookie > 匿名 ttwid jar;显式空串 → 匿名 ttwid ──

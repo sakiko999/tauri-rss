@@ -56,11 +56,7 @@ function printResult(value: unknown, asJson?: boolean): void {
   console.log(JSON.stringify(value, null, 2))
 }
 
-export async function runAttach(
-  action: string,
-  args: string[],
-  opts: AttachOptions,
-): Promise<void> {
+export async function runAttach(action: string, args: string[], opts: AttachOptions): Promise<void> {
   switch (action) {
     case "status":
       return status(opts)
@@ -174,9 +170,7 @@ async function rpc(args: string[], opts: AttachOptions): Promise<void> {
   if (args[1]) {
     try {
       // Windows 下 PowerShell 会把内联 JSON 的引号转义坏；`@file` 是可靠入口。
-      const text = args[1].startsWith("@")
-        ? readFileSync(args[1].slice(1), "utf8")
-        : args[1]
+      const text = args[1].startsWith("@") ? readFileSync(args[1].slice(1), "utf8") : args[1]
       // PowerShell 的 `-Encoding utf8` 可能带 BOM。
       params = JSON.parse(text.replace(/^﻿/, ""))
     } catch (e) {
@@ -187,9 +181,6 @@ async function rpc(args: string[], opts: AttachOptions): Promise<void> {
   }
   const endpoint = resolveEndpoint(opts.endpoint)
   const client = new ServiceClient(endpoint)
-  const result = await client.rpc(
-    method as RpcMethod,
-    params as RpcParams<RpcMethod>,
-  )
+  const result = await client.rpc(method as RpcMethod, params as RpcParams<RpcMethod>)
   printResult(result, opts.json)
 }

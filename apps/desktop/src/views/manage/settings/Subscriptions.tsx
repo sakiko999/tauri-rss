@@ -115,8 +115,8 @@ function SideCardOPML({
         </button>
       </div>
       <p className="setting-help">
-        导入按 OPML 的分组层级建分组、逐条落成 RSS 直链（同一地址已订阅则跳过）；
-        导出只含 RSS 订阅（直播/社交类不含在内）。
+        导入按 OPML 的分组层级建分组、逐条落成 RSS 直链（同一地址已订阅则跳过）； 导出只含 RSS
+        订阅（直播/社交类不含在内）。
       </p>
     </SideCard>
   )
@@ -158,11 +158,7 @@ function SideCardGroups({
           </span>
         </span>
         <span className="setting-control">
-          <Switch
-            checked={autoGroupOnAdd}
-            label="添加订阅时按类型自动归类"
-            onChange={setAutoGroupOnAdd}
-          />
+          <Switch checked={autoGroupOnAdd} label="添加订阅时按类型自动归类" onChange={setAutoGroupOnAdd} />
         </span>
       </div>
       {/* 一键归组:未分组订阅多起来后,逐条改分组太慢。按内容类型归入
@@ -208,7 +204,8 @@ function SideCardGroups({
                 className="icon-btn"
                 aria-label="删除分组"
                 onClick={() => {
-                  if (window.confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`)) void removeGroup(g.id)
+                  if (window.confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`))
+                    void removeGroup(g.id)
                 }}
               >
                 <Icon name="trash" />
@@ -323,7 +320,8 @@ function SubscriptionTable({
                         danger
                         icon="trash"
                         onSelect={() => {
-                          if (window.confirm(`退订「${s.title}」？内容缓存也会一并删除。`)) void removeSubscription(s.id)
+                          if (window.confirm(`退订「${s.title}」？内容缓存也会一并删除。`))
+                            void removeSubscription(s.id)
                         }}
                       >
                         退订

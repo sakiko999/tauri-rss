@@ -34,17 +34,14 @@ function thumbnailFor(login: string): string {
  * (`id`/`url`/`roomId` 都依赖它,编不出来)。标题为空回落 displayName,
  * displayName 也为空再回落 login;开播时间解析失败给 undefined(不污染排序)。
  */
-export function twitchStreamToLive(
-  stream: TwitchStreamNode,
-  sourceId: string,
-  fetchedAt: number,
-): Live | null {
-  const login = String(stream.broadcaster?.login ?? "").trim().toLowerCase()
+export function twitchStreamToLive(stream: TwitchStreamNode, sourceId: string, fetchedAt: number): Live | null {
+  const login = String(stream.broadcaster?.login ?? "")
+    .trim()
+    .toLowerCase()
   if (!login) return null
   const displayName = String(stream.broadcaster?.displayName ?? "").trim() || login
   const createdAt = stream.createdAt
-  const showTime =
-    createdAt && Number.isFinite(Date.parse(createdAt)) ? new Date(createdAt).toISOString() : undefined
+  const showTime = createdAt && Number.isFinite(Date.parse(createdAt)) ? new Date(createdAt).toISOString() : undefined
   const viewers = Number(stream.viewersCount)
   return {
     id: `twitch:${login}`,
@@ -72,8 +69,7 @@ export function twitchStreamToLive(
 export function twitchLiveItem(user: TwitchUser, login: string, fetchedAt: number): Live {
   const stream = user.stream
   const createdAt = stream?.createdAt
-  const showTime =
-    createdAt && Number.isFinite(Date.parse(createdAt)) ? new Date(createdAt).toISOString() : undefined
+  const showTime = createdAt && Number.isFinite(Date.parse(createdAt)) ? new Date(createdAt).toISOString() : undefined
   // GQL 理论上给 displayName,但外部输入/结构变化时可能为空;空作者名不如回落 login。
   const displayName = user.displayName || login
   return {
@@ -109,7 +105,10 @@ export class TwitchLiveChannel implements RssChannel {
 
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
     }
   }
 

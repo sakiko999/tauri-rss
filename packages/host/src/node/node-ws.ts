@@ -10,7 +10,10 @@
 import WebSocket from "ws"
 
 class NodeWsConnection implements WsConnection {
-  constructor(private ws: WebSocket, readonly connectionId: string) {}
+  constructor(
+    private ws: WebSocket,
+    readonly connectionId: string,
+  ) {}
   get readyState(): number {
     // ws 包:0 CONNECTING / 1 OPEN / 2 CLOSING / 3 CLOSED,与 WebSocket 常量对齐。
     return this.ws.readyState

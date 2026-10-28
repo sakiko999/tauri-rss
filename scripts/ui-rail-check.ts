@@ -7,7 +7,11 @@ const PORT = Number(process.env.CDP_PORT ?? 9222)
 const BASE = process.env.APP_URL ?? "http://localhost:1420"
 const widths = process.argv.slice(2).length ? process.argv.slice(2).map(Number) : [1600, 1100, 1079, 1000, 900, 820]
 
-const list = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()) as Array<{ type: string; url: string; webSocketDebuggerUrl: string }>
+const list = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()) as Array<{
+  type: string
+  url: string
+  webSocketDebuggerUrl: string
+}>
 const page = list.find((t) => t.type === "page" && t.url.startsWith(BASE))!
 const ws = new WebSocket(page.webSocketDebuggerUrl)
 let id = 0
@@ -16,10 +20,17 @@ ws.addEventListener("message", (e) => {
   const m = JSON.parse(String(e.data)) as { id?: number; result?: any }
   if (m.id === undefined) return
   const p = pending.get(m.id)
-  if (p) { pending.delete(m.id); p(m.result) }
+  if (p) {
+    pending.delete(m.id)
+    p(m.result)
+  }
 })
 const send = (method: string, params: Record<string, unknown> = {}) =>
-  new Promise<any>((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })) })
+  new Promise<any>((r) => {
+    const i = ++id
+    pending.set(i, r)
+    ws.send(JSON.stringify({ id: i, method, params }))
+  })
 await new Promise<void>((r) => ws.addEventListener("open", () => r()))
 const ev = async (expression: string) => {
   const r = await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })
@@ -47,7 +58,9 @@ for (const w of widths) {
   // 竖排判定:可见且宽 < 40px
   const vert = (b: any) => b && b.display !== "none" && b.w < 40 && b.h > 40
   const flag = vert(o.groupEmpty) ? "  ✖ group-empty 竖排" : ""
-  console.log(`${String(w).padStart(5)} → rail=${o.railW}px  empty=${o.groupEmpty ? `w${o.groupEmpty.w}/h${o.groupEmpty.h}/${o.groupEmpty.display}` : "-"}  label=${o.navLabel ? `w${o.navLabel.w}/${o.navLabel.display}` : "-"}${flag}`)
+  console.log(
+    `${String(w).padStart(5)} → rail=${o.railW}px  empty=${o.groupEmpty ? `w${o.groupEmpty.w}/h${o.groupEmpty.h}/${o.groupEmpty.display}` : "-"}  label=${o.navLabel ? `w${o.navLabel.w}/${o.navLabel.display}` : "-"}${flag}`,
+  )
 }
 await send("Emulation.clearDeviceMetricsOverride")
 ws.close()

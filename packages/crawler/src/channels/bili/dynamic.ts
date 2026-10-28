@@ -118,11 +118,14 @@ export class BiliDynamicChannel implements RssChannel {
   readonly key = "bili:dynamic"
   readonly name = "B站用户动态"
   readonly kind = "social" as const
-  readonly sourceInfoTpl = [
-    { key: "uid", label: "UP 主 uid", required: true },
-  ]
+  readonly sourceInfoTpl = [{ key: "uid", label: "UP 主 uid", required: true }]
   getSource(info: SourceInfo): RssSource {
-    return { fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)) }
+    return {
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
+    }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
     const uid = String(info.uid ?? "")

@@ -11,7 +11,19 @@ import { platformDef } from "@amoeba/platform"
 import { platformOf } from "./subscriptions.ts"
 
 /** 分类展示顺序：视频/直播平台在前，通用 RSS 与 RSSHub 收尾。 */
-const CATEGORY_ORDER = ["bili", "youtube", "twitch", "huya", "douyu", "douyin", "weibo", "xhs", "apple", "rss", "rsshub"]
+const CATEGORY_ORDER = [
+  "bili",
+  "youtube",
+  "twitch",
+  "huya",
+  "douyu",
+  "douyin",
+  "weibo",
+  "xhs",
+  "apple",
+  "rss",
+  "rsshub",
+]
 
 /** 平台表里没有的 key 前缀（`rss:` 直链）单独成一类，名字只能在这里给。 */
 const CATEGORY_LABEL: Record<string, string> = { rss: "RSS 与播客" }
@@ -73,12 +85,7 @@ function orderedCategories(channels: ChannelInfo[]): string[] {
  * @param query 匹配渠道名 / key / 分类名（key 不展示，但 "bili" 这类缩写值得能搜到）
  * @param limit 最多渲染多少行（整组累加；第一组无论如何都渲染）
  */
-export function catalogView(
-  channels: ChannelInfo[],
-  cat = "all",
-  query = "",
-  limit = CATALOG_PAGE,
-): CatalogView {
+export function catalogView(channels: ChannelInfo[], cat = "all", query = "", limit = CATALOG_PAGE): CatalogView {
   const ids = orderedCategories(channels)
   const cats: CatalogCategory[] = [
     { id: "all", label: "全部渠道", count: channels.length },

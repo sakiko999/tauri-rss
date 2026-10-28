@@ -22,19 +22,17 @@ export const TwitchCategoriesChannel = makeApiChannel({
   fetchPage: async (): Promise<Item[]> => {
     const games = await fetchTwitchTopCategories(30)
     const t = now()
-    return games.map(
-      (g): Category => ({
-        id: `twitch-category:${g.slug}`,
-        sourceId: "twitch:categories",
-        kind: "category",
-        title: g.name || g.slug,
-        url: `https://www.twitch.tv/directory/category/${g.slug}`,
-        summary: g.viewersCount ? `${g.viewersCount} 人在看` : undefined,
-        thumbnail: g.boxArtURL ?? undefined,
-        fetchedAt: t,
-        categoryChannel: "twitch:category",
-        categoryInfo: { category: g.slug },
-      }),
-    )
+    return games.map((g): Category => ({
+      id: `twitch-category:${g.slug}`,
+      sourceId: "twitch:categories",
+      kind: "category",
+      title: g.name || g.slug,
+      url: `https://www.twitch.tv/directory/category/${g.slug}`,
+      summary: g.viewersCount ? `${g.viewersCount} 人在看` : undefined,
+      thumbnail: g.boxArtURL ?? undefined,
+      fetchedAt: t,
+      categoryChannel: "twitch:category",
+      categoryInfo: { category: g.slug },
+    }))
   },
 })

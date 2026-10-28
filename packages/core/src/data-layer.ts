@@ -34,10 +34,7 @@ import type { MediaQuery } from "./types/query.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import { findRecord } from "./types/reading.ts"
 import { DEFAULT_SETTINGS, type AppSettings, type NetLevel } from "./types/settings.ts"
-import {
-  createSubscriptionRepository,
-  type SubscriptionRepository,
-} from "./repo/subscription-repo.ts"
+import { createSubscriptionRepository, type SubscriptionRepository } from "./repo/subscription-repo.ts"
 import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
 import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
@@ -311,7 +308,6 @@ export function createDataLayer(): DataLayer {
     return platformOfChannelKey(channelKey)
   }
 
-
   /** 按 channelKey 前缀取 settings 快照里的 cookie(订阅显式 info.cookie 永远优先)。 */
   function cookieFor(channelKey: string, s: AppSettings): string | undefined {
     const field = cookieFieldFor(channelKey)
@@ -492,9 +488,7 @@ export function createDataLayer(): DataLayer {
       if (!opts?.force) {
         const cached = await contentCache.get(subscriptionId)
         if (cached) {
-          const ttlMs = sub.refreshIntervalSec
-            ? sub.refreshIntervalSec * 1000
-            : s.refreshIntervalMin * 60 * 1000
+          const ttlMs = sub.refreshIntervalSec ? sub.refreshIntervalSec * 1000 : s.refreshIntervalMin * 60 * 1000
           if (now() - cached.fetchedAt < ttlMs) {
             const { items, total } = deserializeFeedWithTotal(cached.xml, {
               subscriptionId,
@@ -548,7 +542,11 @@ export function createDataLayer(): DataLayer {
       // ⚠️ 判据**同时看 store 与持久缓存**:只看 store 时,若启动 refreshAll 对该订阅
       //   抛错/超时(未水化),store 为空但磁盘缓存仍在 —— 空抓取会清 store 并覆盖缓存,
       //   旧内容双丢。缓存也在则一并保护。
-      if (items.length === 0 && ((await contentCache.get(subscriptionId).catch(() => null)) !== null || store.query({ subscriptionId }).length > 0)) {
+      if (
+        items.length === 0 &&
+        ((await contentCache.get(subscriptionId).catch(() => null)) !== null ||
+          store.query({ subscriptionId }).length > 0)
+      ) {
         return { subscriptionId, itemCount: 0, error: "本次抓取解析出 0 条,已保留原有内容", fetchedAt: now() }
       }
       // 抓取途中被取消 → 新内容不落 store/缓存（取消不该改变可见状态）。
@@ -636,10 +634,7 @@ export function createDataLayer(): DataLayer {
    * `pageCursors.delete` 会与 loadMore 的 append/set 交错,第 2 页条目混进新首页、
    * 游标指向已失效的序列,表现为重复或跳过整页。
    */
-  function refresh(
-    subscriptionId: string,
-    opts?: { force?: boolean; signal?: AbortSignal },
-  ): Promise<RefreshResult> {
+  function refresh(subscriptionId: string, opts?: { force?: boolean; signal?: AbortSignal }): Promise<RefreshResult> {
     return serialized(`sub:${subscriptionId}`, () => doRefresh(subscriptionId, opts))
   }
 
@@ -811,7 +806,7 @@ export function createDataLayer(): DataLayer {
     const [detail] = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
     const resolved = detail ?? item
     // 正文确有增长才落缓存(否则会把「无补全能力原样返回」也写进去)。
-    const before = item.kind === "article" ? item.content ?? "" : ""
+    const before = item.kind === "article" ? (item.content ?? "") : ""
     if (cacheable && resolved.kind === "article" && (resolved.content ?? "").length > before.length) {
       await bodyCache
         .set(subscriptionId, itemId, {
@@ -870,9 +865,7 @@ export function createDataLayer(): DataLayer {
       // 点「加载更多」,视口里还是原来那批,新内容全插到顶部(实测 89 → 272 条,顶部换了一屏)。
       // 同一订阅的分页内容视为同一批快照:排序键相同 → 稳定排序保持 append 顺序(新内容在末尾)。
       const batchTime = store.query({ subscriptionId }).reduce((min, it) => Math.min(min, it.fetchedAt), Infinity)
-      const aligned = Number.isFinite(batchTime)
-        ? items.map((it) => ({ ...it, fetchedAt: batchTime }))
-        : items
+      const aligned = Number.isFinite(batchTime) ? items.map((it) => ({ ...it, fetchedAt: batchTime })) : items
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
       const addedCount = store.append(subscriptionId, await applyReadingState(aligned))
@@ -1104,9 +1097,7 @@ export function createDataLayer(): DataLayer {
     // 预览与刷新遵守同一条被动承诺：有浏览器时 passive 渠道只读页面自然产生的数据，
     // 绝不构造主动请求；没有被动数据就明确报错（预览没有订阅缓存可回退）。
     const passiveMode = channel.passive === true && !!globalThis.appHost?.browser
-    const xml = passiveMode
-      ? ((await source.fetchPassive?.()) ?? null)
-      : await source.fetch()
+    const xml = passiveMode ? ((await source.fetchPassive?.()) ?? null) : await source.fetch()
     if (!xml) {
       throw new ResolveError("no-data", `被动采集：${channelKey} 预览没有可用数据（页面未产生可读响应）`)
     }

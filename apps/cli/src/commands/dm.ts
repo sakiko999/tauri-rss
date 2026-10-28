@@ -30,7 +30,10 @@ export async function runDm(url: string, opts: DmOptions): Promise<void> {
   if (opts.viaService) {
     const r = await probeDanmaku(
       url,
-      { ...(opts.seconds !== undefined ? { seconds: opts.seconds } : {}), ...(opts.n !== undefined ? { n: opts.n } : {}) },
+      {
+        ...(opts.seconds !== undefined ? { seconds: opts.seconds } : {}),
+        ...(opts.n !== undefined ? { n: opts.n } : {}),
+      },
       opts.endpoint,
     )
     route = r.route
@@ -58,7 +61,14 @@ export async function runDm(url: string, opts: DmOptions): Promise<void> {
 
   const n = opts.n ?? (kind === "vod" ? 10 : 3)
   if (opts.json) {
-    printJson({ url, platform: route.platform, kind, tookMs: Math.round(ms), count: items.length, sample: items.slice(0, n) })
+    printJson({
+      url,
+      platform: route.platform,
+      kind,
+      tookMs: Math.round(ms),
+      count: items.length,
+      sample: items.slice(0, n),
+    })
     return
   }
   console.log(`route:   ${route.platform} ${kind} ${route.id}`)

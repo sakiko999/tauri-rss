@@ -18,7 +18,13 @@
   --accent: oklch(0.7 0.14 70);
   --accent-ink: oklch(0.28 0.08 70);
   --r: 12px;
-  font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    "PingFang SC",
+    "Microsoft YaHei",
+    sans-serif;
   font-size: 16px;
 }
 @media (prefers-color-scheme: dark) {

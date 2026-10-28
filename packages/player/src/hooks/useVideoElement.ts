@@ -283,8 +283,7 @@ export function bindFullscreen(
   const toggle = () => {
     if (isActive()) {
       const exit =
-        doc.exitFullscreen ??
-        (doc as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen
+        doc.exitFullscreen ?? (doc as Document & { webkitExitFullscreen?: () => Promise<void> }).webkitExitFullscreen
       if (exit) exit.call(doc)
     } else {
       const req =

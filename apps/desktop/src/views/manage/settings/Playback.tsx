@@ -12,7 +12,11 @@ export function Playback() {
     <>
       <SideCard title="播放" icon="play">
         <Row label="自动播放" help="点开播放页立即起播;关闭后停在首帧，点播放按钮开始。">
-          <Switch checked={settings.autoplayVideo} label="自动播放" onChange={(v) => void setSetting("autoplayVideo", v)} />
+          <Switch
+            checked={settings.autoplayVideo}
+            label="自动播放"
+            onChange={(v) => void setSetting("autoplayVideo", v)}
+          />
         </Row>
         <Row label="省流模式" help="不加载任何图片（封面/缩略图留占位），慢网络或按流量计费时用。">
           <Switch checked={settings.dataSaver} label="省流模式" onChange={(v) => void setSetting("dataSaver", v)} />
@@ -31,7 +35,11 @@ export function Playback() {
 
       <SideCard title="弹幕" icon="captions">
         <Row label="启用弹幕" help="播放页的总开关;播放页内还可临时关闭。">
-          <Switch checked={settings.danmakuEnabled} label="启用弹幕" onChange={(v) => void setSetting("danmakuEnabled", v)} />
+          <Switch
+            checked={settings.danmakuEnabled}
+            label="启用弹幕"
+            onChange={(v) => void setSetting("danmakuEnabled", v)}
+          />
         </Row>
       </SideCard>
     </>

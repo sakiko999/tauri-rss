@@ -47,7 +47,10 @@ ok(Array.isArray(guard(() => decodeDanmakuSeg(new Uint8Array([0x0b, 0x0c])), "gr
 console.log("正常帧仍正确解码:")
 const good = new Uint8Array([0x0a, 0x0b, 0x10, 0x64, 0x18, 0x01, 0x3a, 0x04, 0x41, 0x42, 0x43, 0x44])
 const r2 = guard(() => decodeDanmakuSeg(good), "正常帧")
-ok(r2?.length === 1 && r2[0]?.content === "ABCD" && r2[0]?.progress === 100, `正常帧解出 ABCD(得 ${JSON.stringify(r2)}）`)
+ok(
+  r2?.length === 1 && r2[0]?.content === "ABCD" && r2[0]?.progress === 100,
+  `正常帧解出 ABCD(得 ${JSON.stringify(r2)}）`,
+)
 
 console.log("空缓冲:")
 ok(guard(() => decodeDanmakuSeg(new Uint8Array([])), "空")?.length === 0, "空缓冲返回 []")

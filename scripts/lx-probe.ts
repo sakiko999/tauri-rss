@@ -161,7 +161,14 @@ async function connect(url: string): Promise<Cdp> {
     ws.addEventListener("error", () => rej(new Error("CDP ws 连接失败")), { once: true })
   })
   ws.addEventListener("message", (e) => {
-    const msg = JSON.parse(String(e.data)) as { id?: number; method?: string; params?: any; sessionId?: string; result?: any; error?: any }
+    const msg = JSON.parse(String(e.data)) as {
+      id?: number
+      method?: string
+      params?: any
+      sessionId?: string
+      result?: any
+      error?: any
+    }
     if (msg.id !== undefined) {
       const p = pending.get(msg.id)
       if (!p) return
@@ -402,7 +409,12 @@ const swReqs = pageInfo.filter((r) => r.swSession)
 pageCdp.page.close()
 pageCdp.browser.close()
 await killPort(PORT)
-await rm(`${process.env.TEMP ?? "."}\\lx-probe-${process.pid}`, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {})
+await rm(`${process.env.TEMP ?? "."}\\lx-probe-${process.pid}`, {
+  recursive: true,
+  force: true,
+  maxRetries: 5,
+  retryDelay: 200,
+}).catch(() => {})
 server.stop(true)
 
 console.log(

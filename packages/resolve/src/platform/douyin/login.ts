@@ -224,12 +224,7 @@ async function douyinBrowserScanLogin(
   // 导航走(canvas 二维码与页面自身轮询不再随刷新消失),已扫码也能等到 sessionid。
   // ⚠️ 模式必须 interactive:二维码是 canvas 绘制,hidden(SW_HIDE)下渲染管线停摆画
   // 不出来(xhs/weibo 是 img data URL/远程 src,读 DOM 即可,才能用 hidden)。
-  return withScanLoginLock(
-    browser,
-    "interactive",
-    (b) => runDouyinBrowserScanLogin(b, emitQr, opts),
-    "douyin",
-  )
+  return withScanLoginLock(browser, "interactive", (b) => runDouyinBrowserScanLogin(b, emitQr, opts), "douyin")
 }
 
 async function runDouyinBrowserScanLogin(

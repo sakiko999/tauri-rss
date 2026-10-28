@@ -59,9 +59,11 @@ async function main(): Promise<void> {
     const auth = { authorization: `Bearer ${token}` }
 
     // identity：不声明 gzip，服务端原样返回 NDJSON。
-    const identity = await (await fetch(`http://127.0.0.1:${port}/v1/state`, {
-      headers: { ...auth, "accept-encoding": "identity" },
-    })).text()
+    const identity = await (
+      await fetch(`http://127.0.0.1:${port}/v1/state`, {
+        headers: { ...auth, "accept-encoding": "identity" },
+      })
+    ).text()
     // gzip：fetch 自动解压，用同一文本重压一次得到**线上传输字节**（与服务端同库同级别）。
     const gzipRes = await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: auth })
     const gzipText = await gzipRes.text()

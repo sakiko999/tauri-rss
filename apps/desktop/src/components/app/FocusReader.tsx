@@ -94,7 +94,11 @@ export function FocusReader({
         <div className="focus-progress" aria-hidden>
           <span ref={barRef} />
         </div>
-        <div className="focus-scroll scroll-area" ref={scrollRef} {...overlayBlock("focus-scroll", `focus:scroll:${itemKey(item)}`)}>
+        <div
+          className="focus-scroll scroll-area"
+          ref={scrollRef}
+          {...overlayBlock("focus-scroll", `focus:scroll:${itemKey(item)}`)}
+        >
           <article
             className="article focus-article"
             {...overlayBlock("focus-article", `focus:article:${itemKey(item)}`)}

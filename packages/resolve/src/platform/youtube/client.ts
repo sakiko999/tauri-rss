@@ -26,7 +26,6 @@ import { DESKTOP_CHROME_UA } from "../../utils/ua.ts"
 import { createLiveChatPoller } from "./danmaku.ts"
 import type { PlatformClient } from "../types.ts"
 
-
 const YOUTUBEI_V1 = "https://www.youtube.com/youtubei/v1"
 const YOUTUBEI_GAPIS_V1 = "https://youtubei.googleapis.com/youtubei/v1"
 /** ANDROID_VR(Oculus Quest 3)UA —— 主力 client,2026-08 起免 poToken 直链。 */
@@ -165,11 +164,10 @@ export function getVisitorData(): Promise<string> {
           },
         },
       }
-      const res = (await postJson(
-        `${YOUTUBEI_V1}/visitor_id?prettyPrint=false`,
-        body,
-        { "user-agent": ANDROID_UA, "X-Goog-Api-Format-Version": "2" },
-      )) as { responseContext?: Record<string, any>; visitorData?: string }
+      const res = (await postJson(`${YOUTUBEI_V1}/visitor_id?prettyPrint=false`, body, {
+        "user-agent": ANDROID_UA,
+        "X-Goog-Api-Format-Version": "2",
+      })) as { responseContext?: Record<string, any>; visitorData?: string }
       const vd = res?.responseContext?.["visitorData"]
       if (!vd) throw new Error("YouTube visitorData 获取失败")
       return vd
@@ -234,11 +232,10 @@ async function getAndroidPlayerResponse(videoId: string, visitorData: string): P
   // ANDROID_VR 走 gapis 端点 + t/id 参数(与 ANDROID 同款,复刻 NewPipe:
   // YoutubeStreamHelper.java:150——YOUTUBEI_V1_GAPIS_URL + "&t=" + generateTParameter()
   // + "&id=" + videoId)。gapis 更稳定(绕开 www.youtube.com 的地域/风控)。
-  const res = (await postJson(
-    `${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`,
-    body,
-    { "user-agent": ANDROID_UA, "X-Goog-Api-Format-Version": "2" },
-  )) as PlayerResponse
+  const res = (await postJson(`${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`, body, {
+    "user-agent": ANDROID_UA,
+    "X-Goog-Api-Format-Version": "2",
+  })) as PlayerResponse
   return res
 }
 
@@ -259,11 +256,10 @@ async function getWebPlayerResponse(videoId: string, visitorData: string): Promi
     contentCheckOk: true,
     racyCheckOk: true,
   }
-  const res = (await postJson(
-    `${YOUTUBEI_V1}/player?prettyPrint=false`,
-    body,
-    { "user-agent": WEB_UA, referer: `https://www.youtube.com/watch?v=${videoId}` },
-  )) as PlayerResponse
+  const res = (await postJson(`${YOUTUBEI_V1}/player?prettyPrint=false`, body, {
+    "user-agent": WEB_UA,
+    referer: `https://www.youtube.com/watch?v=${videoId}`,
+  })) as PlayerResponse
   return res
 }
 
@@ -287,11 +283,10 @@ export async function getIosPlayerResponse(videoId: string, visitorData: string)
     racyCheckOk: true,
   }
   // iOS client 用 gapis 端点 + t/id 参数(NewPipe 同款)。
-  const res = (await postJson(
-    `${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`,
-    body,
-    { "user-agent": IOS_UA, "X-Goog-Api-Format-Version": "2" },
-  )) as PlayerResponse
+  const res = (await postJson(`${YOUTUBEI_GAPIS_V1}/player?prettyPrint=false&t=${Date.now()}&id=${videoId}`, body, {
+    "user-agent": IOS_UA,
+    "X-Goog-Api-Format-Version": "2",
+  })) as PlayerResponse
   return res
 }
 
@@ -511,30 +506,27 @@ async function youtubeDashStreams(
   const desc = R.reverse(sorted)
 
   // 4. 每档 map 成 Stream:MPD 只含该档 video + 公共音轨。
-  return R.map(
-    ({ f, url }: { f: PlayerFormat; url: string }): Stream => {
-      const rep: MpdVideoRep = {
-        id: f.itag,
-        baseUrl: url,
-        width: Number(f.width ?? 0),
-        height: Number(f.height ?? 0),
-        codecs: codecsFromMime(f.mimeType) ?? "avc1.640033",
-        bandwidth: Number(f.bitrate ?? 0),
-        initRange: `${f.initRange!.start}-${f.initRange!.end}`,
-        indexRange: `${f.indexRange!.start}-${f.indexRange!.end}`,
-      }
-      const height = Number(f.height ?? 0)
-      return {
-        url: "",
-        format: "dash",
-        headers,
-        quality: f.qualityLabel ?? `${height}p`,
-        rate: height,
-        dashManifest: buildMpd({ videos: [rep], audio: audioRep, duration, minBufferTime: 1.5 }),
-      }
-    },
-    desc,
-  )
+  return R.map(({ f, url }: { f: PlayerFormat; url: string }): Stream => {
+    const rep: MpdVideoRep = {
+      id: f.itag,
+      baseUrl: url,
+      width: Number(f.width ?? 0),
+      height: Number(f.height ?? 0),
+      codecs: codecsFromMime(f.mimeType) ?? "avc1.640033",
+      bandwidth: Number(f.bitrate ?? 0),
+      initRange: `${f.initRange!.start}-${f.initRange!.end}`,
+      indexRange: `${f.indexRange!.start}-${f.indexRange!.end}`,
+    }
+    const height = Number(f.height ?? 0)
+    return {
+      url: "",
+      format: "dash",
+      headers,
+      quality: f.qualityLabel ?? `${height}p`,
+      rate: height,
+      dashManifest: buildMpd({ videos: [rep], audio: audioRep, duration, minBufferTime: 1.5 }),
+    }
+  }, desc)
 }
 
 /** 搜频道的命中(channelId = `youtube` 渠道的订阅参数)。 */
@@ -585,8 +577,7 @@ export async function searchYouTubeChannels(keyword: string): Promise<YoutubeCha
     },
     { "user-agent": WEB_UA },
   )) as Record<string, any>
-  const sections =
-    res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? []
+  const sections = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? []
   const out: YoutubeChannelHit[] = []
   for (const sec of sections) {
     const items = sec?.itemSectionRenderer?.contents ?? []
@@ -636,8 +627,7 @@ export async function searchYouTubeLive(keyword: string): Promise<YoutubeLiveHit
     },
     { "user-agent": WEB_UA },
   )) as Record<string, any>
-  const sections =
-    res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? []
+  const sections = res?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ?? []
   const out: YoutubeLiveHit[] = []
   for (const sec of sections) {
     for (const it of sec?.itemSectionRenderer?.contents ?? []) {
@@ -689,12 +679,14 @@ export async function resolveYoutubeStreams(videoId: string): Promise<Stream[]> 
   // fallback iOS client(ANDROID 系不返回 hls 时才需要)。
   if (isLiveContent(res)) {
     const hls = res.streamingData?.hlsManifestUrl
-    if (hls) return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
+    if (hls)
+      return [{ url: hls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
     try {
       const ios = await getIosPlayerResponse(videoId, visitorData)
       checkPlayability(ios, videoId)
       const iosHls = ios.streamingData?.hlsManifestUrl
-      if (iosHls) return [{ url: iosHls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
+      if (iosHls)
+        return [{ url: iosHls, format: "hls", headers: { referer: "https://www.youtube.com/", "user-agent": IOS_UA } }]
     } catch (e) {
       log.youtube.warn("iOS live 请求失败:", formatError(e))
     }

@@ -31,7 +31,10 @@ ws.addEventListener("message", (e) => {
   const m = JSON.parse(String(e.data)) as { id?: number; result?: any }
   if (m.id === undefined) return
   const p = pending.get(m.id)
-  if (p) { pending.delete(m.id); p(m.result) }
+  if (p) {
+    pending.delete(m.id)
+    p(m.result)
+  }
 })
 await new Promise<void>((res) => ws.addEventListener("open", () => res()))
 const evaluate = async (expression: string) => {
@@ -157,7 +160,9 @@ const AUDIT = `(() => {
 })()`
 
 const nodes = process.argv.slice(2)
-const targets = nodes.length ? nodes : ["tab:all", "tab:article", "page:settings", "page:account", "page:discover", "s-video-bili"]
+const targets = nodes.length
+  ? nodes
+  : ["tab:all", "tab:article", "page:settings", "page:account", "page:discover", "s-video-bili"]
 for (const n of targets) {
   const url = n.startsWith("/") ? n : `/v/${encodeURIComponent(n)}`
   await evaluate(`location.href = ${JSON.stringify(BASE + url)}`)

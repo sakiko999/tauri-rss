@@ -49,7 +49,17 @@ export function Rail() {
   const [addOpen, setAddOpen] = useState(false)
 
   const counts = useMemo(
-    () => kindCounts({ allItems, subscriptions, filter: {}, sort: {}, page: {}, query: "", selectedNodeId: null, refreshErrors }),
+    () =>
+      kindCounts({
+        allItems,
+        subscriptions,
+        filter: {},
+        sort: {},
+        page: {},
+        query: "",
+        selectedNodeId: null,
+        refreshErrors,
+      }),
     [allItems, subscriptions, refreshErrors],
   )
   const smartCount = useMemo(() => {
@@ -125,7 +135,16 @@ export function Rail() {
         <RailSection title="内容类型">
           {CONTENT_TABS.map((t) => {
             const id = t.id === "all" ? "tab:all" : `tab:${t.id}`
-            return <NavRow key={id} icon={t.icon} label={t.label} count={counts[t.id] ?? 0} active={nodeId === id} onClick={() => go(id)} />
+            return (
+              <NavRow
+                key={id}
+                icon={t.icon}
+                label={t.label}
+                count={counts[t.id] ?? 0}
+                active={nodeId === id}
+                onClick={() => go(id)}
+              />
+            )
           })}
         </RailSection>
 
@@ -155,7 +174,12 @@ export function Rail() {
           title="订阅"
           action={
             <span className="rail-section-actions">
-              <button className="icon-btn sm" aria-label="管理分组" title="管理分组" onClick={() => goSettings("subscriptions")}>
+              <button
+                className="icon-btn sm"
+                aria-label="管理分组"
+                title="管理分组"
+                onClick={() => goSettings("subscriptions")}
+              >
                 <Icon name="settings" size={13} />
               </button>
             </span>
@@ -183,7 +207,12 @@ export function Rail() {
         {/* 刷新全部的唯一入口（顶栏 update-chip 已移除）。loading 时图标转起来，
             按钮本身不禁用 —— 重复点会走 refreshAll 内部的并发守卫。 */}
         <div className="rail-sync">
-          <button className="nav-row rail-sync-btn" onClick={() => void refreshAll(true)} title="同步订阅" aria-label="同步订阅">
+          <button
+            className="nav-row rail-sync-btn"
+            onClick={() => void refreshAll(true)}
+            title="同步订阅"
+            aria-label="同步订阅"
+          >
             <Icon name="refresh" className={loading ? "animate-spin" : undefined} />
             <span className="nav-label">同步订阅</span>
           </button>

@@ -105,7 +105,11 @@ export function RailGroupTree({
         kind === "ungrouped"
           ? { kind: "ungrouped", expanded: true, hasChildren: true }
           : kind === "group"
-            ? { kind: "group", expanded: el.dataset.rowExpanded === "true", hasChildren: el.dataset.rowHasChildren === "true" }
+            ? {
+                kind: "group",
+                expanded: el.dataset.rowExpanded === "true",
+                hasChildren: el.dataset.rowHasChildren === "true",
+              }
             : { kind: "member", expanded: false, hasChildren: false }
 
       const action = navAction(e.key, row)
@@ -172,7 +176,13 @@ export function RailGroupTree({
 
   return (
     <>
-      <Accordion.Root ref={treeRef} type="multiple" value={openIds} onValueChange={onGroupsChange} onKeyDown={onTreeKeyDown}>
+      <Accordion.Root
+        ref={treeRef}
+        type="multiple"
+        value={openIds}
+        onValueChange={onGroupsChange}
+        onKeyDown={onTreeKeyDown}
+      >
         {groups.map((g) => {
           const members = grouped.get(g.id) ?? []
           // 分组徽标:有未读显未读(聚合成员未读),否则显订阅数(new_desktop library.js:88 同款)。

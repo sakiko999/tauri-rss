@@ -62,7 +62,11 @@ const pickArtwork = (e: ChartEntry): string | undefined => {
 }
 
 /** 榜单(按分类 + 国家)。⚠️ 只返回条目骨架,**没有 feedUrl**。 */
-async function fetchChartEntries(country: string, genreId: number, limit: number): Promise<Array<{ id: string; entry: ChartEntry }>> {
+async function fetchChartEntries(
+  country: string,
+  genreId: number,
+  limit: number,
+): Promise<Array<{ id: string; entry: ChartEntry }>> {
   const url = `https://itunes.apple.com/${country}/rss/toppodcasts/limit=${limit}/genre=${genreId}/json`
   const res = await httpJson<{ feed?: { entry?: ChartEntry | ChartEntry[] } }>(url, { "user-agent": UA })
   const raw = res?.feed?.entry
@@ -120,7 +124,14 @@ export async function lookupApplePodcasts(ids: Array<string | number>, country =
 export async function fetchApplePodcastChart(genreId: number, limit = 20, country = "cn"): Promise<ApplePodcast[]> {
   const entries = await fetchChartEntries(country, genreId, limit)
   if (!entries.length) return []
-  const byId = new Map((await lookupApplePodcasts(entries.map((e) => e.id), country)).map((p) => [p.id, p]))
+  const byId = new Map(
+    (
+      await lookupApplePodcasts(
+        entries.map((e) => e.id),
+        country,
+      )
+    ).map((p) => [p.id, p]),
+  )
   // 按**榜单顺序**输出(Lookup 的返回顺序不保证与请求一致)。
   return entries
     .map((e): ApplePodcast | null => {

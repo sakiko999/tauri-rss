@@ -30,24 +30,46 @@ store.replace("s-b", [item("b1", "s-b", { publishedAt: NOW - 2000, isUnread: tru
 store.replace("s-c", [item("c1", "s-c", { publishedAt: NOW - 4000 })])
 
 // 单一订阅。
-assert.deepEqual(store.query({ subscriptionId: "s-a" }).map((i) => i.id), ["a1", "a2"])
+assert.deepEqual(
+  store.query({ subscriptionId: "s-a" }).map((i) => i.id),
+  ["a1", "a2"],
+)
 
 // ⭐ subscriptionIds(分组聚合):组 = {s-a, s-b},不包含 s-c。
-assert.deepEqual(store.query({ subscriptionIds: ["s-a", "s-b"] }).map((i) => i.id), ["a1", "b1", "a2"])
-assert.deepEqual(store.query({ subscriptionIds: [] }).map((i) => i.id), [], "空数组 = 空组,不是「不过滤」")
+assert.deepEqual(
+  store.query({ subscriptionIds: ["s-a", "s-b"] }).map((i) => i.id),
+  ["a1", "b1", "a2"],
+)
+assert.deepEqual(
+  store.query({ subscriptionIds: [] }).map((i) => i.id),
+  [],
+  "空数组 = 空组,不是「不过滤」",
+)
 
 // subscriptionIds 与其它条件取交集。
-assert.deepEqual(store.query({ subscriptionIds: ["s-a", "s-b"], unreadOnly: true }).map((i) => i.id), ["a1", "b1"])
-assert.deepEqual(store.query({ subscriptionIds: ["s-a", "s-b"], starredOnly: true }).map((i) => i.id), ["a2"])
+assert.deepEqual(
+  store.query({ subscriptionIds: ["s-a", "s-b"], unreadOnly: true }).map((i) => i.id),
+  ["a1", "b1"],
+)
+assert.deepEqual(
+  store.query({ subscriptionIds: ["s-a", "s-b"], starredOnly: true }).map((i) => i.id),
+  ["a2"],
+)
 
 // 既有分支不回归。
 assert.equal(store.query({ unreadOnly: true }).length, 2)
-assert.deepEqual(store.query({ starredOnly: true }).map((i) => i.id), ["a2"])
+assert.deepEqual(
+  store.query({ starredOnly: true }).map((i) => i.id),
+  ["a2"],
+)
 assert.equal(store.query({ today: true }).length, 4)
 assert.equal(store.all().length, 4)
 
 // 排序:publishedAt 降序。
-assert.deepEqual(store.query().map((i) => i.id), ["a1", "b1", "a2", "c1"])
+assert.deepEqual(
+  store.query().map((i) => i.id),
+  ["a1", "b1", "a2", "c1"],
+)
 
 // patch 就地合并 + 触发订阅回调。
 let emits = 0
@@ -74,6 +96,9 @@ assert.equal(store.query({ subscriptionId: "s-dup" })[0]?.isUnread, false, "应�
 
 // append 同订阅内按 id 去重。
 store.append("s-b", [item("b1", "s-b"), item("b2", "s-b", { publishedAt: NOW })])
-assert.deepEqual(store.query({ subscriptionId: "s-b" }).map((i) => i.id), ["b2", "b1"])
+assert.deepEqual(
+  store.query({ subscriptionId: "s-b" }).map((i) => i.id),
+  ["b2", "b1"],
+)
 
 console.log("✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / append)")

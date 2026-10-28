@@ -115,7 +115,9 @@ export function extractArticle(html: string, pageUrl?: string, minChars = 120): 
   const head = html.slice(0, 200_000)
   const ogImage = metaContent(head, "og:image") ?? metaContent(head, "twitter:image")
   const ogTitle =
-    metaContent(head, "og:title") ?? metaContent(head, "twitter:title") ?? /<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1]?.trim()
+    metaContent(head, "og:title") ??
+    metaContent(head, "twitter:title") ??
+    /<title[^>]*>([\s\S]*?)<\/title>/i.exec(head)?.[1]?.trim()
 
   const body = html.replace(DROP_BLOCKS, " ")
   const scope =

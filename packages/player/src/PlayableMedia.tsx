@@ -99,8 +99,7 @@ export function unlockAudioPlayback(): void {
   audioUnlocked = true
   try {
     const Ctor =
-      window.AudioContext ??
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
     if (!Ctor) return
     const ctx = new Ctor()
     if (ctx.state === "suspended") void ctx.resume()
@@ -166,9 +165,7 @@ export function PlayableMedia({
   // 控件栏里的开关:解析结果带弹幕才出现。enabled 用 showDanmaku(而不是 danmaku),
   // 关闭时流被丢弃但仍保留能力,按钮不会随流一起消失。
   const danmakuControl =
-    resolved?.danmaku && onToggleDanmaku
-      ? { enabled: showDanmaku, onToggle: onToggleDanmaku }
-      : undefined
+    resolved?.danmaku && onToggleDanmaku ? { enabled: showDanmaku, onToggle: onToggleDanmaku } : undefined
 
   async function handlePlay() {
     if (!resolve) return

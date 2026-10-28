@@ -43,7 +43,7 @@ export function useContainerInteractions(
       const o = opsRef.current
       const k = e.key.toLowerCase()
       const handled =
-        (e.key === " " || k === "k")
+        e.key === " " || k === "k"
           ? (o.togglePlay(), true)
           : e.key === "ArrowLeft"
             ? (o.seek(s.currentTime - 5), true)

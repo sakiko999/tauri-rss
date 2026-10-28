@@ -10,25 +10,25 @@
     <script>
       /* 首帧前决定主题/密度/动效/字号，避免闪白。
        * 偏好在 localStorage(ui-prefs)，与 src/store/prefs.ts 共用同一形状。 */
-      (function () {
+      ;(function () {
         try {
-          var p = JSON.parse(localStorage.getItem("ui-prefs") || "{}");
-          var t = p.theme || "dark";
+          var p = JSON.parse(localStorage.getItem("ui-prefs") || "{}")
+          var t = p.theme || "dark"
           if (t === "system") {
-            t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+            t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"
           }
-          var root = document.documentElement;
-          root.dataset.theme = t;
+          var root = document.documentElement
+          root.dataset.theme = t
           // data-prefs:空格分隔的开关列表(目前只有 railCollapsed)。★ 只给启动骨架用
           // (否则折叠侧栏的用户会先看到 268px 的骨架栏再跳成 64px);
           // React 的首帧标记不带 data-prefs,CSS 侧一律 `~=` 匹配,不会被它污染。
-          if (p.railCollapsed) root.dataset.prefs = "rail-collapsed";
-          if (p.density) root.dataset.density = p.density;
-          if (p.motion) root.dataset.motion = p.motion;
-          if (p.measure) root.dataset.measure = p.measure;
-          if (p.fontSize) root.style.setProperty("--article-fs", p.fontSize + "px");
+          if (p.railCollapsed) root.dataset.prefs = "rail-collapsed"
+          if (p.density) root.dataset.density = p.density
+          if (p.motion) root.dataset.motion = p.motion
+          if (p.measure) root.dataset.measure = p.measure
+          if (p.fontSize) root.style.setProperty("--article-fs", p.fontSize + "px")
         } catch (e) {}
-      })();
+      })()
     </script>
 
     <!-- 启动骨架样式。⚠️ 必须是 <link> 而非 import:module 脚本要等整张依赖图才执行
@@ -43,8 +43,8 @@
         <div class="bs-bar" style="width: 220px"></div>
         <div class="bs-bar bs-chip"></div>
         <div class="bs-icons">
-          <span class="bs-bar"></span><span class="bs-bar"></span><span class="bs-bar"></span><span class="bs-bar"></span
-          ><span class="bs-bar"></span>
+          <span class="bs-bar"></span><span class="bs-bar"></span><span class="bs-bar"></span
+          ><span class="bs-bar"></span><span class="bs-bar"></span>
         </div>
       </div>
       <div class="bs-body">

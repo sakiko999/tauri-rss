@@ -29,9 +29,7 @@ export const DouyinPartitionSearchChannel = makeApiChannel({
   key: "live:douyin:search",
   name: "抖音分区搜索",
   kind: "live",
-  sourceInfoTpl: [
-    { key: "keyword", label: "分区关键词", required: true, placeholder: "如 原神 / 舞蹈 / 音乐 / 游戏" },
-  ],
+  sourceInfoTpl: [{ key: "keyword", label: "分区关键词", required: true, placeholder: "如 原神 / 舞蹈 / 音乐 / 游戏" }],
   channelTitle: (info) => `抖音分区搜索 ${info.keyword ?? ""}`,
   channelLink: "https://live.douyin.com",
   fetchPage: async (info) => {

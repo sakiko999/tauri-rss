@@ -64,15 +64,27 @@ const e = (n: number, y: number, block = false) => ({ n, block, rect: { x: 0, y,
 const five = [e(1, 10), e(2, 20, true), e(3, 30), e(4, 40, true), e(5, 50)]
 
 const all = selectLabels(five, false, 3)
-eq(all.shown.map((x) => x.n), [1, 2, 4], "400 上限内区块优先，shown 按视觉顺序")
+eq(
+  all.shown.map((x) => x.n),
+  [1, 2, 4],
+  "400 上限内区块优先，shown 按视觉顺序",
+)
 eq(all.overflow, 2, "全部模式 overflow 计数")
 
 const only = selectLabels(five, true, 3)
-eq(only.shown.map((x) => x.n), [2, 4], "仅区块模式只留 block")
+eq(
+  only.shown.map((x) => x.n),
+  [2, 4],
+  "仅区块模式只留 block",
+)
 eq(only.overflow, 0, "仅区块模式不把控件算进 overflow")
 
 const tight = selectLabels(five, true, 1)
-eq(tight.shown.map((x) => x.n), [2], "仅区块也受标签上限约束")
+eq(
+  tight.shown.map((x) => x.n),
+  [2],
+  "仅区块也受标签上限约束",
+)
 eq(tight.overflow, 1, "仅区块超出上限时 overflow 计数")
 
 eq(selectLabels(five, false, 0).shown, [], "limit=0 不渲染标签")

@@ -48,7 +48,11 @@ export function SettingsPage() {
       <div className="scroll-area page-scroll" {...overlayBlock("settings-scroll", "page:settings:scroll")}>
         <div className="page-wrap" {...overlayBlock("settings-wrap", "page:settings:wrap")}>
           <h1 className="page-title">设置</h1>
-          <div className="segmented" style={{ marginBlock: "var(--sp-5)" }} {...overlayBlock("settings-tabs", "page:settings:tabs")}>
+          <div
+            className="segmented"
+            style={{ marginBlock: "var(--sp-5)" }}
+            {...overlayBlock("settings-tabs", "page:settings:tabs")}
+          >
             {TABS.map((t) => (
               <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
                 <Icon name={t.icon} size={13} /> {t.label}

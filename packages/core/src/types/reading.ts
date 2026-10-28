@@ -45,11 +45,7 @@ export function itemRefKey(subscriptionId: string, itemId: string): string {
 }
 
 /** 查记录：键必须带订阅维度（见 readingKey）。 */
-export function findRecord(
-  map: ReadingMap,
-  subscriptionId: string,
-  itemId: string,
-): ReadRecord | undefined {
+export function findRecord(map: ReadingMap, subscriptionId: string, itemId: string): ReadRecord | undefined {
   return map[readingKey(subscriptionId, itemId)]
 }
 

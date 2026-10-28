@@ -33,7 +33,8 @@ interface FiberLike {
 const ITEM_FIELDS = ["item", "sub", "subscription", "group", "channel", "s", "entry"]
 const ITEM_SELECTOR =
   ".card, .social-card, .list-row, .queue-row, .palette-item, .sv-slide, .cand-row, .candidate, [data-item], [data-row], [role=listitem]"
-const STATE_CLASS = /^(?:active|open|opened|closed|disabled|selected|current|playing|paused|hover|focus|focus-visible|show|hidden|in|out|is-|has-|animate-)/
+const STATE_CLASS =
+  /^(?:active|open|opened|closed|disabled|selected|current|playing|paused|hover|focus|focus-visible|show|hidden|in|out|is-|has-|animate-)/
 
 function clean(s: string): string {
   return s.replace(/\s+/g, " ").trim()
@@ -99,7 +100,10 @@ function titleText(el: Element): string {
 }
 
 export function isItemLike(el: Element): boolean {
-  return el.matches(ITEM_SELECTOR) || !!el.querySelector(":scope > .card-title, :scope > .social-title, :scope > .list-title")
+  return (
+    el.matches(ITEM_SELECTOR) ||
+    !!el.querySelector(":scope > .card-title, :scope > .social-title, :scope > .list-title")
+  )
 }
 
 /** 结构指纹：tag + 稳定类 + 同级同 tag/class 序号。 */
@@ -163,7 +167,8 @@ export function stableKey(el: Element, meta: ReactMeta = reactMeta(el)): { key: 
   }
 
   if (isItemLike(el)) {
-    const text = titleText(el) || el.getAttribute("aria-label") || el.querySelector("img[alt]")?.getAttribute("alt") || ""
+    const text =
+      titleText(el) || el.getAttribute("aria-label") || el.querySelector("img[alt]")?.getAttribute("alt") || ""
     if (text) {
       return {
         key: `item:${el.tagName.toLowerCase()}|${stableClass(el)}|${ancestorSig(el)}|${text.slice(0, 80)}`,

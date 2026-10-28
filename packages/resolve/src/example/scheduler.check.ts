@@ -21,11 +21,14 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 function fakeBrowser(opts?: { modeDelayMs?: number }) {
   const modes: string[] = []
   const modeResolvedAt: number[] = []
-  const tabs = new Map<string, {
-    activations: number
-    aborted: string[]
-    inflight: (() => void)[]
-  }>()
+  const tabs = new Map<
+    string,
+    {
+      activations: number
+      aborted: string[]
+      inflight: (() => void)[]
+    }
+  >()
   const browser: BrowserBackend = {
     async evaluate<T>(expr: string): Promise<T> {
       return `'${expr}'` as unknown as T
@@ -159,7 +162,11 @@ function fakeBrowser(opts?: { modeDelayMs?: number }) {
     /boom/,
   )
   await withBrowserOp(browser, { lane: "list:b", mode: "interactive" }, () => Promise.resolve())
-  assert.deepEqual(modes, ["interactive", "hidden", "interactive", "hidden"], `异常必须释放租约(得 ${JSON.stringify(modes)})`)
+  assert.deepEqual(
+    modes,
+    ["interactive", "hidden", "interactive", "hidden"],
+    `异常必须释放租约(得 ${JSON.stringify(modes)})`,
+  )
 }
 
 // 5. gate:同平台串行(gate lane),且 gate 等待不占 op lane 锁。
@@ -212,7 +219,10 @@ function fakeBrowser(opts?: { modeDelayMs?: number }) {
 // 7. withRenderLease / withBrowserGlobal 原语直用:异常释放 + 全局互斥。
 {
   const { browser, modes } = fakeBrowser()
-  await assert.rejects(withRenderLease(browser, async () => Promise.reject(new Error("x"))), /x/)
+  await assert.rejects(
+    withRenderLease(browser, async () => Promise.reject(new Error("x"))),
+    /x/,
+  )
   assert.deepEqual(modes, ["interactive", "hidden"], "withRenderLease 异常必须释放")
   const order: string[] = []
   await Promise.all([
@@ -248,19 +258,16 @@ function fakeBrowser(opts?: { modeDelayMs?: number }) {
     order.push("opB-start")
   })
   await Promise.all([opA, global, opB])
-  assert.ok(
-    order.indexOf("global-start") > order.indexOf("opA-end"),
-    `global 必须等在途 op 退出(${order.join(",")})`,
-  )
-  assert.ok(
-    order.indexOf("opB-start") > order.indexOf("global-end"),
-    `global 必须阻塞新 op(${order.join(",")})`,
-  )
+  assert.ok(order.indexOf("global-start") > order.indexOf("opA-end"), `global 必须等在途 op 退出(${order.join(",")})`)
+  assert.ok(order.indexOf("opB-start") > order.indexOf("global-end"), `global 必须阻塞新 op(${order.join(",")})`)
 }
 
 // 8. withLane:前驱失败不传染,fn 异常原样抛出。
 {
-  await assert.rejects(withLane("t", async () => Promise.reject(new Error("first"))), /first/)
+  await assert.rejects(
+    withLane("t", async () => Promise.reject(new Error("first"))),
+    /first/,
+  )
   const r = await withLane("t", async () => "after")
   assert.equal(r, "after", "前驱失败不得卡死后续")
 }

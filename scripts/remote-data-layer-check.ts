@@ -82,7 +82,10 @@ async function main(): Promise<void> {
     })
     add("remote 层创建", dl.remote === true)
     add("初始订阅为空", (await dl.subscriptions.list()).length === 0)
-    add("channels 可用", dl.listChannels().some((c) => c.key === "rss:hn"))
+    add(
+      "channels 可用",
+      dl.listChannels().some((c) => c.key === "rss:hn"),
+    )
     add("channelKind", dl.channelKind("rss:hn") === "article")
 
     const added = await dl.addSubscription("rss:hn", "Remote Test", { url: feedUrl })
@@ -181,7 +184,11 @@ async function main(): Promise<void> {
       const dl2 = await createRemoteDataLayer(endpoint2, {})
       add("重启后快照含订阅", (await dl2.subscriptions.list()).length === 1)
       const alpha = dl2.store.all().find((it) => it.id === "alpha")
-      add("重启后已读/星标收敛", alpha?.isUnread === false && alpha?.isStarred === true, JSON.stringify({ unread: alpha?.isUnread, starred: alpha?.isStarred }))
+      add(
+        "重启后已读/星标收敛",
+        alpha?.isUnread === false && alpha?.isStarred === true,
+        JSON.stringify({ unread: alpha?.isUnread, starred: alpha?.isStarred }),
+      )
       dl2.close()
       const shutdown = await fetch(`http://127.0.0.1:${m2[1]}/v1/shutdown`, {
         method: "POST",

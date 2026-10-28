@@ -23,8 +23,14 @@ export function StateBlock({
   tight?: boolean
 }) {
   return (
-    <div className={`state-block${tight ? " state-block-tight" : ""}`} {...overlayBlock("state-block", `state:${title}`)}>
-      <span className={`state-glyph${tone === "ok" ? " state-glyph-ok" : ""}`} data-tone={tone === "ok" ? undefined : tone}>
+    <div
+      className={`state-block${tight ? " state-block-tight" : ""}`}
+      {...overlayBlock("state-block", `state:${title}`)}
+    >
+      <span
+        className={`state-glyph${tone === "ok" ? " state-glyph-ok" : ""}`}
+        data-tone={tone === "ok" ? undefined : tone}
+      >
         <Icon name={icon} size={22} />
       </span>
       <p className="state-title">{title}</p>

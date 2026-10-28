@@ -33,7 +33,12 @@ export async function runEnv(opts: EnvOptions): Promise<void> {
           : pc.dim("未启用（未找到 amoeba-browser.exe；cargo build -p amoeba-browser）"),
     ),
   )
-  console.log(row("log", `info/debug = ${process.env.RSS_LOG === "1" ? "开 (RSS_LOG=1)" : "关(默认;RSS_LOG=1 放开)"},warn/error 永保留`))
+  console.log(
+    row(
+      "log",
+      `info/debug = ${process.env.RSS_LOG === "1" ? "开 (RSS_LOG=1)" : "关(默认;RSS_LOG=1 放开)"},warn/error 永保留`,
+    ),
+  )
 
   if (!opts.probe) return
 
@@ -41,7 +46,12 @@ export async function runEnv(opts: EnvOptions): Promise<void> {
   const http = nodeBackend()
   const tHttp = startTimer()
   const res = await http.request({ url: "https://www.bilibili.com", responseType: "text", timeoutMs: 10_000 })
-  console.log(row("http", `${res.status === 200 ? ok("GET bilibili.com") : fail(`status ${res.status}`)} ${res.status}, ${fmtMs(tHttp())}`))
+  console.log(
+    row(
+      "http",
+      `${res.status === 200 ? ok("GET bilibili.com") : fail(`status ${res.status}`)} ${res.status}, ${fmtMs(tHttp())}`,
+    ),
+  )
 
   const js = nodeJsBackend()
   const r = js.call("function ping() { return 40 + 2 }", "ping", [])

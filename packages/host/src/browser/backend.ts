@@ -123,9 +123,8 @@ async function evaluateOn<T>(
 
 /** 读 cookie（含 HttpOnly）。传 url 只取该域，否则取全部。 */
 async function cookiesOn(channel: CdpChannel, url?: string): Promise<Record<string, string>> {
-  const r = (url
-    ? await channel.send("Network.getCookies", { urls: [url] })
-    : await channel.send("Network.getAllCookies", {})
+  const r = (
+    url ? await channel.send("Network.getCookies", { urls: [url] }) : await channel.send("Network.getAllCookies", {})
   ) as { cookies?: Array<{ name: string; value: string }> }
   const out: Record<string, string> = {}
   for (const c of r.cookies ?? []) out[c.name] = c.value
@@ -362,10 +361,7 @@ export class CdpBrowserBackend implements BrowserBackend {
     if (!this.browserConnecting) {
       this.browserConnecting = (async () => {
         const p = port ?? (await this.port())
-        const v = await this.getJson<{ webSocketDebuggerUrl?: string }>(
-          `http://127.0.0.1:${p}/json/version`,
-          5_000,
-        )
+        const v = await this.getJson<{ webSocketDebuggerUrl?: string }>(`http://127.0.0.1:${p}/json/version`, 5_000)
         const url = v.webSocketDebuggerUrl
         if (!url) throw new Error("CDP: /json/version 未返回浏览器端点")
         const channel = new CdpChannel("browser", this.connector, {
@@ -426,8 +422,7 @@ export class CdpBrowserBackend implements BrowserBackend {
           const page =
             targets.find(
               (t) => t.type === "page" && t.url === "about:blank" && t.webSocketDebuggerUrl && this.isUsable(t),
-            ) ??
-            targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl && this.isUsable(t))
+            ) ?? targets.find((t) => t.type === "page" && t.webSocketDebuggerUrl && this.isUsable(t))
           if (page?.webSocketDebuggerUrl) return page.webSocketDebuggerUrl
           // 兜底也要走 createTarget：`/json/new` 会建一个未整理的可见顶层窗口。
           const id = await this.createTarget(port)

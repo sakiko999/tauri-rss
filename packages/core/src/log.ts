@@ -23,8 +23,7 @@ export const coreLog = createLogDomain("core", {
     },
     cacheWriteFailed: {
       level: "warn",
-      text: (ctx: { subscriptionId: string; error: string }) =>
-        `内容缓存写入失败 ${ctx.subscriptionId}: ${ctx.error}`,
+      text: (ctx: { subscriptionId: string; error: string }) => `内容缓存写入失败 ${ctx.subscriptionId}: ${ctx.error}`,
     },
     detailFailed: {
       level: "warn",

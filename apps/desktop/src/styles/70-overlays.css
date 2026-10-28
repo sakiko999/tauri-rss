@@ -577,7 +577,9 @@ kbd {
   overflow: hidden;
   border: 1px solid var(--border);
   opacity: 0.6;
-  transition: opacity var(--dur-fast) var(--ease-in), border-color var(--dur-fast) var(--ease-in);
+  transition:
+    opacity var(--dur-fast) var(--ease-in),
+    border-color var(--dur-fast) var(--ease-in);
 }
 .social-detail-thumb:hover {
   opacity: 1;
@@ -666,4 +668,3 @@ kbd {
   font-size: var(--fs-micro);
   font-weight: 620;
 }
-

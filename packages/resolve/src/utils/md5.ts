@@ -43,7 +43,10 @@ function binlMD5(x: number[], len: number): number[] {
   let c = -1732584194
   let d = 271733878
   for (let i = 0; i < x.length; i += 16) {
-    const olda = a, oldb = b, oldc = c, oldd = d
+    const olda = a,
+      oldb = b,
+      oldc = c,
+      oldd = d
     a = md5ff(a, b, c, d, x[i]!, 7, -680876936)
     d = md5ff(d, a, b, c, x[i + 1]!, 12, -389564586)
     c = md5ff(c, d, a, b, x[i + 2]!, 17, 606105819)

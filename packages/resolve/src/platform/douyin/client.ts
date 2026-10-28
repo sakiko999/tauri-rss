@@ -91,7 +91,9 @@ export const douyinClient = {
     if (json == null) throw new Error(`douyin empty body for ${url.slice(0, 80)}`)
     const code = (json as Record<string, any>)?.status_code
     if (code !== undefined && code !== 0) {
-      const msg = String((json as Record<string, any>)?.prompts ?? (json as Record<string, any>)?.status_msg ?? `status_code=${code}`)
+      const msg = String(
+        (json as Record<string, any>)?.prompts ?? (json as Record<string, any>)?.status_msg ?? `status_code=${code}`,
+      )
       // 4031 = verify-center 拦截,2483 = 需登录(抖音明确风控码)
       const riskCode = Number(code)
       if (riskCode === 4031 || riskCode === 2483) reportRisk(String(riskCode))

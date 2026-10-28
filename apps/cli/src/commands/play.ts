@@ -14,16 +14,18 @@ export interface PlayOptions {
 }
 
 export async function runPlay(url: string, opts: PlayOptions): Promise<void> {
-  const r = opts.viaService
-    ? await probeResolve(url, opts.endpoint)
-    : await resolveByUrl(url)
+  const r = opts.viaService ? await probeResolve(url, opts.endpoint) : await resolveByUrl(url)
   printResolved(r)
 
   if (!opts.open) return
   const target = r.streams.find((s) => s.format !== "dash") ?? r.streams[0]
   if (!target?.url) throw new Error("无可用直链可打开")
   if (target.format === "dash") {
-    console.log(pc.yellow("⚠ 全部档位均为 DASH(dashManifest),系统播放器无法直接消费——不打开。mpv 落盘 .mpd 方案见 docs/playback/mpv.md"))
+    console.log(
+      pc.yellow(
+        "⚠ 全部档位均为 DASH(dashManifest),系统播放器无法直接消费——不打开。mpv 落盘 .mpd 方案见 docs/playback/mpv.md",
+      ),
+    )
     return
   }
   console.log(`open:    ${target.quality ?? ""} ${target.format ?? ""} → 系统播放器`)
@@ -37,8 +39,10 @@ export async function runPlay(url: string, opts: PlayOptions): Promise<void> {
  *  (`\"`)cmd 也不认。rundll32 不经 cmd 解析,URL 原样传递。 */
 function openExternal(u: string): void {
   const cmd =
-    process.platform === "win32" ? ["rundll32", "url.dll,FileProtocolHandler", u]
-    : process.platform === "darwin" ? ["open", u]
-    : ["xdg-open", u]
+    process.platform === "win32"
+      ? ["rundll32", "url.dll,FileProtocolHandler", u]
+      : process.platform === "darwin"
+        ? ["open", u]
+        : ["xdg-open", u]
   Bun.spawn(cmd, { stdin: "ignore", stdout: "ignore", stderr: "ignore" })
 }

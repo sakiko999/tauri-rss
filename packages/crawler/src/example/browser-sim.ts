@@ -62,7 +62,14 @@ class CdpPage implements BrowserBackend {
   }
 
   private handle(text: string): void {
-    let msg: { id?: number; method?: string; params?: unknown; sessionId?: string; result?: any; error?: { message?: string } }
+    let msg: {
+      id?: number
+      method?: string
+      params?: unknown
+      sessionId?: string
+      result?: any
+      error?: { message?: string }
+    }
     try {
       msg = JSON.parse(text)
     } catch {
@@ -145,9 +152,12 @@ class CdpPage implements BrowserBackend {
 /** 各 channel 的示例 info(browser-sim 用;来自原 shared backend.ts,保持同参)。 */
 function exampleInfo(key: string): Record<string, string> {
   switch (key) {
-    case "weibo:user": return { uid: "1195230310" } // 微博·何炅(desktop 测试源)
-    case "xhs:user": return { user_id: "593032945e87e77791e03696" } // 小红书·小宇菇菇(desktop 测试源)
-    default: return {}
+    case "weibo:user":
+      return { uid: "1195230310" } // 微博·何炅(desktop 测试源)
+    case "xhs:user":
+      return { user_id: "593032945e87e77791e03696" } // 小红书·小宇菇菇(desktop 测试源)
+    default:
+      return {}
   }
 }
 

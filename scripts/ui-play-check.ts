@@ -15,7 +15,11 @@ const BASE = process.env.APP_URL ?? "http://localhost:1420"
 const waitArg = process.argv.indexOf("--wait")
 const WAIT = waitArg >= 0 ? Number(process.argv[waitArg + 1]) * 1000 : 9000
 
-const list = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()) as Array<{ type: string; url: string; webSocketDebuggerUrl: string }>
+const list = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()) as Array<{
+  type: string
+  url: string
+  webSocketDebuggerUrl: string
+}>
 const page = list.find((t) => t.type === "page" && t.url.startsWith(BASE))
 if (!page) throw new Error(`没有可附加的页面 target(端口 ${PORT})。确认 bun run tauri 在跑。`)
 const ws = new WebSocket(page.webSocketDebuggerUrl)
@@ -25,12 +29,20 @@ ws.addEventListener("message", (e) => {
   const m = JSON.parse(String(e.data)) as { id?: number; result?: any }
   if (m.id === undefined) return
   const p = pending.get(m.id)
-  if (p) { pending.delete(m.id); p(m.result) }
+  if (p) {
+    pending.delete(m.id)
+    p(m.result)
+  }
 })
 await new Promise<void>((r) => ws.addEventListener("open", () => r()))
 const send = (method: string, params: Record<string, unknown> = {}) =>
-  new Promise<any>((r) => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })) })
-const ev = async (x: string) => (await send("Runtime.evaluate", { expression: x, awaitPromise: true, returnByValue: true })).result?.value
+  new Promise<any>((r) => {
+    const i = ++id
+    pending.set(i, r)
+    ws.send(JSON.stringify({ id: i, method, params }))
+  })
+const ev = async (x: string) =>
+  (await send("Runtime.evaluate", { expression: x, awaitPromise: true, returnByValue: true })).result?.value
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 // 各类各挑一条(url 倾向平台特征,便于定位)。
@@ -52,9 +64,13 @@ const targets = JSON.parse(
   })()`),
 )
 
-let ok = 0, bad = 0
+let ok = 0,
+  bad = 0
 for (const [label, idv] of Object.entries(targets) as [string, string][]) {
-  if (!idv) { console.log(`- ${label}: (无此类条目,跳过)`); continue }
+  if (!idv) {
+    console.log(`- ${label}: (无此类条目,跳过)`)
+    continue
+  }
   // ⚠️ PlayableMedia key=item.id → 换条目会重挂 video。导航后必须等「媒体元素出现且 src 变化」,
   // 否则读到上一条的残留状态(曾因此把 4 条都读成同一条 YouTube 的 0:43)。
   // ⚠️ 用 CDP `Page.navigate`(真导航)而非 location.href= ——后者被 react-router 的
@@ -64,8 +80,13 @@ for (const [label, idv] of Object.entries(targets) as [string, string][]) {
   let ready = false
   while (Date.now() < deadline) {
     await sleep(800)
-    const sid = await ev(`(() => { const m = document.querySelector('audio') || document.querySelector('video'); return (decodeURIComponent(location.pathname).includes(${JSON.stringify(idv)}) && m) ? 1 : 0 })()`)
-    if (sid === 1) { ready = true; break }
+    const sid = await ev(
+      `(() => { const m = document.querySelector('audio') || document.querySelector('video'); return (decodeURIComponent(location.pathname).includes(${JSON.stringify(idv)}) && m) ? 1 : 0 })()`,
+    )
+    if (sid === 1) {
+      ready = true
+      break
+    }
   }
   await sleep(WAIT)
   const st = JSON.parse(
@@ -81,8 +102,11 @@ for (const [label, idv] of Object.entries(targets) as [string, string][]) {
     })()`),
   )
   const played = st.media && !st.paused && st.t > 0
-  if (played) ok++; else bad++
-  console.log(`${played ? "✓" : "✗"} ${label}: ${st.media} t=${st.t}s paused=${st.paused} rs=${st.readyState} canvas=${st.canvas} ${played ? "" : "｜" + st.stage}`)
+  if (played) ok++
+  else bad++
+  console.log(
+    `${played ? "✓" : "✗"} ${label}: ${st.media} t=${st.t}s paused=${st.paused} rs=${st.readyState} canvas=${st.canvas} ${played ? "" : "｜" + st.stage}`,
+  )
 }
 console.log(`\n${ok} 起播 / ${bad} 未起播`)
 process.exit(bad === 0 ? 0 : 1)

@@ -85,8 +85,7 @@ export function baseFor(s: StoreSlice, node: string | null, now: number): MediaI
   if (n === "starred") return s.allItems.filter((i) => i.isStarred)
   // 继续:有未读完进度的条目(视频/音频/直播用 positionSec,文章用 scrollRatio)。
   // 进度由 core applyReadingState 从 reading 回填;近片尾/近结尾时 store 已清除。
-  if (n === "resume")
-    return s.allItems.filter((i) => (i.positionSec ?? 0) > 0 || (i.scrollRatio ?? 0) > 0)
+  if (n === "resume") return s.allItems.filter((i) => (i.positionSec ?? 0) > 0 || (i.scrollRatio ?? 0) > 0)
   if (isGroupNode(n)) {
     const gid = groupIdOf(n)
     const ids = new Set(s.subscriptions.filter((sub) => sub.groupId === gid).map((sub) => sub.id))
@@ -101,7 +100,6 @@ export function baseFor(s: StoreSlice, node: string | null, now: number): MediaI
   }
   return s.allItems.filter((i) => i.subscriptionId === n)
 }
-
 
 /** 热度排序键:在线人数 → 点赞数(社交)。 */
 export function heatOf(i: MediaItem): number {
@@ -144,7 +142,11 @@ export function bodyText(i: MediaItem): string {
   const hit = bodyCache.get(i)
   if (hit !== undefined) return hit
   const content = (i as { content?: string }).content ?? ""
-  const text = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().toLowerCase()
+  const text = content
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase()
   bodyCache.set(i, text)
   return text
 }
@@ -354,8 +356,14 @@ export function groupedBySub(items: MediaItem[], subscriptions: Subscription[], 
  * 量纲不同会让直播/大 VOD 长期霸榜（见 heatOf 注释）。
  */
 export function picksMix(items: MediaItem[], limit = 12): MediaItem[] {
-  const social = items.filter((i) => i.kind === "social").slice().sort((a, b) => heatOf(b) - heatOf(a))
-  const media = items.filter((i) => i.kind === "video").slice().sort((a, b) => timeKey(b) - timeKey(a))
+  const social = items
+    .filter((i) => i.kind === "social")
+    .slice()
+    .sort((a, b) => heatOf(b) - heatOf(a))
+  const media = items
+    .filter((i) => i.kind === "video")
+    .slice()
+    .sort((a, b) => timeKey(b) - timeKey(a))
   const out: MediaItem[] = []
   for (let i = 0; out.length < limit && (i < social.length || i < media.length); i++) {
     const s = social[i]
@@ -366,4 +374,3 @@ export function picksMix(items: MediaItem[], limit = 12): MediaItem[] {
   }
   return out
 }
-

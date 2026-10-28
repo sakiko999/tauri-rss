@@ -52,7 +52,9 @@ sp.delete("w_rid")
 sp.delete("wts") // 签名串里 wts 不参与排序,拼接在排序结果之后(与 signWeb 一致)
 sp.sort()
 const origin = IMG_KEY + SUB_KEY
-const mixin = MIXIN_KEY_ENC_TAB.map((i) => origin[i] ?? "").join("").slice(0, 32)
+const mixin = MIXIN_KEY_ENC_TAB.map((i) => origin[i] ?? "")
+  .join("")
+  .slice(0, 32)
 assert.equal(wRid, md5Hex(`${sp.toString()}&wts=${wts}${mixin}`), "w_rid 必须覆盖含 dm_* 的全参数")
 
 // 3. 带 cookie 时签名用同 cookie 的 nav(登录态 key 选择)。

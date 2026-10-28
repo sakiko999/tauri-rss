@@ -49,7 +49,15 @@ export function NavRow({
 }
 
 /** 侧栏分节(标题 + 若干行)。标题里可塞一个操作按钮(如「订阅」旁的管理分组)。 */
-export function RailSection({ title, action, children }: { title: React.ReactNode; action?: React.ReactNode; children: React.ReactNode }) {
+export function RailSection({
+  title,
+  action,
+  children,
+}: {
+  title: React.ReactNode
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
   const key = typeof title === "string" ? `rail-section:${title}` : undefined
   return (
     <section className="rail-section" {...overlayBlock("rail-section", key)}>

@@ -7,13 +7,7 @@ import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 /** 距直播边缘超过 5s 判定为「离开直播」,显示回直播按钮。 */
 export const LIVE_EDGE_THRESHOLD_S = 5
 
-export function MediaLiveEdgeButton({
-  state,
-  ops,
-}: {
-  state: VideoPlayState
-  ops: VideoOps
-}) {
+export function MediaLiveEdgeButton({ state, ops }: { state: VideoPlayState; ops: VideoOps }) {
   if (!state.live || state.paused) return null
   if (!(state.bufferedEnd > 0 && state.bufferedEnd - state.currentTime > LIVE_EDGE_THRESHOLD_S)) return null
   return (

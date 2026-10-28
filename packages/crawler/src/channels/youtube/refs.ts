@@ -15,13 +15,7 @@ const PLAYLIST_ID_RE = /^[A-Za-z0-9_-]{10,80}$/
 const REJECT_PREFIXES = ["RD", "WL", "LL", "LM"]
 
 /** 可承载播放列表的 host。 */
-const YOUTUBE_HOSTS = new Set([
-  "youtube.com",
-  "www.youtube.com",
-  "m.youtube.com",
-  "music.youtube.com",
-  "youtu.be",
-])
+const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"])
 
 function parseUrl(input: string): URL | null {
   try {

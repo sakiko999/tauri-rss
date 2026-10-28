@@ -61,7 +61,10 @@ console.log("figure/图注保留 + 可见文本长度:")
   const ex = extractArticle(html, "https://site.example/")
   assert("图注未丢", !!ex?.text.includes("图 1：架构示意"))
   // 图片密集短摘要:可见字寥寥但 HTML 很长 → visibleTextLength 应远小于原始长度
-  const imgHeavy = `<p><a href="https://example.com/very/long/path/aaaa"><img src="https://cdn.example.com/x/y/z.jpg" width="600"></a></p>`.repeat(8)
+  const imgHeavy =
+    `<p><a href="https://example.com/very/long/path/aaaa"><img src="https://cdn.example.com/x/y/z.jpg" width="600"></a></p>`.repeat(
+      8,
+    )
   assert("可见文本远小于 HTML", visibleTextLength(imgHeavy) < imgHeavy.length / 4)
   assert("可见文本非零", visibleTextLength(imgHeavy) >= 0)
 }

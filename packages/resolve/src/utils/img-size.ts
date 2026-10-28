@@ -51,8 +51,7 @@ export function parseImageSize(buf: Uint8Array): ImageSize | null {
         continue
       }
       const segLen = (buf[off + 2] << 8) | buf[off + 3]
-      const isSof =
-        marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
+      const isSof = marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc
       if (isSof && off + 9 <= buf.byteLength) {
         return { height: (buf[off + 5] << 8) | buf[off + 6], width: (buf[off + 7] << 8) | buf[off + 8] }
       }

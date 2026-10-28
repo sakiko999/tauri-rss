@@ -122,7 +122,12 @@ export function SocialDetailModal() {
     imgs.length > 0 ? imgs.map((_, i) => ({ url: mediaUrl(item, i) ?? "" })) : cover ? [{ url: cover }] : []
   /** 当前图片真实比例。容器比例 === 图片比例时 contain 恰好填满,不留缝也不裁切。 */
   const imgRatio = (() => {
-    const it = item as { aspectRatio?: number; width?: number; height?: number; images?: Array<{ width?: number; height?: number }> }
+    const it = item as {
+      aspectRatio?: number
+      width?: number
+      height?: number
+      images?: Array<{ width?: number; height?: number }>
+    }
     return socialRatio(it.images?.[imgIndex] ?? { width: it.width, height: it.height })
   })()
   const likes = (item as { likes?: number }).likes
@@ -137,219 +142,226 @@ export function SocialDetailModal() {
   const resolveFailed = !!detail.error
   return (
     <>
-    <Modal
-      open
-      onOpenChange={(o) => !o && close()}
-      size="wide"
-      flush
-      title={item.title || item.author?.name || "详情"}
-      desc={item.author?.name ? `${item.author.name} — ${fmtAgo(item.publishedAt)}` : fmtAgo(item.publishedAt)}
-      footer={
-        <>
-          {/* ⚠️ 社交条目没有可播流,`addToQueue` 会**拒绝**它(入队收口处有护栏)——
+      <Modal
+        open
+        onOpenChange={(o) => !o && close()}
+        size="wide"
+        flush
+        title={item.title || item.author?.name || "详情"}
+        desc={item.author?.name ? `${item.author.name} — ${fmtAgo(item.publishedAt)}` : fmtAgo(item.publishedAt)}
+        footer={
+          <>
+            {/* ⚠️ 社交条目没有可播流,`addToQueue` 会**拒绝**它(入队收口处有护栏)——
               原按钮点了不生效却弹「已加入播放队列」(说谎)。这里不摆队列按钮。 */}
-          {item.url ? (
-            /* ⚠️ 走宿主门面(WebView 拦 window.open)。 */
-            <button className="btn btn-quiet" onClick={() => openExternalSafely(item.url)}>
-              <Icon name="external" size={14} /> 打开原文
+            {item.url ? (
+              /* ⚠️ 走宿主门面(WebView 拦 window.open)。 */
+              <button className="btn btn-quiet" onClick={() => openExternalSafely(item.url)}>
+                <Icon name="external" size={14} /> 打开原文
+              </button>
+            ) : null}
+            <span className="spacer" />
+            <button className="btn btn-secondary" onClick={close}>
+              关闭
             </button>
-          ) : null}
-          <span className="spacer" />
-          <button className="btn btn-secondary" onClick={close}>
-            关闭
-          </button>
-        </>
-      }
-    >
-      <div id="social-detail">
-        <div className="social-detail" {...overlayBlock("social-detail", `social:detail:${itemKey(item)}`)}>
-          {/* ⚠️ 缩略图条**不能**放在 media 与 info 之间:它 grid-column:1/-1 会占满
+          </>
+        }
+      >
+        <div id="social-detail">
+          <div className="social-detail" {...overlayBlock("social-detail", `social:detail:${itemKey(item)}`)}>
+            {/* ⚠️ 缩略图条**不能**放在 media 与 info 之间:它 grid-column:1/-1 会占满
               第一行两列,把 info 自动推到第三行。放在 info 之后,自动放置才会是
               media=1/1 → info=1/2 → thumbs=第二行整行。 */}
-          {/* 媒体列的宽度按**当前图片的比例**反推(--detail-media-ratio),media
+            {/* 媒体列的宽度按**当前图片的比例**反推(--detail-media-ratio),media
               容器再按同一比例定宽。这样网格的 1.4fr/1fr 折中值就不会把竖图挤成一条。
               比例异常的图(超长截图 / 超宽 banner)在 CSS 里被 clamp 到 0.5~1.9,
               此时 contain 留一点缝是有意的(完整显示 > 填满裁剪)。 */}
-          <div
-            className="social-detail-media"
-            style={{ "--detail-media-ratio": String(imgRatio) } as React.CSSProperties}
-            {...overlayBlock("social-detail-media", `social:detail:media:${itemKey(item)}`)}
-          >
-            {cover ? (
-              <span className="social-detail-cover">
-                {imgs.length > 1 ? (
-                  <div className="social-detail-controls">
-                    <button
-                      className="social-detail-nav"
-                      data-dir="prev"
-                      aria-label="上一张"
-                      onClick={() => stepImg(-1)}
-                    >
-                      <Icon name="back" size={15} />
-                    </button>
-                    <span className="social-detail-count num">
-                      {imgIndex + 1} / {imgs.length}
-                    </span>
-                    <button
-                      className="social-detail-nav"
-                      data-dir="next"
-                      aria-label="下一张"
-                      onClick={() => stepImg(1)}
-                    >
-                      <Icon name="chevronRight" size={15} />
-                    </button>
-                  </div>
-                ) : null}
-                {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
+            <div
+              className="social-detail-media"
+              style={{ "--detail-media-ratio": String(imgRatio) } as React.CSSProperties}
+              {...overlayBlock("social-detail-media", `social:detail:media:${itemKey(item)}`)}
+            >
+              {cover ? (
+                <span className="social-detail-cover">
+                  {imgs.length > 1 ? (
+                    <div className="social-detail-controls">
+                      <button
+                        className="social-detail-nav"
+                        data-dir="prev"
+                        aria-label="上一张"
+                        onClick={() => stepImg(-1)}
+                      >
+                        <Icon name="back" size={15} />
+                      </button>
+                      <span className="social-detail-count num">
+                        {imgIndex + 1} / {imgs.length}
+                      </span>
+                      <button
+                        className="social-detail-nav"
+                        data-dir="next"
+                        aria-label="下一张"
+                        onClick={() => stepImg(1)}
+                      >
+                        <Icon name="chevronRight" size={15} />
+                      </button>
+                    </div>
+                  ) : null}
+                  {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
-                {/* 实况图：切到即直连播放、静音循环；点一下暂停/续播。
+                  {/* 实况图：切到即直连播放、静音循环；点一下暂停/续播。
                     加载中/失败时继续显示静态图（比黑屏/碎播放器可解释）。 */}
-                {liveVideo && live.url ? (
-                  <video
-                    className="social-detail-video"
-                    src={live.url}
-                    poster={cover}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    onClick={(e) => {
-                      const v = e.currentTarget
-                      if (v.paused) void v.play()
-                      else v.pause()
-                    }}
-                    // 直连失败/解码不支持 → 退回静态图（下方出重试）。
-                    onError={() => live.onError()}
-                  />
-                ) : (
-                  // 点静态图 → 灯箱(完整大图 + 左右翻页)。实况视频那一支不挂:
-                  // 它自己接管点击(暂停/续播),再套一层灯箱会两个动作抢同一次点击。
-                  <button
-                    type="button"
-                    className="social-detail-zoom"
-                    aria-label="查看大图"
-                    onClick={() => setZoom(true)}
-                  >
-                    <MediaImage src={cover} alt={item.title} loading="eager" contain />
-                  </button>
-                )}
-                {/* 直连失败时才出现的重试入口（403/网络抖动/签名过期）。 */}
-                {liveVideo && live.failed ? (
-                  <button
-                    className="btn btn-secondary btn-sm social-detail-live"
-                    onClick={() => setLiveRetry((n) => n + 1)}
-                  >
-                    <Icon name="refresh" size={13} /> 重试
-                  </button>
-                ) : null}
-              </span>
-            ) : (
-              <span className="cover-missing">
-                <Icon name="image" size={24} />
-              </span>
-            )}
-          </div>
-
-          <div className="social-detail-info" {...overlayBlock("social-detail-info", `social:detail:info:${itemKey(item)}`)}>
-            <div className="social-detail-head">
-              <span className="social-avatar social-avatar-letter avatar-round" style={{ width: 34, height: 34 }}>
-                {(item.author?.name?.[0] ?? "?").toUpperCase()}
-              </span>
-              <span className="stack" style={{ gap: 0 }}>
-                <span style={{ fontWeight: 560 }}>{item.author?.name ?? "未知作者"}</span>
-                <span className="t-micro t-dim">{fmtAgo(item.publishedAt)}</span>
-              </span>
+                  {liveVideo && live.url ? (
+                    <video
+                      className="social-detail-video"
+                      src={live.url}
+                      poster={cover}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      onClick={(e) => {
+                        const v = e.currentTarget
+                        if (v.paused) void v.play()
+                        else v.pause()
+                      }}
+                      // 直连失败/解码不支持 → 退回静态图（下方出重试）。
+                      onError={() => live.onError()}
+                    />
+                  ) : (
+                    // 点静态图 → 灯箱(完整大图 + 左右翻页)。实况视频那一支不挂:
+                    // 它自己接管点击(暂停/续播),再套一层灯箱会两个动作抢同一次点击。
+                    <button
+                      type="button"
+                      className="social-detail-zoom"
+                      aria-label="查看大图"
+                      onClick={() => setZoom(true)}
+                    >
+                      <MediaImage src={cover} alt={item.title} loading="eager" contain />
+                    </button>
+                  )}
+                  {/* 直连失败时才出现的重试入口（403/网络抖动/签名过期）。 */}
+                  {liveVideo && live.failed ? (
+                    <button
+                      className="btn btn-secondary btn-sm social-detail-live"
+                      onClick={() => setLiveRetry((n) => n + 1)}
+                    >
+                      <Icon name="refresh" size={13} /> 重试
+                    </button>
+                  ) : null}
+                </span>
+              ) : (
+                <span className="cover-missing">
+                  <Icon name="image" size={24} />
+                </span>
+              )}
             </div>
-            {resolving ? (
-              <span className="stack" style={{ gap: "var(--sp-2)" }}>
-                <span className="skeleton sk-line" style={{ width: "92%" }} />
-                <span className="skeleton sk-line" style={{ width: "78%" }} />
-                <span className="skeleton sk-line" style={{ width: "64%" }} />
-              </span>
-            ) : bodyHtml ? (
-              // ⚠️ HTML 正文走 social-detail-html 覆盖掉 white-space:pre-wrap ——
-              // 平台给的 HTML 里 <a>/<span> 周围本来就带源码换行,pre-wrap 会把这些
-              // 纯排版换行也当真换行渲染,段落被拆开、行距错乱(看着像文字重叠)。
-              // HTML 分支的换行交给 <br>,不靠 white-space。
-              <div className="social-detail-text social-detail-html" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: bodyHtml }} />
-            ) : text ? (
-              <p className="social-detail-text">{text}</p>
-            ) : (
-              // 空正文占位:没有这一支时,正文区是一大片空白,用户分不清
-              // 「还在加载」还是「本来就没正文」。
-              <p className="social-detail-text t-dim">（这条没有正文，只有图片）</p>
-            )}
-            {/* 三项统计全为 0/缺失时不渲染 —— 否则只剩一条纯噪声的横线。 */}
-            {likes || replies || reposts ? (
-              <div className="social-detail-stats">
-                {likes ? (
+
+            <div
+              className="social-detail-info"
+              {...overlayBlock("social-detail-info", `social:detail:info:${itemKey(item)}`)}
+            >
+              <div className="social-detail-head">
+                <span className="social-avatar social-avatar-letter avatar-round" style={{ width: 34, height: 34 }}>
+                  {(item.author?.name?.[0] ?? "?").toUpperCase()}
+                </span>
+                <span className="stack" style={{ gap: 0 }}>
+                  <span style={{ fontWeight: 560 }}>{item.author?.name ?? "未知作者"}</span>
+                  <span className="t-micro t-dim">{fmtAgo(item.publishedAt)}</span>
+                </span>
+              </div>
+              {resolving ? (
+                <span className="stack" style={{ gap: "var(--sp-2)" }}>
+                  <span className="skeleton sk-line" style={{ width: "92%" }} />
+                  <span className="skeleton sk-line" style={{ width: "78%" }} />
+                  <span className="skeleton sk-line" style={{ width: "64%" }} />
+                </span>
+              ) : bodyHtml ? (
+                // ⚠️ HTML 正文走 social-detail-html 覆盖掉 white-space:pre-wrap ——
+                // 平台给的 HTML 里 <a>/<span> 周围本来就带源码换行,pre-wrap 会把这些
+                // 纯排版换行也当真换行渲染,段落被拆开、行距错乱(看着像文字重叠)。
+                // HTML 分支的换行交给 <br>,不靠 white-space。
+                <div
+                  className="social-detail-text social-detail-html"
+                  onClick={onBodyClick}
+                  dangerouslySetInnerHTML={{ __html: bodyHtml }}
+                />
+              ) : text ? (
+                <p className="social-detail-text">{text}</p>
+              ) : (
+                // 空正文占位:没有这一支时,正文区是一大片空白,用户分不清
+                // 「还在加载」还是「本来就没正文」。
+                <p className="social-detail-text t-dim">（这条没有正文，只有图片）</p>
+              )}
+              {/* 三项统计全为 0/缺失时不渲染 —— 否则只剩一条纯噪声的横线。 */}
+              {likes || replies || reposts ? (
+                <div className="social-detail-stats">
+                  {likes ? (
+                    <span>
+                      <Icon name="heart" size={13} /> {fmtCount(likes)}
+                    </span>
+                  ) : null}
+                  {replies ? (
+                    <span>
+                      <Icon name="message" size={13} /> {fmtCount(replies)}
+                    </span>
+                  ) : null}
+                  {reposts ? (
+                    <span>
+                      <Icon name="refresh" size={13} /> {fmtCount(reposts)}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+              {/* 状态脚注:只在「补全中 / 补全失败 / 实况播放失败」时出现。
+                完整内容 + 正常播放不需要解释。 */}
+              {resolving || resolveFailed || (liveVideo && live.failed) ? (
+                <p className="social-detail-note">
+                  {resolving ? (
+                    <Icon name="loader" size={13} className="animate-spin" />
+                  ) : (
+                    <Icon name="alert" size={13} />
+                  )}
                   <span>
-                    <Icon name="heart" size={13} /> {fmtCount(likes)}
+                    {resolving
+                      ? "正在向源站补全详情…"
+                      : resolveFailed
+                        ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
+                        : "实况视频播放失败（已显示静态图）"}
                   </span>
-                ) : null}
-                {replies ? (
-                  <span>
-                    <Icon name="message" size={13} /> {fmtCount(replies)}
-                  </span>
-                ) : null}
-                {reposts ? (
-                  <span>
-                    <Icon name="refresh" size={13} /> {fmtCount(reposts)}
-                  </span>
-                ) : null}
+                </p>
+              ) : null}
+            </div>
+
+            {/* 多图缩略图条:直接点选,不必靠左右键一张张翻。放在 info 之后是刻意的
+              ——它横跨整行,插在 media 与 info 之间会把 info 挤到第三行。 */}
+            {imgs.length > 1 ? (
+              <div className="social-detail-thumbs" role="tablist" aria-label="图片">
+                {imgs.map((img, i) => (
+                  <button
+                    key={`${img.url}-${i}`}
+                    className="social-detail-thumb"
+                    role="tab"
+                    aria-selected={i === imgIndex}
+                    aria-label={`第 ${i + 1} 张`}
+                    onClick={() => setImgIndex(i)}
+                  >
+                    <MediaImage src={mediaUrl(item, i)} ratio={1} />
+                  </button>
+                ))}
               </div>
             ) : null}
-            {/* 状态脚注:只在「补全中 / 补全失败 / 实况播放失败」时出现。
-                完整内容 + 正常播放不需要解释。 */}
-            {resolving || resolveFailed || (liveVideo && live.failed) ? (
-              <p className="social-detail-note">
-                {resolving ? (
-                  <Icon name="loader" size={13} className="animate-spin" />
-                ) : (
-                  <Icon name="alert" size={13} />
-                )}
-                <span>
-                  {resolving
-                    ? "正在向源站补全详情…"
-                    : resolveFailed
-                      ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
-                      : "实况视频播放失败（已显示静态图）"}
-                </span>
-              </p>
-            ) : null}
           </div>
-
-          {/* 多图缩略图条:直接点选,不必靠左右键一张张翻。放在 info 之后是刻意的
-              ——它横跨整行,插在 media 与 info 之间会把 info 挤到第三行。 */}
-          {imgs.length > 1 ? (
-            <div className="social-detail-thumbs" role="tablist" aria-label="图片">
-              {imgs.map((img, i) => (
-                <button
-                  key={`${img.url}-${i}`}
-                  className="social-detail-thumb"
-                  role="tab"
-                  aria-selected={i === imgIndex}
-                  aria-label={`第 ${i + 1} 张`}
-                  onClick={() => setImgIndex(i)}
-                >
-                  <MediaImage src={mediaUrl(item, i)} ratio={1} />
-                </button>
-              ))}
-            </div>
-          ) : null}
         </div>
-      </div>
-    </Modal>
-    {/* 灯箱是**兄弟**不是子节点:radix 的 DismissableLayer 把「后开的层」视为内部,
+      </Modal>
+      {/* 灯箱是**兄弟**不是子节点:radix 的 DismissableLayer 把「后开的层」视为内部,
         但把灯箱嵌在外层 Dialog.Content 的 children 里会让外层的滚动/焦点作用域多包一层。
         索引共用 imgIndex —— 灯箱翻到第 N 张,关掉后详情也停在第 N 张。 */}
-    <Lightbox
-      open={zoom}
-      images={lightboxImages}
-      index={imgIndex}
-      onIndexChange={setImgIndex}
-      onClose={() => setZoom(false)}
-    />
+      <Lightbox
+        open={zoom}
+        images={lightboxImages}
+        index={imgIndex}
+        onIndexChange={setImgIndex}
+        onClose={() => setZoom(false)}
+      />
     </>
   )
 }

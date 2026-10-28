@@ -102,11 +102,7 @@ async function removeProfile(dir: string): Promise<string | null> {
   return last instanceof Error ? last.message : String(last)
 }
 
-async function resetOne(
-  label: string,
-  dir: string,
-  stop: () => number,
-): Promise<boolean> {
+async function resetOne(label: string, dir: string, stop: () => number): Promise<boolean> {
   const before = dirSizeMB(dir)
   if (before === null) {
     console.log(row(label, pc.dim(`${dir} 不存在，无需清理`)))

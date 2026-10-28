@@ -113,7 +113,8 @@ export function MediaCard({
   const playable = isPlayableKind(item.kind)
   // 「在播」判据只走 lib/media.ts 的 isLiveNow（offline 不算、unknown 算在播）——
   // 以前这里内联一份，和首页区块的判据各写各的，下播房间会漏过滤。
-  const dur = (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
+  const dur =
+    (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
   const online = onlineOf(item)
   const b = badged(item, actions)
   // article 同 social:没有可播流,整卡点击应是「打开原文」而不是播放。
@@ -312,9 +313,7 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
                   <Icon name="play" size={10} /> 实况
                 </span>
               ) : null}
-              {extra > 0 && i === tiles.length - 1 ? (
-                <span className="smosaic-more num">+{extra}</span>
-              ) : null}
+              {extra > 0 && i === tiles.length - 1 ? <span className="smosaic-more num">+{extra}</span> : null}
             </span>
           ))}
         </span>

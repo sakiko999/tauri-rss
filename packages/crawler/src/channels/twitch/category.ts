@@ -41,9 +41,7 @@ export class TwitchCategoryChannel implements RssChannel {
     const slug = normalizeTwitchCategory(raw)
     return {
       channelTitle: slug ? `Twitch 分区 ${slug}` : "Twitch 分区",
-      channelLink: slug
-        ? `https://www.twitch.tv/directory/category/${slug}`
-        : "https://www.twitch.tv/directory",
+      channelLink: slug ? `https://www.twitch.tv/directory/category/${slug}` : "https://www.twitch.tv/directory",
     }
   }
 }

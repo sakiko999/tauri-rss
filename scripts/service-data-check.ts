@@ -82,12 +82,7 @@ async function main(): Promise<void> {
       const hit = events.find(predicate)
       if (hit) return resolve(hit)
       const timer = setTimeout(
-        () =>
-          reject(
-            new Error(
-              `等待事件超时；已收到: ${events.map((e) => e.type).join(",") || "(none)"}`,
-            ),
-          ),
+        () => reject(new Error(`等待事件超时；已收到: ${events.map((e) => e.type).join(",") || "(none)"}`)),
         timeoutMs,
       )
       waiters.push({
@@ -137,14 +132,22 @@ async function main(): Promise<void> {
     }
 
     const channels = await rpc<Array<{ key: string }>>("channels.list")
-    add("channels.list", channels.some((c) => c.key === "rss:hn"), `count=${channels.length}`)
+    add(
+      "channels.list",
+      channels.some((c) => c.key === "rss:hn"),
+      `count=${channels.length}`,
+    )
 
     const added = await rpc<{ id: string; refresh: { itemCount: number; error?: string } }>(
       "addSubscription",
       { channelKey: "rss:hn", title: "Local Test", info: { url: feedUrl } },
       { opId: "op-add" },
     )
-    add("addSubscription 首刷 2 条", added.refresh.itemCount === 2 && !added.refresh.error, JSON.stringify(added.refresh))
+    add(
+      "addSubscription 首刷 2 条",
+      added.refresh.itemCount === 2 && !added.refresh.error,
+      JSON.stringify(added.refresh),
+    )
     const subId = added.id
 
     const retried = await rpc<{ id: string }>(
@@ -156,19 +159,25 @@ async function main(): Promise<void> {
     const subsAfterRetry = await rpc<unknown[]>("subscriptions.list")
     add("幂等未重复建订阅", subsAfterRetry.length === 1, `count=${subsAfterRetry.length}`)
 
-    const stateText = await (
-      await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: authClient })
-    ).text()
+    const stateText = await (await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: authClient })).text()
     const lines = stateText
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line) as Record<string, unknown>)
     const meta = lines.find((l) => l.type === "meta") as { rev?: number; totals?: Record<string, number> }
-    const snapItems = lines.filter((l) => l.type === "items").flatMap((l) => (l.items as Array<{ content?: string }>) ?? [])
+    const snapItems = lines
+      .filter((l) => l.type === "items")
+      .flatMap((l) => (l.items as Array<{ content?: string }>) ?? [])
     add("快照 rev > 0", (meta?.rev ?? 0) > 0, `rev=${meta?.rev}`)
     add("快照含 2 条", snapItems.length === 2, `count=${snapItems.length}`)
-    add("快照投影去掉文章正文", snapItems.every((it) => it.content === undefined))
-    add("快照有 snapshot.end", lines.some((l) => l.type === "snapshot.end"))
+    add(
+      "快照投影去掉文章正文",
+      snapItems.every((it) => it.content === undefined),
+    )
+    add(
+      "快照有 snapshot.end",
+      lines.some((l) => l.type === "snapshot.end"),
+    )
 
     // WS：先取快照 rev，再订阅；之后的事件 rev 必须连续。
     ws = new WebSocket(`ws://127.0.0.1:${port}/v1/events`)
@@ -243,9 +252,7 @@ async function main(): Promise<void> {
     add("job cancel 200", cancelRes.status === 200, `status=${cancelRes.status}`)
     add("取消返回「刷新已取消」", cancelled.error === "刷新已取消", String(cancelled.error))
     add("取消先于慢响应返回", cancelMs < 1_000, `${cancelMs}ms`)
-    const afterCancel = await (
-      await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: authClient })
-    ).text()
+    const afterCancel = await (await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: authClient })).text()
     const afterCancelCount = afterCancel
       .trim()
       .split("\n")
@@ -287,7 +294,11 @@ async function main(): Promise<void> {
       body: JSON.stringify({ method: "probe.resolve", params: { url: "https://example.com/nope" } }),
     })
     const probeMissBody = (await probeMiss.json()) as { ok?: boolean }
-    add("probe.resolve 未命中 → 4xx", probeMiss.status >= 400 && probeMiss.status < 500 && probeMissBody.ok === false, `status=${probeMiss.status}`)
+    add(
+      "probe.resolve 未命中 → 4xx",
+      probeMiss.status >= 400 && probeMiss.status < 500 && probeMissBody.ok === false,
+      `status=${probeMiss.status}`,
+    )
 
     const more = await rpc<{ addedCount: number; hasMore: boolean }>("loadMore", { subscriptionId: subId })
     add("loadMore 无分页", more.addedCount === 0 && more.hasMore === false, JSON.stringify(more))
@@ -324,18 +335,12 @@ async function main(): Promise<void> {
     await Promise.all([removeP, removeReadP])
     add("退订清理事件", true)
 
-    const emptyState = await (
-      await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: authClient })
-    ).text()
+    const emptyState = await (await fetch(`http://127.0.0.1:${port}/v1/state`, { headers: authClient })).text()
     add("退订后快照无条目", !emptyState.includes('"type":"items"'))
 
     // 一次提交可含多条事件（同 rev）；下一个提交必须恰好 +1。
-    const revs = events
-      .filter((e) => "rev" in e && typeof e.rev === "number")
-      .map((e) => (e as { rev: number }).rev)
-    const contiguous = revs.every(
-      (r, i) => i === 0 || r === revs[i - 1]! || r === revs[i - 1]! + 1,
-    )
+    const revs = events.filter((e) => "rev" in e && typeof e.rev === "number").map((e) => (e as { rev: number }).rev)
+    const contiguous = revs.every((r, i) => i === 0 || r === revs[i - 1]! || r === revs[i - 1]! + 1)
     add("事件 rev 连续（同提交可多条）", contiguous, revs.join(","))
     // 回放用 `>=`（同 rev 的多条事件可能只应用了一部分，重放是补齐且幂等），
     // 所以首条可能等于快照 rev；唯一不能接受的是**小于**（说明漏了事件）。

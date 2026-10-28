@@ -113,7 +113,7 @@ export function heroWidth(item: MediaItem): number {
   return it.width ?? it.images?.[0]?.width ?? Infinity
 }
 
-/** 条目主图宽高比(默认 16:9)。 */export function ratioOf(item: MediaItem): number {
+/** 条目主图宽高比(默认 16:9)。 */ export function ratioOf(item: MediaItem): number {
   const it = item as {
     aspectRatio?: number
     width?: number

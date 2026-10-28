@@ -24,7 +24,14 @@ import type {
   SourceInfo,
 } from "../../index.ts"
 import { apiFetch, serializeWithTotal } from "../factory.ts"
-import { WB_BASE, apiHeaders, mblogCardsToItems, readWeiboLoginCookie, weiboClient, weiboScanLogin } from "@amoeba/resolve"
+import {
+  WB_BASE,
+  apiHeaders,
+  mblogCardsToItems,
+  readWeiboLoginCookie,
+  weiboClient,
+  weiboScanLogin,
+} from "@amoeba/resolve"
 import { cdpJson, cdpNavigate, withBrowserOp } from "@amoeba/resolve"
 
 export class WeiboUserChannel implements RssChannel, Loginable {
@@ -38,10 +45,7 @@ export class WeiboUserChannel implements RssChannel, Loginable {
    * 翻页 `ok:-100`),而热搜列表匿名可用。走浏览器路径:passport 页自带二维码 → 轮询
    * `SUB` cookie。同平台多 channel(weibo:user/hot)共享 Edge profile 登录态。
    */
-  scanLogin(
-    emitQr: (qr: string | null) => void,
-    opts?: { timeoutMs?: number },
-  ): Promise<LoginResult> {
+  scanLogin(emitQr: (qr: string | null) => void, opts?: { timeoutMs?: number }): Promise<LoginResult> {
     const browser = globalThis.appHost?.browser
     if (!browser) throw new Error("微博扫码登录需 Tauri 桌面环境(未注入 appHost.browser)")
     return weiboScanLogin(browser, emitQr, opts)
@@ -78,7 +82,10 @@ export class WeiboUserChannel implements RssChannel, Loginable {
     return { xml, ...(items.length && lastMid ? { cursor: lastMid } : {}) }
   }
 
-  private async fetchItems(info: SourceInfo, sinceId?: string): Promise<{ items: Item[]; lastMid?: string; total?: number }> {
+  private async fetchItems(
+    info: SourceInfo,
+    sinceId?: string,
+  ): Promise<{ items: Item[]; lastMid?: string; total?: number }> {
     const uid = String(info.uid ?? "").trim()
     if (!/^\d+$/.test(uid)) throw new Error(`weibo:user 需要数字 uid,收到 "${uid}"`)
     const cookie = (info.cookie as string) || undefined

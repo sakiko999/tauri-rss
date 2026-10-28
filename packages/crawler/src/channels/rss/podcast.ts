@@ -27,9 +27,7 @@ export const RssPodcastChannel = makeApiChannel({
     const xml = await httpText(url, { "user-agent": UA })
     const feed = parseFeed(xml)
     const t = now()
-    return feed.channel.item
-      .map((it) => itemToAudio(it, t))
-      .filter((a): a is Audio => a !== undefined)
+    return feed.channel.item.map((it) => itemToAudio(it, t)).filter((a): a is Audio => a !== undefined)
   },
 })
 

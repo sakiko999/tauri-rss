@@ -34,10 +34,46 @@ export interface ItagInfo {
  */
 const ITAGS: Record<number, ItagInfo> = {
   // ── 渐进式(mp4,音视频合一)────────────────────────────────────
-  18: { id: 18, type: "video", container: "mp4", codec: "avc1", audioCodec: "mp4a", resolution: "360p", height: 360, fps: 30 },
-  22: { id: 22, type: "video", container: "mp4", codec: "avc1", audioCodec: "mp4a", resolution: "720p", height: 720, fps: 30 },
-  37: { id: 37, type: "video", container: "mp4", codec: "avc1", audioCodec: "mp4a", resolution: "1080p", height: 1080, fps: 30 },
-  38: { id: 38, type: "video", container: "mp4", codec: "avc1", audioCodec: "mp4a", resolution: "1080p", height: 1080, fps: 30 },
+  18: {
+    id: 18,
+    type: "video",
+    container: "mp4",
+    codec: "avc1",
+    audioCodec: "mp4a",
+    resolution: "360p",
+    height: 360,
+    fps: 30,
+  },
+  22: {
+    id: 22,
+    type: "video",
+    container: "mp4",
+    codec: "avc1",
+    audioCodec: "mp4a",
+    resolution: "720p",
+    height: 720,
+    fps: 30,
+  },
+  37: {
+    id: 37,
+    type: "video",
+    container: "mp4",
+    codec: "avc1",
+    audioCodec: "mp4a",
+    resolution: "1080p",
+    height: 1080,
+    fps: 30,
+  },
+  38: {
+    id: 38,
+    type: "video",
+    container: "mp4",
+    codec: "avc1",
+    audioCodec: "mp4a",
+    resolution: "1080p",
+    height: 1080,
+    fps: 30,
+  },
 
   // ── 纯视频(DASH,无音轨)───────────────────────────────────────
   160: { id: 160, type: "video_only", container: "mp4", codec: "avc1", resolution: "144p", height: 144, fps: 30 },

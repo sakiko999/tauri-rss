@@ -40,12 +40,7 @@ export function HotPane() {
       </header>
 
       {words.length === 0 ? (
-        <StateBlock
-          icon="radio"
-          tight
-          title="没有取到热搜"
-          text="可能是网络问题，试着刷新一下。"
-        />
+        <StateBlock icon="radio" tight title="没有取到热搜" text="可能是网络问题，试着刷新一下。" />
       ) : (
         <div className="scroll-area" style={{ flex: 1 }} {...overlayBlock("hot-list", "hot:list")}>
           {words.map((w, i) => {

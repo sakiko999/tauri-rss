@@ -13,23 +13,40 @@ import { getChannel, type SourceInfo } from "@amoeba/crawler"
 /** 各 channel 的示例参数(收编自 crawler example/backend.ts;无参 channel 空)。 */
 export function exampleInfo(key: string): Record<string, string> {
   switch (key) {
-    case "bili:user_video": return { uid: "511068914" } // 3Blue1Brown
-    case "bili:dynamic": return { uid: "2267573" } // DIYgod(视频为主,需登录 cookie)
-    case "bili:live": return { roomId: "998" } // 一个公开直播房间
-    case "youtube": return { channelId: "UCYO_jab_esuFRV4b17AJtAw" } // 3Blue1Brown
-    case "youtube:playlist": return { playlistId: "PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI" } // 探针实测 15 条
-    case "youtube:live-category": return { category: "gaming" } // Live Now - Gaming
-    case "youtube:live": return { videoId: "tRsQsTMvPNg" } // Claude FM 常驻直播(desktop 测试源)
-    case "bili:season": return { seasonId: "2974525" } // 探针实测 61 条
-    case "bili:series": return { seriesId: "358495" } // 探针实测 54 条
-    case "bili:favlist": return { mediaId: "1052622027" } // 公开收藏夹,探针实测 28 条
-    case "live:huya": return { roomId: "116" } // 虎牙房间
-    case "live:douyu": return { roomId: "9999" } // 斗鱼房间(yyfyyf,验证过 betard 可用)
-    case "live:douyin": return { roomId: "1" } // 抖音房间
-    case "twitch:live": return { roomIds: "shroud" } // Twitch 频道登录名
-    case "twitch:category": return { category: "just-chatting" } // 分区 slug(或目录页链接)
-    case "rss:podcast": return { url: "https://feeds.megaphone.fm/hubermanlab" } // Huberman Lab(desktop 测试源)
-    default: return {}
+    case "bili:user_video":
+      return { uid: "511068914" } // 3Blue1Brown
+    case "bili:dynamic":
+      return { uid: "2267573" } // DIYgod(视频为主,需登录 cookie)
+    case "bili:live":
+      return { roomId: "998" } // 一个公开直播房间
+    case "youtube":
+      return { channelId: "UCYO_jab_esuFRV4b17AJtAw" } // 3Blue1Brown
+    case "youtube:playlist":
+      return { playlistId: "PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI" } // 探针实测 15 条
+    case "youtube:live-category":
+      return { category: "gaming" } // Live Now - Gaming
+    case "youtube:live":
+      return { videoId: "tRsQsTMvPNg" } // Claude FM 常驻直播(desktop 测试源)
+    case "bili:season":
+      return { seasonId: "2974525" } // 探针实测 61 条
+    case "bili:series":
+      return { seriesId: "358495" } // 探针实测 54 条
+    case "bili:favlist":
+      return { mediaId: "1052622027" } // 公开收藏夹,探针实测 28 条
+    case "live:huya":
+      return { roomId: "116" } // 虎牙房间
+    case "live:douyu":
+      return { roomId: "9999" } // 斗鱼房间(yyfyyf,验证过 betard 可用)
+    case "live:douyin":
+      return { roomId: "1" } // 抖音房间
+    case "twitch:live":
+      return { roomIds: "shroud" } // Twitch 频道登录名
+    case "twitch:category":
+      return { category: "just-chatting" } // 分区 slug(或目录页链接)
+    case "rss:podcast":
+      return { url: "https://feeds.megaphone.fm/hubermanlab" } // Huberman Lab(desktop 测试源)
+    default:
+      return {}
   }
 }
 

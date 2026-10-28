@@ -61,9 +61,7 @@ export function videoReferrerFor(url: string): string | undefined {
  * 本表**无 JS 消费方**:Rust(`media_referer.rs`)按它改写 Origin;TS 持有只为保持
  * 「平台知识单一权威在 resolve + parity 守护两边一致」的既有模式。
  */
-export const XHR_ORIGIN_RULES: Array<[string, string]> = [
-  ["playlist.ttvnw.net", "https://www.twitch.tv/"],
-]
+export const XHR_ORIGIN_RULES: Array<[string, string]> = [["playlist.ttvnw.net", "https://www.twitch.tv/"]]
 
 /** XHR 请求 url 命中规则 → 应改写成的站内 Origin;未命中返回 undefined。 */
 export function xhrOriginFor(url: string): string | undefined {

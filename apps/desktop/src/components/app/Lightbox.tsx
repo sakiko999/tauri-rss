@@ -62,17 +62,9 @@ export function Lightbox({
   const src = httpsify(images[current]?.url)
 
   return (
-    <Modal
-      open={open}
-      onOpenChange={(o) => (o ? undefined : onClose())}
-      size="wide"
-      flush
-      title="图片预览"
-    >
+    <Modal open={open} onOpenChange={(o) => (o ? undefined : onClose())} size="wide" flush title="图片预览">
       <div className="lightbox" {...overlayBlock("lightbox", `lightbox:${current}`)}>
-        <div className="lightbox-stage">
-          {src ? <MediaImage src={src} contain loading="eager" /> : null}
-        </div>
+        <div className="lightbox-stage">{src ? <MediaImage src={src} contain loading="eager" /> : null}</div>
         {count > 1 ? (
           <div className="lightbox-nav">
             <button className="lightbox-arrow" data-dir="prev" aria-label="上一张" onClick={() => step(-1)}>

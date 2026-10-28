@@ -24,7 +24,10 @@ ws.addEventListener("message", (e) => {
   const m = JSON.parse(String(e.data)) as { id?: number; result?: any }
   if (m.id === undefined) return
   const p = pending.get(m.id)
-  if (p) { pending.delete(m.id); p(m.result) }
+  if (p) {
+    pending.delete(m.id)
+    p(m.result)
+  }
 })
 await new Promise<void>((res) => ws.addEventListener("open", () => res()))
 
@@ -39,6 +42,9 @@ const r = await send("Browser.setWindowBounds", {
 })
 console.log("setWindowBounds:", JSON.stringify(r ?? "ok"))
 await new Promise((res) => setTimeout(res, 900))
-const inner = await send("Runtime.evaluate", { expression: "JSON.stringify({w:innerWidth,h:innerHeight})", returnByValue: true })
+const inner = await send("Runtime.evaluate", {
+  expression: "JSON.stringify({w:innerWidth,h:innerHeight})",
+  returnByValue: true,
+})
 console.log("inner:", inner?.result?.value)
 ws.close()

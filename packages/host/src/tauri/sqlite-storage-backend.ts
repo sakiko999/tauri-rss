@@ -97,10 +97,12 @@ export class SqliteStorageBackend implements StorageBackend {
           )
           if (rows[0]) continue
           await db.execute(migration.sql)
-          await db.execute(
-            `INSERT INTO ${table} (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)`,
-            [migration.version, migration.name, Date.now(), migration.checksum],
-          )
+          await db.execute(`INSERT INTO ${table} (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)`, [
+            migration.version,
+            migration.name,
+            Date.now(),
+            migration.checksum,
+          ])
         }
       })().catch((e) => {
         this.readyPromise = null
@@ -137,9 +139,7 @@ export class SqliteStorageBackend implements StorageBackend {
   async keys(prefix = ""): Promise<string[]> {
     const db = await this.ready()
     const table = this.requireSchema().table
-    const rows = await db.select<Array<{ key: string }>>(`SELECT key FROM ${table} WHERE key LIKE $1 || '%'`, [
-      prefix,
-    ])
+    const rows = await db.select<Array<{ key: string }>>(`SELECT key FROM ${table} WHERE key LIKE $1 || '%'`, [prefix])
     return rows.map((r) => r.key)
   }
 }

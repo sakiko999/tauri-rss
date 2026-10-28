@@ -11,18 +11,16 @@ import { fetchDouyuCategories, now, type DouyuCategory } from "@amoeba/resolve"
 /** 分区树 → 目录条目(纯函数):只列二级分区。 */
 export function douyuCategoryItems(sourceId: string, t: number, tree: DouyuCategory[]): Item[] {
   return tree.flatMap((c) =>
-    c.children.map(
-      (sub): Category => ({
-        id: `douyu-area:${sub.id}`,
-        sourceId,
-        kind: "category",
-        title: sub.name,
-        summary: c.name,
-        fetchedAt: t,
-        categoryChannel: "live:douyu:category",
-        categoryInfo: { areaId: sub.id },
-      }),
-    ),
+    c.children.map((sub): Category => ({
+      id: `douyu-area:${sub.id}`,
+      sourceId,
+      kind: "category",
+      title: sub.name,
+      summary: c.name,
+      fetchedAt: t,
+      categoryChannel: "live:douyu:category",
+      categoryInfo: { areaId: sub.id },
+    })),
   )
 }
 

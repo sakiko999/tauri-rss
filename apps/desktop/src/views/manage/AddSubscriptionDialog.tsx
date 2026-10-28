@@ -152,11 +152,7 @@ export function AddSubscriptionDialog({
    *  单值 videoId，硬拼逗号会把订阅写坏 → 非 multiParam 恒空，自动隐藏「添加到」。 */
   const targets = useMemo(
     () =>
-      searchMode && searchKind === "user"
-        ? []
-        : multiParamOf(landChannel)
-          ? subsOfChannel(subscriptions, landKey)
-          : [],
+      searchMode && searchKind === "user" ? [] : multiParamOf(landChannel) ? subsOfChannel(subscriptions, landKey) : [],
     [searchMode, searchKind, subscriptions, landKey, landChannel],
   )
   /** 已订阅过的候选值(重复添加会得到两条相同订阅,先标出来)。 */

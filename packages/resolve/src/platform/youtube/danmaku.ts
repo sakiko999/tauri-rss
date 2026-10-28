@@ -75,9 +75,7 @@ function initialContinuation(data: Record<string, any>): string {
 }
 
 /** message.runs → 纯文本(text run 直取,emoji run 取 emojiId)。 */
-function runsToText(
-  runs?: Array<{ text?: string; emoji?: { emojiId?: string } }>,
-): string {
+function runsToText(runs?: Array<{ text?: string; emoji?: { emojiId?: string } }>): string {
   if (!runs) return ""
   return runs
     .map((r) => r.text ?? r.emoji?.emojiId ?? "")
@@ -129,7 +127,16 @@ async function pollOnce(liveId: string, state: ChatState, onItems: (items: Danma
   if (!lc) throw new Error("youtube live chat: 无 continuation(直播结束?)")
 
   const items: DanmakuItem[] = []
-  for (const action of (lc.actions ?? []) as Array<{ addChatItemAction?: { item?: { liveChatTextMessageRenderer?: { message?: { runs?: Array<{ text?: string; emoji?: { emojiId?: string } }> }; authorName?: { simpleText?: string } } } } }>) {
+  for (const action of (lc.actions ?? []) as Array<{
+    addChatItemAction?: {
+      item?: {
+        liveChatTextMessageRenderer?: {
+          message?: { runs?: Array<{ text?: string; emoji?: { emojiId?: string } }> }
+          authorName?: { simpleText?: string }
+        }
+      }
+    }
+  }>) {
     const msg = action?.addChatItemAction?.item?.liveChatTextMessageRenderer
     if (!msg) continue
     const text = runsToText(msg.message?.runs)
@@ -138,8 +145,7 @@ async function pollOnce(liveId: string, state: ChatState, onItems: (items: Danma
   if (items.length) onItems(items)
 
   const cont = (lc.continuations?.[0]?.timedContinuationData ?? lc.continuations?.[0]?.invalidationContinuationData) as
-    | { continuation?: string; timeoutMs?: number }
-    | undefined
+    { continuation?: string; timeoutMs?: number } | undefined
   if (!cont?.continuation) throw new Error("youtube live chat: 直播结束(无下一 continuation)")
   state.token = cont.continuation
   state.timeoutMs = cont.timeoutMs ?? DEFAULT_TIMEOUT_MS
@@ -183,11 +189,10 @@ export function createLiveChatPoller(liveId: string): (onItems: (items: DanmakuI
 
   return (onItems) => {
     if (!statePromise) {
-      statePromise = initChat(liveId)
-        .catch((e) => {
-          log.youtube.danmakuInitFailed({ error: formatError(e) })
-          throw e
-        })
+      statePromise = initChat(liveId).catch((e) => {
+        log.youtube.danmakuInitFailed({ error: formatError(e) })
+        throw e
+      })
     }
     void statePromise.then((state) => schedule(state, onItems)).catch(() => {})
     return () => {

@@ -23,22 +23,31 @@ ws.addEventListener("message", (e) => {
   const m = JSON.parse(String(e.data)) as { id?: number; result?: any; method?: string; params?: any }
   if (m.id !== undefined) {
     const p = pending.get(m.id)
-    if (p) { pending.delete(m.id); p(m.result) }
+    if (p) {
+      pending.delete(m.id)
+      p(m.result)
+    }
     return
   }
   if (m.method === "Log.entryAdded") {
     const en = m.params?.entry
-    if (en && (en.level === "error" || en.level === "warning")) logs.push(`[${en.level}] ${en.text} ${en.url ? "@" + en.url : ""}`)
+    if (en && (en.level === "error" || en.level === "warning"))
+      logs.push(`[${en.level}] ${en.text} ${en.url ? "@" + en.url : ""}`)
   }
   if (m.method === "Runtime.consoleAPICalled") {
     const { type, args } = m.params ?? {}
     if (type === "error" || type === "warning") {
-      const text = (args ?? []).map((a: any) => a.value ?? a.description ?? a.type).join(" ").slice(0, 400)
+      const text = (args ?? [])
+        .map((a: any) => a.value ?? a.description ?? a.type)
+        .join(" ")
+        .slice(0, 400)
       logs.push(`[console.${type}] ${text}`)
     }
   }
   if (m.method === "Runtime.exceptionThrown") {
-    logs.push(`[exception] ${m.params?.exceptionDetails?.text ?? ""} ${m.params?.exceptionDetails?.exception?.description?.slice(0, 300) ?? ""}`)
+    logs.push(
+      `[exception] ${m.params?.exceptionDetails?.text ?? ""} ${m.params?.exceptionDetails?.exception?.description?.slice(0, 300) ?? ""}`,
+    )
   }
 })
 const send = (method: string, params: Record<string, unknown> = {}) =>
@@ -52,7 +61,19 @@ await send("Log.enable")
 await send("Runtime.enable")
 
 const nodes = process.argv.slice(2)
-const targets = nodes.length ? nodes : ["tab:all", "tab:article", "tab:live", "tab:social", "unread", "starred", "page:settings", "page:account", "page:discover"]
+const targets = nodes.length
+  ? nodes
+  : [
+      "tab:all",
+      "tab:article",
+      "tab:live",
+      "tab:social",
+      "unread",
+      "starred",
+      "page:settings",
+      "page:account",
+      "page:discover",
+    ]
 for (const n of targets) {
   const url = n.startsWith("/") ? n : `/v/${encodeURIComponent(n)}`
   logs.push(`--- goto ${url} ---`)
@@ -66,6 +87,8 @@ await send("Runtime.evaluate", {
 })
 await new Promise((r) => setTimeout(r, 800))
 
-const meaningful = logs.filter((l) => !l.includes("favicon") && !l.includes("Download the React DevTools") && !l.includes("--- goto"))
+const meaningful = logs.filter(
+  (l) => !l.includes("favicon") && !l.includes("Download the React DevTools") && !l.includes("--- goto"),
+)
 console.log(meaningful.length ? meaningful.join("\n") : "✔ 没有控制台错误/告警")
 ws.close()

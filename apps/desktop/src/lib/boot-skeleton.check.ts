@@ -23,7 +23,7 @@ const responsive = read("../styles/90-responsive.css")
 const railVar = (css: string): string | undefined => css.match(/--rail:\s*([^;]+);/)?.[1]?.trim()
 const bsRailWidth = (css: string, at?: RegExp): string | undefined => {
   // 有 `at` 时只在匹配到的片段里找 .bs-rail 的 width(用来区分基础/折叠/窄窗三份)。
-  const scope = at ? css.split(at)[1] ?? "" : css
+  const scope = at ? (css.split(at)[1] ?? "") : css
   return scope.match(/\.bs-rail\s*\{\s*width:\s*([^;]+);/)?.[1]?.trim()
 }
 

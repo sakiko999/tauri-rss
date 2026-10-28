@@ -48,11 +48,21 @@ assert(
   JSON.stringify(splitValues("6，21452505 9\n10", "roomIds")) === JSON.stringify(["6", "21452505", "9", "10"]),
   "splitValues 支持中文逗号/空格/换行",
 )
-assert(JSON.stringify(splitValues("英雄联盟,王者", "keyword")) === JSON.stringify(["英雄联盟,王者"]), "splitValues 单值参数不切")
+assert(
+  JSON.stringify(splitValues("英雄联盟,王者", "keyword")) === JSON.stringify(["英雄联盟,王者"]),
+  "splitValues 单值参数不切",
+)
 
 // multiParamOf:只有列表型参数能并入
 const ch = (key: string, field: string): ChannelInfo =>
-  ({ key, name: key, kind: "live", loginable: false, passive: false, sourceInfoTpl: [{ key: field, label: field }] }) as ChannelInfo
+  ({
+    key,
+    name: key,
+    kind: "live",
+    loginable: false,
+    passive: false,
+    sourceInfoTpl: [{ key: field, label: field }],
+  }) as ChannelInfo
 assert(multiParamOf(ch("bili:live", "roomIds")) === true, "roomIds 渠道支持并入")
 assert(multiParamOf(ch("bili:search", "keyword")) === false, "keyword 渠道不支持并入")
 
@@ -70,11 +80,24 @@ assert(JSON.stringify(merged.added) === JSON.stringify(["9"]), "added 只含本�
 assert(searchChannelOf("douyu") === "live:douyu:search", "douyu → 斗鱼搜索渠道")
 assert(searchChannelOf("youtube") === "youtube:live-search", "youtube → 直播搜索渠道")
 assert(searchChannelOf("douyin") === "live:douyin:search", "douyin → 抖音分区搜索渠道")
-assert(Object.values(SEARCH_CHANNEL).every((k) => typeof k === "string"), "映射值为渠道 key 字符串")
+assert(
+  Object.values(SEARCH_CHANNEL).every((k) => typeof k === "string"),
+  "映射值为渠道 key 字符串",
+)
 
 // candidatesFromSearch:从接口条目派生候选(roomId 去重、无 roomId 丢弃)
 const live = (roomId: string, title: string): LiveItem =>
-  ({ id: `douyu:${roomId}`, subscriptionId: "p", kind: "live", title, roomId, url: `https://www.douyu.com/${roomId}`, fetchedAt: 0, isUnread: true, isStarred: false }) as unknown as LiveItem
+  ({
+    id: `douyu:${roomId}`,
+    subscriptionId: "p",
+    kind: "live",
+    title,
+    roomId,
+    url: `https://www.douyu.com/${roomId}`,
+    fetchedAt: 0,
+    isUnread: true,
+    isStarred: false,
+  }) as unknown as LiveItem
 const cands = candidatesFromSearch([live("288016", "A"), live("288016", "A-dup"), live("999", "B")])
 assert(cands.length === 2, "roomId 去重(重复房号只留一条)")
 assert(cands[0]!.value === "288016", "候选值 = roomId")
@@ -82,7 +105,17 @@ assert(candidatesFromSearch([]).length === 0, "空结果 → 空候选")
 
 // candidatesFromUsers:候选值从 url 提取(raw 不穿 XML 边界),无匹配 url 跳过
 const user = (url: string, title: string, summary = ""): MediaItem =>
-  ({ id: url, subscriptionId: "p", kind: "video", title, url, summary, fetchedAt: 0, isUnread: true, isStarred: false }) as unknown as MediaItem
+  ({
+    id: url,
+    subscriptionId: "p",
+    kind: "video",
+    title,
+    url,
+    summary,
+    fetchedAt: 0,
+    isUnread: true,
+    isStarred: false,
+  }) as unknown as MediaItem
 const ucands = candidatesFromUsers([
   user("https://space.bilibili.com/37663924", "半佛仙人", "770万粉丝 · 575 个视频"),
   user("https://space.bilibili.com/37663924", "半佛仙人-dup"),

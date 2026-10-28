@@ -86,25 +86,18 @@ function seedReading(file: string): void {
     [`sub\u0000a`]: { read: true, lastReadAt: 1 },
     [`sub\u0000b`]: { read: true, lastReadAt: 1 },
   }
-  db.query("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)").run(
-    "reading",
-    JSON.stringify(seed),
-  )
+  db.query("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)").run("reading", JSON.stringify(seed))
   db.close()
 }
 
 function readReading(file: string): Record<string, { read?: boolean }> {
   const db = new Database(file, { readonly: true })
-  const row = db.query("SELECT value FROM kv WHERE key = 'reading'").get() as
-    | { value?: string }
-    | undefined
+  const row = db.query("SELECT value FROM kv WHERE key = 'reading'").get() as { value?: string } | undefined
   db.close()
   return row?.value ? JSON.parse(row.value) : {}
 }
 
-async function dualWriterRepro(
-  dir: string,
-): Promise<{ dualLost: boolean; singleLost: boolean }> {
+async function dualWriterRepro(dir: string): Promise<{ dualLost: boolean; singleLost: boolean }> {
   const dualFile = join(dir, "dual.db")
   seedReading(dualFile)
   const barrier = makeBarrier(2)
@@ -113,10 +106,7 @@ async function dualWriterRepro(
   const r1 = createReadingRepository(s1, () => 100)
   const r2 = createReadingRepository(s2, () => 200)
   // 两条命令各自改不同的 item；两个 repo 都基于同一份旧 blob 写回。
-  await Promise.all([
-    r1.markRead("sub", "a", false),
-    r2.markRead("sub", "b", false),
-  ])
+  await Promise.all([r1.markRead("sub", "a", false), r2.markRead("sub", "b", false)])
   const afterDual = readReading(dualFile)
   s1.close()
   s2.close()
@@ -131,12 +121,8 @@ async function dualWriterRepro(
   s3.close()
 
   return {
-    dualLost: !(
-      afterDual["sub\u0000a"]?.read === false && afterDual["sub\u0000b"]?.read === false
-    ),
-    singleLost: !(
-      afterSingle["sub\u0000a"]?.read === false && afterSingle["sub\u0000b"]?.read === false
-    ),
+    dualLost: !(afterDual["sub\u0000a"]?.read === false && afterDual["sub\u0000b"]?.read === false),
+    singleLost: !(afterSingle["sub\u0000a"]?.read === false && afterSingle["sub\u0000b"]?.read === false),
   }
 }
 
@@ -154,7 +140,9 @@ async function dbStats(dbFile: string): Promise<Record<string, unknown> | null> 
   for (const r of rows) {
     const subId = r.key.slice("content:".length)
     try {
-      items.push(...(deserializeFeed(r.value, { subscriptionId: subId, now: 0 }) as unknown as Array<Record<string, unknown>>))
+      items.push(
+        ...(deserializeFeed(r.value, { subscriptionId: subId, now: 0 }) as unknown as Array<Record<string, unknown>>),
+      )
     } catch {
       /* 坏缓存跳过：阶段 0 只统计可解析部分 */
     }
@@ -208,9 +196,7 @@ async function markMany5k(dir: string): Promise<number> {
 async function main(): Promise<void> {
   const dir = join(tmpdir(), `amoeba-service-phase0-${process.pid}`)
   mkdirSync(dir, { recursive: true })
-  const dbFile =
-    process.env.AMOEBA_PHASE0_DB ??
-    join(process.env.APPDATA ?? "", "app.amoeba.desktop", "rss.dev.db")
+  const dbFile = process.env.AMOEBA_PHASE0_DB ?? join(process.env.APPDATA ?? "", "app.amoeba.desktop", "rss.dev.db")
 
   try {
     const stats = await dbStats(dbFile)

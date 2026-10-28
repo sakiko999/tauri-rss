@@ -11,7 +11,16 @@ import type { MediaKind, Subscription } from "@amoeba/core"
 import { navForKind, navIdOf } from "./nodes.ts"
 
 const sub = (id: string, channelKey: string, groupId?: string | null): Subscription =>
-  ({ id, channelKey, title: id, groupId: groupId ?? null, enabled: true, info: {}, createdAt: 0, updatedAt: 0 }) as Subscription
+  ({
+    id,
+    channelKey,
+    title: id,
+    groupId: groupId ?? null,
+    enabled: true,
+    info: {},
+    createdAt: 0,
+    updatedAt: 0,
+  }) as Subscription
 
 const KINDS: Record<string, MediaKind> = {
   "bili:video": "video",
@@ -51,7 +60,18 @@ assert.equal(nav("tab:all"), null, "「全部内容」不属于任何主导航")
 assert.equal(nav("tab:not-a-kind"), null, "未知 tab 不高亮而不是抛错")
 
 // ── 3. 保留节点一律不高亮 ────────────────────────────────────────────────
-for (const id of ["today", "unread", "starred", "resume", "short:video", "short:live", "page:settings", "page:discover", "page:account", "play:whatever"]) {
+for (const id of [
+  "today",
+  "unread",
+  "starred",
+  "resume",
+  "short:video",
+  "short:live",
+  "page:settings",
+  "page:discover",
+  "page:account",
+  "play:whatever",
+]) {
   assert.equal(nav(id), null, `${id} 不是主导航`)
 }
 assert.equal(nav(null), null, "无节点不高亮")

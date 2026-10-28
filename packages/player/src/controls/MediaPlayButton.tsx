@@ -16,12 +16,7 @@ export function MediaPlayButton({
   className?: string
 }) {
   return (
-    <button
-      type="button"
-      aria-label={state.paused ? "播放" : "暂停"}
-      onClick={ops.togglePlay}
-      className={className}
-    >
+    <button type="button" aria-label={state.paused ? "播放" : "暂停"} onClick={ops.togglePlay} className={className}>
       {state.paused ? <PlayIcon className="h-5 w-5" /> : <PauseIcon className="h-5 w-5" />}
     </button>
   )

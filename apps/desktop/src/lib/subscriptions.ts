@@ -50,7 +50,12 @@ export function subsOfChannel(subs: Subscription[], channelKey: string): Subscri
 }
 
 /** 该渠道下哪些订阅已经含有这个值 —— 可能不止一条(重复订阅过)。 */
-export function subsHolding(subs: Subscription[], channelKey: string, param: string | undefined, value: string): Subscription[] {
+export function subsHolding(
+  subs: Subscription[],
+  channelKey: string,
+  param: string | undefined,
+  value: string,
+): Subscription[] {
   return subsOfChannel(subs, channelKey).filter((s) => valueList(s, param).includes(String(value)))
 }
 

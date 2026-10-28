@@ -19,11 +19,20 @@ function ok(cond: unknown, label: string) {
 const doc = {
   title: "My Feeds",
   feeds: [
-    { title: "Hacker News", xmlUrl: "https://hnrss.org/frontpage", htmlUrl: "https://news.ycombinator.com", groupPath: [] },
+    {
+      title: "Hacker News",
+      xmlUrl: "https://hnrss.org/frontpage",
+      htmlUrl: "https://news.ycombinator.com",
+      groupPath: [],
+    },
     { title: "阮一峰", xmlUrl: "https://www.ruanyifeng.com/blog/atom.xml", groupPath: [] },
     { title: "BBC World", xmlUrl: "https://feeds.bbci.co.uk/news/world/rss.xml", groupPath: ["新闻"] },
     { title: "NYT Home", xmlUrl: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml", groupPath: ["新闻"] },
-    { title: "TED", xmlUrl: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0RhatS1pyxInC00YKjjBqQ", groupPath: ["视频", "YouTube"] },
+    {
+      title: "TED",
+      xmlUrl: "https://www.youtube.com/feeds/videos.xml?channel_id=UC0RhatS1pyxInC00YKjjBqQ",
+      groupPath: ["视频", "YouTube"],
+    },
   ],
 }
 const xml = serializeOpml(doc)

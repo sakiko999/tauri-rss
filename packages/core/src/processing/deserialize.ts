@@ -12,7 +12,15 @@
  * live 的 platform/roomId 来自 `tpl:*`（外部 feed 缺失时给静态默认）。
  * app 层语义由 core 注入:subscriptionId 来自 ctx,isUnread 默认 true、isStarred 默认 false。
  */
-import type { MediaAttachment, MediaAuthor, MediaItem, MediaKind, MediaStream, SocialImage, StreamingFormat } from "../types/media-item.ts"
+import type {
+  MediaAttachment,
+  MediaAuthor,
+  MediaItem,
+  MediaKind,
+  MediaStream,
+  SocialImage,
+  StreamingFormat,
+} from "../types/media-item.ts"
 import type { LivePlatformId, LiveStatus } from "../types/live.ts"
 import { parseFeed, type ParsedItem } from "@amoeba/xml"
 
@@ -428,7 +436,7 @@ function asContentFormat(v: unknown): "html" | "markdown" | "text" | undefined {
 
 function enclosureVal(v: unknown): unknown {
   if (v === undefined || v === null) return undefined
-  return Array.isArray(v) ? v.find((e) => e != null) ?? v[0] : v
+  return Array.isArray(v) ? (v.find((e) => e != null) ?? v[0]) : v
 }
 
 function typeOfEnclosure(enc: unknown): string | undefined {
@@ -454,7 +462,8 @@ function rsshubThumbnail(raw: Record<string, unknown>): string | undefined {
     for (const m of asList(mc)) {
       const o = obj(m as Record<string, unknown>)
       const u = str(attr(o, "url"))
-      if (u && (String(attr(o, "medium") ?? "") === "image" || String(attr(o, "type") ?? "").startsWith("image/"))) return u
+      if (u && (String(attr(o, "medium") ?? "") === "image" || String(attr(o, "type") ?? "").startsWith("image/")))
+        return u
     }
   }
   const ii = raw["itunes:image"]

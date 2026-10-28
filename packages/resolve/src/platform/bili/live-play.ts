@@ -61,8 +61,7 @@ export async function resolveBiliLivePlay(roomId: string, info?: SourceInfo): Pr
         const applied = extractBiliLiveAppliedQn(r?.data ?? {}) ?? q.qn
         if (seen.has(applied)) continue
         seen.add(applied)
-        const name =
-          applied === q.qn ? q.name : `${qnDescName(probe?.data ?? {}, applied)}(请求${q.name})`
+        const name = applied === q.qn ? q.name : `${qnDescName(probe?.data ?? {}, applied)}(请求${q.name})`
         streams.push({ ...s, quality: name, rate: applied })
       }
     } catch (e) {
@@ -120,8 +119,10 @@ interface BiliLiveUrl {
 }
 
 /** 取嵌套数组字段,缺省空数组(pathOr 提供类型化默认,免 Array.isArray 样板)。 */
-const pathArr = (path: string[]) => (obj: Record<string, any>): Record<string, any>[] =>
-  R.pathOr<Record<string, any>[]>([], path, obj)
+const pathArr =
+  (path: string[]) =>
+  (obj: Record<string, any>): Record<string, any>[] =>
+    R.pathOr<Record<string, any>[]>([], path, obj)
 
 /**
  * 从单个 codec 展开 url_info 列表。
@@ -133,7 +134,8 @@ function codecToUrls(c: Record<string, any>): BiliLiveUrl[] {
   if (String(c?.codec_name ?? "").toLowerCase() !== "avc") return []
   const baseUrl = String(c?.base_url ?? "")
   if (!baseUrl) return []
-  const format = baseUrl.includes(".m3u8") || baseUrl.includes(".fmp4") ? "hls" : baseUrl.includes(".flv") ? "flv" : "live"
+  const format =
+    baseUrl.includes(".m3u8") || baseUrl.includes(".fmp4") ? "hls" : baseUrl.includes(".flv") ? "flv" : "live"
   return R.chain(
     (ui: Record<string, any>) => {
       const host = String(ui?.host ?? "")

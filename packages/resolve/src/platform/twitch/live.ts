@@ -18,8 +18,7 @@ import { twitchGql } from "./client.ts"
 import { normalizeTwitchLogin } from "../../utils/twitch.ts"
 
 /** PlaybackAccessToken 的 persisted query hash(Twitch 改版时只改这里)。 */
-export const TWITCH_PLAYBACK_TOKEN_HASH =
-  "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"
+export const TWITCH_PLAYBACK_TOKEN_HASH = "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"
 
 const USHER_BASE = "https://usher.ttvnw.net/api/v2/channel/hls"
 
@@ -144,7 +143,12 @@ function parseAttrList(raw: string): Record<string, string> {
  * 其次 URL 里的 `<height>p<fps>` / `audio_only`,再按 RESOLUTION 的 `<height>p`;
  * 都没有 RESOLUTION 的档位 = audio_only(实测其 `IVS-NAME` 也确实是 audio_only)。
  */
-function variantQuality(name: string | undefined, url: string, height: number | undefined, frameRate: number | undefined): string {
+function variantQuality(
+  name: string | undefined,
+  url: string,
+  height: number | undefined,
+  frameRate: number | undefined,
+): string {
   const trimmed = name?.trim()
   if (trimmed) return trimmed
   const path = url.split("?")[0] ?? url

@@ -18,7 +18,16 @@ const item = (id: string, kind: MediaItem["kind"], sub: string, extra: Extra = {
   ({ id, kind, subscriptionId: sub, title: id, fetchedAt: NOW, ...extra }) as MediaItem
 
 const sub = (id: string): Subscription =>
-  ({ id, channelKey: "x", title: id, groupId: null, enabled: true, info: {}, createdAt: 0, updatedAt: 0 }) as Subscription
+  ({
+    id,
+    channelKey: "x",
+    title: id,
+    groupId: null,
+    enabled: true,
+    info: {},
+    createdAt: 0,
+    updatedAt: 0,
+  }) as Subscription
 
 // ── 1. 今日计数 ──────────────────────────────────────────────────────────
 {
@@ -71,7 +80,11 @@ const sub = (id: string): Subscription =>
     item("vid", "video", "s1", { online: 500 }),
   ]
   const r = selectLive(items)
-  assert.deepEqual(r.map((x) => x.id), ["high", "low", "old"], "offline 排除、在线数降序、unknown 兜底在后")
+  assert.deepEqual(
+    r.map((x) => x.id),
+    ["high", "low", "old"],
+    "offline 排除、在线数降序、unknown 兜底在后",
+  )
   assert.equal(selectLive(items, 2).length, 2, "limit 生效")
 }
 
@@ -84,8 +97,16 @@ const sub = (id: string): Subscription =>
     item("s2-new", "video", "s2", { publishedAt: NOW - 2 * HOUR }),
   ]
   const r = groupedBySub(items, subs, 1)
-  assert.deepEqual(r.map((x) => x.sub.id), ["s1", "s2"], "按最新一条排序；空订阅不出现")
-  assert.deepEqual(r[0]?.items.map((x) => x.id), ["s1-new"], "每个订阅截断到 perSub")
+  assert.deepEqual(
+    r.map((x) => x.sub.id),
+    ["s1", "s2"],
+    "按最新一条排序；空订阅不出现",
+  )
+  assert.deepEqual(
+    r[0]?.items.map((x) => x.id),
+    ["s1-new"],
+    "每个订阅截断到 perSub",
+  )
   assert.equal(r[0]?.unread, 1, "未读数是该订阅全量，不是截断后的")
   assert.equal(r[1]?.unread, 0)
 }
@@ -100,7 +121,11 @@ const sub = (id: string): Subscription =>
     item("a1", "article", "s1", { publishedAt: NOW }),
   ]
   const r = picksMix(items, 3)
-  assert.deepEqual(r.map((x) => x.id), ["s-high", "v-new", "s-low"], "动态按热度、影音按时间、交替取；文章不进精选")
+  assert.deepEqual(
+    r.map((x) => x.id),
+    ["s-high", "v-new", "s-low"],
+    "动态按热度、影音按时间、交替取；文章不进精选",
+  )
   assert.equal(picksMix(items, 99).length, 4, "limit 大于池子时取尽可用的")
 }
 
@@ -121,7 +146,11 @@ const sub = (id: string): Subscription =>
     selectedNodeId: "tab:all",
     refreshErrors: {},
   }
-  assert.deepEqual(queryView(slice, "tab:all", NOW).list.map((x) => x.id), ["both"], "未读+收藏同时置位是 AND")
+  assert.deepEqual(
+    queryView(slice, "tab:all", NOW).list.map((x) => x.id),
+    ["both"],
+    "未读+收藏同时置位是 AND",
+  )
 }
 
 console.log("✔ 首页聚合 selectors 自检通过（今日/续播/在播/订阅更新/精选/筛选）")

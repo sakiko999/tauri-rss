@@ -17,7 +17,11 @@ const MEMBER: RowCtx = { kind: "member", expanded: false, hasChildren: false }
 const UNGROUPED: RowCtx = { kind: "ungrouped", expanded: true, hasChildren: true }
 
 // 上下移动:三种行都一样
-for (const [name, row] of [["分组", GROUP_OPEN], ["未分组", UNGROUPED], ["成员", MEMBER]] as const) {
+for (const [name, row] of [
+  ["分组", GROUP_OPEN],
+  ["未分组", UNGROUPED],
+  ["成员", MEMBER],
+] as const) {
   eq(navAction("ArrowDown", row), { type: "move", delta: 1 }, `${name}行 ↓ 下移`)
   eq(navAction("ArrowUp", row), { type: "move", delta: -1 }, `${name}行 ↑ 上移`)
   eq(navAction("Home", row), { type: "first" }, `${name}行 Home → 首行`)
@@ -29,7 +33,11 @@ eq(navAction("ArrowRight", GROUP_SHUT), { type: "expand" }, "分组行(折叠)�
 eq(navAction("ArrowRight", GROUP_OPEN), { type: "into" }, "分组行(展开)→ 进首个成员")
 eq(navAction("ArrowRight", GROUP_EMPTY_SHUT), { type: "expand" }, "空分组(折叠)→ 展开(不进入)")
 // 空分组展开后 → 无可进(hasChildren=false)→ 不消费
-eq(navAction("ArrowRight", { kind: "group", expanded: true, hasChildren: false }), { type: "none" }, "空分组(展开)→ 不消费")
+eq(
+  navAction("ArrowRight", { kind: "group", expanded: true, hasChildren: false }),
+  { type: "none" },
+  "空分组(展开)→ 不消费",
+)
 
 // 分组行:← 展开则折叠,已折叠则不消费
 eq(navAction("ArrowLeft", GROUP_OPEN), { type: "collapse" }, "分组行(展开)← 折叠")

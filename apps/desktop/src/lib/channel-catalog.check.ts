@@ -59,8 +59,15 @@ const CATALOG = [
 // ── 3. 分组与分页 ───────────────────────────────────────────────────────
 {
   const v = catalogView(CATALOG, "all")
-  assert.deepEqual(v.groups.map((g) => g.id), ["bili", "youtube", "huya", "douyin", "rss"])
-  assert.deepEqual(v.groups[0]?.items.map((c) => c.key), ["bili:popular", "bili:user_video", "bili:live"], "组内保持注册顺序")
+  assert.deepEqual(
+    v.groups.map((g) => g.id),
+    ["bili", "youtube", "huya", "douyin", "rss"],
+  )
+  assert.deepEqual(
+    v.groups[0]?.items.map((c) => c.key),
+    ["bili:popular", "bili:user_video", "bili:live"],
+    "组内保持注册顺序",
+  )
   assert.equal(v.shown, v.total, "默认 limit 足够时全量渲染")
 
   // 三组各 6 条，limit=10：整组累加 → 只出第一组（6），剩 12 条
@@ -84,7 +91,18 @@ const CATALOG = [
 {
   assert.equal(isSingleton(ch("bili:popular", "B站综合热门")), true, "无参渠道 = 单例")
   assert.equal(isSingleton(ch("bili:user_video", "B站 UP 主投稿", ["uid"])), false, "带参数可反复添加")
-  assert.equal(isSingleton({ key: "x", name: "x", kind: "video", loginable: false, passive: false, sourceInfoTpl: [] } as ChannelInfo), true, "空数组也算单例")
+  assert.equal(
+    isSingleton({
+      key: "x",
+      name: "x",
+      kind: "video",
+      loginable: false,
+      passive: false,
+      sourceInfoTpl: [],
+    } as ChannelInfo),
+    true,
+    "空数组也算单例",
+  )
   assert.equal(CATALOG_PAGE, 24)
 }
 

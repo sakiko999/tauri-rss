@@ -1,7 +1,3 @@
 [workspace]
 resolver = "2"
-members = [
-    "apps/src-tauri",
-    "apps/browser-sidecar",
-    "apps/runtime",
-]
+members = ["apps/src-tauri", "apps/browser-sidecar", "apps/runtime"]

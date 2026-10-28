@@ -26,7 +26,9 @@
   color: var(--text-dim);
   font-size: var(--fs-small);
   font-weight: 520;
-  transition: color var(--dur-fast) var(--ease-in), border-color var(--dur-fast) var(--ease-in);
+  transition:
+    color var(--dur-fast) var(--ease-in),
+    border-color var(--dur-fast) var(--ease-in);
 }
 .media-tab:hover {
   color: var(--text);
@@ -51,7 +53,9 @@
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
   background: var(--surface-1);
-  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+  transition:
+    border-color var(--dur-fast) var(--ease-in),
+    background var(--dur-fast) var(--ease-in);
 }
 .live-hero:hover {
   border-color: var(--border-strong);

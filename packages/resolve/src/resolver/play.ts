@@ -66,11 +66,7 @@ export async function resolveLivePlayByUrl(url: string, info?: ResolveInfo): Pro
 type VideoPlatform = Extract<ResolvePlatform, "bilibili" | "youtube">
 
 /** 按视频平台 + id 解析可播流。 */
-export async function resolveVideoStreams(
-  platform: VideoPlatform,
-  id: string,
-  info?: ResolveInfo,
-): Promise<Stream[]> {
+export async function resolveVideoStreams(platform: VideoPlatform, id: string, info?: ResolveInfo): Promise<Stream[]> {
   if (platform === "bilibili") return resolveBiliVideoPlay(id, info)
   return resolveYoutubeStreams(id)
 }
@@ -79,11 +75,7 @@ export async function resolveVideoStreams(
 type LivePlatform = Extract<ResolvePlatform, "bilibili" | "douyu" | "huya" | "douyin" | "twitch">
 
 /** 按直播平台 + roomId 解析可播流。 */
-export async function resolveLiveStreams(
-  platform: LivePlatform,
-  id: string,
-  info?: ResolveInfo,
-): Promise<Stream[]> {
+export async function resolveLiveStreams(platform: LivePlatform, id: string, info?: ResolveInfo): Promise<Stream[]> {
   switch (platform) {
     case "bilibili":
       return resolveBiliLivePlay(id, info)

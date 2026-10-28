@@ -44,9 +44,7 @@ export async function runDetail(url: string, opts: DetailOptions): Promise<void>
   }
   const xsecToken = parsed.searchParams.get("xsec_token") ?? ""
   if (!xsecToken) {
-    console.error(
-      pc.red(`✘ URL 缺少 xsec_token:详情页 noteDetailMap 需要列表项的 token(从列表复制完整链接)`),
-    )
+    console.error(pc.red(`✘ URL 缺少 xsec_token:详情页 noteDetailMap 需要列表项的 token(从列表复制完整链接)`))
     process.exit(1)
   }
 

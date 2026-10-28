@@ -10,21 +10,11 @@ import { useState } from "react"
 import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 import { MediaMuteButton } from "./MediaMuteButton.tsx"
 
-export function MediaVolumeSlider({
-  state,
-  ops,
-}: {
-  state: VideoPlayState
-  ops: VideoOps
-}) {
+export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: VideoOps }) {
   const [open, setOpen] = useState(false)
   const volumePct = Math.round((state.muted ? 0 : state.volume) * 100)
   return (
-    <div
-      className="relative flex items-center"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
+    <div className="relative flex items-center" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
       <MediaMuteButton state={state} ops={ops} />
       {/* 垂直滑条浮层:仅按钮 hover 显示(React 状态,不受祖先 group 影响) */}
       {open && (

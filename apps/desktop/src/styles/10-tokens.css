@@ -188,8 +188,9 @@
 
 /* ---------- 与主题无关的令牌 ---------- */
 :root {
-  --font-sans: "Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei",
-    "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-sans:
+    "Plex Sans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
+    system-ui, sans-serif;
   /* 中文衬线插在 Plex Serif 之后、系统宋体之前:装了 Noto/Source Han Serif 的机器
      直接命中(比 SimSun 细腻),没装则原样落到 Songti/SimSun —— 不随包、不引 CDN
      (Tauri 离线,且思源宋体全量 3-8MB 进包不划算)。 */
@@ -492,4 +493,3 @@
     cursor: pointer;
   }
 }
-

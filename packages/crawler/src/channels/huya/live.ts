@@ -57,7 +57,10 @@ export class HuyaLiveChannel implements RssChannel {
   // fetch 支持多房间(roomIds 逗号分隔)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
     }
   }
 
@@ -79,6 +82,9 @@ export class HuyaLiveChannel implements RssChannel {
     return ok.map((live) => ({ ...live, fetchedAt: t }))
   }
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `虎牙直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: `https://www.huya.com/${String(info.roomIds ?? info.roomId ?? "")}` }
+    return {
+      channelTitle: `虎牙直播 ${String(info.roomIds ?? info.roomId ?? "")}`,
+      channelLink: `https://www.huya.com/${String(info.roomIds ?? info.roomId ?? "")}`,
+    }
   }
 }

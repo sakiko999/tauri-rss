@@ -14,10 +14,7 @@ const ROWS = 8
 const CARDS = 9
 
 export function PreviewSkeleton({ mode = "grid" }: { mode?: "grid" | "list" }) {
-  const items = useMemo(
-    () => Array.from({ length: mode === "list" ? ROWS : CARDS }, (_, i) => i),
-    [mode],
-  )
+  const items = useMemo(() => Array.from({ length: mode === "list" ? ROWS : CARDS }, (_, i) => i), [mode])
   return mode === "list" ? (
     <div className="bs-list">
       {items.map((i) => (

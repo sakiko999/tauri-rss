@@ -20,8 +20,7 @@ function rustRules(name: RuleName): Array<[string, string]> {
   return [...block!.matchAll(/\("([^"]+)",\s*"([^"]+)"\)/g)].map((m) => [m[1]!, m[2]!])
 }
 
-const sorted = (rows: Array<[string, string]>) =>
-  [...rows].sort(([a], [b]) => a.localeCompare(b))
+const sorted = (rows: Array<[string, string]>) => [...rows].sort(([a], [b]) => a.localeCompare(b))
 
 assert.deepEqual(sorted(rustRules("IMAGE_REFERRERS")), sorted(MEDIA_REFERRERS), "图片 Referer 规则两边不一致")
 assert.deepEqual(sorted(rustRules("VIDEO_REFERRERS")), sorted(VIDEO_REFERRERS), "视频 Referer 规则两边不一致")

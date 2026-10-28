@@ -22,8 +22,7 @@ import { httpJson } from "../../host.ts"
 import { M_HUYA, HUYA_UA } from "./client.ts"
 
 /** 播放 FLV 用的 UA(HYSDK PC 端,dart 同款)。 */
-export const HUYA_PLAY_UA =
-  "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"
+export const HUYA_PLAY_UA = "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"
 
 /** profileRoom API → 按 CDN 归拢的一条线路(flv/hls 各一个完整签名直链)。 */
 interface HuyaApiLine {
@@ -128,7 +127,13 @@ export async function resolveHuyaLivePlay(roomId: string): Promise<Stream[]> {
     for (const line of lines) {
       // 每档都给 HLS(带该档 ratio)——低档也可切(flv 低档播不稳,故不产)。
       if (line.hlsUrl) {
-        out.push({ url: withRatio(line.hlsUrl, br.bitRate), format: "hls", headers, quality: `${br.name}·${line.cdn}`, rate: br.bitRate })
+        out.push({
+          url: withRatio(line.hlsUrl, br.bitRate),
+          format: "hls",
+          headers,
+          quality: `${br.name}·${line.cdn}`,
+          rate: br.bitRate,
+        })
       }
       if (isTop && line.flvUrl) {
         out.push({ url: line.flvUrl, format: "flv", headers, quality: `${br.name}·${line.cdn}`, rate: br.bitRate })

@@ -127,11 +127,13 @@ export class CdpChannel {
           reject(new Error(`CDP 命令超时(${method}):页面可能已导航,回复丢失`))
         }
       }, CDP_CMD_TIMEOUT_MS)
-      const settle = <T>(fn: (v: T) => void) => (v: T) => {
-        clearTimeout(timer)
-        this.activity?.end()
-        fn(v)
-      }
+      const settle =
+        <T>(fn: (v: T) => void) =>
+        (v: T) => {
+          clearTimeout(timer)
+          this.activity?.end()
+          fn(v)
+        }
       this.pending.set(id, { resolve: settle(resolve), reject: settle(reject) })
       void transport.send(msg).catch((e) => {
         if (!this.pending.delete(id)) return

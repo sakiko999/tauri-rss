@@ -14,12 +14,7 @@ import type { MediaStream } from "@amoeba/core"
 
 // ⚠️ 判据统一放 `streamKind.ts`(纯函数、不 import 引擎),本模块与自检共用一份。
 // 曾经这里与 useMediaStream 各写一遍(实现已经开始漂移)。
-export {
-  isProgressiveAudio,
-  isProgressiveVideo,
-  isRtmp,
-  isStreamingStream,
-} from "./streamKind.ts"
+export { isProgressiveAudio, isProgressiveVideo, isRtmp, isStreamingStream } from "./streamKind.ts"
 import { pickDefaultStream } from "./streamKind.ts"
 
 /**

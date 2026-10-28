@@ -41,12 +41,7 @@ export function openSocialDetailWithTransition(open: () => void): void {
   pendingSource = null
 
   // ⚠️ `isConnected`:卡片可能已被虚拟化卸载(点完立刻滚走),name 挂上去也抓不到快照。
-  if (
-    !source ||
-    !source.isConnected ||
-    typeof document.startViewTransition !== "function" ||
-    prefersReducedMotion()
-  ) {
+  if (!source || !source.isConnected || typeof document.startViewTransition !== "function" || prefersReducedMotion()) {
     open()
     return
   }

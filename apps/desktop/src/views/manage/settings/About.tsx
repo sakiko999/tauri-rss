@@ -11,13 +11,7 @@ import { useEffect, useState, useSyncExternalStore } from "react"
 import { Icon } from "../../../components/Icon.tsx"
 import { SideCard } from "../../../components/StateBlock.tsx"
 import { Row } from "./Row.tsx"
-import {
-  getUpdatePhase,
-  installUpdate,
-  manualCheck,
-  relaunchApp,
-  subscribeUpdatePhase,
-} from "../../../lib/update.ts"
+import { getUpdatePhase, installUpdate, manualCheck, relaunchApp, subscribeUpdatePhase } from "../../../lib/update.ts"
 
 /** 字节数 → 人类可读(只用于进度文案)。 */
 function fmtBytes(n: number): string {
@@ -69,9 +63,7 @@ export function About() {
           </p>
         ) : null}
 
-        {phase.kind === "error" ? (
-          <p className="setting-help update-error">检查或安装失败：{phase.message}</p>
-        ) : null}
+        {phase.kind === "error" ? <p className="setting-help update-error">检查或安装失败：{phase.message}</p> : null}
 
         {phase.kind === "available" ? (
           <div className="update-card">

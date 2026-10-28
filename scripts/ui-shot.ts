@@ -27,7 +27,10 @@ ws.addEventListener("message", (e) => {
   const m = JSON.parse(String(e.data)) as { id?: number; result?: any }
   if (m.id === undefined) return
   const p = pending.get(m.id)
-  if (p) { pending.delete(m.id); p(m.result) }
+  if (p) {
+    pending.delete(m.id)
+    p(m.result)
+  }
 })
 await new Promise<void>((res) => ws.addEventListener("open", () => res()))
 const evaluate = async (expression: string) => {

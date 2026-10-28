@@ -80,7 +80,9 @@ function viewersOf(text: string | undefined): number | undefined {
 function isLiveBadge(overlays: unknown): boolean {
   if (!Array.isArray(overlays)) return false
   return overlays.some((o) => {
-    const text = textOf((o as { thumbnailOverlayTimeStatusRenderer?: { text?: unknown } })?.thumbnailOverlayTimeStatusRenderer?.text)
+    const text = textOf(
+      (o as { thumbnailOverlayTimeStatusRenderer?: { text?: unknown } })?.thumbnailOverlayTimeStatusRenderer?.text,
+    )
     return text?.toUpperCase() === "LIVE"
   })
 }
@@ -89,7 +91,10 @@ function isLiveBadge(overlays: unknown): boolean {
 export function youtubeShelfSlug(title: string): string {
   const t = title.trim()
   if (!/^live now/i.test(t)) return slugify(t)
-  const rest = t.replace(/^live now/i, "").replace(/^[\s-]+/, "").trim()
+  const rest = t
+    .replace(/^live now/i, "")
+    .replace(/^[\s-]+/, "")
+    .trim()
   return rest ? slugify(rest) : "hot"
 }
 
@@ -131,8 +136,7 @@ function videoRendererToHit(vr: Record<string, any>): YoutubeLiveHit | null {
 export function parseYoutubeLiveShelves(raw: unknown): YoutubeLiveShelf[] {
   const root = raw as any
   const tabContent = root?.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content
-  const sections: unknown[] =
-    tabContent?.richGridRenderer?.contents ?? tabContent?.sectionListRenderer?.contents ?? []
+  const sections: unknown[] = tabContent?.richGridRenderer?.contents ?? tabContent?.sectionListRenderer?.contents ?? []
   const out: YoutubeLiveShelf[] = []
   for (const section of sections) {
     const s = section as any

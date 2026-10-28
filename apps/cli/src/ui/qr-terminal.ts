@@ -212,9 +212,7 @@ const IMAGE_URL_RE = /^https?:\/\/.*\.(png|jpe?g|gif|webp|bmp)([?#]|$)/i
  */
 export function matrixFromEmit(payload: string): QrMatrix {
   if (IMAGE_URL_RE.test(payload)) {
-    throw new Error(
-      `二维码是远程图片而非二维码内容，终端无法渲染；请用桌面端扫码或手动打开：${payload}`,
-    )
+    throw new Error(`二维码是远程图片而非二维码内容，终端无法渲染；请用桌面端扫码或手动打开：${payload}`)
   }
   if (/^data:image\//i.test(payload) && !/^data:image\/png[;,]/i.test(payload)) {
     throw new Error(`二维码图片格式不支持（仅 PNG）：${payload.slice(0, 24)}…`)

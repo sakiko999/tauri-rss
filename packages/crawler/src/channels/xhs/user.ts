@@ -51,14 +51,19 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
       return { fetch: denied, fetchPassive: denied, fetchMore: denied, resolveDetail: denied }
     }
     const browser = globalThis.appHost?.browser
-    const fetch = apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info))
-    const base = (browser
-      ? {
-          fetch,
-          fetchMore: (cursor?: string, ctx?: { existing: number }) =>
-            this.fetchMoreViaBrowser(browser, userId, cursor, ctx?.existing),
-        }
-      : { fetch }) as RssSource & Partial<Pageable> & ItemDetailSource
+    const fetch = apiFetchItems(
+      () => this.fetchItems(info),
+      () => this.channelOptions(info),
+    )
+    const base = (
+      browser
+        ? {
+            fetch,
+            fetchMore: (cursor?: string, ctx?: { existing: number }) =>
+              this.fetchMoreViaBrowser(browser, userId, cursor, ctx?.existing),
+          }
+        : { fetch }
+    ) as RssSource & Partial<Pageable> & ItemDetailSource
     // 详情与 explore 共用同一套策略。刻意不传 info.cookie:桌面有浏览器时详情走浏览器栈
     // (reqwest 带账号 cookie 既拿不到数据——xhs WAF 按客户端栈判定——又让凭据走非浏览器栈
     // 出站);无浏览器门面(mobile/CLI)会回落 provider 登录态,这是登录态必需的。
@@ -152,10 +157,7 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
       // 之外的本 tab 导航走),clamp 会把窗口压回**已返回过的前缀** —— 「加载更多
       // 点了没反应」。保持旧 cursor:滚动把页面养到超过它;这轮滚不到就返回空 +
       // 原 cursor 让 core 重试(别标 ended)。
-      const startIdx =
-        cursor !== undefined
-          ? Number(cursor) || 0
-          : Math.min(existing ?? initial.length, initial.length)
+      const startIdx = cursor !== undefined ? Number(cursor) || 0 : Math.min(existing ?? initial.length, initial.length)
 
       // state 缓存不足才滚动(平台自己签名加载,我们只触发);缓存够则零滚动直接取窗口(快)。
       let after = initial
@@ -163,11 +165,7 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
       // 「加载慢/未触发」:前者 hasMore false(停),后者返回 cursor 让 core 重试(别标 ended)。
       let platformActive = false
       if (initial.length <= startIdx) {
-        const r = await scrollXhsUntilGrown(
-          b,
-          () => readXhsStateListCount(b, ["user", "notes"]),
-          startIdx,
-        )
+        const r = await scrollXhsUntilGrown(b, () => readXhsStateListCount(b, ["user", "notes"]), startIdx)
         platformActive = r.platformActive
         after = await readXhsStateList(b, ["user", "notes"])
       }

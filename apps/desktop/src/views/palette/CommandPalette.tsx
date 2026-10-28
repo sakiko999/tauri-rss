@@ -80,7 +80,16 @@ export function CommandPalette() {
       group: "条目",
       title: it.title,
       sub: it.author?.name,
-      icon: it.kind === "live" ? "radio" : it.kind === "video" ? "play" : it.kind === "audio" ? "music" : it.kind === "social" ? "message" : "rss",
+      icon:
+        it.kind === "live"
+          ? "radio"
+          : it.kind === "video"
+            ? "play"
+            : it.kind === "audio"
+              ? "music"
+              : it.kind === "social"
+                ? "message"
+                : "rss",
       run: () => actions.onPlay(it),
     }))
     return [...nav, ...items]
@@ -93,7 +102,13 @@ export function CommandPalette() {
       { id: "cmd:account", group: "命令", title: "打开账号与凭证", icon: "lock", run: () => go("page:account") },
       { id: "cmd:discover", group: "命令", title: "打开发现", icon: "compass", run: () => go("page:discover") },
       { id: "cmd:groups", group: "命令", title: "管理分组", icon: "folder", run: () => go("page:settings") },
-      { id: "cmd:offline", group: "命令", title: "切换离线模式", icon: "offline", run: () => useDesktop.getState().setOffline(!useDesktop.getState().offline) },
+      {
+        id: "cmd:offline",
+        group: "命令",
+        title: "切换离线模式",
+        icon: "offline",
+        run: () => useDesktop.getState().setOffline(!useDesktop.getState().offline),
+      },
       {
         id: "cmd:theme",
         group: "命令",
@@ -122,7 +137,11 @@ export function CommandPalette() {
           // 窗口外的条目,与文案不符。用 queryView 放大 page 取全量(与 ArticlePane 同款),
           // 并只对真正未读的计数。
           const n = s.selectedNodeId ?? "tab:all"
-          const full = queryView({ ...s, page: { ...s.page, [n]: Number.MAX_SAFE_INTEGER } }, s.selectedNodeId, Date.now()).list
+          const full = queryView(
+            { ...s, page: { ...s.page, [n]: Number.MAX_SAFE_INTEGER } },
+            s.selectedNodeId,
+            Date.now(),
+          ).list
           // 传**条目**(非 id):reading 键要带 subscriptionId(见 core `readingKey`)。
           const unread = full.filter((i) => i.isUnread)
           s.markAllRead(unread)
@@ -248,4 +267,3 @@ export function CommandPalette() {
     </div>
   )
 }
-

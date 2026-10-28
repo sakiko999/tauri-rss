@@ -239,7 +239,7 @@ export function PlatformBrowser({
             <input
               key={f.key}
               className={fields.length > 1 ? "input" : "input input-wide"}
-              value={view === "category" ? categoryValues[f.key] ?? "" : q}
+              value={view === "category" ? (categoryValues[f.key] ?? "") : q}
               placeholder={f.placeholder ?? f.label ?? "参数"}
               aria-label={f.label ?? "参数"}
               onChange={(e) => {
@@ -261,7 +261,11 @@ export function PlatformBrowser({
         </div>
       )}
 
-      {error ? <Banner tone="error" icon="alert">{error}</Banner> : null}
+      {error ? (
+        <Banner tone="error" icon="alert">
+          {error}
+        </Banner>
+      ) : null}
 
       {items ? (
         cands.length === 0 ? (
@@ -270,9 +274,7 @@ export function PlatformBrowser({
             tight
             title="没有可订阅的条目"
             text={
-              items.length === 0
-                ? "换个参数再试；若渠道需要登录，先去「账号与凭证」。"
-                : "返回的条目没有可用的房间号。"
+              items.length === 0 ? "换个参数再试；若渠道需要登录，先去「账号与凭证」。" : "返回的条目没有可用的房间号。"
             }
           />
         ) : (

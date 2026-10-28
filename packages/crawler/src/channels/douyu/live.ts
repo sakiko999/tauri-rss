@@ -34,7 +34,10 @@ export class DouyuLiveChannel implements RssChannel {
   // fetch 支持多房间(roomIds 逗号分隔)。
   getSource(info: SourceInfo): RssSource {
     return {
-      fetch: apiFetchItems(() => this.fetchItems(info), () => this.channelOptions(info)),
+      fetch: apiFetchItems(
+        () => this.fetchItems(info),
+        () => this.channelOptions(info),
+      ),
     }
   }
 
@@ -79,6 +82,9 @@ export class DouyuLiveChannel implements RssChannel {
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {
-    return { channelTitle: `斗鱼直播 ${String(info.roomIds ?? info.roomId ?? "")}`, channelLink: `${BASE}/${String(info.roomIds ?? info.roomId ?? "")}` }
+    return {
+      channelTitle: `斗鱼直播 ${String(info.roomIds ?? info.roomId ?? "")}`,
+      channelLink: `${BASE}/${String(info.roomIds ?? info.roomId ?? "")}`,
+    }
   }
 }

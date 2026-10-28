@@ -65,11 +65,18 @@ export class BiliSeriesChannel implements RssChannel {
       return midFor(ref.seriesId)
     }
     return {
-      fetch: apiFetchItems(() => this.fetchItems(info, mid, 1), () => this.channelOptions(info)),
-      fetchMore: apiFetchMore((page) => this.fetchItems(info, mid, page), () => this.channelOptions(info), {
-        first: 2,
-        step: 1,
-      }),
+      fetch: apiFetchItems(
+        () => this.fetchItems(info, mid, 1),
+        () => this.channelOptions(info),
+      ),
+      fetchMore: apiFetchMore(
+        (page) => this.fetchItems(info, mid, page),
+        () => this.channelOptions(info),
+        {
+          first: 2,
+          step: 1,
+        },
+      ),
     }
   }
 

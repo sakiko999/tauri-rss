@@ -9,13 +9,7 @@ import type { Subscription } from "@amoeba/core"
 import type { SubFeed } from "../../store/selectors.ts"
 import { HomeSection } from "./HomeSection.tsx"
 
-export function HomeFeedRows({
-  feeds,
-  onOpenSub,
-}: {
-  feeds: SubFeed[]
-  onOpenSub: (sub: Subscription) => void
-}) {
+export function HomeFeedRows({ feeds, onOpenSub }: { feeds: SubFeed[]; onOpenSub: (sub: Subscription) => void }) {
   if (feeds.length === 0) return null
   return (
     <HomeSection title="订阅更新">

@@ -21,7 +21,10 @@ export class WeiboHotChannel implements RssChannel {
   getSource(info: SourceInfo): RssSource & HotWordSource {
     const cookie = (info.cookie as string) || undefined
     return {
-      fetch: apiFetchItems(() => this.fetchItems(), () => this.channelOptions()),
+      fetch: apiFetchItems(
+        () => this.fetchItems(),
+        () => this.channelOptions(),
+      ),
       resolveHotWord: (word) => this.resolveHotWordImpl(word, cookie),
     }
   }

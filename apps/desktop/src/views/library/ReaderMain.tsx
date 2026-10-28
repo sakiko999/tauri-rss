@@ -96,7 +96,7 @@ export function ReaderMain() {
   const itemId = item?.id
   /** 会话缓存的键必须带订阅维度（同 id 跨订阅会串正文）。 */
   const itemCacheKey = item ? itemKey(item) : undefined
-  const curContent = item?.kind === "article" ? item.content ?? "" : ""
+  const curContent = item?.kind === "article" ? (item.content ?? "") : ""
   /** 可见文本长度(<400 触补全;用可见长度而非原始 HTML——图片密集摘要会虚高)。 */
   const curVisible = visibleLength(curContent)
   const [full, setFull] = useState<{ id: string; content: string } | null>(null)
@@ -118,7 +118,7 @@ export function ReaderMain() {
     void dl
       .resolveDetail(subId, itemId)
       .then((d) => {
-        const text = d?.kind === "article" ? d.content ?? "" : ""
+        const text = d?.kind === "article" ? (d.content ?? "") : ""
         if (live && text.length > curContent.length) {
           if (bodyCache.size >= BODY_CACHE_MAX) bodyCache.delete(bodyCache.keys().next().value as string)
           bodyCache.set(itemCacheKey, text)
@@ -140,9 +140,9 @@ export function ReaderMain() {
    *  ⚠️ 补全结果**不走 store.patch**(只在本地 full/cache),故判定格式必须依据**当前
    *  展示的那段文本**,而不是 item.contentFormat —— 后者是 store 里的原始摘要格式,
    *  对补全的纯文本恒错(曾据此写 `contentFormat==="text"` 但当保护从未生效)。 */
-  const shownContent = full && full.id === itemCacheKey ? full.content : cached ?? curContent
+  const shownContent = full && full.id === itemCacheKey ? full.content : (cached ?? curContent)
   /** 本条目是否已拿到补全正文(对位复合键,不是「任意条目补全过」)。 */
-  const hasFull = (full?.id === itemCacheKey) || !!cached
+  const hasFull = full?.id === itemCacheKey || !!cached
   // ⚠️ 补全正文恒为**纯文本**(raw.ts 强制 contentFormat="text"),hasFull 时直接按纯文本
   // 渲染,不再猜格式——否则补全文本里的裸 `<`(数学/代码/`<https://…>`)会被 looksLikeHtml
   // 命中而走 innerHTML,把内容当标签吞掉且丢段落换行。仅未补全时才依据 store 的

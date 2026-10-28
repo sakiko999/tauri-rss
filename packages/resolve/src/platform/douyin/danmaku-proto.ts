@@ -110,11 +110,7 @@ export function douyinHeartbeatFrame(): Uint8Array {
 
 /** ack 帧:PushFrame{logId, payloadType:"ack", payload:internalExt}(dart sendAck 的修正版)。 */
 export function douyinAckFrame(logId: number, internalExt: string): Uint8Array {
-  return concat(
-    pbFieldString(2, String(logId)),
-    pbFieldString(7, "ack"),
-    pbFieldBytes(8, TE.encode(internalExt)),
-  )
+  return concat(pbFieldString(2, String(logId)), pbFieldString(7, "ack"), pbFieldBytes(8, TE.encode(internalExt)))
 }
 
 /** gzip 解压(DecompressionStream,浏览器/Node 18+ 内置)。失败原样返回(非 gzip 帧)。 */
@@ -133,7 +129,10 @@ async function gunzip(data: Uint8Array): Promise<Uint8Array> {
  * 链路:PushFrame{logId, payload} → gzip → Response{needAck, internalExt, messagesList[]}
  * → Message{method=="WebcastChatMessage", payload} → ChatMessage{user.nickName, content}。
  */
-export async function decodeDouyinPushFrame(buf: Uint8Array, onAck: (frame: Uint8Array) => void): Promise<DanmakuItem[]> {
+export async function decodeDouyinPushFrame(
+  buf: Uint8Array,
+  onAck: (frame: Uint8Array) => void,
+): Promise<DanmakuItem[]> {
   let logId = 0
   let payload: Uint8Array | null = null
   for (const f of protoFields(buf)) {

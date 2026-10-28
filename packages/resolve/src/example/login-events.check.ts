@@ -35,15 +35,19 @@ for (const [name, domain] of LOGIN_DOMAINS) {
   domain.loginFallback({ reason: "network down" })
   const got = take().map((t) => t.replace(new RegExp(`^\\[${name}\\] `), ""))
 
-  assert.deepEqual(got, [
-    "扫码登录导航 https://example.test/login?token=abc",
-    "二维码已就绪(可扫码)",
-    "登录成功",
-    "登录成功 · user_id=u1",
-    "已登录(复用 profile)",
-    "扫码登录超时或二维码已失效",
-    "HTTP 路径失败,回退浏览器: network down",
-  ], `${name} 的登录事件文案与其他平台不一致`)
+  assert.deepEqual(
+    got,
+    [
+      "扫码登录导航 https://example.test/login?token=abc",
+      "二维码已就绪(可扫码)",
+      "登录成功",
+      "登录成功 · user_id=u1",
+      "已登录(复用 profile)",
+      "扫码登录超时或二维码已失效",
+      "HTTP 路径失败,回退浏览器: network down",
+    ],
+    `${name} 的登录事件文案与其他平台不一致`,
+  )
 }
 
 // 弹幕初始化失败:各直播域同一句(避免四处复制、措辞漂移)。

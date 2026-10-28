@@ -66,11 +66,18 @@ export class BiliSeasonChannel implements RssChannel {
   getSource(info: SourceInfo): RssSource & Pageable {
     const seasonId = (): Promise<string> => seasonIdFor(info.seasonId ?? "")
     return {
-      fetch: apiFetchItems(() => this.fetchItems(seasonId, 1), () => this.channelOptions(info)),
-      fetchMore: apiFetchMore((page) => this.fetchItems(seasonId, page), () => this.channelOptions(info), {
-        first: 2,
-        step: 1,
-      }),
+      fetch: apiFetchItems(
+        () => this.fetchItems(seasonId, 1),
+        () => this.channelOptions(info),
+      ),
+      fetchMore: apiFetchMore(
+        (page) => this.fetchItems(seasonId, page),
+        () => this.channelOptions(info),
+        {
+          first: 2,
+          step: 1,
+        },
+      ),
     }
   }
 

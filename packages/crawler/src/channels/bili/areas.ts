@@ -45,6 +45,5 @@ export const BiliLiveAreasChannel = makeApiChannel({
   defaultInfo: {},
   channelTitle: () => "B站直播分区列表",
   channelLink: "https://live.bilibili.com/p/eden/area-tags",
-  fetchPage: async (): Promise<Item[]> =>
-    biliCategoryItems("bili:live:areas", now(), await fetchBiliCategories()),
+  fetchPage: async (): Promise<Item[]> => biliCategoryItems("bili:live:areas", now(), await fetchBiliCategories()),
 })

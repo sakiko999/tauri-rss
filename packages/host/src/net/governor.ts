@@ -119,9 +119,7 @@ let _policy = clonePolicy(DEFAULT_NET_POLICY)
  * ⚠️ `levels` 是**整表替换**(不是合并):它是设置页"平台覆盖"的完整快照,
  * 删除某个平台的覆盖必须靠整表替换表达;逐项合并会让删掉的值一直留在宿主里。
  */
-export function configureNetwork(
-  input: { level?: NetLevel } & Partial<NetPolicy>,
-): void {
+export function configureNetwork(input: { level?: NetLevel } & Partial<NetPolicy>): void {
   if (input.level !== undefined) _policy.level = input.level
   if (input.levels !== undefined) _policy.levels = { ...input.levels }
   if (input.globalMaxConcurrent !== undefined) {
@@ -578,11 +576,7 @@ function dedupeKeyFor(req: HttpRequest, platform: string): string {
 }
 
 /** 计量请求:冷却 → 去重 → 平台并发/配额 → 全局并发 → 执行。 */
-function meteredRequest(
-  backend: HttpBackend,
-  req: HttpRequest,
-  platform: string,
-): Promise<HttpResponse> {
+function meteredRequest(backend: HttpBackend, req: HttpRequest, platform: string): Promise<HttpResponse> {
   ensureLoaded()
 
   // 1. 平台冷却:未到期直接 reject,不发请求。
@@ -593,9 +587,7 @@ function meteredRequest(
       // 不给用户看完整 URL（吐司放不下）；subscriptionId 已在 data-layer 的日志里。
       const left = Math.ceil((cooldown.until - now) / 1000)
       const wait = left >= 60 ? `${Math.ceil(left / 60)} 分钟` : `${left} 秒`
-      return Promise.reject(
-        new Error(`平台冷却中（${platform}，剩余 ${wait}，信号 ${cooldown.signal}）`),
-      )
+      return Promise.reject(new Error(`平台冷却中（${platform}，剩余 ${wait}，信号 ${cooldown.signal}）`))
     }
     _cooldowns.delete(platform)
   }

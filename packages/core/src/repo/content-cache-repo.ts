@@ -29,10 +29,7 @@ export interface ContentCacheRepo {
   delete(subscriptionId: string): Promise<void>
 }
 
-export function createContentCacheRepo(
-  storage: StorageBackend,
-  prefix = "content:",
-): ContentCacheRepo {
+export function createContentCacheRepo(storage: StorageBackend, prefix = "content:"): ContentCacheRepo {
   const key = (subscriptionId: string): string => `${prefix}${subscriptionId}`
 
   return {

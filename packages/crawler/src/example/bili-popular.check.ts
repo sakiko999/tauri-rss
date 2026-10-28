@@ -46,8 +46,7 @@ ok(items[0]?.url === "https://www.bilibili.com/video/BV1xx411c7mD", "url 走 bvi
 ok(items[0]?.title === "示例视频一", "title 映射")
 ok(items[0]?.summary === "简介一", "summary 取 desc")
 ok(
-  items[0]?.thumbnail === "https://i0.hdslb.com/cover1.jpg" &&
-    items[0]?.poster === "https://i0.hdslb.com/cover1.jpg",
+  items[0]?.thumbnail === "https://i0.hdslb.com/cover1.jpg" && items[0]?.poster === "https://i0.hdslb.com/cover1.jpg",
   "封面同时写 thumbnail/poster",
 )
 ok(items[0]?.author?.name === "UP主甲" && items[0]?.channel?.name === "UP主甲", "作者映射")

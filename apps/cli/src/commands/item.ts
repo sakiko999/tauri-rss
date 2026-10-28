@@ -8,12 +8,7 @@
  */
 import pc from "picocolors"
 import type { Stream } from "@amoeba/xml"
-import {
-  resolveLivePlayByUrl,
-  resolvePlayByUrl,
-  resolveRoute,
-  type ResolveRoute,
-} from "@amoeba/resolve"
+import { resolveLivePlayByUrl, resolvePlayByUrl, resolveRoute, type ResolveRoute } from "@amoeba/resolve"
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"
 import { probeResolve } from "./probe.ts"
 
@@ -36,8 +31,7 @@ export function routeWithCookie(url: string): ResolveRoute {
 export async function resolveByUrl(url: string): Promise<ResolvedItem> {
   const route = routeWithCookie(url)
   const elapsed = startTimer()
-  const { streams } =
-    route.kind === "live" ? await resolveLivePlayByUrl(url) : await resolvePlayByUrl(url)
+  const { streams } = route.kind === "live" ? await resolveLivePlayByUrl(url) : await resolvePlayByUrl(url)
   return { route, streams, tookMs: elapsed() }
 }
 
@@ -77,9 +71,7 @@ export function printResolved(r: ResolvedItem): void {
 }
 
 export async function runItem(url: string, opts: ItemOptions): Promise<void> {
-  const r = opts.viaService
-    ? await probeResolve(url, opts.endpoint)
-    : await resolveByUrl(url)
+  const r = opts.viaService ? await probeResolve(url, opts.endpoint) : await resolveByUrl(url)
   if (opts.json) {
     printJson({
       url,

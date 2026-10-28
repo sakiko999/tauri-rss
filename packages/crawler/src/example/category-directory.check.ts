@@ -34,7 +34,10 @@ const douyinTree: DouyinCategory[] = [
 ]
 const dy = douyinCategoryItems("live:douyin:categories", FIXED, douyinTree) as Category[]
 ok(dy.length === 4, `顶层 + 子分区全展开（得 ${dy.length}）`)
-ok(dy.every((i) => i.kind === "category"), "全部 kind=category")
+ok(
+  dy.every((i) => i.kind === "category"),
+  "全部 kind=category",
+)
 ok(
   dy.every((i) => i.categoryChannel === "live:douyin:category"),
   "categoryChannel 指向 live:douyin:category",
@@ -48,7 +51,10 @@ ok(sub?.categoryInfo.partition === "1010017", `子分区 partition（得 ${sub?.
 ok(sub?.categoryInfo.partitionType === "1", `子分区 partitionType=1（得 ${sub?.categoryInfo.partitionType}）`)
 ok(sub?.summary === "游戏 · 子分区", `子分区 summary（得 ${sub?.summary}）`)
 ok(dy.find((i) => i.title === "游戏")?.summary === "2 个子分区", "有子分区时 summary 计数")
-ok(dy.every((i) => i.fetchedAt === FIXED && i.sourceId === "live:douyin:categories"), "sourceId/fetchedAt 透传")
+ok(
+  dy.every((i) => i.fetchedAt === FIXED && i.sourceId === "live:douyin:categories"),
+  "sourceId/fetchedAt 透传",
+)
 
 console.log("斗鱼分区目录条目:")
 const douyuTree: DouyuCategory[] = [
@@ -66,7 +72,10 @@ const dyu = douyuCategoryItems("live:douyu:categories", FIXED, douyuTree) as Cat
 ok(dyu.length === 3, `只列二级分区（得 ${dyu.length}）`)
 ok(dyu[0]?.categoryInfo.areaId === "1", `categoryInfo.areaId（得 ${dyu[0]?.categoryInfo.areaId}）`)
 ok(dyu[0]?.summary === "网游竞技", `summary = 父级（得 ${dyu[0]?.summary}）`)
-ok(dyu.every((i) => i.categoryChannel === "live:douyu:category"), "categoryChannel 指向斗鱼分区")
+ok(
+  dyu.every((i) => i.categoryChannel === "live:douyu:category"),
+  "categoryChannel 指向斗鱼分区",
+)
 
 console.log("虎牙分区目录条目:")
 const huyaSubs: HuyaSubCategory[] = [

@@ -155,7 +155,10 @@ ok(streams[0]?.rate === 1080, `streams[0].rate = 1080（播放器取首条；得
 ok(streams[0]?.format === "hls", `format = hls（得 ${streams[0]?.format}）`)
 ok(streams[0]?.quality === "1080p60 (source)", `quality 透传（得 ${streams[0]?.quality}）`)
 ok(streams[3]?.quality === "audio_only" && streams[3]?.rate === undefined, "audio_only 最后且无 rate")
-ok(streams.every((s) => s.format === "hls"), "全部为 hls")
+ok(
+  streams.every((s) => s.format === "hls"),
+  "全部为 hls",
+)
 ok(
   streams[0]?.url === "https://video-weaver.example/hls/1080p60/index-dvr.m3u8",
   "Stream.url 是 variant playlist（不是无 CORS 的 master）",

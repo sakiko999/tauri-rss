@@ -235,10 +235,7 @@ function splitKey(key: string): { subscriptionId: string; itemId: string } | nul
  * 连接服务并返回同形 DataLayer。
  * 初始化顺序：hello → 快照 → 镜像 → channels → WS（WS 失败不阻塞；重连会重取快照）。
  */
-export async function createRemoteDataLayer(
-  endpoint: EndpointInfo,
-  hooks: RemoteHooks = {},
-): Promise<RemoteDataLayer> {
+export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: RemoteHooks = {}): Promise<RemoteDataLayer> {
   const client = new ServiceClient(endpoint)
   await client.hello()
 
@@ -528,11 +525,7 @@ export async function createRemoteDataLayer(
     setTotal(subscriptionId, total)
   }
 
-  function putRecord(
-    subscriptionId: string,
-    itemId: string,
-    patch: Partial<ReadRecord>,
-  ): ReadRecord {
+  function putRecord(subscriptionId: string, itemId: string, patch: Partial<ReadRecord>): ReadRecord {
     const key = readingKey(subscriptionId, itemId)
     const prev = reading[key]
     const rec: ReadRecord = {
@@ -590,11 +583,7 @@ export async function createRemoteDataLayer(
         await refreshSubs()
       },
       async update(id, patch) {
-        const updated = await client.rpc(
-          "subscriptions.update",
-          { id, patch },
-          { opId: uid("op") },
-        )
+        const updated = await client.rpc("subscriptions.update", { id, patch }, { opId: uid("op") })
         subscriptions = updated
           ? subscriptions.map((sub) => (sub.id === id ? updated : sub))
           : subscriptions.filter((sub) => sub.id !== id)
@@ -616,11 +605,7 @@ export async function createRemoteDataLayer(
         await refreshSubs()
       },
       async updateGroup(id, patch) {
-        const updated = await client.rpc(
-          "subscriptions.updateGroup",
-          { id, patch },
-          { opId: uid("op") },
-        )
+        const updated = await client.rpc("subscriptions.updateGroup", { id, patch }, { opId: uid("op") })
         if (updated) groups = groups.map((group) => (group.id === id ? updated : group))
         hooks.onSubscriptions?.(subscriptions, groups)
         return updated
@@ -635,11 +620,7 @@ export async function createRemoteDataLayer(
       getAll: async () => ({ ...reading }),
       get: async (subscriptionId, itemId) => findRecord(reading, subscriptionId, itemId),
       async markRead(subscriptionId, itemId, read = true) {
-        await client.rpc(
-          "reading.markRead",
-          { subscriptionId, itemId, read },
-          { opId: uid("op") },
-        )
+        await client.rpc("reading.markRead", { subscriptionId, itemId, read }, { opId: uid("op") })
         putRecord(subscriptionId, itemId, { read })
         store.patch(subscriptionId, itemId, { isUnread: !read, lastReadAt: Date.now() })
       },
@@ -655,29 +636,17 @@ export async function createRemoteDataLayer(
         }
       },
       async setStarred(subscriptionId, itemId, starred) {
-        await client.rpc(
-          "reading.setStarred",
-          { subscriptionId, itemId, starred },
-          { opId: uid("op") },
-        )
+        await client.rpc("reading.setStarred", { subscriptionId, itemId, starred }, { opId: uid("op") })
         putRecord(subscriptionId, itemId, { starred })
         store.patch(subscriptionId, itemId, { isStarred: starred, lastReadAt: Date.now() })
       },
       async setPosition(subscriptionId, itemId, positionSec) {
-        await client.rpc(
-          "reading.setPosition",
-          { subscriptionId, itemId, positionSec },
-          { opId: uid("op") },
-        )
+        await client.rpc("reading.setPosition", { subscriptionId, itemId, positionSec }, { opId: uid("op") })
         putRecord(subscriptionId, itemId, { positionSec })
         store.patch(subscriptionId, itemId, { positionSec, lastReadAt: Date.now() })
       },
       async setScrollRatio(subscriptionId, itemId, scrollRatio) {
-        await client.rpc(
-          "reading.setScrollRatio",
-          { subscriptionId, itemId, scrollRatio },
-          { opId: uid("op") },
-        )
+        await client.rpc("reading.setScrollRatio", { subscriptionId, itemId, scrollRatio }, { opId: uid("op") })
         putRecord(subscriptionId, itemId, { scrollRatio })
         store.patch(subscriptionId, itemId, { scrollRatio, lastReadAt: Date.now() })
       },
@@ -698,11 +667,7 @@ export async function createRemoteDataLayer(
         return next
       },
       async setIfUnchanged(expected, patch) {
-        const next = await client.rpc(
-          "settings.setIfUnchanged",
-          { expected, patch },
-          { opId: uid("op") },
-        )
+        const next = await client.rpc("settings.setIfUnchanged", { expected, patch }, { opId: uid("op") })
         if (next) {
           settings = next
           hooks.onSettings?.(settings)

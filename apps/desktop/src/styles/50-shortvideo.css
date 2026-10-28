@@ -298,7 +298,9 @@
   border: 1px solid var(--border);
   color: inherit;
   text-align: left;
-  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+  transition:
+    border-color var(--dur-fast) var(--ease-in),
+    background var(--dur-fast) var(--ease-in);
 }
 .card:hover {
   border-color: var(--border-strong);
@@ -506,7 +508,9 @@
   overflow: hidden;
   background: var(--surface-1);
   border: 1px solid var(--border);
-  transition: border-color var(--dur-fast) var(--ease-in), background var(--dur-fast) var(--ease-in);
+  transition:
+    border-color var(--dur-fast) var(--ease-in),
+    background var(--dur-fast) var(--ease-in);
 }
 .social-card:hover {
   border-color: var(--border-strong);
@@ -643,4 +647,3 @@
   font-size: var(--fs-micro);
   color: var(--text-dim);
 }
-

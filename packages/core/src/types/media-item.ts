@@ -181,10 +181,4 @@ export interface CategoryItem extends MediaItemBase {
   categoryInfo: Record<string, string>
 }
 
-export type MediaItem =
-  | ArticleItem
-  | SocialItem
-  | VideoItem
-  | AudioItem
-  | LiveItem
-  | CategoryItem
+export type MediaItem = ArticleItem | SocialItem | VideoItem | AudioItem | LiveItem | CategoryItem

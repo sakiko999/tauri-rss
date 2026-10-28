@@ -61,11 +61,7 @@ export function PlayerControls({
 
         <MediaVolumeSlider state={state} ops={ops} />
         <MediaRateButton state={state} ops={ops} />
-        <MediaQualityButton
-          qualityOptions={qualityOptions}
-          activeQuality={activeQuality}
-          onQuality={onQuality}
-        />
+        <MediaQualityButton qualityOptions={qualityOptions} activeQuality={activeQuality} onQuality={onQuality} />
         <MediaDanmakuButton control={danmakuControl} />
         <MediaFullscreenButton fullscreen={fullscreen} />
       </div>

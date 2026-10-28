@@ -8,13 +8,7 @@ import type { DesktopState, StoreCtx } from "../types.ts"
 
 type ReadingActions = Pick<
   DesktopState,
-  | "markRead"
-  | "markAllRead"
-  | "toggleStar"
-  | "savePosition"
-  | "saveScrollRatio"
-  | "resolvePlay"
-  | "resolveLivePlay"
+  "markRead" | "markAllRead" | "toggleStar" | "savePosition" | "saveScrollRatio" | "resolvePlay" | "resolveLivePlay"
 >
 
 export function createReadingActions(ctx: StoreCtx): ReadingActions {

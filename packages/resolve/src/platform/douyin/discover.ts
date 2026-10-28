@@ -78,7 +78,10 @@ function extractCategoryJson(html: string): string | null {
   }
   if (depth !== 0) return null
   // 反转义:先 `\"`→`"`,再 `\\`→`\`(顺序不可颠倒)。
-  return html.slice(start, end + 1).replace(/\\"/g, '"').replace(/\\\\/g, "\\")
+  return html
+    .slice(start, end + 1)
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\")
 }
 
 function toPartition(raw: unknown): DouyinPartition | null {

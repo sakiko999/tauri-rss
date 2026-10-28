@@ -7,7 +7,14 @@
  * 内置 crawler 形态(见 CLAUDE.md):移动端不接爬虫服务,仅用有限平台(SSR/HTTP)。
  */
 import { create } from "zustand"
-import { createDataLayer, findItem, positionDecision, type DataLayer, type MediaItem, type Subscription } from "@amoeba/core"
+import {
+  createDataLayer,
+  findItem,
+  positionDecision,
+  type DataLayer,
+  type MediaItem,
+  type Subscription,
+} from "@amoeba/core"
 
 import "@amoeba/core/source/rsshub"
 

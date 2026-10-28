@@ -16,32 +16,30 @@
  *   bun run tauri [desktop|mobile]         — Vite dev + Tauri dev 并行（热重载）
  *   bun run tauri [desktop|mobile] build   — 前端构建 + Tauri release 构建
  */
-import { $ } from "bun";
-import { spawn, execSync } from "child_process";
+import { $ } from "bun"
+import { spawn, execSync } from "child_process"
 
-type Platform = "desktop" | "mobile";
+type Platform = "desktop" | "mobile"
 
 /** 单条命令的声明式描述（数据，未执行）。 */
 interface CmdSpec {
-  label: string;
-  cmd: string;
-  args: string[];
-  cwd: string;
+  label: string
+  cmd: string
+  args: string[]
+  cwd: string
   /** 额外环境变量(只作用于本子进程)。 */
-  env?: Record<string, string>;
+  env?: Record<string, string>
 }
 
 /** 执行单元：单条前台命令，或一组并行长驻进程。 */
-type Execution =
-  | { kind: "once"; spec: CmdSpec }
-  | { kind: "parallel"; specs: CmdSpec[] };
+type Execution = { kind: "once"; spec: CmdSpec } | { kind: "parallel"; specs: CmdSpec[] }
 
-const PLATFORMS = ["desktop", "mobile"] as const;
-const ROOT = import.meta.dir + "/..";
-const APP = (p: Platform) => `${ROOT}/apps/${p}`;
-const SRC_TAURI = `${ROOT}/apps/src-tauri`;
+const PLATFORMS = ["desktop", "mobile"] as const
+const ROOT = import.meta.dir + "/.."
+const APP = (p: Platform) => `${ROOT}/apps/${p}`
+const SRC_TAURI = `${ROOT}/apps/src-tauri`
 /** 移动端 dev/build 走独立 tauri.conf.mobile.json。 */
-const MOBILE_CFG = (p: Platform) => (p === "mobile" ? ["--config", `${SRC_TAURI}/tauri.conf.mobile.json`] : []);
+const MOBILE_CFG = (p: Platform) => (p === "mobile" ? ["--config", `${SRC_TAURI}/tauri.conf.mobile.json`] : [])
 /**
  * dev 额外叠 tauri.conf.dev.json(只开 CDP 调试端口 9222)。
  * ⚠️ 端口**不加进 tauri.conf.json**:那里是 release 构建用的,带上等于给发布版开一个
@@ -50,15 +48,14 @@ const MOBILE_CFG = (p: Platform) => (p === "mobile" ? ["--config", `${SRC_TAURI}
 const DEV_CFG = (p: Platform) => [
   ...MOBILE_CFG(p),
   ...(p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.dev.json`] : []),
-];
+]
 /**
  * `--release` 时**不叠** `tauri.conf.dev.json` —— 那个文件存在的**唯一目的**就是开
  * 9222 调试口，而 release 模式的意义是**复现真实发布形态**；带上它就自相矛盾，
  * 也违背 CLAUDE.md 记的「9222 只在 dev」这条不变量。
  * 移动端仍叠它自己的 config（`tauri.conf.mobile.json` 是**必需平台配置**，与调试无关）。
  */
-const DEV_CFG_FOR = (p: Platform, release: boolean) =>
-  release ? MOBILE_CFG(p) : DEV_CFG(p);
+const DEV_CFG_FOR = (p: Platform, release: boolean) => (release ? MOBILE_CFG(p) : DEV_CFG(p))
 
 const HELP = `
 Amoeba 调试脚本
@@ -78,7 +75,7 @@ Amoeba 调试脚本
 用 WebView2 自己的 9334（webview_browser_open 返回的端口）。
 
 平台默认 desktop；移动端需先配置好 Android/iOS 工具链。
-`;
+`
 
 // ── 纯函数核心：参数 → 执行计划（无 I/O）────────────────────
 
@@ -93,8 +90,13 @@ const viteDev = (p: Platform, profile?: "release-debug"): CmdSpec => ({
   args: ["run", "dev"],
   cwd: APP(p),
   ...(profile ? { env: { VITE_AMOEBA_PROFILE: profile } } : {}),
-});
-const viteBuild = (p: Platform): CmdSpec => ({ label: `前端构建 (${p})`, cmd: "bun", args: ["run", "build"], cwd: APP(p) });
+})
+const viteBuild = (p: Platform): CmdSpec => ({
+  label: `前端构建 (${p})`,
+  cmd: "bun",
+  args: ["run", "build"],
+  cwd: APP(p),
+})
 /**
  * `--release` → `tauri dev --release`：**Rust 以 release 优化编译**，但仍保留 Vite dev
  * server 与热重载。用来调试「只在 release 下才走」的行为。
@@ -111,15 +113,29 @@ const tauriDev = (p: Platform, release = false): CmdSpec => ({
   cmd: "bunx",
   args: ["tauri", "dev", ...DEV_CFG_FOR(p, release), ...(release ? ["--release"] : [])],
   cwd: SRC_TAURI,
-});
+})
 /** release 配置只在 `tauri build` 叠加：dev/test 不应要求 target/release 下的 sidecar 已存在。 */
-const RELEASE_CFG = (p: Platform) =>
-  p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.release.json`] : [];
-const tauriBuild = (p: Platform): CmdSpec => ({ label: `Tauri build (${p})`, cmd: "bunx", args: ["tauri", "build", ...MOBILE_CFG(p), ...RELEASE_CFG(p)], cwd: SRC_TAURI });
+const RELEASE_CFG = (p: Platform) => (p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.release.json`] : [])
+const tauriBuild = (p: Platform): CmdSpec => ({
+  label: `Tauri build (${p})`,
+  cmd: "bunx",
+  args: ["tauri", "build", ...MOBILE_CFG(p), ...RELEASE_CFG(p)],
+  cwd: SRC_TAURI,
+})
 /** 桌面发布包需要：服务 JS bundle + 运行时启动器 + 浏览器 sidecar（进 resources）。 */
-const SERVICE_BUILD: CmdSpec = { label: "服务 bundle", cmd: "bun", args: ["run", "service:build"], cwd: ROOT };
-const RUNTIME_BUILD: CmdSpec = { label: "运行时启动器", cmd: "cargo", args: ["build", "-p", "amoeba-runtime", "--release"], cwd: ROOT };
-const BROWSER_BUILD: CmdSpec = { label: "浏览器 sidecar", cmd: "cargo", args: ["build", "-p", "amoeba-browser", "--release"], cwd: ROOT };
+const SERVICE_BUILD: CmdSpec = { label: "服务 bundle", cmd: "bun", args: ["run", "service:build"], cwd: ROOT }
+const RUNTIME_BUILD: CmdSpec = {
+  label: "运行时启动器",
+  cmd: "cargo",
+  args: ["build", "-p", "amoeba-runtime", "--release"],
+  cwd: ROOT,
+}
+const BROWSER_BUILD: CmdSpec = {
+  label: "浏览器 sidecar",
+  cmd: "cargo",
+  args: ["build", "-p", "amoeba-browser", "--release"],
+  cwd: ROOT,
+}
 /** RSSHub sidecar:desktop 订阅源,`bun run tauri` 时随 Vite+Tauri 一并带起(独立 Node 进程,自起 1200 端口)。 */
 
 /**
@@ -129,7 +145,13 @@ const BROWSER_BUILD: CmdSpec = { label: "浏览器 sidecar", cmd: "cargo", args:
  * argv[3]=--release；而 `bun run tauri --release` 里 argv[2]=`--release`。
  * 按位置硬取会把 `--release` 当成平台名。故先摊平再按语义挑。
  */
-function parseArgs(argv: string[]): { command?: string; platform?: Platform; release: boolean; build: boolean; help: boolean } {
+function parseArgs(argv: string[]): {
+  command?: string
+  platform?: Platform
+  release: boolean
+  build: boolean
+  help: boolean
+} {
   const rest = argv.slice(2)
   const help = rest.some((a) => a === "--help" || a === "-h" || a === "help")
   const release = rest.includes("--release")
@@ -146,9 +168,9 @@ function parseArgs(argv: string[]): { command?: string; platform?: Platform; rel
 function planFor(command: string, platform: Platform, opts: { release: boolean } = { release: false }): Execution[] {
   switch (command) {
     case "dev":
-      return [{ kind: "once", spec: viteDev(platform) }];
+      return [{ kind: "once", spec: viteDev(platform) }]
     case "build":
-      return [{ kind: "once", spec: viteBuild(platform) }];
+      return [{ kind: "once", spec: viteBuild(platform) }]
     case "tauri":
       // `--release` → Rust 以 release 编译（调「只在 release 走」的分支，如隐藏 Edge 窗口）。
       // 同时让 Vite 用 release-debug 的独立 DB,避免和普通 dev 数据互串。
@@ -157,7 +179,7 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
           kind: "parallel",
           specs: [viteDev(platform, opts.release ? "release-debug" : undefined), tauriDev(platform, opts.release)],
         },
-      ];
+      ]
     case "build-release":
       return [
         { kind: "once", spec: viteBuild(platform) },
@@ -169,9 +191,9 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
             ]
           : []),
         { kind: "once", spec: tauriBuild(platform) },
-      ];
+      ]
     default:
-      throw new Error(`未知命令，可用: dev | build | tauri | build-release`);
+      throw new Error(`未知命令，可用: dev | build | tauri | build-release`)
   }
 }
 
@@ -179,10 +201,10 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
 
 /** 单条前台命令：bun $ 的 .cwd() 局部定位，不污染全局 cwd。 */
 async function runOnce(spec: CmdSpec): Promise<void> {
-  console.log(`▶ ${spec.label}`);
-  let cmd = $`${spec.cmd} ${spec.args}`.cwd(spec.cwd);
-  if (spec.env) cmd = cmd.env({ ...process.env, ...spec.env });
-  await cmd;
+  console.log(`▶ ${spec.label}`)
+  let cmd = $`${spec.cmd} ${spec.args}`.cwd(spec.cwd)
+  if (spec.env) cmd = cmd.env({ ...process.env, ...spec.env })
+  await cmd
 }
 
 /**
@@ -192,81 +214,81 @@ async function runOnce(spec: CmdSpec): Promise<void> {
  */
 function spawnParallel(specs: CmdSpec[]): void {
   const procs = specs.map((s) => {
-    console.log(`▶ ${s.label}`);
+    console.log(`▶ ${s.label}`)
     return spawn(s.cmd, s.args, {
       cwd: s.cwd,
       stdio: "inherit",
       shell: process.platform === "win32",
       ...(s.env ? { env: { ...process.env, ...s.env } } : {}),
-    });
-  });
+    })
+  })
 
   const killTree = (p: ReturnType<typeof spawn>) => {
-    if (!p.pid || p.killed) return;
+    if (!p.pid || p.killed) return
     if (process.platform === "win32") {
       try {
-        execSync(`taskkill /F /T /PID ${p.pid}`, { stdio: "ignore" });
-        return;
+        execSync(`taskkill /F /T /PID ${p.pid}`, { stdio: "ignore" })
+        return
       } catch {
         /* taskkill 失败(进程已退) → fallthrough 到普通 kill。 */
       }
     }
-    p.kill();
-  };
+    p.kill()
+  }
 
-  let done = false;
+  let done = false
   const onExit = (code: number | null) => {
-    if (done) return;
-    done = true;
-    console.log(`\n⏹ 进程退出 (${code ?? "signal"})，终止其余进程`);
-    procs.forEach(killTree);
-    process.exit(code ?? 0);
-  };
+    if (done) return
+    done = true
+    console.log(`\n⏹ 进程退出 (${code ?? "signal"})，终止其余进程`)
+    procs.forEach(killTree)
+    process.exit(code ?? 0)
+  }
 
   procs.forEach((p) => {
-    p.on("close", (c) => onExit(c ?? 0));
+    p.on("close", (c) => onExit(c ?? 0))
     p.on("error", (e) => {
-      console.error(`\n❌ ${e.message}`);
-      onExit(1);
-    });
-  });
+      console.error(`\n❌ ${e.message}`)
+      onExit(1)
+    })
+  })
   for (const sig of ["SIGINT", "SIGTERM"] as const) {
     process.on(sig, () => {
-      procs.forEach(killTree);
-      process.exit(0);
-    });
+      procs.forEach(killTree)
+      process.exit(0)
+    })
   }
 }
 
 /** 顺序解释执行计划：once 前台等完成；parallel 阻塞到进程组退出。 */
 async function execute(plan: Execution[]): Promise<void> {
   for (const step of plan) {
-    if (step.kind === "once") await runOnce(step.spec);
-    else spawnParallel(step.specs); // parallel 靠进程事件整体退出，不等返回
+    if (step.kind === "once") await runOnce(step.spec)
+    else spawnParallel(step.specs) // parallel 靠进程事件整体退出，不等返回
   }
 }
 
 // ── main：parse → validate → plan → execute ────────────────
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv);
+  const args = parseArgs(process.argv)
   if (args.help) {
-    console.log(HELP);
-    return;
+    console.log(HELP)
+    return
   }
-  const platform = args.platform ?? "desktop";
+  const platform = args.platform ?? "desktop"
   if (!PLATFORMS.includes(platform)) {
-    console.error(`❌ 未知平台: "${platform}"，可用: ${PLATFORMS.join(", ")}`);
-    console.log(HELP);
-    process.exit(1);
+    console.error(`❌ 未知平台: "${platform}"，可用: ${PLATFORMS.join(", ")}`)
+    console.log(HELP)
+    process.exit(1)
   }
   // `tauri ... build` = 前端构建 + Tauri release 构建；`build` 单独出现仍是只构建前端。
-  const command = args.command === "tauri" && args.build ? "build-release" : (args.command ?? "");
-  const plan = planFor(command, platform, { release: args.release });
-  await execute(plan);
+  const command = args.command === "tauri" && args.build ? "build-release" : (args.command ?? "")
+  const plan = planFor(command, platform, { release: args.release })
+  await execute(plan)
 }
 
 main().catch((e) => {
-  console.error(`\n❌ ${e.message}`);
-  process.exit(1);
-});
+  console.error(`\n❌ ${e.message}`)
+  process.exit(1)
+})

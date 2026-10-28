@@ -109,7 +109,11 @@ export function makeApiChannel(spec: ApiChannelSpec): RssChannel {
     if (!spec.pageable) return { fetch }
     return {
       fetch,
-      fetchMore: apiFetchMore((page) => spec.fetchPage(info, page), () => channelOptions(info), spec.pageable),
+      fetchMore: apiFetchMore(
+        (page) => spec.fetchPage(info, page),
+        () => channelOptions(info),
+        spec.pageable,
+      ),
     }
   }
   // scanLogin 挂渠道级(isLoginable 按 "scanLogin" in c 探测);其余字段逐 spec 透传。
@@ -160,4 +164,3 @@ export function apiFetchMore(
     }
   }
 }
-
