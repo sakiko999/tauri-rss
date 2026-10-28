@@ -221,7 +221,9 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 **登录（2026-10-26 收口）**：`rss login <platform>` 已落地（终端二维码，只走服务 RPC
 `scanLogin`）；登录态回归已实测——已登录短路、`xhs:explore` / `xhs:user` 首屏 + 翻页、
 `rss detail` 全过。唯一未验的是**扫码出码本身**（现有 profile 已登录，走的是短路）：
-用未登录 profile 起临时服务（`rss --service --profile-dir <空目录>`）再验。
+用未登录 profile 起临时服务（`rss --service --profile-dir <空目录>`）再验；2026-10-28 起
+service 侧浏览器默认 `images:false`（`--blink-settings=imagesEnabled=false`），二维码
+路径（img.src 属性 / canvas.toDataURL / 纯 HTTP）理论上不受影响，验证时一并覆盖。
 
 **未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
 

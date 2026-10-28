@@ -313,7 +313,10 @@ mod windows_impl {
             "--disk-cache-size=67108864".to_string(),
             "--window-position=-32000,-32000".to_string(),
         ];
-        // ⚠️ 默认不关图片：xhs 必须登录，扫码二维码是图片；需要省内存时用 --no-images。
+        // imagesEnabled=false 只禁 <img> 加载/渲染,不影响 DOM 属性与 canvas 2D:抓取只读
+        // SSR DOM/接口状态,登录二维码走 img.src 属性 / canvas.toDataURL / 纯 HTTP,均不
+        // 依赖图片渲染(各平台 login.ts)。本 sidecar 默认开图(CLI 探针要看图调试),生产
+        // service host 传 images:false → --no-images。
         if !images {
             args.push("--blink-settings=imagesEnabled=false".to_string());
         }

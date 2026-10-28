@@ -74,7 +74,10 @@ export function setupServiceHost(opts: ServiceHostOptions): ServiceHost {
   setLogSink((level, text) => console.error(`[${level}] ${text}`))
   const storage = sqliteStorage(opts.dbFile)
   const binary = opts.browser === false ? undefined : (opts.browserSidecar ?? locateSidecarBinary())
-  const browser = binary ? createSidecarBrowser({ binary, profileDir: opts.profileDir }) : undefined
+  // ⚠️ images:false 必传:抓取只要 SSR DOM/接口状态,瀑布流图片是纯内存负担;
+  // 登录不受影响——四个平台的二维码都不依赖图片渲染(bili/douyin 主路径纯 HTTP,
+  // xhs/weibo/douyin 回退读 img.src 属性或 canvas.toDataURL,见 resolve 各 login.ts)。
+  const browser = binary ? createSidecarBrowser({ binary, profileDir: opts.profileDir, images: false }) : undefined
   if (!browser) {
     console.error("[service] browser sidecar not found; browser channels will fail")
   }
