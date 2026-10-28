@@ -109,6 +109,14 @@
   --spacing-control: 34px;
   --spacing-control-sm: 28px;
   --font-weight-ui: 550;
+
+  /* 阴影令牌(2026-10-28 从单轨化前的 :root 恢复:那次迁移漏搬,30-controls 的
+     segmented 与 70-overlays 的弹层引用悬空,投影静默消失)。
+     弹层大投影(原型 0 24px 64px -32px):负扩散让影子收在元素边缘内,只在浮层/弹窗
+     用;-32px 偏移到 shadow-2 上会变成一块灰雾,两者别混用。 */
+  --shadow-1: 0 1px 2px oklch(0 0 0 / 40%);
+  --shadow-2: 0 8px 24px oklch(0 0 0 / 45%);
+  --shadow-pop: 0 24px 64px -32px oklch(0 0 0 / 72%);
 }
 
 /* 默认（深色）语义开关；浅色块只覆盖颜色变量。 */
@@ -182,6 +190,12 @@
   --color-popover-foreground: oklch(0.22 0.012 72);
   --color-card-foreground: oklch(0.22 0.012 72);
   --color-accent-foreground: oklch(0.22 0.012 72);
+
+  /* 浅色阴影:与深色同一条几何(0 24px 64px -32px);浅底靠降低不透明度而非换浅色 ——
+     rgba 白灰的影子在纯白卡面上看不见,反而像脏边。 */
+  --shadow-1: 0 1px 2px oklch(0.25 0.02 72 / 8%);
+  --shadow-2: 0 8px 24px oklch(0.25 0.02 72 / 12%);
+  --shadow-pop: 0 24px 64px -32px oklch(0.25 0.02 106 / 22%);
 }
 
 /* ---------- 字体 ----------
