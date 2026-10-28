@@ -289,7 +289,8 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 登录微博后复验 `weibo:user` 首屏自动预加载第二页真正落地（本次改动只验到匿名态）
 - [!] 补全（`resolveDetail`）**不保证纯文本**：feed 自带全文时 `raw.ts` 原样返回 HTML（contentFormat=html）；桌面镜像剥掉 article 的 content，所以阅读器必走补全 —— 消费侧必须按返回体的 contentFormat 渲染
 - [ ] 重启桌面应用复验阅读器：阮一峰正文应渲染为排版好的 HTML（本次只验到 core 侧 resolveDetail 返回 contentFormat=html，没在真机 UI 上确认）
-- [ ] 听视频（`?mode=listen`）实机 UI 验证：卡片音符钮 → 播放页版式（.listen-art + 原生音频条）、
-  听⇄看切换进度衔接、队列自动下一条保持 listen 模式。引擎路径已真播实证（dash.js 挂 `<audio>`
-  播剥完 video AdaptationSet 的 MPD，经 DashHostLoader 隧道起播推进，2026-10-28）；UI 装配层只过了 tsc。
+- [x] 听视频 / 播客音频页实机验证（2026-10-29）：`?mode=listen` 走 `.audio-art` 封面 + AudioShell
+  自绘控件（进度/±15+30/倍速/定时），B 站 DASH 音轨经 dash.js 挂 `<audio>` 真播（dur=213s）；
+  播客单集（喜马拉雅 m4a）直连 206 + 自动起播。**残余**：听⇄看切换的进度衔接、队列自动下一条
+  保持 listen 模式两项只过代码路径，未逐帧实测。
 <!-- cc-todo:end -->
