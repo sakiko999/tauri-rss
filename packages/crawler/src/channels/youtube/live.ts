@@ -1,4 +1,3 @@
-import { getYoutubeLiveMeta, now } from "@amoeba/resolve"
 /**
  * youtube:live —— YouTube 直播订阅 channel。
  *
@@ -11,6 +10,8 @@ import { getYoutubeLiveMeta, now } from "@amoeba/resolve"
  * 留未来增强)。播放走懒解析:resolveLivePlay(roomId=videoId)→ resolveYoutubeStreams
  * (iOS client hlsManifestUrl,失败降级 web 页)。
  */
+
+import { getYoutubeLiveMeta, now } from "@amoeba/resolve"
 import type { Live } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

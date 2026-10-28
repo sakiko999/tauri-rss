@@ -1,6 +1,3 @@
-import { formatError } from "@amoeba/log"
-
-import { log } from "../log.ts"
 /**
  * stream —— 弹幕流原语:异步 setup 竞态守卫(deferredStream)+ WS 连接管理(createWsStream)。
  *
@@ -18,6 +15,10 @@ import { log } from "../log.ts"
  * 连 douyu 8/8 握手成功(证书 GlobalSign 有效,失败实为集群节点偶发 RST),故统一
  * 走宿主。两形态在内部归一成 WsLike 抽象(send/close/readyState)。
  */
+
+import { formatError } from "@amoeba/log"
+
+import { log } from "../log.ts"
 import type { DanmakuItem, DanmakuStream } from "./types.ts"
 
 export interface WsStreamOptions {

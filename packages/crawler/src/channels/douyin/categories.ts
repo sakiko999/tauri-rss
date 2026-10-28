@@ -1,4 +1,3 @@
-import { type DouyinCategory, fetchDouyinCategories, now } from "@amoeba/resolve"
 /**
  * live:douyin:categories —— 抖音分区目录**订阅**。
  *
@@ -8,6 +7,8 @@ import { type DouyinCategory, fetchDouyinCategories, now } from "@amoeba/resolve
  * ⚠️ `categoryInfo` **必须同时带** `partition` 与 `partitionType`(顶层 4 / 子 1):
  * 只填第一个参数会把顶层分区当成子分区(1),上游取不到数据。
  */
+
+import { type DouyinCategory, fetchDouyinCategories, now } from "@amoeba/resolve"
 import type { Category, Item } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

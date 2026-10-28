@@ -1,4 +1,3 @@
-import { describeElement, reactMeta, stableKey } from "./key.ts"
 /**
  * 可交互元素扫描。
  *
@@ -10,6 +9,8 @@ import { describeElement, reactMeta, stableKey } from "./key.ts"
  *   - React 的 onClick/onPointerDown 兜底（覆盖 Cards.tsx 的 card-play span）
  *   - 用户自定义选择器（工具栏）
  */
+
+import { describeElement, reactMeta, stableKey } from "./key.ts"
 import type { Box, Candidate } from "./types.ts"
 
 const BASE_SELECTOR = [

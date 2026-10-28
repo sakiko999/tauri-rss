@@ -1,15 +1,3 @@
-import {
-  MediaDanmakuButton,
-  MediaFullscreenButton,
-  MediaLiveEdgeButton,
-  MediaPlayButton,
-  MediaQualityButton,
-  MediaRateButton,
-  MediaTimeDisplay,
-  MediaTimeRange,
-  MediaVolumeSlider,
-} from "./controls/index.ts"
-import type { DanmakuControl } from "./controls/index.ts"
 /**
  * PlayerControls —— 控件栏(默认组合,MediaChrome `<media-control-bar>` 的 React 版)。
  *
@@ -24,6 +12,19 @@ import type { DanmakuControl } from "./controls/index.ts"
  * `.stage`)决定圆角与裁切。曾在此写死 `rounded-b-xl`,导致播放器内嵌到任何非圆角
  * 容器时控件条比画面更圆、底部两角错位。容器圆角 = 播放器外观,不归播放器管。
  */
+
+import {
+  MediaDanmakuButton,
+  MediaFullscreenButton,
+  MediaLiveEdgeButton,
+  MediaPlayButton,
+  MediaQualityButton,
+  MediaRateButton,
+  MediaTimeDisplay,
+  MediaTimeRange,
+  MediaVolumeSlider,
+} from "./controls/index.ts"
+import type { DanmakuControl } from "./controls/index.ts"
 import type { FullscreenApi, VideoOps, VideoPlayState } from "./hooks/useVideoElement.ts"
 
 export function PlayerControls({

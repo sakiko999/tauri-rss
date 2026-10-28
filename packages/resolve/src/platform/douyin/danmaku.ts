@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-
 /**
  * douyin 弹幕 —— 签名(WebMSSDK get_sign) → wss + signature → PushFrame hb → gzip → protobuf。
  *
@@ -16,6 +14,9 @@ import { formatError } from "@amoeba/log"
  * userId = 主播真实 user id_str(enter API data.user.id_str;dart 的随机 12 位已失效)。
  * roomId 需长号(enter API 的 id_str;失败兜底用订阅 web_rid)。
  */
+
+import { formatError } from "@amoeba/log"
+
 import { createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuStream } from "../../danmaku"
 import { httpJson } from "../../host.ts"

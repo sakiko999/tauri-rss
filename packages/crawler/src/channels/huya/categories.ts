@@ -1,4 +1,3 @@
-import { fetchHuyaSubCategories, HUYA_TOP_CATEGORIES, type HuyaSubCategory, now } from "@amoeba/resolve"
 /**
  * live:huya:categories —— 虎牙分区目录**订阅**。
  *
@@ -6,6 +5,8 @@ import { fetchHuyaSubCategories, HUYA_TOP_CATEGORIES, type HuyaSubCategory, now 
  * `kind:"category"`,点开用 `live:huya:category` + `{gameId}` 预览并订阅。
  * 单个顶层失败不影响其余;全部为空才抛错(不能静默给空目录)。
  */
+
+import { fetchHuyaSubCategories, HUYA_TOP_CATEGORIES, type HuyaSubCategory, now } from "@amoeba/resolve"
 import type { Category, Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

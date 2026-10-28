@@ -1,11 +1,12 @@
-import { existsSync } from "node:fs"
-
-import { locateSidecarBinary, nodeBackend, nodeJsBackend } from "@amoeba/host/node"
 /**
  * env — appHost 各门面自检。--probe 实测(轻请求 / JS 求值 / KV roundtrip),
  * 缺省只报告注入状态与配置位置。ws 不实际建连(四平台弹幕归 rss dm)。
  * browser = 可选能力：`--browser` / AMOEBA_BROWSER=1 时懒启动 amoeba-browser sidecar。
  */
+
+import { existsSync } from "node:fs"
+
+import { locateSidecarBinary, nodeBackend, nodeJsBackend } from "@amoeba/host/node"
 import pc from "picocolors"
 
 import { sqliteFilePath } from "../store/sqlite-storage.ts"

@@ -1,3 +1,11 @@
+/**
+ * youtube channel —— YouTube 频道(官方 RSS),产 Video Item。
+ *
+ * 官方 feed `youtube.com/feeds/videos.xml?channel_id=` 已带 media:group
+ * (thumbnail + description)和 yt:videoId。本 channel 解析它,规范化
+ * videoId → watch URL,产 Video Item。
+ */
+
 import {
   DESKTOP_CHROME_UA,
   fetchYoutubeChannelVideos,
@@ -6,13 +14,6 @@ import {
   now,
   type YoutubeChannelVideo,
 } from "@amoeba/resolve"
-/**
- * youtube channel —— YouTube 频道(官方 RSS),产 Video Item。
- *
- * 官方 feed `youtube.com/feeds/videos.xml?channel_id=` 已带 media:group
- * (thumbnail + description)和 yt:videoId。本 channel 解析它,规范化
- * videoId → watch URL,产 Video Item。
- */
 import type { Item, Video } from "@amoeba/xml"
 import { type ParsedItem, parseFeed, type SerializeOptions } from "@amoeba/xml"
 

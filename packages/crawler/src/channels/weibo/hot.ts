@@ -1,4 +1,3 @@
-import { httpJson, mblogCardsToItems, now, PC_UA, WB_BASE, weiboClient } from "@amoeba/resolve"
 /**
  * weibo:hot —— 微博实时热搜 channel(kind: social)。
  *
@@ -7,6 +6,8 @@ import { httpJson, mblogCardsToItems, now, PC_UA, WB_BASE, weiboClient } from "@
  * 点热搜词 → resolveHotWord(word):`container/getIndex?containerid=100103type=1&q={word}`
  * 搜索该词微博流(需完整登录 cookie)。
  */
+
+import { httpJson, mblogCardsToItems, now, PC_UA, WB_BASE, weiboClient } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

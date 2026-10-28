@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import { log, now, type TwitchStreamPage } from "@amoeba/resolve"
 /**
  * Twitch 直播流列表 source 装配(热门 / 分区共用)。
  *
@@ -9,6 +7,9 @@ import { log, now, type TwitchStreamPage } from "@amoeba/resolve"
  *
  * 只提供 fetch / fetchMore 两项能力;不实现 resolveDetail / fetchPassive / Loginable。
  */
+
+import { formatError } from "@amoeba/log"
+import { log, now, type TwitchStreamPage } from "@amoeba/resolve"
 import { type Live, serializeFeed, type SerializeOptions } from "@amoeba/xml"
 
 import type { Pageable, RssSource } from "../../index.ts"

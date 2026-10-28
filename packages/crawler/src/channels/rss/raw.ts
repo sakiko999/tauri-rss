@@ -1,4 +1,3 @@
-import { DESKTOP_CHROME_UA, httpText } from "@amoeba/resolve"
 /**
  * RawRssChannel — 原生 RSS/Atom feed 直链,fetch 直接透传上游 XML(无需 serialize)。
  *
@@ -9,6 +8,8 @@ import { DESKTOP_CHROME_UA, httpText } from "@amoeba/resolve"
  * kind 是构造时传入的宽 `Kind`(上游 feed 类型运行时才知道),只用于产出描述
  * (deserialize 兜底)。
  */
+
+import { DESKTOP_CHROME_UA, httpText } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 
 import type { ItemDetailSource, Kind, RssChannel, RssSource, SourceInfo } from "../../index.ts"

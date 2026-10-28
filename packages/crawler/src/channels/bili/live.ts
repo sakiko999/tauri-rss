@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import { biliClient, log, now, parseRoomIds } from "@amoeba/resolve"
 /**
  * bili:live —— bilibili 直播房间 channel。
  *
@@ -10,6 +8,9 @@ import { biliClient, log, now, parseRoomIds } from "@amoeba/resolve"
  * 可播流/弹幕解析在 crawler/src/resolver(按 item.url 路由 → platform/bili)。
  * resolveBiliLivePlay + helpers 已迁 platform/bili/live-play.ts。
  */
+
+import { formatError } from "@amoeba/log"
+import { biliClient, log, now, parseRoomIds } from "@amoeba/resolve"
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

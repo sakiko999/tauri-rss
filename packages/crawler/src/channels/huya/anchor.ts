@@ -1,5 +1,3 @@
-import { searchHuyaAnchors } from "@amoeba/resolve"
-
 /**
  * huya 搜主播 —— 按关键词搜主播(`search.cdn.huya.com`,`v=1`)。
  *
@@ -8,6 +6,9 @@ import { searchHuyaAnchors } from "@amoeba/resolve"
  *
  * ⚠️ **不可分页**(接口 `start` 实测无效,同搜房间)。
  */
+
+import { searchHuyaAnchors } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 
 const PAGE = 20

@@ -1,5 +1,3 @@
-import type { Item, Kind } from "@amoeba/xml"
-
 /**
  * crawler —— 订阅源抓取层(producer 的重构替代)。
  *
@@ -17,6 +15,9 @@ import type { Item, Kind } from "@amoeba/xml"
  * 注册:内置 channel 由 `ensureRegistered()` 惰性注册(见 register.ts),
  * `getChannel/listChannels/registerAllChannels` 都会先确保已注册。
  */
+
+import type { Item, Kind } from "@amoeba/xml"
+
 import { registerBuiltinChannels } from "./register.ts"
 
 /** channel 产出的 item 种类。 */

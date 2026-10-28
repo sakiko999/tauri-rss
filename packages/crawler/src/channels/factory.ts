@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import { log } from "@amoeba/resolve"
 /**
  * source 装配辅助。
  *
@@ -10,6 +8,9 @@ import { log } from "@amoeba/resolve"
  *   - api channel(items → serializeFeed → XML):用 `apiFetch` 包出 fetch;
  *   - 原生直传(上游已是 XML):channel 自行 `() => this.fetchXml(info)`。
  */
+
+import { formatError } from "@amoeba/log"
+import { log } from "@amoeba/resolve"
 import type { Item, SerializeOptions } from "@amoeba/xml"
 import { serializeFeed } from "@amoeba/xml"
 

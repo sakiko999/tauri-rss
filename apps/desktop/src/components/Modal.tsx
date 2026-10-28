@@ -1,7 +1,3 @@
-import * as Dialog from "@radix-ui/react-dialog"
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
-import * as SelectPrimitive from "@radix-ui/react-select"
-import * as SwitchPrimitive from "@radix-ui/react-switch"
 /**
  * Modal / Menu —— 浮层原语(radix primitive + 设计系统类名)。
  *
@@ -9,6 +5,11 @@ import * as SwitchPrimitive from "@radix-ui/react-switch"
  * z-index 栈)。React 侧直接用 radix:焦点陷阱 / ESC / ARIA 都是现成的,
  * 只把外观换成 .scrim/.modal/.menu 类。
  */
+
+import * as Dialog from "@radix-ui/react-dialog"
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import * as SelectPrimitive from "@radix-ui/react-select"
+import * as SwitchPrimitive from "@radix-ui/react-switch"
 import type { ReactNode } from "react"
 
 import { overlayBlock } from "../lib/uiOverlay.ts"

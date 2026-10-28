@@ -1,4 +1,3 @@
-import { fetchBiliAreaRooms, now } from "@amoeba/resolve"
 /**
  * bili:live:area —— 按分区列直播间(参数化 parentAreaId + areaId,页码翻页)。
  *
@@ -7,6 +6,8 @@ import { fetchBiliAreaRooms, now } from "@amoeba/resolve"
  * provider(settings 扫码登录)兜底;两者皆无 → -352 → 翻译成登录引导文案。
  * 字段映射照 hot.ts(getListByArea 同形:roomId/title/uname/cover/online)。
  */
+
+import { fetchBiliAreaRooms, now } from "@amoeba/resolve"
 import type { Live } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

@@ -1,6 +1,3 @@
-import type { MediaItem } from "@amoeba/core"
-import { PlayableMedia } from "@amoeba/player"
-import { MediaImage } from "@amoeba/ui"
 /**
  * ShortVideoView —— 第三模式：短视频全屏上下滑流。
  *
@@ -15,6 +12,10 @@ import { MediaImage } from "@amoeba/ui"
  *   （重挂即停），回来重新懒解析（有缓存）。⚠️ `PlayableMedia` 靠 key 重挂会重解析、代价大，
  *   但「保留实例只暂停」需给它加命令式 pause API（当前没有，不做）。
  */
+
+import type { MediaItem } from "@amoeba/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Icon } from "../../components/Icon.tsx"

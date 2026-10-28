@@ -1,4 +1,3 @@
-import { now, searchYouTubeChannels } from "@amoeba/resolve"
 /**
  * youtube:user —— 搜频道(搜索渠道,不直接订阅)。
  *
@@ -9,6 +8,8 @@ import { now, searchYouTubeChannels } from "@amoeba/resolve"
  * 下游订阅走 `youtube` 渠道(channelId 参数):角色同 `bili:search` 之于 `bili:live`,
  * 只作「搜索添加」的取数源。
  */
+
+import { now, searchYouTubeChannels } from "@amoeba/resolve"
 import type { Video } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

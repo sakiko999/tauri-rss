@@ -1,4 +1,3 @@
-import QRCode from "qrcode"
 /**
  * QrImage —— 把 `scanLogin` 推回来的字符串渲染成二维码。
  *
@@ -7,6 +6,8 @@ import QRCode from "qrcode"
  *   - 其余视作**二维码内容**(bili 纯 HTTP 协议只给一段 URL)→ 本地编码。
  * 编码放在这里而不是 crawler:这是展示关切,也免得把 QR 库拖进抓取层。
  */
+
+import QRCode from "qrcode"
 import { useEffect, useState } from "react"
 
 import { Icon } from "./Icon.tsx"

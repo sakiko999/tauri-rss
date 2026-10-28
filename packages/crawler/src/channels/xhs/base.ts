@@ -1,5 +1,3 @@
-import { readXhsLoginCookie, xhsScanLogin } from "@amoeba/resolve"
-
 /**
  * xhs 渠道公共基类。
  *
@@ -8,6 +6,9 @@ import { readXhsLoginCookie, xhsScanLogin } from "@amoeba/resolve"
  * 可能在 shared 求值完成前 `extends XhsChannelBase` → TDZ。基类不依赖 shared,
  * 拆出来后 user/explore 可以安全地先拿基类、再用 shared 的函数。
  */
+
+import { readXhsLoginCookie, xhsScanLogin } from "@amoeba/resolve"
+
 import type { Loginable, LoginCookieSnapshot, LoginResult } from "../../index.ts"
 
 export class XhsChannelBase implements Loginable {

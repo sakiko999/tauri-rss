@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-
 /**
  * bilibili 直播弹幕 —— getDanmuInfo(wbi 签名) → wss → op=7 认证 → 心跳 → op=5 弹幕。
  *
@@ -22,6 +20,9 @@ import { formatError } from "@amoeba/log"
  * (sec-websocket-key 握手问题已修:into_client_request 构造完整请求)。
  * host 的 **wss_port 非标(常见 2245)必须拼端口**(默认 443 握手成功但非弹幕服务)。
  */
+
+import { formatError } from "@amoeba/log"
+
 import { argbToHex, createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuItem, DanmakuStream } from "../../danmaku"
 import { log } from "../../log.ts"

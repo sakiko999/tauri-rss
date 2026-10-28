@@ -1,5 +1,3 @@
-import type { ChannelInfo } from "@amoeba/core"
-import { MediaImage } from "@amoeba/ui"
 /**
  * AddPanels —— 「添加订阅」弹窗的两块功能件。
  *
@@ -9,6 +7,9 @@ import { MediaImage } from "@amoeba/ui"
  * 拆出来的理由:两块互不依赖 —— 「搜索添加」是调平台搜索接口选候选，
  * 「浏览渠道」是查渠道目录再填参数。
  */
+
+import type { ChannelInfo } from "@amoeba/core"
+import { MediaImage } from "@amoeba/ui"
 import { useMemo, useState } from "react"
 
 import { Button } from "../../components/Button.tsx"

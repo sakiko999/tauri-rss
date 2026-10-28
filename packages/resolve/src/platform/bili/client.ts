@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import type { Stream } from "@amoeba/xml"
 /**
  * BilibiliClient — crawler 版 bili 共享客户端(HTTP + wbi 签名 + buvid)。
  *
@@ -14,6 +12,9 @@ import type { Stream } from "@amoeba/xml"
  *
  * 零登录:nav 未登录(`code:-101`)仍返回 wbi_img → MD5 即可签名。
  */
+
+import { formatError } from "@amoeba/log"
+import type { Stream } from "@amoeba/xml"
 import * as R from "ramda"
 
 import type { DanmakuOptions, DanmakuStream } from "../../danmaku"

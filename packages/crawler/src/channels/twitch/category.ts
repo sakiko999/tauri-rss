@@ -1,4 +1,3 @@
-import { fetchTwitchCategoryStreams, normalizeTwitchCategory } from "@amoeba/resolve"
 /**
  * twitch:category —— Twitch 分区直播(匿名 GraphQL `game(slug).streams`)。
  *
@@ -7,6 +6,8 @@ import { fetchTwitchCategoryStreams, normalizeTwitchCategory } from "@amoeba/res
  * 不实现 fetchPassive / Loginable / passive。
  * 分类目录另见 `categories.ts`(`twitch:categories`,产 kind:"category" 条目)。
  */
+
+import { fetchTwitchCategoryStreams, normalizeTwitchCategory } from "@amoeba/resolve"
 import { type SerializeOptions } from "@amoeba/xml"
 
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"

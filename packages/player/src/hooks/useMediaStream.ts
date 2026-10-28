@@ -1,7 +1,3 @@
-import type { MediaStream } from "@amoeba/core"
-import * as dashjs from "dashjs"
-import flvjs from "flv.js"
-import Hls from "hls.js"
 /**
  * useMediaStream —— hls.js / flv.js 生命周期 hook(一个 hook 管两种流)。
  *
@@ -12,6 +8,11 @@ import Hls from "hls.js"
  * StrictMode 双挂载安全:effect 始终返回 cleanup(销毁当前实例),
  * 重跑时先销毁旧实例再建新。
  */
+
+import type { MediaStream } from "@amoeba/core"
+import * as dashjs from "dashjs"
+import flvjs from "flv.js"
+import Hls from "hls.js"
 import { useEffect, useRef } from "react"
 
 import { DashHostLoader } from "../engines/dashHostLoader.ts"

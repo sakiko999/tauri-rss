@@ -1,4 +1,3 @@
-import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
 /**
  * youtube:live-categories —— YouTube 直播栏目目录**订阅**。
  *
@@ -9,6 +8,8 @@ import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
  * ⚠️ `Live Now` 本身不是栏目(它是「直播热门」,归 `youtube:live-hot`),不列入。
  * 被 LIVE badge 过滤成空栏目的(Recent/Upcoming)也不列入。
  */
+
+import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
 import type { Category, Item } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

@@ -1,4 +1,3 @@
-import { extractInitialState, log, noteCardToSocial, now, withBrowserOp, XHS_BASE, xhsClient } from "@amoeba/resolve"
 /**
  * xhs:user —— 小红书用户笔记 channel(kind: social)。
  *
@@ -18,6 +17,8 @@ import { extractInitialState, log, noteCardToSocial, now, withBrowserOp, XHS_BAS
  *
  * ⚠️ 本渠道**不声明** `passive`:翻页要 interactive 滚动,不是纯导航采集。
  */
+
+import { extractInitialState, log, noteCardToSocial, now, withBrowserOp, XHS_BASE, xhsClient } from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 

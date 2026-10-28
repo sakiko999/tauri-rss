@@ -1,3 +1,16 @@
+/**
+ * rss --service —— 数据服务（阶段 1）。
+ *
+ * 单写者：本进程独占 SQLite、crawler/resolve、浏览器、governor、jobs。
+ *   stdout 只输出一行 `READY <port>`；日志一律 stderr。
+ *   endpoint.json / instance.lock / service.token 都在 dataDir 下。
+ *   HTTP: /v1/hello /v1/health /v1/state /v1/rpc /v1/jobs/:id/cancel /v1/shutdown
+ *   WS:   /v1/events（首帧 auth → hello → subscribe sinceRev）
+ *
+ * 一致性：每个改变镜像状态的提交 rev+1，并广播一条到多条 StateEvent；
+ * 事件环形缓冲供断线重连按 sinceRev 回放，gap 则要求客户端重新取快照。
+ */
+
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -46,18 +59,6 @@ import {
   type WsClientMessage,
   type WsServerMessage,
 } from "@amoeba/service-protocol"
-/**
- * rss --service —— 数据服务（阶段 1）。
- *
- * 单写者：本进程独占 SQLite、crawler/resolve、浏览器、governor、jobs。
- *   stdout 只输出一行 `READY <port>`；日志一律 stderr。
- *   endpoint.json / instance.lock / service.token 都在 dataDir 下。
- *   HTTP: /v1/hello /v1/health /v1/state /v1/rpc /v1/jobs/:id/cancel /v1/shutdown
- *   WS:   /v1/events（首帧 auth → hello → subscribe sinceRev）
- *
- * 一致性：每个改变镜像状态的提交 rev+1，并广播一条到多条 StateEvent；
- * 事件环形缓冲供断线重连按 sinceRev 回放，gap 则要求客户端重新取快照。
- */
 import type { ServerWebSocket } from "bun"
 
 import { backupDbIfNeeded, type ServiceHost, setupServiceHost } from "./host.ts"

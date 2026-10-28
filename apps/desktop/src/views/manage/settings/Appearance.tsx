@@ -1,5 +1,6 @@
-import { SideCard } from "../../../components/StateBlock.tsx"
 /** 外观 tab:全部是**表现型**偏好(usePrefs,localStorage)。 */
+
+import { SideCard } from "../../../components/StateBlock.tsx"
 import { type Density, type Measure, type Motion, type ThemeMode, usePrefs } from "../../../store/prefs.ts"
 import { Row } from "./Row.tsx"
 

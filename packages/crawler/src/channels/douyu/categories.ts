@@ -1,10 +1,11 @@
-import { type DouyuCategory, fetchDouyuCategories, now } from "@amoeba/resolve"
 /**
  * live:douyu:categories —— 斗鱼分区目录**订阅**。
  *
  * 内容 = `cate/list` 的二级分区(一级分区没有直接列房接口),每条 `kind:"category"`;
  * 点开用 `live:douyu:category` + `{areaId}` 预览该分区房间,并可按同一份参数订阅。
  */
+
+import { type DouyuCategory, fetchDouyuCategories, now } from "@amoeba/resolve"
 import type { Category, Item } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

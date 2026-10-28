@@ -1,4 +1,3 @@
-import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:season —— B 站视频合集(`ugc_season`)订阅。
  *
@@ -11,6 +10,8 @@ import { biliClient, now } from "@amoeba/resolve"
  * 翻页:`page_num` 递增,本页为空即止(apiFetchMore 数值游标)。
  * 条目没有作者名(archives[] 只有 bvid/title/pic/pubdate/duration/stat),author 留空。
  */
+
+import { biliClient, now } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

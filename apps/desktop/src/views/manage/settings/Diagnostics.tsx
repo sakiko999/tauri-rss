@@ -1,5 +1,6 @@
-import { ERROR_KIND_LABEL } from "@amoeba/core"
 /** 存储与诊断 tab:概况计数 + 清缓存 / 清浏览器 profile / 完全重置 + 最近抓取错误。 */
+
+import { ERROR_KIND_LABEL } from "@amoeba/core"
 import { useState } from "react"
 
 import { Button } from "../../../components/Button.tsx"

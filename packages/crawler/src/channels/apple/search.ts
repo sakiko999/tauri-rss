@@ -1,10 +1,11 @@
-import { now, searchApplePodcasts } from "@amoeba/resolve"
 /**
  * apple:podcast-search —— 按关键词搜 Apple 播客节目。
  *
  * 与 chart 的区别:`search` 接口**直接返回 `feedUrl`**(不需二次 Lookup),
  * 所以这里少一次往返。产出与 chart 同构(`kind: audio`,`url` = 节目 RSS)。
  */
+
+import { now, searchApplePodcasts } from "@amoeba/resolve"
 import type { Audio } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

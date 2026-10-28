@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import { douyuRoomInfo, log, now, parseRoomIds, strOr, toInt } from "@amoeba/resolve"
 /**
  * douyu 直播房间 channel —— HTTP + CryptoJS 签名(host.js)。
  *
@@ -13,6 +11,9 @@ import { douyuRoomInfo, log, now, parseRoomIds, strOr, toInt } from "@amoeba/res
  * 签名只用于 getH5Play(拉 RTMP 直链)。本 channel 产出 Live Item(状态+元数据),
  * playUrls 需额外 H5Play 请求,交由下游 resolveLivePlay 懒解析(同 huya)。
  */
+
+import { formatError } from "@amoeba/log"
+import { douyuRoomInfo, log, now, parseRoomIds, strOr, toInt } from "@amoeba/resolve"
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

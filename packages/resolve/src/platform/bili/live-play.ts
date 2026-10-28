@@ -1,4 +1,3 @@
-import type { Stream } from "@amoeba/xml"
 /**
  * bilibili 直播流解析 —— 懒解析 getRoomPlayInfo 全档位可播流。
  *
@@ -13,6 +12,8 @@ import type { Stream } from "@amoeba/xml"
  * 档位随房间/登录态动态变化(未登录钳到 250 超清、登录后 10000 原画)。
  * 契约:最高清晰度排最前(player 默认选流取第一个)。
  */
+
+import type { Stream } from "@amoeba/xml"
 import * as R from "ramda"
 
 import type { SourceInfo } from "../../index.ts"

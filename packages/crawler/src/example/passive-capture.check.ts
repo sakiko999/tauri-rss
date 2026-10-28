@@ -1,9 +1,10 @@
-import { passiveBuffer } from "../passive/buffer.ts"
 /**
  * capturePage 自检 —— `bun packages/crawler/src/example/passive-capture.check.ts`
  * 用假 BrowserBackend 回放 CDP 事件，验证：匹配/非匹配过滤、文本 MIME 才取 body、
  * 拿不到 send/onEvent 时明确报错。
  */
+
+import { passiveBuffer } from "../passive/buffer.ts"
 import { capturePage } from "../passive/capture.ts"
 
 let fails = 0

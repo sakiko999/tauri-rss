@@ -1,7 +1,3 @@
-import { formatError } from "@amoeba/log"
-
-import { deferredStream } from "../../danmaku"
-import type { DanmakuOptions } from "../../danmaku"
 /**
  * douyin 平台客户端 —— ABogus 签名 + ttwid warmup + JSON 请求。
  *
@@ -9,6 +5,11 @@ import type { DanmakuOptions } from "../../danmaku"
  * ttwid cookie(模块级 memoize,首次无 cookie 时抓首页 Set-Cookie,兜底默认值)。
  * 从 DouyinLiveChannel 下沉(原 channel 私有 getJson/ensureCookie/abogusUrl)。
  */
+
+import { formatError } from "@amoeba/log"
+
+import { deferredStream } from "../../danmaku"
+import type { DanmakuOptions } from "../../danmaku"
 import { httpJson } from "../../host.ts"
 import { log } from "../../log.ts"
 import { platformCookie } from "../credentials.ts"

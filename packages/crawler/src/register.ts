@@ -1,3 +1,9 @@
+/**
+ * 内置 channel 登记函数(无幂等守卫,由 index.ts 的惰性注册调用)。
+ *
+ * 新增渠道:在对应平台目录实现 class,然后在这里登记。
+ */
+
 import { ApplePodcastChartChannel, ApplePodcastSearchChannel } from "./channels/apple/index.ts"
 import {
   BiliAnchorChannel,
@@ -62,11 +68,6 @@ import {
   YoutubePlaylistChannel,
   YoutubeUserChannel,
 } from "./channels/youtube/index.ts"
-/**
- * 内置 channel 登记函数(无幂等守卫,由 index.ts 的惰性注册调用)。
- *
- * 新增渠道:在对应平台目录实现 class,然后在这里登记。
- */
 import { registerChannel } from "./index.ts"
 
 /** 注册所有内置 channel。无守卫——由调用方(index.ts)保证幂等。 */

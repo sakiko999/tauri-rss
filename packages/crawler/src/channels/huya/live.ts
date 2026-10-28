@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import { httpJson, HUYA_UA, log, now, parseRoomIds } from "@amoeba/resolve"
 /**
  * huya 直播房间 channel —— 纯 HTTP,无签名。
  *
@@ -9,6 +7,9 @@ import { httpJson, HUYA_UA, log, now, parseRoomIds } from "@amoeba/resolve"
  * ⚠️ 关播房间 `data.stream` 为空但 `liveData` 仍在,状态看 `liveStatus`(ON/OFF)。
  * resolveLivePlay 走 play.ts(profileRoom → 全档位 × 多线路)。
  */
+
+import { formatError } from "@amoeba/log"
+import { httpJson, HUYA_UA, log, now, parseRoomIds } from "@amoeba/resolve"
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

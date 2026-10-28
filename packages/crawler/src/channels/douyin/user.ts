@@ -1,4 +1,3 @@
-import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
 /**
  * 抖音用户直播间 —— 输入**用户主页链接 / sec_uid**，解析并订阅该用户的直播间。
  *
@@ -18,6 +17,8 @@ import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
  * ⚠️ 从未开播过的账号可能拿不到房间数据（enter `10011`/`4001038`），此时会报
  * 抓取失败；暂不生成占位 offline 条目（避免伪造标题/头像）。
  */
+
+import { fetchDouyinUserLive, fetchRoom } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

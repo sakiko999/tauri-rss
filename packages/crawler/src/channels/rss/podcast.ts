@@ -1,4 +1,3 @@
-import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
 /**
  * RssPodcastChannel — 播客 RSS,产 AudioItem(kind=audio)。
  *
@@ -6,6 +5,8 @@ import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
  * enclosure + itunes 元数据,归一成 Audio Item 再 serializeFeed(带 tpl: 扩展),
  * 让 core 能按 tpl:kind=audio 正确解析。
  */
+
+import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
 import type { Audio } from "@amoeba/xml"
 import { type ParsedItem, parseFeed } from "@amoeba/xml"
 

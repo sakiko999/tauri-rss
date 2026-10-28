@@ -1,4 +1,3 @@
-import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:series —— B 站「视频列表 / 系列」订阅。
  *
@@ -10,6 +9,8 @@ import { biliClient, now } from "@amoeba/resolve"
  * 看起来像「列表没内容」。所以先查元信息拿 mid,不要求用户输入。
  * 输入:series ID 或列表 URL(`/lists/<sid>`、`seriesdetail?sid=`、`list/<mid>?sid=`)。
  */
+
+import { biliClient, now } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

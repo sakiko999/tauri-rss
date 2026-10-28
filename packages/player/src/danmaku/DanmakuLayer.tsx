@@ -1,4 +1,3 @@
-import type { DanmakuItem, DanmakuStream } from "@amoeba/resolve"
 /**
  * DanmakuLayer —— Canvas 2D 弹幕渲染层(自研,不依赖第三方弹幕库)。
  *
@@ -9,6 +8,8 @@ import type { DanmakuItem, DanmakuStream } from "@amoeba/resolve"
  * 渲染:requestAnimationFrame 自绘循环,不随 React 每帧重渲染。
  * mode 分支:1/2/3/6 滚动(右→左),4 底 / 5 顶 静态居中停留。
  */
+
+import type { DanmakuItem, DanmakuStream } from "@amoeba/resolve"
 import { useEffect, useRef } from "react"
 
 import { log } from "../log/index.ts"

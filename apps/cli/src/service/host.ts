@@ -1,7 +1,3 @@
-import { Database } from "bun:sqlite"
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs"
-import { join } from "node:path"
-
 /**
  * 数据服务宿主注入。
  *
@@ -11,6 +7,11 @@ import { join } from "node:path"
  * stdout 契约：除 `READY <port>` 外不写任何东西；日志一律 stderr（宿主 console
  * logger 默认写 stdout，必须替换）。
  */
+
+import { Database } from "bun:sqlite"
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs"
+import { join } from "node:path"
+
 import { createSidecarBrowser, locateSidecarBinary, nodeBackend, nodeJsBackend, nodeWsBackend } from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
 import { setLogSink } from "@amoeba/log"

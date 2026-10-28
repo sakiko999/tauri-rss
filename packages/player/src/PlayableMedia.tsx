@@ -1,5 +1,3 @@
-import type { MediaStream, ResolvePlayback } from "@amoeba/core"
-import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
 /**
  * PlayableMedia —— 可播放媒体容器(video/audio/live 共用)。
  *
@@ -16,6 +14,9 @@ import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
  * 注意:原生 <video>/<audio> 无法带自定义 header(如 bilibili 直链的 referer)。
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
+
+import type { MediaStream, ResolvePlayback } from "@amoeba/core"
+import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
 import { useEffect, useRef, useState } from "react"
 
 import { AudioShell } from "./AudioShell.tsx"

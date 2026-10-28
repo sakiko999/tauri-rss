@@ -1,4 +1,3 @@
-import type { MediaStream } from "@amoeba/core"
 /**
  * useStreamSelection —— 选流 + 档位切换。
  *
@@ -10,6 +9,8 @@ import type { MediaStream } from "@amoeba/core"
  * 选流策略:**取 `streams[0]`**(crawler 契约保证最高清晰度排最前)。
  * 切档态在 streams 变化(重新 resolve / props 更新)时自动重置。
  */
+
+import type { MediaStream } from "@amoeba/core"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 // ⚠️ 判据统一放 `streamKind.ts`(纯函数、不 import 引擎),本模块与自检共用一份。

@@ -1,4 +1,3 @@
-import { now, searchBiliUsers } from "@amoeba/resolve"
 /**
  * bili:user —— 搜 UP主(搜索渠道,不直接订阅)。
  *
@@ -9,6 +8,8 @@ import { now, searchBiliUsers } from "@amoeba/resolve"
  * 下游订阅走 `bili:user_video`(uid 参数):本渠道的角色同 `bili:search` 之于
  * `bili:live` —— 只作「搜索添加」的取数源(previewChannel 取候选),不设计为长期订阅。
  */
+
+import { now, searchBiliUsers } from "@amoeba/resolve"
 import type { Item, Video } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

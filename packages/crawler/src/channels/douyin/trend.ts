@@ -1,4 +1,3 @@
-import { fetchDouyinTrends, now } from "@amoeba/resolve"
 /**
  * douyin:trend —— 抖音热点榜 channel(kind: social)。
  *
@@ -12,6 +11,8 @@ import { fetchDouyinTrends, now } from "@amoeba/resolve"
  * 相关:`live:douyin:hot` 是**直播热门房间**(kind:live);本 channel 是**全站热点词**
  * (kind:social)。两者不同,勿混。
  */
+
+import { fetchDouyinTrends, now } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

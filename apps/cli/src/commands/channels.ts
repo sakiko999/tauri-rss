@@ -1,8 +1,9 @@
-import { listChannels } from "@amoeba/crawler"
 /**
  * channels — 渠道注册表快照(不 fetch)。
  * key / kind / name / 参数 tpl(* = required)/ defaultInfo。
  */
+
+import { listChannels } from "@amoeba/crawler"
 import pc from "picocolors"
 
 import { printJson } from "../ui/render.ts"

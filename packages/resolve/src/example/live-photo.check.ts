@@ -1,4 +1,3 @@
-import { mblogToSocial } from "../platform/weibo/client.ts"
 /**
  * 实况图（Live Photo）映射自检 —— `bun packages/resolve/src/example/live-photo.check.ts`
  *
@@ -9,6 +8,8 @@ import { mblogToSocial } from "../platform/weibo/client.ts"
  * - 小红书详情 `imageList[i].livePhoto === true` + `stream.EF4[0].masterUrl`（不是 h264）；
  * - 微博 `pics[].type === "livephoto"` + `pics[].videoSrc`（302 包装器）。
  */
+
+import { mblogToSocial } from "../platform/weibo/client.ts"
 import { noteDetailToSocial } from "../platform/xhs/client.ts"
 
 let failed = 0

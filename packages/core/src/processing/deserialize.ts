@@ -1,6 +1,3 @@
-import { type ParsedItem, parseFeed } from "@amoeba/xml"
-
-import type { LivePlatformId, LiveStatus } from "../types/live.ts"
 /**
  * deserializeFeed — RSS 2.0 XML → MediaItem[]。
  *
@@ -15,6 +12,10 @@ import type { LivePlatformId, LiveStatus } from "../types/live.ts"
  * live 的 platform/roomId 来自 `tpl:*`（外部 feed 缺失时给静态默认）。
  * app 层语义由 core 注入:subscriptionId 来自 ctx,isUnread 默认 true、isStarred 默认 false。
  */
+
+import { type ParsedItem, parseFeed } from "@amoeba/xml"
+
+import type { LivePlatformId, LiveStatus } from "../types/live.ts"
 import type {
   MediaAttachment,
   MediaAuthor,

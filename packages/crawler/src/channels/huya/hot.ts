@@ -1,4 +1,3 @@
-import { httpJson, now } from "@amoeba/resolve"
 /**
  * huya 直播热门 —— cache.php LiveList(无鉴权),支持分页加载更多。
  *
@@ -9,6 +8,8 @@ import { httpJson, now } from "@amoeba/resolve"
  * 能力:对外是独立 channel(无参,热门发现);内部**委托同平台 HuyaLiveChannel**
  * 的 resolveLivePlay/getDanmaku(hot 是「特殊的 live channel」——外部区分开,机制复用)。
  */
+
+import { httpJson, now } from "@amoeba/resolve"
 import type { Live } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

@@ -1,11 +1,12 @@
-import type { DanmakuItem } from "@amoeba/resolve"
-import { getDanmakuByUrl } from "@amoeba/resolve"
 /**
  * dm — 弹幕探针(收编 crawler example/test-danmaku.ts 的单 url 版)。
  * VOD:等首批(全量分段)打印前 n 条;live:固定窗口采集 + 连接帧数统计。
  * 平台登录 cookie 由 credentials provider 兜底(可选;直播弹幕 2026-09 实测
  * **匿名可用**,见 resolve/platform/bili/danmaku-live.ts)。
  */
+
+import type { DanmakuItem } from "@amoeba/resolve"
+import { getDanmakuByUrl } from "@amoeba/resolve"
 import pc from "picocolors"
 
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"

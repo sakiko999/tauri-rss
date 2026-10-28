@@ -1,7 +1,3 @@
-import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
-import { join } from "node:path"
-
-import { defaultSidecarProfileDir } from "@amoeba/host/node"
 /**
  * browser-reset — 清掉抓取浏览器 profile。
  *
@@ -16,6 +12,11 @@ import { defaultSidecarProfileDir } from "@amoeba/host/node"
  *
  * 用法:`bun run rss browser-reset [--target cli|desktop|all]`
  */
+
+import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
+import { join } from "node:path"
+
+import { defaultSidecarProfileDir } from "@amoeba/host/node"
 import pc from "picocolors"
 
 import { fail, ok, row } from "../ui/render.ts"

@@ -1,5 +1,3 @@
-import type { Subscription, SubscriptionGroup } from "@amoeba/core"
-import * as Accordion from "@radix-ui/react-accordion"
 /**
  * RailGroupTree —— 侧栏的**订阅分组树**(业务件:读 store、吃 domain 类型)。
  *
@@ -11,6 +9,9 @@ import * as Accordion from "@radix-ui/react-accordion"
  *
  * ⚠️ 只负责树本身 —— 分节标题在外层用 `<RailSection>` 包(那里要放「管理分组」按钮)。
  */
+
+import type { Subscription, SubscriptionGroup } from "@amoeba/core"
+import * as Accordion from "@radix-ui/react-accordion"
 import { useCallback, useMemo, useRef, useState } from "react"
 
 import { navAction, type RowCtx } from "../../lib/rail-nav.ts"

@@ -1,4 +1,3 @@
-import { biliClient, biliQrGenerate, biliScanLogin, now } from "@amoeba/resolve"
 /**
  * bili:popular —— bilibili 综合热门(video channel)。
  *
@@ -8,6 +7,8 @@ import { biliClient, biliQrGenerate, biliScanLogin, now } from "@amoeba/resolve"
  * 不需要 appHost.browser —— 扫一次所有 bili channel 共享(登录态经 credentials
  * provider 注入)。
  */
+
+import { biliClient, biliQrGenerate, biliScanLogin, now } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 
 import type { LoginResult } from "../../index.ts"

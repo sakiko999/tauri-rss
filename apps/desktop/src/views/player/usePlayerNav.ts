@@ -1,5 +1,3 @@
-import type { MediaItem } from "@amoeba/core"
-import { unlockAudioPlayback } from "@amoeba/player"
 /**
  * usePlayerNav —— 卡片/列表的「播放入口」回调收敛处。
  *
@@ -17,6 +15,9 @@ import { unlockAudioPlayback } from "@amoeba/player"
  * ⚠️ 打开外链必须走 `appHost.openExternal`(桌面是 Tauri opener 插件)——WebView
  * 会把裸 `window.open` 拦掉,表现为「点了没反应」。
  */
+
+import type { MediaItem } from "@amoeba/core"
+import { unlockAudioPlayback } from "@amoeba/player"
 import { useCallback, useMemo } from "react"
 import { useNavigate } from "react-router"
 

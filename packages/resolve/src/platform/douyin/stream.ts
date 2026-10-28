@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import type { Stream } from "@amoeba/xml"
 /**
  * douyin 流解析 —— enter → reflow → HTML 三级降级拉直播直链。
  *
@@ -12,6 +10,9 @@ import type { Stream } from "@amoeba/xml"
  * ⚠️ roomId 参数是订阅的 **web_rid(短号)**,不是 enter 返回的 room_id/id_str(长号)。
  * 每次 resolve 独立取新鲜签名直链(带过期时间)。
  */
+
+import { formatError } from "@amoeba/log"
+import type { Stream } from "@amoeba/xml"
 import * as R from "ramda"
 
 import { httpJson, httpText } from "../../host.ts"

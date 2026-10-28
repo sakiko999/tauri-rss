@@ -1,4 +1,3 @@
-import type { CategoryItem, MediaItem } from "@amoeba/core"
 /**
  * MediaMain —— 非文章节点的网格主区。按内容形态分发:
  *   social 独占   → 筛选 chips + MasonryGrid 瀑布流
@@ -9,6 +8,8 @@ import type { CategoryItem, MediaItem } from "@amoeba/core"
  * 网格保留 VirtuosoGrid 虚拟化(比 new_desktop 的 page-cap 全量渲染更适合大库)。
  * 点击卡片 → 播放入口(手势内 unlockAudioPlayback,见 usePlayerNav)。
  */
+
+import type { CategoryItem, MediaItem } from "@amoeba/core"
 import { type ReactNode, useEffect, useMemo, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router"
 import { VirtuosoGrid } from "react-virtuoso"

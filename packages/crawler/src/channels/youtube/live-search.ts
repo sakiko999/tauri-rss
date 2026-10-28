@@ -1,4 +1,3 @@
-import { now, searchYouTubeLive } from "@amoeba/resolve"
 /**
  * youtube:live-search —— 按关键词搜**正在直播**的视频(InnerTube 直播过滤器)。
  *
@@ -10,6 +9,8 @@ import { now, searchYouTubeLive } from "@amoeba/resolve"
  * ⚠️ `liveStatus` 信任搜索过滤器给的 LIVE badge(不再逐条打 player API;
  * 预览也不需要精确在线数,`online` 取搜索结果里的 watching 数)。
  */
+
+import { now, searchYouTubeLive } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

@@ -1,9 +1,10 @@
-import { getChannel } from "@amoeba/crawler"
-import { parseFeed } from "@amoeba/xml"
 /**
  * fetch — 单渠道抓取探针(★ 高频)。
  * 计时 + 条数 + 样本;--xml 看原始输出;--json 进管道配 jq;失败完整堆栈。
  */
+
+import { getChannel } from "@amoeba/crawler"
+import { parseFeed } from "@amoeba/xml"
 import pc from "picocolors"
 
 import { buildInfo, parseKvPairs } from "../info.ts"

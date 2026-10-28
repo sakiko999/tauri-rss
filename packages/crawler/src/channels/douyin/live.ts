@@ -1,17 +1,3 @@
-import { formatError } from "@amoeba/log"
-import {
-  douyinOnline,
-  douyinScanLogin,
-  fetchDouyinUserLive,
-  fetchRoom,
-  isDouyinProfileUrl,
-  log,
-  normalizeDouyinRoomId,
-  now,
-  parseRoomIds,
-  strOr,
-  toInt,
-} from "@amoeba/resolve"
 /**
  * douyin 直播房间 channel —— HTTP + ABogus 签名(host.js)。
  *
@@ -28,6 +14,21 @@ import {
  * 归一后当 web_rid 用(2026-10-18 实测)。主页链接会先经匿名资料 API 换 sec_uid →
  * 抖音号,再走 enter;`live:douyin:user` 保留给存量订阅。
  */
+
+import { formatError } from "@amoeba/log"
+import {
+  douyinOnline,
+  douyinScanLogin,
+  fetchDouyinUserLive,
+  fetchRoom,
+  isDouyinProfileUrl,
+  log,
+  normalizeDouyinRoomId,
+  now,
+  parseRoomIds,
+  strOr,
+  toInt,
+} from "@amoeba/resolve"
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

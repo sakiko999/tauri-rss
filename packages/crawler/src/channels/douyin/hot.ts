@@ -1,4 +1,3 @@
-import { douyinClient, douyinOnline, now } from "@amoeba/resolve"
 /**
  * douyin 直播热门 —— partition/detail/room/v2 + ABogus,支持分页加载更多。
  *
@@ -8,6 +7,8 @@ import { douyinClient, douyinOnline, now } from "@amoeba/resolve"
  * 分页:**offset 游标制**(每页 COUNT 条,offset 递增),`isPageable` 探测 → fetchMore
  * 翻页(本页为空 = 没有更多)。
  */
+
+import { douyinClient, douyinOnline, now } from "@amoeba/resolve"
 import type { Live } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

@@ -1,5 +1,3 @@
-import { fmtCount, MediaImage } from "@amoeba/ui"
-import DOMPurify from "dompurify"
 /**
  * SocialDetailModal —— 社交条目详情弹窗(点瀑布流卡片打开)。
  *
@@ -12,6 +10,9 @@ import DOMPurify from "dompurify"
  * overflow:hidden 裁掉 ≡ 撑满 + 截断)。竖图/横图都由 object-fit:contain 装进
  * 同一可用高度,不再按源比例撑高把正文挤到图片下方。
  */
+
+import { fmtCount, MediaImage } from "@amoeba/ui"
+import DOMPurify from "dompurify"
 import { useEffect, useMemo, useState } from "react"
 
 import { openExternalSafely } from "../../lib/host.ts"

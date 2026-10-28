@@ -1,4 +1,3 @@
-import { overlayBlock } from "../lib/uiOverlay.ts"
 /**
  * NavRow / RailSection —— 侧栏导航的**功能件**(纯 props,不碰 store)。
  *
@@ -8,6 +7,8 @@ import { overlayBlock } from "../lib/uiOverlay.ts"
  * ⚠️ 类名(`nav-row` / `nav-label` / `nav-count`)必须原样保留:它们是 styles.css 与
  * 折叠态规则(`.rail-collapsed` 与 `@media (max-width:1080px)` 两份清单)的选择器锚点。
  */
+
+import { overlayBlock } from "../lib/uiOverlay.ts"
 import { Icon } from "./Icon.tsx"
 
 export function NavRow({

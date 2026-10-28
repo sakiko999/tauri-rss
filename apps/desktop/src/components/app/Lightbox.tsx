@@ -1,4 +1,3 @@
-import { MediaImage } from "@amoeba/ui"
 /**
  * Lightbox —— 社交图集灯箱(从详情弹窗点图打开)。
  *
@@ -10,6 +9,8 @@ import { MediaImage } from "@amoeba/ui"
  * 索引由调用方持有(SocialDetailModal 的 imgIndex):灯箱翻到哪张,关掉后详情就停在
  * 哪张 —— 两个视图共用一份「当前第几张」,不各记一份。
  */
+
+import { MediaImage } from "@amoeba/ui"
 import { useEffect } from "react"
 
 import { httpsify } from "../../lib/media.ts"

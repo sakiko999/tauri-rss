@@ -1,10 +1,11 @@
-import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/core"
-
 /**
  * subscriptions.check —— 最小断言(仓库无测试基建,照 core/example/*.check.ts 惯例)。
  * 覆盖 valueList 的分支:列表型参数按逗号切、单值参数**不切**。
  *   bun apps/desktop/src/lib/subscriptions.check.ts
  */
+
+import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/core"
+
 import {
   candidatesFromSearch,
   candidatesFromUsers,

@@ -1,6 +1,3 @@
-import type { MediaItem } from "@amoeba/core"
-import { PlayableMedia } from "@amoeba/player"
-import { MediaImage } from "@amoeba/ui"
 /**
  * Mobile App —— 极简「看内容」闭环:未读列表 → 点开播放/阅读。
  *
@@ -8,6 +5,10 @@ import { MediaImage } from "@amoeba/ui"
  * ui `MediaImage`(防盗链隧道)。含基础订阅管理(RSS 直链增删);不做频道发现/rail/
  * 播放器控件 —— 那些归 desktop 工作台。
  */
+
+import type { MediaItem } from "@amoeba/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
 import { useEffect, useState } from "react"
 
 import { displayBody } from "./html.ts"

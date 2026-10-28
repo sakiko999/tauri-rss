@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-
 /**
  * huya 弹幕 —— wss://cdnws.api.huya.com + Tars 编解码(probe 实测原生握手可连)。
  *
@@ -9,6 +7,9 @@ import { formatError } from "@amoeba/log"
  * 心跳固定字节 60s;消息外层 tag0=type(7)→ tag1=HYPushMessage{uri, msg} →
  * uri=1400 → HYMessage{userInfo.nickName, content, bulletFormat.fontColor}。
  */
+
+import { formatError } from "@amoeba/log"
+
 import { createWsStream, deferredStream } from "../../danmaku"
 import type { DanmakuStream } from "../../danmaku"
 import { log } from "../../log.ts"

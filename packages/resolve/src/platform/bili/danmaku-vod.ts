@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-
 /**
  * bilibili 视频弹幕 —— seg.so 全量懒解析(VOD 时间轴用)。
  *
@@ -7,6 +5,9 @@ import { formatError } from "@amoeba/log"
  * protobuf 手写 wire 解码(decodeDanmakuSeg)。匿名可用(软风控,带登录 cookie 更稳)。
  * 每段 6 分钟,段数 = ceil(durationSec/360) + 1。
  */
+
+import { formatError } from "@amoeba/log"
+
 import { argbToHex, deferredStream } from "../../danmaku"
 import type { DanmakuItem, DanmakuStream } from "../../danmaku"
 import { log } from "../../log.ts"

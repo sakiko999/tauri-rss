@@ -1,5 +1,3 @@
-import { serializeCookieDict } from "../../utils/cookie.ts"
-import type { LoginCookieSnapshot } from "../types.ts"
 /**
  * 小红书登录 cookie 快照 —— 应用启动时从抓取浏览器 profile **只读**取一份。
  *
@@ -15,6 +13,9 @@ import type { LoginCookieSnapshot } from "../types.ts"
  * 这仍不是「会话有效」的证明(服务端失效时 cookie 可能残留),只用来判断「浏览器里
  * 有没有登录材料」。失效由下一次抓取如实报错,不在启动期额外访问平台。
  */
+
+import { serializeCookieDict } from "../../utils/cookie.ts"
+import type { LoginCookieSnapshot } from "../types.ts"
 import { XHS_BASE } from "./client.ts"
 
 export async function readXhsLoginCookie(browser: BrowserBackend): Promise<LoginCookieSnapshot | null> {

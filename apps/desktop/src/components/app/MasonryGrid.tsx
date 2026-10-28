@@ -1,5 +1,3 @@
-import type { MediaItem } from "@amoeba/core"
-import { useMasonry, usePositioner } from "masonic"
 /**
  * MasonryGrid — social 瀑布流(masonic 虚拟化)。
  *
@@ -17,6 +15,9 @@ import { useMasonry, usePositioner } from "masonic"
  *    ⚠️ 但估算(文本折行等)有偏差 → 用「预置估算防空白 + 渲染后测量真实高度修正」兜底,
  *    见下方预置/测量段(不是「一次到位无需二次校准」)。
  */
+
+import type { MediaItem } from "@amoeba/core"
+import { useMasonry, usePositioner } from "masonic"
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react"
 
 import { itemKey, socialRatio } from "../../lib/media.ts"

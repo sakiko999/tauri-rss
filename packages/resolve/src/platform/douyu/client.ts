@@ -1,10 +1,11 @@
-import { formatError } from "@amoeba/log"
 /**
  * douyu 平台客户端 —— CryptoJS 签名 + H5Play 拉流 + 房间信息。
  *
  * 无状态单例:签名/请求全从参数取(cookie/referer 每次传)。从 DouyuLiveChannel
  * 下沉(原 channel 私有方法)。签名脚本 CRYPTO_JS 经 host.js 执行。
  */
+
+import { formatError } from "@amoeba/log"
 import type { Stream } from "@amoeba/xml"
 
 import { httpGet, httpJson, now } from "../../host.ts"

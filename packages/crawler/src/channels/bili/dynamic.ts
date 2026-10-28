@@ -1,4 +1,3 @@
-import { biliClient, fillImageSizes, now, toHttps } from "@amoeba/resolve"
 /**
  * bilibili 用户动态类 channel(bili:dynamic)。
  *
@@ -17,6 +16,8 @@ import { biliClient, fillImageSizes, now, toHttps } from "@amoeba/resolve"
  *   - DYNAMIC_TYPE_ARTICLE(专栏):major.opus.jump_url(cv 号)
  * 统一映射成 Social(content + images + likes/reposts/replies),链接指向 t.bilibili.com/{id_str}。
  */
+
+import { biliClient, fillImageSizes, now, toHttps } from "@amoeba/resolve"
 import type { Item, Social, SocialImage } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

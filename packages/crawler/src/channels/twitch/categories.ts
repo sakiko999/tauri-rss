@@ -1,4 +1,3 @@
-import { fetchTwitchTopCategories, now } from "@amoeba/resolve"
 /**
  * twitch:categories —— Twitch 分类目录**订阅**。
  *
@@ -9,6 +8,8 @@ import { fetchTwitchTopCategories, now } from "@amoeba/resolve"
  * ⚠️ 分类本身没有可播房间,所以它不是 live item —— 只是一个「指向订阅」的目录条目。
  * ⚠️ `games(first)` 匿名可用,实测 30 个分类(slug/name/观看数/封面)。
  */
+
+import { fetchTwitchTopCategories, now } from "@amoeba/resolve"
 import type { Category, Item } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

@@ -1,4 +1,3 @@
-import type { DanmakuStream } from "@amoeba/resolve"
 /**
  * VideoShell —— 播放器外壳:视频画面 + 控件层。
  *
@@ -8,6 +7,8 @@ import type { DanmakuStream } from "@amoeba/resolve"
  *   - useContainerInteractions  键盘快捷键 + 点击聚焦 + 单击播放/双击全屏
  *   - useVideoElement       媒体状态 + 操作
  */
+
+import type { DanmakuStream } from "@amoeba/resolve"
 import { useEffect, useRef, useState } from "react"
 
 import type { DanmakuControl } from "./controls/index.ts"

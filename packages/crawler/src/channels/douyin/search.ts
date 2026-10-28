@@ -1,5 +1,3 @@
-import { searchDouyinRooms } from "@amoeba/resolve"
-
 /**
  * douyin **分区搜索** —— 按分区关键词列直播间（**不是**主播/房间标题搜索）。
  *
@@ -22,6 +20,9 @@ import { searchDouyinRooms } from "@amoeba/resolve"
  * **上游命中 ∪ 本地分区树 title 匹配**（见 `searchDouyinRooms`），无需登录、无需浏览器。
  * 残留：分区树只到「大类」粒度，`美食`（属「生活」）这类三级词仍返空。
  */
+
+import { searchDouyinRooms } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 
 const PAGE_SIZE = 20

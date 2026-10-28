@@ -1,4 +1,3 @@
-import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:favlist —— B 站收藏夹订阅。
  *
@@ -9,6 +8,8 @@ import { biliClient, now } from "@amoeba/resolve"
  * ⚠️ `medias[].attr != 0` = 已失效/私密视频 —— 跳过(否则点开必碎)。
  * ⚠️ 收藏夹页 URL 的 `fid` 与 API 的 `media_id` 是同一个值。
  */
+
+import { biliClient, now } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

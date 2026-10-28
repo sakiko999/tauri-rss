@@ -1,11 +1,12 @@
-import { createDataLayer, ERROR_KIND_LABEL, type ErrorKind, errorKindOf, type RefreshResult } from "@amoeba/core"
-import { getChannel } from "@amoeba/crawler"
 /**
  * refresh — core DataLayer 编排冒烟:add/update 订阅 → refresh → store 查询。
  * 走 SQLite 持久化(订阅幂等:同 channelKey 复用已有订阅,只更新 info)。
  * info 不注入 cookie——DataLayer.sourceInfoFor 按 settings 自动注入(订阅跟随
  * settings 更新,不固化),这是与 fetch/item 探针直连 source 的关键差异。
  */
+
+import { createDataLayer, ERROR_KIND_LABEL, type ErrorKind, errorKindOf, type RefreshResult } from "@amoeba/core"
+import { getChannel } from "@amoeba/crawler"
 import pc from "picocolors"
 
 import { exampleInfo, parseKvPairs } from "../info.ts"

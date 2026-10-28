@@ -1,5 +1,3 @@
-import { resolveLivePlayByUrl, resolvePlayByUrl, type ResolveRoute, resolveRoute } from "@amoeba/resolve"
-import type { Stream } from "@amoeba/xml"
 /**
  * item — by-url 一站式探针(★ 高频)。
  * resolveRoute 命中 → streams 全档位表(format/quality/rate/headers/dashManifest)
@@ -8,6 +6,9 @@ import type { Stream } from "@amoeba/xml"
  * cookie:平台登录态由 credentials provider(client 内部兜底)提供,这里不再按
  * url 域手抄注入表(旧表缺 douyin;CLI 入口 main.ts 已注册同源 provider)。
  */
+
+import { resolveLivePlayByUrl, resolvePlayByUrl, type ResolveRoute, resolveRoute } from "@amoeba/resolve"
+import type { Stream } from "@amoeba/xml"
 import pc from "picocolors"
 
 import { fmtMs, printJson, startTimer, trunc } from "../ui/render.ts"

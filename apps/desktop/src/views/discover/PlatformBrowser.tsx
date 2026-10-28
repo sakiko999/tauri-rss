@@ -1,4 +1,3 @@
-import type { ChannelInfo, MediaItem } from "@amoeba/core"
 /**
  * PlatformBrowser —— 发现页的「分区浏览 / 搜索 / 搜主播」面板。
  *
@@ -13,6 +12,8 @@ import type { ChannelInfo, MediaItem } from "@amoeba/core"
  * ⚠️ 三种视图的返回都是 live item(roomId 已由 tpl:roomId/URL 还原)，所以统一走
  * `candidatesFromSearch`；不再用 CardMini 网格(信息少、还要再点进弹窗才能订阅)。
  */
+
+import type { ChannelInfo, MediaItem } from "@amoeba/core"
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../components/Button.tsx"

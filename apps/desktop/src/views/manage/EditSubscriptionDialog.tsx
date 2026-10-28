@@ -1,4 +1,3 @@
-import type { Subscription } from "@amoeba/core"
 /**
  * EditSubscriptionDialog —— 编辑一条订阅(标题 / 分组 / 独立刷新间隔 / 启用)。
  *
@@ -8,6 +7,8 @@ import type { Subscription } from "@amoeba/core"
  * 分组与写库都从 store 自取(不 props 透传),这样任意位置一句
  * `<EditSubscriptionDialog sub={s} onClose={...} />` 就能用。
  */
+
+import type { Subscription } from "@amoeba/core"
 import { useState } from "react"
 
 import { Button } from "../../components/Button.tsx"

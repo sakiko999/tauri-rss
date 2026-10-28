@@ -1,6 +1,4 @@
 #!/usr/bin/env bun
-import { cookieFieldForPlatform } from "@amoeba/core"
-import { setPlatformCookieLookup } from "@amoeba/resolve"
 /**
  * rss — crawler/resolve/core 的正式观测面(docs/cli-plan.md,2026-08-27 定稿)。
  *
@@ -15,6 +13,9 @@ import { setPlatformCookieLookup } from "@amoeba/resolve"
  *   env       appHost 门面自检        refresh core DataLayer 编排冒烟
  *   browser-reset 清掉 Edge CDP 的浏览器 profile(脏了才用)
  */
+
+import { cookieFieldForPlatform } from "@amoeba/core"
+import { setPlatformCookieLookup } from "@amoeba/resolve"
 import { cac } from "cac"
 import pc from "picocolors"
 

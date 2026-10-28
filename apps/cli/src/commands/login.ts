@@ -1,4 +1,3 @@
-import { writeFileSync } from "node:fs"
 /**
  * login — 扫码登录平台账号（经数据服务）。
  *
@@ -13,6 +12,8 @@ import { writeFileSync } from "node:fs"
  * 二维码：emitQr 两种载荷（data URL / 内容）统一由 ui/qr-terminal 画成半块字符；
  * 识别失败时把原图落盘，不让终端卡在一张画不出来的码上。
  */
+
+import { writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 

@@ -1,11 +1,12 @@
-import { parseOpml } from "@amoeba/xml"
-
 /**
  * opml 映射自检(desktop 侧)—— `bun apps/desktop/src/lib/opml.check.ts`
  *
  * 覆盖:分组路径拼装(嵌套)、只导出带 url 的 rss 订阅(rsshub/直播渠道排除)、
  * 导入去重(同 xmlUrl 跳过)。
  */
+
+import { parseOpml } from "@amoeba/xml"
+
 import { exportOpml, pendingImports } from "./opml.ts"
 
 let fails = 0

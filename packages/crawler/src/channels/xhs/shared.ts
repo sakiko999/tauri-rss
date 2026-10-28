@@ -1,21 +1,3 @@
-import {
-  cdpEvaluate,
-  cdpNavigate,
-  extractInitialState,
-  extractNoteDetail,
-  isXhsLoggedIn,
-  isXhsOrigin,
-  noteDetailStateExpr,
-  noteDetailToSocial,
-  now,
-  rawOf,
-  reportXhsRisk,
-  resolveCookie,
-  waitUntil,
-  withBrowserOp,
-  XHS_BASE,
-  xhsClient,
-} from "@amoeba/resolve"
 /**
  * xhs 渠道共享的**浏览器策略层**。
  *
@@ -34,6 +16,25 @@ import {
  * ⚠️ 登录判据是 `isXhsLoggedIn`(页面 loggedIn + 侧栏「我」+ user_id cookie),
  * **不是 `web_session`** —— 小红书对游客也会立即签发 web_session。
  */
+
+import {
+  cdpEvaluate,
+  cdpNavigate,
+  extractInitialState,
+  extractNoteDetail,
+  isXhsLoggedIn,
+  isXhsOrigin,
+  noteDetailStateExpr,
+  noteDetailToSocial,
+  now,
+  rawOf,
+  reportXhsRisk,
+  resolveCookie,
+  waitUntil,
+  withBrowserOp,
+  XHS_BASE,
+  xhsClient,
+} from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 
 import { passiveBuffer } from "../../passive/buffer.ts"

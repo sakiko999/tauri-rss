@@ -1,11 +1,12 @@
-import { searchDouyuRooms } from "@amoeba/resolve"
-
 /**
  * douyu 搜索 —— 按关键词搜直播间(`japi/search/api/searchShow`,匿名可用)。
  *
  * 取数在 `resolve/platform/douyu/discover.ts` 的 `searchDouyuRooms`。
  * 分页:页码制(page 从 1 起,pageSize 真消费→可分页)。
  */
+
+import { searchDouyuRooms } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 
 const PAGE = 20

@@ -1,11 +1,12 @@
-import { searchDouyuAnchors } from "@amoeba/resolve"
-
 /**
  * douyu 搜主播 —— 按关键词搜主播(`japi/search/api/searchUser`,匿名可用)。
  *
  * 取数在 `resolve/platform/douyu/discover.ts` 的 `searchDouyuAnchors`。
  * 分页:页码制(page 从 1 起,pageSize 真消费)。
  */
+
+import { searchDouyuAnchors } from "@amoeba/resolve"
+
 import { makeApiChannel } from "../factory.ts"
 
 const PAGE = 20

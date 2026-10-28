@@ -1,5 +1,3 @@
-import { execSync, spawn } from "child_process"
-
 /**
  * Tauri Playground 统一脚本 — functional core / imperative shell。
  *
@@ -18,6 +16,9 @@ import { execSync, spawn } from "child_process"
  *   bun run tauri [desktop|mobile]         — Vite dev + Tauri dev 并行（热重载）
  *   bun run tauri [desktop|mobile] build   — 前端构建 + Tauri release 构建
  */
+
+import { execSync, spawn } from "child_process"
+
 import { $ } from "bun"
 
 type Platform = "desktop" | "mobile"

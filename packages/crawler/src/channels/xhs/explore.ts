@@ -1,4 +1,3 @@
-import { noteCardToSocial, now, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
 /**
  * xhs:explore —— 小红书发现页(推荐内容)channel(kind: social)。
  *
@@ -11,6 +10,8 @@ import { noteCardToSocial, now, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
  *   - 被动刷新 → `fetchPassive`(CDP Network 捕获页面自己的文档);
  *   - 无浏览器(mobile/CLI)→ **不支持**(登录态 HTTP SSR 是空壳,见 `XHS_EXPLORE_NEEDS_BROWSER`)。
  */
+
+import { noteCardToSocial, now, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 

@@ -1,6 +1,3 @@
-import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream } from "@amoeba/core"
-import { PlayableMedia } from "@amoeba/player"
-import { MediaImage } from "@amoeba/ui"
 /**
  * PlayerPage —— 播放页。
  *
@@ -11,6 +8,10 @@ import { MediaImage } from "@amoeba/ui"
  * 解析走 core:video → resolvePlay, live → resolveLivePlay;两者都返回
  * `{ streams, danmaku }`,danmaku 由 PlayableMedia 内部接给 DanmakuLayer。
  */
+
+import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream } from "@amoeba/core"
+import { PlayableMedia } from "@amoeba/player"
+import { MediaImage } from "@amoeba/ui"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 

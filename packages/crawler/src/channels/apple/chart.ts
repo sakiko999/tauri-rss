@@ -1,4 +1,3 @@
-import { APPLE_PODCAST_GENRES, fetchApplePodcastChart, now } from "@amoeba/resolve"
 /**
  * apple:podcast-chart —— Apple 播客热门榜(按分类)。
  *
@@ -11,6 +10,8 @@ import { APPLE_PODCAST_GENRES, fetchApplePodcastChart, now } from "@amoeba/resol
  * 点开走「打开原文」去 Apple 页 + RSS。后续真要进播放页,应做成**懒解析**
  * (像 by-url 那样点了才解析),而不是在 fetch 里批量拉。
  */
+
+import { APPLE_PODCAST_GENRES, fetchApplePodcastChart, now } from "@amoeba/resolve"
 import type { Audio } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

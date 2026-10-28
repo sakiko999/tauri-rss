@@ -1,4 +1,3 @@
-import type { ChannelInfo } from "@amoeba/core"
 /**
  * DiscoverPage —— 发现页:平台能力矩阵 + 分区浏览 + 搜索,全部接真实渠道。
  *
@@ -12,6 +11,8 @@ import type { ChannelInfo } from "@amoeba/core"
  * 面板与榜单已拆到同目录:`PlatformBrowser.tsx`(分区/搜索)· `BoardList.tsx`(一键订阅)·
  * `platforms.ts`(共用常量)。本文件保留能力矩阵与三块 section 的布局。
  */
+
+import type { ChannelInfo } from "@amoeba/core"
 import { useEffect, useMemo, useState } from "react"
 
 import { Icon } from "../../components/Icon.tsx"

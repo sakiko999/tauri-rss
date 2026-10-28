@@ -1,4 +1,3 @@
-import type { MediaItem } from "@amoeba/core"
 /**
  * HomeView —— 「合流」首页看板（M3，业务件：读 store、吃 domain 类型）。
  *
@@ -11,6 +10,8 @@ import type { MediaItem } from "@amoeba/core"
  * ⚠️ useMemo 依赖只认 allItems / subscriptions —— store 换引用即重算；
  *    不能把 Date.now() 直接写进依赖（每帧都变，memo 永远失效）。
  */
+
+import type { MediaItem } from "@amoeba/core"
 import { useMemo } from "react"
 
 import { Button } from "../../components/Button.tsx"

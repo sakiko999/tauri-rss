@@ -1,10 +1,11 @@
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 /**
  * MediaQualityButton —— 清晰度档位菜单(MediaChrome `<media-settings-menu>` 的轻量 React 版)。
  *
  * 消费多档位列表(rate + quality),选中调 `onQuality`。少于 2 档不渲染。
  * 菜单用 radix DropdownMenu。
  */
+
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
 import { useState } from "react"
 
 const MENU_CONTENT_CLS = "z-50 min-w-24 rounded-md border border-white/15 bg-black/95 py-1 text-xs text-white shadow-xl"

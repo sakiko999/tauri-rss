@@ -1,5 +1,3 @@
-import { formatError } from "@amoeba/log"
-import type { Stream } from "@amoeba/xml"
 /**
  * InnerTubeClient — YouTube InnerTube player API 客户端(零登录)。
  *
@@ -17,6 +15,9 @@ import type { Stream } from "@amoeba/xml"
  * n 参数:HTML5 client 的 URL 带 `n=xxx`(节流混淆),不解 → 限速 50KB/s 或 403。
  * 本 client 在 resolve 后统一解 n(见 signature.ts 的 deobfuscateNParam)。
  */
+
+import { formatError } from "@amoeba/log"
+import type { Stream } from "@amoeba/xml"
 import * as R from "ramda"
 
 import { log } from "../../log.ts"

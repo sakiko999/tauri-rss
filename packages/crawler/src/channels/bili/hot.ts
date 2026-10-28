@@ -1,4 +1,3 @@
-import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili 直播热门 —— getListByArea(wbi 签名),支持分页加载更多。
  *
@@ -10,6 +9,8 @@ import { biliClient, now } from "@amoeba/resolve"
  * ⚠️ 能力抽离:只输出 Live item 基础信息(与 rsshub 一致)。流/弹幕解析统一走
  * crawler/resolver(按 item.url→live.bilibili.com/{roomId} 路由)。翻页(Pageable)保留。
  */
+
+import { biliClient, now } from "@amoeba/resolve"
 import type { Live } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

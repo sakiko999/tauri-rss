@@ -1,4 +1,3 @@
-import { now } from "../../host.ts"
 /**
  * YouTube 直播页(Live tab)匿名解析 —— 直播热门 / 栏目分区 / 栏目目录。
  *
@@ -22,6 +21,8 @@ import { now } from "../../host.ts"
  * ⚠️ 整页约 800KB,热门与栏目两个 channel 可能在同一轮刷新里各拉一次 → 结果做
  * 5 分钟内存缓存(含并发去重:缓存的是 Promise)。不落库、不写内容缓存。
  */
+
+import { now } from "../../host.ts"
 import type { YoutubeLiveHit } from "./client.ts"
 import { youtubeBrowse } from "./client.ts"
 

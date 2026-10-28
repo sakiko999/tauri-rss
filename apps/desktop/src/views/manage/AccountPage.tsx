@@ -1,5 +1,3 @@
-import { type ChannelInfo, cookieFieldFor } from "@amoeba/core"
-import { browserCookieHostsOf, LOGIN_PLATFORMS, platformDef } from "@amoeba/platform"
 /**
  * AccountPage —— 账号与凭证。
  *
@@ -10,6 +8,9 @@ import { browserCookieHostsOf, LOGIN_PLATFORMS, platformDef } from "@amoeba/plat
  * cookie 落 core settings 对应字段(bilibiliCookie / weiboCookie / xhsCookie),
  * refresh 时按 channelKey 前缀自动注入。
  */
+
+import { type ChannelInfo, cookieFieldFor } from "@amoeba/core"
+import { browserCookieHostsOf, LOGIN_PLATFORMS, platformDef } from "@amoeba/platform"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "../../components/Button.tsx"

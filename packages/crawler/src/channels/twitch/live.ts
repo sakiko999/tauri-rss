@@ -1,12 +1,3 @@
-import {
-  fetchTwitchUsers,
-  log,
-  normalizeTwitchLogin,
-  now,
-  parseRoomIds,
-  type TwitchStreamNode,
-  type TwitchUser,
-} from "@amoeba/resolve"
 /**
  * twitch:live —— Twitch 直播频道订阅 channel(一期)。
  *
@@ -18,6 +9,16 @@ import {
  * 一期只做 `fetch`:不实现 fetchMore / resolveDetail / fetchPassive / Loginable /
  * passive（浏览器被动）。播放走 resolver by-url(见 docs/twitch-channel.md §4.1)。
  */
+
+import {
+  fetchTwitchUsers,
+  log,
+  normalizeTwitchLogin,
+  now,
+  parseRoomIds,
+  type TwitchStreamNode,
+  type TwitchUser,
+} from "@amoeba/resolve"
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 

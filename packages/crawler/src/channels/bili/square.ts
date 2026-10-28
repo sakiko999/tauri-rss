@@ -1,4 +1,3 @@
-import { biliClient, now } from "@amoeba/resolve"
 /**
  * bili:square —— bilibili 热搜(social channel)。
  *
@@ -9,6 +8,8 @@ import { biliClient, now } from "@amoeba/resolve"
  * wbi 签名(signWeb)→ search/square 热搜榜。零登录可用;登录 cookie 经
  * credentials provider 兜底(签名与请求同 cookie,见 bili client)。
  */
+
+import { biliClient, now } from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"

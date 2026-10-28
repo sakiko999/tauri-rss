@@ -1,4 +1,3 @@
-import type { MediaItem } from "@amoeba/core"
 /**
  * FocusReader —— 专注阅读浮层(合流改版 M4)。
  *
@@ -14,6 +13,8 @@ import type { MediaItem } from "@amoeba/core"
  * (focusOpenRef),本组件独占写 saveScrollRatio;关闭时 ReaderMain 把三栏对到
  * 同一进度。两个容器各写一份会互相覆盖 —— 阅读进度是同一 readingKey 上的一个值。
  */
+
+import type { MediaItem } from "@amoeba/core"
 import { useEffect, useRef } from "react"
 import type { ReactNode } from "react"
 

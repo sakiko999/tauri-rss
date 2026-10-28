@@ -1,4 +1,3 @@
-import type { DouyinCategory, DouyuCategory, HuyaSubCategory } from "@amoeba/resolve"
 /**
  * 分区目录条目自检 —— `bun packages/crawler/src/example/category-directory.check.ts`
  *
@@ -6,6 +5,8 @@ import type { DouyinCategory, DouyuCategory, HuyaSubCategory } from "@amoeba/res
  * 原样交给 `previewChannel(categoryChannel, categoryInfo)`。抖音顶层尤其容易漏
  * `partitionType`（应为 4，曾默认成子分区的 1 → 取不到数据）。
  */
+
+import type { DouyinCategory, DouyuCategory, HuyaSubCategory } from "@amoeba/resolve"
 import type { Category } from "@amoeba/xml"
 
 import { douyinCategoryItems } from "../channels/douyin/categories.ts"

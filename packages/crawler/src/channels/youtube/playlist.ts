@@ -1,4 +1,3 @@
-import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
 /**
  * youtube:playlist —— YouTube 播放列表订阅(官方 Atom feed)。
  *
@@ -9,6 +8,8 @@ import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
  * (100/页 + continuation,见 docs/channel-expansion-research.md §2.2)——暂不做。
  * ⚠️ 输入归一化在 refs.ts:`RD`/`WL`/`LL`/`LM` 前缀拒收(动态/私有/需登录)。
  */
+
+import { DESKTOP_CHROME_UA, httpText, now } from "@amoeba/resolve"
 import type { Item } from "@amoeba/xml"
 import { parseFeed } from "@amoeba/xml"
 

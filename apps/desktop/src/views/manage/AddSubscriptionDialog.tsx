@@ -1,4 +1,3 @@
-import type { MediaItem } from "@amoeba/core"
 /**
  * AddSubscriptionDialog —— 添加订阅弹窗(radix Dialog + 设计系统类名)。
  *
@@ -12,6 +11,8 @@ import type { MediaItem } from "@amoeba/core"
  * ⚠️ 两大块 JSX 已拆到同目录的 `AddPanels.tsx`(SearchPanel 搜索添加 / ChannelPanel
  * 按渠道配置);这里只留**表单状态与提交编排**。
  */
+
+import type { MediaItem } from "@amoeba/core"
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../components/Button.tsx"

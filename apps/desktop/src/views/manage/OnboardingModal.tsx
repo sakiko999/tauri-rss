@@ -1,10 +1,11 @@
+/**
+ * OnboardingModal —— 首次启动引导(仅首次,标记记在 usePrefs.onboarded)。
+ */
+
 import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
-/**
- * OnboardingModal —— 首次启动引导(仅首次,标记记在 usePrefs.onboarded)。
- */
 import { usePrefs } from "../../store/prefs.ts"
 
 export function OnboardingModal() {

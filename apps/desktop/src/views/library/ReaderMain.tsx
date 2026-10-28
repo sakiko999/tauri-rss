@@ -1,5 +1,3 @@
-import { MediaImage } from "@amoeba/ui"
-import DOMPurify from "dompurify"
 /**
  * ReaderMain —— 阅读视图的主区:工具栏 + 正文。
  *
@@ -8,6 +6,9 @@ import DOMPurify from "dompurify"
  * 节点(见 FocusReader 的 children),不复制第二份 DOMPurify 配置。
  * 滚动进度条按主区绝对定位(styles.css 里 .main-region position:relative)。
  */
+
+import { MediaImage } from "@amoeba/ui"
+import DOMPurify from "dompurify"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { FocusReader } from "../../components/app/FocusReader.tsx"

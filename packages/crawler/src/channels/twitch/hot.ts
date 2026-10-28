@@ -1,10 +1,11 @@
-import { fetchTwitchTopStreams } from "@amoeba/resolve"
 /**
  * twitch:hot —— Twitch 热门直播(匿名 GraphQL,按观看数降序)。
  *
  * 无参数;支持游标翻页(`fetchMore`,见 streams.ts)。只输出 Live item,
  * 播放走 resolver by-url。不实现 fetchPassive / Loginable / passive。
  */
+
+import { fetchTwitchTopStreams } from "@amoeba/resolve"
 import { type SerializeOptions } from "@amoeba/xml"
 
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"

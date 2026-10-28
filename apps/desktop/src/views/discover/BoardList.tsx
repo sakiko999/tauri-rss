@@ -1,10 +1,11 @@
-import type { ChannelInfo } from "@amoeba/core"
 /**
  * BoardList —— 可订阅榜单(无参渠道一键订阅)。
  *
  * 从 DiscoverPage 拆出。`boards` 的筛选口径由父页面决定(见那里的注释:不按 kind /
  * key 正则缩范围,只排除原生 RSS 直链)。
  */
+
+import type { ChannelInfo } from "@amoeba/core"
 import { useState } from "react"
 
 import { Icon } from "../../components/Icon.tsx"
