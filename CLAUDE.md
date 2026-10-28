@@ -269,4 +269,6 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 跑 `bun run fmt` 做全仓格式化收口（含 CRLF→LF），单独 commit；之后把 fmt:check/lint 并入 `bun run check` 并在 CI job 中启用
 - [!] 微博匿名只给首页 10 条，翻页（page/since_id/weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录
 - [ ] 登录微博后复验 `weibo:user` 首屏自动预加载第二页真正落地（本次改动只验到匿名态）
+- [!] 补全（`resolveDetail`）**不保证纯文本**：feed 自带全文时 `raw.ts` 原样返回 HTML（contentFormat=html）；桌面镜像剥掉 article 的 content，所以阅读器必走补全 —— 消费侧必须按返回体的 contentFormat 渲染
+- [ ] 重启桌面应用复验阅读器：阮一峰正文应渲染为排版好的 HTML（本次只验到 core 侧 resolveDetail 返回 contentFormat=html，没在真机 UI 上确认）
 <!-- cc-todo:end -->
