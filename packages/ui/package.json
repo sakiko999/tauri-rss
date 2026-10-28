@@ -8,9 +8,6 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@amoeba/core": "workspace:*",
-    "@amoeba/player": "workspace:*",
-    "@amoeba/resolve": "workspace:*",
     "react": "^19.2.8"
   },
   "devDependencies": {

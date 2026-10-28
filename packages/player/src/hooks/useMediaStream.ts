@@ -109,19 +109,13 @@ export function useMediaStream({
       // 走 HlsHostLoader(appHost.http:Rust reqwest 隧道,不经过 WebView 的 CORS/Origin):
       //   - `googlevideo.com`(YouTube):manifest/分片都无 `Access-Control-Allow-Origin`
       //     → playlist 与分片**全部**走隧道;
-      //   - `playlist.ttvnw.net`(Twitch):该域对 `Origin: http://tauri.localhost` **直接回
-      //     403**(dev 的 `http://localhost:1420` 恰好放行),所以只有 release 下 Twitch
-      //     黑屏、错误是 `hls networkError manifestLoadError`。但 Twitch 的**分片域**
-      //     (`*.cloudfront.hls.ttvnw.net`)带 `ACAO:*`、直连 206 —— 只把 **playlist**
-      //     换成隧道(`pLoader`),分片仍走浏览器 XHR(更省,且大分片不必走 base64 隧道)。
       // 判据别按「有没有 CORS」,按「WebView 里直接发会不会被拒」。
+      // Twitch 的 playlist 域(`playlist.ttvnw.net`)不走隧道:它只拒页面源
+      // Origin(`*.tauri.localhost`),Rust 在 WebView2 网络层按 XHR_ORIGIN_RULES 改写
+      // Origin(media_referer.rs),默认 XHR 直连即可;分片域(`*.cloudfront.hls.ttvnw.net`)
+      // 本就 `ACAO:*` 直连。
       if (/googlevideo\.com/i.test(stream.url)) {
         hls.config.loader = HlsHostLoader
-      } else if (/playlist\.ttvnw\.net/i.test(stream.url)) {
-        // hls.js 的 pLoader 要求 `Loader<PlaylistLoaderContext>`(比通用 LoaderContext
-        // 多 level/id 等字段),而 HlsHostLoader 只用 url/headers/range —— 运行时同一套,
-        // 这里只做类型收窄(改类签名会让 `config.loader` 那处反过来不兼容)。
-        hls.config.pLoader = HlsHostLoader as unknown as typeof hls.config.pLoader
       } else if (stream.headers) {
         hls.config.xhrSetup = (xhr) => {
           for (const [k, v] of Object.entries(stream.headers!)) {

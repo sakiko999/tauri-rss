@@ -23,8 +23,6 @@ let _browser: BrowserBackend | undefined
 let _openExternal: ((url: string) => Promise<void>) | undefined
 /** 自动更新(仅 Tauri 桌面注入;缺失 = 当前环境不支持)。 */
 let _updater: UpdaterBackend | undefined
-/** 桌面 WebView2 是否已注册防盗链 Referer 注入(见 apps/src-tauri/media_referer.rs)。 */
-let _nativeMediaReferer = false
 
 /**
  * `openExternal` 允许的协议 —— **安全边界,不是配置项**。
@@ -81,11 +79,6 @@ export function initAppHost(): void {
     get net(): NetBackend {
       return netBackend
     },
-    // 能力探测:仅 Windows 桌面且 Rust 已注册 WebView2 拦截时为 true。消费侧
-    // (MediaImage / 实况视频)据此直连原 URL,失败仍回退 blob 隧道。
-    get nativeMediaReferer(): boolean {
-      return _nativeMediaReferer
-    },
     /**
      * 打开外部链接(系统默认浏览器)。
      *
@@ -121,7 +114,6 @@ export function setHostCaps(caps: {
   browser?: BrowserBackend
   openExternal?: (url: string) => Promise<void>
   updater?: UpdaterBackend
-  nativeMediaReferer?: boolean
 }): void {
   initAppHost()
   // 所有出站 HTTP 统一过 governor(分类/去重/配额/冷却),见 net/governor.ts。
@@ -133,5 +125,4 @@ export function setHostCaps(caps: {
   _browser = caps.browser
   _openExternal = caps.openExternal
   _updater = caps.updater
-  _nativeMediaReferer = caps.nativeMediaReferer === true
 }

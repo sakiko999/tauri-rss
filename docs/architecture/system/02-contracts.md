@@ -69,8 +69,7 @@ graph LR
 | `ChannelInfo` 投影 | `core/src/types/channel-info.ts:10` | `data-layer.ts:894-904` | desktop 添加订阅/发现页/账号页 | TS import | 表单字段缺失；`loginable/passive` 误判 |
 | `LoginResult` / `LoginCookieSnapshot` | `LoginResult` 三份平行声明（§8）；`LoginCookieSnapshot` 在 crawler/resolve 各一份，core 直接 re-export crawler 版 | channel `scanLogin` / `readLoginCookie` | core `scanLogin`、`syncBrowserCookies` | TS import / 结构兼容 | `refreshToken` 在边界被丢弃 |
 | OPML 文档 | `packages/xml/src/opml.ts`（`OpmlDoc`/`OpmlFeed`） | desktop `lib/opml.ts` | 同包 `parseOpml` | 文件文本 | 导入导出丢分组/重复 URL 被去重 |
-| `imageProxy`/`dataSaver` 旁路 | `global.d.ts` | desktop `store/lib.ts:88-92` 手写镜像 | ui `MediaImage.tsx` | 全局对象可写字段 | 开关不生效或已挂载图不重取 |
-| `nativeMediaReferer` | `global.d.ts`（只读） | `setHostCaps`（Windows 桌面注入 true） | ui `MediaImage`、实况视频 | 门面 getter | 标志误报 → 直连 403；回退隧道兜底 |
+| `dataSaver` 旁路 | `global.d.ts` | desktop `store/lib.ts` 手写镜像 | ui `MediaImage.tsx` | 全局对象可写字段 | 开关不生效或已挂载图不重取 |
 
 **错误分类**：`ErrorKind` 的权威在 resolve `errors.ts`（`auth / risk / rate-limit / network / timeout / unsupported / parse / no-data / unknown`）。新抛错点应优先 `throw new ResolveError(kind, msg)`；旧平台 client 仍是普通 `Error`，由 `errorKindOf` 做**启发式兜底**（先认显式 `kind`，再按消息匹配：429/冷却 → `rate-limit`，401/cookie/登录 → `auth`，403/412/418/风控 → `risk`，…）。因此 403 不再一律等同「需要登录」。UI 统一用 `ERROR_KIND_LABEL` 出标题，不再按字符串正则猜；`unknown` 留给调用方自己的默认文案。迁移完成前，普通 `Error` 的分类是**尽力而为**，平台 client 逐步改用 `ResolveError` 才算精确。
 
@@ -242,7 +241,7 @@ sequenceDiagram
 | `SubscriptionGroup` | `:26-32` | `id/title/icon?/parentId?`（扁平树） |
 | `ChannelInfo` | `core/src/types/channel-info.ts:10-25` | `key/name/kind/sourceInfoTpl?/defaultInfo?/loginable/passive` |
 | `RefreshResult` | `core/src/types/refresh-result.ts` | `subscriptionId/itemCount/error?/errorKind?/fetchedAt`；**失败不抛**，以 `error` 返回，`errorKind` 是机器可读分类（成功省略） |
-| `AppSettings` | `core/src/types/settings.ts:24-104` | 功能型：`refreshIntervalMin`（同时是 TTL）、`netLevel/netLevels`、`autoRefresh`、`autoGroupOnAdd`、`markReadOnOpen`、`danmakuEnabled`、`autoPlayNext`、`imageProxy`、`dataSaver`、四个平台 `*Cookie`、`rsshubBaseUrl`、`autoplayVideo`。表现型 `theme/fontSize/density/viewMode/startMuted/defaultQuality` 存在但**无消费者**（`:25-37`、`:39-43`、`:66-71`） |
+| `AppSettings` | `core/src/types/settings.ts:24-104` | 功能型：`refreshIntervalMin`（同时是 TTL）、`netLevel/netLevels`、`autoRefresh`、`autoGroupOnAdd`、`markReadOnOpen`、`danmakuEnabled`、`autoPlayNext`、`dataSaver`、四个平台 `*Cookie`、`rsshubBaseUrl`、`autoplayVideo`。表现型 `theme/fontSize/density/viewMode/startMuted/defaultQuality` 存在但**无消费者**（`:25-37`、`:39-43`、`:66-71`） |
 | `NetLevel` | `settings.ts:20` | `0\|1\|2\|3`；`"lx"/9` 在 repo 归一为 1（`settings-repo.ts:42-56`） |
 | `MediaQuery` | `core/src/types/query.ts:2-11` | `subscriptionId?`、`subscriptionIds?`（分组聚合）、`today/unreadOnly/starredOnly`。`MediaStore.query` 只按 `publishedAt` 降序，同刻按插入序（`query.ts:10` 注释即如此声明，无 id tie-break；`media-store.ts:67`） |
 | `Pageable` | `crawler/src/index.ts:115-128` | `fetchMore(cursor?, {existing})` → `{xml, cursor?, hasMore?}`；**cursor 省略 = 没有更多** |
@@ -291,19 +290,19 @@ sequenceDiagram
 
 | 注入器 | 环境 | http | storage | js | ws | browser | updater |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `injectTauriHost({updater?,browser?,storage?,nativeMediaReferer?})`（`tauri/inject-tauri.ts:31-71`）· desktop（`apps/desktop/src/main.tsx:17-21`） | 订阅工作台 | Rust `http_get` | `storage:false` → 读写即抛的拒绝后端（唯一写者 = `rss --service`） | `new Function` | `TauriWsBackend` | `browser:false`（抓取浏览器归数据服务） | 有 |
+| `injectTauriHost({updater?,browser?,storage?})`（`tauri/inject-tauri.ts:31-71`）· desktop（`apps/desktop/src/main.tsx:15-18`） | 订阅工作台 | Rust `http_get` | `storage:false` → 读写即抛的拒绝后端（唯一写者 = `rss --service`） | `new Function` | `TauriWsBackend` | `browser:false`（抓取浏览器归数据服务） | 有 |
 | 同上 · mobile（`apps/mobile/src/main.tsx:17`） | 极简看内容（已冻结） | Rust `http_get` | `SqliteStorageBackend`（tauri-plugin-sql） | `new Function` | `TauriWsBackend` | `browser:false` 不注入 | `updater:false` |
 | `injectNodeHost()`（`node/inject-node.ts:12-20`） | example / 脚本 | Node fetch | 内存 Map | `new Function` | `node-ws` | 无 | 无 |
 | `injectBrowserHost()`（`browser/inject-browser.ts:35-42`） | 纯前端 | 浏览器 fetch（CORS 受限） | `localStorage`（`browser-rss:` 前缀） | `new Function` | 无 | 无 | 无 |
 | CLI 自组装（`apps/cli/src/host/node-host.ts:46-67`） | 调试探针 | Node fetch | `bun:sqlite`（构造时按 core 的 `STORAGE_SCHEMA` 建表；`setSchema` 只校验同表） | `new Function` | `node-ws` | `--browser` / `AMOEBA_BROWSER=1` 时注入 amoeba-browser sidecar（默认无） | 无 |
 
-desktop 固定 `storage:false` + `browser:false`（数据服务模式的硬约束），并传 `nativeMediaReferer:true`（非 Windows 在注入内部降级为 false）。mobile 同样显式传 `browser:false`：能力探测按对象真值判断，`appHost.browser` 为 `undefined` 时 crawler/core 才按「无浏览器」回落主动抓取，不会出现「注入了但命令全 `Err`」的误判。
+desktop 固定 `storage:false` + `browser:false`（数据服务模式的硬约束）；防盗链由 Rust 网络层注入，不暴露能力探测（`nativeMediaReferer` 2026-10-28 删）。mobile 同样显式传 `browser:false`：能力探测按对象真值判断，`appHost.browser` 为 `undefined` 时 crawler/core 才按「无浏览器」回落主动抓取，不会出现「注入了但命令全 `Err`」的误判。
 
 `StorageBackend` 的 DDL 权威 = `core/src/db/schema.ts` 的 `STORAGE_SCHEMA`（`kv(key TEXT PRIMARY KEY, value TEXT NOT NULL)` + `versioned: { table: _migrations, ddl, migrations: SCHEMA_MIGRATIONS }`）。**注入路径**：`createDataLayer()` 首行调 `appHost.storage.setSchema?.(STORAGE_SCHEMA)`；`SqliteStorageBackend` 在首次连接前保存 schema，`ready()` 时执行（已应用版本的 checksum 不符则拒绝启动）；未注入就读写会抛错，建连后只能重复注入同一份 schema，换 schema 会被拒绝。KV/localStorage/内存后端不实现该方法，调用是 no-op。CLI 的 `sqliteStorage` 在构造时 import core 的 `STORAGE_SCHEMA` 建表，并实现 `setSchema`（只接受同一份 schema，作装配顺序守卫），不是「未接 `setSchema`」的例外。
 
-### 5.2 `imageProxy` / `dataSaver` 旁路
+### 5.2 `dataSaver` 旁路
 
-这两个开关不在 `AppSettings` → `DataLayer` 的常规读路径上，而是由 desktop 每次设置变化时**手写**到全局门面（`apps/desktop/src/store/lib.ts:88-92`），ui 的 `MediaImage` 在渲染时直读（`MediaImage.tsx:115-122`，无订阅）。这意味着：门面对象上它们只是普通自有属性，不是 `runtime.ts` 里定义的 getter；切换开关后已挂载的图片不会重新取图（effect 只依赖 `src`，`:141-162`）。
+这个开关不在 `AppSettings` → `DataLayer` 的常规读路径上，而是由 desktop 每次设置变化时**手写**到全局门面（`apps/desktop/src/store/lib.ts`），ui 的 `MediaImage` 在渲染时直读（无订阅）。门面对象上它只是普通自有属性，不是 `runtime.ts` 里定义的 getter；切换后已挂载的图片不会重新取图（effect 只依赖 `src`）。`imageProxy` 已随图片 blob 隧道一并删除（2026-10-28，防盗链统一由 Rust 网络层注入，见 ui-conventions.md）。
 
 ---
 

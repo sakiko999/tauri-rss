@@ -160,8 +160,10 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 ## 图片加载与防盗链
 
 > 2026-08。微博图床 403 触发：审计 `<img>` 图片加载的 Referer 处理，当时结论是维持
-> blob 隧道。**2026-10-25 更新**：桌面改为 WebView2 `WebResourceRequested` 原生注入，
-> blob 隧道降级为回退与非 Windows 路径；自定义协议仍不做。
+> blob 隧道。**2026-10-25 更新**：桌面改为 WebView2 `WebResourceRequested` 原生注入。
+> **2026-10-28 更新**：图片的 blob 隧道**删除**（过度防御）——图片恒直连，未注入环境
+> 403 → ImageOff 占位；实况视频保留 blob 回退；XHR/fetch 的 Origin 改写（Twitch
+> playlist 域）同批加入。自定义协议仍不做。
 
 ### 背景：sinaimg 对空 Referer 也 403
 
@@ -176,23 +178,27 @@ n/tva/ws1.sinaimg.cn 等子域全部 403/404）。
 `WebResourceRequested`，其他环境用 Rust reqwest 代理（可设任意 header）。页面里的
 `fetch` / `<img referrerpolicy>` 都改不了跨源 Referer。
 
-### 现行方案：桌面原生注入 + 非 Windows blob 回退（2026-10-25）
+### 现行方案：桌面原生注入，图片无 JS 回退（2026-10-28）
 
-**桌面（Windows/WebView2）**：Rust 在 `setup` 里注册 `WebResourceRequested`，只对
-白名单 host 的 `IMAGE`/`MEDIA` 请求改写 `Referer`，不接管响应
-（`apps/src-tauri/src/media_referer.rs`）。图片/实况直接走原生 `<img>` / `<video>`，
-保留 HTTP 缓存、HTTP/2、Range 与渐进解码；`appHost.nativeMediaReferer` 是能力标志，
-`MediaImage` / 实况视频据此直连，直连失败才回退隧道。
+**桌面（Windows/WebView2）**：Rust 在 `setup` 里注册 `WebResourceRequested`，按请求
+context 改写请求头、不接管响应（`apps/src-tauri/src/media_referer.rs`）：
 
-**其他环境 / 回退**：命中防盗链图床的 src 经 `appHost.http`（Tauri 生产走 Rust
-`http_get`，node/browser 后端同接口）带站内 Referer 拉取 `arraybuffer` → Blob URL。
+- `IMAGE`/`MEDIA`（图片/实况视频）→ 改 `Referer` 为站内值；
+- `XML_HTTP_REQUEST`/`FETCH`（hls.js manifest 等 XHR）→ 改 `Origin`（Twitch playlist
+  域拒页面源 `*.tauri.localhost`，2026-10-28 curl 实测钉死）。
 
-- 规则表 `mediaReferrerFor(url)` 收敛在 **resolve 层**（`packages/resolve/src/media-referrer.ts`，
-  `sinaimg.cn → https://weibo.com/`）—— 唯一权威；Rust 侧为了拦截回调保留一份常量，
-  `media-referrer-parity.check.ts` 守住两边一致；
-- 回退路径的 `MediaImage`（`packages/ui/src/renderers/atoms/MediaImage.tsx`）内联
-  `useProxiedImage`：命中未就绪返回 undefined（不挂原 src，避免先发必 403 的请求）；
-  隧道失败走占位；模块级 `proxyCache` 防重复请求；
+图片/实况直接走原生 `<img>` / `<video>`，保留 HTTP 缓存、HTTP/2、Range 与渐进解码。
+**无 JS 隧道、无能力探测**：图片与实况视频均恒直连（`nativeMediaReferer` 及两套
+blob 回退已于 2026-10-28 删除）；未注入环境（纯浏览器调试）防盗链图 403 → ImageOff
+占位，实况视频播放失败 → 退回静态图 + 重试按钮。
+
+- 规则表收敛在 **resolve 层**（`packages/resolve/src/media-referrer.ts`）：图片/视频
+  `mediaReferrerFor` / `videoReferrerFor`（`sinaimg.cn → https://weibo.com/` 等），
+  XHR Origin `xhrOriginFor`（`playlist.ttvnw.net → https://www.twitch.tv/`）—— 唯一
+  权威；Rust 侧为了拦截回调保留一份常量，`media-referrer-parity.check.ts` 守住
+  两边一致（三张表）；
+- `MediaImage`（`packages/ui/src/renderers/atoms/MediaImage.tsx`）已无隧道/探测逻辑：
+  恒直连（Windows 由 Rust 注入兜住），失败走 ImageOff 占位；
 - 跨三环境统一（tauri/browser/node），纯 TS 无 eval，CSP 安全；
 - 实机验证（2026-10-25）：CDP `requestWillBeSentExtraInfo` 显示 sinaimg 与 xhscdn
   请求的实际 Referer 分别为 `https://weibo.com/` 与 `https://www.xiaohongshu.com/`；

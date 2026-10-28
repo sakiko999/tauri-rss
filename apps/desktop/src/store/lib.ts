@@ -83,11 +83,10 @@ export function withTimeout<T>(p: Promise<T>, ms: number, label: string, onTimeo
  *
  * 为什么走门面而不是 props:`MediaImage` 在 `packages/ui`,是任意深度的树节点,
  * 为一两个开关层层传参会污染所有中间组件的 props。这类「全局渲染开关」走
- * appHost 更短。目前只有 imageProxy / dataSaver。
+ * appHost 更短。目前只有 dataSaver。
  */
 export function applyRuntimeSettings(s: AppSettings): void {
-  const host = globalThis.appHost as { imageProxy?: boolean; dataSaver?: boolean }
-  host.imageProxy = s.imageProxy
+  const host = globalThis.appHost as { dataSaver?: boolean }
   host.dataSaver = s.dataSaver
 }
 

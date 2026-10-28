@@ -147,7 +147,7 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 | bili | `refreshToken` 在 resolve 产出（`packages/resolve/src/index.ts:22`），core 的 `LoginResult` 无该字段（`packages/core/src/data-layer.ts:52-57`），且只落 cookie | 「已有 refresh_token、可做自动保活」的前提不成立（§1.3） | [../../platforms/login.md](../../platforms/login.md) |
 | douyin | cookie 已由 provider 消费；登录解锁原画待真机验证 | 登录收益未证实 | [../../platforms/platform-notes.md](../../platforms/platform-notes.md) |
 | YouTube | 主力 client `VISIONOS`；机房 IP 风控与 client 无关 | 换 client 救不了 IP 风控 | [../../platforms/youtube.md](../../platforms/youtube.md) |
-| mobile | 无 CDP、无扫码、`imageProxy/dataSaver` 从未写入门面 | 只能 RSS 直链 + 未读流；被动渠道恒走缓存 | 见 04-extension.md / 01-packages.md |
+| mobile | 无 CDP、无扫码、`dataSaver` 从未写入门面 | 只能 RSS 直链 + 未读流；被动渠道恒走缓存 | 见 04-extension.md / 01-packages.md |
 | 构建 | 四份 tauri.conf（含 tauri.conf.release.json）+ `scripts/tauri.ts`；9222 只在 dev | release 分支验收成本高（R13） | [../../ops/commands.md](../../ops/commands.md) |
 
 ## 6. 工程与构建风险

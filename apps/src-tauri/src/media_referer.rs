@@ -7,8 +7,10 @@
 //!
 //! 边界:
 //!   - 只对下面白名单 host 生效(与 resolve/media-referrer.ts 同一份规则，改一处要同步)；
-//!   - 只改 `Referer`，不接管响应、不读取 body、不做网络请求；
-//!   - 非 Windows / 旧 WebView2 注册失败时静默降级，前端仍有 blob 隧道兜底。
+//!   - 只改请求头(图片/视频 = `Referer`；XHR/fetch = `Origin`)，不接管响应、
+//!     不读取 body、不做网络请求；
+//!   - 非 Windows / 旧 WebView2 注册失败时静默降级(实况视频仍有 blob 隧道兜底；
+//!     防盗链图片无回退，直接 403 占位)。
 //!
 //! 规则权威在 TS(`packages/resolve/src/media-referrer.ts`)。这里为了拦截回调
 //! 不能跨语言调用，保留一份常量；`media-referrer-parity.check.ts` 守住两边一致。
@@ -16,7 +18,8 @@
 use tauri::{Manager, Runtime};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2Controller, ICoreWebView2WebResourceRequestedEventArgs,
-    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA,
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE,
+    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST,
 };
 use webview2_com::WebResourceRequestedEventHandler;
 use windows::core::{HSTRING, PWSTR};
@@ -31,6 +34,11 @@ const VIDEO_REFERRERS: &[(&str, &str)] = &[
     ("weibocdn.com", "https://weibo.com/"),
     ("sinaimg.cn", "https://weibo.com/"),
 ];
+
+/// XHR/fetch 的 Origin 改写规则(host 后缀 → 站内 Origin)。与 TS `XHR_ORIGIN_RULES` 同步。
+/// Twitch playlist 域对页面源 Origin(`*.tauri.localhost`)回 403,hls.js 的 manifest
+/// 请求(JS 禁改 Origin)只能在这层改写 —— 详见 resolve/media-referrer.ts 注释。
+const XHR_ORIGIN_RULES: &[(&str, &str)] = &[("playlist.ttvnw.net", "https://www.twitch.tv/")];
 
 /// 在 `setup` 阶段调用一次。失败只打日志，不影响应用启动(前端回退 blob 隧道)。
 pub fn install<R: Runtime>(app: &tauri::App<R>) {
@@ -76,15 +84,25 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
 
             let mut context = COREWEBVIEW2_WEB_RESOURCE_CONTEXT_IMAGE;
             let _ = args.ResourceContext(&mut context);
+            let headers = request.Headers()?;
+            if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST
+                || context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH
+            {
+                // XHR/fetch(hls.js manifest 等):改写 Origin(页面源 `*.tauri.localhost`
+                // 被 Twitch playlist 域拒)。Referer/UA 不动 —— 这些域不校验。
+                if let Some(origin) = suffix_rule_for(XHR_ORIGIN_RULES, &host) {
+                    headers.SetHeader(&HSTRING::from("Origin"), &HSTRING::from(origin))?;
+                }
+                return Ok(());
+            }
             let rules = if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_MEDIA {
                 VIDEO_REFERRERS
             } else {
                 IMAGE_REFERRERS
             };
-            let Some(referrer) = referer_for(rules, &host) else {
+            let Some(referrer) = suffix_rule_for(rules, &host) else {
                 return Ok(());
             };
-            let headers = request.Headers()?;
             headers.SetHeader(&HSTRING::from("Referer"), &HSTRING::from(referrer))?;
             Ok(())
         },
@@ -96,13 +114,16 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
     // 过滤器按 host + 协议 + 资源类型精确注册；glob 的 `*.host` 不覆盖 apex，
     // 所以 apex 与 wildcard 各注册一次。http 也注册，避免少量源站直链走混合内容前
     // 就已被拒。
-    let mut hosts: Vec<&str> = IMAGE_REFERRERS.iter().map(|(h, _)| *h).collect();
-    for (h, _) in VIDEO_REFERRERS {
-        if !hosts.contains(h) {
-            hosts.push(h);
+    let media_hosts: Vec<&str> = {
+        let mut hosts: Vec<&str> = IMAGE_REFERRERS.iter().map(|(h, _)| *h).collect();
+        for (h, _) in VIDEO_REFERRERS {
+            if !hosts.contains(h) {
+                hosts.push(h);
+            }
         }
-    }
-    for host in hosts {
+        hosts
+    };
+    for host in media_hosts {
         for scheme in ["https", "http"] {
             for pattern in [
                 format!("{scheme}://{host}/*"),
@@ -120,14 +141,31 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
             }
         }
     }
+    // XHR/fetch 域(hls.js manifest 等)单独按请求 context 注册。
+    for (host, _) in XHR_ORIGIN_RULES {
+        for scheme in ["https", "http"] {
+            for pattern in [
+                format!("{scheme}://{host}/*"),
+                format!("{scheme}://*.{host}/*"),
+            ] {
+                let pattern = HSTRING::from(pattern);
+                let _ = core.AddWebResourceRequestedFilter(
+                    &pattern,
+                    COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST,
+                );
+                let _ =
+                    core.AddWebResourceRequestedFilter(&pattern, COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH);
+            }
+        }
+    }
 
     // token 仅用于卸载；应用生命周期内一直保留。
     let _ = token;
     Ok(())
 }
 
-/// host 命中后缀规则(精确或 `.suffix` 边界)，返回规则里的 Referer。
-fn referer_for(rules: &'static [(&'static str, &'static str)], host: &str) -> Option<&'static str> {
+/// host 命中后缀规则(精确或 `.suffix` 边界)，返回规则里的值(Referer 或 Origin)。
+fn suffix_rule_for(rules: &'static [(&'static str, &'static str)], host: &str) -> Option<&'static str> {
     rules
         .iter()
         .find(|(suffix, _)| {

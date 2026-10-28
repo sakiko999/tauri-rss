@@ -275,7 +275,7 @@ player 只决定怎么把 `streams[0]` 放出来。
 
 功能型设置步骤：`core/types/settings.ts` 加字段 + `DEFAULT_SETTINGS` → 设置页 tab（`SettingsPage.tsx` 的
 `TABS` 与分支）→ 用 `setSetting` 写。**不要**直接写 settings repo：`applySettings` 还负责 `syncNetPolicy` 与
-`cookieSnapshot`，绕过会让 HTTP 回落路径继续用旧 cookie。若渲染管线要直读（如 `imageProxy`/`dataSaver`），
+`cookieSnapshot`，绕过会让 HTTP 回落路径继续用旧 cookie。若渲染管线要直读（如 `dataSaver`），
 在 `store/lib.ts` 的 `applyRuntimeSettings` 里镜像到 `appHost`，不要走 props 透传。
 
 **回归**：`tsc -p apps/desktop` + `ui-probe.ts goto <node>` / `page:settings`；改偏好首帧还要对照

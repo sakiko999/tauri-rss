@@ -19,15 +19,15 @@
 - **兜底**：`now`（Date.now）。日志不走门面（`appHost.log` 已删），统一用 `@amoeba/log`
 - **`openExternal(url)`**：打开外链。⚠️ 桌面必须走它（Tauri opener 插件）—— WebView 会拦掉
   `window.open`，表现为「点了没反应」
-- **`imageProxy` / `dataSaver`**：渲染管线开关（AppSettings 的镜像，ui 的 MediaImage 直读，
+- **`dataSaver`**：渲染管线开关（AppSettings 的镜像，ui 的 MediaImage 直读，
   避免层层传 props）。由 app 层在设置变化时写入
 - **`net`**：网络治理门面（`configure` / `reportRisk` / `browserGate` / `governorStats`）。
   governor 是 host 内建能力，未注入 http 也恒可用；CDP 操作必须过 `browserGate` ——
   等级/冷却/统计见 `docs/risk/crawler-risk-control.md`
-- **`nativeMediaReferer`**（只读能力探测）：Windows 桌面 Rust 已注册 WebView2
-  `WebResourceRequested` 防盗链 Referer 注入时为 `true`。消费侧（ui 的 `MediaImage`、
-  实况视频）据此直连原 URL；`false` 或直连失败仍走 blob 隧道。见
-  `apps/src-tauri/src/media_referer.rs` 与 `docs/ui/ui-conventions.md`
+- **防盗链注入不暴露门面**：Windows 桌面 Rust 在 WebView2 网络层改写请求头（图片/
+  视频 Referer、XHR/fetch Origin，`apps/src-tauri/src/media_referer.rs`），消费侧
+  （`MediaImage`、实况视频）无感知、恒直连——`nativeMediaReferer` 能力探测已删
+  （2026-10-28），见 `docs/ui/ui-conventions.md`
 
 **storage 四态（2026-10-26）**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）·
 desktop 拒绝后端（`injectTauriHost({storage:false})`，读写即抛）· mobile `SqliteStorageBackend`

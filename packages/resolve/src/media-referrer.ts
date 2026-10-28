@@ -49,3 +49,25 @@ export function videoReferrerFor(url: string): string | undefined {
   if (!m) return undefined
   return VIDEO_REFERRERS.find(([host]) => m[1].includes(host))?.[1]
 }
+
+/**
+ * XHR/fetch 请求的 Origin 改写规则(host 后缀 → 站内 Origin)。
+ *
+ * Twitch 的 playlist 域对页面源 Origin(`http(s)://*.tauri.localhost`,即 Tauri 生产
+ * 页面)直接回 **403**(2026-10-28 实测:无 Origin / 站内 Origin 均 200)。hls.js 的
+ * manifest 请求是 XHR,JS 层禁止改 Origin(forbidden header),只能由 Rust 在
+ * WebView2 网络层改写 —— 与图片/视频的 Referer 注入同款分工。
+ *
+ * 本表**无 JS 消费方**:Rust(`media_referer.rs`)按它改写 Origin;TS 持有只为保持
+ * 「平台知识单一权威在 resolve + parity 守护两边一致」的既有模式。
+ */
+export const XHR_ORIGIN_RULES: Array<[string, string]> = [
+  ["playlist.ttvnw.net", "https://www.twitch.tv/"],
+]
+
+/** XHR 请求 url 命中规则 → 应改写成的站内 Origin;未命中返回 undefined。 */
+export function xhrOriginFor(url: string): string | undefined {
+  const m = url.match(/^https?:\/\/([^/]+)/)
+  if (!m) return undefined
+  return XHR_ORIGIN_RULES.find(([host]) => m[1].includes(host))?.[1]
+}

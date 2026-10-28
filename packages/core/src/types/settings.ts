@@ -73,8 +73,6 @@ export interface AppSettings {
   danmakuEnabled: boolean
   /** 一集播完自动播队列里的下一条。关闭则播完停住。 */
   autoPlayNext: boolean
-  /** 防盗链图片经宿主隧道转发(命中 mediaReferrerFor 的图床)。 */
-  imageProxy: boolean
   /**
    * bilibili 登录 cookie(浏览器复制的完整串,含 SESSDATA)。
    * 登录态来源:扫码(scanLogin)写回或此处手填;消费经 resolve 的 credentials
@@ -120,7 +118,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultQuality: "highest",
   danmakuEnabled: true,
   autoPlayNext: true,
-  imageProxy: true,
   bilibiliCookie: "",
   weiboCookie: "",
   xhsCookie: "",

@@ -161,7 +161,7 @@ export function createSubsActions(ctx: StoreCtx): SubsActions {
       if (!dl) return
       const next = await dl.settings.set({ [key]: value })
       set({ settings: next })
-      // 渲染管线直读的门面开关(如 imageProxy)同步生效,不必等重挂载。
+      // 渲染管线直读的门面开关(如 dataSaver)同步生效,不必等重挂载。
       applyRuntimeSettings(next)
     },
 

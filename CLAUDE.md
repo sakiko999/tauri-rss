@@ -36,8 +36,9 @@ packages/
                net/governor.ts 统一治理所有 appHost.http（分级/并发/RPM/冷却/去重）。
                应用走子路径 `./node|tauri|browser|cdp|runtime|governor`；根入口无 import 副作用。
                `browser/*` 是载具无关的 CDP 核心（BrowserDriver 收敛桌面/CLI 差异）。
-               桌面媒体防盗链走 WebView2 请求头注入（src-tauri/media_referer.rs），
-               失败/非 Windows 回退 blob 隧道（appHost.nativeMediaReferer 探测）
+               桌面媒体防盗链走 WebView2 请求头注入（src-tauri/media_referer.rs：
+               图片/视频改 Referer，XHR/fetch 改 Origin——规则表在 resolve
+               media-referrer.ts，parity check 守护）；图片/实况均恒直连，无 JS 回退
   resolve/     ★ 平台解析层：platform/（各平台 client + 播放解析 + 弹幕 codec）、
                resolver/（by-url 路由）、browser/（CDP 模拟）、utils/、danmaku/ 原语。
                契约：按 item.url 懒解析 + 平台 client 供 crawler 取数。类型自持，不依赖 crawler
@@ -55,7 +56,7 @@ packages/
                    refreshAll/diagnostics/probe + snapshot/event/job 类型）
   service-client/   ★ RemoteDataLayer：desktop/CLI 共用。读本地镜像、写 RPC、WS 事件；
                    运行时不 import core 根入口（避免拉进 crawler/resolve）
-  ui/          ⚠️ 只剩原子件：desktop 仅引 MediaImage（防盗链隧道）与 fmtCount
+  ui/          ⚠️ 只剩原子件：desktop 仅引 MediaImage（原生直连，防盗链归 Rust 注入）与 fmtCount
 ```
 
 依赖链 `resolve ← crawler ← core`，播放支线 `core ← player`；`log` 是零依赖叶子；
@@ -164,6 +165,8 @@ bun run rss attach status | list | refresh <id>  # CLI 作为桌面数据服务�
 bun run service:build                       # 打包独立服务入口 → dist/service/service.js
 bun run check                               # ★ 统一检查入口：static+contract+state+typecheck
 bun run check --layer service       # 起真实数据服务（慢）；`--layer all` 五层、`--list` 列清单
+bun run lint                                # oxlint 静态检查（默认 correctness 规则；当前 0 error / 16 warning）
+bun run fmt / fmt:check                     # bun fmt 全仓格式化 / 只检查不写（配置在 bunfig.toml）
 bun scripts/service-data-check.ts           # 服务数据链路 48 项自检（含 job 取消/并发写/回滚）
 bun scripts/remote-data-layer-check.ts      # 远端镜像 38 项自检（含取消/崩溃 fail-closed/重启收敛）
 bun scripts/service-snapshot-size.ts        # 快照体积实测（原始 vs gzip，默认桌面 dev 库副本）
@@ -237,7 +240,6 @@ live 按平台二次聚合的 UI 侧。
 ## TODO / 重要信息（cc-todo 自动维护）
 
 - [ ] **CI 工作流暂缓（2026-10-26 定）**：`.github/workflows/ci.yml` 未建；统一入口 `bun run check`
-  已在本地跑通，接入时 job 跑 `bun run check`，service 层单列（需 bun:sqlite + 端口）。
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
 - [ ] WebView2 生命周期剩余：空闲回收后自动重建、`/json/new` lane tab 关得掉、`/json/close` 不残留、连续 3 次关/建
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
@@ -246,7 +248,8 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 实况播放 release 验收：mp4 解码与暂停/续播（dev 已修 Referer 403 + ORB）
 - [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
 - [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
-- [ ] Referer 改造：共享 reqwest Client → WebResourceRequested（图片）→ 实况视频；规则表抽共享 JSON，`MediaImage` 改 `unsafe-url` 保留 blob 回退
+- [ ] Referer 改造剩余：规则表抽共享 JSON（现 TS/Rust 双份 + parity check）；实况视频的响应头注入（ORB 兜底）按需再做
+- [ ] twitch XHR Origin 改写（`playlist.ttvnw.net` → `www.twitch.tv`）需 release 复验：dev 页面 Origin（localhost:1420）本就被 CDN 放行，验证不了 `*.tauri.localhost` 场景；若 release 仍 403 则回滚 player 特判
 - [ ] 系统文档正文细化（03 时序图 / 02 契约正文；01 依赖矩阵与 02 字段表已随 R9 / membersOnly 更新）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
 - [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
@@ -255,11 +258,14 @@ live 按平台二次聚合的 UI 侧。
 - [!] 视频会员标记 = `Video.membersOnly`（`tpl:membersOnly`）：B站取 `rights.pay/arc_pay/ugc_pay`；YouTube 频道走 InnerTube（官方 RSS 无标记），**匿名首屏可能不含会员视频**，回退 RSS 时标记缺失。
 - [!] CLI 浏览器必须显式 `--browser`；显式空串 `--kv cookie=` 在浏览器路径也强制匿名（xhs 直接报「需要登录」），不传 cookie 键时浏览器路径才用 profile 登录态。
 - [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
-- [!] WebView2 Referer 注入仅 Windows；其他平台与直连失败必须保留 blob 回退，靠 `appHost.nativeMediaReferer` 分流。
+- [!] WebView2 请求头注入（图片/视频 Referer + XHR Origin）仅 Windows；图片与实况视频**均恒直连、无 JS 回退**（blob 隧道 2026-10-28 全删，`nativeMediaReferer` 探测一并删除）；未注入环境 403 → 占位（图片 ImageOff / 实况退回静态图 + 重试）。
 - [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
 - [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS。
 - [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
 - [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
 - [ ] 合流改版计划草案待评审排期：docs/ui/heliu-redesign-plan.md（分支 docs/desktop-redesign-plan）
 - [ ] 跑 `bun run dev` 实拍添加订阅弹窗：分类 chip 换行、24 行列表滚动、「已订阅 N」与行尾动作文字的密度
+- [ ] 修 huya 403 时发现根 tsconfig.app.json 的 `types:["vite/client"]` 靠 vite 根提升才成立（2026-10-28 起已改为根 package.json 显式声明 vite ^8.1.5）；若未来再动 workspace 布局，注意 player/ui tsc 会先断
+- [ ] release 复验 twitch XHR Origin 改写（media_referer.rs 的 SetHeader("Origin") 是否生效）；dev 环境的 localhost:1420 Origin 被 CDN 放行，验证不了生产场景，失败则回滚 useMediaStream 的 pLoader 特判
+- [!] 媒体加载统一策略（2026-10-28）：平台知识只在 resolve 规则表，Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
 <!-- cc-todo:end -->

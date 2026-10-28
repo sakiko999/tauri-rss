@@ -1,4 +1,4 @@
-/** 播放 tab:自动播放 / 省流 / 画质(锁档)+ 弹幕开关 + 图片代理。 */
+/** 播放 tab:自动播放 / 省流 / 画质(锁档)+ 弹幕开关。 */
 import { useDesktop } from "../../../store/index.ts"
 import { SideCard } from "../../../components/StateBlock.tsx"
 import { Switch } from "../../../components/Modal.tsx"
@@ -32,15 +32,6 @@ export function Playback() {
       <SideCard title="弹幕" icon="captions">
         <Row label="启用弹幕" help="播放页的总开关;播放页内还可临时关闭。">
           <Switch checked={settings.danmakuEnabled} label="启用弹幕" onChange={(v) => void setSetting("danmakuEnabled", v)} />
-        </Row>
-      </SideCard>
-
-      <SideCard title="图片" icon="image">
-        <Row
-          label="图片防盗链处理"
-          help="部分图床会拒绝外部直接加载，开启后由本机代为取图，图片能正常显示。"
-        >
-          <Switch checked={settings.imageProxy} label="图片代理" onChange={(v) => void setSetting("imageProxy", v)} />
         </Row>
       </SideCard>
     </>

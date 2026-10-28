@@ -96,11 +96,11 @@ host → core、也不允许 core 生产依赖 host —— 这是唯一能同时
 | **platform** | | | | | | | | | | 无（零依赖叶子，R9 平台表） |
 | **xml** | | | | | | | | | | `fast-xml-parser` |
 | **host** | | R | R | | | | | | | `@tauri-apps/api` + opener/process/sql/updater、`ws` |
-| **resolve** | T | R | | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 ui/desktop 取防盗链规则 |
+| **resolve** | T | R | | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 desktop 取防盗链/Origin 规则 |
 | **crawler** | R | R | | D | R | | | | | — |
 | **core** | R | R | R | D | R | R | | | | — |
 | **player** | | R | | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
-| **ui** | | | | | R（仅 `./media-referrer`） | | U | U | | `react`；仍读 `globalThis.appHost.imageProxy/dataSaver` |
+| **ui** | | | | | | | U | U | | `react`；读 `globalThis.appHost.dataSaver`（2026-10-28 起无 amoeba 包依赖） |
 | **desktop** | R | | R | R | R | | R | R | R | react-router、zustand、react-virtuoso、masonic、Radix、dompurify、qrcode、lucide、`@tauri-apps/api`（`store/data-source.ts:11`） |
 | **mobile** | U | | | R | U | U | R | R | R | react、zustand；`@tauri-apps/api` 也声明未用 |
 | **cli** | R | R | R | R | R | R | R | | | `cac`、`picocolors`、`qrcode`、`jsqr` |
@@ -128,7 +128,7 @@ graph LR
   core -- "appHost.storage / now / net / browser" --> HOST["host runtime.ts 门面"]
   crawler -- "appHost.browser（能力探测）" --> HOST
   player -- "appHost.http（HLS/DASH 分片）/ net.governorStats" --> HOST
-  ui -- "appHost.http / imageProxy / dataSaver" --> HOST
+  ui -- "appHost.dataSaver" --> HOST
   HOST -- "invoke http_get / ws_* / webview_browser_*" --> RUST["apps/src-tauri"]
 ```
 
@@ -252,13 +252,13 @@ graph LR
 
 | 维度 | 内容 |
 | --- | --- |
-| 负责 | `MediaImage`：lazy、aspect-ratio 占位、失败占位、命中图床时经 `appHost.http` 带 Referer 拉 `arraybuffer`→Blob URL、模块级缓存（成功 500 / Blob LRU 300 / 失败负缓存 / in-flight 合并）；`fmtCount` 互动数缩写 |
+| 负责 | `MediaImage`：lazy、aspect-ratio 占位、失败占位、模块级成功缓存（500）；`fmtCount` 互动数缩写。防盗链由 Rust 网络层注入（无 JS 隧道，2026-10-28 删） |
 | 不负责 | 卡片/列表/渲染器（已迁 desktop `components/app/Cards.tsx`）；播放组件（已拆 player）；主题与布局（只提供 `theme.css` 令牌，由 desktop 引入） |
 | 对外导出 | 仅 `MediaImage` 与 `fmtCount`（`packages/ui/src/index.ts:12-13`）；`Skeleton`/`Icons` 是包内原子 |
 | 内部结构 | `renderers/atoms/{MediaImage,format,Skeleton,Icons}`；`styles/{theme.css,tailwind.css}` |
-| 依赖 / 被依赖 | 运行时依赖 react 与 `@amoeba/resolve/media-referrer`；经全局读 `appHost.imageProxy/dataSaver`（`MediaImage.tsx:115-122`）。被 desktop（7 处）与 mobile（1 处）使用。core/player 为未使用声明 |
-| 常见改动入口 | 新图床：改 `packages/resolve/src/media-referrer.ts`，不要改 ui；新原子件：谨慎——先判断是否该留在 desktop |
-| 关键文件 | `packages/ui/src/renderers/atoms/MediaImage.tsx:29-73`（缓存）、`:75-99`（隧道）、`:115-122`（运行时开关）；`packages/ui/src/renderers/atoms/format.ts:6` |
+| 依赖 / 被依赖 | 运行时仅 react（2026-10-28 起零 amoeba 包依赖）；经全局读 `appHost.dataSaver`。被 desktop（7 处）与 mobile（1 处）使用 |
+| 常见改动入口 | 新图床：改 `packages/resolve/src/media-referrer.ts`（Rust 侧规则同步），不要改 ui；新原子件：谨慎——先判断是否该留在 desktop |
+| 关键文件 | `packages/ui/src/renderers/atoms/MediaImage.tsx`（加载/占位/缓存）；`packages/ui/src/renderers/atoms/format.ts:6` |
 
 ### 2.9 platform — 平台名单一权威
 
@@ -295,7 +295,7 @@ graph LR
   - `components/*.tsx` = 纯 props 功能件；`components/app/*.tsx` = 读 `useDesktop`/`usePrefs` 的业务件（本次实测 `useDesktop` 只出现在 `views/`、`components/app/`、`store/`、`lib/`、入口）。
   - `lib/` = 工具与少量 store 适配（`useLatestOnly` 世代守卫、`itemKey` 复合键、OPML 映射、快捷键、更新状态机）；其中 `host.ts`/`shortcuts.ts`/`update.ts` 直接读 `useDesktop`。
 - **跨包面**：core（30+ 处，含动态 import）、ui 7、player 3、xml 2（OPML：`lib/opml.ts:10`、`store/actions/subs.ts:7`）、resolve 1（`SocialDetailModal.tsx:19` 取 `./media-referrer`）、platform 2（`AccountPage.tsx:13`、`lib/subscriptions.ts:8`）、host 1（`main.tsx:4`）、service-client/service-protocol 各 1（`store/data-source.ts:12-13`）、`@tauri-apps/api` 1（`store/data-source.ts:11`）。
-- **启动入口**（注意静态 import 会提升到模块体之前）：模块加载期先执行 `import "@amoeba/core/source/rsshub"`（`main.tsx:8`），它只经 crawler→resolve 求值，**不再连带 host**；随后模块体执行 `injectTauriHost({ nativeMediaReferer:true, storage:false, browser:false })`（`@amoeba/host/tauri`，`main.tsx:17-21`，内部 `initAppHost()` 建门面 + `setHostCaps`）；`init()`（`store/actions/data.ts:21-90`）由 App 挂载时调用（`App.tsx:66`），内部 `createDesktopDataLayer()` → 首轮 TTL 刷新 → `ready`。dev 暴露 `__store`（`main.tsx:25-26`）并加载 ui-overlay。
+- **启动入口**（注意静态 import 会提升到模块体之前）：模块加载期先执行 `import "@amoeba/core/source/rsshub"`（`main.tsx:8`），它只经 crawler→resolve 求值，**不再连带 host**；随后模块体执行 `injectTauriHost({ storage:false, browser:false })`（`@amoeba/host/tauri`，`main.tsx:15-18`，内部 `initAppHost()` 建门面 + `setHostCaps`）；`init()`（`store/actions/data.ts:21-90`）由 App 挂载时调用（`App.tsx:66`），内部 `createDesktopDataLayer()` → 首轮 TTL 刷新 → `ready`。dev 暴露 `__store`（`main.tsx:25-26`）并加载 ui-overlay。
 - **关键文件**：`apps/desktop/src/store/{index,types,nodes,selectors,ctx,lib,prefs,data-source}.ts`；`store/actions/{data,view,subs,reading,ui}.ts`；`views/player/usePlayerNav.ts`（播放入口收口）；`components/app/Cards.tsx`（可播判定）。
 
 ### 3.2 mobile — 极简看内容

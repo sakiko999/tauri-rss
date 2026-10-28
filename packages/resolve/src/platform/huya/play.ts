@@ -82,9 +82,13 @@ function parseProfile(data: Record<string, any>): HuyaApiProfile {
   return { lines: [...byCdn.values()].filter((l) => l.flvUrl || l.hlsUrl), bitRates }
 }
 
-/** 覆盖/追加 HLS url 的 ratio 档位参数。 */
+/**
+ * 覆盖/追加 HLS url 的 ratio 档位参数。
+ * ⚠️ `bitRate=0`(原始最高档,如「蓝光15M」)**不传 ratio**——CDN 拒绝 `ratio=0`
+ * (实测 tx/hs 线路回 403/404,去掉参数即 200),不带 ratio 本就是最高档。
+ */
 function withRatio(url: string, bitRate: number): string {
-  if (!url) return ""
+  if (!url || !bitRate) return url
   return /[?&]ratio=\d+/.test(url)
     ? url.replace(/([?&]ratio=)\d+/, `$1${bitRate}`)
     : `${url}${url.includes("?") ? "&" : "?"}ratio=${bitRate}`

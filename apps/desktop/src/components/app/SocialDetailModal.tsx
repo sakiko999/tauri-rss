@@ -16,7 +16,6 @@ import { useDesktop } from "../../store/index.ts"
 import { Modal } from "../Modal.tsx"
 import { Icon } from "../Icon.tsx"
 import { MediaImage, fmtCount } from "@amoeba/ui"
-import { videoReferrerFor } from "@amoeba/resolve/media-referrer"
 import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
 import { openExternalSafely } from "../../lib/host.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
@@ -24,105 +23,23 @@ import { looksLikeHtml } from "../../lib/html.ts"
 import { Lightbox } from "./Lightbox.tsx"
 
 /**
- * 实况视频 Blob 回退路径：整段下载 → Blob URL。
+ * 实况视频直连：WebView2 原生网络层由 Rust 注入 Referer
+ * (`apps/src-tauri/src/media_referer.rs` 的 `VIDEO_REFERRERS`，规则权威在
+ * resolve `videoReferrerFor`)，保留原生 Range/seek/缓存。
  *
- * 详情里**切到实况图即自动播放**；`attempt` 递增 = 失败重试。
- *
- * 桌面 WebView2 已注入 Referer 时优先直连（`useLiveVideoSource`），保留原生
- * Range/seek/缓存；直连失败才回到这里。回退路径仍不能直接 `<video src>`：
- * CDN 对页面源 Referer 返回 403 text/html，浏览器再按 ORB 拦成
- * `MEDIA_ELEMENT_ERROR: Format error`，且媒体错误不进 console。
- * Referer 规则归 resolve（videoReferrerFor），这里不写死域名。
- */
-function useLiveVideoBlob(src: string | undefined, attempt: number) {
-  const [blobUrl, setBlobUrl] = useState<string | undefined>(undefined)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | undefined>(undefined)
-
-  useEffect(() => {
-    setBlobUrl(undefined)
-    setError(undefined)
-    if (!src) {
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    const referrer = videoReferrerFor(src)
-    void (async () => {
-      const res = await globalThis.appHost.http.request({
-        url: src,
-        method: "GET",
-        responseType: "arraybuffer",
-        timeoutMs: 20_000,
-        // 媒体直链不计入平台 RPM / 冷却（与图片隧道同一语义）。
-        policy: { metered: false },
-        ...(referrer ? { headers: { Referer: referrer } } : {}),
-      })
-      if (res.status !== 200) throw new Error(`HTTP ${res.status}`)
-      const ct = (res.headers["content-type"] ?? res.headers["Content-Type"] ?? "video/mp4") as string
-      // arraybuffer 解码出的是独立 ArrayBuffer（无 byteOffset），直接取 buffer。
-      const buf = (res.body as Uint8Array).buffer as ArrayBuffer
-      const url = URL.createObjectURL(new Blob([buf], { type: ct }))
-      if (cancelled) {
-        URL.revokeObjectURL(url)
-        return
-      }
-      // 所有权交给下面的 blobUrl 清理 effect（取消时在上面已 revoke）。
-      setBlobUrl(url)
-    })()
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    // 取消后由上面创建处紧邻的 cancelled 分支 revoke（两步之间没有 await）。
-    return () => {
-      cancelled = true
-    }
-  }, [src, attempt])
-
-  // blobUrl 被替换 / 组件卸载时释放上一个 Blob（视频数据在内存里，不 revoke 会泄漏）。
-  useEffect(() => {
-    return () => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl)
-    }
-  }, [blobUrl])
-
-  return { blobUrl, loading, error }
-}
-
-/**
- * 实况视频源:桌面 WebView2 已注入 Referer 时直接用 https 直链(Chromium 原生
- * Range/seek/缓存);直连失败才回退上面的整段 blob 隧道。
+ * 2026-10-28 删掉 blob 隧道回退（整段下载 → Blob URL）——与图片同一决策：
+ * 过度防御没有意义。直连失败(403 / 解码不支持)→ 退回静态图 + 重试。
+ * `attempt` 递增 = 重试（清失败态，`<video>` 重新挂载触发新请求）。
  */
 function useLiveVideoSource(src: string | undefined, attempt: number) {
-  const nativeCapable = globalThis.appHost?.nativeMediaReferer === true
-  const native = nativeCapable && !!src && !!videoReferrerFor(src)
-  /** 直连失败记 (src, attempt)；换图或点重试时自动失效，让原生路径再试一次。 */
-  const [nativeFailed, setNativeFailed] = useState<{ src: string; attempt: number } | undefined>()
-  const useNative =
-    native && !(nativeFailed?.src === src && nativeFailed.attempt === attempt)
-
-  const blob = useLiveVideoBlob(useNative ? undefined : src, attempt)
-  if (useNative) {
-    return {
-      url: src,
-      loading: false,
-      error: undefined as string | undefined,
-      native: true,
-      onNativeError: () => {
-        if (src) setNativeFailed({ src, attempt })
-      },
-    }
-  }
+  const [failed, setFailed] = useState(false)
+  // 换图 / 换条目 / 点重试 → 清失败态。
+  useEffect(() => setFailed(false), [src, attempt])
   return {
-    url: blob.blobUrl,
-    loading: blob.loading,
-    error: blob.error,
-    native: false,
-    onNativeError: () => {},
+    /** 失败后不挂 src（退回静态图）；否则恒为源直链。 */
+    url: failed ? undefined : src,
+    failed,
+    onError: () => setFailed(true),
   }
 }
 
@@ -136,15 +53,11 @@ export function SocialDetailModal() {
   const [imgIndex, setImgIndex] = useState(0)
   /** 灯箱是否打开。索引与详情**共用** imgIndex —— 关灯箱后详情停在同一张。 */
   const [zoom, setZoom] = useState(false)
-  /** 实况重试计数：递增触发 hook 重新拉取。 */
+  /** 实况重试计数：递增让视频重新挂载再试一次。 */
   const [liveRetry, setLiveRetry] = useState(0)
-  /** 视频解码失败（隧道成功但编码不支持等），与隧道错误分开记。 */
-  const [liveDecodeError, setLiveDecodeError] = useState<string | undefined>(undefined)
   /** 当前图若是实况，取视频直链（统一 https：源站给的是 http，WebView 里会被混合内容拦）。 */
   const liveVideo = httpsify((imgs[imgIndex] as { liveVideo?: string } | undefined)?.liveVideo)
   const live = useLiveVideoSource(liveVideo, liveRetry)
-  const liveFailure = live.error ?? liveDecodeError
-  useEffect(() => setLiveDecodeError(undefined), [imgIndex, item?.id])
   /**
    * ⚠️ 所有 hook 必须在 `if (!detail) return null` **之前**调用。
    * 曾把 useState/useEffect 放在 early return 之后:detail 为 null 时提前返回(少调),
@@ -289,9 +202,9 @@ export function SocialDetailModal() {
                 ) : null}
                 {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
-                {/* 实况图：切到即自动拉取并静音循环播；点一下暂停/续播。
-                    隧道完成前继续显示静态图（比黑屏/碎播放器可解释）。 */}
-                {liveVideo && live.url && !liveDecodeError ? (
+                {/* 实况图：切到即直连播放、静音循环；点一下暂停/续播。
+                    加载中/失败时继续显示静态图（比黑屏/碎播放器可解释）。 */}
+                {liveVideo && live.url ? (
                   <video
                     className="social-detail-video"
                     src={live.url}
@@ -305,11 +218,8 @@ export function SocialDetailModal() {
                       if (v.paused) void v.play()
                       else v.pause()
                     }}
-                    // 直连失败 → 回退 blob 隧道；隧道也失败/解码不支持 → 退回静态图。
-                    onError={() => {
-                      if (live.native) live.onNativeError()
-                      else setLiveDecodeError("视频无法解码")
-                    }}
+                    // 直连失败/解码不支持 → 退回静态图（下方出重试）。
+                    onError={() => live.onError()}
                   />
                 ) : (
                   // 点静态图 → 灯箱(完整大图 + 左右翻页)。实况视频那一支不挂:
@@ -323,8 +233,8 @@ export function SocialDetailModal() {
                     <MediaImage src={cover} alt={item.title} loading="eager" contain />
                   </button>
                 )}
-                {/* 自动播失败时才出现的重试入口（隧道 403/超时/过期）。 */}
-                {liveVideo && live.error && !live.loading ? (
+                {/* 直连失败时才出现的重试入口（403/网络抖动/签名过期）。 */}
+                {liveVideo && live.failed ? (
                   <button
                     className="btn btn-secondary btn-sm social-detail-live"
                     onClick={() => setLiveRetry((n) => n + 1)}
@@ -389,11 +299,11 @@ export function SocialDetailModal() {
                 ) : null}
               </div>
             ) : null}
-            {/* 状态脚注:只在「补全中 / 补全失败 / 实况加载中 / 实况失败」时出现。
+            {/* 状态脚注:只在「补全中 / 补全失败 / 实况播放失败」时出现。
                 完整内容 + 正常播放不需要解释。 */}
-            {resolving || resolveFailed || (liveVideo && (live.loading || liveFailure)) ? (
+            {resolving || resolveFailed || (liveVideo && live.failed) ? (
               <p className="social-detail-note">
-                {resolving || live.loading ? (
+                {resolving ? (
                   <Icon name="loader" size={13} className="animate-spin" />
                 ) : (
                   <Icon name="alert" size={13} />
@@ -401,11 +311,9 @@ export function SocialDetailModal() {
                 <span>
                   {resolving
                     ? "正在向源站补全详情…"
-                    : liveVideo && live.loading
-                      ? "正在加载实况视频…"
-                      : resolveFailed
-                        ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
-                        : `实况视频加载失败：${liveFailure}（已显示静态图）`}
+                    : resolveFailed
+                      ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
+                      : "实况视频播放失败（已显示静态图）"}
                 </span>
               </p>
             ) : null}

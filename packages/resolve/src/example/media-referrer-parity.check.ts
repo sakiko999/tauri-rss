@@ -7,11 +7,13 @@
  */
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import { MEDIA_REFERRERS, VIDEO_REFERRERS } from "../media-referrer.ts"
+import { MEDIA_REFERRERS, VIDEO_REFERRERS, XHR_ORIGIN_RULES } from "../media-referrer.ts"
 
 const RUST = "apps/src-tauri/src/media_referer.rs"
 
-function rustRules(name: "IMAGE_REFERRERS" | "VIDEO_REFERRERS"): Array<[string, string]> {
+type RuleName = "IMAGE_REFERRERS" | "VIDEO_REFERRERS" | "XHR_ORIGIN_RULES"
+
+function rustRules(name: RuleName): Array<[string, string]> {
   const src = readFileSync(RUST, "utf8")
   const block = src.match(new RegExp(`const ${name}:[^=]*=\\s*&\\[([\\s\\S]*?)\\];`))?.[1]
   assert.ok(block, `Rust 里找不到 ${name}`)
@@ -23,5 +25,6 @@ const sorted = (rows: Array<[string, string]>) =>
 
 assert.deepEqual(sorted(rustRules("IMAGE_REFERRERS")), sorted(MEDIA_REFERRERS), "图片 Referer 规则两边不一致")
 assert.deepEqual(sorted(rustRules("VIDEO_REFERRERS")), sorted(VIDEO_REFERRERS), "视频 Referer 规则两边不一致")
+assert.deepEqual(sorted(rustRules("XHR_ORIGIN_RULES")), sorted(XHR_ORIGIN_RULES), "XHR Origin 规则两边不一致")
 
-console.log("✔ Referer 规则一致性通过（TS resolve/media-referrer.ts ↔ Rust media_referer.rs）")
+console.log("✔ Referer/Origin 规则一致性通过（TS resolve/media-referrer.ts ↔ Rust media_referer.rs）")

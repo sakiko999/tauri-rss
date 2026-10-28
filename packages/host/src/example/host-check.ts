@@ -1,5 +1,5 @@
 /**
- * 宿主门面自检 —— 覆盖本轮新增/改动的字段:openExternal / imageProxy / dataSaver。
+ * 宿主门面自检 —— 覆盖本轮新增/改动的字段:openExternal / dataSaver。
  * 跑:`bun packages/host/src/example/host-check.ts`
  */
 import assert from "node:assert/strict"
@@ -12,7 +12,6 @@ assert.equal(typeof globalThis.appHost.openExternal, "function", "openExternal �
 
 // node 环境没有真浏览器,openExternal 的兜底是 window.open —— 会抛(无 window)。
 // 断言「有这个方法」而不是「调用成功」,避免测试环境依赖 GUI。
-assert.equal(globalThis.appHost.imageProxy, undefined, "node 后端不设 imageProxy(默认开启由消费侧判定)")
 assert.equal(globalThis.appHost.dataSaver, undefined, "node 后端不设 dataSaver")
 
 // ── js 后端契约:`(fnDecl, name, args)` 必须能执行「声明式函数 + 显式实参」 ──
@@ -48,9 +47,8 @@ injectBrowserHost()
 assert.equal(typeof globalThis.appHost.openExternal, "function", "browser 后端也应有 openExternal")
 assert.equal(typeof globalThis.appHost.http.request, "function", "browser 后端应用 fetch 实现 http")
 
-// 可写:app 层按 settings 写入这两个渲染开关。
-globalThis.appHost.imageProxy = false
+// 可写:app 层按 settings 写入渲染开关。
 globalThis.appHost.dataSaver = true
-assert.equal(globalThis.appHost.imageProxy, false, "imageProxy 可被 app 层覆盖")
+assert.equal(globalThis.appHost.dataSaver, true, "dataSaver 可被 app 层覆盖")
 
-console.log("✔ 宿主门面自检通过(openExternal 协议白名单 / imageProxy / dataSaver / js 契约)")
+console.log("✔ 宿主门面自检通过(openExternal 协议白名单 / dataSaver / js 契约)")

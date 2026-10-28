@@ -28,7 +28,7 @@
 flowchart TD
   A["main.tsx: injectTauriHost()/injectBrowserHost()<br/>（@amoeba/host/tauri|browser）"] --> B["setHostCaps 内部 initAppHost() 幂等建门面"]
   B --> C{"运行形态"}
-  C -->|desktop| D["injectTauriHost({ storage:false, browser:false, nativeMediaReferer:true })<br/>（唯一生产路径；不再持有 SQLite/抓取浏览器）"]
+  C -->|desktop| D["injectTauriHost({ storage:false, browser:false })<br/>（唯一生产路径；不再持有 SQLite/抓取浏览器）"]
   C -->|mobile Tauri| E["injectTauriHost({ updater:false, browser:false })"]
   C -->|mobile 纯浏览器| F["injectBrowserHost()"]
   D --> G["setHostCaps：http 被 governedHttp 包裹"]

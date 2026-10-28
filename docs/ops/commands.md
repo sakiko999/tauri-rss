@@ -92,7 +92,7 @@ bun packages/core/src/example/media-store.check.ts      # 查询分支（分组�
 bun packages/core/src/example/data-layer.check.ts       # 停用不抓取 / reading 回填 / 空抓取不丢内容
 bun packages/core/src/example/repo-concurrency.check.ts # 仓储并发写不互相覆盖（丢数据护栏）
 bun packages/core/src/reading-position.check.ts         # 续播落库判据（近片尾清除 / 5s 节流）
-bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/imageProxy）
+bun packages/host/src/example/host-check.ts             # 门面字段（openExternal/dataSaver）
 bun packages/host/src/example/governor.check.ts         # 网络治理（分类/L0/去重/冷却/分档/并发）
 bun packages/core/src/example/passive-mode.check.ts     # 被动采集（只走 fetchPassive / autoRefresh / 覆盖投影 / 预览）
 bun packages/core/src/example/error-kind.check.ts       # 错误分类（errorKind 透出 / 403→risk / 冷却→rate-limit / no-data）
@@ -131,6 +131,21 @@ bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契
 ```
 
 「改了什么 → 跑什么」的完整巡检清单见 `docs/ops/smoke-check.md`。
+
+## Lint 与格式化
+
+```bash
+bun run lint                           # oxlint（默认 correctness 规则；.oxlintrc.json 里配 ignorePatterns）
+bun run fmt                            # bun fmt 全仓格式化（bunfig.toml：120 列/无分号/双引号/尾逗号 all）
+bun run fmt:check                      # 只检查不写（收口后用作 CI 门禁）
+```
+
+- formatter = Bun 内置 `bun fmt`（Prettier 兼容引擎）。⚠️ package.json 里的 `fmt` script 必须带
+  `--no-script`，否则 `bun fmt` 会路由回同名 script 造成递归。
+- linter = `oxlint`（Bun 内置 `bun lint` 在 1.4.x 尚未发布；升级后可直接替换本行命令）。
+- 2026-10-28 接入时**未跑全仓格式化**：`bun run fmt:check` 仍报约 489 个文件待格式化（基线），
+  格式化收口后再把 `fmt:check`（以及 `lint`）并入 `bun run check` 的统一入口。
+- 文档（`**/*.md`）与 `apps/new_desktop/`、`tmp/` 不在格式化范围内（bunfig.toml 的 ignorePatterns）。
 
 ## UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 由 dev 配置开启）
 
