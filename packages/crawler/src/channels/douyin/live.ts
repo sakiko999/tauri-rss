@@ -148,9 +148,11 @@ export function douyinLiveItem(res: Record<string, any>, webRid: string, sourceI
   const isLive = toInt(room.status) === 2
 
   return {
-    // id 用长号 id_str(唯一稳定);roomId 必须用订阅传入的 web_rid(短号/抖音号)——
-    // douyin 的 enter API / HTML 页面 / resolveLivePlay 都用 web_rid,不是 room_id。
-    id: `douyin:${String(room.id_str ?? webRid)}`,
+    // id 用 webRid(固定房间标识):id_str 是一次性 room_id,**每次重新开播都换**,
+    // 会让已读/星标/续播每场失效、旧条目以新未读重现(hot/category 渠道一直用
+    // webRid)。roomId 字段同样必须是订阅传入的 web_rid —— enter API / HTML 页面 /
+    // resolveLivePlay 都用 web_rid,不是 room_id。
+    id: `douyin:${webRid || String(room.id_str ?? "")}`,
     sourceId,
     kind: "live",
     title: String(room.title ?? ""),

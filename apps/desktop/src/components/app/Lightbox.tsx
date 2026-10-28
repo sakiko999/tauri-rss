@@ -66,13 +66,17 @@ export function Lightbox({
   return (
     <Modal open={open} onOpenChange={(o) => (o ? undefined : onClose())} size="wide" flush title="图片预览">
       <div className="lightbox" {...overlayBlock("lightbox", `lightbox:${current}`)}>
-        <div className="lightbox-stage">{src ? <MediaImage src={src} contain loading="eager" /> : null}</div>
+        <div className="lightbox-stage">
+          {/* alt 带上位置:图片本身没有标题(灯箱只收 URL),但读屏至少能知道翻到第几张。 */}
+          {src ? <MediaImage src={src} contain loading="eager" alt={`第 ${current + 1} 张，共 ${count} 张`} /> : null}
+        </div>
         {count > 1 ? (
           <div className="lightbox-nav">
             <button className="lightbox-arrow" data-dir="prev" aria-label="上一张" onClick={() => step(-1)}>
               <Icon name="back" size={16} />
             </button>
-            <span className="lightbox-count num">
+            {/* aria-live:键盘翻页只改这两处文本,读屏否则完全无反馈。 */}
+            <span className="lightbox-count num" aria-live="polite">
               {current + 1} / {count}
             </span>
             <button className="lightbox-arrow" data-dir="next" aria-label="下一张" onClick={() => step(1)}>

@@ -4,16 +4,17 @@
  * 取数在 `resolve/platform/huya/discover.ts` 的 `searchHuyaRooms`(含
  * 「房间桶 room_id 可能错,用 uid+yyid 去主播桶修正」的坑)。
  *
- * ⚠️ **不可分页**:接口的 `start` 参数实测无效——`start=0` 返 20 条,
- * `start>=20` 一律返同一批 40 条(首条相同,与 start 值无关)。故只取首页、
- * 不声明 Pageable(避免下游翻页拿到重复结果)。
+ * ⚠️ **不可分页**:接口的 `start` 参数实测无效(服务端只回显、不换窗口)。
+ * 但 `rows` 是真实的深度杠杆(~100 封顶):2026-10-27 起取 rows=100 一次拿全
+ * (英雄联盟 numFound≈97;此前 rows=20 只见 20/97)。不声明 Pageable(start
+ * 翻不动,翻页只会拿到同一批)。
  */
 
 import { searchHuyaRooms } from "@amoeba/resolve"
 
 import { makeApiChannel } from "../factory.ts"
 
-const PAGE = 20
+const PAGE = 100
 
 export const HuyaSearchChannel = makeApiChannel({
   key: "live:huya:search",

@@ -10,7 +10,7 @@ import { isImeComposing } from "../../lib/ime.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useViewNavigate } from "../../router.tsx"
 import { useDesktop } from "../../store/index.ts"
-import { PAGES, SMART, TABS } from "../../store/nodes.ts"
+import { HOME_NODE, KIND_META, LIBRARY_NODE, PAGES, SMART, TABS } from "../../store/nodes.ts"
 import { usePrefs } from "../../store/prefs.ts"
 import { queryView } from "../../store/selectors.ts"
 import { usePlayerNav } from "../player/usePlayerNav.ts"
@@ -82,16 +82,8 @@ export function CommandPalette() {
       group: "条目",
       title: it.title,
       sub: it.author?.name,
-      icon:
-        it.kind === "live"
-          ? "radio"
-          : it.kind === "video"
-            ? "play"
-            : it.kind === "audio"
-              ? "music"
-              : it.kind === "social"
-                ? "message"
-                : "rss",
+      // kind → 图标只有一份权威（KIND_META）；四层三元副本曾漏掉 category。
+      icon: KIND_META[it.kind]?.icon ?? "rss",
       run: () => actions.onPlay(it),
     }))
     return [...nav, ...items]
@@ -139,6 +131,12 @@ export function CommandPalette() {
           // 窗口外的条目,与文案不符。用 queryView 放大 page 取全量(与 ArticlePane 同款),
           // 并只对真正未读的计数。
           const n = s.selectedNodeId ?? "tab:all"
+          // 首页/片库/整页/播放页没有列表：baseFor 恒空，跑下去会弹「已全部标为已读 0 条」
+          // —— 一个 0 条的成功 toast 等于在说谎。明确告诉用户去有列表的视图。
+          if (n === HOME_NODE || n === LIBRARY_NODE || n.startsWith("page:") || n.startsWith("play:")) {
+            s.toast("warn", "当前视图没有列表", "切到某个订阅或内容分类后再标记。")
+            return
+          }
           const full = queryView(
             { ...s, page: { ...s.page, [n]: Number.MAX_SAFE_INTEGER } },
             s.selectedNodeId,

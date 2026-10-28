@@ -9,7 +9,7 @@
 import type { MediaItem, MediaKind, Subscription } from "@amoeba/core"
 
 import { isLiveNow } from "../lib/media.ts"
-import { groupIdOf, isGroupNode, isTabNode } from "./nodes.ts"
+import { groupIdOf, HOME_NODE, isGroupNode, isTabNode, LIBRARY_NODE } from "./nodes.ts"
 
 /** 视图筛选(按节点分别记忆)。 */
 export interface ViewFilter {
@@ -78,6 +78,9 @@ export function isToday(ts: number | undefined, now: number): boolean {
 /** 节点 → 未筛选的基础条目集。 */
 export function baseFor(s: StoreSlice, node: string | null, now: number): MediaItem[] {
   const n = node ?? "tab:all"
+  // 首页/片库是看板与说明页，不渲染列表。显式返回空集：否则裸 id 会落到最后的
+  // 「按 subscriptionId 过滤」兜底（永远为空），读代码的人会以为它是个订阅节点。
+  if (n === HOME_NODE || n === LIBRARY_NODE) return []
   if (isTabNode(n)) {
     const k = n.slice(4)
     return k === "all" ? s.allItems : s.allItems.filter((i) => i.kind === k)
@@ -197,20 +200,11 @@ export function queryView(s: StoreSlice, node: string | null, now: number): View
   return { list: list.slice(0, cap), total, hasMore: total > cap }
 }
 
-export function unreadCount(s: StoreSlice, node: string | null, now: number): number {
-  return baseFor(s, node, now).filter((i) => i.isUnread).length
-}
-
 /** 全部 + 各 kind 的条目计数(rail 的 tab 徽标)。 */
 export function kindCounts(s: StoreSlice): Record<string, number> {
   const m: Record<string, number> = { all: s.allItems.length }
   for (const i of s.allItems) m[i.kind] = (m[i.kind] ?? 0) + 1
   return m
-}
-
-/** 单订阅未读数。 */
-export function subUnread(s: StoreSlice, subId: string): number {
-  return s.allItems.filter((i) => i.subscriptionId === subId && i.isUnread).length
 }
 
 export type Health = "disabled" | "busy" | "stale" | "error" | "ok"
@@ -228,12 +222,9 @@ export function healthOf(
   return "ok"
 }
 
-/** 最近一次成功抓取时间(订阅 updatedAt 之后由刷新写入;此处以 updatedAt 近似)。 */
-export function lastFetchedOf(sub: Subscription): number {
-  return sub.updatedAt
-}
-
-// itemsById 已删：裸 id 定位会跨订阅串条目，统一走 itemKey/复合键。
+// itemsById / unreadCount / subUnread / lastFetchedOf 已删：裸 id 定位会跨订阅串条目，
+// 统一走 itemKey/复合键；未读计数在消费点按 kind 收窄（见 ArticlePane.chipCounts）。
+// 最新抓取时间在侧栏页脚用 max(sub.updatedAt) 直接算。
 
 // ═══════════════════════════════════════════════════════════════════════
 // 首页聚合（合流改版 M3）
@@ -330,7 +321,7 @@ export interface SubFeed {
 /**
  * 订阅更新：每个订阅取最近 N 条 + 未读数，按最新一条排序。
  *
- * 一次遍历建 map，**不要**对每个订阅调 subUnread（那是 O(订阅×条目) 全扫）。
+ * 一次遍历建 map，**不要**逐订阅各扫一遍全库（那是 O(订阅×条目) 的全扫）。
  * 没有条目的订阅（刚订阅/抓取失败）不出现——空源不该占首页一块位置。
  */
 export function groupedBySub(items: MediaItem[], subscriptions: Subscription[], perSub = 3): SubFeed[] {

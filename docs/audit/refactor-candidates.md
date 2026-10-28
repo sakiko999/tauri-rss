@@ -154,9 +154,9 @@ case 写类型谓词，收益为负。
 
 ## D · 已核实（可删，按需）
 
-- 已核实：`lib/media.ts:155` 的 `fmtNum`、`components/app/Cards.tsx:301` 的 `LiveRailCard`
-  均 0 引用（可删）；`lib/subscriptions.ts:69` 另有一份私有 `fmtNum` 副本；
-  `nodes.ts` 的分组 helper 仍需逐个 grep。
+- ~~已核实：`lib/media.ts:155` 的 `fmtNum`、`Cards.tsx:301` 的 `LiveRailCard` 均 0 引用~~
+  **已复核（2026-10-27）**：`fmtNum` 现在被首页/侧栏多处使用（不要删）；`LiveRailCard` 已删；
+  `lib/subscriptions.ts` 的私有 `fmtNum` 仍存（与 `lib/media.ts` 的导出重复，可后续合并）。
 
 ---
 
@@ -171,34 +171,43 @@ case 写类型谓词，收益为负。
   `series.ts:98`）：这三个接口的列表项没有 `rights`，充电专属不可判（详见
   `docs/platforms/platform-notes.md` 的 B站段）。已修的是 `user_video`（`is_charging_arc`）；
   这两个渠道要么接受缺口，要么按条目懒查 `view`（不建议）。
-- **A-2 「在播」判据两处各写一遍**（`Apps/desktop/src/lib/media.ts` 的 `isLiveNow` 与
-  `Cards.tsx:102` 的内联 `liveStatus !== "offline"`）：应统一走 `isLiveNow`，避免下次只改一处。
+- ~~**A-2 「在播」判据两处各写一遍**~~ ✅ **已修（2026-10-27）**：`Cards.tsx` 已统一走
+  `lib/media.ts` 的 `isLiveNow`（unknown 算在播、offline 不算，与首页/侧栏同判据）。
 
 - **A0 `browser-sidecar` 没接 WebView2 进程退出事件**（`apps/browser-sidecar/src/main.rs:928` 只有
   500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
   `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
-  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。修法：`add_BrowserProcessExited`
-  → `request_shutdown()`（**只对浏览器进程退出**；渲染进程崩溃 WebView2 会自建，别用 ProcessFailed
-  的泛化事件，否则打断在途抓取）。桌面载具已有同款兜底（`webview_browser.rs:414`）。
+  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。桌面载具已有同款兜底（`webview_browser.rs:414`）。
+  ✅ 已修（2026-10-27）：主路 `ICoreWebView2Environment5::add_BrowserProcessExited` →
+  `request_shutdown()`，sidecar 自行退出、由宿主 `ensureReady` 重启整载具；旧 Runtime（< 88）
+  没有 Environment5 才降级 `add_ProcessFailed` + 只拦 `BROWSER_PROCESS_EXITED`（渲染进程失败
+  WebView2 会自建，泛化会打断在途抓取）。真机验证：杀 sidecar 的 msedgewebview2 子进程 →
+  sidecar 干净退出（exitCode 0）。
 - **A0b `rss --service` 的 job 表可能残留**（`apps/cli/src/service/server.ts:488-514`）：`runJob` 的
   `jobs.delete` 只在 `finally`，被 cancel 但底层 await 未返回时条目与 AbortController 一直挂着。
+  **2026-10-27 复核**：实际等待有界（core refresh 自带 abort race、CDP 命令 30s、HTTP 超时），
+  不是永久泄漏；但 cancel 后到操作自然结束前条目仍在。低成本改法：`Promise.race(fn, abortSignal)`
+  让 job 在取消时立即结算（`finally` 删除），语义与「取消 = 结束」一致。
 
 - **A1 服务端 diagnostics 内联了一份 core 实现**（`apps/cli/src/service/server.ts:829` 起）：
   `clearAll` 不清 `removedSubs`/`pageCursors`/`pageTotals`、不重置 netPolicy，也不取消在途
   refresh（在途结果会写回已清空的库）；core 的 `layer.diagnostics` 在生产路径成死代码。
   建议 dispatch 一律委托 core，`clearAll` 返回受影响的 subscriptionId 供 server 清投影。
 - **A2 `projectItem` 剥掉 article 的 `content`**（`server.ts:294` / `service-client:209`）：
-  桌面全文搜索（`selectors.ts:133`）与卡片摘要直接读 `item.content` → 生产路径静默失效。
-  需产品决策：投影保留 content（体积↑），或搜索改走服务端 / 按需 `resolveDetail`。
-- **A3 扫码登录成功后读本地 settings 镜像再写回**（`AccountPage.tsx:277`）：镜像尚未收到
-  `settings.changed` 时会把刚写入的 cookie 覆盖成旧值。应用 RPC 返回值或等事件后再写。
+  镜像里 `content` 恒空 → `matchesQuery` 的 bodyText 部分在生产路径不生效。
+  **2026-10-27 已修一半**：搜索空态文案改为「标题、作者与摘要；正文不在本地镜像里」
+  （`ArticlePane.tsx`），不再承诺搜正文；卡片摘要读的是 summary，不受影响。
+  **仍需产品决策**：投影保 content（体积↑，先跑 `service-snapshot-size.ts`），或搜索走服务端 /
+  按需 `resolveDetail`。
+- ~~**A3 扫码登录成功后读本地 settings 镜像再写回**~~ ✅ **已修（2026-10-27）**：
+  `AccountPage` 直接用 `LoginResult.cookie` 同步 UI，不再重读可能滞后的镜像。
 - **A4 刷新超时不再 `abortTabs`**：服务端 `withSignal` 只让 race reject，不中止底层请求，
   被放弃的抓取仍占浏览器 lane（`op:xhs`）直到 CDP 自身超时。desktop 侧 `abortTabs` 调用已移除。
 - **A5 `channelVideoToItem` 缺 author/publishedAt/duration**（`crawler/.../youtube/channel.ts:119`）：
   「今天」节点恒空、时间排序退化、卡片把 summary 当作者名。设计上刻意不反推 publishedAt，
   但 author（频道名）与 duration（lockup 里有）可以补。
-- **A6 `contentCache.delete` 无调用**（`core/src/repo/content-cache-repo.ts`）；
-  `bodyCache.deleteAll` 只剩自检用。删前者，后者标注「仅自检」。
+- ~~**A6 `contentCache.delete` 无调用**~~ ✅ **已修（2026-10-27）**：删除该方法；
+  `bodyCache.deleteAll` 保留并在接口注释标注「仅自检」。
 
 ### B · 性能
 
@@ -221,9 +230,10 @@ case 写类型谓词，收益为负。
 - **C3 `mergeProbeInfo`（`server.ts:309`）手抄 `sourceInfoFor` 的 cookie 合并规则**。
 - **C4 `BROWSER_UI_URL` / `EDGE_UI_URL` 与 `targetParams()` 在两个 driver 各一份**：
   不是载具差异，应移到 `host/src/browser/backend.ts` 常量。
-- **C5 `scripts/check.ts` 是白名单**：新增 `.check.ts` 不登记就静默不跑；`TYPECHECK_PROJECTS`
-  漏 `service-client`/`service-protocol`；`--filter` 打错时打印「0/0 全部通过」退出 0。
-  建议改成 glob 发现 + 未登记即失败。
+- ~~**C5 `scripts/check.ts` 是白名单**~~ ✅ **已修（2026-10-27）**：按文件系统发现
+  `*.check.ts`，未登记直接失败；有 `tsconfig.json` 但不在 `TYPECHECK_PROJECTS` 的项目同样失败；
+  `--filter` 空匹配改为 exit 1。（`service-client`/`service-protocol` 没有自己的 tsconfig，
+  由消费方 desktop/cli 的 typecheck 覆盖，不是漏项。）
 - **C6 YouTube InnerTube 文本/缩略图解析 4 份**（`channel.ts` 的 `textOf`/`maxThumb`、
   `discover.ts` 的 `textOf`/`thumbOf`、`client.ts` 的 `ytText`/`ytThumb`）。
 - **C7 客户端只比 `hello.protocol`，不读 `minClientProtocol`**（`service-client/src/index.ts:104`）：
@@ -236,6 +246,30 @@ case 写类型谓词，收益为负。
   Tauri 进程存活（`service.rs:242`），父进程消失后自行退出 —— 双保险已存在。
 
 ---
+
+## 2026-10-27：合流改版收尾复核（docs 全量核对）
+
+对 `docs/` 里全部「遗留/未做/待验证」条目做了一次逐条对码核对（120 条：open 89 / fixed 1 /
+stale 9 / decision 21）。本轮修掉的：
+
+- **[high] RSSHub provider 没在数据服务/CLI 注册**（00-overview 曾写「desktop/mobile 入口都 import」，
+  数据服务化后那句已够不到 DataLayer）：服务与 CLI 入口补 `import "@amoeba/core/source/rsshub"`，
+  `probe.fetch` 改走 `@amoeba/core/source` 的聚合注册表；`service-data-check` 钉住
+  `channels.list` 含 `rsshub:feed`。
+- **[med] 单订阅 TTL 清不回 0**：`undefined` 在 RPC JSON 里丢失 → 旧值保留。
+  新增 `SubscriptionPatch`（`null` = 清除），repo 侧删除键；dialog 改发 `null`；
+  `service-data-check` 钉「可写 / 可用 null 清除」。
+- **[trivial] 扫码登录后用滞后的 settings 镜像回写 cookie**（A3，见上）。
+- **[low] 直播会写续播位置**：`savePosition` 统一在入口拦 `kind === "live"`（原只在部分调用点讨论）。
+- **[low] 死代码/重复**：`contentCache.delete`、`LiveRailCard`、`selectors` 三个无调用导出已删；
+  kind 名称/图标两处本地副本改为 `KIND_META`。
+- **[low] 检查入口假绿**：`scripts/check.ts` 增加未登记检查文件/未纳入 typecheck 项目的守卫，
+  `--filter` 空匹配退出 1。
+- **AI 文案**：搜索空态不再承诺「搜正文」（A2）。
+
+> 其余 open 项按本文分档排期（A1 diagnostics 归位、A4 abortTabs、
+> B 段性能、C 段分层）——都不属于合流改版的收尾范围，单独开轮做。
+> （A0 browser-sidecar 退出事件已于 2026-10-27 落地，见上。）
 
 ## 附：为什么没引入 remeda
 

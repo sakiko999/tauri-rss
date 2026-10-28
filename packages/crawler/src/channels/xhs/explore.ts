@@ -189,14 +189,16 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
     return serializeFeed(this.toItems(feeds), this.channelOptions())
   }
 
-  /** feeds[] → Item[](noteId 在展开项外层,noteCard 在内层,xsecToken 也在外层)。 */
+  /** feeds[] → Item[](noteId 在展开项外层,noteCard 在内层,xsecToken 也在外层)。
+   *  ⚠️ 按外层 id 去重:平台 state 会把同一笔记重复追加(user 渠道的置顶组案底同源)。 */
   private toItems(feeds: any[]): Item[] {
     const t = now()
+    const seen = new Set<string>()
     return feeds
       .map((f: any): Social | null =>
         f?.noteCard ? noteCardToSocial(f.noteCard, this.key, t, f.id, f.xsecToken) : null,
       )
-      .filter((x): x is Social => !!x)
+      .filter((x): x is Social => !!x && !seen.has(x.id) && (seen.add(x.id), true))
   }
 
   private channelOptions(): SerializeOptions {

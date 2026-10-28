@@ -3,7 +3,7 @@
  * key / kind / name / 参数 tpl(* = required)/ defaultInfo。
  */
 
-import { listChannels } from "@amoeba/crawler"
+import { listChannels } from "@amoeba/core/source"
 import pc from "picocolors"
 
 import { printJson } from "../ui/render.ts"

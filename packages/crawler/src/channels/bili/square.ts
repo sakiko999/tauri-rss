@@ -28,25 +28,35 @@ export const BiliSquareChannel = makeApiChannel({
       { cookie: info.cookie },
     )
     const list = data?.data?.trending?.list ?? []
-    const t = now()
-    return list.map((raw): Item => {
-      const keyword = String(raw.keyword ?? "")
-      const link =
-        String(raw.link ?? raw.goto ?? "") ||
-        `https://search.bilibili.com/all?${new URLSearchParams({ keyword })}&from_source=webtop_search`
-      return {
-        // ⚠️ id 只用**词**(不加下标):榜单刷新后词位次会移动,下标入 id 会让同一词
-        // 因位次变化被当成新条目反复进库(与 weibo:hot / douyin:trend 同款约定)。
-        id: `bili-rank-${keyword}`,
-        sourceId: "bili:square",
-        kind: "social",
-        title: keyword,
-        url: link,
-        summary: raw["icon"] ? `<img src="${raw.icon}">` : undefined,
-        content: `<p>${keyword}</p>`,
-        fetchedAt: t,
-        raw,
-      } satisfies Social
-    })
+    return squareItems(list, now())
   },
 })
+
+/**
+ * 热搜原始条目 → 订阅条目。**导出给自检**:core 归类看的是条目级 `tpl:kind`
+ * (item.kind),渠道上声明的 `kind` 只是元数据 —— 只断言渠道 kind 的话,
+ * 把这里的 "social" 改回 "article" 检查照样全绿(词条会重新混进阅读流)。
+ */
+export function squareItems(list: Array<Record<string, unknown>>, t: number): Item[] {
+  return list.map((raw): Item => {
+    const keyword = String(raw.keyword ?? "")
+    const link =
+      String(raw.link ?? raw.goto ?? "") ||
+      `https://search.bilibili.com/all?${new URLSearchParams({ keyword })}&from_source=webtop_search`
+    return {
+      // ⚠️ id 只用**词**(不加下标):榜单刷新后词位次会移动,下标入 id 会让同一词
+      // 因位次变化被当成新条目反复进库(与 weibo:hot / douyin:trend 同款约定)。
+      id: `bili-rank-${keyword}`,
+      sourceId: "bili:square",
+      kind: "social",
+      title: keyword,
+      url: link,
+      thumbnail: typeof raw["icon"] === "string" ? raw["icon"] : undefined,
+      // ⚠️ 纯文本,不包 <p>:social 卡片按文本渲染 content(见 SocialCard),
+      // 带标签会原样显示 `<p>词条</p>`。与 weibo:hot / douyin:trend 同款。
+      content: keyword,
+      fetchedAt: t,
+      raw,
+    } satisfies Social
+  })
+}

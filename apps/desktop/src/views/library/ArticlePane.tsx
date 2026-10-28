@@ -57,7 +57,7 @@ export function ArticlePane() {
    * 「未读 / 收藏」chip 的计数。
    *
    * ⚠️ 只数文章:阅读栏只列 kind=article,而 tab:today / unread / resume 这类智能节点
-   * 混着视频与动态 —— 直接用 unreadCount() 会写出「未读 42」但点进去只有 12 条。
+   * 混着视频与动态 —— 直接用全量未读计数会写出「未读 42」但点进去只有 12 条。
    * ⚠️ 计数带上当前搜索词:搜索把列表收窄成 3 条时 chip 还写 42 就是在说谎。
    * ⚠️ 计数**不受 chip 自身影响**:否则切到「收藏」后「未读」的数字跟着变,无法预估。
    */
@@ -237,12 +237,18 @@ function EmptyState({
 }) {
   const query = useDesktop((s) => s.query)
   const offline = useDesktop((s) => s.offline)
+  // ⚠️ 「这个 tab 空了」≠「还没有订阅」：tab:article 是聚合视图、没有订阅身份
+  // (hasSub 恒 false)，但有 10 个订阅、只是没有文章时，旧文案会说谎。
+  const hasAnySub = useDesktop((s) => s.subscriptions.length > 0)
+  const refreshAll = useDesktop((s) => s.refreshAll)
+  // ⚠️ 只承诺标题/作者/摘要:生产路径的镜像剥掉了 article.content
+  // （docs/audit/refactor-candidates.md 的 A2），写「覆盖正文」时搜索正文永远搜不到。
   if (query)
     return (
       <StateBlock
         icon="search"
         title="没有匹配的内容"
-        text={`当前列表里没有包含「${query}」的条目。搜索覆盖标题、作者、摘要与正文。`}
+        text={`当前列表里没有包含「${query}」的条目。搜索覆盖标题、作者与摘要；正文不在本地镜像里。`}
       />
     )
   if (offline) return <StateBlock icon="offline" title="离线模式" text="已跳过网络抓取。切回在线后再刷新。" />
@@ -261,6 +267,20 @@ function EmptyState({
   if (disabled) return <StateBlock icon="lock" title="订阅已停用" text="在「设置 → 订阅」里重新启用它。" />
   if (hasSub)
     return <StateBlock icon="inbox" title="这个订阅还没有内容" text="点侧栏的刷新按钮抓一次,或等下一个刷新周期。" />
+  if (hasAnySub) {
+    return (
+      <StateBlock
+        icon="inbox"
+        title="这里还没有内容"
+        text="当前视图是空的：这个分类下暂时没有条目，或源的内容在其它分类里。刷新一次，或切到「全部」看看。"
+        actions={
+          <Button variant="primary" onClick={() => void refreshAll(true)}>
+            <Icon name="refresh" size={14} /> 刷新
+          </Button>
+        }
+      />
+    )
+  }
   return (
     <StateBlock
       icon="rss"

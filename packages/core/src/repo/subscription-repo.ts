@@ -4,7 +4,7 @@
  * 内容(MediaItem)在 MediaStore;本 repo 只维护订阅 + 分组的树。
  */
 
-import type { Subscription, SubscriptionGroup } from "../types/subscription.ts"
+import type { Subscription, SubscriptionGroup, SubscriptionPatch } from "../types/subscription.ts"
 
 const STORAGE_KEY = "subscriptions"
 
@@ -18,7 +18,7 @@ export interface SubscriptionRepository {
   listGroups(): Promise<SubscriptionGroup[]>
   get(id: string): Promise<Subscription | undefined>
   add(subscription: Subscription): Promise<void>
-  update(id: string, patch: Partial<Omit<Subscription, "id">>): Promise<Subscription | undefined>
+  update(id: string, patch: SubscriptionPatch): Promise<Subscription | undefined>
   remove(id: string): Promise<void>
   addGroup(group: SubscriptionGroup): Promise<void>
   /** 改组名/图标;返回更新后的组。 */
@@ -102,8 +102,13 @@ export function createSubscriptionRepository(storage: StorageBackend, now: () =>
         if (idx === -1) return undefined
         const prev = state.subscriptions[idx]!
         // ⚠️ 不许把 channelKey 改空:空了之后 refresh 抛 NoChannelError,订阅静默失效。
-        const next: Subscription = { ...prev, ...patch, id, updatedAt: now() }
+        // refreshIntervalSec 单拎出来：`null` = 清除（SubscriptionPatch 约定），
+        // undefined = 不改，数字 = 覆盖。
+        const { refreshIntervalSec, ...rest } = patch
+        const next: Subscription = { ...prev, ...rest, id, updatedAt: now() }
         if (!next.channelKey) next.channelKey = prev.channelKey
+        if (refreshIntervalSec === null) delete next.refreshIntervalSec
+        else if (refreshIntervalSec !== undefined) next.refreshIntervalSec = refreshIntervalSec
         state.subscriptions[idx] = next
         await save(state)
         return next

@@ -110,11 +110,15 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
   /** SSR 扁平笔记数组 → Item[](noteCard → Social,noteId 用外层 id,xsecToken 在外层)。 */
   private notesToItems(notes: any[]): Item[] {
     const t = now()
+    // ⚠️ user.notes 是分组数组(置顶组 + 全部组),flat() 后置顶笔记会出现两次
+    // (生产库实测 61/60,两段逐字节相同,重复对在 idx 0 与 52):按外层 id 去重,
+    // 保留首次出现(置顶位)。
+    const seen = new Set<string>()
     return notes
       .map((n: any): Social | null =>
         n?.noteCard ? noteCardToSocial(n.noteCard, this.key, t, n.id, n.xsecToken) : null,
       )
-      .filter((x): x is Social => !!x)
+      .filter((x): x is Social => !!x && !seen.has(x.id) && (seen.add(x.id), true))
   }
 
   /**

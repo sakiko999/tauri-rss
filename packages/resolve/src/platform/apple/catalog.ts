@@ -108,14 +108,20 @@ const toPodcast = (r: LookupResult): ApplePodcast | null => {
 
 /**
  * 按 id 批量取详情(**这一步才拿到 `feedUrl`**)。
- * ⚠️ 一次最多传几十个 id,多了 URL 会过长;调用方分批。
+ * 内部按每批 ~100 id 分批(守住 lookup URL 长度惯例上限;实测 200 id 一次 2239
+ * 字符可用,分批只是防线,调用方无需再切)。
  */
 export async function lookupApplePodcasts(ids: Array<string | number>, country = "cn"): Promise<ApplePodcast[]> {
   const clean = ids.map((i) => String(i).trim()).filter(Boolean)
   if (!clean.length) return []
-  const url = `https://itunes.apple.com/lookup?id=${clean.join(",")}&entity=podcast&country=${country}`
-  const res = await httpJson<{ results?: LookupResult[] }>(url, { "user-agent": UA })
-  return (res?.results ?? []).map(toPodcast).filter((p): p is ApplePodcast => p !== null)
+  const out: ApplePodcast[] = []
+  for (let i = 0; i < clean.length; i += 100) {
+    const batch = clean.slice(i, i + 100)
+    const url = `https://itunes.apple.com/lookup?id=${batch.join(",")}&entity=podcast&country=${country}`
+    const res = await httpJson<{ results?: LookupResult[] }>(url, { "user-agent": UA })
+    out.push(...(res?.results ?? []).map(toPodcast).filter((p): p is ApplePodcast => p !== null))
+  }
+  return out
 }
 
 /**

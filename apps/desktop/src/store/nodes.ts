@@ -77,6 +77,14 @@ export const PAGES: Array<{ id: string; label: string; icon: string }> = [
  */
 export const HOME_NODE = "home"
 
+/**
+ * 片库节点。**只用于 /library 深链**（v1 不做片库，P1）：没有任何数据源产出
+ * movie/series/anime，导航位不渲染。留这个节点是为了让 `/library` 落到
+ * 「未开放」的说明页，而不是被 `*` 静默重定向回首页（用户会以为链接坏了）。
+ * 与 home 一样用裸 id，不新增 page:/tab: 前缀。
+ */
+export const LIBRARY_NODE = "library"
+
 export const DEFAULT_VIEW = HOME_NODE
 
 export function isTabNode(id: string | null): boolean {
@@ -228,6 +236,7 @@ export function nodeMeta(
   // 首页是独立视图意图（不是订阅、不是 tab）—— 必须排在所有前缀判定之前，
   // 否则裸 id 会落到最后的「按订阅查」分支。
   if (n === HOME_NODE) return { ...base, title: "首页", icon: "grid", type: "home" }
+  if (n === LIBRARY_NODE) return { ...base, title: "片库", icon: "grid", type: "page" }
 
   if (isPlayNode(n)) return { ...base, title: "播放", icon: "play", type: "player" }
 

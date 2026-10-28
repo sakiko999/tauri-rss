@@ -12,7 +12,7 @@
  */
 
 import type { MediaItem } from "@amoeba/core"
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
@@ -35,6 +35,9 @@ function greetingOf(hour: number): string {
   return "晚上好"
 }
 
+/** 同一小时（小时桶），用于判断 `now` 是否需要刷新。 */
+const sameHour = (a: number, b: number): boolean => Math.floor(a / 3_600_000) === Math.floor(b / 3_600_000)
+
 export function HomeView() {
   const allItems = useDesktop((s) => s.allItems)
   const subscriptions = useDesktop((s) => s.subscriptions)
@@ -45,8 +48,20 @@ export function HomeView() {
   const go = useViewNavigate()
   const actions = usePlayerNav()
 
-  // 「现在」只在数据变化时刷新一次（见文件头：不能进依赖的每帧值）。
-  const now = useMemo(() => Date.now(), [allItems, subscriptions])
+  // 「现在」只在**跨小时**时更新（问候语/日期按小时变，见文件头：不能把 Date.now()
+  // 写进依赖，每帧都变会让 memo 永远失效）。⚠️ 只有数据变化不够：应用长开过夜后
+  // 页头会停在「早上好 · 昨天」，「今日有更新」也一直按昨天的日界算。
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNow((prev) => (sameHour(prev, Date.now()) ? prev : Date.now()))
+    }, 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  useEffect(() => {
+    // 数据变化时校正一次；同一小时不触发重渲染。
+    setNow((prev) => (sameHour(prev, Date.now()) ? prev : Date.now()))
+  }, [allItems, subscriptions])
 
   const counts = useMemo(() => todayCounts(allItems, now), [allItems, now])
   const feature = useMemo(() => {
@@ -133,7 +148,8 @@ export function HomeView() {
   // bili:precious 等源刻意不设 publishedAt，精确计数会漏掉它们（§2.2 文案修正 ①）；
   // 计数为 0 时整句不出现 —— 「今日暂无更新」在全是无时间戳源的库里是假话。
   const summaryParts: string[] = []
-  if (counts.total > 0) summaryParts.push(`今日有更新 ${counts.total} 条`)
+  // `total > 0` 只用来判定这句是否出现，数字本身不展示（原因见上）。
+  if (counts.total > 0) summaryParts.push("今日有更新")
   if (counts.liveNow > 0) summaryParts.push(`${counts.liveNow} 场直播进行中`)
 
   return (

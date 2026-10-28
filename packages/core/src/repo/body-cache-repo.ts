@@ -25,6 +25,7 @@ export interface BodyCacheRepo {
   /** 该订阅全部正文缓存的键(退订清理与其它键合成一次 batch)。 */
   keysOf(subscriptionId: string): Promise<string[]>
   /** 删某订阅的全部条目正文缓存(订阅退订时;条目 id 未知,按前缀清)。 */
+  /** ⚠️ 仅自检使用（生产退订走 keysOf + 批量 storage.delete）；保留是为了验前缀扫描语义。 */
   deleteAll(subscriptionId: string): Promise<void>
 }
 

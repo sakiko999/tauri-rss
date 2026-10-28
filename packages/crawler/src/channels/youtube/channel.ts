@@ -15,9 +15,9 @@ import {
   type YoutubeChannelVideo,
 } from "@amoeba/resolve"
 import type { Item, Video } from "@amoeba/xml"
-import { type ParsedItem, parseFeed, type SerializeOptions } from "@amoeba/xml"
+import { type ParsedItem, parseFeed, serializeFeed, type SerializeOptions } from "@amoeba/xml"
 
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 
 const UA = DESKTOP_CHROME_UA
@@ -45,12 +45,33 @@ export class YoutubeChannel implements RssChannel {
   }
 
   // 仅输出 Video item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→watch?v=)。
-  getSource(info: SourceInfo): RssSource {
+  getSource(info: SourceInfo): RssSource & Partial<Pageable> {
     return {
       fetch: apiFetchItems(
         () => this.fetchItems(info),
         () => this.channelOptions(info),
       ),
+      // InnerTube continuation 翻页(cursor = 上游 token,数值 apiFetchMore 不适用)。
+      fetchMore: async (cursor?: string) => {
+        const opts = this.channelOptions(info)
+        const channelId = info.channelId ?? this.defaultChannelId ?? ""
+        // 单视频/直播订阅(videoId)无翻页语义;不认识的信息源也直接到底。
+        if (info.videoId || !channelId) return { xml: serializeFeed([], opts) }
+        // 首翻无 cursor:先拉一次首页拿 token(条目丢弃,twitch streams 两步法同款;
+        // 不能闭包缓存首页 token —— refresh 会换掉首页)。失败要 throw,别返回空页。
+        let token = cursor
+        if (token === undefined) {
+          const first = await fetchYoutubeChannelVideos(channelId)
+          token = first.continuation
+          if (!token) return { xml: serializeFeed([], opts) } // 一页到底
+        }
+        const page = await fetchYoutubeChannelVideos(channelId, { continuation: token })
+        const items = page.videos.map((v) => channelVideoToItem(v, now()))
+        return {
+          xml: serializeFeed(items, opts),
+          ...(page.continuation ? { cursor: page.continuation, hasMore: true } : {}),
+        }
+      },
     }
   }
 

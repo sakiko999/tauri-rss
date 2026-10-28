@@ -139,6 +139,12 @@ async function main(): Promise<void> {
       channels.some((c) => c.key === "rss:hn"),
       `count=${channels.length}`,
     )
+    // ⚠️ RSSHub 是运行时注册的 source（import 副作用）。服务进程漏掉那句 import 时，
+    // rsshub:feed 会在生产路径 NoChannelError，而其它检查全绿 —— 这里钉住。
+    add(
+      "channels.list 含 rsshub:feed",
+      channels.some((c) => c.key === "rsshub:feed"),
+    )
 
     const added = await rpc<{ id: string; refresh: { itemCount: number; error?: string } }>(
       "addSubscription",
@@ -151,6 +157,18 @@ async function main(): Promise<void> {
       JSON.stringify(added.refresh),
     )
     const subId = added.id
+
+    // TTL 清除语义：RPC 走 JSON，undefined 会被丢掉 → 旧值清不掉。约定用 null。
+    const withTtl = await rpc<{ refreshIntervalSec?: number }>("subscriptions.update", {
+      id: subId,
+      patch: { refreshIntervalSec: 600 },
+    })
+    add("订阅 TTL 可写", withTtl.refreshIntervalSec === 600, String(withTtl.refreshIntervalSec))
+    const clearedTtl = await rpc<{ refreshIntervalSec?: number }>("subscriptions.update", {
+      id: subId,
+      patch: { refreshIntervalSec: null },
+    })
+    add("订阅 TTL 可用 null 清除", clearedTtl.refreshIntervalSec === undefined, String(clearedTtl.refreshIntervalSec))
 
     const retried = await rpc<{ id: string }>(
       "addSubscription",

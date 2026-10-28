@@ -24,7 +24,7 @@ export type { MediaStore, MediaStoreListener } from "./store/media-store.ts"
 export type { ChannelInfo } from "./types/channel-info.ts"
 export type { RefreshResult } from "./types/refresh-result.ts"
 
-export type { Subscription, SubscriptionGroup } from "./types/subscription.ts"
+export type { Subscription, SubscriptionGroup, SubscriptionPatch } from "./types/subscription.ts"
 
 /**
  * ⚠️ 只导出 `AppSettings` 与需要的联合类型。`ViewMode` / `ThemeMode` / `Density`

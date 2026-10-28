@@ -86,7 +86,11 @@ export class BiliSeasonChannel implements RssChannel {
   private async fetchItems(seasonId: () => Promise<string>, page: number): Promise<Item[]> {
     const id = await seasonId()
     const res = await biliClient.getJson<{ data?: { archives?: Array<Record<string, any>> } }>(
-      `${API}/x/polymer/web-space/seasons_archives_list?mid=0&season_id=${encodeURIComponent(id)}&page_num=${page}&page_size=${PAGE_SIZE}`,
+      // ⚠️ 必须带 sort_reverse=true:该端点默认按 pubdate **升序**(首页 = 最老一批,
+      // 2026-10-27 实测 season 2974525 首条 2024-05-11),与订阅语义相反;
+      // sort_by/ascending/order 等参数均无效,只有 RSSHub 同款 sort_reverse 生效。
+      // 加上后 page1 = 最新,「加载更多」向更老翻。
+      `${API}/x/polymer/web-space/seasons_archives_list?mid=0&season_id=${encodeURIComponent(id)}&sort_reverse=true&page_num=${page}&page_size=${PAGE_SIZE}`,
       // ⚠️ 必须带 Referer:匿名请求不带时返回 -352(风控),见文件头。
       { referer: "https://www.bilibili.com/" },
     )

@@ -47,36 +47,41 @@ export async function fetchDouyuCategories(): Promise<DouyuCategory[]> {
     .filter((c) => c.id !== "")
 }
 
-/** 按分区列房间(page 从 1 起;服务端每页固定条数)。 */
-export async function fetchDouyuCategoryRooms(areaId: string, page = 1): Promise<Item[]> {
-  const res = await httpJson<{ data?: { rl?: Array<Record<string, any>> } }>(
+/**
+ * 按分区列房间(page 从 1 起;服务端每页固定条数)。
+ * 返回 `{ items, hasMore }`:可 pageable 的渠道过滤条目(type!=1 广告位)必须显式
+ * 回 hasMore,否则整页被滤空会被 core 判成到底(工厂契约)。`data.pgcnt` 是总页数
+ * (实测 area=1 → 4),用它精确判;缺失回退「原始行非空」。
+ */
+export async function fetchDouyuCategoryRooms(areaId: string, page = 1): Promise<{ items: Item[]; hasMore: boolean }> {
+  const res = await httpJson<{ data?: { rl?: Array<Record<string, any>>; pgcnt?: number } }>(
     `https://www.douyu.com/gapi/rkc/directory/mixList/2_${encodeURIComponent(areaId)}/${page}`,
     { "user-agent": UA, referer: "https://www.douyu.com/" },
   )
   const t = now()
   const list = Array.isArray(res?.data?.rl) ? res.data.rl : []
-  return (
-    list
-      // type != 1 是广告/推荐位,不是真实房间。
-      .filter((item) => Number(item.type ?? 1) === 1)
-      .map((item): Live => {
-        const rid = String(item.rid ?? "")
-        return {
-          id: `douyu:${rid}`,
-          sourceId: "live:douyu:category",
-          kind: "live",
-          title: String(item.rn ?? ""),
-          url: `https://www.douyu.com/${rid}`,
-          thumbnail: item.rs16 ? String(item.rs16) : undefined,
-          author: item.nn ? { name: String(item.nn) } : undefined,
-          fetchedAt: t,
-          platform: "douyu",
-          roomId: rid,
-          liveStatus: "live",
-          online: Number(item.ol ?? 0),
-        }
-      })
-  )
+  const pgcnt = Number(res?.data?.pgcnt ?? 0)
+  const items = list
+    // type != 1 是广告/推荐位,不是真实房间。缺失按 1 保留(宁多勿误删)。
+    .filter((item) => Number(item.type ?? 1) === 1)
+    .map((item): Live => {
+      const rid = String(item.rid ?? "")
+      return {
+        id: `douyu:${rid}`,
+        sourceId: "live:douyu:category",
+        kind: "live",
+        title: String(item.rn ?? ""),
+        url: `https://www.douyu.com/${rid}`,
+        thumbnail: item.rs16 ? String(item.rs16) : undefined,
+        author: item.nn ? { name: String(item.nn) } : undefined,
+        fetchedAt: t,
+        platform: "douyu",
+        roomId: rid,
+        liveStatus: "live",
+        online: Number(item.ol ?? 0),
+      }
+    })
+  return { items, hasMore: pgcnt > 0 ? page < pgcnt : list.length > 0 }
 }
 
 /** 搜索房间(匿名可用)。分页 page 从 1 起。 */

@@ -11,8 +11,10 @@ import type { ButtonHTMLAttributes } from "react"
 
 import { cn } from "../lib/cn.ts"
 
+// ⚠️ 按压态用 text-primary-text 而不是 text-primary：primary 压在 primary-soft 上浅色只有
+// 3.99:1（13px 正文需 4.5），按下反而更难读；primary-text 浅 4.97 / 深 6.21。
 const buttonVariants = cva(
-  "inline-flex h-control items-center justify-center gap-2 rounded-md border border-transparent px-3 text-ui font-ui whitespace-nowrap transition-colors duration-[120ms] ease-decel active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:bg-primary-soft aria-pressed:text-primary",
+  "inline-flex h-control items-center justify-center gap-2 rounded-md border border-transparent px-3 text-ui font-ui whitespace-nowrap transition-colors duration-[120ms] ease-decel active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 aria-pressed:bg-primary-soft aria-pressed:text-primary-text",
   {
     variants: {
       variant: {
@@ -40,7 +42,7 @@ export function Button({ className, variant, size, block, ...props }: ButtonProp
 }
 
 const iconButtonVariants = cva(
-  "grid size-control flex-none place-items-center rounded-md text-muted-foreground transition-colors duration-[120ms] ease-decel hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:bg-primary-soft aria-pressed:text-primary",
+  "grid size-control flex-none place-items-center rounded-md text-muted-foreground transition-colors duration-[120ms] ease-decel hover:bg-surface-2 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 aria-pressed:bg-primary-soft aria-pressed:text-primary-text",
   {
     variants: {
       size: {

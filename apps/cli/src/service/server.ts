@@ -30,8 +30,13 @@ import {
   type RefreshResult,
   type Subscription,
   type SubscriptionGroup,
+  type SubscriptionPatch,
 } from "@amoeba/core"
-import { getChannel as crawlerGetChannel } from "@amoeba/crawler"
+import { getChannel as sourceGetChannel } from "@amoeba/core/source"
+// RSSHub 是运行时注册的外部 source（import 副作用）。DataLayer 现在跑在本服务进程里，
+// desktop 入口那句 import 够不到这里 —— 漏掉它，`rsshub:feed` 订阅刷新会 NoChannelError
+// （桌面「发现 → RSSHub」添加的订阅全部静默失败）。见 docs/audit/refactor-candidates.md。
+import "@amoeba/core/source/rsshub"
 import { formatError } from "@amoeba/log"
 import {
   getDanmakuByUrl,
@@ -627,10 +632,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         return undefined
       }
       case "subscriptions.update": {
-        const updated = await layer.subscriptions.update(
-          asString(p.id, "id"),
-          (p.patch ?? {}) as Partial<Omit<Subscription, "id">>,
-        )
+        const updated = await layer.subscriptions.update(asString(p.id, "id"), (p.patch ?? {}) as SubscriptionPatch)
         commit(await subsEvent())
         return updated
       }
@@ -875,7 +877,8 @@ export async function runService(opts: ServiceOptions): Promise<number> {
 
       // ── CLI 原始探针（只读；cookie/被动规则与抓取同源）────────
       case "probe.fetch": {
-        const channel = crawlerGetChannel(asString(p.channelKey, "channelKey"))
+        // 走 source 聚合注册表（含 rsshub），不是 crawler 单表：探针与真实刷新同源。
+        const channel = sourceGetChannel(asString(p.channelKey, "channelKey"))
         if (!channel) throw new ServiceError("bad-request", 404, "未知渠道")
         const settings = await layer.settings.get()
         const info = mergeProbeInfo(channel.key, (p.info ?? {}) as Record<string, string>, settings)

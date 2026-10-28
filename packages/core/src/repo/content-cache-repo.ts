@@ -25,8 +25,6 @@ export interface ContentCacheRepo {
   set(subscriptionId: string, entry: ContentCacheEntry): Promise<void>
   /** 该订阅缓存的键(退订清理与正文缓存键合成一次 batch)。 */
   keysOf(subscriptionId: string): Promise<string[]>
-  /** 删某订阅缓存(订阅移除时)。 */
-  delete(subscriptionId: string): Promise<void>
 }
 
 export function createContentCacheRepo(storage: StorageBackend, prefix = "content:"): ContentCacheRepo {
@@ -48,9 +46,6 @@ export function createContentCacheRepo(storage: StorageBackend, prefix = "conten
     },
     async keysOf(subscriptionId) {
       return [key(subscriptionId)]
-    },
-    async delete(subscriptionId) {
-      await storage.delete(key(subscriptionId))
     },
   }
 }

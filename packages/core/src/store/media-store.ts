@@ -69,13 +69,21 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
     },
 
     replace(subscriptionId, next) {
-      items = [...items.filter((it) => it.subscriptionId !== subscriptionId), ...next]
+      // ⚠️ 按 id 去重:「id 在订阅内唯一」是契约,append 早就去重而 replace 没有 ——
+      // 渠道产出重复条目(xhs 滚动 state 会把同一笔记追加两次)时,UI 会因重复 React key 报警,
+      // 且同一条在列表里出现两次。保留首次出现,顺序不变。
+      const seen = new Set<string>()
+      const unique = next.filter((it) => !seen.has(it.id) && (seen.add(it.id), true))
+      items = [...items.filter((it) => it.subscriptionId !== subscriptionId), ...unique]
       emit()
     },
 
     append(subscriptionId, next) {
       const existingIds = new Set(items.filter((it) => it.subscriptionId === subscriptionId).map((it) => it.id))
-      const fresh = next.filter((it) => !existingIds.has(it.id))
+      // ⚠️ existingIds 同时当「本批已接受」集合用:同一页内部的重复 id(xhs 置顶组 +
+      // 全部组 flat 的案底同源)也不能双写 —— 与 replace 的页内去重对称,
+      // addedCount 因此是真实新增数(core 靠它判「游标前进了但 0 新增」)。
+      const fresh = next.filter((it) => !existingIds.has(it.id) && (existingIds.add(it.id), true))
       if (!fresh.length) return 0
       items = [...items, ...fresh]
       emit()

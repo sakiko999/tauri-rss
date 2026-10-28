@@ -103,4 +103,32 @@ assert.deepEqual(
   ["b2", "b1"],
 )
 
-console.log("✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / append)")
+// ⭐ append 对同批内部的重复 id 也去重(与 replace 对称;addedCount 只算真实新增)。
+store.append("s-append-dup", [
+  item("e1", "s-append-dup", { publishedAt: NOW }),
+  item("e2", "s-append-dup", { publishedAt: NOW - 1000 }),
+  item("e1", "s-append-dup", { publishedAt: NOW - 2000 }), // 同批重复,应被丢弃
+])
+assert.deepEqual(
+  store.query({ subscriptionId: "s-append-dup" }).map((i) => i.id),
+  ["e1", "e2"],
+)
+assert.equal(store.all().filter((i) => i.subscriptionId === "s-append-dup").length, 2)
+
+// ⭐ replace 也按 id 去重(契约:id 在订阅内唯一)。
+// 案底:小红书滚动翻页后平台 state 会把同一笔记追加两次,xml 缓存 61 条里 60 唯一,
+// UI 报「Encountered two children with the same key」。
+store.replace("s-dup2", [
+  item("x1", "s-dup2", { publishedAt: NOW }),
+  item("x2", "s-dup2", { publishedAt: NOW - 1000 }),
+  item("x1", "s-dup2", { publishedAt: NOW - 2000 }),
+])
+assert.deepEqual(
+  store.query({ subscriptionId: "s-dup2" }).map((i) => i.id),
+  ["x1", "x2"],
+  "replace 未按 id 去重 —— 同一订阅会渲染重复条目",
+)
+
+console.log(
+  "✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / append / replace 去重)",
+)

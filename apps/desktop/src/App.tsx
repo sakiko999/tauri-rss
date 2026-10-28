@@ -24,13 +24,14 @@ import { useGlobalShortcuts } from "./lib/shortcuts.ts"
 import { overlayBlock } from "./lib/uiOverlay.ts"
 import { scheduleStartupCheck } from "./lib/update.ts"
 import { setNavBridge, useDesktop, useNodeMeta } from "./store/index.ts"
-import type { NodeType } from "./store/nodes.ts"
+import { LIBRARY_NODE, type NodeType } from "./store/nodes.ts"
 import { usePrefs } from "./store/prefs.ts"
 import { showSkeleton } from "./store/selectors.ts"
 import { DiscoverPage } from "./views/discover/DiscoverPage.tsx"
 import { HomeView } from "./views/home/HomeView.tsx"
 import { ArticlePane } from "./views/library/ArticlePane.tsx"
 import { HotPane } from "./views/library/HotPane.tsx"
+import { LibraryPage } from "./views/library/LibraryPage.tsx"
 import { MediaMain } from "./views/library/MediaMain.tsx"
 import { ReaderMain } from "./views/library/ReaderMain.tsx"
 import { ShortVideoView } from "./views/library/ShortVideoView.tsx"
@@ -155,6 +156,8 @@ export default function App() {
               <DiscoverPage />
             ) : meta.node === "page:account" ? (
               <AccountPage />
+            ) : meta.node === LIBRARY_NODE ? (
+              <LibraryPage />
             ) : (
               <SettingsPage />
             )

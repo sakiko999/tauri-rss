@@ -19,9 +19,9 @@
 
 import { biliClient, fillImageSizes, now, toHttps } from "@amoeba/resolve"
 import type { Item, Social, SocialImage } from "@amoeba/xml"
-import { type SerializeOptions } from "@amoeba/xml"
+import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 
-import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 
 const API = "https://api.bilibili.com"
@@ -112,30 +112,71 @@ function parseItem(it: DynItem): { content: string; images: SocialImage[]; likes
   return parsed
 }
 
+function requireUid(info: SourceInfo): string {
+  const uid = String(info.uid ?? "")
+  if (!/^\d+$/.test(uid)) throw new Error(`bili:dynamic 需要数字 uid,收到 "${uid}"`)
+  return uid
+}
+
 /** bilibili 用户动态(社交)channel。 */
 export class BiliDynamicChannel implements RssChannel {
   readonly key = "bili:dynamic"
   readonly name = "B站用户动态"
   readonly kind = "social" as const
   readonly sourceInfoTpl = [{ key: "uid", label: "UP 主 uid", required: true }]
-  getSource(info: SourceInfo): RssSource {
+  getSource(info: SourceInfo): RssSource & Partial<Pageable> {
     return {
       fetch: apiFetchItems(
         () => this.fetchItems(info),
         () => this.channelOptions(info),
       ),
+      // offset 游标翻页:apiFetchMore 不适用(Number(cursor) 会吃掉 offset 字符串)。
+      fetchMore: async (cursor?: string) => {
+        // 首翻无 cursor:offset 只随响应给出 → 先拉一次首页拿下一页 token(条目丢弃,
+        // weibo/user.ts 的 since_id 两步法同款;不能闭包缓存,refresh 会换掉首页)。
+        const uid = requireUid(info)
+        const opts = this.channelOptions(info)
+        let token = cursor
+        if (token === undefined) {
+          const first = await this.fetchRaw(info, uid, "")
+          token = first.offset
+          if (!token) return { xml: serializeFeed([], opts) } // 一页到底
+        }
+        const page = await this.fetchRaw(info, uid, token)
+        const items = await this.toItems(page.items, now())
+        return {
+          xml: serializeFeed(items, opts),
+          // has_more=true 但 offset 缺失时不给 cursor(core 判到底,不悬挂重试);
+          // hasMore 显式 true:整页被过滤成 0 条时也不能让 core 按「0 新增」判到底。
+          ...(page.hasMore && page.offset ? { cursor: page.offset, hasMore: true } : {}),
+        }
+      },
     }
   }
   private async fetchItems(info: SourceInfo): Promise<Item[]> {
-    const uid = String(info.uid ?? "")
-    if (!/^\d+$/.test(uid)) throw new Error(`bili:dynamic 需要数字 uid,收到 "${uid}"`)
-    // 登录 cookie:订阅级 info.cookie > core 层 DEFAULT(core 注入 sourceInfoFor)。
-    const data = await biliClient.getJson<{ data?: { items?: DynItem[] } }>(
-      `${API}/x/polymer/web-dynamic/v1/feed/space?host_mid=${uid}&platform=web&features=itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote`,
+    const page = await this.fetchRaw(info, requireUid(info), "")
+    return this.toItems(page.items, now())
+  }
+  /** 拉一页原始动态(空间动态端点要登录 cookie + wbi 域外 referer,见文件头)。 */
+  private async fetchRaw(
+    info: SourceInfo,
+    uid: string,
+    offset: string,
+  ): Promise<{ items: DynItem[]; hasMore: boolean; offset?: string }> {
+    const data = await biliClient.getJson<{
+      data?: { items?: DynItem[]; has_more?: boolean; offset?: string }
+    }>(
+      `${API}/x/polymer/web-dynamic/v1/feed/space?host_mid=${uid}&platform=web&features=itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote${offset ? `&offset=${encodeURIComponent(offset)}` : ""}`,
       { referer: `https://space.bilibili.com/${uid}/`, cookie: info.cookie || undefined },
     )
-    const items = data?.data?.items ?? []
-    const t = now()
+    return {
+      items: data?.data?.items ?? [],
+      hasMore: data?.data?.has_more === true,
+      offset: data?.data?.offset || undefined,
+    }
+  }
+  /** DynItem[] → Social[](parse 一次 + fill 尺寸,fetch/fetchMore 共用同一批对象)。 */
+  private async toItems(items: DynItem[], t: number): Promise<Item[]> {
     // 先一次性 parse 全部(缓存结果,map 时复用)——兜底 fill 尺寸的必须是同一个对象,
     // 否则 fill 完再 map 又 parse 一次生成新对象,宽高丢失。
     const parsedItems = items.map((it) => parseItem(it))
