@@ -4,14 +4,17 @@
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 DataLayer。
  */
 
-import { ERROR_KIND_LABEL, type ErrorKind, errorKindOf } from "@amoeba/core"
+import { contentTtlMs, ERROR_KIND_LABEL, type ErrorKind, errorKindOf } from "@amoeba/core"
 
 import { createDesktopDataLayer } from "../data-source.ts"
 import { applyRuntimeSettings, REFRESH_TIMEOUT_MS, withTimeout } from "../lib.ts"
 import { PAGE_SIZE } from "../selectors.ts"
 import type { DesktopState, StoreCtx } from "../types.ts"
 
-type DataActions = Pick<DesktopState, "init" | "syncBrowserCookies" | "refresh" | "refreshAll" | "loadMore">
+type DataActions = Pick<
+  DesktopState,
+  "init" | "syncBrowserCookies" | "refresh" | "refreshAll" | "refreshIfStale" | "loadMore"
+>
 
 /** init 幂等(StrictMode 双 effect 用同一个 promise 去重)。 */
 let initPromise: Promise<void> | null = null
@@ -117,8 +120,11 @@ export function createDataActions(ctx: StoreCtx): DataActions {
       // ⚠️ try/finally:dl.refresh 抛错(存储损坏/宿主未注入)时若不清 busy,该订阅
       // health 会**永久停在 busy**(转圈不消失),只能重启应用恢复。
       try {
-        // 手动「刷新当前」→ 强制绕过 TTL(用户显式点刷 = 期望最新)。
-        const result = await dl.refresh(id, { force: true })
+        // 手动「刷新当前」默认 force(用户显式点刷 = 期望最新);自动补刷传
+        // force:false 走 TTL 缓存(core 侧未过期零网络)。超时与 refreshAll 同款,
+        // 防单条永挂让 busy 转圈不落。
+        const force = opts?.force !== false
+        const result = await withTimeout(dl.refresh(id, { force }), REFRESH_TIMEOUT_MS, id)
         const total = dl.totalOf(id)
         const title = get().subscriptions.find((s) => s.id === id)?.title ?? id
         set((s) => {
@@ -126,6 +132,8 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           delete busy[id]
           return {
             busy,
+            // TTL 判定用缓存 fetchedAt(命中缓存时它早于 now),不是当下时间。
+            ...(result.error ? {} : { fetchedAt: { ...s.fetchedAt, [id]: result.fetchedAt } }),
             ...(total !== undefined ? { totals: { ...s.totals, [id]: total } } : {}),
             loadMoreEnded: result.error ? s.loadMoreEnded : { ...s.loadMoreEnded, [id]: false },
             // ⚠️ 首屏可能超过 PAGE_SIZE(xhs:explore 实测 89 条):本地窗口初始只有 60,
@@ -156,7 +164,7 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           const label = kind === "unknown" ? "刷新失败" : ERROR_KIND_LABEL[kind]
           get().toast("error", `${label}：${title}`, `${result.error}\n旧缓存已保留展示,不会出现内容空窗。`)
         } else if (!opts?.silent) {
-          // 手动刷新是 force 的,必然走网络 —— 旧文案「未发起网络请求」与实际行为不符。
+          // 只有手动刷新(force)会到这里 —— 自动补刷恒 silent。
           // 停用订阅例外:core 对 enabled=false 不抓取只回缓存,别宣称「已强制重新抓取」。
           const disabled = get().subscriptions.find((s) => s.id === id)?.enabled === false
           get().toast(
@@ -249,12 +257,14 @@ export function createDataActions(ctx: StoreCtx): DataActions {
         // ⚠️ 本地窗口抬到至少覆盖新首屏(同 refresh(id):首屏可能超过 PAGE_SIZE,
         // 渠道分页只按 addedCount 增长窗口,首屏缺口永远补不上)。
         const page = { ...get().page }
+        const fetchedAt = { ...get().fetchedAt }
         for (let i = 0; i < subs.length; i++) {
           const r = results[i]
           if (r?.status !== "fulfilled" || r.value.error) continue
           const id = subs[i]!.id
           // 同上:停用/无缓存订阅返回 itemCount 0,不能把窗口压到 0。
           page[id] = Math.max(page[id] || PAGE_SIZE, r.value.itemCount)
+          fetchedAt[id] = r.value.fetchedAt
         }
         set({
           loading: false,
@@ -263,6 +273,7 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           refreshErrorKinds: kinds,
           loadMoreEnded: clearedEnded,
           page,
+          fetchedAt,
         })
       }
       const failed = Object.keys(errors).length
@@ -277,6 +288,29 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           : `${subs.length} 条订阅已更新。`,
       )
       refreshView()
+    },
+
+    /**
+     * 选中过期订阅时的自动补刷(select 钩子调):
+     *   - 内容**照常展示**(缓存镜像立即渲染,不盖骨架),仅 busy 加转圈;
+     *   - TTL 判定在本地做(`contentTtlMs` + `fetchedAt`):TTL 内零调用;
+     *     `fetchedAt` 未知(启动后未刷过)仍调一次 —— core 的 TTL 短路兜底,
+     *     未过期时零网络、毫秒级返回;
+     *   - 尊重 autoRefresh(关 = 非手动刷新不发网络)与停用订阅;全量刷新
+     *     (loading)或该条在刷(busy)时不叠加。
+     */
+    refreshIfStale(id) {
+      const dl = get().dl
+      if (!dl || get().offline || get().loading || get().busy[id]) return
+      const settings = get().settings
+      const sub = get().subscriptions.find((s) => s.id === id)
+      if (!sub || sub.enabled === false || settings?.autoRefresh === false) return
+      if (settings) {
+        const at = get().fetchedAt[id]
+        if (at !== undefined && Date.now() - at < contentTtlMs(sub, settings)) return
+      }
+      // silent:成功不 toast(用户没主动要刷新);失败 toast + refreshErrors → rail 告警。
+      void get().refresh(id, { force: false, silent: true })
     },
 
     async loadMore() {

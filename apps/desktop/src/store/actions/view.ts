@@ -41,7 +41,11 @@ export function createViewActions(ctx: StoreCtx): ViewActions {
       const dl = get().dl
       if (!dl) return
       refreshView()
-      if (isRealSub(nodeId)) queryCanLoadMore(nodeId)
+      if (isRealSub(nodeId)) {
+        queryCanLoadMore(nodeId)
+        // 选中过期订阅自动补一次刷新(不阻塞内容展示,仅 busy 转圈;TTL 内零调用)。
+        get().refreshIfStale(nodeId)
+      }
     },
 
     async loadHotWord(word) {

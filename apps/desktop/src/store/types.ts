@@ -93,6 +93,8 @@ export interface DesktopState {
   /** 刷新中(全量/单订阅)。 */
   loading: boolean
   busy: Record<string, boolean>
+  /** 各订阅最近一次成功取数的时间(缓存 fetchedAt;TTL 内跳过自动补刷)。 */
+  fetchedAt: Record<string, number>
   refreshErrors: Record<string, string>
   /** 与 refreshErrors 同键的失败分类（登录/风控/网络/…），供 UI 选文案。 */
   refreshErrorKinds: Record<string, ErrorKind>
@@ -169,9 +171,13 @@ export interface DesktopState {
    */
   openPreviewDetail(item: MediaItem, opts?: { force?: boolean }): Promise<void>
 
-  /** `opts.silent` 时不弹「已更新」toast（供内部编排调用，调用方自己有提示）。 */
-  refresh(id: string, opts?: { silent?: boolean }): Promise<void>
+  /** `opts.silent` 时不弹「已更新」toast（供内部编排调用，调用方自己有提示）。
+   *  `opts.force` 默认 true（手动刷新语义）；`false` = 走 TTL 缓存（自动补刷）。 */
+  refresh(id: string, opts?: { silent?: boolean; force?: boolean }): Promise<void>
   refreshAll(force?: boolean): Promise<void>
+  /** 选中过期订阅时的自动补刷：TTL 内零调用，过期才发一次非 force 刷新
+   *  （不阻塞内容展示，仅 busy 转圈；失败走 refreshErrors + toast）。 */
+  refreshIfStale(id: string): void
   loadMore(): Promise<void>
   setOffline(v: boolean): void
 

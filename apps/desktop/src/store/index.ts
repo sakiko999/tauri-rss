@@ -60,6 +60,7 @@ export const useDesktop = create<DesktopState>()((set, get) => {
 
     loading: false,
     busy: {},
+    fetchedAt: {},
     refreshErrors: {},
     refreshErrorKinds: {},
     canLoadMore: {},

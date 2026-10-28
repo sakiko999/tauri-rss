@@ -43,6 +43,18 @@ import type { MediaQuery } from "./types/query.ts"
 import { findRecord } from "./types/reading.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import { type AppSettings, DEFAULT_SETTINGS, type NetLevel } from "./types/settings.ts"
+import type { Subscription } from "./types/subscription.ts"
+
+/**
+ * 内容缓存 TTL（ms）：订阅级 `refreshIntervalSec` 优先，否则全局 `refreshIntervalMin`。
+ * 消费方：doRefresh 的 TTL 短路、desktop 选中订阅时的自动补刷判据。
+ */
+export function contentTtlMs(
+  sub: Pick<Subscription, "refreshIntervalSec">,
+  s: Pick<AppSettings, "refreshIntervalMin">,
+): number {
+  return sub.refreshIntervalSec ? sub.refreshIntervalSec * 1000 : s.refreshIntervalMin * 60 * 1000
+}
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
@@ -490,7 +502,7 @@ export function createDataLayer(): DataLayer {
       if (!opts?.force) {
         const cached = await contentCache.get(subscriptionId)
         if (cached) {
-          const ttlMs = sub.refreshIntervalSec ? sub.refreshIntervalSec * 1000 : s.refreshIntervalMin * 60 * 1000
+          const ttlMs = contentTtlMs(sub, s)
           if (now() - cached.fetchedAt < ttlMs) {
             const { items, total } = deserializeFeedWithTotal(cached.xml, {
               subscriptionId,
