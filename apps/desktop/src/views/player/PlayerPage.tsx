@@ -46,6 +46,11 @@ export function PlayerPage() {
   const playTo = usePlayNavigate()
   /** 剧场模式:单列 + 收起右栏(队列/同订阅),把宽度全给画面。只存本页状态,不改设置。 */
   const [theater, setTheater] = useState(false)
+  /**
+   * 播放器回报的「实际是否纯音频」。带条目键:切条目时旧值自动失效(不会把上一条的
+   * 音频版式套到新条目上,等播放器重新回报)。
+   */
+  const [appliedAudioOnly, setAppliedAudioOnly] = useState<{ key: string; on: boolean } | null>(null)
 
   // ⚠️ 合并 `previewDetail`:二级订阅的单集/房间是**临时预览**出来的(未落库、未建订阅),
   // 只查 allItems 会「找不到这条内容」。队列/下一条也走这份合并表。
@@ -151,7 +156,11 @@ export function PlayerPage() {
   const listening = mode === "listen" && !isLive && item.kind === "video"
   // 音频版式:播客单集(kind=audio 且有直链)与视频的「听」模式共用一套
   // 封面 + 音频控件页(原型的 pod 播放页子集:进度/±15-30/倍速/睡眠定时)。
-  const audioMode = listening || (item.kind === "audio" && !!(item as { stream?: MediaStream }).stream)
+  // ⚠️ 播客单集**天然**是纯音频(直链在 refresh 里就带着),立刻摆封面;「听视频」要等
+  // 播放器真剥出音轨才成立 —— 剥不动(durl 回退的混合轨)时它是视频,摆封面就会和画面
+  // 挤在同一套音频版式里,所以听模式一律听播放器回报(`onAudioOnlyChange`)。
+  const podcastAudio = item.kind === "audio" && !!(item as { stream?: MediaStream }).stream
+  const audioMode = podcastAudio || (listening && appliedAudioOnly?.key === itemKey(item) && appliedAudioOnly.on)
   // 弹幕:设置总开关 × 播放页临时覆盖。关掉时 resolve 结果里的 danmaku 不交给播放器。
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
 
@@ -226,6 +235,8 @@ export function PlayerPage() {
                 startAtSec={isLive ? undefined : item.positionSec}
                 onProgress={(sec, dur) => savePosition(item, sec, dur)}
                 audioOnly={listening}
+                // 听模式剥没剥出音轨只有播放器知道 → 页面据此决定摆封面还是 16:9 舞台。
+                onAudioOnlyChange={(on) => setAppliedAudioOnly({ key: itemKey(item), on })}
                 // 播完自动下一条:仅当设置开着**且**队列里确实有下一条时。播过的当前条
                 // 同时出队(与「播放队列」的语义一致 —— 它是待播列表,不是播放历史)。
                 onEnded={() => {
@@ -330,7 +341,8 @@ export function PlayerPage() {
                       key={itemKey(it)}
                       className="queue-row"
                       aria-current={itemKey(it) === itemKey(item) ? "true" : undefined}
-                      onClick={() => playTo(it, from)}
+                      /* 在听模式里点队列/相关条目,沿用听模式 —— 否则每换一集都被踹回画面。 */
+                      onClick={() => playTo(it, from, listening ? "listen" : undefined)}
                     >
                       <span className="queue-rank num">{i + 1}</span>
                       <span className="queue-thumb">
@@ -361,7 +373,11 @@ export function PlayerPage() {
                 <p className="rail-empty">该订阅下暂无其它条目。</p>
               ) : (
                 related.map((it) => (
-                  <button key={itemKey(it)} className="queue-row" onClick={() => playTo(it, from)}>
+                  <button
+                    key={itemKey(it)}
+                    className="queue-row"
+                    onClick={() => playTo(it, from, listening ? "listen" : undefined)}
+                  >
                     <span className="queue-thumb">
                       <MediaImage src={mediaUrl(it)} ratio={16 / 9} fill />
                     </span>

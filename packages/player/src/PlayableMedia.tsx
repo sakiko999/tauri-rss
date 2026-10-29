@@ -125,6 +125,7 @@ export function PlayableMedia({
   onProgress,
   onEnded,
   audioOnly = false,
+  onAudioOnlyChange,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -157,6 +158,12 @@ export function PlayableMedia({
    * 混合轨 mp4)则照常播视频,不报错。封面/标题排版归宿主。
    */
   audioOnly?: boolean
+  /**
+   * 实际是否以**纯音频**呈现（听模式剥轨成功，或本来就是渐进式音频）。
+   * 宿主据此决定封面/版式：听模式剥不动（durl 回退的混合轨 mp4）时这里回 false，
+   * 页面必须回到视频版式 —— 否则封面和画面挤在同一套音频版式里。
+   */
+  onAudioOnlyChange?: (on: boolean) => void
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -312,6 +319,15 @@ export function PlayableMedia({
     })
     // stream?.url 变化 = 换条目/换源，重新起播。
   }, [autoPlay, isNativeAudio, stream?.url])
+
+  // 把「实际是否纯音频」回传宿主:听模式能不能剥出独立音轨只有播放器知道(要等
+  // resolve 出的流 / audioOnlyMpd 的结果),页面据此决定摆封面还是 16:9 舞台。
+  // 解析未完成时 listenMode=false → 先按视频版式,剥轨成功后翻成音频版式。
+  const onAudioOnlyChangeRef = useRef(onAudioOnlyChange)
+  onAudioOnlyChangeRef.current = onAudioOnlyChange
+  useEffect(() => {
+    onAudioOnlyChangeRef.current?.(listenMode || isNativeAudio)
+  }, [listenMode, isNativeAudio])
 
   // ── 续播:起播跳转 + 进度上报 ──────────────────────────────────────────────
   // 跳转只做**一次**(resumedRef;≤3s 视为「从头看」不跳 —— 否则片头几秒的进度会被

@@ -8,14 +8,19 @@
  * 播完回调）全部留给 PlayableMedia —— 它把 `mediaRef` 传进来。续播/进度/播完只有
  * 一份实现（重构候选 B3 说的就是这段曾被两处各写一遍）。
  *
+ * 状态与键盘**复用视频那套**：`useVideoElement`（state/ops 单一契约，不再自造第二份
+ * 媒体状态机）+ `useContainerInteractions`（Space/K 播放暂停、←/→ ±5s、↑/↓ 音量、
+ * M 静音；F 全屏对音频无义，传空实现）。焦点在进度条上时方向键归 sliders 自己。
+ *
  * ⚠️ 配色写死黑底白字（与 VideoShell/MediaState 同契约）：这是播放器表面，不随主题
  * 翻——浅色主题下白底控件贴在纯黑面板上会割裂。也**不带圆角**（播放器一贯方角）。
  */
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
+import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"
+import { useVideoElement } from "./hooks/useVideoElement.ts"
 import { PauseIcon, PlayIcon } from "./icons.tsx"
-import { log } from "./log/index.ts"
 
 /** 倍速档位。 */
 const SPEEDS = [0.75, 1, 1.25, 1.5, 2]
@@ -44,51 +49,17 @@ export function AudioShell({
   className?: string
   onError?: (e: unknown) => void
 }) {
-  const [playing, setPlaying] = useState(false)
-  const [current, setCurrent] = useState(0)
-  const [duration, setDuration] = useState(0)
-  const [rate, setRate] = useState(1)
+  const shellRef = useRef<HTMLDivElement | null>(null)
+  // 媒体错误统一由 useVideoElement 上报（含日志）。
+  const { state, ops } = useVideoElement(mediaRef, false, (code, msg) =>
+    onError?.(new Error(msg || `audio error(code=${code ?? "?"})`)),
+  )
+  // 键盘与视频页同语义；全屏对音频无意义 → 空实现。单击播放不接（控件面不是画面）。
+  useContainerInteractions(shellRef, state, ops, () => {})
+
   const [menu, setMenu] = useState<null | "speed" | "sleep">(null)
   const [sleepMin, setSleepMin] = useState(0)
   const [sleepLeft, setSleepLeft] = useState(0)
-
-  // 元素事件 → 本地状态。DASH 由 dash.js 挂 MSE，事件照常派发。
-  useEffect(() => {
-    const a = mediaRef.current
-    if (!a) return
-    const sync = () => {
-      setCurrent(a.currentTime)
-      setDuration(Number.isFinite(a.duration) ? a.duration : 0)
-    }
-    const onPlay = () => setPlaying(true)
-    const onPause = () => setPlaying(false)
-    const onErr = () => {
-      log.mediaError({ code: a.error?.code, msg: a.error?.message ?? "" })
-      onError?.(new Error(a.error?.message ?? `audio error(code=${a.error?.code ?? "?"})`))
-    }
-    a.addEventListener("timeupdate", sync)
-    a.addEventListener("durationchange", sync)
-    a.addEventListener("loadedmetadata", sync)
-    a.addEventListener("play", onPlay)
-    a.addEventListener("pause", onPause)
-    a.addEventListener("error", onErr)
-    return () => {
-      a.removeEventListener("timeupdate", sync)
-      a.removeEventListener("durationchange", sync)
-      a.removeEventListener("loadedmetadata", sync)
-      a.removeEventListener("play", onPlay)
-      a.removeEventListener("pause", onPause)
-      a.removeEventListener("error", onErr)
-    }
-    // onError 用 ref 会在播放器包里引入更多样板；这里按 src 重建监听即可（换流频率低）。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src])
-
-  // 倍速要在元素（重新）挂载后重新应用一次：切听/看会换元素。
-  useEffect(() => {
-    const a = mediaRef.current
-    if (a) a.playbackRate = rate
-  }, [rate, src, mediaRef])
 
   // 睡眠定时：到点暂停并复位；切档/关闭时清掉上一轮的计时。
   useEffect(() => {
@@ -110,34 +81,19 @@ export function AudioShell({
     return () => clearInterval(t)
   }, [sleepMin, mediaRef])
 
-  const toggle = () => {
-    const a = mediaRef.current
-    if (!a) return
-    if (a.paused) void a.play().catch(() => {})
-    else a.pause()
-  }
-  const skip = (delta: number) => {
-    const a = mediaRef.current
-    if (!a) return
-    const max = Number.isFinite(a.duration) ? Math.max(0, a.duration - 0.25) : Number.POSITIVE_INFINITY
-    a.currentTime = Math.max(0, Math.min(max, a.currentTime + delta))
-  }
-  const seek = (t: number) => {
-    const a = mediaRef.current
-    if (a && Number.isFinite(t)) a.currentTime = t
-  }
-  const setSpeed = (r: number) => {
-    setRate(r)
-    const a = mediaRef.current
-    if (a) a.playbackRate = r
-    setMenu(null)
-  }
+  const { currentTime: current, duration, paused, playbackRate: rate } = state
 
   const ctrl = "rounded-full border border-white/25 px-3 py-1 text-xs tabular-nums transition hover:bg-white/10"
   const menuBtn = "block w-full px-3 py-1.5 text-left hover:bg-white/15"
 
   return (
-    <div className={["w-full max-w-[560px] bg-black px-5 py-4 text-white", className].filter(Boolean).join(" ")}>
+    <div
+      ref={shellRef}
+      tabIndex={0}
+      className={["w-full max-w-[560px] bg-black px-5 py-4 text-white outline-none", className]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {/* preload=metadata：起播由 PlayableMedia 直接 play() 驱动，这里只求总时长/进度条
           立刻有值（none 要等 play 才出时长，页面先空一段）。 */}
       <audio ref={mediaRef} src={src} preload="metadata" className="hidden" />
@@ -149,7 +105,7 @@ export function AudioShell({
         max={duration > 0 ? duration : 0}
         step={1}
         value={Math.min(current, duration || 0)}
-        onChange={(e) => seek(Number(e.currentTarget.value))}
+        onChange={(e) => ops.seek(Number(e.currentTarget.value))}
         aria-label="播放进度"
         className="w-full accent-white"
       />
@@ -159,18 +115,18 @@ export function AudioShell({
       </div>
 
       <div className="mt-3 flex items-center justify-center gap-4">
-        <button type="button" className={ctrl} onClick={() => skip(-15)} aria-label="后退 15 秒">
+        <button type="button" className={ctrl} onClick={() => ops.seek(current - 15)} aria-label="后退 15 秒">
           −15
         </button>
         <button
           type="button"
-          onClick={toggle}
-          aria-label={playing ? "暂停" : "播放"}
+          onClick={ops.togglePlay}
+          aria-label={paused ? "播放" : "暂停"}
           className="grid h-14 w-14 place-items-center rounded-full bg-white text-black transition hover:bg-white/85"
         >
-          {playing ? <PauseIcon className="h-6 w-6" /> : <PlayIcon className="h-6 w-6 translate-x-0.5" />}
+          {paused ? <PlayIcon className="h-6 w-6 translate-x-0.5" /> : <PauseIcon className="h-6 w-6" />}
         </button>
-        <button type="button" className={ctrl} onClick={() => skip(30)} aria-label="前进 30 秒">
+        <button type="button" className={ctrl} onClick={() => ops.seek(current + 30)} aria-label="前进 30 秒">
           +30
         </button>
       </div>
@@ -211,7 +167,10 @@ export function AudioShell({
                       role="menuitemradio"
                       aria-checked={s === rate}
                       className={menuBtn}
-                      onClick={() => setSpeed(s)}
+                      onClick={() => {
+                        ops.changeRate(s)
+                        setMenu(null)
+                      }}
                     >
                       {s}×{s === rate ? " ✓" : ""}
                     </button>
