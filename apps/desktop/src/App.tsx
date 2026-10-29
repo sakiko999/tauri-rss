@@ -68,8 +68,11 @@ export default function App() {
   const booting = useDesktop(showSkeleton)
   const meta = useNodeMeta(nodeId)
   const railCollapsed = usePrefs((s) => s.railCollapsed)
-  // 有音频会话时给主区留出迷你条的高度（否则最后一行内容被压住）。
+  // 迷你条只在「有会话 **且** 不在它自己的播放页」时出现（播放页有一整张播放面）。
+  // 底部留白必须跟着**实际可见性**走：播放页也留 68px 会在滚动区下沿留一条空白，
+  // 滚动区高度比窗口少一截（实测被当成「滚动区域很怪」）。
   const audioItem = useAudioSession((s) => s.item)
+  const miniVisible = !!audioItem && !(isPlay && params.itemId === audioItem.id)
   useGlobalShortcuts()
 
   useEffect(() => {
@@ -133,7 +136,7 @@ export default function App() {
         data-view={viewType}
         data-rail={railCollapsed ? "collapsed" : "expanded"}
         data-sel={String(sel)}
-        data-mini={audioItem ? "on" : undefined}
+        data-mini={miniVisible ? "on" : undefined}
         {...overlayBlock("app-body", "app:body")}
       >
         <Rail />

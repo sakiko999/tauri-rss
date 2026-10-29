@@ -19,6 +19,24 @@
   gap: var(--sp-6);
   align-items: start;
 }
+/* 右栏吸顶：左列（简介 / 播客长 show notes）通常比右栏长，不吸顶时右栏一滚就走，
+   右侧留一整条空白（实测被当成「滚动区域很怪」）。高于视口时右栏自己滚，底部条目
+   仍够得着。 */
+.player-side {
+  position: sticky;
+  top: 0;
+  max-height: calc(100dvh - var(--header-h) - var(--sp-6));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* 单列（≤1280，右栏落到主列下方）时吸顶没有意义：它会钉在顶上、跟后面的内容脱开。 */
+@media (max-width: 1280px) {
+  .player-side {
+    position: static;
+    max-height: none;
+    overflow: visible;
+  }
+}
 /* ⚠️ .stage 原本没有任何规则:视频高度 = 56.25% × 容器宽(由 VideoShell 的
    padding-top 撑),在窄窗(1080 断点下播放页变单栏)真实宽度可达 940px → 视频
    528px,加上标题/操作就超出视口,"除了画面什么都看不到",标题都要滚才看到。
