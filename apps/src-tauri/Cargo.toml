@@ -1,6 +1,6 @@
 [package]
 name = "amoeba"
-version = "0.9.0"
+version = "0.9.1"
 description = "Amoeba — local-first feed workbench (RSS / video / live / social)"
 authors = ["zhh"]
 edition = "2021"
