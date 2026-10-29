@@ -193,6 +193,12 @@ export function PlayerPage() {
     useAudioSession.getState().open(item, podcastSource, item.positionSec)
   }, [item, podcastSource])
 
+  // 打开的是视频/直播页：先停掉会话里的播客，避免两路声音叠在一起（迷你条里可随时续上）。
+  useEffect(() => {
+    if (!item || podcastSource) return
+    audioSessionEl.pause()
+  }, [item, podcastSource])
+
   // 会话元素的进度/播完/定位：元素在模块里，页面只挂监听（切条目时重挂）。
   useEffect(() => {
     if (!podcastSource) return
