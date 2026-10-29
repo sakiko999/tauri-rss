@@ -846,7 +846,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         const url = asString(p.url, "url")
         const kind: "vod" | "live" = p.kind === "live" ? "live" : "vod"
         const stream = await layer.resolveDanmaku(subscriptionId, url, kind)
-        // 与 open 并发到达的 close 已把这个 id 关掉 → 不要再把订阅装回去。
+        // 等 resolveDanmaku 期间可能又来一次同 id 的 open（重试）→ 只装一次。
         if (danmakuSubs.has(subId)) return undefined
         const off = stream((items) => {
           if (!items.length) return
