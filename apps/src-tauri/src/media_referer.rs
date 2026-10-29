@@ -42,13 +42,19 @@ const XHR_ORIGIN_RULES: &[(&str, &str)] = &[("playlist.ttvnw.net", "https://www.
 
 /// 媒体请求**去 Edge 品牌**(host 后缀)。与 TS `MEDIA_UA_STRIP_HOSTS` 同步。
 ///
-/// 喜马拉雅 CDN 的 WAF 对含 `Edg/156.0.0.0` 的完整 UA 串回 **403 text/html**
-/// (2026-10-29 实测:`Edg/156` 403 ×4,而 `Edg/155`/`Edg/157`/`Chrome/156`/
-/// 无 UA 全部 206 合法 MP4A)。403 又被 ORB 拦成 `net::ERR_BLOCKED_BY_ORB`,
-/// 媒体元素只报 `MEDIA_ELEMENT_ERROR: Format error` —— 表象像解码问题,实为 UA 黑名单。
+/// 喜马拉雅 CDN 的 WAF 回 **403 text/html** + 响应头 `x-error-info: ua_acl.access`,
+/// 即**一条完整的 UA 字面串**被拉进了黑名单 —— 恰好就是当前 Windows WebView2 的真实
+/// UA(`… Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0`)。2026-10-29 实测粒度是
+/// **整串等值、大小写不敏感**:`EDG` 大写也 403;而 mac 平台串、去掉 `Mozilla/5.0`
+/// 前缀、`Safari/537.36` 后双空格、`Edg/156`(无补丁位)、`Edg/156.0.0.1`、
+/// `Chrome/155 + Edg/156`、只留 `Chrome/156.0.0.0 Edg/156.0.0.0` 全部 206。
+/// 即不存在「按版本号拦 Edge」的规则,能撞上的只有那一条字面串。403 又被 ORB 拦成
+/// `net::ERR_BLOCKED_BY_ORB`,媒体元素只报 `MEDIA_ELEMENT_ERROR: Format error`
+/// —— 表象像解码问题,实为 UA 黑名单。
 ///
-/// 处理:只把 ` Edg/<ver>` 一段去掉(保留真实 Chrome 版本),不硬编码 UA 串 ——
-/// 宿主升级 WebView2 后版本号自动跟随,不必维护。
+/// 处理:只把 ` Edg/<ver>` 一段去掉(保留真实 Chromium 版本)。**不含任何版本号**:
+/// 字符串一变就不等于黑名单条目了;Edge 升级后自动跟随,黑名单若跟着更新也照样躲开
+/// (含 Edg 的任何 UA 都不再等于那条记录)。
 const UA_STRIP_EDG_HOSTS: &[&str] = &["xmcdn.com", "ximalaya.com"];
 
 /// 在 `setup` 阶段调用一次。失败只打日志，不影响应用启动(前端回退 blob 隧道)。

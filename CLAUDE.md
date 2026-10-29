@@ -284,13 +284,16 @@ live 按平台二次聚合的 UI 侧。
   A10 youtube:playlist InnerTube 化单独立项，B7/B8/B9 low 留观
 - [ ] 修 huya 403 时发现根 tsconfig.app.json 的 `types:["vite/client"]` 靠 vite 根提升才成立（2026-10-28 起已改为根 package.json 显式声明 vite ^8.1.5）；若未来再动 workspace 布局，注意 player/ui tsc 会先断
 - [!] 媒体加载统一策略（2026-10-28）：平台知识只在 resolve 规则表，Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin、MEDIA 去 Edge UA 品牌），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
-- [!] **媒体 403 的表象是 `Format error`**（2026-10-29）：CDN 的 403 text/html 被 ORB 拦成 `net::ERR_BLOCKED_BY_ORB`，`<audio>/<video>` 只报 `MEDIA_ELEMENT_ERROR: Format error`，看着像解码失败。喜马拉雅 CDN（`xmcdn.com`）的 WAF 把含 `Edg/156.0.0.0` 的 UA 串列黑（`Chrome/156`、`Edg/155`、`Edg/157` 全放行）——`UA_STRIP_EDG_HOSTS` 在 Rust 侧只删 ` Edg/<ver>` 段，不硬编码 UA。排查先看 CDP `Network.loadingFailed` 的 `ERR_BLOCKED_BY_ORB` + 原始状态码，别往解码器上找。
+- [!] **媒体 403 的表象是 `Format error`**（2026-10-29）：CDN 的 403 text/html 被 ORB 拦成 `net::ERR_BLOCKED_BY_ORB`，`<audio>/<video>` 只报 `MEDIA_ELEMENT_ERROR: Format error`，看着像解码失败。喜马拉雅 CDN（`xmcdn.com`）的 403 带 `x-error-info: ua_acl.access`：黑名单是**一条完整 UA 字面串**（当前 Windows WebView2 的真实 UA），**整串等值、大小写不敏感**——mac 平台串、少一段、双空格、`Edg/156`（无补丁位）全放行，所以没有「按 Edge 版本号拦」的规则可匹配。`UA_STRIP_EDG_HOSTS` 在 Rust 侧只删 ` Edg/<ver>` 段（不含版本号，串一变即不等于黑名单条目）。排查先看 CDP `Network.loadingFailed` 的 `ERR_BLOCKED_BY_ORB` + 原始状态码，别往解码器上找。
 - [!] 微博匿名只给首页 10 条，翻页（page/since_id/weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录
 - [ ] 登录微博后复验 `weibo:user` 首屏自动预加载第二页真正落地（本次改动只验到匿名态）
 - [!] 补全（`resolveDetail`）**不保证纯文本**：feed 自带全文时 `raw.ts` 原样返回 HTML（contentFormat=html）；桌面镜像剥掉 article 的 content，所以阅读器必走补全 —— 消费侧必须按返回体的 contentFormat 渲染
 - [ ] 重启桌面应用复验阅读器：阮一峰正文应渲染为排版好的 HTML（本次只验到 core 侧 resolveDetail 返回 contentFormat=html，没在真机 UI 上确认）
 - [x] 听视频 / 播客音频页实机验证（2026-10-29）：`?mode=listen` 走 `.audio-art` 封面 + AudioShell
   自绘控件（进度/±15+30/倍速/定时），B 站 DASH 音轨经 dash.js 挂 `<audio>` 真播（dur=213s）；
-  播客单集（喜马拉雅 m4a）直连 206 + 自动起播。**残余**：听⇄看切换的进度衔接、队列自动下一条
-  保持 listen 模式两项只过代码路径，未逐帧实测。
+  播客单集（喜马拉雅 m4a）直连 206 + 自动起播。**收尾实测**：听→看 t 4.4→6、看→听 9.0→10.9
+  各接着播（引擎未就绪时 200ms 连点切换也不崩）；队列自动下一条 URL 保持 `mode=listen` 并起播；
+  键盘 Space/←→、倍速 1.25×（元素 playbackRate 同步）、睡眠定时计数与取消实测通过。
+  AudioShell 不再自造媒体状态机：state/ops 复用 `useVideoElement`、键盘复用 `useContainerInteractions`；
+  听模式能否真剥音轨由播放器 `onAudioOnlyChange` 回报，剥不动（durl 混合轨）时页面按视频版式不摆封面。
 <!-- cc-todo:end -->

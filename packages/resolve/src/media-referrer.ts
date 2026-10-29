@@ -66,13 +66,16 @@ export const XHR_ORIGIN_RULES: Array<[string, string]> = [["playlist.ttvnw.net",
 /**
  * 媒体直链需要**去掉 ` Edg/<ver>` UA 段**的 host 后缀（Rust 侧改写）。
  *
- * 喜马拉雅 CDN（`aod.cos.tx.xmcdn.com`）的 WAF 把含 `Edg/156.0.0.0` 的完整 UA 串
- * 列进了黑名单，回 **403 text/html**；403 又被 ORB 拦成 `ERR_BLOCKED_BY_ORB`，媒体元素
- * 只报 `Format error`（表象像解码问题，实为 UA 黑名单）。2026-10-29 实测：
- * `Edg/156` 恒 403，`Edg/155` / `Edg/157` / `Chrome/156` / 无 UA 全部 206 合法音频。
+ * 喜马拉雅 CDN（`aod.cos.tx.xmcdn.com`）回 **403 text/html** + `x-error-info: ua_acl.access`
+ * —— 黑名单里是**一条完整的 UA 字面串**，恰好就是当前 Windows WebView2 的真实 UA
+ * （`… Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0`）。2026-10-29 实测粒度：整串等值、
+ * 大小写不敏感（`EDG` 也 403）；mac 平台串 / 去 `Mozilla/5.0` 前缀 / `Safari` 后双空格 /
+ * `Edg/156`（无补丁位）/ `Edg/156.0.0.1` / `Chrome/155 + Edg/156` / 只留版本对 → 全 206。
+ * 也就是说**没有「按 Edge 版本号拦」的规则**，只有那一条字面串会被撞上。403 又被 ORB
+ * 拦成 `ERR_BLOCKED_BY_ORB`，媒体元素只报 `Format error`（表象像解码问题）。
  *
- * 只去掉 ` Edg/<ver>` 一段（保留真实 Chrome 版本），不硬编码 UA 串 —— WebView2
- * 升级后版本号自动跟随。
+ * 只去掉 ` Edg/<ver>` 一段（保留真实 Chromium 版本），**不含版本号**：串一变就不等于
+ * 黑名单条目，Edge 升级自动跟随，ACL 跟着更新也照样躲开。
  *
  * 本表**无 JS 消费方**：Rust（`media_referer.rs`）按它改写；TS 持有只为「平台知识
  * 单一权威在 resolve + parity 守护」。
