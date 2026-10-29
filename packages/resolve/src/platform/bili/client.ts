@@ -70,6 +70,8 @@ export interface BilibiliClient extends PlatformClient {
   resolveCid(bvidOrAid: string, cookie?: string): Promise<string>
   /** bvid+cid → durl mp4 直链(/x/player/playurl,qn=80 platform=html5)。 */
   resolvePlayUrl(bvidOrAid: string, cid: string, cookie?: string): Promise<Stream[]>
+  /** bvid+cid → 章节(UP 主在投稿里标的时间点,/x/player/v2 的 view_points)。无则空数组。 */
+  viewPoints(bvidOrAid: string, cid: string, cookie?: string): Promise<Array<{ t: number; label: string }>>
   /** 弹幕能力:kind=vod 走视频全量解析(VOD 时间轴),默认 live 走直播实时流。 */
   getDanmaku(id: string, opts?: BilibiliDanmakuOptions): DanmakuStream
 }
@@ -332,6 +334,31 @@ async function resolvePlayUrl(bvidOrAid: string, cid: string, cookie?: string): 
   throw new Error(`bilibili playurl: no playable stream for ${bvidOrAid}`)
 }
 
+/**
+ * 章节:UP 主在投稿设置里标的「时间点」(`view_points`)。
+ *
+ * `/x/player/v2` 是**非 wbi** 接口,bvid + cid 就够;匿名可读,登录态下也只是多返回
+ * 一些播放器配置。多数视频没有章节 → `view_points` 为空数组,调用方按「没有」处理。
+ */
+async function viewPoints(
+  bvidOrAid: string,
+  cid: string,
+  cookie?: string,
+): Promise<Array<{ t: number; label: string }>> {
+  const q = bvidOrAid.startsWith("av")
+    ? `aid=${encodeURIComponent(bvidOrAid.slice(2))}`
+    : `bvid=${encodeURIComponent(bvidOrAid)}`
+  const res = await getJson<{ data?: { view_points?: Array<{ from?: number; content?: string }> } }>(
+    `${API_MAIN}/x/player/v2?${q}&cid=${cid}`,
+    { referer: `https://www.bilibili.com/video/${bvidOrAid}`, cookie },
+  )
+  const points = Array.isArray(res?.data?.view_points) ? res.data.view_points : []
+  return points
+    .map((p) => ({ t: Math.max(0, Math.round(Number(p.from) || 0)), label: String(p.content ?? "").trim() }))
+    .filter((p) => p.label)
+    .sort((a, b) => a.t - b.t)
+}
+
 /** 弹幕能力:kind=vod 走视频全量解析,否则直播实时流。cookie 由 opts 显式传。 */
 function getDanmaku(id: string, opts?: BilibiliDanmakuOptions): DanmakuStream {
   return opts?.kind === "vod" ? biliVodDanmakuStream(id, opts?.cookie) : biliLiveDanmakuStream(id, opts?.cookie)
@@ -348,6 +375,7 @@ export const biliClient: BilibiliClient = {
   navMid,
   resolveCid,
   resolvePlayUrl,
+  viewPoints,
   getDanmaku,
 }
 

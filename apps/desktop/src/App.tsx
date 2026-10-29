@@ -39,6 +39,8 @@ import { AccountPage } from "./views/manage/AccountPage.tsx"
 import { OnboardingModal } from "./views/manage/OnboardingModal.tsx"
 import { SettingsPage } from "./views/manage/SettingsPage.tsx"
 import { CommandPalette } from "./views/palette/CommandPalette.tsx"
+import { useAudioSession } from "./views/player/audio-session.ts"
+import { MiniPlayer } from "./views/player/MiniPlayer.tsx"
 import { PlayerPage } from "./views/player/PlayerPage.tsx"
 
 export default function App() {
@@ -66,6 +68,8 @@ export default function App() {
   const booting = useDesktop(showSkeleton)
   const meta = useNodeMeta(nodeId)
   const railCollapsed = usePrefs((s) => s.railCollapsed)
+  // 有音频会话时给主区留出迷你条的高度（否则最后一行内容被压住）。
+  const audioItem = useAudioSession((s) => s.item)
   useGlobalShortcuts()
 
   useEffect(() => {
@@ -129,6 +133,7 @@ export default function App() {
         data-view={viewType}
         data-rail={railCollapsed ? "collapsed" : "expanded"}
         data-sel={String(sel)}
+        data-mini={audioItem ? "on" : undefined}
         {...overlayBlock("app-body", "app:body")}
       >
         <Rail />
@@ -179,6 +184,7 @@ export default function App() {
       <CommandPalette />
       <SocialDetailModal />
       <OnboardingModal />
+      <MiniPlayer />
       <Toaster />
     </div>
   )

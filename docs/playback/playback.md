@@ -81,15 +81,24 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
 | 声纹频谱 | `controls/WaveformSeek.tsx`：确定性伪波形（FNV-1a 指纹 → 四正弦 × 拱形包络），已播段 accent、播放头竖线 + 圆点；点击/拖动 seek，`role="slider"` 键盘可达 |
 | 时间 | 当前 / `-剩余` |
 | 控件 | −15 / 66px 主键 / +30；倍速、睡眠定时；右侧是宿主给的次要动作（听⇄看、下一条、打开原文） |
-| 右栏（desktop 组装） | 本集简介（长文内部滚动）+ 播放队列 + 来自同一订阅（按当前条目往后数，查 `known` 覆盖预览单集） |
+| 右栏（desktop 组装） | 章节（有数据才出现）+ 播放队列 + 来自同一订阅（按当前条目往后数，查 `known` 覆盖预览单集）；简介在**播放器下方** |
+| 迷你条 | 播客单集的会话级播放器（`views/player/audio-session.ts`）：离开播放页继续播，底部浮条可暂停/回页/关闭 |
 
 - **波形不进 React state**：rAF 直接读 `mediaRef.currentTime`，暂停时靠 `timeupdate` 重画一帧
   —— 4Hz 的 state 会让条形一顿一顿地跳。`prefers-reduced-motion` 下只画静态帧。
 - **配色走主题 token**（带深色回退值）：pod-stage 是内容卡片，浅色主题下是浅底；与
   「视频舞台恒黑 + 方角」是两套契约，别把方角规则套到这张卡上。
 - **数据来源边界**：标题/封面/简介/时长全部来自条目本身；播放器包不认识数据模型，
-  这些由宿主经 `audioStage` 透传。**章节栏没有实现** —— 播客 RSS 与喜马拉雅单集不带
-  章节数据，B 站 `view_points` 要另开一条 resolve → 页面的数据通路（需要时再做）。
+  这些由宿主经 `audioStage` 透传。
+- **章节数据通路（2026-10-29）**：`biliClient.viewPoints`（`/x/player/v2` 的
+  `view_points`，非 wbi、匿名可读）→ `resolveBiliVideoPlay` 随流一起返回 →
+  `ResolveResult` / `ResolvePlayback.chapters` → `PlayableMedia.onChapters` →
+  播放页右栏 + 波形刻度，点击走 `onMediaControl.seek`。**没有章节的条目一律缺省**
+  （播客 RSS、喜马拉雅单集、YouTube 都不带），右栏那一栏不渲染。
+- **会话级播放器**：播客单集不走 `PlayableMedia`（页面一卸载媒体元素就没了），
+  由 `audio-session.ts` 的模块级 `<audio>` 持有，播放页与迷你条是它的两个控制面；
+  `AudioShell` 因此有 `ownElement=false`（只做控制面）。听视频是 DASH，仍归
+  `PlayableMedia`，离开播放页即停（不在这条会话里）。
 
 ## 统计信息（仿 YouTube 右键）
 

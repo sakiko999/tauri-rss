@@ -15,7 +15,7 @@
  * 带 headers 的 mp4 原生播可能 403 —— 当前如实提示;hls.js 经 xhrSetup 可带。
  */
 
-import type { MediaStream, ResolvePlayback } from "@amoeba/core"
+import type { MediaStream, PlaybackChapter, ResolvePlayback } from "@amoeba/core"
 import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/resolve/errors"
 import { useEffect, useMemo, useRef, useState } from "react"
 
@@ -140,6 +140,8 @@ export function PlayableMedia({
   audioOnly = false,
   onAudioOnlyChange,
   audioStage,
+  onChapters,
+  onMediaControl,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -184,6 +186,16 @@ export function PlayableMedia({
    * 缺省时 AudioShell 只画波形与控件（mobile 的极简形态）。
    */
   audioStage?: AudioStageProps
+  /**
+   * 解析结果里的章节（目前只有 bili 给）。没有章节就回空数组 —— 宿主据此决定
+   * 要不要渲染章节栏，不在播放器包里判断。
+   */
+  onChapters?: (chapters: PlaybackChapter[]) => void
+  /**
+   * 把「跳转」暴露给宿主（章节栏点击定位）。元素换了（切档/听⇄看）会重新给一次，
+   * 卸载给 null。
+   */
+  onMediaControl?: (ctl: { seek: (sec: number) => void } | null) => void
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -348,6 +360,35 @@ export function PlayableMedia({
   useEffect(() => {
     onAudioOnlyChangeRef.current?.(listenMode || isNativeAudio)
   }, [listenMode, isNativeAudio])
+
+  // 章节随解析结果回来(目前只有 bili)。没有 → 空数组,宿主据此不渲染章节栏。
+  const onChaptersRef = useRef(onChapters)
+  onChaptersRef.current = onChapters
+  useEffect(() => {
+    onChaptersRef.current?.(resolved?.chapters ?? [])
+  }, [resolved])
+
+  // 把跳转暴露给宿主(章节栏点击定位)。换元素(切档/听⇄看)重新给一次,卸载给 null。
+  const onMediaControlRef = useRef(onMediaControl)
+  onMediaControlRef.current = onMediaControl
+  useEffect(() => {
+    const el = mediaEl()
+    if (!el) {
+      onMediaControlRef.current?.(null)
+      return
+    }
+    onMediaControlRef.current?.({
+      seek: (sec: number) => {
+        try {
+          el.currentTime = Math.max(0, sec)
+        } catch {
+          // 未加载完时个别状态抛 InvalidStateError,忽略(与续播同款处理)。
+        }
+      },
+    })
+    return () => onMediaControlRef.current?.(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream?.url, listenMode])
 
   // ── 续播:起播跳转 + 进度上报 ──────────────────────────────────────────────
   // 跳转只做**一次**(resumedRef;≤3s 视为「从头看」不跳 —— 否则片头几秒的进度会被

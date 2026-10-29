@@ -35,12 +35,139 @@
   display: block;
   padding-block: 0;
 }
-/* 播客单集的「本集简介」实测有 1000+ 字（整篇 show notes）：右栏给高度上限 + 内部滚动，
-   否则队列/接下来播放被顶到几屏之外。视频的简介在舞台下方，不受此限。 */
-.pod-notes-scroll {
-  max-height: 340px;
-  overflow: auto;
-  overscroll-behavior: contain;
+/* 章节：时间点 + 标题，当前章节高亮（原型 pod-chapter）。 */
+.pod-chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pod-chapter {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+  text-align: left;
+  transition:
+    background var(--dur-base) var(--ease-in),
+    color var(--dur-base) var(--ease-in);
+}
+.pod-chapter:hover {
+  background: var(--color-surface-2);
+  color: var(--color-foreground);
+}
+.pod-chapter[aria-current="true"] {
+  background: var(--color-primary-soft);
+  color: var(--color-foreground);
+}
+.pod-chapter .ch-t {
+  flex: none;
+  min-width: 42px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.8;
+  color: var(--color-primary-text);
+}
+.pod-chapter[aria-current="true"] .ch-t {
+  color: var(--color-primary-text);
+}
+.pod-chapter .ch-label {
+  min-width: 0;
+}
+
+/* ── 迷你播放条（原型 mini-pod）──────────────────────────────────────────
+   会话级播客播放器的第二个控制面：离开播放页后浮在底部，让「继续听」成立。
+   让开侧栏（--rail），与启动骨架同一套边界。 */
+.mini-player {
+  position: fixed;
+  left: calc(var(--rail) + var(--sp-5));
+  right: var(--sp-5);
+  bottom: var(--sp-4);
+  z-index: 38; /* 低于浮层（--z-modal=50），高于正文 */
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 7px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--r-lg);
+  background: var(--color-background-elev);
+  box-shadow: var(--shadow-pop, 0 12px 32px rgb(0 0 0 / 45%));
+}
+/* 主区底部留出迷你条的高度，最后一行内容不被压住。 */
+.app-body[data-mini="on"] .main-region {
+  padding-bottom: 68px;
+}
+.mp-cover {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--color-surface-2);
+}
+.mp-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mp-title {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-foreground);
+  text-align: left;
+}
+.mp-title:hover {
+  color: var(--color-primary-text);
+}
+.mp-sub {
+  font-size: 10.5px;
+  color: var(--color-dim);
+}
+.mp-track {
+  display: block;
+  height: 2px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: var(--color-surface-3);
+  overflow: hidden;
+}
+.mp-track > span {
+  display: block;
+  height: 100%;
+  background: var(--color-primary);
+}
+.mp-time {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-dim);
+  white-space: nowrap;
+}
+.mp-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface-2);
+  color: var(--color-muted-foreground);
+}
+.mp-btn:hover {
+  border-color: var(--color-border-strong);
+  color: var(--color-foreground);
 }
 /* 极矮窗口下(如横屏小窗)保证舞台仍有最小可视高度,不被压成一条 */
 @media (max-height: 520px) {

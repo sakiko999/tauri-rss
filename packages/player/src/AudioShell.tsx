@@ -45,6 +45,7 @@ function fmt(sec: number): string {
 export function AudioShell({
   mediaRef,
   src,
+  ownElement = true,
   seed,
   artwork,
   kicker,
@@ -60,6 +61,11 @@ export function AudioShell({
   mediaRef: React.RefObject<HTMLAudioElement | null>
   /** 渐进式直链；DASH（听视频）由 PlayableMedia 的 useMediaStream attach，这里不传。 */
   src?: string
+  /**
+   * 元素是否由本组件渲染。宿主持有跨路由存活的媒体元素时传 `false`
+   * ——此壳只做控制面，`mediaRef` 指向外面那个元素。
+   */
+  ownElement?: boolean
   /** 波形指纹（条目稳定 id）：换集换形状。 */
   seed: string
   /** 封面。 */
@@ -129,8 +135,9 @@ export function AudioShell({
         .join(" ")}
     >
       {/* preload=metadata：起播由 PlayableMedia 直接 play() 驱动，这里只求总时长/波形
-          立刻有值（none 要等 play 才出时长，卡片先空一段）。 */}
-      <audio ref={mediaRef} src={src} preload="metadata" className="hidden" />
+          立刻有值（none 要等 play 才出时长，卡片先空一段）。
+          宿主带会话级元素（ownElement=false）时不渲染，避免出现两份媒体源。 */}
+      {ownElement ? <audio ref={mediaRef} src={src} preload="metadata" className="hidden" /> : null}
 
       <div className="grid [grid-template-columns:190px_minmax(0,1fr)] items-center gap-6 max-sm:[grid-template-columns:108px_minmax(0,1fr)]">
         {artwork ? (

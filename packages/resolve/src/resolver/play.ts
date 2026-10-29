@@ -14,7 +14,7 @@ import type { Stream } from "@amoeba/xml"
 
 import { ResolveError } from "../errors.ts"
 import type { SourceInfo } from "../index.ts"
-import { resolveBiliLivePlay, resolveBiliVideoPlay } from "../platform/bili"
+import { type PlaybackChapter, resolveBiliLivePlay, resolveBiliVideoPlay } from "../platform/bili"
 import { douyinResolveStreams } from "../platform/douyin"
 import { douyuResolveStreams } from "../platform/douyu"
 import { resolveHuyaLivePlay } from "../platform/huya"
@@ -29,6 +29,8 @@ export interface ResolveResult {
   /** 路由命中的平台 id(视频 bvid/直播 roomId 等;调试/日志用)。 */
   id: string
   streams: Stream[]
+  /** 平台给的章节时间点(目前只有 bili 有);没有就是空/undefined。 */
+  chapters?: PlaybackChapter[]
 }
 
 /**
@@ -41,8 +43,8 @@ export async function resolvePlayByUrl(url: string, info?: ResolveInfo): Promise
     throw new ResolveError("unsupported", `resolver: 无法从 URL 解析视频流(仅支持 bilibili 视频/YouTube): ${url}`)
   }
   // kind==="video" ⇒ 平台仅在 bilibili|youtube(路由表由 kind 判别保证)。
-  const streams = await resolveVideoStreams(route.platform as VideoPlatform, route.id, info)
-  return { id: route.id, streams }
+  const { streams, chapters } = await resolveVideoStreams(route.platform as VideoPlatform, route.id, info)
+  return { id: route.id, streams, chapters }
 }
 
 /** 按 item.url 解析直播可播流(kind=live 路由)。 */
@@ -54,7 +56,8 @@ export async function resolveLivePlayByUrl(url: string, info?: ResolveInfo): Pro
   // 故放行 youtube 的 video-route,复用视频解析(YouTube 直播流由 resolveYoutubeStreams
   // 内部判为 HLS,同一入口)。
   if (route && route.kind === "video" && route.platform === "youtube") {
-    return resolveVideoStreams("youtube", route.id, info).then((streams) => ({ id: route.id, streams }))
+    const { streams } = await resolveVideoStreams("youtube", route.id, info)
+    return { id: route.id, streams }
   }
   if (!route || route.kind !== "live") {
     throw new ResolveError("unsupported", `resolver: 无法从 URL 解析直播流(需直播路由): ${url}`)
@@ -67,10 +70,14 @@ export async function resolveLivePlayByUrl(url: string, info?: ResolveInfo): Pro
 /** 视频平台(video 路由可命中的平台)。 */
 type VideoPlatform = Extract<ResolvePlatform, "bilibili" | "youtube">
 
-/** 按视频平台 + id 解析可播流。 */
-export async function resolveVideoStreams(platform: VideoPlatform, id: string, info?: ResolveInfo): Promise<Stream[]> {
+/** 按视频平台 + id 解析可播流（bili 顺带章节；YouTube 无章节数据）。 */
+export async function resolveVideoStreams(
+  platform: VideoPlatform,
+  id: string,
+  info?: ResolveInfo,
+): Promise<{ streams: Stream[]; chapters?: PlaybackChapter[] }> {
   if (platform === "bilibili") return resolveBiliVideoPlay(id, info)
-  return resolveYoutubeStreams(id)
+  return { streams: await resolveYoutubeStreams(id) }
 }
 
 /** 直播平台(live 路由可命中的平台)。 */

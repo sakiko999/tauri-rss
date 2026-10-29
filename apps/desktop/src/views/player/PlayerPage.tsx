@@ -9,10 +9,17 @@
  * `{ streams, danmaku }`,danmaku 由 PlayableMedia 内部接给 DanmakuLayer。
  */
 
-import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaKind, type MediaStream } from "@amoeba/core"
-import { PlayableMedia } from "@amoeba/player"
+import {
+  ERROR_KIND_LABEL,
+  errorKindOf,
+  type MediaItem,
+  type MediaKind,
+  type MediaStream,
+  type PlaybackChapter,
+} from "@amoeba/core"
+import { AudioShell, PlayableMedia } from "@amoeba/player"
 import { MediaImage } from "@amoeba/ui"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router"
 
 import { Button, IconButton } from "../../components/Button.tsx"
@@ -24,6 +31,10 @@ import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
 import { useDesktop } from "../../store/index.ts"
 import { KIND_META } from "../../store/nodes.ts"
+import { audioSessionEl, audioSessionRef, useAudioSession } from "./audio-session.ts"
+
+/** 没有章节时的稳定空数组（`[]` 每次渲染都是新引用 → 会打穿 useMemo/useCallback）。 */
+const EMPTY_CHAPTERS: PlaybackChapter[] = []
 
 export function PlayerPage() {
   const { itemId, from, sub, mode } = usePlayParams()
@@ -51,6 +62,16 @@ export function PlayerPage() {
    * 音频版式套到新条目上,等播放器重新回报)。
    */
   const [appliedAudioOnly, setAppliedAudioOnly] = useState<{ key: string; on: boolean } | null>(null)
+  /** 播放器回报的章节（目前只有 bili 有）。同样带条目键：切条目时旧值自动失效。 */
+  const [chapters, setChapters] = useState<{ key: string; list: PlaybackChapter[] } | null>(null)
+  /** 播放器给的跳转句柄（章节栏点击定位；元素换了会重新给）。 */
+  const [mediaCtl, setMediaCtl] = useState<{ seek: (sec: number) => void } | null>(null)
+  /**
+   * 当前章节下标：由 onProgress 顺带算，**只在跨章节时** setState（4Hz 的高频进度
+   * 不触发页面重渲染）。
+   */
+  const [chapterIdx, setChapterIdx] = useState(-1)
+  const chapterIdxRef = useRef(-1)
 
   // ⚠️ 合并 `previewDetail`:二级订阅的单集/房间是**临时预览**出来的(未落库、未建订阅),
   // 只查 allItems 会「找不到这条内容」。队列/下一条也走这份合并表。
@@ -138,6 +159,70 @@ export function PlayerPage() {
     return known.find((i) => itemKey(i) === nextKey) ?? null
   }, [queue, item, known])
 
+  // ── 播客单集：会话级播放器（离开播放页继续听，迷你条共用同一个元素）──────────
+  // ⚠️ 这些 effect 必须在 `!item` 早退**之前**：React 的 hook 数量不能随渲染分支变化。
+  // ⚠️ 依赖表只能放**值**：回调（playTo/removeFromQueue）每次渲染都是新函数，
+  //    放进 deps 会让「effect → setState → 重渲染 → effect」无限循环（实测
+  //    Maximum update depth exceeded）。回调走 ref 读最新。
+  const chapterList = useMemo(
+    () => (item && chapters?.key === itemKey(item) ? chapters.list : EMPTY_CHAPTERS),
+    [item, chapters],
+  )
+  const chapterAt = useCallback(
+    (sec: number) => {
+      let idx = -1
+      for (const [i, c] of chapterList.entries()) if (sec >= c.t) idx = i
+      return idx
+    },
+    [chapterList],
+  )
+  const podcastSource = item && item.kind === "audio" ? (item as { stream?: MediaStream }).stream?.url : undefined
+
+  const chapterAtRef = useRef(chapterAt)
+  chapterAtRef.current = chapterAt
+  /** 播完下一条：读渲染期的最新值（不放进 effect 依赖）。 */
+  const endedRef = useRef<() => void>(() => {})
+  endedRef.current = () => {
+    if (!item || !(settings?.autoPlayNext ?? true)) return
+    removeFromQueue(item)
+    if (nextInQueue) playTo(nextInQueue, from)
+  }
+
+  useEffect(() => {
+    if (!item || !podcastSource) return
+    useAudioSession.getState().open(item, podcastSource, item.positionSec)
+  }, [item, podcastSource])
+
+  // 会话元素的进度/播完/定位：元素在模块里，页面只挂监听（切条目时重挂）。
+  useEffect(() => {
+    if (!podcastSource) return
+    const el = audioSessionEl
+    setMediaCtl({
+      seek: (t: number) => {
+        try {
+          el.currentTime = Math.max(0, t)
+        } catch {
+          /* 未就绪时忽略 */
+        }
+      },
+    })
+    const onTime = () => {
+      const i = chapterAtRef.current(el.currentTime)
+      if (i !== chapterIdxRef.current) {
+        chapterIdxRef.current = i
+        setChapterIdx(i)
+      }
+    }
+    const onEnded = () => endedRef.current()
+    el.addEventListener("timeupdate", onTime)
+    el.addEventListener("ended", onEnded)
+    return () => {
+      el.removeEventListener("timeupdate", onTime)
+      el.removeEventListener("ended", onEnded)
+      setMediaCtl(null)
+    }
+  }, [podcastSource])
+
   if (!item) {
     return (
       <div className="page" {...overlayBlock("player-missing", "player:missing")}>
@@ -172,20 +257,72 @@ export function PlayerPage() {
   const audioMode = podcastAudio || (listening && appliedAudioOnly?.key === itemKey(item) && appliedAudioOnly.on)
   const durationSec =
     (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
-  /** 本集简介：视频版式放在舞台下方，音频版式进右栏（原型 pod-side 的「本集简介」）。 */
+  /** 简介：两种版式都放在播放器**下方**（右栏留给章节/队列/同订阅）。 */
   const summaryCard = item.summary ? (
     <SideCard title={audioMode ? "本集简介" : "简介"} icon="info" pad blockKey="player:summary">
-      {/* 播客单集的简介往往就是整篇 show notes（实测 1000+ 字），右栏给高度上限 + 内部
-          滚动，否则队列/接下来播放被顶到几屏之外。视频的简介在舞台下方，照常铺开。 */}
-      <div className={audioMode ? "pod-notes-scroll" : undefined}>
-        <p className="t-small t-muted" style={{ lineHeight: 1.7 }}>
-          {item.summary}
-        </p>
-      </div>
+      <p className="t-small t-muted" style={{ lineHeight: 1.7 }}>
+        {item.summary}
+      </p>
     </SideCard>
   ) : null
   // 弹幕:设置总开关 × 播放页临时覆盖。关掉时 resolve 结果里的 danmaku 不交给播放器。
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
+
+  /**
+   * 音频版式的播放面（原型 podplay）：封面 / 「正在播放」/ 标题 / 节目名 / 元信息 +
+   * 次要动作。原来那排按钮在 .player-meta 里，音频模式下整块不渲染 —— 动作挪到这里，
+   * 避免同一件事两处出现。两种音频来源（会话 / PlayableMedia）共用这一份。
+   */
+  const audioStage = {
+    seed: itemKey(item),
+    artwork: mediaUrl(item) || undefined,
+    kicker: listening ? "正在播放 · 仅音频" : "正在播放 · 播客单集",
+    title: item.title,
+    subtitle: item.author?.name,
+    chapters: chapterList,
+    meta: (
+      <>
+        <span>{fmtAgo(item.publishedAt)}</span>
+        {durationSec ? (
+          <>
+            <span className="opacity-60">·</span>
+            <span>{fmtTime(durationSec)}</span>
+          </>
+        ) : null}
+        {platform ? (
+          <>
+            <span className="opacity-60">·</span>
+            <span>{PLATFORM_LABEL[platform] ?? platform}</span>
+          </>
+        ) : null}
+      </>
+    ),
+    actions: (
+      <>
+        {item.kind === "video" && !isLive ? (
+          listening ? (
+            <Button variant="quiet" size="sm" onClick={() => playTo(item, from)}>
+              <Icon name="monitor" size={14} /> 看视频
+            </Button>
+          ) : (
+            <Button variant="quiet" size="sm" onClick={() => playTo(item, from, "listen")}>
+              <Icon name="music" size={14} /> 只听声音
+            </Button>
+          )
+        ) : null}
+        {nextInQueue ? (
+          <Button variant="quiet" size="sm" onClick={() => playTo(nextInQueue, from, listening ? "listen" : undefined)}>
+            <Icon name="skipForward" size={14} /> 下一条
+          </Button>
+        ) : null}
+        {item.url ? (
+          <Button variant="quiet" size="sm" onClick={() => openExternalSafely(item.url)}>
+            <Icon name="external" size={14} /> 打开原文
+          </Button>
+        ) : null}
+      </>
+    ),
+  }
 
   return (
     <div
@@ -226,104 +363,72 @@ export function PlayerPage() {
                   这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。
                   音频版式下 stage 不摆封面：整张「播放面」(封面/标题/声纹波形/控件)
                   由 AudioShell 自己渲染（原型 pod-stage 是一张卡片，不是黑舞台）。 */}
-              <PlayableMedia
-                key={itemKey(item)}
-                // 统一传 item.id：core 的 findItemUrl 按 (subscriptionId, id) 命中并取
-                // item.url（预览条目不在库内时传 url 走兜底）。
-                // ⚠️ refresh 已带直链时(feed enclosure,如播客)直接给 streams —— 这类
-                // item.url 是**网页**(不可 by-url 路由),靠 resolve 必失败。
-                streams={
-                  (item as { stream?: MediaStream }).stream ? [(item as { stream: MediaStream }).stream] : undefined
-                }
-                resolve={() => {
-                  // ⚠️ 预览条目(二级订阅)不在库里,core 的 findItemUrl 按 subscriptionId 查不到 →
-                  // 传 url 走它「入参本身是 URL」的兜底;否则会误报「不指向可解析的视频链接」。
-                  const ref = inStore || !item.url ? item.id : item.url
-                  return isLive ? resolveLivePlay(item.subscriptionId, ref) : resolvePlay(item.subscriptionId, ref)
-                }}
-                // ⚠️ 已下播的直播不自动解析:解析必得已验证失效的流(douyin flv 404 /
-                // huya 空),表现为黑屏 + 只有 console 报错。交给用户点「播放」手动重试。
-                autoResolve={isLive && item.liveStatus === "offline" ? false : (settings?.autoplayVideo ?? true)}
-                // 弹幕总开关关闭时不建弹幕连接(而非建了再藏)。
-                showDanmaku={danmakuOn}
-                // 开关渲染在播放器控件栏里;全局设置关闭时不给按钮(按了也不会生效)。
-                onToggleDanmaku={(settings?.danmakuEnabled ?? true) ? toggleDanmaku : undefined}
-                // 续播:非直播才有位置语义(item.positionSec 由 core 从 reading 回填)。
-                startAtSec={isLive ? undefined : item.positionSec}
-                onProgress={(sec, dur) => savePosition(item, sec, dur)}
-                audioOnly={listening}
-                // 听模式剥没剥出音轨只有播放器知道 → 页面据此决定摆音频版式还是 16:9 舞台。
-                onAudioOnlyChange={(on) => setAppliedAudioOnly({ key: itemKey(item), on })}
-                // 音频版式的播放面（原型 podplay）：封面 / 「正在播放」/ 标题 / 节目名 /
-                // 元信息 + 次要动作。原来那排按钮在 .player-meta 里，音频模式下整块不渲染
-                // —— 动作挪到这里，避免同一件事两处出现。
-                audioStage={{
-                  seed: itemKey(item),
-                  artwork: mediaUrl(item) || undefined,
-                  kicker: listening ? "正在播放 · 仅音频" : "正在播放 · 播客单集",
-                  title: item.title,
-                  subtitle: item.author?.name,
-                  meta: (
-                    <>
-                      <span>{fmtAgo(item.publishedAt)}</span>
-                      {durationSec ? (
-                        <>
-                          <span className="opacity-60">·</span>
-                          <span>{fmtTime(durationSec)}</span>
-                        </>
-                      ) : null}
-                      {platform ? (
-                        <>
-                          <span className="opacity-60">·</span>
-                          <span>{PLATFORM_LABEL[platform] ?? platform}</span>
-                        </>
-                      ) : null}
-                    </>
-                  ),
-                  actions: (
-                    <>
-                      {item.kind === "video" && !isLive ? (
-                        listening ? (
-                          <Button variant="quiet" size="sm" onClick={() => playTo(item, from)}>
-                            <Icon name="monitor" size={14} /> 看视频
-                          </Button>
-                        ) : (
-                          <Button variant="quiet" size="sm" onClick={() => playTo(item, from, "listen")}>
-                            <Icon name="music" size={14} /> 只听声音
-                          </Button>
-                        )
-                      ) : null}
-                      {nextInQueue ? (
-                        <Button
-                          variant="quiet"
-                          size="sm"
-                          onClick={() => playTo(nextInQueue, from, listening ? "listen" : undefined)}
-                        >
-                          <Icon name="skipForward" size={14} /> 下一条
-                        </Button>
-                      ) : null}
-                      {item.url ? (
-                        <Button variant="quiet" size="sm" onClick={() => openExternalSafely(item.url)}>
-                          <Icon name="external" size={14} /> 打开原文
-                        </Button>
-                      ) : null}
-                    </>
-                  ),
-                }}
-                // 播完自动下一条:仅当设置开着**且**队列里确实有下一条时。播过的当前条
-                // 同时出队(与「播放队列」的语义一致 —— 它是待播列表,不是播放历史)。
-                onEnded={() => {
-                  if (!(settings?.autoPlayNext ?? true)) return
-                  removeFromQueue(item)
-                  if (nextInQueue) playTo(nextInQueue, from, listening ? "listen" : undefined)
-                }}
-                onError={(err) => {
-                  const kind = errorKindOf(err)
-                  useDesktop
-                    .getState()
-                    .toast("error", kind === "unknown" ? "播放失败" : ERROR_KIND_LABEL[kind], String(err))
-                }}
-              />
+              {podcastAudio && podcastSource ? (
+                /* 播客单集：媒体元素在会话模块里（跨路由存活），这里只是控制面。 */
+                <AudioShell
+                  mediaRef={audioSessionRef}
+                  ownElement={false}
+                  {...audioStage}
+                  onError={(e) => useDesktop.getState().toast("error", "播放失败", String(e))}
+                />
+              ) : (
+                <PlayableMedia
+                  key={itemKey(item)}
+                  // 统一传 item.id：core 的 findItemUrl 按 (subscriptionId, id) 命中并取
+                  // item.url（预览条目不在库内时传 url 走兜底）。
+                  // ⚠️ refresh 已带直链时(feed enclosure,如播客)直接给 streams —— 这类
+                  // item.url 是**网页**(不可 by-url 路由),靠 resolve 必失败。
+                  streams={
+                    (item as { stream?: MediaStream }).stream ? [(item as { stream: MediaStream }).stream] : undefined
+                  }
+                  resolve={() => {
+                    // ⚠️ 预览条目(二级订阅)不在库里,core 的 findItemUrl 按 subscriptionId 查不到 →
+                    // 传 url 走它「入参本身是 URL」的兜底;否则会误报「不指向可解析的视频链接」。
+                    const ref = inStore || !item.url ? item.id : item.url
+                    return isLive ? resolveLivePlay(item.subscriptionId, ref) : resolvePlay(item.subscriptionId, ref)
+                  }}
+                  // ⚠️ 已下播的直播不自动解析:解析必得已验证失效的流(douyin flv 404 /
+                  // huya 空),表现为黑屏 + 只有 console 报错。交给用户点「播放」手动重试。
+                  autoResolve={isLive && item.liveStatus === "offline" ? false : (settings?.autoplayVideo ?? true)}
+                  // 弹幕总开关关闭时不建弹幕连接(而非建了再藏)。
+                  showDanmaku={danmakuOn}
+                  // 开关渲染在播放器控件栏里;全局设置关闭时不给按钮(按了也不会生效)。
+                  onToggleDanmaku={(settings?.danmakuEnabled ?? true) ? toggleDanmaku : undefined}
+                  // 续播:非直播才有位置语义(item.positionSec 由 core 从 reading 回填)。
+                  startAtSec={isLive ? undefined : item.positionSec}
+                  onProgress={(sec, dur) => {
+                    savePosition(item, sec, dur)
+                    // 章节高亮只在**跨章节**时 setState：4Hz 的进度不触发页面重渲染。
+                    const i = chapterAt(sec)
+                    if (i !== chapterIdxRef.current) {
+                      chapterIdxRef.current = i
+                      setChapterIdx(i)
+                    }
+                  }}
+                  // 章节（目前只有 bili 给）：没有就是空数组，右栏那一栏不渲染。
+                  onChapters={(list) => setChapters({ key: itemKey(item), list })}
+                  // 章节栏点击定位用的跳转句柄（元素换了会重新给，卸载给 null）。
+                  onMediaControl={setMediaCtl}
+                  audioOnly={listening}
+                  // 听模式剥没剥出音轨只有播放器知道 → 页面据此决定摆音频版式还是 16:9 舞台。
+                  onAudioOnlyChange={(on) => setAppliedAudioOnly({ key: itemKey(item), on })}
+                  // 音频版式的播放面（原型 podplay）：见下方 audioStage。
+                  audioStage={audioStage}
+                  // 播完自动下一条:仅当设置开着**且**队列里确实有下一条时。播过的当前条
+                  // 同时出队(与「播放队列」的语义一致 —— 它是待播列表,不是播放历史)。
+                  onEnded={() => {
+                    if (!(settings?.autoPlayNext ?? true)) return
+                    removeFromQueue(item)
+                    if (nextInQueue) playTo(nextInQueue, from, listening ? "listen" : undefined)
+                  }}
+                  onError={(err) => {
+                    const kind = errorKindOf(err)
+                    useDesktop
+                      .getState()
+                      .toast("error", kind === "unknown" ? "播放失败" : ERROR_KIND_LABEL[kind], String(err))
+                  }}
+                />
+              )}
             </div>
 
             {/* 音频版式不要这块:标题/元信息/次要动作都在 AudioShell 的播放面里,
@@ -394,8 +499,7 @@ export function PlayerPage() {
               </div>
             )}
 
-            {/* 视频版式的简介留在舞台下方;音频版式进右栏(原型 pod-side 的「本集简介」)。 */}
-            {audioMode || !summaryCard ? null : <div className="section-first">{summaryCard}</div>}
+            {summaryCard ? <div className="section-first">{summaryCard}</div> : null}
           </div>
 
           {/* ⚠️ `player-side` 类给剧场模式用(data-theater=on 时 display:none)——
@@ -405,7 +509,24 @@ export function PlayerPage() {
             data-audio={audioMode ? "on" : undefined}
             {...overlayBlock("player-side", "player:side")}
           >
-            {audioMode ? summaryCard : null}
+            {chapterList.length ? (
+              <SideCard title="章节" icon="list" blockKey="player:chapters">
+                <div className="pod-chapters">
+                  {chapterList.map((c, i) => (
+                    <button
+                      key={`${c.t}-${i}`}
+                      type="button"
+                      className="pod-chapter"
+                      aria-current={i === chapterIdx ? "true" : undefined}
+                      onClick={() => mediaCtl?.seek(c.t)}
+                    >
+                      <span className="ch-t">{fmtTime(c.t)}</span>
+                      <span className="ch-label">{c.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </SideCard>
+            ) : null}
             <SideCard title={`播放队列 ${queueItems.length}`} icon="queue" blockKey="player:queue">
               {queueItems.length === 0 ? (
                 <p className="rail-empty">队列为空。在卡片上点 + 加入,或从列表播放。</p>

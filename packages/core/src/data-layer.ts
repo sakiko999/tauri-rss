@@ -722,14 +722,14 @@ export function createDataLayer(): DataLayer {
     const sub = await repo.get(subscriptionId)
     const info = sub ? await sourceInfoFor(sub) : await previewInfoFor(subscriptionId)
     if (!info) return null
-    const { streams } = await resolveVideoByUrl(url, info)
+    const { streams, chapters } = await resolveVideoByUrl(url, info)
     let danmaku
     try {
       danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
     } catch {
       // 无弹幕能力(如纯图文/音频)不阻塞播放。
     }
-    return { streams, danmaku }
+    return { streams, danmaku, chapters }
   }
 
   /** 直播播放:同上,但 kind=live 路由。 */

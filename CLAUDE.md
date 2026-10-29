@@ -301,6 +301,11 @@ live 按平台二次聚合的 UI 侧。
   实测：真单集 206 直连 + 起播；波形点击 50% → 375.9/748；Space 暂停、→+30、←−15；
   倍速 1.5× 落到元素；听→看 t 4.5→6.3、看→听 9.3→11.6 接着播（引擎未就绪时 200ms 连点也不崩）；
   队列自动下一条保持 `mode=listen`。
-  **刻意不做**：章节栏（播客 RSS / 喜马拉雅单集**没有**章节数据；B 站 `view_points` 要新开一条
-  resolve→页面 的数据通路）、节目笔记（同前）、喜欢的迷你播放条（属播客套件，不在播放页）。
+  **章节（2026-10-29 补）**：`biliClient.viewPoints`（`/x/player/v2` 的 `view_points`，非 wbi、匿名可读）
+  → `ResolvePlayback.chapters` → `PlayableMedia.onChapters` → 右栏「章节」+ 波形刻度，点击走
+  `onMediaControl.seek`。**没有章节的条目一律缺省**（播客 RSS / 喜马拉雅 / YouTube 都没有），不渲染那一栏。
+  **迷你条（同日补）**：播客单集改走**会话级**播放器（`views/player/audio-session.ts` 的模块级
+  `<audio>`，跨路由存活），播放页与迷你条是两个控制面（`AudioShell` 的 `ownElement=false`）；
+  离开播放页继续播、底部浮条可暂停/回页/关闭。听视频是 DASH，仍归 PlayableMedia，离开即停。
+  **刻意不做**：节目笔记（单集简介就是它）。
 <!-- cc-todo:end -->
