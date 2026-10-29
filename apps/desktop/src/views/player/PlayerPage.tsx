@@ -400,7 +400,11 @@ export function PlayerPage() {
 
           {/* ⚠️ `player-side` 类给剧场模式用(data-theater=on 时 display:none)——
               只靠 overlayBlock 的属性没法在 CSS 里稳定选中(DEV 之外它根本不渲染)。 */}
-          <aside className="stack player-side" {...overlayBlock("player-side", "player:side")}>
+          <aside
+            className="stack player-side"
+            data-audio={audioMode ? "on" : undefined}
+            {...overlayBlock("player-side", "player:side")}
+          >
             {audioMode ? summaryCard : null}
             <SideCard title={`播放队列 ${queueItems.length}`} icon="queue" blockKey="player:queue">
               {queueItems.length === 0 ? (
