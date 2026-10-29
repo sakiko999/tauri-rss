@@ -4,7 +4,8 @@
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 reading 判据。
  */
 
-import { findItem, positionDecision, readingKey } from "@amoeba/core"
+import { findItem, positionDecision, readingKey, type ResolvePlayback } from "@amoeba/core"
+import { getDanmakuByUrl } from "@amoeba/resolve"
 
 import type { DesktopState, StoreCtx } from "../types.ts"
 
@@ -12,6 +13,21 @@ type ReadingActions = Pick<
   DesktopState,
   "markRead" | "markAllRead" | "toggleStar" | "savePosition" | "saveScrollRatio" | "resolvePlay" | "resolveLivePlay"
 >
+
+/**
+ * RPC(JSON) 会把 `ResolvePlayback.danmaku`（函数）丢掉 —— 服务端同时给了可序列化的
+ * `danmakuRef`，这里在**本地**重建弹幕流（seg.so / 直播 ws 走桌面自己的 appHost 隧道，
+ * 与 mobile 同款）。匿名重建：凭证不过界（B 站/斗鱼/虎牙弹幕匿名可用；抖音直播弹幕
+ * 在桌面暂缺，见 danmaku.md）。重建失败不阻塞播放（与 core 侧同语义）。
+ */
+function rebuildDanmaku(r: ResolvePlayback): ResolvePlayback {
+  if (r.danmaku || !r.danmakuRef) return r
+  try {
+    return { ...r, danmaku: getDanmakuByUrl(r.danmakuRef.url, { kind: r.danmakuRef.kind }) }
+  } catch {
+    return r
+  }
+}
 
 export function createReadingActions(ctx: StoreCtx): ReadingActions {
   const { get } = ctx
@@ -111,13 +127,13 @@ export function createReadingActions(ctx: StoreCtx): ReadingActions {
     async resolvePlay(subscriptionId, itemId) {
       const dl = get().dl
       if (!dl) throw new Error("DataLayer 未初始化")
-      return dl.resolvePlay(subscriptionId, itemId)
+      return rebuildDanmaku(await dl.resolvePlay(subscriptionId, itemId))
     },
 
     async resolveLivePlay(subscriptionId, roomId) {
       const dl = get().dl
       if (!dl) throw new Error("DataLayer 未初始化")
-      return dl.resolveLivePlay(subscriptionId, roomId)
+      return rebuildDanmaku(await dl.resolveLivePlay(subscriptionId, roomId))
     },
   }
 }

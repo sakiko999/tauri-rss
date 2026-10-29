@@ -338,6 +338,14 @@ DanmakuLayer (canvas 2D)
 
 ## 播放器侧约定（2026-10-21 从 `CLAUDE.md` 迁入）
 
+- **⚠️ 弹幕流是函数，过 RPC(JSON) 会丢（2026-10-29 实测）**：桌面自数据服务化起，
+  `resolvePlay`/`resolveLivePlay` 回来只剩 `streams`/`chapters` —— 服务进程里的
+  `danmaku`（订阅即拉取的函数）被序列化丢掉，视频/直播弹幕在桌面**整体消失**。
+  修法：`ResolvePlayback` 同时带可序列化的 `danmakuRef`（`{url, kind}`，**不带 cookie**，
+  凭证不过界），desktop 的 store action 用 `getDanmakuByUrl` **本地匿名重建**
+  （seg.so/直播 ws 走桌面自己的 appHost 隧道，与 mobile 同款）。B 站视频/直播、斗鱼、
+  虎牙弹幕匿名可用；**抖音直播弹幕在桌面暂缺**（要 ttwid，凭证在服务进程）—— 恢复它
+  得走「服务端订阅 + 推送」，不是把 cookie 递给客户端。重建失败不阻塞播放。
 - **弹幕开关在播放器控件栏**（`MediaDanmakuButton`），不在播放页 meta 的按钮组。
   `PlayableMedia` 只在 `resolved.danmaku` 存在时把 control 传给 `VideoShell`；`enabled` 跟
   `showDanmaku` 而不是渲染用的 `danmaku` —— 关闭后流被丢弃但按钮仍在，否则按钮会随流一起消失、

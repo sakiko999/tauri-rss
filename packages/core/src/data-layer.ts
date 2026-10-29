@@ -729,7 +729,10 @@ export function createDataLayer(): DataLayer {
     } catch {
       // 无弹幕能力(如纯图文/音频)不阻塞播放。
     }
-    return { streams, danmaku, chapters }
+    // danmaku 是函数,过 RPC(JSON) 会丢 —— 同时给可序列化的 ref 让客户端本地重建
+    // (匿名;凭证不过界,见 DanmakuRef 注释)。
+    const danmakuRef = danmaku ? { url, kind: "vod" as const } : undefined
+    return { streams, danmaku, danmakuRef, chapters }
   }
 
   /** 直播播放:同上,但 kind=live 路由。 */
@@ -746,7 +749,8 @@ export function createDataLayer(): DataLayer {
     } catch {
       // 无弹幕能力不阻塞播放。
     }
-    return { streams, danmaku }
+    const danmakuRef = danmaku ? { url, kind: "live" as const } : undefined
+    return { streams, danmaku, danmakuRef }
   }
 
   async function resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]> {
