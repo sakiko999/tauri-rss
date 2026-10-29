@@ -8,6 +8,7 @@
 import type {
   AppSettings,
   ChannelInfo,
+  DanmakuItem,
   LoginResult,
   MediaItem,
   MediaKind,
@@ -215,11 +216,22 @@ export interface RpcMethodMap {
     params: Record<string, never>
     result: Array<keyof AppSettings>
   }
+  /**
+   * 弹幕订阅（服务端建连 + 推送 `danmaku.items`）。`subId` 由**客户端**生成并先
+   * 注册监听：服务端一开始推流就可能发首批（VOD 是一次性全量），等 RPC 返回再挂
+   * 回调会丢第一批。`danmaku.close` 退订；客户端全断后服务端按空闲回收。
+   */
+  "danmaku.open": {
+    params: { subId: string; subscriptionId: string; url: string; kind: "vod" | "live" }
+    result: void
+  }
+  "danmaku.close": { params: { subId: string }; result: void }
 
   "diagnostics.cacheStats": { params: Record<string, never>; result: DiagnosticsStats }
   "diagnostics.clearContentCache": { params: Record<string, never>; result: number }
   "diagnostics.clearCookies": { params: { hosts: string[] }; result: void }
-  "diagnostics.clearAll": { params: Record<string, never>; result: void }
+  /** 返回受影响的 subscriptionId（客户端据此清本地镜像投影）。 */
+  "diagnostics.clearAll": { params: Record<string, never>; result: string[] }
   "diagnostics.resetBrowserProfile": { params: Record<string, never>; result: string }
 
   // CLI 原始探针（fetch/item/play/dm 的远端路径；只读，不写库）。
@@ -345,6 +357,11 @@ export type ServiceEvent =
       result?: unknown
       error?: { kind: string; message: string }
     }
+  /**
+   * 弹幕批次（caller-only：不占 rev、不进快照）。与 job.* 一样广播到全部连接，
+   * 客户端按 `danmaku.open` 时自带的 `subId` 过滤。
+   */
+  | { type: "danmaku.items"; subId: string; items: DanmakuItem[] }
   | { type: "service.shutdown"; reason?: string }
 
 /** WS 下行信封。`hello` 在认证后立即发送。 */

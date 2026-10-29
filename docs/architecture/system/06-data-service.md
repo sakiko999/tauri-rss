@@ -134,7 +134,7 @@
 - 不兼容 → 426 `protocol-mismatch`；desktop 强制重启服务，CLI 拒绝 attach。
 - 同 protocol 内只做加法。
 
-## 4. API 面（45 个 RPC 方法）
+## 4. API 面（47 个 RPC 方法）
 
 ### 4.1 分组
 
@@ -143,14 +143,17 @@
 | 本地镜像读（12） | `listChannels`、`channelKind`、`subscriptions.list/listGroups/get`、`reading.getAll/get`、`settings.get`、`store.all/query`、`canLoadMore`、`totalOf` | 快照 + 事件维护，客户端同步读 |
 | 语义命令（14） | `subscriptions.add/update/remove/addGroup/updateGroup/removeGroup`、`reading.markRead/markManyRead/setStarred/setPosition/setScrollRatio`、`settings.set/setIfUnchanged/reset` | `POST /v1/rpc`，带 `opId` |
 | 长任务（10） | `addSubscription`、`previewChannel`、`refresh`、`loadMore`、`resolveDetail`、`resolvePlay`、`resolveLivePlay`、`resolveHotWord`、`scanLogin`、`syncBrowserCookies` | job + progress 事件 |
+| 弹幕订阅（2） | `danmaku.open`、`danmaku.close` | 服务端建连 + `danmaku.items` 推送（caller-only） |
 | 客户端本地（2+） | `store.patch`（乐观镜像）、`store.subscribe`（本地事件） | 不上线 |
 
 `reading.deleteBySubscription` 并入 `subscriptions.remove` 的服务端事务，不单独暴露。
 
-**实际实现（2026-10-26）**：`RpcMethodMap` 共 45 个方法 = 36 个 DataLayer 语义方法
+**实际实现（2026-10-30）**：`RpcMethodMap` 共 47 个方法 = 36 个 DataLayer 语义方法
 （12 镜像读 + 14 语义命令 + 10 长任务）+ `refreshAll` + 5 个 `diagnostics.*`（桌面设置页/
-账号页不再直连 storage/browser；「清除凭证」也经服务浏览器）+ 3 个 `probe.*`（CLI 原始探针
-远端路径）；`store.patch/subscribe`（客户端本地）与 `hydrate()`（服务内部）不上线。
+账号页不再直连 storage/browser；「清除凭证」也经服务浏览器；实现一律委托 core
+`layer.diagnostics.*`，server 只清投影与广播）+ 3 个 `probe.*`（CLI 原始探针远端路径）
++ 2 个 `danmaku.*`（弹幕连接开在服务进程内：凭证不过界，需登录态的抖音直播弹幕因此可用）；
+`store.patch/subscribe`（客户端本地）与 `hydrate()`（服务内部）不上线。
 `hydrate()` 是 core 新增的「只读缓存水化」，服务 boot 时调用，保证首个快照就有内容；
 desktop/移动的 init 仍走 `refreshAll(false)`。
 CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danmaku`，与订阅
@@ -192,6 +195,9 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - 移到服务（job），返回 `ResolvedPlayback`/streams；
 - desktop 不再需要 `setPlatformCookieLookup`，避免登录态播放静默降级；
 - 媒体字节仍由 renderer 直接请求，媒体 governor 留在桌面；抓取 governor 只在服务。
+- **弹幕连接同样归服务**：`ResolvePlayback.danmaku` 是函数，过 RPC 会被 JSON 丢掉；`danmakuRef`
+  只是能力标记，客户端按它调 `danmaku.open`（服务端用订阅凭证建连），只收 `danmaku.items` 批次。
+  凭证不出服务进程，「本地匿名重建」的做法已删除（桌面不再 import `@amoeba/resolve`）。
 
 ## 5. 事件与一致性
 
@@ -200,7 +206,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - `epoch`：每次服务启动生成；`bootId` 用于诊断。
 - `rev`：全局单调提交号；**每个改变镜像状态的提交必须发一条事件**。
 - 合帧：多种变更合并成**一次提交**（rev +1），不是丢弃中间 rev。这样 rev 连续，客户端不会误判缺口。
-- caller-only 帧（progress/QR/job 结果）不占 rev。
+- caller-only 帧（progress/QR/job 结果/弹幕批次）不占 rev。
 
 ### 5.2 事件类型
 
@@ -209,6 +215,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - `settings.changed`（按 key）
 - `reading.changed`（按 key）
 - `job.progress` / `job.done`（caller-only）
+- `danmaku.items`（caller-only：`{subId, items}`；与 job.* 一样广播，客户端按自带的 `subId` 过滤）
 - `service.shutdown`
 
 ### 5.3 应用规则

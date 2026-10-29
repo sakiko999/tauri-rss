@@ -54,7 +54,7 @@ export type {
 } from "./types/media-item.ts"
 export type { LivePlatformId, LiveStatus } from "./types/live.ts"
 export type { MediaQuery } from "./types/query.ts"
-export type { PlaybackChapter, ResolvePlayback } from "./types/playback.ts"
+export type { DanmakuItem, DanmakuStream, PlaybackChapter, ResolvePlayback } from "./types/playback.ts"
 
 export { NoChannelError } from "./errors.ts"
 /** 错误分类契约（resolve 定义，core 透出给 apps；UI 不再按字符串猜登录/风控）。 */

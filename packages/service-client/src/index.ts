@@ -14,6 +14,8 @@
 import type {
   AppSettings,
   ChannelInfo,
+  DanmakuItem,
+  DanmakuStream,
   DataLayer,
   LoginResult,
   MediaItem,
@@ -256,6 +258,8 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
   const totals = new Map<string, number>()
   const kinds = new Map<string, MediaKind>()
   const jobProgressListeners = new Map<string, (progress: JobProgress) => void>()
+  /** 弹幕批次按客户端生成的 subId 分发（服务端广播到全部连接，各端自行过滤）。 */
+  const danmakuListeners = new Map<string, (items: DanmakuItem[]) => void>()
   let status: RemoteStatus = { online: true, events: false }
 
   function setStatus(next: RemoteStatus): void {
@@ -386,6 +390,9 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
       case "job.done":
         // caller 的 HTTP 请求负责结果；这里只清进度订阅。
         jobProgressListeners.delete(event.jobId)
+        break
+      case "danmaku.items":
+        danmakuListeners.get(event.subId)?.(event.items)
         break
       case "service.shutdown":
         closed = true
@@ -544,13 +551,14 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
     clearContentCache: () => client.rpc("diagnostics.clearContentCache"),
     clearCookies: (hosts: string[]) => client.rpc("diagnostics.clearCookies", { hosts }),
     clearAll: async () => {
-      await client.rpc("diagnostics.clearAll")
+      const ids = await client.rpc("diagnostics.clearAll")
       subscriptions = []
       groups = []
       reading = {}
       totals.clear()
-      for (const sub of new Set(store.all().map((it) => it.subscriptionId))) store.clear(sub)
+      for (const id of ids) store.clear(id)
       hooks.onSubscriptions?.([], [])
+      return ids
     },
     resetBrowserProfile: () => client.rpc("diagnostics.resetBrowserProfile"),
   }
@@ -726,6 +734,29 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
     },
     async resolveLivePlay(subscriptionId, roomId) {
       return client.rpc("resolveLivePlay", { subscriptionId, roomId }, { opId: uid("op") })
+    },
+    async resolveDanmaku(subscriptionId, url, kind) {
+      // 连接开在服务进程里（凭证不过界），这里只做「订阅 → 批次 → 退订」的桥。
+      // subId 由客户端生成且**先挂监听**：服务端一开始推流就可能发首批
+      // （VOD 是一次性全量），等 RPC 返回再挂回调会丢掉第一批。
+      const stream: DanmakuStream = (onItems) => {
+        const subId = uid("dm")
+        danmakuListeners.set(subId, onItems)
+        const opening = client
+          .rpc("danmaku.open", { subId, subscriptionId, url, kind }, { opId: uid("op") })
+          .catch(() => {
+            // 该条目不支持弹幕（或解析失败）：静默无弹幕，不阻塞播放。
+            danmakuListeners.delete(subId)
+          })
+        return () => {
+          // ⚠️ 等 open 落地再关：否则 close 先到、open 后到，服务端会留下没人听的连接。
+          void opening.finally(() => {
+            danmakuListeners.delete(subId)
+            void client.rpc("danmaku.close", { subId }, { opId: uid("op") }).catch(() => {})
+          })
+        }
+      }
+      return stream
     },
     async resolveHotWord(subscriptionId, word) {
       return client.rpc("resolveHotWord", { subscriptionId, word }, { opId: uid("op") })

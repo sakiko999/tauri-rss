@@ -38,7 +38,7 @@ import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot }
 import { createMediaStore } from "./store/media-store.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
-import type { ResolvePlayback } from "./types/playback.ts"
+import type { DanmakuStream, ResolvePlayback } from "./types/playback.ts"
 import type { MediaQuery } from "./types/query.ts"
 import { findRecord } from "./types/reading.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
@@ -121,6 +121,14 @@ export interface DataLayer {
   resolveDetail(subscriptionId: string, itemId: string): Promise<MediaItem | null>
   /** 懒解析某直播房间的可播流(播放时调用;playUrls 带 expiry 签名,不缓存)。 */
   resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback>
+  /**
+   * 开一路弹幕订阅(播放器 unmount 时调返回的 unsubscribe)。
+   *
+   * 与 `resolvePlay().danmaku` 同源,但**在数据服务进程内**建连:弹幕握手要用订阅
+   * 凭证(抖音直播要 ttwid),凭证不过界 —— 服务端订阅 + 推送是唯一解。
+   * 无弹幕能力时抛错(调用方按「该条目没有弹幕」处理)。
+   */
+  resolveDanmaku(subscriptionId: string, url: string, kind: "vod" | "live"): Promise<DanmakuStream>
   /** 热搜词 → 该词下内容流(desktop 热搜三栏右栏;不持久,直接返回 MediaItem[])。 */
   resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]>
   /** 订阅是否支持分页加载更多(hot 发现流;UI 据此显隐「加载更多」)。 */
@@ -154,8 +162,8 @@ export interface DataLayerDiagnostics {
   cacheStats(): Promise<{ keys: number; bytes: number }>
   /** 删除全部 `content:` 缓存，返回删除条数。已加载的 store 条目不动。 */
   clearContentCache(): Promise<number>
-  /** 删除全部库数据并清空内存条目（调用方负责 reload）。 */
-  clearAll(): Promise<void>
+  /** 删除全部库数据并清空内存条目，返回受影响的 subscriptionId（服务端据此清投影/广播）。 */
+  clearAll(): Promise<string[]>
   /** 清理指定域名的浏览器 cookie（账号页「清除凭证」；远端走服务浏览器）。 */
   clearCookies(hosts: string[]): Promise<void>
   /** 清理抓取浏览器 profile（cookie/缓存），返回 profile 目录。 */
@@ -753,6 +761,17 @@ export function createDataLayer(): DataLayer {
     return { streams, danmaku, danmakuRef }
   }
 
+  /**
+   * 弹幕订阅（服务端建连）：凭证只在服务进程内使用 —— 抖音直播弹幕要 ttwid，
+   * 桌面拿不到也不该拿到。info 规则与播放解析同源（订阅 / `preview:` 前缀）。
+   */
+  async function resolveDanmaku(subscriptionId: string, url: string, kind: "vod" | "live"): Promise<DanmakuStream> {
+    const sub = await repo.get(subscriptionId)
+    const info = sub ? await sourceInfoFor(sub) : await previewInfoFor(subscriptionId)
+    // 无路由 / 平台不支持 → getDanmakuByUrl 抛错，原样透出（调用方按「没有弹幕」处理）。
+    return getDanmakuByUrl(url, { kind, cookie: info?.cookie })
+  }
+
   async function resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]> {
     const sub = await repo.get(subscriptionId)
     if (!sub) throw new Error("subscription not found")
@@ -1045,15 +1064,20 @@ export function createDataLayer(): DataLayer {
       return keys.length
     },
     async clearAll() {
+      // 删库前取受影响订阅：服务端据此清 diff 投影并广播 items.cleared。
+      const ids = new Set<string>((await repo.list().catch(() => [])).map((s) => s.id))
       const keys = await storage.keys()
       for (const key of keys) await storage.delete(key)
-      const subs = new Set(store.all().map((it) => it.subscriptionId))
-      for (const id of subs) store.clear(id)
+      for (const it of store.all()) ids.add(it.subscriptionId)
+      for (const id of ids) store.clear(id)
+      // 内存态一并回零：退订墓碑/分页游标/总数/凭证快照 —— 漏一个就会带着旧状态继续跑
+      // (典型:netLevels 仍按登录态限流、loadMore 从已删的游标续翻)。
       removedSubs.clear()
       pageCursors.clear()
       pageTotals.clear()
       cookieSnapshot = { ...DEFAULT_SETTINGS }
       syncNetPolicy(cookieSnapshot)
+      return [...ids]
     },
     async clearCookies(hosts) {
       const browser = globalThis.appHost.browser
@@ -1202,6 +1226,7 @@ export function createDataLayer(): DataLayer {
     hydrate,
     resolvePlay,
     resolveLivePlay,
+    resolveDanmaku,
     resolveHotWord,
     resolveDetail,
     canLoadMore,

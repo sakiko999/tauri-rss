@@ -341,11 +341,13 @@ DanmakuLayer (canvas 2D)
 - **⚠️ 弹幕流是函数，过 RPC(JSON) 会丢（2026-10-29 实测）**：桌面自数据服务化起，
   `resolvePlay`/`resolveLivePlay` 回来只剩 `streams`/`chapters` —— 服务进程里的
   `danmaku`（订阅即拉取的函数）被序列化丢掉，视频/直播弹幕在桌面**整体消失**。
-  修法：`ResolvePlayback` 同时带可序列化的 `danmakuRef`（`{url, kind}`，**不带 cookie**，
-  凭证不过界），desktop 的 store action 用 `getDanmakuByUrl` **本地匿名重建**
-  （seg.so/直播 ws 走桌面自己的 appHost 隧道，与 mobile 同款）。B 站视频/直播、斗鱼、
-  虎牙弹幕匿名可用；**抖音直播弹幕在桌面暂缺**（要 ttwid，凭证在服务进程）—— 恢复它
-  得走「服务端订阅 + 推送」，不是把 cookie 递给客户端。重建失败不阻塞播放。
+- **桌面弹幕 = 服务端订阅 + 推送（2026-10-30）**：`ResolvePlayback.danmakuRef`（`{url, kind}`，
+  **不带凭证**）只是能力标记；`DataLayer.resolveDanmaku(subscriptionId, url, kind)` 在**数据服务进程内**
+  建连（info 走 sourceInfoFor，与播放解析同源），经 `danmaku.open` RPC 订阅、`danmaku.items` 事件推批次
+  （caller-only，不占 rev）、`danmaku.close` 退订（客户端全断后 60s 空闲回收）。`subId` 由**客户端生成**并先挂
+  监听 —— VOD 首批是一次性全量，等 RPC 返回再挂回调会丢第一批。桌面因此**不 import `@amoeba/resolve`**，
+  凭证也不出服务进程：**抖音直播弹幕（要 ttwid）在桌面可用**（实测 7 条）。
+  打开失败/无弹幕能力静默无弹幕，不阻塞播放。
 - **弹幕开关在播放器控件栏**（`MediaDanmakuButton`），不在播放页 meta 的按钮组。
   `PlayableMedia` 只在 `resolved.danmaku` 存在时把 control 传给 `VideoShell`；`enabled` 跟
   `showDanmaku` 而不是渲染用的 `danmaku` —— 关闭后流被丢弃但按钮仍在，否则按钮会随流一起消失、

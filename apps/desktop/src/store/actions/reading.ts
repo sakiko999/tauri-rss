@@ -4,8 +4,7 @@
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 reading 判据。
  */
 
-import { findItem, positionDecision, readingKey, type ResolvePlayback } from "@amoeba/core"
-import { getDanmakuByUrl } from "@amoeba/resolve"
+import { type DanmakuStream, findItem, positionDecision, readingKey, type ResolvePlayback } from "@amoeba/core"
 
 import type { DesktopState, StoreCtx } from "../types.ts"
 
@@ -16,17 +15,33 @@ type ReadingActions = Pick<
 
 /**
  * RPC(JSON) 会把 `ResolvePlayback.danmaku`（函数）丢掉 —— 服务端同时给了可序列化的
- * `danmakuRef`，这里在**本地**重建弹幕流（seg.so / 直播 ws 走桌面自己的 appHost 隧道，
- * 与 mobile 同款）。匿名重建：凭证不过界（B 站/斗鱼/虎牙弹幕匿名可用；抖音直播弹幕
- * 在桌面暂缺，见 danmaku.md）。重建失败不阻塞播放（与 core 侧同语义）。
+ * `danmakuRef`，这里按它**向服务端订阅**一路弹幕流：连接开在数据服务进程内（凭证
+ * 不过界，抖音直播弹幕因此可用），桌面只收批次。不支持弹幕/解析失败静默无弹幕，
+ * 不阻塞播放（与 core 侧同语义）。
  */
-function rebuildDanmaku(r: ResolvePlayback): ResolvePlayback {
+function rebuildDanmaku(
+  subscriptionId: string,
+  r: ResolvePlayback,
+  open: (subscriptionId: string, url: string, kind: "vod" | "live") => Promise<DanmakuStream>,
+): ResolvePlayback {
   if (r.danmaku || !r.danmakuRef) return r
-  try {
-    return { ...r, danmaku: getDanmakuByUrl(r.danmakuRef.url, { kind: r.danmakuRef.kind }) }
-  } catch {
-    return r
+  const { url, kind } = r.danmakuRef
+  const stream: DanmakuStream = (onItems) => {
+    let off: (() => void) | null = null
+    let closed = false
+    void open(subscriptionId, url, kind)
+      .then((open_) => {
+        // 打开落地前已退订（快速切条目）→ 立刻关掉，否则服务端留一路没人听的连接。
+        if (closed) return
+        off = open_(onItems)
+      })
+      .catch(() => {})
+    return () => {
+      closed = true
+      off?.()
+    }
   }
+  return { ...r, danmaku: stream }
 }
 
 export function createReadingActions(ctx: StoreCtx): ReadingActions {
@@ -127,13 +142,17 @@ export function createReadingActions(ctx: StoreCtx): ReadingActions {
     async resolvePlay(subscriptionId, itemId) {
       const dl = get().dl
       if (!dl) throw new Error("DataLayer 未初始化")
-      return rebuildDanmaku(await dl.resolvePlay(subscriptionId, itemId))
+      return rebuildDanmaku(subscriptionId, await dl.resolvePlay(subscriptionId, itemId), (sid, url, kind) =>
+        dl.resolveDanmaku(sid, url, kind),
+      )
     },
 
     async resolveLivePlay(subscriptionId, roomId) {
       const dl = get().dl
       if (!dl) throw new Error("DataLayer 未初始化")
-      return rebuildDanmaku(await dl.resolveLivePlay(subscriptionId, roomId))
+      return rebuildDanmaku(subscriptionId, await dl.resolveLivePlay(subscriptionId, roomId), (sid, url, kind) =>
+        dl.resolveDanmaku(sid, url, kind),
+      )
     },
   }
 }

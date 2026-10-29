@@ -390,6 +390,34 @@ async function main(): Promise<void> {
     add("每日备份已生成", backups.length > 0, backups.join(","))
     if (m2) {
       const port2 = Number(m2[1])
+      const rpc2 = async (method: string, params: unknown = {}) => {
+        const res = await fetch(`http://127.0.0.1:${port2}/v1/rpc`, {
+          method: "POST",
+          headers: authOwner,
+          body: JSON.stringify({ method, params }),
+        })
+        return (await res.json()) as { ok?: boolean; result?: unknown }
+      }
+      // 诊断实现在 core（server 只做投影/广播）：clearAll 要返回受影响订阅，
+      // 且连内存态（墓碑/游标/总数/凭证快照）一起清 —— 不再由 server 手写副本。
+      const sub2Body = await rpc2("addSubscription", {
+        channelKey: "rss:hn",
+        title: "Wipe Probe",
+        info: { url: feedUrl },
+      })
+      const sub2 = (sub2Body.result as { id?: string } | undefined)?.id ?? ""
+      add("clearAll 前有订阅", sub2Body.ok === true && !!sub2, JSON.stringify(sub2Body).slice(0, 160))
+      const wipe = await rpc2("diagnostics.clearAll")
+      const ids = (wipe.result as string[] | undefined) ?? []
+      add("clearAll 返回受影响订阅", wipe.ok === true && ids.includes(sub2), JSON.stringify(ids))
+      const wiped = await (await fetch(`http://127.0.0.1:${port2}/v1/state`, { headers: authOwner })).text()
+      add(
+        "clearAll 后快照无订阅/无条目",
+        wiped.includes('"subscriptions":[]') && !wiped.includes('"type":"items"'),
+        wiped.length.toString(),
+      )
+      const wipedSettings = (await rpc2("settings.get")).result as { refreshIntervalMin?: number } | undefined
+      add("clearAll 后设置回默认", wipedSettings?.refreshIntervalMin === 30, JSON.stringify(wipedSettings))
       // 制造「备份之后又发生了写入」的漂移，供回滚演练用。
       const drift = await fetch(`http://127.0.0.1:${port2}/v1/rpc`, {
         method: "POST",

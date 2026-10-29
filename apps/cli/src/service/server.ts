@@ -43,11 +43,9 @@ import {
   resolveLivePlayByUrl as resolveLiveByUrl,
   resolvePlayByUrl as resolveVideoByUrl,
   resolveRoute,
-  withBrowserGlobal,
 } from "@amoeba/resolve"
 import {
   type AddSubscriptionMeta,
-  type DiagnosticsStats,
   ENDPOINT_SCHEMA,
   type EndpointInfo,
   type HealthResponse,
@@ -89,6 +87,8 @@ const READING_BATCH_MS = 1_000
 const EVENT_LOG_LIMIT = 512
 const MAX_RPC_BYTES = 16 * 1024 * 1024
 const SNAPSHOT_CHUNK = 400
+/** 客户端全部断开后弹幕订阅的空闲回收延时（WS 短暂重连不该杀掉正在收的弹幕）。 */
+const DANMAKU_IDLE_MS = 60_000
 
 type StateEventInput = StateEvent extends infer T ? (T extends StateEvent ? Omit<T, "rev"> : never) : never
 
@@ -368,6 +368,9 @@ export async function runService(opts: ServiceOptions): Promise<number> {
   const eventLog: StateEvent[] = []
   const lastItems = new Map<string, MediaItem[]>()
   const jobs = new Map<string, { controller: AbortController; promise: Promise<unknown> }>()
+  /** 弹幕订阅：客户端生成的 subId → unsubscribe。连接在服务进程内（凭证不过界）。 */
+  const danmakuSubs = new Map<string, () => void>()
+  let danmakuIdleTimer: ReturnType<typeof setTimeout> | null = null
   const opCache = new Map<string, { at: number; promise: Promise<unknown> }>()
   const pendingReading = new Map<string, ReadRecord | null>()
   let readingTimer: ReturnType<typeof setTimeout> | null = null
@@ -390,6 +393,20 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         /* 已关闭 */
       }
     }
+  }
+
+  function closeDanmaku(subId: string): void {
+    const off = danmakuSubs.get(subId)
+    danmakuSubs.delete(subId)
+    try {
+      off?.()
+    } catch {
+      /* 连接已断 */
+    }
+  }
+
+  function closeAllDanmaku(): void {
+    for (const subId of danmakuSubs.keys()) closeDanmaku(subId)
   }
 
   function commit(...inputs: StateEventInput[]): number {
@@ -821,59 +838,59 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         return fields
       }
 
-      // ── 诊断（桌面不直连 storage/browser）─────────────────────
-      case "diagnostics.cacheStats": {
-        const storage = globalThis.appHost.storage
-        const keys = await storage.keys("content:")
-        let bytes = 0
-        for (const key of keys) {
-          const value = await storage.get(key)
-          bytes += (value?.length ?? 0) * 2
-        }
-        return { keys: keys.length, bytes } satisfies DiagnosticsStats
+      // ── 弹幕订阅（服务端建连 + 推送；凭证不过界）──────────────
+      case "danmaku.open": {
+        const subId = asString(p.subId, "subId")
+        if (danmakuSubs.has(subId)) return undefined
+        const subscriptionId = asString(p.subscriptionId, "subscriptionId")
+        const url = asString(p.url, "url")
+        const kind: "vod" | "live" = p.kind === "live" ? "live" : "vod"
+        const stream = await layer.resolveDanmaku(subscriptionId, url, kind)
+        // 与 open 并发到达的 close 已把这个 id 关掉 → 不要再把订阅装回去。
+        if (danmakuSubs.has(subId)) return undefined
+        const off = stream((items) => {
+          if (!items.length) return
+          broadcast({ type: "event", event: { type: "danmaku.items", subId, items } })
+        })
+        danmakuSubs.set(subId, off)
+        return undefined
       }
-      case "diagnostics.clearContentCache": {
-        const storage = globalThis.appHost.storage
-        const keys = await storage.keys("content:")
-        for (const key of keys) await storage.delete(key)
-        return keys.length
+      case "danmaku.close": {
+        closeDanmaku(asString(p.subId, "subId"))
+        return undefined
       }
+
+      // ── 诊断（桌面不直连 storage/browser；实现一律归 core）─────
+      case "diagnostics.cacheStats":
+        return layer.diagnostics.cacheStats()
+      case "diagnostics.clearContentCache":
+        return layer.diagnostics.clearContentCache()
       case "diagnostics.clearCookies": {
         const hosts = Array.isArray(p.hosts)
           ? (p.hosts as unknown[]).filter((h): h is string => typeof h === "string" && !!h)
           : []
-        const browser = globalThis.appHost.browser
-        if (browser?.clearCookies && hosts.length) {
-          await withBrowserGlobal(async () => {
-            for (const host of hosts) await browser.clearCookies?.(host)
-          })
-        }
+        await layer.diagnostics.clearCookies(hosts)
         return undefined
       }
       case "diagnostics.clearAll": {
-        const subs = await layer.subscriptions.list()
-        const map = await layer.reading.getAll().catch(() => ({}))
-        const removedKeys = Object.keys(map)
-        for (const sub of subs) layer.store.clear(sub.id)
+        // 内存态（墓碑/游标/总数/凭证快照）由 core 清；这里只收尾服务自己的投影与事件。
+        const before = await layer.reading.getAll().catch(() => ({}))
+        const removedKeys = Object.keys(before)
+        for (const job of jobs.values()) job.controller.abort()
+        const ids = await layer.diagnostics.clearAll()
         lastItems.clear()
-        const storage = globalThis.appHost.storage
-        for (const key of await storage.keys()) await storage.delete(key)
-        const settings = await layer.settings.reset()
         commit(
           { type: "subscriptions.changed", subscriptions: [], groups: [] },
-          { type: "settings.changed", settings },
+          { type: "settings.changed", settings: await layer.settings.get() },
           { type: "reading.changed", records: Object.fromEntries(removedKeys.map((k) => [k, null])) },
-          ...subs.map((sub) => ({ type: "items.cleared" as const, subscriptionId: sub.id })),
+          ...ids.map((subscriptionId) => ({ type: "items.cleared" as const, subscriptionId })),
         )
-        return undefined
+        // 库都清了，进行中的弹幕订阅也没有意义。
+        closeAllDanmaku()
+        return ids
       }
-      case "diagnostics.resetBrowserProfile": {
-        const browser = globalThis.appHost.browser
-        if (!browser?.resetProfile) {
-          throw new ServiceError("unsupported", 400, "当前环境不支持清理浏览器数据")
-        }
-        return withBrowserGlobal(() => browser.resetProfile!())
-      }
+      case "diagnostics.resetBrowserProfile":
+        return layer.diagnostics.resetBrowserProfile()
 
       // ── CLI 原始探针（只读；cookie/被动规则与抓取同源）────────
       case "probe.fetch": {
@@ -1068,6 +1085,11 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     websocket: {
       open(ws) {
         sockets.add(ws)
+        // 有客户端回来了：取消空闲回收（WS 重连不该打断正在看的弹幕）。
+        if (danmakuIdleTimer) {
+          clearTimeout(danmakuIdleTimer)
+          danmakuIdleTimer = null
+        }
         setTimeout(() => {
           if (!ws.data.authed) ws.close(4001, "unauthorized")
         }, AUTH_TIMEOUT_MS)
@@ -1144,6 +1166,13 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       },
       close(ws) {
         sockets.delete(ws)
+        // 客户端全断了：弹幕订阅没有消费者，延时回收（给 WS 重连留窗口）。
+        if (!sockets.size && danmakuSubs.size && !danmakuIdleTimer) {
+          danmakuIdleTimer = setTimeout(() => {
+            danmakuIdleTimer = null
+            if (!sockets.size) closeAllDanmaku()
+          }, DANMAKU_IDLE_MS)
+        }
       },
     },
   })
@@ -1220,6 +1249,8 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     if (parentTimer) clearInterval(parentTimer)
     if (heartbeat) clearInterval(heartbeat)
     if (cookieTimer) clearTimeout(cookieTimer)
+    if (danmakuIdleTimer) clearTimeout(danmakuIdleTimer)
+    closeAllDanmaku()
     flushReading()
     broadcast({ type: "event", event: { type: "service.shutdown", reason: "shutdown" } })
     for (const ws of sockets) {

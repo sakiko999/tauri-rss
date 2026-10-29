@@ -189,10 +189,11 @@ case 写类型谓词，收益为负。
   不是永久泄漏；但 cancel 后到操作自然结束前条目仍在。低成本改法：`Promise.race(fn, abortSignal)`
   让 job 在取消时立即结算（`finally` 删除），语义与「取消 = 结束」一致。
 
-- **A1 服务端 diagnostics 内联了一份 core 实现**（`apps/cli/src/service/server.ts:829` 起）：
-  `clearAll` 不清 `removedSubs`/`pageCursors`/`pageTotals`、不重置 netPolicy，也不取消在途
-  refresh（在途结果会写回已清空的库）；core 的 `layer.diagnostics` 在生产路径成死代码。
-  建议 dispatch 一律委托 core，`clearAll` 返回受影响的 subscriptionId 供 server 清投影。
+- ~~**A1 服务端 diagnostics 内联了一份 core 实现**~~ ✅ **已修（2026-10-30）**：dispatch 5 个
+  `diagnostics.*` 一律委托 `layer.diagnostics.*`（core 的 `clearAll` 清 `removedSubs`/`pageCursors`/
+  `pageTotals` 并重置 netPolicy），返回受影响的 subscriptionId 供 server 清 `lastItems` 投影并广播
+  `items.cleared`；server 另在 clearAll 前 abort 在途 job（`jobs.controller`）。回归
+  `scripts/service-data-check.ts`（clearAll 返回 ids / 快照为空 / 设置回默认）。
 - **A2 `projectItem` 剥掉 article 的 `content`**（`server.ts:294` / `service-client:209`）：
   镜像里 `content` 恒空 → `matchesQuery` 的 bodyText 部分在生产路径不生效。
   **2026-10-27 已修一半**：搜索空态文案改为「标题、作者与摘要；正文不在本地镜像里」

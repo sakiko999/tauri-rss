@@ -42,7 +42,6 @@
         "@amoeba/host": "workspace:*",
         "@amoeba/platform": "workspace:*",
         "@amoeba/player": "workspace:*",
-        "@amoeba/resolve": "workspace:*",
         "@amoeba/service-client": "workspace:*",
         "@amoeba/service-protocol": "workspace:*",
         "@amoeba/ui": "workspace:*",
