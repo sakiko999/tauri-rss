@@ -58,10 +58,15 @@ export function videoReferrerFor(url: string): string | undefined {
  * manifest 请求是 XHR,JS 层禁止改 Origin(forbidden header),只能由 Rust 在
  * WebView2 网络层改写 —— 与图片/视频的 Referer 注入同款分工。
  *
+ * ⚠️ 值里**不带尾斜杠**(Origin 的语法就是 `scheme://host[:port]`):2026-10-30 实测
+ * `https://www.twitch.tv/`(带斜杠)→ **403**,`https://www.twitch.tv` → 200。
+ * 早先写带斜杠的版本在 dev 里测不出来(dev 页面 Origin `localhost:1420` 本就被放行,
+ * 改写值根本没被 CDN 校验过),到 release(`*.tauri.localhost`)才暴露成 403。
+ *
  * 本表**无 JS 消费方**:Rust(`media_referer.rs`)按它改写 Origin;TS 持有只为保持
  * 「平台知识单一权威在 resolve + parity 守护两边一致」的既有模式。
  */
-export const XHR_ORIGIN_RULES: Array<[string, string]> = [["playlist.ttvnw.net", "https://www.twitch.tv/"]]
+export const XHR_ORIGIN_RULES: Array<[string, string]> = [["playlist.ttvnw.net", "https://www.twitch.tv"]]
 
 /**
  * 媒体直链需要**去掉 ` Edg/<ver>` UA 段**的 host 后缀（Rust 侧改写）。
@@ -87,4 +92,30 @@ export function xhrOriginFor(url: string): string | undefined {
   const m = url.match(/^https?:\/\/([^/]+)/)
   if (!m) return undefined
   return XHR_ORIGIN_RULES.find(([host]) => m[1].includes(host))?.[1]
+}
+
+/**
+ * huya HLS CDN 只认这条播放器 UA(与 `platform/huya/play.ts` 的 `HUYA_PLAY_UA` 同源)。
+ *
+ * 2026-10-30 实测(manifest / 分片都试过):**只有 UA 是判据** —— 浏览器 UA → 403
+ * `text/html`,这条 HYSDK 串 → 200;Referer / Origin 有无都不影响。CDN 回
+ * `Access-Control-Allow-Origin: *`,所以直连 CORS 无碍。
+ */
+export const HUYA_HLS_UA = "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"
+
+/**
+ * XHR/fetch 请求的 UA 改写规则(host 后缀 → 指定 UA)。
+ *
+ * hls.js 的 manifest/分片请求都是 XHR,`User-Agent` 是 forbidden header(JS 设不了),
+ * 只能由 Rust 在 WebView2 网络层改 —— 与 Origin 改写同款分工。
+ *
+ * 本表同样**无 JS 消费方**(Rust 按它改写,TS 只为 parity 守护)。
+ */
+export const XHR_UA_RULES: Array<[string, string]> = [["hls.huya.com", HUYA_HLS_UA]]
+
+/** XHR 请求 url 命中规则 → 应改写成的 UA;未命中返回 undefined。 */
+export function xhrUserAgentFor(url: string): string | undefined {
+  const m = url.match(/^https?:\/\/([^/]+)/)
+  if (!m) return undefined
+  return XHR_UA_RULES.find(([host]) => m[1].includes(host))?.[1]
 }

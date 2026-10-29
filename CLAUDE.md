@@ -253,7 +253,13 @@ live 按平台二次聚合的 UI 侧。
 - [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
 - [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
 - [ ] Referer 改造剩余：规则表抽共享 JSON（现 TS/Rust 双份 + parity check）；实况视频的响应头注入（ORB 兜底）按需再做
-- [ ] twitch XHR Origin 改写（`playlist.ttvnw.net` → `www.twitch.tv`）需 release 复验：dev 页面 Origin（localhost:1420）本就被 CDN 放行，验证不了 `*.tauri.localhost` 场景；若 release 仍 403 则回滚 player 特判
+- [x] twitch XHR Origin 改写 release 复验（2026-10-30）：**release 确实 403，根因是改写值带尾斜杠**
+  —— `https://www.twitch.tv/` 403、`https://www.twitch.tv` 200（Origin 语法本就没有路径段）。
+  dev 页面 Origin（localhost:1420）本就被 CDN 放行，所以改写值从没被 CDN 校验过。已去掉斜杠；
+  hls.js 分片域 `*.cloudfront.hls.ttvnw.net` 本就 `ACAO:*` 直连。
+- [x] huya HLS 403（2026-10-30）：manifest/分片都只认 **HYSDK 播放器 UA**（浏览器 UA → 403
+  `text/html`，Referer/Origin 不是判据）。新增 `XHR_UA_RULES`（`hls.huya.com`），Rust 在 XHR/FETCH
+  改 UA；`flv.huya.com` 不需要（无头也 200）。
 - [ ] 系统文档正文细化（03 时序图 / 02 契约正文；01 依赖矩阵与 02 字段表已随 R9 / membersOnly 更新）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
 - [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
@@ -283,7 +289,10 @@ live 按平台二次聚合的 UI 侧。
   （三批 `c3eb177` / `765771f` / `0c0a802`）；余 A6 RSS 入站上限 / A9 搜索候选翻页 /
   A10 youtube:playlist InnerTube 化单独立项，B7/B8/B9 low 留观
 - [ ] 修 huya 403 时发现根 tsconfig.app.json 的 `types:["vite/client"]` 靠 vite 根提升才成立（2026-10-28 起已改为根 package.json 显式声明 vite ^8.1.5）；若未来再动 workspace 布局，注意 player/ui tsc 会先断
-- [!] 媒体加载统一策略（2026-10-28）：平台知识只在 resolve 规则表，Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin、MEDIA 去 Edge UA 品牌），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
+- [!] 媒体加载统一策略（2026-10-28 / 2026-10-30 补 XHR UA）：平台知识只在 resolve 规则表，
+  Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin 或 UA、
+  MEDIA 去 Edge UA 品牌），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
+  **值本身也是规则的一部分**：twitch 的 Origin 带尾斜杠就 403，huya HLS 不认浏览器 UA。
 - [!] **媒体 403 的表象是 `Format error`**（2026-10-29）：CDN 的 403 text/html 被 ORB 拦成 `net::ERR_BLOCKED_BY_ORB`，`<audio>/<video>` 只报 `MEDIA_ELEMENT_ERROR: Format error`，看着像解码失败。喜马拉雅 CDN（`xmcdn.com`）的 403 带 `x-error-info: ua_acl.access`：黑名单是**一条完整 UA 字面串**（当前 Windows WebView2 的真实 UA），**整串等值、大小写不敏感**——mac 平台串、少一段、双空格、`Edg/156`（无补丁位）全放行，所以没有「按 Edge 版本号拦」的规则可匹配。`UA_STRIP_EDG_HOSTS` 在 Rust 侧只删 ` Edg/<ver>` 段（不含版本号，串一变即不等于黑名单条目）。排查先看 CDP `Network.loadingFailed` 的 `ERR_BLOCKED_BY_ORB` + 原始状态码，别往解码器上找。
 - [!] **`ResolvePlayback.danmaku` 是函数，过数据服务 RPC(JSON) 会被丢**（2026-10-29 修，
   2026-10-30 改为服务端订阅）：桌面自服务化起视频/直播弹幕**整体消失**（服务进程里是好的）。

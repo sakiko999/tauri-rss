@@ -199,9 +199,10 @@ blob 回退已于 2026-10-28 删除）；未注入环境（纯浏览器调试）
 
 - 规则表收敛在 **resolve 层**（`packages/resolve/src/media-referrer.ts`）：图片/视频
   `mediaReferrerFor` / `videoReferrerFor`（`sinaimg.cn → https://weibo.com/` 等），
-  XHR Origin `xhrOriginFor`（`playlist.ttvnw.net → https://www.twitch.tv/`）—— 唯一
+  XHR Origin `xhrOriginFor`（`playlist.ttvnw.net → https://www.twitch.tv`，**不带尾斜杠**）、
+  XHR UA `xhrUserAgentFor`（`hls.huya.com → HYSDK…` 播放器 UA，浏览器 UA 403）—— 唯一
   权威；Rust 侧为了拦截回调保留一份常量，`media-referrer-parity.check.ts` 守住
-  两边一致（三张表）；
+  两边一致（四张表 + UA 去品牌 host 列表）；
 - `MediaImage`（`packages/ui/src/renderers/atoms/MediaImage.tsx`）已无隧道/探测逻辑：
   恒直连（Windows 由 Rust 注入兜住），失败走 ImageOff 占位；
 - 跨三环境统一（tauri/browser/node），纯 TS 无 eval，CSP 安全；

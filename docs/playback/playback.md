@@ -24,15 +24,19 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   永不回升。`defaultQuality: "auto"` 因此**不做**，设置页只留只读的「锁最高档」。
 - **loader 路由按「WebView 里直接发会不会被拒」，不按「有没有 CORS」**：
   - `googlevideo.com`（YouTube）→ `config.loader = HlsHostLoader`（manifest 与分片**全走隧道**）；
-  - `playlist.ttvnw.net`（Twitch）→ **只设 `config.pLoader`**（分片仍走浏览器 XHR）。
-  ⚠️ **Twitch playlist 在 true release 下会 403**（2026-10-21 实测）：只有
-  `playlist.ttvnw.net` 对 `Origin: http://tauri.localhost` 回 **403**（dev 的
+  - `playlist.ttvnw.net`（Twitch）→ **XHR 直连**，由 Rust 改写 Origin（见下）。
+  ⚠️ **Twitch playlist 只拒页面源 Origin**（`http://tauri.localhost` → 403，dev 的
   `http://localhost:1420` 恰好放行）；分片域 `*.cloudfront.hls.ttvnw.net` 带 `ACAO:*`、
   直连 206 正常（把分片也塞进隧道反而 `fragParsingError`）。现象：dev 正常、release 里
-  Twitch 黑屏，错误 `hls networkError manifestLoadError`。**改 loader 条件后必须在 release
-  里复验**（dev 掩盖这条 Origin 差异）。
-  ⚠️ `pLoader` 的类型是 `Loader<PlaylistLoaderContext>`，与 `HlsHostLoader` 不完全兼容，
-  需 `as unknown as typeof hls.config.pLoader` 收窄（运行时同一套 url/headers/range）。
+  Twitch 黑屏，`hls networkError manifestLoadError (HTTP 403)`。
+  **改写值不能带尾斜杠**（2026-10-30 release 实测）：`https://www.twitch.tv/` → 403、
+  `https://www.twitch.tv` → 200 —— Origin 的语法里没有路径段，早先带斜杠的版本在 dev
+  永远测不出来（CDN 根本不校验 dev 的 Origin）。规则在 `resolve/media-referrer.ts`
+  的 `XHR_ORIGIN_RULES`，Rust `media_referer.rs` 同步执行。
+- **huya HLS 只认播放器 UA**（2026-10-30 实测）：manifest 与分片对浏览器 UA 回 403
+  `text/html`，带 HYSDK UA 才 200（Referer/Origin 有无都不影响，响应带 `ACAO:*`）。
+  `User-Agent` 是 forbidden header（hls.js 设不了），所以同样由 Rust 按
+  `XHR_UA_RULES`（`hls.huya.com`）在 XHR/FETCH 上改写；`flv.huya.com` 不需要。
 - hls.js fatal 错误必须上报 **Error 实例**（带 `type/details/HTTP code/URL`）。直接传 hls 的
   `ErrorData` 对象会让 UI 显示 `[object Object]`，丢掉全部上下文。
 

@@ -7,8 +7,8 @@
 //!
 //! 边界:
 //!   - 只对下面白名单 host 生效(与 resolve/media-referrer.ts 同一份规则，改一处要同步)；
-//!   - 只改请求头(图片/视频 = `Referer`；XHR/fetch = `Origin`)，不接管响应、
-//!     不读取 body、不做网络请求；
+//!   - 只改请求头(图片/视频 = `Referer`；XHR/fetch = `Origin`/`User-Agent`)，不接管
+//!     响应、不读取 body、不做网络请求；
 //!   - 非 Windows / 旧 WebView2 注册失败时静默降级(实况视频仍有 blob 隧道兜底；
 //!     防盗链图片无回退，直接 403 占位)。
 //!
@@ -38,7 +38,14 @@ const VIDEO_REFERRERS: &[(&str, &str)] = &[
 /// XHR/fetch 的 Origin 改写规则(host 后缀 → 站内 Origin)。与 TS `XHR_ORIGIN_RULES` 同步。
 /// Twitch playlist 域对页面源 Origin(`*.tauri.localhost`)回 403,hls.js 的 manifest
 /// 请求(JS 禁改 Origin)只能在这层改写 —— 详见 resolve/media-referrer.ts 注释。
-const XHR_ORIGIN_RULES: &[(&str, &str)] = &[("playlist.ttvnw.net", "https://www.twitch.tv/")];
+/// ⚠️ 值**不带尾斜杠**:带斜杠的 Origin 会被 CDN 回 403(2026-10-30 实测)。
+const XHR_ORIGIN_RULES: &[(&str, &str)] = &[("playlist.ttvnw.net", "https://www.twitch.tv")];
+
+/// XHR/fetch 的 UA 改写规则(host 后缀 → 指定 UA)。与 TS `XHR_UA_RULES` 同步。
+/// huya HLS CDN 只认这条 HYSDK 串(浏览器 UA → 403 text/html,2026-10-30 实测
+/// manifest 与分片一致);Referer/Origin 不是判据。
+const XHR_UA_RULES: &[(&str, &str)] =
+    &[("hls.huya.com", "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)")];
 
 /// 媒体请求**去 Edge 品牌**(host 后缀)。与 TS `MEDIA_UA_STRIP_HOSTS` 同步。
 ///
@@ -123,10 +130,13 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
             if context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_XML_HTTP_REQUEST
                 || context == COREWEBVIEW2_WEB_RESOURCE_CONTEXT_FETCH
             {
-                // XHR/fetch(hls.js manifest 等):改写 Origin(页面源 `*.tauri.localhost`
-                // 被 Twitch playlist 域拒)。Referer/UA 不动 —— 这些域不校验。
+                // XHR/fetch(hls.js manifest/分片):按域改写 Origin / UA。两者各管各的
+                // —— Twitch playlist 拒页面源 Origin;huya HLS 只认播放器 UA。
                 if let Some(origin) = suffix_rule_for(XHR_ORIGIN_RULES, &host) {
                     headers.SetHeader(&HSTRING::from("Origin"), &HSTRING::from(origin))?;
+                }
+                if let Some(ua) = suffix_rule_for(XHR_UA_RULES, &host) {
+                    headers.SetHeader(&HSTRING::from("User-Agent"), &HSTRING::from(ua))?;
                 }
                 return Ok(());
             }
@@ -198,8 +208,9 @@ unsafe fn install_for(controller: ICoreWebView2Controller) -> windows::core::Res
             }
         }
     }
-    // XHR/fetch 域(hls.js manifest 等)单独按请求 context 注册。
-    for (host, _) in XHR_ORIGIN_RULES {
+    // XHR/fetch 域(hls.js manifest 等)单独按请求 context 注册；Origin 与 UA 两类规则
+    // 的 host 集可能不同，各自注册一遍。
+    for (host, _) in XHR_ORIGIN_RULES.iter().chain(XHR_UA_RULES.iter()) {
         for scheme in ["https", "http"] {
             for pattern in [
                 format!("{scheme}://{host}/*"),

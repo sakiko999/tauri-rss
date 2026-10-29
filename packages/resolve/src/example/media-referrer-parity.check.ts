@@ -9,11 +9,17 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
-import { MEDIA_REFERRERS, MEDIA_UA_STRIP_HOSTS, VIDEO_REFERRERS, XHR_ORIGIN_RULES } from "../media-referrer.ts"
+import {
+  MEDIA_REFERRERS,
+  MEDIA_UA_STRIP_HOSTS,
+  VIDEO_REFERRERS,
+  XHR_ORIGIN_RULES,
+  XHR_UA_RULES,
+} from "../media-referrer.ts"
 
 const RUST = "apps/src-tauri/src/media_referer.rs"
 
-type RuleName = "IMAGE_REFERRERS" | "VIDEO_REFERRERS" | "XHR_ORIGIN_RULES"
+type RuleName = "IMAGE_REFERRERS" | "VIDEO_REFERRERS" | "XHR_ORIGIN_RULES" | "XHR_UA_RULES"
 
 function rustRules(name: RuleName): Array<[string, string]> {
   const src = readFileSync(RUST, "utf8")
@@ -36,6 +42,7 @@ const sortedList = (rows: string[]) => [...rows].sort((a, b) => a.localeCompare(
 assert.deepEqual(sorted(rustRules("IMAGE_REFERRERS")), sorted(MEDIA_REFERRERS), "图片 Referer 规则两边不一致")
 assert.deepEqual(sorted(rustRules("VIDEO_REFERRERS")), sorted(VIDEO_REFERRERS), "视频 Referer 规则两边不一致")
 assert.deepEqual(sorted(rustRules("XHR_ORIGIN_RULES")), sorted(XHR_ORIGIN_RULES), "XHR Origin 规则两边不一致")
+assert.deepEqual(sorted(rustRules("XHR_UA_RULES")), sorted(XHR_UA_RULES), "XHR UA 规则两边不一致")
 assert.deepEqual(
   sortedList(rustHostList("UA_STRIP_EDG_HOSTS")),
   sortedList(MEDIA_UA_STRIP_HOSTS),

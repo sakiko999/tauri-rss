@@ -21,10 +21,14 @@
 import type { Stream } from "@amoeba/xml"
 
 import { httpJson } from "../../host.ts"
+import { HUYA_HLS_UA } from "../../media-referrer.ts"
 import { HUYA_UA, M_HUYA } from "./client.ts"
 
-/** 播放 FLV 用的 UA(HYSDK PC 端,dart 同款)。 */
-export const HUYA_PLAY_UA = "HYSDK(Windows, 30000002)_APP(pc_exe&7060000&official)_SDK(trans&2.32.3.5646)"
+/**
+ * 播放直链用的 UA(HYSDK PC 端,dart 同款)。字面量唯一权威在 `media-referrer.ts`
+ * 的 `HUYA_HLS_UA` —— HLS CDN 只认这条串(浏览器 UA 403),Rust 网络层也用同一份。
+ */
+export const HUYA_PLAY_UA = HUYA_HLS_UA
 
 /** profileRoom API → 按 CDN 归拢的一条线路(flv/hls 各一个完整签名直链)。 */
 interface HuyaApiLine {
