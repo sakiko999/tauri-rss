@@ -35,6 +35,19 @@ import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
 import { audioOnlyMpd } from "./utils/audioOnlyMpd.ts"
 import { VideoShell } from "./VideoShell.tsx"
 
+/** 音频页播放面的展示信息（宿主组装；播放器包不认识数据模型）。 */
+export interface AudioStageProps {
+  /** 波形指纹：条目稳定 id（换集换形状）。 */
+  seed: string
+  artwork?: string
+  kicker?: string
+  title?: string
+  subtitle?: string
+  meta?: React.ReactNode
+  actions?: React.ReactNode
+  chapters?: { t: number }[]
+}
+
 /**
  * 状态块内的次要按钮。
  *
@@ -126,6 +139,7 @@ export function PlayableMedia({
   onEnded,
   audioOnly = false,
   onAudioOnlyChange,
+  audioStage,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -164,6 +178,12 @@ export function PlayableMedia({
    * 页面必须回到视频版式 —— 否则封面和画面挤在同一套音频版式里。
    */
   onAudioOnlyChange?: (on: boolean) => void
+  /**
+   * 音频页播放面的文案/封面（标题、节目名、日期时长、次要动作）。
+   * 播放器包不认识数据模型，这些由宿主组装后透传给 AudioShell；
+   * 缺省时 AudioShell 只画波形与控件（mobile 的极简形态）。
+   */
+  audioStage?: AudioStageProps
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -506,7 +526,15 @@ export function PlayableMedia({
   // 听视频:audio-only DASH 交 AudioShell(自绘控件),dash.js 经 useMediaStream
   // attach 到它内部的 <audio>。档位条不出现 —— 各档 MPD 剥完音轨相同,切档无意义。
   if (listenMode) {
-    return <AudioShell mediaRef={audioRef} className={className} onError={(e) => setPlayError(e)} />
+    return (
+      <AudioShell
+        mediaRef={audioRef}
+        seed={audioStage?.seed ?? ""}
+        {...audioStage}
+        className={className}
+        onError={(e) => setPlayError(e)}
+      />
+    )
   }
 
   // 渐进式视频 / HLS / FLV / DASH → VideoShell 外壳(自定义控件)。
@@ -537,6 +565,8 @@ export function PlayableMedia({
     return (
       <AudioShell
         mediaRef={audioRef}
+        seed={audioStage?.seed ?? stream.url}
+        {...audioStage}
         src={stream.url}
         className={className}
         onError={(e) => {

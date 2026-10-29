@@ -84,11 +84,20 @@ export function PlayerPage() {
     const byKey = new Map(known.map((i) => [itemKey(i), i]))
     return queue.map((k) => byKey.get(k)).filter((x): x is MediaItem => !!x)
   }, [queue, known])
-  const related = useMemo(
-    () =>
-      item ? allItems.filter((i) => i.subscriptionId === item.subscriptionId && i.id !== item.id).slice(0, 6) : [],
-    [allItems, item],
-  )
+  /**
+   * 同订阅的「接下来几条」：从当前条目往后数（原型的「接下来播放」语义），到尾部
+   * 再回卷到最新几条。
+   * ⚠️ 必须查 `known` 而不是 `allItems`：播客单集是**预览条目**（不在库里），只查
+   * allItems 时这一栏永远是空的（而单集恰恰最需要「接着听下一集」）。
+   */
+  const related = useMemo(() => {
+    if (!item) return []
+    const same = known.filter((i) => i.subscriptionId === item.subscriptionId)
+    const idx = same.findIndex((i) => i.id === item.id)
+    const after = idx >= 0 ? same.slice(idx + 1, idx + 7) : []
+    const pool = after.length ? after : same.filter((i) => i.id !== item.id).slice(0, 6)
+    return pool.slice(0, 6)
+  }, [known, item])
 
   // 返回位置：从二级预览里播的，回预览（`?open=`）；否则回来源节点。
   // 预览内容不在库里，回来源节点会丢掉"单集列表"这一层，用户得再点一次节目。
@@ -161,6 +170,20 @@ export function PlayerPage() {
   // 挤在同一套音频版式里,所以听模式一律听播放器回报(`onAudioOnlyChange`)。
   const podcastAudio = item.kind === "audio" && !!(item as { stream?: MediaStream }).stream
   const audioMode = podcastAudio || (listening && appliedAudioOnly?.key === itemKey(item) && appliedAudioOnly.on)
+  const durationSec =
+    (item as { durationSec?: number; duration?: number }).durationSec ?? (item as { duration?: number }).duration
+  /** 本集简介：视频版式放在舞台下方，音频版式进右栏（原型 pod-side 的「本集简介」）。 */
+  const summaryCard = item.summary ? (
+    <SideCard title={audioMode ? "本集简介" : "简介"} icon="info" pad blockKey="player:summary">
+      {/* 播客单集的简介往往就是整篇 show notes（实测 1000+ 字），右栏给高度上限 + 内部
+          滚动，否则队列/接下来播放被顶到几屏之外。视频的简介在舞台下方，照常铺开。 */}
+      <div className={audioMode ? "pod-notes-scroll" : undefined}>
+        <p className="t-small t-muted" style={{ lineHeight: 1.7 }}>
+          {item.summary}
+        </p>
+      </div>
+    </SideCard>
+  ) : null
   // 弹幕:设置总开关 × 播放页临时覆盖。关掉时 resolve 结果里的 danmaku 不交给播放器。
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
 
@@ -200,15 +223,9 @@ export function PlayerPage() {
             >
               {/* PlayableMedia/VideoShell 自带 relative + aspect-ratio 容器与控件层。
                   ⚠️ **播放器无圆角**(常见播放器都是满幅方角设计)——player 包方角,
-                  这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。 */}
-              {audioMode && mediaUrl(item) ? (
-                /* 音频页没有画面:封面当 artwork(原型 pod-stage 的形态),控件在其下。
-                   ⚠️ 不要传 fill:那会给 h-full 且不带 aspect-ratio,而 .audio-art 只定宽度
-                   → 高度塌成 0(封面不显示)。ratio=1 由 MediaImage 自己撑出正方形。 */
-                <div className="audio-art" {...overlayBlock("audio-art", "player:audio-art")}>
-                  <MediaImage src={mediaUrl(item)} ratio={1} alt="" />
-                </div>
-              ) : null}
+                  这里也不再包圆角。stage 只负责宽度上限与居中(见 styles.css .stage)。
+                  音频版式下 stage 不摆封面：整张「播放面」(封面/标题/声纹波形/控件)
+                  由 AudioShell 自己渲染（原型 pod-stage 是一张卡片，不是黑舞台）。 */}
               <PlayableMedia
                 key={itemKey(item)}
                 // 统一传 item.id：core 的 findItemUrl 按 (subscriptionId, id) 命中并取
@@ -235,8 +252,64 @@ export function PlayerPage() {
                 startAtSec={isLive ? undefined : item.positionSec}
                 onProgress={(sec, dur) => savePosition(item, sec, dur)}
                 audioOnly={listening}
-                // 听模式剥没剥出音轨只有播放器知道 → 页面据此决定摆封面还是 16:9 舞台。
+                // 听模式剥没剥出音轨只有播放器知道 → 页面据此决定摆音频版式还是 16:9 舞台。
                 onAudioOnlyChange={(on) => setAppliedAudioOnly({ key: itemKey(item), on })}
+                // 音频版式的播放面（原型 podplay）：封面 / 「正在播放」/ 标题 / 节目名 /
+                // 元信息 + 次要动作。原来那排按钮在 .player-meta 里，音频模式下整块不渲染
+                // —— 动作挪到这里，避免同一件事两处出现。
+                audioStage={{
+                  seed: itemKey(item),
+                  artwork: mediaUrl(item) || undefined,
+                  kicker: listening ? "正在播放 · 仅音频" : "正在播放 · 播客单集",
+                  title: item.title,
+                  subtitle: item.author?.name,
+                  meta: (
+                    <>
+                      <span>{fmtAgo(item.publishedAt)}</span>
+                      {durationSec ? (
+                        <>
+                          <span className="opacity-60">·</span>
+                          <span>{fmtTime(durationSec)}</span>
+                        </>
+                      ) : null}
+                      {platform ? (
+                        <>
+                          <span className="opacity-60">·</span>
+                          <span>{PLATFORM_LABEL[platform] ?? platform}</span>
+                        </>
+                      ) : null}
+                    </>
+                  ),
+                  actions: (
+                    <>
+                      {item.kind === "video" && !isLive ? (
+                        listening ? (
+                          <Button variant="quiet" size="sm" onClick={() => playTo(item, from)}>
+                            <Icon name="monitor" size={14} /> 看视频
+                          </Button>
+                        ) : (
+                          <Button variant="quiet" size="sm" onClick={() => playTo(item, from, "listen")}>
+                            <Icon name="music" size={14} /> 只听声音
+                          </Button>
+                        )
+                      ) : null}
+                      {nextInQueue ? (
+                        <Button
+                          variant="quiet"
+                          size="sm"
+                          onClick={() => playTo(nextInQueue, from, listening ? "listen" : undefined)}
+                        >
+                          <Icon name="skipForward" size={14} /> 下一条
+                        </Button>
+                      ) : null}
+                      {item.url ? (
+                        <Button variant="quiet" size="sm" onClick={() => openExternalSafely(item.url)}>
+                          <Icon name="external" size={14} /> 打开原文
+                        </Button>
+                      ) : null}
+                    </>
+                  ),
+                }}
                 // 播完自动下一条:仅当设置开着**且**队列里确实有下一条时。播过的当前条
                 // 同时出队(与「播放队列」的语义一致 —— 它是待播列表,不是播放历史)。
                 onEnded={() => {
@@ -253,84 +326,82 @@ export function PlayerPage() {
               />
             </div>
 
-            <div className="player-meta" {...overlayBlock("player-meta", "player:meta")}>
-              <h1 className="player-title">{item.title}</h1>
-              <div className="player-sub">
-                {isLive ? (
-                  // ⚠️ 按 liveStatus 标注:曾对所有 live 无脑写「● 直播中」——已下播的
-                  // 房间也显示直播中(说谎)。offline/unknown 如实标。
-                  item.liveStatus === "live" ? (
-                    <span className="tag tag-live">● 直播中</span>
+            {/* 音频版式不要这块:标题/元信息/次要动作都在 AudioShell 的播放面里,
+                再在下面写一遍就是「同一件事两处」。 */}
+            {audioMode ? null : (
+              <div className="player-meta" {...overlayBlock("player-meta", "player:meta")}>
+                <h1 className="player-title">{item.title}</h1>
+                <div className="player-sub">
+                  {isLive ? (
+                    // ⚠️ 按 liveStatus 标注:曾对所有 live 无脑写「● 直播中」——已下播的
+                    // 房间也显示直播中(说谎)。offline/unknown 如实标。
+                    item.liveStatus === "live" ? (
+                      <span className="tag tag-live">● 直播中</span>
+                    ) : (
+                      <span className="tag">○ 已下播</span>
+                    )
                   ) : (
-                    <span className="tag">○ 已下播</span>
-                  )
-                ) : (
-                  <span className="tag">
-                    {/* 无时长就显示「视频」/「音频」,不写语义含糊的「点播」。 */}
-                    {(item as { durationSec?: number }).durationSec
-                      ? fmtTime((item as { durationSec?: number }).durationSec)
-                      : item.kind === "audio"
-                        ? "音频"
-                        : "视频"}
-                  </span>
-                )}
-                {platform ? <span>{PLATFORM_LABEL[platform] ?? platform}</span> : null}
-                {item.author?.name ? <span>{item.author.name}</span> : null}
-                {/* 0 也要显示:直播「无人观看」是有用的状态,不该被 truthy 判断吞掉。 */}
-                {online !== undefined ? <span className="num">{online} 人在看</span> : null}
-                {/* 时间靠右 —— 与列表/卡片同一套编排(元信息不再用 `·` 串成一句)。 */}
-                <span className="player-time">{fmtAgo(item.publishedAt)}</span>
-              </div>
-              <div className="player-actions">
-                {/* 听/看切换(点播视频):同一份解析结果换元素播,不重解析;进度由播放器带过去。 */}
-                {item.kind === "video" && !isLive ? (
-                  listening ? (
-                    <Button variant="quiet" onClick={() => playTo(item, from)}>
-                      <Icon name="monitor" size={14} /> 看视频
-                    </Button>
-                  ) : (
-                    <Button variant="quiet" onClick={() => playTo(item, from, "listen")}>
-                      <Icon name="music" size={14} /> 只听声音
-                    </Button>
-                  )
-                ) : null}
-                {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。
+                    <span className="tag">
+                      {/* 无时长就显示「视频」/「音频」,不写语义含糊的「点播」。 */}
+                      {(item as { durationSec?: number }).durationSec
+                        ? fmtTime((item as { durationSec?: number }).durationSec)
+                        : item.kind === "audio"
+                          ? "音频"
+                          : "视频"}
+                    </span>
+                  )}
+                  {platform ? <span>{PLATFORM_LABEL[platform] ?? platform}</span> : null}
+                  {item.author?.name ? <span>{item.author.name}</span> : null}
+                  {/* 0 也要显示:直播「无人观看」是有用的状态,不该被 truthy 判断吞掉。 */}
+                  {online !== undefined ? <span className="num">{online} 人在看</span> : null}
+                  {/* 时间靠右 —— 与列表/卡片同一套编排(元信息不再用 `·` 串成一句)。 */}
+                  <span className="player-time">{fmtAgo(item.publishedAt)}</span>
+                </div>
+                <div className="player-actions">
+                  {/* 听/看切换(点播视频):同一份解析结果换元素播,不重解析;进度由播放器带过去。 */}
+                  {item.kind === "video" && !isLive ? (
+                    listening ? (
+                      <Button variant="quiet" onClick={() => playTo(item, from)}>
+                        <Icon name="monitor" size={14} /> 看视频
+                      </Button>
+                    ) : (
+                      <Button variant="quiet" onClick={() => playTo(item, from, "listen")}>
+                        <Icon name="music" size={14} /> 只听声音
+                      </Button>
+                    )
+                  ) : null}
+                  {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。
                     音频页没有画面,剧场模式无意义。 */}
-                {audioMode ? null : (
-                  <Button variant="quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
-                    <Icon name="monitor" size={14} /> 剧场模式
+                  {audioMode ? null : (
+                    <Button variant="quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
+                      <Icon name="monitor" size={14} /> 剧场模式
+                    </Button>
+                  )}
+                  <Button variant="quiet" onClick={() => addToQueue(item)}>
+                    <Icon name="queue" size={14} /> 加入队列
                   </Button>
-                )}
-                <Button variant="quiet" onClick={() => addToQueue(item)}>
-                  <Icon name="queue" size={14} /> 加入队列
-                </Button>
-                {nextInQueue ? (
-                  <Button variant="quiet" onClick={() => playTo(nextInQueue, from, listening ? "listen" : undefined)}>
-                    <Icon name="skipForward" size={14} /> 下一条：{nextInQueue.title.slice(0, 16)}
-                  </Button>
-                ) : null}
-                {item.url ? (
-                  <Button variant="quiet" onClick={() => openExternalSafely(item.url)}>
-                    <Icon name="external" size={14} /> 打开原文
-                  </Button>
-                ) : null}
+                  {nextInQueue ? (
+                    <Button variant="quiet" onClick={() => playTo(nextInQueue, from, listening ? "listen" : undefined)}>
+                      <Icon name="skipForward" size={14} /> 下一条：{nextInQueue.title.slice(0, 16)}
+                    </Button>
+                  ) : null}
+                  {item.url ? (
+                    <Button variant="quiet" onClick={() => openExternalSafely(item.url)}>
+                      <Icon name="external" size={14} /> 打开原文
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            )}
 
-            {item.summary ? (
-              <div className="section-first">
-                <SideCard title="简介" icon="info" pad blockKey="player:summary">
-                  <p className="t-small t-muted" style={{ lineHeight: 1.7 }}>
-                    {item.summary}
-                  </p>
-                </SideCard>
-              </div>
-            ) : null}
+            {/* 视频版式的简介留在舞台下方;音频版式进右栏(原型 pod-side 的「本集简介」)。 */}
+            {audioMode || !summaryCard ? null : <div className="section-first">{summaryCard}</div>}
           </div>
 
           {/* ⚠️ `player-side` 类给剧场模式用(data-theater=on 时 display:none)——
               只靠 overlayBlock 的属性没法在 CSS 里稳定选中(DEV 之外它根本不渲染)。 */}
           <aside className="stack player-side" {...overlayBlock("player-side", "player:side")}>
+            {audioMode ? summaryCard : null}
             <SideCard title={`播放队列 ${queueItems.length}`} icon="queue" blockKey="player:queue">
               {queueItems.length === 0 ? (
                 <p className="rail-empty">队列为空。在卡片上点 + 加入,或从列表播放。</p>

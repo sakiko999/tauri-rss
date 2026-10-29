@@ -118,6 +118,46 @@ export function DanmakuOffIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+/** 后退:圆环 + 逆时针箭头（秒数由调用方叠在下方）。 */
+export function RewindIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path d="M3.6 9.6A9 9 0 1 1 12 21" />
+      <path d="M3 4.6v5h5" />
+    </svg>
+  )
+}
+
+/** 前进:圆环 + 顺时针箭头（秒数由调用方叠在下方）。 */
+export function ForwardIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <path d="M20.4 9.6A9 9 0 1 0 12 21" />
+      <path d="M21 4.6v5h-5" />
+    </svg>
+  )
+}
+
 /** 缓冲 spinner:单弧线 + 缺口,配合 `animate-spin` 旋转。 */
 export function SpinnerIcon(props: SVGProps<SVGSVGElement>) {
   return (

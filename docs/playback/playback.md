@@ -71,6 +71,26 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   `PlayableMedia` 会把最后的 `currentTime` 带到新元素（否则又从头播）。队列自动下一条
   透传当前模式。
 
+## 音频播放页（播客单集 / 听视频，2026-10-29）
+
+`AudioShell` 是音频条目与听视频共用的**播放面卡片**（原型 podplay 的落地形态）：
+
+| 区块 | 内容 |
+| --- | --- |
+| 顶部 | 封面 190px + 「正在播放 · 播客单集/仅音频」+ 标题 + 节目名 + 日期/时长/平台 |
+| 声纹频谱 | `controls/WaveformSeek.tsx`：确定性伪波形（FNV-1a 指纹 → 四正弦 × 拱形包络），已播段 accent、播放头竖线 + 圆点；点击/拖动 seek，`role="slider"` 键盘可达 |
+| 时间 | 当前 / `-剩余` |
+| 控件 | −15 / 66px 主键 / +30；倍速、睡眠定时；右侧是宿主给的次要动作（听⇄看、下一条、打开原文） |
+| 右栏（desktop 组装） | 本集简介（长文内部滚动）+ 播放队列 + 来自同一订阅（按当前条目往后数，查 `known` 覆盖预览单集） |
+
+- **波形不进 React state**：rAF 直接读 `mediaRef.currentTime`，暂停时靠 `timeupdate` 重画一帧
+  —— 4Hz 的 state 会让条形一顿一顿地跳。`prefers-reduced-motion` 下只画静态帧。
+- **配色走主题 token**（带深色回退值）：pod-stage 是内容卡片，浅色主题下是浅底；与
+  「视频舞台恒黑 + 方角」是两套契约，别把方角规则套到这张卡上。
+- **数据来源边界**：标题/封面/简介/时长全部来自条目本身；播放器包不认识数据模型，
+  这些由宿主经 `audioStage` 透传。**章节栏没有实现** —— 播客 RSS 与喜马拉雅单集不带
+  章节数据，B 站 `view_points` 要另开一条 resolve → 页面的数据通路（需要时再做）。
+
 ## 统计信息（仿 YouTube 右键）
 
 `VideoShell` 右键菜单 → `PlayerStatsOverlay`（`packages/player/src/PlayerStatsOverlay.tsx`）。

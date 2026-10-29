@@ -24,6 +24,8 @@ export function useContainerInteractions(
   state: VideoPlayState,
   ops: VideoOps,
   fullscreenToggle: () => void,
+  /** ←/→ 的步长(秒)。音频页按原型用 −15 / +30,视频页保持 ±5。 */
+  seekSteps: { back: number; forward: number } = { back: 5, forward: 5 },
 ): { handleClick: () => void } {
   // 最新 state/ops/toggle 用 ref 持有:回调读最新值,不因 timeupdate 重建闭包。
   const stateRef = useRef(state)
@@ -32,6 +34,8 @@ export function useContainerInteractions(
   opsRef.current = ops
   const fsRef = useRef(fullscreenToggle)
   fsRef.current = fullscreenToggle
+  const stepsRef = useRef(seekSteps)
+  stepsRef.current = seekSteps
 
   // 键盘:容器 keydown 域。挂载一次,回调内从 ref 读最新。
   useEffect(() => {
@@ -48,9 +52,9 @@ export function useContainerInteractions(
         e.key === " " || k === "k"
           ? (o.togglePlay(), true)
           : e.key === "ArrowLeft"
-            ? (o.seek(s.currentTime - 5), true)
+            ? (o.seek(s.currentTime - stepsRef.current.back), true)
             : e.key === "ArrowRight"
-              ? (o.seek(s.currentTime + 5), true)
+              ? (o.seek(s.currentTime + stepsRef.current.forward), true)
               : e.key === "ArrowUp"
                 ? (o.changeVolume(s.volume + 0.1), true)
                 : e.key === "ArrowDown"
