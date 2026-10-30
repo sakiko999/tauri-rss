@@ -109,6 +109,47 @@ latest.push({
 ok(latest.getLatest("xhs", "explore")?.body === "two", "getLatest 取该平台/接口最新")
 ok(latest.getLatest("nope", "explore") === null, "getLatest 无匹配返回 null")
 
+// ── list（分页接口：max_cursor 不同 = 不同 URL，各存一份）─────────────────────
+let tlist = 0
+const paging = new PassiveBuffer({ ttlMs: 1000, now: () => tlist })
+paging.push({
+  platform: "douyin",
+  endpoint: "user_posts",
+  url: "https://a.com/p?max_cursor=0",
+  status: 200,
+  mime: "t",
+  body: "p1",
+  at: 1,
+})
+paging.push({
+  platform: "douyin",
+  endpoint: "user_posts",
+  url: "https://a.com/p?max_cursor=99",
+  status: 200,
+  mime: "t",
+  body: "p2",
+  at: 2,
+})
+paging.push({
+  platform: "douyin",
+  endpoint: "other",
+  url: "https://a.com/p?max_cursor=0",
+  status: 200,
+  mime: "t",
+  body: "x",
+  at: 3,
+})
+ok(
+  paging
+    .list("douyin", "user_posts")
+    .map((e) => e.body)
+    .join(",") === "p1,p2",
+  "list 合并同接口各页（按写入顺序）",
+)
+ok(paging.list("douyin", "nope").length === 0, "list 无匹配返回空数组")
+tlist = 1010
+ok(paging.list("douyin", "user_posts").length === 0, "list 同样受 TTL 约束")
+
 // ── clear ───────────────────────────────────────────────────────────────────
 latest.clear()
 ok(latest.stats().count === 0 && latest.stats().bytes === 0, "clear 清空")

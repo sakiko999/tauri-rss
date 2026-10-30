@@ -117,6 +117,19 @@ export class PassiveBuffer {
     return this.entries.get(entryKey(platform, endpoint, url)) ?? null
   }
 
+  /**
+   * 取该平台/接口下的**全部**未过期条目（分页接口用：`max_cursor` 不同 = 不同 URL，
+   * 每页各存一份，需要合并而不是只取最新那一份）。
+   */
+  list(platform: string, endpoint: string): PassiveEntry[] {
+    this.prune()
+    const out: PassiveEntry[] = []
+    for (const e of this.entries.values()) {
+      if (e.platform === platform && e.endpoint === endpoint) out.push(e)
+    }
+    return out
+  }
+
   /** 取该平台/接口下最新的一份（URL 不固定时用）。 */
   getLatest(platform: string, endpoint: string): PassiveEntry | null {
     this.prune()

@@ -312,11 +312,11 @@ UI 流程（与播客榜单完全同构）：
   主播名（`旭旭宝宝`）与三级词（`美食`）返回 0。已知主播请用 `live:douyin` +
   抖音号/主页链接（见 `docs/platforms/platform-notes.md`）；`live:douyin:user` 仅保留给存量订阅。
   `live:douyin:anchor` 已删除（本地过滤热门房间没有意义）。
-- **抖音用户作品只拿得到首屏**（2026-10-30）—— `douyin:user` 已落地：导航主页 + 捕获
-  页面自己发的 `/aweme/v1/web/aweme/post/`（匿名 200，零构造请求）。但**翻页没打通**：
-  作品数 > 首屏（实测 ~21 条）时，页面不会发第二次请求，程序化滚动 / 真实滚轮 /
-  PageDown / 焦点模拟 / 加高视口 / 已登录 profile 全部试过。因此**不声明 `Pageable`**，
-  界面不会出现「加载更多」。详见 `docs/platforms/platform-notes.md` 抖音段。
+- **抖音用户作品翻页需要登录**（2026-10-31 修正）—— `douyin:user`：导航主页 + 捕获
+  页面自己发的 `/aweme/v1/web/aweme/post/`（零构造请求）。**已登录**时滚动触发下一页，
+  走 `Pageable`（窗口 30 条）；**匿名**只有首屏 21 条、点「加载更多」报「需要登录」。
+  此前「翻页没打通」的结论是匿名态测的（登录弹窗盖住作品区、滚轮全打在弹窗上）。
+  详见 `docs/platforms/platform-notes.md` 抖音段。
 - **虎牙搜索不可分页** —— 接口 `start` 参数实测无效（`start=0` 返 20 条、`start>=20` 一律
   返同一批 40 条），故只取首页、不声明 `Pageable`。
 - **微博无纯 HTTP 扫码登录** —— `weiboScanLogin` 走 CDP 浏览器路径（passport 页自带

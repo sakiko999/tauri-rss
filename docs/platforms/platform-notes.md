@@ -101,11 +101,15 @@
     绑定、疑似一次性）；纯 HTTP 自签（ABogus + ttwid）直接 **403** 并触发平台冷却。
   - 映射：`aweme_type === 68`/有 `images[]` 的是**图文**（它的 `play_addr` 是 BGM，
     不能当视频）；视频按 `video.bit_rate[]` 降序取最高档直链。
-  - ⚠️ **已知上限：只有首屏（实测 ~21 条）**。页面不发第二次 `/aweme/post`
-    （`max_cursor` 在页面手里），程序化滚动（含小步 scrollBy 到容器底部）、真实滚轮
-    `Input.dispatchMouseEvent`、`PageDown`、`synthesizeScrollGesture`、
-    `setFocusEmulationEnabled` + `Page.setWebLifecycleState(active)`、加宽/加高视口、
-    已登录 profile 全部试过无效。所以**不声明 `Pageable`**、界面无「加载更多」。
+  - ✅ **翻页（`Pageable`，2026-10-31）**：**登录态下**页面会随滚动自己发下一页
+    `/aweme/post`（实测 57 → 87 → 110 → 140 → 163）。手法 = 把**最大可滚动容器**
+    滚到底（抖音主页不在 window 上滚，容器是 class 混淆的内层 div）+ 在**完整落在
+    视口内的作品卡**上发真实滚轮（`Input.dispatchMouseEvent` type=`mouseWheel`；
+    只滚容器、或坐标落在视口外/登录弹窗上都不触发）。我们只读 `passiveBuffer`
+    里累积的各页响应（`buffer.list()` 合并 `max_cursor` 不同的多份），窗口 30 条。
+  - ⚠️ **匿名只有首屏（实测 21 条）**：作品区被登录弹窗盖住，滚轮无效、页面不发
+    第二次请求。翻页前按 `sessionid`（与登录快照同判据）门控，匿名直接报
+    「翻页需要登录」的可操作错误（**不看 DOM 弹窗 class —— 匿名实测时它不一定在**）。
   - 另一个坑：lane 的 tab 是后台 target，**hidden 下页面连首屏那发请求都不发**，
     必须 `mode:"interactive"`（xhs 的被动捕获能留在 hidden，是因为它读导航文档本身）。
 - ✅ **抖音扫码登录**（2026-10-16，`resolve/platform/douyin/login.ts`）：纯 HTTP 走
