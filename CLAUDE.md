@@ -276,6 +276,11 @@ live 按平台二次聚合的 UI 侧。
   dev 实例与安装版**可并跑互不影响**（服务端口动态分配）；dev updater 已封（main.tsx 只在 PROD 注入，
   否则 dev 里点「安装」会用正式 NSIS 覆盖升级正式版）；dev 库首启自动从旧共享目录迁移
   （`service.rs:migrate_legacy_shared_db`，原子落位 + legacy 改 `.migrated` 防复活）。
+  ⚠️ **唯一例外（临时，2026-10-30）**：抓取浏览器 profile 是**共用安装版**的
+  （`service.rs:resolve_paths`：非 desktop 身份 → `app.amoeba.desktop/webview-profile`），
+  否则 dev 里没有登录态。代价是抓取浏览器全局只有一个（sidecar profile 命名 mutex 独占），
+  两边同时跑时后启动的那个报「profile 已被另一个 sidecar 占用」；`rss browser-reset --target dev`
+  清的是同一个目录。
   裸 `bunx tauri dev`（不经 `bun run tauri`）不带 overlay = desktop 身份，与安装版互斥，别用。
 - [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
 - [!] 桌面只走 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；进程内 DataLayer 回退已删（非 Tauri 的浏览器 dev 仍走进程内）。

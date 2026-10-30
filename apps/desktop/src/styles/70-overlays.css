@@ -501,6 +501,16 @@ kbd {
   background: oklch(0.12 0.01 264 / 32%);
   pointer-events: none;
 }
+/* 实体底圆:细线图标直接压在照片上等于看不见(实测截图里只剩一个几乎透明的圈)。 */
+.social-detail-video-loading-chip {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: oklch(0.18 0.01 264 / 74%);
+  box-shadow: 0 2px 12px oklch(0 0 0 / 35%);
+}
 
 /* 媒体框必须有「确定的 height」,图片的百分比尺寸才有基准;
    只给 max-height 会让容器高度退化成 auto,图片按自然尺寸绘制、

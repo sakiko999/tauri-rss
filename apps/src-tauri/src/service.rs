@@ -230,7 +230,19 @@ fn resolve_paths(app: &AppHandle, db_file: &str) -> Result<Paths, String> {
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?;
     let data_dir = local.join("service");
-    let profile_dir = local.join("webview-profile");
+    // ⚠️ **临时共用（2026-10-30）**：非正式版身份（`app.amoeba.dev`：dev 与 release 调试
+    // 实例）用**安装版**的抓取浏览器 profile —— 换不到登录态的话 dev 的浏览器渠道等于空跑，
+    // 调试没意义。数据服务 / DB / 单实例锁仍按 identifier 各自独立。
+    // 代价：profile 的 sidecar 命名 mutex 是**独占**的，dev 与安装版同时跑时，后启动的那个
+    // 用不了抓取浏览器（报「profile 已被另一个 sidecar 占用」）。
+    let profile_dir = if app.config().identifier == LEGACY_IDENTIFIER {
+        local.join("webview-profile")
+    } else {
+        local
+            .parent()
+            .map(|p| p.join(LEGACY_IDENTIFIER).join("webview-profile"))
+            .unwrap_or_else(|| local.join("webview-profile"))
+    };
     let db_path = data.join(db_file);
     let token_file = data_dir.join("service.token");
     let endpoint_file = data_dir.join("endpoint.json");

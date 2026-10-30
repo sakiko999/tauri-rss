@@ -4,7 +4,7 @@
  * 实例身份（identifier）决定 profile 目录，必须分开清：
  *   - `cli`（默认）：`amoeba-browser.exe` 的 `%LOCALAPPDATA%/app.amoeba.cli/browser-profile`
  *   - `desktop`：安装版的 `.../app.amoeba.desktop/webview-profile`（含休眠的 CDP 9334）
- *   - `dev`：`bun run tauri` 调试实例的 `.../app.amoeba.dev/webview-profile`
+ *   - `dev`：**与 desktop 同一个目录**（临时共用抓取浏览器 profile，见 `DEV_PROFILE`）
  *   - `all`：三者都清
  *
  * ⚠️ CLI 的浏览器是显式 opt-in（`--browser`）；清 CLI profile 会掉 CLI 侧登录态。
@@ -32,7 +32,10 @@ const DESKTOP_CDP_PORT = 9334
  *  用户以为清了 profile、其实脏数据还在。(2026-10-16 `com.zhh.tauri-app` → `app.amoeba.desktop`) */
 const desktopProfileDir = (identifier: string) => join(process.env.LOCALAPPDATA ?? "", identifier, "webview-profile")
 const DESKTOP_PROFILE = desktopProfileDir("app.amoeba.desktop")
-const DEV_PROFILE = desktopProfileDir("app.amoeba.dev")
+/** ⚠️ 临时共用（2026-10-30，与 `service.rs:resolve_paths` 同一决定）：dev 调试实例的抓取
+ *  浏览器 profile 指向**安装版**目录（登录态才换得到 dev 里）。所以 `--target dev` 与
+ *  `--target desktop` 清的是同一个目录 —— 清 dev 会连带清掉安装版的登录态。 */
+const DEV_PROFILE = DESKTOP_PROFILE
 /** 与 sidecar 默认值同一实现（手抄路径会在规则变化时去删一个不存在的目录，静默 no-op）。 */
 const CLI_PROFILE = defaultSidecarProfileDir()
 

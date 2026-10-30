@@ -71,6 +71,9 @@
    `dbFile=%APPDATA%\<identifier>\rss{,.dev,.release-debug}.db`、
    `profileDir=%LOCALAPPDATA%\<identifier>\webview-profile`（dev 首启会从旧共享目录
    `app.amoeba.desktop` 一次性迁移 dev 库，见 `migrate_legacy_shared_db`）。
+   ⚠️ **临时例外（2026-10-30）**：`profileDir` 不随 identifier 隔离 —— 非 desktop 身份
+   直接用 `%LOCALAPPDATA%\app.amoeba.desktop\webview-profile`（dev 要复用安装版登录态）。
+   抓取浏览器因此全局独占：两边同时跑时后启动的一方报「profile 已被另一个 sidecar 占用」。
 3. 读 `dataDir\endpoint.json`；`/v1/hello` 存活且 protocol=1 → **adopt**，不 spawn。
 4. 否则 spawn `amoeba-runtime.exe <service.js|service/main.ts> --service --data-dir ... --db ... --profile-dir ... --token-file ... --parent-pid <desktop pid>`。
 5. 读 stdout 首行 `READY <port>`，上限 30s；启动先做每日 `VACUUM INTO` 备份再开库。

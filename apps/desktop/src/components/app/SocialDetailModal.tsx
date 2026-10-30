@@ -151,6 +151,12 @@ export function SocialDetailModal() {
    */
   const resolving = detail.full === null && !detail.error && !!(item as { xsecToken?: string }).xsecToken
   const resolveFailed = !!detail.error
+  /**
+   * 视频帖**补全中**：xhs 的播放直链只在详情 SSR 里（列表只给 `hasVideo` 标记），
+   * 所以点开详情后媒体区会先显示封面、过一两秒才变成 `<video>` —— 这段时间看起来
+   * 就是一张普通图片，用户不知道视频还在路上。补一个和缓冲期同样的 spinner。
+   */
+  const videoResolving = resolving && !postVideo && (item as { hasVideo?: boolean }).hasVideo === true
   return (
     <>
       <Modal
@@ -268,10 +274,12 @@ export function SocialDetailModal() {
                       <MediaImage src={cover} alt={item.title} loading="eager" contain />
                     </button>
                   ) : null}
-                  {/* 视频加载中：叠在 poster 上（起播/卡缓冲）。 */}
-                  {postVideo && post.url && videoWaiting ? (
+                  {/* 视频加载中：叠在 poster 上（补全中 + 起播/卡缓冲）。 */}
+                  {(postVideo && post.url && videoWaiting) || videoResolving ? (
                     <span className="social-detail-video-loading" aria-hidden>
-                      <Icon name="loader" size={22} className="animate-spin" />
+                      <span className="social-detail-video-loading-chip">
+                        <Icon name="loader" size={22} className="animate-spin" />
+                      </span>
                     </span>
                   ) : null}
                   {/* 直连失败时才出现的重试入口（403/网络抖动/签名过期）。 */}
