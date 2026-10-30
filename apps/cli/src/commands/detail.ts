@@ -80,6 +80,8 @@ export async function runDetail(url: string, opts: DetailOptions): Promise<void>
     for (const u of imgUrls.slice(0, 5)) console.log(`  · ${trunc(u, 90)}`)
     if (imgUrls.length > 5) console.log(pc.dim(`  … 共 ${imgUrls.length} 张`))
   }
+  // 视频笔记:详情 SSR 里的播放直链(详情弹窗原生 <video> 播)。
+  if (detail?.video) console.log(pc.dim(`视频: ${trunc(detail.video, 90)}`))
   console.log(
     `互动: ${detail?.likes !== undefined ? `赞 ${detail.likes}` : "-"} · ${
       detail?.reposts !== undefined ? `转 ${detail.reposts}` : "-"

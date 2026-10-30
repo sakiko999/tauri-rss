@@ -59,11 +59,16 @@ function socialImages(i: MediaItem): Array<{ url?: string; liveVideo?: string }>
 
 type SocialFilterId = "all" | "media" | "multi" | "video" | "text"
 
+/** 帖子级视频直链(视频微博/视频笔记;xhs 详情补全后才有)。 */
+function socialVideo(i: MediaItem): string | undefined {
+  return (i as { video?: string }).video
+}
+
 /**
  * 整屏社交的筛选 chips。
  *
  * 口径按**已有的列表字段**定,不新造分类:
- *   - 视频动态 = 图集里有 `liveVideo` 的条目(微博/小红书把视频放在图片位上,带视频直链);
+ *   - 视频动态 = 图集里有 `liveVideo`(实况/图片位视频) 或条目带帖子级 `video`(视频微博);
  *   - 文字 = 没有图集的条目。
  * ⚠️ 过滤只作用于**已加载窗口**(客户端过滤,零协议改动);滚动加载的新条目会继续被同一
  * 谓词筛,直到该节点的数据加载完。
@@ -72,8 +77,12 @@ const SOCIAL_FILTERS: Array<{ id: SocialFilterId; label: string; test: (i: Media
   { id: "all", label: "全部", test: () => true },
   { id: "media", label: "图文", test: (i) => socialImages(i).length > 0 },
   { id: "multi", label: "多图", test: (i) => socialImages(i).length > 1 },
-  { id: "video", label: "视频", test: (i) => socialImages(i).some((img) => !!img.liveVideo) },
-  { id: "text", label: "文字", test: (i) => socialImages(i).length === 0 },
+  {
+    id: "video",
+    label: "视频",
+    test: (i) => !!socialVideo(i) || socialImages(i).some((img) => !!img.liveVideo),
+  },
+  { id: "text", label: "文字", test: (i) => socialImages(i).length === 0 && !socialVideo(i) },
 ]
 
 export function MediaMain() {

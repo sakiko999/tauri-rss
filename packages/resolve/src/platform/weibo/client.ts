@@ -133,6 +133,12 @@ export function mblogToSocial(m: any, sourceId: string, t: number): Social {
       return video ? { url, liveVideo: toHttps(String(video)) } : { url }
     })
     .filter((img: { url: string }) => !!img.url)
+  const page = m?.page_info
+  const video = page?.type === "video" ? weiboVideoUrl(page) : undefined
+  // 视频微博的封面在 page_pic（pics 为空）——不补就变成「无图纯文字」，看起来像抓取失败。
+  if (!images.length && video && page?.page_pic?.url) {
+    images.push({ url: toHttps(String(page.page_pic.url)) })
+  }
   return {
     id: `wb-${id}`,
     sourceId,
@@ -141,6 +147,7 @@ export function mblogToSocial(m: any, sourceId: string, t: number): Social {
     url: id ? `https://m.weibo.cn/status/${id}` : undefined,
     content: text,
     images: images.length ? images : undefined,
+    video,
     likes: toInt(m?.attitudes_count),
     reposts: toInt(m?.reposts_count),
     replies: toInt(m?.comments_count),
@@ -151,6 +158,28 @@ export function mblogToSocial(m: any, sourceId: string, t: number): Social {
     fetchedAt: t,
     raw: { mblogId: id, isLongText: !!m?.isLongText },
   }
+}
+
+/**
+ * 视频微博（page_info.type === "video"）的播放直链。
+ *
+ * 字段组合照 RSSHub weibo/utils：`urls.*` 是新结构，`media_info.*` 含 stream_url 系列
+ * 与旧字段。偏好 720p H.264：hevc 在 WebView2 上是另一套解码支持，排最后。
+ */
+function weiboVideoUrl(page: any): string | undefined {
+  const urls = page?.urls ?? {}
+  const media = page?.media_info ?? {}
+  const url =
+    urls.mp4_720p_mp4 ??
+    media.mp4_720p_mp4 ??
+    urls.mp4_hd_mp4 ??
+    media.mp4_hd_url ??
+    media.stream_url_hd ??
+    media.stream_url ??
+    urls.mp4_ld_mp4 ??
+    media.mp4_sd_url ??
+    urls.hevc_mp4_hd
+  return url ? toHttps(String(url)) : undefined
 }
 
 /** 长微博展开:isLongText 时调 /statuses/extend 拿完整正文(原地改 content)。

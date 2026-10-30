@@ -172,6 +172,23 @@ ok(
   `实况视频直链未丢（得 ${JSON.stringify(socialImgBack.images?.map((i: any) => i?.liveVideo))}）`,
 )
 
+// 4d. Social.video(帖子级视频直链:视频笔记/视频微博)必须完整往返
+const socialVideo: Item = {
+  id: "n3",
+  sourceId: "weibo:user",
+  kind: "social",
+  title: "视频微博",
+  fetchedAt: 1,
+  content: "正文",
+  video: "https://f.video.weibocdn.com/x.mp4?a=1&b=2",
+} as Item
+const socialVideoBack = deserializeFeed(serializeFeed([socialVideo]), ctx)[0] as any
+console.log("Social.video 往返:")
+ok(
+  socialVideoBack.video === "https://f.video.weibocdn.com/x.mp4?a=1&b=2",
+  `video 直链未丢(得 ${socialVideoBack.video})`,
+)
+
 // 4c. Category(分区目录条目):categoryChannel + categoryInfo(JSON)必须完整往返
 const category: Item = {
   id: "douyin-partition:101",

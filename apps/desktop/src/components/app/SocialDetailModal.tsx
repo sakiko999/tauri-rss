@@ -56,11 +56,14 @@ export function SocialDetailModal() {
   const [imgIndex, setImgIndex] = useState(0)
   /** 灯箱是否打开。索引与详情**共用** imgIndex —— 关灯箱后详情停在同一张。 */
   const [zoom, setZoom] = useState(false)
-  /** 实况重试计数：递增让视频重新挂载再试一次。 */
+  /** 视频重试计数：递增让视频重新挂载再试一次（实况与帖子级视频共用）。 */
   const [liveRetry, setLiveRetry] = useState(0)
   /** 当前图若是实况，取视频直链（统一 https：源站给的是 http，WebView 里会被混合内容拦）。 */
   const liveVideo = httpsify((imgs[imgIndex] as { liveVideo?: string } | undefined)?.liveVideo)
   const live = useLiveVideoSource(liveVideo, liveRetry)
+  /** 帖子级视频（视频微博随列表落库；xhs 视频笔记在详情补全后才有）。 */
+  const postVideo = httpsify((item as { video?: string } | undefined)?.video)
+  const post = useLiveVideoSource(postVideo, liveRetry)
   /**
    * ⚠️ 所有 hook 必须在 `if (!detail) return null` **之前**调用。
    * 曾把 useState/useEffect 放在 early return 之后:detail 为 null 时提前返回(少调),
@@ -131,6 +134,8 @@ export function SocialDetailModal() {
       height?: number
       images?: Array<{ width?: number; height?: number }>
     }
+    // 视频帖无图集时按 16:9 给媒体框（视频封面比例的常见口径）。
+    if (postVideo && imgs.length === 0) return 16 / 9
     return socialRatio(it.images?.[imgIndex] ?? { width: it.width, height: it.height })
   })()
   const likes = (item as { likes?: number }).likes
@@ -183,7 +188,7 @@ export function SocialDetailModal() {
               style={{ "--detail-media-ratio": String(imgRatio) } as React.CSSProperties}
               {...overlayBlock("social-detail-media", `social:detail:media:${itemKey(item)}`)}
             >
-              {cover ? (
+              {cover || (postVideo && post.url) ? (
                 <span className="social-detail-cover">
                   {imgs.length > 1 ? (
                     <div className="social-detail-controls">
@@ -210,9 +215,21 @@ export function SocialDetailModal() {
                   ) : null}
                   {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
-                  {/* 实况图：切到即直连播放、静音循环；点一下暂停/续播。
-                    加载中/失败时继续显示静态图（比黑屏/碎播放器可解释）。 */}
-                  {liveVideo && live.url ? (
+                  {/* 视频帖（视频微博/视频笔记）：原生 <video> 直连（Referer 由 Rust 注入），
+                    带控件、静音起播；失败退回封面（下方出重试）。 */}
+                  {postVideo && post.url ? (
+                    <video
+                      className="social-detail-video"
+                      src={post.url}
+                      poster={cover}
+                      controls
+                      autoPlay
+                      muted
+                      playsInline
+                      onError={() => post.onError()}
+                    />
+                  ) : liveVideo && live.url ? (
+                    // 实况图：切到即直连播放、静音循环；点一下暂停/续播。
                     <video
                       className="social-detail-video"
                       src={live.url}
@@ -229,7 +246,7 @@ export function SocialDetailModal() {
                       // 直连失败/解码不支持 → 退回静态图（下方出重试）。
                       onError={() => live.onError()}
                     />
-                  ) : (
+                  ) : cover ? (
                     // 点静态图 → 灯箱(完整大图 + 左右翻页)。实况视频那一支不挂:
                     // 它自己接管点击(暂停/续播),再套一层灯箱会两个动作抢同一次点击。
                     <button
@@ -240,9 +257,9 @@ export function SocialDetailModal() {
                     >
                       <MediaImage src={cover} alt={item.title} loading="eager" contain />
                     </button>
-                  )}
+                  ) : null}
                   {/* 直连失败时才出现的重试入口（403/网络抖动/签名过期）。 */}
-                  {liveVideo && live.failed ? (
+                  {(liveVideo && live.failed) || (postVideo && post.failed) ? (
                     <Button
                       variant="secondary"
                       size="sm"
@@ -318,7 +335,7 @@ export function SocialDetailModal() {
               ) : null}
               {/* 状态脚注:只在「补全中 / 补全失败 / 实况播放失败」时出现。
                 完整内容 + 正常播放不需要解释。 */}
-              {resolving || resolveFailed || (liveVideo && live.failed) ? (
+              {resolving || resolveFailed || (liveVideo && live.failed) || (postVideo && post.failed) ? (
                 <p className="social-detail-note">
                   {resolving ? (
                     <Icon name="loader" size={13} className="animate-spin" />
@@ -330,7 +347,9 @@ export function SocialDetailModal() {
                       ? "正在向源站补全详情…"
                       : resolveFailed
                         ? `详情补全失败：${detail.error}（列表页只带封面与标题）`
-                        : "实况视频播放失败（已显示静态图）"}
+                        : postVideo && post.failed
+                          ? "视频播放失败（已显示封面）"
+                          : "实况视频播放失败（已显示静态图）"}
                   </span>
                 </p>
               ) : null}

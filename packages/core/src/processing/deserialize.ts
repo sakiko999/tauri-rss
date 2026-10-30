@@ -199,6 +199,8 @@ function parseSocial(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     reposts: num(raw["tpl:reposts"]),
     replies: num(raw["tpl:replies"]),
     isLiked: boolTpl(raw["tpl:isLiked"], undefined),
+    // 帖子级视频直链（视频笔记/视频微博）。
+    video: str(raw["tpl:video"]),
     // 小红书详情页开关(匿名 GET /explore/<id> 需带列表项 xsec_token)。
     xsecToken: str(raw["tpl:xsecToken"]),
   }

@@ -102,6 +102,8 @@ export interface SocialItem extends MediaItemBase {
   reposts?: number
   replies?: number
   isLiked?: boolean
+  /** 帖子级视频直链(视频笔记/视频微博;详情弹窗原生 <video> 直连播放)。 */
+  video?: string
   /** 小红书笔记详情开关(列表项 xsec_token;匿名 GET /explore/<id> 需带才返回 noteDetailMap)。 */
   xsecToken?: string
 }

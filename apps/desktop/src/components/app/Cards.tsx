@@ -162,6 +162,12 @@ export function MediaCard({
     >
       <div className="card-media aspect-video">
         <MediaImage src={img} ratio={16 / 9} fill />
+        {/* 视频帖（视频微博/详情补全后的视频笔记）：混合流里也标出「能看视频」。 */}
+        {item.kind === "social" && (item as { video?: string }).video ? (
+          <span className="social-video-badge" title="可播放的视频动态">
+            <Icon name="play" size={10} /> 视频
+          </span>
+        ) : null}
         {isLiveNow(item) ? (
           <span className="live-pulse">
             <span className="status-dot" data-state="live" /> LIVE
@@ -327,10 +333,11 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
           {tiles.map((img, i) => (
             <span key={`${img.url}-${i}`} className="smosaic-item">
               <MediaImage src={httpsify(img.url)} fill loading="eager" />
-              {/* 角标：实况图/视频动态（liveVideo 能播一小段）。新浪列表自带，小红书要进详情才知道。 */}
-              {img.liveVideo ? (
+              {/* 角标：实况图（liveVideo 能播一小段）/ 帖子级视频（视频微博；xhs 视频笔记
+                要进详情补全后才有）。 */}
+              {img.liveVideo || (i === 0 && (item as { video?: string }).video) ? (
                 <span className="social-video-badge" title="可播放的视频动态">
-                  <Icon name="play" size={10} /> 实况
+                  <Icon name="play" size={10} /> {img.liveVideo ? "实况" : "视频"}
                 </span>
               ) : null}
               {extra > 0 && i === tiles.length - 1 ? <span className="smosaic-more num">+{extra}</span> : null}

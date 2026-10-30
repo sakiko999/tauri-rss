@@ -83,6 +83,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/core/src/example/passive-mode.check.ts",
     "packages/resolve/src/example/scheduler.check.ts",
     "packages/resolve/src/example/live-photo.check.ts",
+    "packages/resolve/src/example/video-post.check.ts",
     "packages/crawler/src/example/passive-buffer.check.ts",
     "packages/crawler/src/example/passive-capture.check.ts",
     "packages/crawler/src/example/xhs-strategy.check.ts",

@@ -115,6 +115,13 @@ export interface Social extends Base {
   reposts?: number
   replies?: number
   isLiked?: boolean
+  /**
+   * 帖子级视频直链（视频笔记 / 视频微博）。渐进 mp4，原生 `<video>` 直连播放
+   * （Referer 由 Rust 按 VIDEO_REFERRERS 注入）。xhs 只在详情 SSR 里有（随详情
+   * 补全懒解析）；weibo 在列表数据里随抓取落库（快照会过期，失败退回封面）。
+   * serialize 写 `tpl:video`，deserialize 对称读回。
+   */
+  video?: string
   /** 小红书笔记详情开关(列表项 xsec_token)。匿名 GET /explore/<id>?xsec_token= 才返回 noteDetailMap。 */
   xsecToken?: string
 }

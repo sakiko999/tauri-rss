@@ -147,6 +147,8 @@ function itemToTree(item: Item): Record<string, unknown> {
     setTplN(tree, "reposts", item.reposts)
     setTplN(tree, "replies", item.replies)
     if (item.isLiked !== undefined) setTpl(tree, "isLiked", item.isLiked ? "1" : "0")
+    // 帖子级视频直链(视频笔记/视频微博):详情弹窗原生 <video> 播。漏写 = 边界静默丢。
+    setTplN(tree, "video", item.video)
     // 小红书详情页开关(匿名 GET /explore/<id> 需带 xsec_token)。
     setTplN(tree, "xsecToken", item.xsecToken)
   } else if (item.kind === "category") {

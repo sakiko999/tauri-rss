@@ -353,6 +353,34 @@ function firstStreamUrl(stream: any): string | undefined {
   return undefined
 }
 
+/**
+ * 视频笔记（note.type === "video"）的播放直链。
+ *
+ * ⚠️ 不能复用 `firstStreamUrl`：那个是实况图专用、按 JSON 键序取第一个，而视频笔记的
+ * codec 键是 `h264/h265/h266/av1`（RSSHub 参考实现恰好把 av1 排最前）—— 按键序取会
+ * 产出 AV1 mp4，WebView2 的解码支持不稳。必须显式偏好 h264 → h265 → h266 → av1，
+ * 未知 codec 再兜底。回退 `consumer.originVideoKey`（不带签名，活得比 masterUrl 久）。
+ */
+function videoNoteUrl(video: any): string | undefined {
+  const stream = video?.media?.stream
+  const pick = (codec: string): string | undefined => {
+    const arr = stream?.[codec]
+    const s = Array.isArray(arr) ? arr[0] : undefined
+    const url = s?.masterUrl ?? s?.backupUrls?.[0]
+    return url ? toHttps(String(url)) : undefined
+  }
+  for (const codec of ["h264", "h265", "h266", "av1"]) {
+    const url = pick(codec)
+    if (url) return url
+  }
+  for (const codec of Object.keys(stream ?? {})) {
+    const url = pick(codec)
+    if (url) return url
+  }
+  const key = video?.consumer?.originVideoKey
+  return key ? `https://sns-video-al.xhscdn.com/${key}` : undefined
+}
+
 export function noteDetailToSocial(note: any, sourceId: string, t: number): Social | null {
   const noteId = String(note?.noteId ?? "").trim()
   if (!noteId) return null
@@ -396,6 +424,8 @@ export function noteDetailToSocial(note: any, sourceId: string, t: number): Soci
       : undefined,
     publishedAt: toEpochMs(note?.time),
     fetchedAt: t,
+    // 视频笔记：详情 SSR 里带完整流（列表 noteCard 只有封面 → 视频是详情懒解析出来的）。
+    video: note?.type === "video" ? videoNoteUrl(note?.video) : undefined,
     xsecToken: note?.xsecToken ?? undefined,
   }
 }

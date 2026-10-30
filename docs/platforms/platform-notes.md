@@ -240,6 +240,33 @@
 - **UI**：瀑布流封面加「实况」角标；详情里**点击才加载** `<video muted loop>`（不自动播，
   省流量），失败退回静态图。
 
+## 视频帖：小红书视频笔记 / 微博视频微博（2026-10-30）
+
+普通视频帖（区别于上面的实况图）的视频直链。契约 = `Social.video`（帖子级单值直链），
+XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
+
+- **小红书**：直链**只在详情页 SSR 里**（`note.type === "video"`；列表 noteCard 只有封面，
+  拿不到流 → 视频天然是详情懒解析）。流在 `note.video.media.stream.<codec>[0]` 的
+  `masterUrl`（带 `sign&t`）或 `backupUrls[0]`；codec 键是 `h264/h265/h266/av1` ——
+  **必须按 h264 优先选**（参考实现把 av1 排最前，按 JSON 键序取会产出 AV1 mp4，WebView2
+  解码不稳）。stream 缺失时回退 `video.consumer.originVideoKey` →
+  `sns-video-al.xhscdn.com/<key>`。poster = `imageList[0].urlDefault`。
+  实测（2026-10-30）：详情直链带站内 Referer → 206 / `video/mp4`。
+- **微博**：直链就在**列表数据**里（`m.weibo.cn` container 的 `mblog.page_info`，
+  `type === "video"`）→ 随抓取落库（快照会过期，失败退封面重试）。字段偏好：
+  `urls.mp4_720p_mp4 > mp4_hd_mp4 > media_info.stream_url_hd/stream_url > mp4_ld_mp4 >
+  hevc_mp4_hd`（hevc 是另一套解码支持，排最后）；封面 `page_pic.url`（`pics` 为空时
+  兜底进 `images[0]`，否则卡片是「无图纯文字」）。实测（2026-10-30）：720p 直链带
+  Referer → 206；**CDN 不支持 HEAD**（403），验证要用带 Range 的 GET。
+- **防盗链**：两家都在 `VIDEO_REFERRERS`（`xhscdn.com` / `weibocdn.com` → 站内 Referer），
+  Rust 在 MEDIA context 注入 → 原生 `<video>` 直连可播；**不能走 hls.js/dash.js**
+  （XHR context 不注入 Referer，JS 也设不了）。
+- **回归**：`packages/resolve/src/example/video-post.check.ts`（两家映射 + 流偏好）+
+  `serialize-roundtrip.check.ts` 的 `Social.video` 往返。
+- **UI**：卡片角标「视频」（瀑布流封面 / 混合流 MediaCard）；详情弹窗 `<video controls
+  autoPlay muted>`（静音起播，可开声），失败退封面 + 重试。视频帖**刻意不进播放页/队列/
+  短视频流**：那需要放宽 kind 门控（social 不可播）与新增 by-url 解析路由，按需另做。
+
 ## 时间戳单位
 
 - ⚠️ **平台的 `time` 字段单位会变**，别无条件 `* 1000`。xhs 从**秒**改成**毫秒**后，

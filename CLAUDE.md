@@ -189,7 +189,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 | B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
 | 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做） |
 | YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
-| 小红书 | 全 SSR；**`web_session` 不是登录标志**；**2026-10-22 起全渠道要求登录（匿名态已移除）**，未登录直接报「需要登录」；`xhs:explore` 被动、`xhs:user` 滚动翻页；带 `web_session` 的会话 **SSR 只给空壳**（feed 由页面 XHR 填，读 state 前要等列表非空）；匿名滚动翻页不可靠（headless 300012 / WebView2 300011，风控累积）——这是移除匿名的依据 |
+| 小红书 | 全 SSR；**`web_session` 不是登录标志**；**2026-10-22 起全渠道要求登录（匿名态已移除）**，未登录直接报「需要登录」；`xhs:explore` 被动、`xhs:user` 滚动翻页；带 `web_session` 的会话 **SSR 只给空壳**（feed 由页面 XHR 填，读 state 前要等列表非空）；匿名滚动翻页不可靠（headless 300012 / WebView2 300011，风控累积）——这是移除匿名的依据；**视频笔记的流只在详情 SSR**（`note.video`，codec 按 h264 优先，见 `Social.video`） |
 | Twitch | 公开 GQL + usher HLS，纯匿名；master 无 CORS 必须服务端拉；流列表翻页要用 Android Client-ID |
 | 斗鱼/虎牙 | douyu `rate` 是档位 ID 不是清晰度；huya 低档只产 HLS |
 | Apple 播客 | 榜单条目 = 一个 feed（`stream` 空），主操作是「列出单集」不是播放 |
@@ -314,6 +314,12 @@ live 按平台二次聚合的 UI 侧。
   先挂监听（VOD 首批是一次性全量）。**桌面不再 import `@amoeba/resolve`**，抖音直播弹幕（要 ttwid）
   因此恢复。**通则：跨服务边界的返回值只能是可序列化描述符，塞函数/类实例会静默丢**。
 - [!] 微博匿名只给首页 10 条，翻页（page/since_id/weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录
+- [!] **视频帖走 `Social.video`（`tpl:video`）**：视频微博直链在列表数据里（`page_info`，
+  随抓取落库，快照会过期）；小红书视频笔记只在详情 SSR（`note.video`，codec 必须按
+  h264→h265→h266→av1 偏好选，**别按键序**——av1 排最前会产出 WebView2 解不了的流）。
+  详情弹窗原生 `<video controls>` 直连（Referer 由 Rust 注入）；**刻意不进播放页/队列**
+  （social 不可播是 kind 硬契约，要进得先放宽门控并加 by-url 路由）。回归
+  `video-post.check.ts` + roundtrip。
 - [ ] 登录微博后复验 `weibo:user` 首屏自动预加载第二页真正落地（本次改动只验到匿名态）
 - [!] 补全（`resolveDetail`）**不保证纯文本**：feed 自带全文时 `raw.ts` 原样返回 HTML（contentFormat=html）；桌面镜像剥掉 article 的 content，所以阅读器必走补全 —— 消费侧必须按返回体的 contentFormat 渲染
 - [ ] 重启桌面应用复验阅读器：阮一峰正文应渲染为排版好的 HTML（本次只验到 core 侧 resolveDetail 返回 contentFormat=html，没在真机 UI 上确认）
