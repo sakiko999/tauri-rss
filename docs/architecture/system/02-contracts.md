@@ -271,7 +271,7 @@ sequenceDiagram
 | 热搜词 | `resolveHotWord(word): Promise<Item[]>`（`:52-55`） | `weibo:hot` | `data-layer.ts:743-758`（Item[] → XML → MediaItem） | `isHotWordSource`（`:135-137`） |
 | 单条详情 | `resolveDetail(item, {passive?}): Promise<Item\|null>`（`:58-67`） | RSS 原文补全、xhs | `data-layer.ts:763-826` | `isItemDetailSource`（`:140-142`） |
 | 扫码登录 | `scanLogin(emitQr, {timeoutMs, signal})`（`:73-94`） | bili/weibo/xhs/douyin | `data-layer.ts:919-932` | `isLoginable`（`:149-151`），**channel 级** |
-| 启动 cookie 快照 | `readLoginCookie(browser): Promise<LoginCookieSnapshot\|null>`（`:192-197`） | xhs/weibo | `syncBrowserCookies`（`data-layer.ts:967-1015`） | 方法存在性；`null` 表示「无登录标记」而非登出 |
+| 启动 cookie 快照 | `readLoginCookie(browser): Promise<LoginCookieSnapshot\|null>`（`:192-197`） | xhs/weibo/douyin | `syncBrowserCookies`（`data-layer.ts:967-1015`） | 方法存在性；`null` 表示「无登录标记」而非登出 |
 
 两条与实现强相关的边界：
 

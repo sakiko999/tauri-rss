@@ -10,6 +10,8 @@
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 发布构建（含 service:build + runtime/browser + release 配置）
 bun run tauri:release               # ⭐ Rust 以 release 编译但保留热重载（见 CLAUDE.md 环境要求）
                                     #   dev/tauri:release 都用 identifier app.amoeba.dev：与安装版数据完全隔离、可并跑
+                                    #   ⚠️ 抓取浏览器 profile 例外：默认**共用**安装版（app.amoeba.desktop/webview-profile）
+bun run tauri --own-profile         # 抓取浏览器改用 app.amoeba.dev 自己的 profile（首登/清凭证/换号调试）
 bun run scripts/tauri.ts help       # 全部用法
 
 # CLI 抓取浏览器 sidecar（Windows / WebView2；VS2022 Native Tools 环境）

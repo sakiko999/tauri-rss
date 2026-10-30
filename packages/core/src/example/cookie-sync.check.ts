@@ -9,7 +9,8 @@
  *   5. weibo 优先 m.weibo.cn,缺失时才回落 weibo.com;
  *   6. 没有该平台订阅 → 不读浏览器;
  *   7. 只有**停用**订阅 → 不读浏览器;
- *   8. 只有 xhs 订阅(桌面无 HTTP 消费方)→ 不单独拉起浏览器。
+ *   8. 只有 xhs / douyin 订阅(都不是「值得单独拉起浏览器」的消费方)→ 不单独拉起;
+ *   9. douyin 标记 = sessionid(ttwid 匿名也有),浏览器已拉起时顺带同步(douyinCookie)。
  *
  * 跑:`bun packages/core/src/example/cookie-sync.check.ts`
  * 用内存存储 + 假 browser.getCookies,不触网、不启动浏览器。
@@ -28,9 +29,11 @@ injectNodeHost()
 let fakeXhs: Record<string, string> = { id_token: "id-1", web_session: "ws-1", a1: "a1-1" }
 let fakeWeiboMobile: Record<string, string> = { SUB: "sub-m", SUBP: "subp-m", _T_WM: "wm" }
 let fakeWeiboDesktop: Record<string, string> = { SUB: "sub-d" }
+let fakeDouyin: Record<string, string> = { sessionid: "sid-1", ttwid: "tt-1" }
 let xhsReads = 0
 let weiboMobileReads = 0
 let weiboDesktopReads = 0
+let douyinReads = 0
 /** 下一次 m.weibo.cn 读取前执行(模拟读期间用户手改设置)。 */
 let beforeWeiboRead: (() => Promise<void>) | null = null
 
@@ -55,6 +58,10 @@ Object.defineProperty(globalThis.appHost, "browser", {
         weiboDesktopReads++
         return { ...fakeWeiboDesktop }
       }
+      if (url === "https://www.douyin.com") {
+        douyinReads++
+        return { ...fakeDouyin }
+      }
       return {}
     },
   },
@@ -69,10 +76,12 @@ function sub(id: string, channelKey: string): Subscription {
 
 await dl.subscriptions.add(sub("sub-xhs", "xhs:user"))
 await dl.subscriptions.add(sub("sub-weibo", "weibo:user"))
+await dl.subscriptions.add(sub("sub-douyin", "live:douyin"))
 
-// ── 1. 首次同步:两个平台都写入 ─────────────────────────────────────────────
+// ── 1. 首次同步:三个平台都写入 ─────────────────────────────────────────────
 let fields = await dl.syncBrowserCookies()
-assert.deepEqual([...fields].sort(), ["weiboCookie", "xhsCookie"], "两个平台都应更新")
+assert.deepEqual([...fields].sort(), ["douyinCookie", "weiboCookie", "xhsCookie"], "三个平台都应更新")
+assert.equal((await dl.settings.get()).douyinCookie, "sessionid=sid-1; ttwid=tt-1", "douyin 快照按 key 排序")
 let s = await dl.settings.get()
 assert.equal(s.xhsCookie, "a1=a1-1; id_token=id-1; web_session=ws-1", "xhs 快照应按 key 排序")
 assert.equal(
@@ -95,9 +104,11 @@ assert.deepEqual(fields, [], "cookie 未变化时不应重写")
 fakeXhs = { web_session: "guest" }
 fakeWeiboMobile = {}
 fakeWeiboDesktop = {}
+fakeDouyin = {}
 fields = await dl.syncBrowserCookies()
 assert.deepEqual(fields, [], "无登录标记不应写入")
 s = await dl.settings.get()
+assert.equal(s.douyinCookie, "sessionid=sid-1; ttwid=tt-1", "无标记不能清空 douyin 快照")
 assert.equal(s.xhsCookie, "a1=a1-1; id_token=id-1; web_session=ws-1", "无标记不能清空 xhs 快照")
 assert.equal(
   resolveCookie(undefined, "weibo"),
@@ -126,7 +137,7 @@ assert.ok(fields.includes("weiboCookie"), "只有 weibo.com 登录态时也应�
 s = await dl.settings.get()
 assert.equal(s.weiboCookie, "ALF=alf; SUB=sub-d", "回落到 weibo.com 的 cookie 集")
 
-// ── 6. 没有订阅 → 不读浏览器 ─────────────────────────────────────────────
+// ── 6. 没有 weibo/xhs 订阅(只余 douyin)→ 不读浏览器 ──────────────────────
 await dl.subscriptions.remove("sub-xhs")
 await dl.subscriptions.remove("sub-weibo")
 fakeXhs = { id_token: "id-3" }
@@ -134,7 +145,7 @@ fakeWeiboMobile = { SUB: "sub-3" }
 let xhsBefore = xhsReads
 let weiboBefore = weiboMobileReads
 fields = await dl.syncBrowserCookies()
-assert.deepEqual(fields, [], "无订阅不应同步")
+assert.deepEqual(fields, [], "无消费方订阅不应同步")
 assert.equal(xhsReads, xhsBefore, "无订阅不应读 xhs cookie")
 assert.equal(weiboMobileReads, weiboBefore, "无订阅不应读 weibo cookie")
 
@@ -147,19 +158,28 @@ assert.deepEqual(fields, [], "停用订阅不应同步")
 assert.equal(weiboMobileReads, weiboBefore, "停用订阅不应读 weibo cookie")
 await dl.subscriptions.remove("sub-weibo-off")
 
-// ── 8. 只有 xhs 订阅:桌面无 HTTP 消费方,不单独拉起浏览器 ────────────────
+// ── 8. 只有 xhs / douyin 订阅:都不是「值得单独拉起浏览器」的消费方 ────────
 await dl.subscriptions.add(sub("sub-xhs-2", "xhs:user"))
 fakeXhs = { id_token: "id-4", a1: "a1-4" }
+fakeDouyin = { sessionid: "sid-4" }
 xhsBefore = xhsReads
+const douyinBefore = douyinReads
 fields = await dl.syncBrowserCookies()
-assert.deepEqual(fields, [], "xhs 无桌面消费方,不应为它单独启动浏览器")
+assert.deepEqual(fields, [], "xhs/douyin 都不是消费方,不应为它们单独启动浏览器")
 assert.equal(xhsReads, xhsBefore, "仅 xhs 订阅不应读 cookie")
+assert.equal(douyinReads, douyinBefore, "仅 douyin 订阅不应读 cookie")
 
-// weibo 订阅在场时,xhs 顺带同步(浏览器已为 weibo 拉起,近零成本)。
+// weibo 订阅在场时,xhs / douyin 顺带同步(浏览器已为 weibo 拉起,近零成本)。
 await dl.subscriptions.add(sub("sub-weibo-2", "weibo:user"))
+fakeDouyin = { sessionid: "sid-2", ttwid: "tt-2" }
 fields = await dl.syncBrowserCookies()
-assert.deepEqual([...fields].sort(), ["weiboCookie", "xhsCookie"], "浏览器已拉起时 xhs 应顺带同步")
+assert.deepEqual(
+  [...fields].sort(),
+  ["douyinCookie", "weiboCookie", "xhsCookie"],
+  "浏览器已拉起时 xhs / douyin 都应顺带同步",
+)
 s = await dl.settings.get()
 assert.equal(s.xhsCookie, "a1=a1-4; id_token=id-4", "xhs 快照应更新到顺带读取的值")
+assert.equal(s.douyinCookie, "sessionid=sid-2; ttwid=tt-2", "douyin 快照应更新到顺带读取的值")
 
 console.log("cookie-sync.check: 全部通过")

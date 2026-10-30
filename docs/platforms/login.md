@@ -158,10 +158,14 @@ boot（`READY`）后 1.5s 由服务进程跑 `DataLayer.syncBrowserCookies()`（
   实测匿名 Edge 会话没有 `id_token`，扫码登录的 profile 有。
 - **weibo 优先 `https://m.weibo.cn`**（`WB_BASE` 消费域），缺失才回落 `weibo.com`；
   不合并两域（扁平 Record 会丢同名 SUB/SUBP 的域信息）。
-- **消费方门槛**：只处理**有启用订阅**的平台；只有 `weiboCookie` 是桌面 HTTP 消费方、
-  单独值得拉起浏览器。`xhsCookie` 在桌面没有数据消费方（xhs 全走浏览器，settings 只剩
-  账号页展示）→ 只在浏览器已因 weibo 被拉起时**顺带**同步，不为它单独启动。
-  bili / douyin 不参与（bili 纯 HTTP；douyin 登录 HTTP 优先，浏览器会话可能更旧）。
+- **douyin 标记 = `sessionid`**（`ttwid` 匿名也签发）；域取 `https://www.douyin.com`。
+  抖音桌面侧没有浏览器数据路径（直播流解析/主页全是 HTTP + `douyinCookie()`），
+  2026-10-30 才补上这一步 —— 在此之前浏览器里换号/重登都不会回流 settings。
+- **消费方门槛**：只处理**有启用订阅**的平台；只有 `weiboCookie` 是「值得单独拉起
+  浏览器」的桌面 HTTP 消费方。`xhsCookie`（xhs 全走浏览器，settings 只剩账号页展示）
+  与 `douyinCookie` 都只在浏览器已因 weibo 被拉起时**顺带**同步，不为它们单独启动
+  —— 抖音只有订阅、没有 weibo/xhs 订阅时，启动**不会**同步 douyinCookie（扫码当时
+  写的那份继续用）。bili 不参与（纯 HTTP，无登录态字段）。
 - **只读不改坏**：浏览器无登录标记时**不清空** settings（无法区分登出与 profile 重置）；
   读+写在 `withBrowserOpSlot` 内与「清除凭证/清理浏览器数据」互斥；写经
   `setIfUnchanged` 原子比对（比对与写入同一串行临界区），期间用户保存/扫码写过就放弃。

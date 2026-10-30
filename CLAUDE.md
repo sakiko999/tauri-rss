@@ -163,6 +163,7 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 ```bash
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 前端+release 构建
 bun run tauri:release               # release 编译 + 热重载（调 release-only 分支）
+bun run tauri --own-profile         # dev 但用独立抓取浏览器 profile（默认共用安装版登录态）
 bun run rss channels | fetch <key> | item <url> | play <url>   # CLI 调试探针
 bun run rss login <platform>                                # 扫码登录（经数据服务；终端二维码）
 bun run rss fetch <key> --via-service           # 探针走数据服务（同 cookie/被动/配额）
@@ -280,7 +281,9 @@ live 按平台二次聚合的 UI 侧。
   （`service.rs:resolve_paths`：非 desktop 身份 → `app.amoeba.desktop/webview-profile`），
   否则 dev 里没有登录态。代价是抓取浏览器全局只有一个（sidecar profile 命名 mutex 独占），
   两边同时跑时后启动的那个报「profile 已被另一个 sidecar 占用」；`rss browser-reset --target dev`
-  清的是同一个目录。
+  清的是同一个目录。要一份**独立**的干净 profile（调首登/清凭证/换号）用
+  `bun run tauri --own-profile`（= 服务进程带 `AMOEBA_OWN_PROFILE=1`，走
+  `app.amoeba.dev\webview-profile`）。
   裸 `bunx tauri dev`（不经 `bun run tauri`）不带 overlay = desktop 身份，与安装版互斥，别用。
 - [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
 - [!] 桌面只走 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；进程内 DataLayer 回退已删（非 Tauri 的浏览器 dev 仍走进程内）。

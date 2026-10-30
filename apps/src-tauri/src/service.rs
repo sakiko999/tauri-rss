@@ -93,6 +93,11 @@ fn lock_pid(path: &Path) -> Option<u32> {
     value.get("pid")?.as_u64()?.try_into().ok()
 }
 
+/// 布尔环境变量开关（`1` / `true`）。用于 `bun run tauri --own-profile` 这类调试入口。
+fn env_flag(name: &str) -> bool {
+    matches!(std::env::var(name).as_deref(), Ok("1") | Ok("true"))
+}
+
 /// `foo.db` → `foo.db-wal` / `foo.db.migrating`（OsString 拼接，不经显示编码）。
 fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
     let mut s = path.as_os_str().to_os_string();
@@ -235,7 +240,9 @@ fn resolve_paths(app: &AppHandle, db_file: &str) -> Result<Paths, String> {
     // 调试没意义。数据服务 / DB / 单实例锁仍按 identifier 各自独立。
     // 代价：profile 的 sidecar 命名 mutex 是**独占**的，dev 与安装版同时跑时，后启动的那个
     // 用不了抓取浏览器（报「profile 已被另一个 sidecar 占用」）。
-    let profile_dir = if app.config().identifier == LEGACY_IDENTIFIER {
+    // `--own-profile`（`AMOEBA_OWN_PROFILE=1`，见 scripts/tauri.ts）仍用自己的目录：调
+    // 首登/清凭证/换号这类「干净 profile」路径时需要一份互不影响的登录态。
+    let profile_dir = if app.config().identifier == LEGACY_IDENTIFIER || env_flag("AMOEBA_OWN_PROFILE") {
         local.join("webview-profile")
     } else {
         local

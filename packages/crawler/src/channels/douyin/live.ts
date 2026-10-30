@@ -26,13 +26,14 @@ import {
   normalizeDouyinRoomId,
   now,
   parseRoomIds,
+  readDouyinLoginCookie,
   strOr,
   toInt,
 } from "@amoeba/resolve"
 import type { Item, Live } from "@amoeba/xml"
 import { type SerializeOptions } from "@amoeba/xml"
 
-import type { Loginable, LoginResult, RssChannel, RssSource, SourceInfo } from "../../index.ts"
+import type { Loginable, LoginCookieSnapshot, LoginResult, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { apiFetchItems } from "../factory.ts"
 
 const LIVE = "https://live.douyin.com"
@@ -62,6 +63,15 @@ export class DouyinLiveChannel implements RssChannel, Loginable {
    */
   scanLogin(emitQr: (qr: string | null) => void, opts?: { timeoutMs?: number }): Promise<LoginResult> {
     return douyinScanLogin(emitQr, opts)
+  }
+
+  /**
+   * 启动快照：只读浏览器 profile 的登录 cookie（不导航）。
+   * ⚠️ 抖音没有浏览器数据路径（直播流解析/主页全是 HTTP + `douyinCookie()`），
+   * 少了这一步，登录态只在扫码那一刻进 settings，浏览器侧再换号/重登都不会回流。
+   */
+  readLoginCookie(browser: BrowserBackend): Promise<LoginCookieSnapshot | null> {
+    return readDouyinLoginCookie(browser)
   }
 
   // 仅输出 Live item(与 rsshub 一致);流/弹幕走 crawler/resolver(按 item.url→live.douyin.com)。

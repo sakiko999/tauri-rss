@@ -74,6 +74,10 @@ Amoeba 调试脚本
   bun run build [desktop|mobile]           只构建前端产物
   bun run tauri [desktop|mobile]           Vite dev + Tauri dev 并行（完整应用，热重载）
   bun run tauri [desktop|mobile] --release 同上，但 **Rust 以 release 编译**（见下）
+  bun run tauri [desktop|mobile] --own-profile
+                                           抓取浏览器用**自己的** profile（默认与安装版共用，
+                                           好在调试时复用登录态）。要调首登/清凭证/换号这类
+                                           「干净 profile」路径时用它。
   bun run tauri [desktop|mobile] build     前端构建 + Tauri release 构建
 
 ⚠️ --release 的用途：调试「**只在 release 下才走**」的行为（如 Windows 子系统的
@@ -122,11 +126,17 @@ const viteBuild = (p: Platform): CmdSpec => ({
  * ⚠️ 与 `tauri build` 的区别：这个**不产出安装包**、不跑 frontendDist（仍走 devUrl）。
  * 首次跑要全量 release 编译（数分钟）；之后增量。
  */
-const tauriDev = (p: Platform, release = false): CmdSpec => ({
-  label: `Tauri dev (${p}${release ? " --release" : ""})`,
+const tauriDev = (p: Platform, release = false, ownProfile = false): CmdSpec => ({
+  label: `Tauri dev (${p}${release ? " --release" : ""}${ownProfile ? " --own-profile" : ""})`,
   cmd: "bunx",
   args: ["tauri", "dev", ...DEV_CFG_FOR(p, release), ...(release ? ["--release"] : [])],
   cwd: SRC_TAURI,
+  /**
+   * `--own-profile`：调试实例用**自己的**抓取浏览器 profile（`app.amoeba.dev\webview-profile`），
+   * 不共用安装版的登录态。共用（默认）适合调「有登录态才走得到」的分支；独立适合调干净
+   * profile 的路径（首登、清凭证、换号）。Rust 侧读这个环境变量，见 `service.rs:resolve_paths`。
+   */
+  ...(ownProfile ? { env: { AMOEBA_OWN_PROFILE: "1" } } : {}),
 })
 /** release 配置只在 `tauri build` 叠加：dev/test 不应要求 target/release 下的 sidecar 已存在。 */
 const RELEASE_CFG = (p: Platform) => (p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.release.json`] : [])
@@ -183,23 +193,29 @@ function parseArgs(argv: string[]): {
   command?: string
   platform?: Platform
   release: boolean
+  ownProfile: boolean
   build: boolean
   help: boolean
 } {
   const rest = argv.slice(2)
   const help = rest.some((a) => a === "--help" || a === "-h" || a === "help")
   const release = rest.includes("--release")
+  const ownProfile = rest.includes("--own-profile")
   // ⚠️ `command` 要排除 `--help`/`help`，否则 `bun run tauri help` 会被当成未知命令。
   const command = rest.find((a) => !a.startsWith("-") && a !== "help")
   // `bun run tauri [desktop|mobile] build` 的 `build` 是**第二段意图**，不是命令名；
   // 旧解析只取第一个非 flag 词，于是 `tauri:build` 静默落进 dev 计划（不产安装包）。
   const build = rest.includes("build")
   const platform = rest.find((a) => PLATFORMS.includes(a as Platform)) as Platform | undefined
-  return { command, platform, release, build, help }
+  return { command, platform, release, ownProfile, build, help }
 }
 
 /** 命令意图 → 执行计划。纯函数（只描述，不执行）。 */
-function planFor(command: string, platform: Platform, opts: { release: boolean } = { release: false }): Execution[] {
+function planFor(
+  command: string,
+  platform: Platform,
+  opts: { release: boolean; ownProfile: boolean } = { release: false, ownProfile: false },
+): Execution[] {
   switch (command) {
     case "dev":
       return [{ kind: "once", spec: viteDev(platform) }]
@@ -217,13 +233,13 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
             { kind: "once" as const, spec: SYNC_RELEASE_SERVICE },
             {
               kind: "parallel" as const,
-              specs: [viteDev(platform, "release-debug"), tauriDev(platform, true)],
+              specs: [viteDev(platform, "release-debug"), tauriDev(platform, true, opts.ownProfile)],
             },
           ]
         : [
             {
               kind: "parallel",
-              specs: [viteDev(platform, undefined), tauriDev(platform, false)],
+              specs: [viteDev(platform, undefined), tauriDev(platform, false, opts.ownProfile)],
             },
           ]
     case "build-release":
@@ -330,7 +346,7 @@ async function main(): Promise<void> {
   }
   // `tauri ... build` = 前端构建 + Tauri release 构建；`build` 单独出现仍是只构建前端。
   const command = args.command === "tauri" && args.build ? "build-release" : (args.command ?? "")
-  const plan = planFor(command, platform, { release: args.release })
+  const plan = planFor(command, platform, { release: args.release, ownProfile: args.ownProfile })
   await execute(plan)
 }
 
