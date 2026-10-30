@@ -153,6 +153,26 @@ const BROWSER_BUILD: CmdSpec = {
 /** RSSHub sidecar:desktop 订阅源,`bun run tauri` 时随 Vite+Tauri 一并带起(独立 Node 进程,自起 1200 端口)。 */
 
 /**
+ * 把 dist/service/service.js 同步进 target/release/service/ —— release 形态的服务
+ * 跑的是 resource_dir（= **仓库根** target/release，cargo workspace 的产物目录，
+ * 见 service.rs 的 target_dir()）下的副本，优先级高于 dist/。那份副本只在完整
+ * `tauri build` 时刷新：跑过一次 build 再 `tauri dev --release`，服务就会用
+ * **上次 build 的旧包**（新功能「消失」，2026-10-30 视频帖在 release 下不可播
+ * 就是它）。⚠️ 别写成 apps/src-tauri/target —— 那不是服务读的目录。
+ */
+const SYNC_RELEASE_SERVICE: CmdSpec = {
+  label: "同步 service 包 → target/release",
+  cmd: "powershell",
+  args: [
+    "-NoProfile",
+    "-Command",
+    `New-Item -ItemType Directory -Force "${ROOT}/target/release/service" | Out-Null; ` +
+      `Copy-Item "${ROOT}/dist/service/service.js" "${ROOT}/target/release/service/service.js" -Force`,
+  ],
+  cwd: ROOT,
+}
+
+/**
  * 解析 argv → 命令意图。纯函数。
  *
  * ⚠️ **flag 不按位置取**：`bun run tauri desktop --release` 里 argv[2]=desktop、
@@ -188,12 +208,24 @@ function planFor(command: string, platform: Platform, opts: { release: boolean }
     case "tauri":
       // `--release` → Rust 以 release 编译（调「只在 release 走」的分支，如隐藏 Edge 窗口）。
       // 同时让 Vite 用 release-debug 的独立 DB,避免和普通 dev 数据互串。
-      return [
-        {
-          kind: "parallel",
-          specs: [viteDev(platform, opts.release ? "release-debug" : undefined), tauriDev(platform, opts.release)],
-        },
-      ]
+      // ⚠️ release 形态的服务跑 dist/service/service.js 打包产物（service.rs 回退），
+      // 必须先重建 —— 旧包会让新功能在 release 下「消失」（2026-10-30 视频帖踩过）。
+      // dev（debug 编译）不受影响：它直接跑 apps/cli/src/service/main.ts 源码。
+      return opts.release
+        ? [
+            { kind: "once" as const, spec: SERVICE_BUILD },
+            { kind: "once" as const, spec: SYNC_RELEASE_SERVICE },
+            {
+              kind: "parallel" as const,
+              specs: [viteDev(platform, "release-debug"), tauriDev(platform, true)],
+            },
+          ]
+        : [
+            {
+              kind: "parallel",
+              specs: [viteDev(platform, undefined), tauriDev(platform, false)],
+            },
+          ]
     case "build-release":
       return [
         { kind: "once", spec: viteBuild(platform) },

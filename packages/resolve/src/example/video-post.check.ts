@@ -12,7 +12,7 @@
  */
 
 import { mblogToSocial } from "../platform/weibo/client.ts"
-import { noteDetailToSocial } from "../platform/xhs/client.ts"
+import { noteCardToSocial, noteDetailToSocial } from "../platform/xhs/client.ts"
 
 let failed = 0
 const ok = (cond: boolean, msg: string): void => {
@@ -67,6 +67,36 @@ ok(xhsKey?.video === "https://sns-video-al.xhscdn.com/abc/def.mp4", `xhs 应回�
 // 非视频笔记不得产出 video（别把视频字段给图文笔记）。
 const xhsPlain = noteDetailToSocial({ ...xhsVideoNote, type: "normal" }, "xhs:explore", 1) as any
 ok(!xhsPlain?.video, "xhs 图文笔记不应有 video")
+
+// 列表 noteCard 的 type 标记（实测 2026-10-30：video/normal）→ hasVideo：
+// 列表拿不到流，卡片角标先靠这个信号。
+const cardVideo = noteCardToSocial(
+  {
+    type: "video",
+    displayTitle: "视频笔记",
+    cover: { urlDefault: "http://x/c.webp", width: 3, height: 4 },
+    time: 1791961240000,
+  },
+  "xhs:user",
+  1,
+  "v3",
+  "tok",
+) as any
+ok(cardVideo?.hasVideo === true, `xhs 列表视频笔记应带 hasVideo（得 ${cardVideo?.hasVideo}）`)
+ok(!cardVideo?.video, "xhs 列表项不应有直链（流等详情）")
+const cardPlain = noteCardToSocial(
+  {
+    type: "normal",
+    displayTitle: "图文",
+    cover: { urlDefault: "http://x/p.webp", width: 3, height: 4 },
+    time: 1791961240000,
+  },
+  "xhs:user",
+  1,
+  "v4",
+  "tok",
+) as any
+ok(cardPlain?.hasVideo === undefined, "xhs 列表图文笔记不应带 hasVideo")
 
 // ── 微博：视频微博 ─────────────────────────────────────────────────
 const wbPoster = { url: "http://wx1.sinaimg.cn/large/p.jpg" }

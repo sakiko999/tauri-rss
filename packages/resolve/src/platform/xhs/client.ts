@@ -222,6 +222,8 @@ interface NoteFields {
   publishedAtMs?: number
   /** 小红书笔记详情开关(get /explore/<id> 需带列表项 xsec_token)。 */
   xsecToken?: string
+  /** 列表级视频标记(noteCard.type === "video";流要等详情补全)。 */
+  hasVideo?: boolean
 }
 
 /**
@@ -248,6 +250,7 @@ function noteToSocial(f: NoteFields, sourceId: string, t: number): Social | null
     publishedAt: f.publishedAtMs,
     fetchedAt: t,
     xsecToken: f.xsecToken,
+    hasVideo: f.hasVideo,
   }
 }
 
@@ -293,6 +296,9 @@ export function noteCardToSocial(
       authorAvatar: user.avatar ? String(user.avatar) : undefined,
       publishedAtMs,
       xsecToken,
+      // 列表 noteCard 带 type(实测 2026-10-30:video/normal):列表没有流,
+      // 这个标记让卡片先打「视频」角标,直链等详情补全。
+      hasVideo: noteCard?.type === "video" ? true : undefined,
     },
     sourceId,
     t,

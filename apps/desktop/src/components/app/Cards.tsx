@@ -163,7 +163,7 @@ export function MediaCard({
       <div className="card-media aspect-video">
         <MediaImage src={img} ratio={16 / 9} fill />
         {/* 视频帖（视频微博/详情补全后的视频笔记）：混合流里也标出「能看视频」。 */}
-        {item.kind === "social" && (item as { video?: string }).video ? (
+        {item.kind === "social" && isVideoPost(item) ? (
           <span className="social-video-badge" title="可播放的视频动态">
             <Icon name="play" size={10} /> 视频
           </span>
@@ -289,6 +289,11 @@ const MOSAIC_MAX = 4
 /** 社交图集条目(只声明本文件用到的字段)。 */
 type SocialImg = { url: string; width?: number; height?: number; liveVideo?: string }
 
+/** 视频帖：有直链（视频微博）或列表标记（xhs noteCard.type === "video"，流等详情）。 */
+function isVideoPost(item: MediaItem): boolean {
+  return !!(item as { video?: string }).video || !!(item as { hasVideo?: boolean }).hasVideo
+}
+
 /**
  * 宫格分割方向:横图按列、竖图按行 —— 竖图按列切会得到细长条。
  * ⚠️ 只决定内部怎么切,不决定**块的比例**(见 SocialCard 里的说明)。
@@ -333,9 +338,9 @@ export function SocialCard({ item, actions }: { item: MediaItem; actions: CardAc
           {tiles.map((img, i) => (
             <span key={`${img.url}-${i}`} className="smosaic-item">
               <MediaImage src={httpsify(img.url)} fill loading="eager" />
-              {/* 角标：实况图（liveVideo 能播一小段）/ 帖子级视频（视频微博；xhs 视频笔记
-                要进详情补全后才有）。 */}
-              {img.liveVideo || (i === 0 && (item as { video?: string }).video) ? (
+              {/* 角标：实况图（liveVideo 能播一小段）/ 帖子级视频（视频微博带直链；
+                xhs 视频笔记列表只有 type 标记，流等详情补全）。 */}
+              {img.liveVideo || (i === 0 && isVideoPost(item)) ? (
                 <span className="social-video-badge" title="可播放的视频动态">
                   <Icon name="play" size={10} /> {img.liveVideo ? "实况" : "视频"}
                 </span>

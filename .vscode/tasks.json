@@ -77,11 +77,13 @@
     {
       // 真 release 的 Rust：只产出可执行文件（不生成安装包）。前端已由上一个任务构建到
       // dist/desktop（tauri.conf 的 frontendDist）；这里**不**启动 Vite dev server。
+      // ⚠️ 先重建 dist/service/service.js：release 形态的服务跑打包产物（service.rs 回退），
+      // 用旧包 = 新功能在 release 下「消失」。
       "label": "tauri-release-nobundle",
       "type": "shell",
-      "command": "bunx tauri build --no-bundle",
+      "command": "bun run service:build && bunx tauri build --no-bundle",
       "options": {
-        "cwd": "${workspaceFolder}/apps/src-tauri"
+        "cwd": "${workspaceFolder}"
       },
       "dependsOn": ["tauri-release-frontend"],
       "dependsOrder": "sequence",

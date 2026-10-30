@@ -149,6 +149,8 @@ function itemToTree(item: Item): Record<string, unknown> {
     if (item.isLiked !== undefined) setTpl(tree, "isLiked", item.isLiked ? "1" : "0")
     // 帖子级视频直链(视频笔记/视频微博):详情弹窗原生 <video> 播。漏写 = 边界静默丢。
     setTplN(tree, "video", item.video)
+    // 列表级视频标记(xhs noteCard.type):列表没有流,角标先靠它。
+    if (item.hasVideo !== undefined) setTpl(tree, "hasVideo", item.hasVideo ? "1" : "0")
     // 小红书详情页开关(匿名 GET /explore/<id> 需带 xsec_token)。
     setTplN(tree, "xsecToken", item.xsecToken)
   } else if (item.kind === "category") {

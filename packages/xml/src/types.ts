@@ -122,6 +122,11 @@ export interface Social extends Base {
    * serialize 写 `tpl:video`，deserialize 对称读回。
    */
   video?: string
+  /**
+   * 列表级「是视频帖」标记（xhs noteCard.type === "video"）：列表数据没有流，
+   * 只有这个信号 —— UI 靠它先打「视频」角标，直链等详情补全。
+   */
+  hasVideo?: boolean
   /** 小红书笔记详情开关(列表项 xsec_token)。匿名 GET /explore/<id>?xsec_token= 才返回 noteDetailMap。 */
   xsecToken?: string
 }

@@ -140,6 +140,9 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   （`!cfg!(debug_assertions)` 是编译期判据，如 Windows 子系统）。保留 Vite dev server 与 Rust 热重载，
   但首次全量 release 编译（~4min），且**不叠 `tauri.conf.dev.json`**（不开 9222），只叠身份 overlay
   `tauri.conf.dev-release.json`（identifier 同 dev，见下方「实例身份」）。
+  ⚠️ release 形态的服务跑**仓库根 `target/release/service/service.js`**（resource_dir，优先于 dist/），
+  且只在完整 `tauri build` 时刷新 —— 脚本会先 `service:build` 并同步过去，别手动拷到
+  `apps/src-tauri/target`（那不是服务读的目录；2026-10-30 视频帖在 release 下「消失」即旧包）。
   ⚠️ release 默认无调试符号：要断点用 `CARGO_PROFILE_RELEASE_DEBUG=true`（**环境变量**，写进
   Cargo.toml 会让发布安装包也白塞符号），只在**首次构建时**生效（已构建过需删 release 产物重建）。
   ⚠️ 别 `taskkill /IM msedgewebview2.exe`：那是应用窗口进程，杀它 = 应用退出。

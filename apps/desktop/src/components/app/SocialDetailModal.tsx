@@ -64,16 +64,19 @@ export function SocialDetailModal() {
   /** 帖子级视频（视频微博随列表落库；xhs 视频笔记在详情补全后才有）。 */
   const postVideo = httpsify((item as { video?: string } | undefined)?.video)
   const post = useLiveVideoSource(postVideo, liveRetry)
+  /** 视频帖加载中（起播/卡缓冲）：poster 只有图没有声音，不标出来与普通图片无法区分。 */
+  const [videoWaiting, setVideoWaiting] = useState(false)
+  useEffect(() => {
+    setImgIndex(0)
+    setVideoWaiting(false)
+    // 换条目时灯箱必须一起关:否则它停在上一条的图上,而 indices 已归零。
+    setZoom(false)
+  }, [item?.id])
   /**
    * ⚠️ 所有 hook 必须在 `if (!detail) return null` **之前**调用。
    * 曾把 useState/useEffect 放在 early return 之后:detail 为 null 时提前返回(少调),
    * 有值时多调 → React 抛「Rendered more/fewer hooks than expected」,弹窗整块崩掉打不开。
    */
-  useEffect(() => {
-    setImgIndex(0)
-    // 换条目时灯箱必须一起关:否则它停在上一条的图上,而 indices 已归零。
-    setZoom(false)
-  }, [item?.id])
   useEffect(() => {
     // ⚠️ 只在弹窗真正打开时挂监听:本组件常驻在 App 里,无条件监听会让 ←/→ 在
     // 任何页面(阅读视图、播放页)被吞掉 —— 播放页的左右键是跳转/快进。
@@ -216,7 +219,7 @@ export function SocialDetailModal() {
                   {/* ⚠️ style 上的比例必须与图片**真实比例**一致:每张图换比例,
                     媒体列的宽度就跟着变。 */}
                   {/* 视频帖（视频微博/视频笔记）：原生 <video> 直连（Referer 由 Rust 注入），
-                    带控件、静音起播；失败退回封面（下方出重试）。 */}
+                    带控件、直接有声起播（WebView2 已开 no-user-gesture）；失败退回封面（下方出重试）。 */}
                   {postVideo && post.url ? (
                     <video
                       className="social-detail-video"
@@ -224,9 +227,16 @@ export function SocialDetailModal() {
                       poster={cover}
                       controls
                       autoPlay
-                      muted
                       playsInline
-                      onError={() => post.onError()}
+                      // 加载态：起播/卡缓冲时叠 spinner —— poster 只有图，不标就与普通图片无差别。
+                      onLoadStart={() => setVideoWaiting(true)}
+                      onCanPlay={() => setVideoWaiting(false)}
+                      onPlaying={() => setVideoWaiting(false)}
+                      onWaiting={() => setVideoWaiting(true)}
+                      onError={() => {
+                        setVideoWaiting(false)
+                        post.onError()
+                      }}
                     />
                   ) : liveVideo && live.url ? (
                     // 实况图：切到即直连播放、静音循环；点一下暂停/续播。
@@ -257,6 +267,12 @@ export function SocialDetailModal() {
                     >
                       <MediaImage src={cover} alt={item.title} loading="eager" contain />
                     </button>
+                  ) : null}
+                  {/* 视频加载中：叠在 poster 上（起播/卡缓冲）。 */}
+                  {postVideo && post.url && videoWaiting ? (
+                    <span className="social-detail-video-loading" aria-hidden>
+                      <Icon name="loader" size={22} className="animate-spin" />
+                    </span>
                   ) : null}
                   {/* 直连失败时才出现的重试入口（403/网络抖动/签名过期）。 */}
                   {(liveVideo && live.failed) || (postVideo && post.failed) ? (

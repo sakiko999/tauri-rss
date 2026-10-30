@@ -181,6 +181,7 @@ const socialVideo: Item = {
   fetchedAt: 1,
   content: "正文",
   video: "https://f.video.weibocdn.com/x.mp4?a=1&b=2",
+  hasVideo: true,
 } as Item
 const socialVideoBack = deserializeFeed(serializeFeed([socialVideo]), ctx)[0] as any
 console.log("Social.video 往返:")
@@ -188,6 +189,7 @@ ok(
   socialVideoBack.video === "https://f.video.weibocdn.com/x.mp4?a=1&b=2",
   `video 直链未丢(得 ${socialVideoBack.video})`,
 )
+ok(socialVideoBack.hasVideo === true, `hasVideo 列表标记未丢(得 ${socialVideoBack.hasVideo})`)
 
 // 4c. Category(分区目录条目):categoryChannel + categoryInfo(JSON)必须完整往返
 const category: Item = {

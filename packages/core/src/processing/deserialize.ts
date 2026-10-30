@@ -201,6 +201,8 @@ function parseSocial(it: ParsedItem, ctx: DeserializeContext): MediaItem {
     isLiked: boolTpl(raw["tpl:isLiked"], undefined),
     // 帖子级视频直链（视频笔记/视频微博）。
     video: str(raw["tpl:video"]),
+    // 列表级「是视频帖」标记（xhs 列表没有流，角标先靠它）。
+    hasVideo: boolTpl(raw["tpl:hasVideo"], undefined),
     // 小红书详情页开关(匿名 GET /explore/<id> 需带列表项 xsec_token)。
     xsecToken: str(raw["tpl:xsecToken"]),
   }

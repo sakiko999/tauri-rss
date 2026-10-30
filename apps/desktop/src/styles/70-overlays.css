@@ -490,6 +490,17 @@ kbd {
   bottom: var(--sp-3);
   backdrop-filter: blur(6px);
 }
+/* 视频帖加载中：poster 只有图没有声音，不标出来与普通图片无法区分。 */
+.social-detail-video-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-on-media);
+  background: oklch(0.12 0.01 264 / 32%);
+  pointer-events: none;
+}
 
 /* 媒体框必须有「确定的 height」,图片的百分比尺寸才有基准;
    只给 max-height 会让容器高度退化成 auto,图片按自然尺寸绘制、
