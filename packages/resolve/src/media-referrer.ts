@@ -41,6 +41,8 @@ export const VIDEO_REFERRERS: Array<[string, string]> = [
   // 微博实况视频（f.video.weibocdn.com）与图床同源策略。
   ["weibocdn.com", "https://weibo.com/"],
   ["sinaimg.cn", "https://weibo.com/"],
+  // 抖音作品直链（v26-web.douyinvod.com 等）：无 Referer 403，带 douyin.com 206（2026-10-30 实测）。
+  ["douyinvod.com", "https://www.douyin.com/"],
 ]
 
 /** 视频直链所属域名命中规则 → 需要的站内 Referer;未命中返回 undefined（可空 Referer 拉取）。 */

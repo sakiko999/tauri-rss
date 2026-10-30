@@ -89,9 +89,25 @@
 - ✅ **主页链接也走 `live:douyin`**（2026-10-19）：`roomIds` 接受
   `www.douyin.com/user/<sec_uid>`，先经匿名资料 API
   `aweme/v1/web/user/profile/other/?sec_user_id=...`（a_bogus+ttwid）换
-  `unique_id`/`short_id`，再当 web_rid 走 enter。`live:douyin:user`
-  （`channels/douyin/user.ts`）**保留给存量订阅**，新入口不再列出 —— 统一到
-  `live:douyin` 后，新订阅才能和搜索添加/「并入已有订阅」共用同一个渠道。
+  `unique_id`/`short_id`，再当 web_rid 走 enter（旧的 `live:douyin:user` 已删除，
+  能力并入 `live:douyin`）。
+- 🆕 **抖音用户作品（`douyin:user`，2026-10-30）**：**被动采集**——导航
+  `www.douyin.com/user/<sec_uid>`，页面自己的 JS 会请求
+  `aweme/v1/web/aweme/post/`，我们在 `Network.loadingFinished` 后读那份响应体
+  （`capturePage` + `passiveBuffer`）。**应用侧零构造请求、零签名**，匿名 200。
+  - 为什么只能被动：页面自己发 200 JSON，但**原样重放同一条 URL**（页面内 fetch、
+    同一份 cookie）返回 835KB HTML 骨架；补 `uifid` 头、用页面 `localStorage.xmst`
+    的 msToken、本仓现算 `a_bogus` 全部无效（`a_bogus` 与 HttpOnly 的 msToken cookie
+    绑定、疑似一次性）；纯 HTTP 自签（ABogus + ttwid）直接 **403** 并触发平台冷却。
+  - 映射：`aweme_type === 68`/有 `images[]` 的是**图文**（它的 `play_addr` 是 BGM，
+    不能当视频）；视频按 `video.bit_rate[]` 降序取最高档直链。
+  - ⚠️ **已知上限：只有首屏（实测 ~21 条）**。页面不发第二次 `/aweme/post`
+    （`max_cursor` 在页面手里），程序化滚动（含小步 scrollBy 到容器底部）、真实滚轮
+    `Input.dispatchMouseEvent`、`PageDown`、`synthesizeScrollGesture`、
+    `setFocusEmulationEnabled` + `Page.setWebLifecycleState(active)`、加宽/加高视口、
+    已登录 profile 全部试过无效。所以**不声明 `Pageable`**、界面无「加载更多」。
+  - 另一个坑：lane 的 tab 是后台 target，**hidden 下页面连首屏那发请求都不发**，
+    必须 `mode:"interactive"`（xhs 的被动捕获能留在 hidden，是因为它读导航文档本身）。
 - ✅ **抖音扫码登录**（2026-10-16，`resolve/platform/douyin/login.ts`）：纯 HTTP 走
   `sso.douyin.com` 通行证（get_qrcode → check_qrconnect 轮询 → redirect_url 落
   cookie），**实测被 JS 挑战页拦**（warmup 只给 `__ac_nonce`，无 JS 执行过不了

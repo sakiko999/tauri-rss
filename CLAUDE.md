@@ -191,7 +191,7 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 | 平台 | 一句话 |
 | --- | --- |
 | B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
-| 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做） |
+| 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做）。`douyin:user`（2026-10-30）= **被动捕获页面自己的 `/aweme/post`**（接口重放/自签都被拦），**只拿得到首屏 ~21 条**、翻页未打通 |
 | YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
 | 小红书 | 全 SSR；**`web_session` 不是登录标志**；**2026-10-22 起全渠道要求登录（匿名态已移除）**，未登录直接报「需要登录」；`xhs:explore` 被动、`xhs:user` 滚动翻页；带 `web_session` 的会话 **SSR 只给空壳**（feed 由页面 XHR 填，读 state 前要等列表非空）；匿名滚动翻页不可靠（headless 300012 / WebView2 300011，风控累积）——这是移除匿名的依据；**视频笔记的流只在详情 SSR**（`note.video`，codec 按 h264 优先，见 `Social.video`） |
 | Twitch | 公开 GQL + usher HLS，纯匿名；master 无 CORS 必须服务端拉；流列表翻页要用 Android Client-ID |

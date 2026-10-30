@@ -194,7 +194,8 @@ export interface RssChannel {
   /**
    * 启动快照能力(可选):从浏览器 profile **只读**当前登录 cookie,供 core 在
    * 应用启动时把 settings 里的凭证快照对齐到浏览器。不得导航/发请求;未登录返回
-   * `null`。只有浏览器路径登录的渠道实现(bili 纯 HTTP、douyin HTTP 优先 → 不实现)。
+   * `null`。只有「桌面侧消费 settings cookie」的平台需要实现(xhs/weibo/douyin;
+   * bili 纯 HTTP 签名,不需要)。
    */
   readLoginCookie?(browser: BrowserBackend): Promise<LoginCookieSnapshot | null>
   /** 按 info(url/uid/…)实例化一个可抓取的 source(行为载体);返回类型可按需收窄成 RssSource & VideoPlayable 等。 */

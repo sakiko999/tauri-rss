@@ -33,6 +33,8 @@ const VIDEO_REFERRERS: &[(&str, &str)] = &[
     ("xhscdn.com", "https://www.xiaohongshu.com/"),
     ("weibocdn.com", "https://weibo.com/"),
     ("sinaimg.cn", "https://weibo.com/"),
+    // 抖音作品直链：无 Referer 403、带 douyin.com 206(2026-10-30 实测)。
+    ("douyinvod.com", "https://www.douyin.com/"),
 ];
 
 /// XHR/fetch 的 Origin 改写规则(host 后缀 → 站内 Origin)。与 TS `XHR_ORIGIN_RULES` 同步。

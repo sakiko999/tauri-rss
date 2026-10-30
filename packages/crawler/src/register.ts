@@ -31,6 +31,7 @@ import {
   DouyinLiveHotChannel,
   DouyinPartitionSearchChannel,
   DouyinTrendChannel,
+  DouyinUserChannel,
 } from "./channels/douyin/index.ts"
 import {
   DouyuAnchorChannel,
@@ -144,6 +145,8 @@ export function registerBuiltinChannels(): void {
   registerChannel(DouyinCategoriesChannel)
   registerChannel(DouyinPartitionSearchChannel)
   registerChannel(DouyinTrendChannel)
+  // 用户主页作品：**被动采集**（导航 + 捕获页面自己的 /aweme/post），见 channels/douyin/user.ts。
+  registerChannel(new DouyinUserChannel())
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──
   registerChannel(new WeiboUserChannel())
