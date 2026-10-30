@@ -76,8 +76,10 @@ git push origin vX.Y.Z
    `bun install` → **`bun run tauri:build`**（内含前端构建 + service:build + runtime/browser
    的 release 构建 + `tauri build --config tauri.conf.release.json`）→ 创建 Release 并上传
    `*-setup.exe`、`*.sig`、`latest.json`。
-   ⚠️ `.github/workflows/release.yml` 目前仍是 `build:desktop` + tauri-action（裸 `tauri build`），
-   产物缺三件资源（service.js / runtime / browser），需改成同一命令。
+   ⚠️ CI 不跑 `bun run tauri:build` 本身，而是逐步复刻它：`build:desktop` → `service:build`
+   → `cargo build --release -p amoeba-runtime -p amoeba-browser` → tauri-action 带
+   `--config tauri.conf.release.json`（三件资源靠这个 overlay 的 `bundle.resources` 进包）。
+   改其中任一环节必须两处同步，否则打出来的包缺资源、装完起不来（v0.7.0 事故）。
 4. 已安装用户下次启动（或手动「设置 → 关于与更新」）即可检测到新版本。
 
 ## 待补：发布门禁（2026-10-26 事故后记）
