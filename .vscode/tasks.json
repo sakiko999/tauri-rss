@@ -2,10 +2,16 @@
   "version": "2.0.0",
   "tasks": [
     {
+      // 只杀本仓库 target/ 下的 dev 实例：dev 与安装版可并跑（identifier 隔离），
+      // 按镜像名 taskkill /IM amoeba.exe 会连安装版一起杀掉。
       "label": "kill-tauri",
       "type": "process",
-      "command": "C:/Windows/System32/cmd.exe",
-      "args": ["/c", "taskkill /F /IM amoeba.exe >nul 2>&1 & exit /b 0"],
+      "command": "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "Get-Process amoeba -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '${workspaceFolder}\\target\\*' } | Stop-Process -Force; exit 0"
+      ],
       "problemMatcher": [],
       "presentation": {
         "reveal": "silent",

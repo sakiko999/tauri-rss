@@ -1,8 +1,9 @@
 /**
  * attach — CLI 作为数据服务的客户端。
  *
- * 服务与桌面同生命周期：默认读 desktop 的 endpoint.json，使用 **client token**
- * （只能命令，不能 shutdown）。改数据/刷新会立刻通过 WS 事件反映到桌面。
+ * 服务与桌面同生命周期：默认读 **dev 实例**（app.amoeba.dev）的 endpoint.json，使用
+ * **client token**（只能命令，不能 shutdown）。要连安装版用 `--profile desktop`。
+ * 改数据/刷新会立刻通过 WS 事件反映到对应实例。
  *
  *   rss attach status [--json]
  *   rss attach list [--json]
@@ -21,29 +22,55 @@ import { fail, fmtMs, ok, printJson, startTimer } from "../ui/render.ts"
 
 export interface AttachOptions {
   endpoint?: string
+  /** 选哪个实例身份的服务目录（dev = app.amoeba.dev / desktop = 安装版）。 */
+  profile?: string
   json?: boolean
   all?: boolean
   force?: boolean
 }
 
-function endpointFile(explicit?: string): string {
-  const raw =
-    explicit ??
-    process.env.AMOEBA_SERVICE_ENDPOINT ??
-    join(
-      process.env.LOCALAPPDATA ?? process.env.HOME ?? process.cwd(),
-      "app.amoeba.desktop",
-      "service",
-      "endpoint.json",
-    )
-  if (existsSync(raw) && statSync(raw).isDirectory()) return join(raw, "endpoint.json")
-  return raw
+/** 实例身份 → 服务目录。与 tauri.conf.dev.json / tauri.conf.json 的 identifier 对齐。 */
+export type ServiceProfile = "dev" | "desktop"
+const PROFILE_DIR: Record<ServiceProfile, string> = {
+  dev: "app.amoeba.dev",
+  desktop: "app.amoeba.desktop",
 }
 
-export function resolveEndpoint(explicit?: string): EndpointInfo {
-  const file = endpointFile(explicit)
+function resolveProfile(explicit?: string): ServiceProfile {
+  if (explicit === "desktop" || explicit === "dev") return explicit
+  const fromEnv = process.env.AMOEBA_SERVICE_PROFILE
+  if (fromEnv === "desktop" || fromEnv === "dev") return fromEnv
+  // 默认 dev：CLI 是仓库调试工具，attach/login 面向的「桌面服务」就是 dev 实例。
+  return "dev"
+}
+
+function endpointFile(explicit?: string, profile?: string): string {
+  if (explicit && existsSync(explicit)) {
+    return statSync(explicit).isDirectory() ? join(explicit, "endpoint.json") : explicit
+  }
+  if (explicit) return explicit
+  if (process.env.AMOEBA_SERVICE_ENDPOINT) return process.env.AMOEBA_SERVICE_ENDPOINT
+  // fail-closed：只认选定身份的目录，不回退另一个身份 —— attach/login 是写操作，
+  // 静默连错（尤其连到安装版的真实库）比报错危险得多。
+  return join(
+    process.env.LOCALAPPDATA ?? process.env.HOME ?? process.cwd(),
+    PROFILE_DIR[resolveProfile(profile)],
+    "service",
+    "endpoint.json",
+  )
+}
+
+export function resolveEndpoint(explicit?: string, profile?: string): EndpointInfo {
+  const file = endpointFile(explicit, profile)
   if (!existsSync(file)) {
-    throw new Error(`找不到服务 endpoint：${file}\n先启动桌面（bun run tauri），或用 --endpoint 指定目录/文件`)
+    const current = resolveProfile(profile)
+    const other = current === "dev" ? "desktop" : "dev"
+    throw new Error(
+      `找不到服务 endpoint：${file}\n` +
+        `当前实例身份是 ${current}（dev = bun run tauri 调试实例，desktop = 安装版）。\n` +
+        `换身份用 --profile ${other} 或 AMOEBA_SERVICE_PROFILE=${other}；先启动对应实例，` +
+        `或用 --endpoint 指定 endpoint.json/目录。`,
+    )
   }
   const info = JSON.parse(readFileSync(file, "utf8")) as EndpointInfo
   if (info.schema !== "amoeba-service/1") throw new Error(`endpoint schema 不支持：${info.schema}`)
@@ -75,7 +102,7 @@ export async function runAttach(action: string, args: string[], opts: AttachOpti
 }
 
 async function status(opts: AttachOptions): Promise<void> {
-  const endpoint = resolveEndpoint(opts.endpoint)
+  const endpoint = resolveEndpoint(opts.endpoint, opts.profile)
   const client = new ServiceClient(endpoint)
   await client.hello()
   const [health, snap] = await Promise.all([client.health(), client.snapshot()])
@@ -112,7 +139,7 @@ async function status(opts: AttachOptions): Promise<void> {
 }
 
 async function list(opts: AttachOptions): Promise<void> {
-  const endpoint = resolveEndpoint(opts.endpoint)
+  const endpoint = resolveEndpoint(opts.endpoint, opts.profile)
   const dl = await createRemoteDataLayer(endpoint)
   try {
     const [subs, groups] = await Promise.all([dl.subscriptions.list(), dl.subscriptions.listGroups()])
@@ -141,7 +168,7 @@ async function list(opts: AttachOptions): Promise<void> {
 }
 
 async function refresh(idsInput: string[], opts: AttachOptions): Promise<void> {
-  const endpoint = resolveEndpoint(opts.endpoint)
+  const endpoint = resolveEndpoint(opts.endpoint, opts.profile)
   const dl = await createRemoteDataLayer(endpoint)
   const force = opts.force !== false
   const ids = idsInput.flatMap((v) => v.split(",")).filter(Boolean)
@@ -182,7 +209,7 @@ async function rpc(args: string[], opts: AttachOptions): Promise<void> {
       )
     }
   }
-  const endpoint = resolveEndpoint(opts.endpoint)
+  const endpoint = resolveEndpoint(opts.endpoint, opts.profile)
   const client = new ServiceClient(endpoint)
   const result = await client.rpc(method as RpcMethod, params as RpcParams<RpcMethod>)
   printResult(result, opts.json)

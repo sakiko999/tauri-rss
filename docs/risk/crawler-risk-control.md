@@ -41,8 +41,9 @@
 > 抓取浏览器的归属与载体见 `docs/architecture/crawler-topology.md`；本文只写风控相关的
 > 参数与行为。历史测量（Edge 时代）保留在 §3.9 作为依据，行为结论仍适用于 WebView2。
 
-- 抓取浏览器由 `rss --service` 持有：`service.rs` 把 `%LOCALAPPDATA%/app.amoeba.desktop/webview-profile`
-  作为 `--user-data-dir` 传给 `amoeba-browser.exe`（`apps/browser-sidecar`），CDP 端口由 sidecar
+- 抓取浏览器由 `rss --service` 持有：`service.rs` 把 `%LOCALAPPDATA%/<identifier>/webview-profile`
+  作为 `--user-data-dir` 传给 `amoeba-browser.exe`（`apps/browser-sidecar`；identifier =
+  安装版 `app.amoeba.desktop` / dev 形态 `app.amoeba.dev`，两实例并跑时各有独立 profile），CDP 端口由 sidecar
   stdout 的 `READY <port>` 动态分配（`packages/host/src/node/browser-sidecar.ts:97-120`）。
   Tauri 内嵌的 `webview_browser.rs`（固定 9334）只在宿主未封 `browser` 时生效，desktop 已
   `browser:false`（`apps/desktop/src/main.tsx:17-21`），属冻结路径。

@@ -9,13 +9,14 @@
 ```bash
 bun run dev / tauri / tauri:build   # 纯前端 / 完整应用热重载 / 发布构建（含 service:build + runtime/browser + release 配置）
 bun run tauri:release               # ⭐ Rust 以 release 编译但保留热重载（见 CLAUDE.md 环境要求）
+                                    #   dev/tauri:release 都用 identifier app.amoeba.dev：与安装版数据完全隔离、可并跑
 bun run scripts/tauri.ts help       # 全部用法
 
 # CLI 抓取浏览器 sidecar（Windows / WebView2；VS2022 Native Tools 环境）
 cargo build -p amoeba-browser       # 产物 target/debug/amoeba-browser.exe
 bun run rss env --browser           # 确认 CLI 注入了 browser（懒启动，不 spawn）
 bun run rss fetch weibo:user --browser --kv uid=1195230310
-bun run rss browser-reset --target cli   # 清 CLI 自己的 profile（默认）
+bun run rss browser-reset --target cli   # 清 CLI 自己的 profile（默认；desktop=安装版，dev=调试实例，all=全部）
 ```
 
 ## CLI 调试探针（收编全部 example；设计与边界见下文「CLI 设计与边界」）
@@ -44,13 +45,14 @@ bun run rss sug <关键词>                # 抖音搜索联想词（匿名 appH
 bun run rss detail <url> --cookie <ck>  # xhs 单条详情补全（登录态 noteDetail；URL 需带 xsec_token）
 bun run rss login <platform>            # 扫码登录（经数据服务；终端渲染二维码，bili/weibo/xhs/douyin）
 bun run rss login xhs --timeout 120     # 指定等待秒数；已登录时直接返回（不重复扫码）
-bun run rss login xhs --endpoint <dir>  # 显式指定服务 endpoint（默认桌面服务）
+bun run rss login xhs --endpoint <dir>  # 显式指定服务 endpoint（默认 dev 实例服务）
 bun run rss env --probe                 # appHost 门面自检
 bun run rss refresh <key>               # core DataLayer 编排冒烟（SQLite 持久化）
 bun run rss align                       # crawler/rsshub 同构断言
 bun run rss --service --data-dir <dir>  # 前台数据服务（READY + HTTP/WS + 单写者）
 bun run rss fetch <key> --via-service --json     # 探针走数据服务（同 cookie/被动/配额；item/play/dm 同）
-bun run rss attach status               # CLI 连桌面服务：endpoint/health/rev/订阅/条目
+bun run rss attach status               # CLI 连 dev 实例服务：endpoint/health/rev/订阅/条目
+bun run rss attach status --profile desktop  # 连安装版的服务（--endpoint 可指定任意路径）
 bun run rss attach list [--json]        # 列出订阅（含条目数/总数/分组）
 bun run rss attach refresh <id|channel> # 经服务刷新（--all 全部；--no-force 走 TTL）
 bun run rss attach rpc <method> @params.json  # 通用 RPC（Windows 传 JSON 用 @file）

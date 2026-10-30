@@ -18,11 +18,16 @@ const ENTRY = join(ROOT, "apps", "cli", "src", "main.ts")
 const argv = process.argv.slice(2)
 const dbArg = argv.includes("--db") ? argv[argv.indexOf("--db") + 1] : undefined
 const maxKb = Number(argv.includes("--max-kb") ? argv[argv.indexOf("--max-kb") + 1] : "1024")
-const sourceDb = dbArg ?? join(process.env.APPDATA ?? "", "app.amoeba.desktop", "rss.dev.db")
+// dev 实例的库（identifier app.amoeba.dev；旧共享目录里的库由桌面 dev 首启自动迁走）。
+const sourceDb = dbArg ?? join(process.env.APPDATA ?? "", "app.amoeba.dev", "rss.dev.db")
 
 async function main(): Promise<void> {
   if (!sourceDb || !existsSync(sourceDb)) {
-    throw new Error(`找不到库：${sourceDb}（用 --db 指定）`)
+    throw new Error(
+      `找不到库：${sourceDb}\n` +
+        `dev 库在 app.amoeba.dev 目录（先跑一次 bun run tauri 让迁移落地）；` +
+        `旧共享目录的库在 app.amoeba.desktop 下；或用 --db 指定。`,
+    )
   }
   const dir = mkdtempSync(join(tmpdir(), "amoeba-snapshot-size-"))
   const dbFile = join(dir, "rss.db")

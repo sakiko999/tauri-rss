@@ -28,6 +28,8 @@ import { resolveEndpoint } from "./attach.ts"
 
 export interface LoginOptions {
   endpoint?: string
+  /** 选哪个实例身份的服务（默认 dev；登录态跟着实例走）。 */
+  profile?: string
   /** 等待扫码的秒数（缺省由平台实现决定，通常 3~5 分钟）。 */
   timeout?: number
   json?: boolean
@@ -43,9 +45,9 @@ function findLoginable(platform: string): RssChannel & Loginable {
   return channel as RssChannel & Loginable
 }
 
-function loadEndpoint(explicit?: string) {
+function loadEndpoint(explicit?: string, profile?: string) {
   try {
-    return resolveEndpoint(explicit)
+    return resolveEndpoint(explicit, profile)
   } catch (e) {
     // 只取首行（resolveEndpoint 的后半句提示由下面的统一文案覆盖）。
     const reason = (e instanceof Error ? e.message : String(e)).split("\n")[0]!
@@ -60,7 +62,7 @@ function loadEndpoint(explicit?: string) {
 
 export async function runLogin(platform: string, opts: LoginOptions): Promise<void> {
   const channel = findLoginable(platform)
-  const endpoint = loadEndpoint(opts.endpoint)
+  const endpoint = loadEndpoint(opts.endpoint, opts.profile)
   const elapsed = startTimer()
 
   let layer: Awaited<ReturnType<typeof createRemoteDataLayer>>

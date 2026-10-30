@@ -198,7 +198,8 @@ async function markMany5k(dir: string): Promise<number> {
 async function main(): Promise<void> {
   const dir = join(tmpdir(), `amoeba-service-phase0-${process.pid}`)
   mkdirSync(dir, { recursive: true })
-  const dbFile = process.env.AMOEBA_PHASE0_DB ?? join(process.env.APPDATA ?? "", "app.amoeba.desktop", "rss.dev.db")
+  // dev 实例的库（identifier app.amoeba.dev；旧共享目录由桌面 dev 首启自动迁走）。
+  const dbFile = process.env.AMOEBA_PHASE0_DB ?? join(process.env.APPDATA ?? "", "app.amoeba.dev", "rss.dev.db")
 
   try {
     const stats = await dbStats(dbFile)

@@ -1,16 +1,18 @@
 /**
  * browser-reset — 清掉抓取浏览器 profile。
  *
- * 现在有两套浏览器，profile 必须分开清：
+ * 实例身份（identifier）决定 profile 目录，必须分开清：
  *   - `cli`（默认）：`amoeba-browser.exe` 的 `%LOCALAPPDATA%/app.amoeba.cli/browser-profile`
- *   - `desktop`：Tauri WebView2 的 `.../app.amoeba.desktop/webview-profile`（CDP 9334）
- *   - `all`：两者都清
+ *   - `desktop`：安装版的 `.../app.amoeba.desktop/webview-profile`（含休眠的 CDP 9334）
+ *   - `dev`：`bun run tauri` 调试实例的 `.../app.amoeba.dev/webview-profile`
+ *   - `all`：三者都清
  *
  * ⚠️ CLI 的浏览器是显式 opt-in（`--browser`）；清 CLI profile 会掉 CLI 侧登录态。
- * ⚠️ 桌面 profile 的清理仍是「杀 9334 进程树 + 删目录」；CLI profile 用镜像名
- *    `amoeba-browser.exe`（我们自己的进程，安全）先停 sidecar，再删目录。
+ * ⚠️ 停 sidecar 按**命令行里的 profile 路径**过滤，不按镜像名 —— dev 与安装版可以
+ *    并跑，`taskkill /IM amoeba-browser.exe` 分不清谁是谁，会把另一个实例正在用的
+ *    抓取浏览器一起杀掉。desktop 额外杀 9334 监听者（休眠的进程内抓取浏览器）。
  *
- * 用法:`bun run rss browser-reset [--target cli|desktop|all]`
+ * 用法:`bun run rss browser-reset [--target cli|desktop|dev|all]`
  */
 
 import { existsSync, readdirSync, rmSync, statSync } from "node:fs"
@@ -23,11 +25,14 @@ import { fail, ok, row } from "../ui/render.ts"
 
 /** 与 apps/src-tauri/src/webview_browser.rs 的 `PORT` 对齐。 */
 const DESKTOP_CDP_PORT = 9334
-/** 与 tauri.conf.json 的 identifier + Rust `app_local_data_dir()/webview-profile` 对齐。
+/** 与 tauri.conf.json / tauri.conf.dev.json 的 identifier + Rust
+ *  `app_local_data_dir()/webview-profile` 对齐。
  *  ⚠️ `app_local_data_dir` 在 Windows 是 LOCALAPPDATA(不是 Roaming)。
  *  ⚠️ **改 identifier 必须同步这里** —— 不同步会去删一个不存在的目录(静默 no-op),
  *  用户以为清了 profile、其实脏数据还在。(2026-10-16 `com.zhh.tauri-app` → `app.amoeba.desktop`) */
-const DESKTOP_PROFILE = join(process.env.LOCALAPPDATA ?? "", "app.amoeba.desktop", "webview-profile")
+const desktopProfileDir = (identifier: string) => join(process.env.LOCALAPPDATA ?? "", identifier, "webview-profile")
+const DESKTOP_PROFILE = desktopProfileDir("app.amoeba.desktop")
+const DEV_PROFILE = desktopProfileDir("app.amoeba.dev")
 /** 与 sidecar 默认值同一实现（手抄路径会在规则变化时去删一个不存在的目录，静默 no-op）。 */
 const CLI_PROFILE = defaultSidecarProfileDir()
 
@@ -78,16 +83,35 @@ function killOnPort(port: number): number {
   return pids.size
 }
 
-/** 停掉所有 amoeba-browser sidecar（我们自己的进程名，不误伤用户浏览器）。 */
-function killCliSidecars(): number {
+/** 停掉 `--user-data-dir` 指向 `profileDir` 的 amoeba-browser sidecar（含整棵子树）。
+ *
+ * 按**命令行里的 profile 路径**过滤而不是按镜像名：dev 与安装版并跑时各有一个
+ * sidecar，`taskkill /IM amoeba-browser.exe` 会把另一个实例正在用的抓取浏览器
+ * 一起杀掉。host 侧 spawn 固定带 `--user-data-dir <profileDir>`（见
+ * packages/host/src/node/browser-sidecar.ts），命令行就是归属判据。 */
+function killSidecarsOnProfile(profileDir: string): number {
+  let out = ""
   try {
-    const r = Bun.spawnSync(["taskkill", "/F", "/T", "/IM", "amoeba-browser.exe"], {
-      stderr: "ignore",
-    })
-    return r.exitCode === 0 ? 1 : 0
+    out = Bun.spawnSync([
+      "powershell",
+      "-NoProfile",
+      "-Command",
+      `Get-CimInstance Win32_Process -Filter "Name='amoeba-browser.exe'" | ` +
+        `Where-Object { $_.CommandLine -like '*${profileDir.replaceAll("'", "''")}*' } | ` +
+        `ForEach-Object { $_.ProcessId }`,
+    ]).stdout.toString()
   } catch {
     return 0
   }
+  const pids = out.split(/\s+/).filter((v) => /^\d+$/.test(v))
+  for (const pid of pids) {
+    try {
+      Bun.spawnSync(["taskkill", "/F", "/T", "/PID", pid])
+    } catch {
+      /* 进程已退出 */
+    }
+  }
+  return pids.length
 }
 
 /** 删目录,句柄释放有延迟,重试几次。返回 null 表示成功，否则错误文本。 */
@@ -124,7 +148,7 @@ async function resetOne(label: string, dir: string, stop: () => number): Promise
 }
 
 export interface BrowserResetOptions {
-  target?: "cli" | "desktop" | "all"
+  target?: "cli" | "desktop" | "dev" | "all"
 }
 
 export async function runBrowserReset(opts: BrowserResetOptions = {}): Promise<void> {
@@ -134,12 +158,20 @@ export async function runBrowserReset(opts: BrowserResetOptions = {}): Promise<v
   let okAll = true
   if (target === "cli" || target === "all") {
     console.log(pc.dim(`  ${CLI_PROFILE}`))
-    okAll = (await resetOne("CLI", CLI_PROFILE, killCliSidecars)) && okAll
+    okAll = (await resetOne("CLI", CLI_PROFILE, () => killSidecarsOnProfile(CLI_PROFILE))) && okAll
   }
   if (target === "desktop" || target === "all") {
     console.log(pc.dim(`  ${DESKTOP_PROFILE}`))
-    // 桌面端可能正在运行：杀占用 9334 的进程树（只认端口，不按镜像名）。
-    okAll = (await resetOne("桌面", DESKTOP_PROFILE, () => killOnPort(DESKTOP_CDP_PORT))) && okAll
+    // 安装版可能正在运行：先杀休眠进程内浏览器可能占着的 9334，再停本 profile 的 sidecar。
+    okAll =
+      (await resetOne("桌面(安装版)", DESKTOP_PROFILE, () => {
+        const byPort = killOnPort(DESKTOP_CDP_PORT)
+        return byPort + killSidecarsOnProfile(DESKTOP_PROFILE)
+      })) && okAll
+  }
+  if (target === "dev" || target === "all") {
+    console.log(pc.dim(`  ${DEV_PROFILE}`))
+    okAll = (await resetOne("桌面(dev)", DEV_PROFILE, () => killSidecarsOnProfile(DEV_PROFILE))) && okAll
   }
 
   if (!okAll) process.exit(1)

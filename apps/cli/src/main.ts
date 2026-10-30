@@ -122,7 +122,11 @@ cli.option("--browser", "启用抓取浏览器（spawn amoeba-browser sidecar；
 cli.option("--no-browser", "强制关闭抓取浏览器（默认）")
 // fetch/item/play/dm 可走数据服务（与订阅抓取同一 cookie/被动/配额路径）。
 cli.option("--via-service", "fetch/item/play/dm 改走数据服务 probe.*（需桌面或 AMOEBA_SERVICE_ENDPOINT）")
-cli.option("--endpoint <path>", "服务 endpoint.json/目录（默认 desktop 服务）")
+cli.option("--endpoint <path>", "服务 endpoint.json/目录（默认按 --profile 的实例目录）")
+cli.option(
+  "--profile <name>",
+  "服务实例形态 dev|desktop（默认 dev；identifier 隔离后 dev 调试实例与安装版各有服务目录）",
+)
 
 cli
   .command("channels", "列出全部 channel(key/kind/name/参数 tpl)")
@@ -198,18 +202,19 @@ cli
   .option("--timeout <sec>", "等待扫码的秒数（缺省由平台决定）")
   .option("--json", "JSON 输出")
   .action(
-    guard((platform: string, opts: { endpoint?: string; timeout?: string; json?: boolean }) => {
+    guard((platform: string, opts: { endpoint?: string; profile?: string; timeout?: string; json?: boolean }) => {
       const timeout = opts.timeout === undefined ? undefined : Number(opts.timeout)
       if (timeout !== undefined && (!Number.isFinite(timeout) || timeout <= 0)) {
         throw new Error("--timeout 需要正数秒")
       }
-      return runLogin(platform, { endpoint: opts.endpoint, timeout, json: opts.json })
+      return runLogin(platform, { endpoint: opts.endpoint, profile: opts.profile, timeout, json: opts.json })
     }),
   )
 
 cli
-  .command("attach <action> [arg1] [arg2]", "作为数据服务客户端（status/list/refresh/rpc；默认连桌面）")
-  .option("--endpoint <path>", "endpoint.json 或其目录（默认 desktop 服务）")
+  .command("attach <action> [arg1] [arg2]", "作为数据服务客户端（status/list/refresh/rpc；默认 dev 实例）")
+  .option("--endpoint <path>", "endpoint.json 或其目录（默认按 --profile 的实例目录）")
+  .option("--profile <name>", "dev|desktop（默认 dev；desktop = 安装版的服务）")
   .option("--json", "JSON 输出")
   .option("--all", "refresh 全部订阅")
   .option("--no-force", "refresh 走 TTL 缓存")
@@ -219,7 +224,7 @@ cli
         action: string,
         arg1: string | undefined,
         arg2: string | undefined,
-        opts: { endpoint?: string; json?: boolean; all?: boolean; force?: boolean },
+        opts: { endpoint?: string; profile?: string; json?: boolean; all?: boolean; force?: boolean },
       ) =>
         runAttach(
           action,
@@ -230,9 +235,9 @@ cli
   )
 
 cli
-  .command("browser-reset", "清掉抓取浏览器 profile(默认 CLI sidecar;--target desktop|all)")
-  .option("--target <target>", "cli|desktop|all(默认 cli)")
-  .action(guard((opts: { target?: "cli" | "desktop" | "all" }) => runBrowserReset(opts)))
+  .command("browser-reset", "清掉抓取浏览器 profile(默认 CLI sidecar;--target desktop|dev|all)")
+  .option("--target <target>", "cli|desktop|dev|all(默认 cli)")
+  .action(guard((opts: { target?: "cli" | "desktop" | "dev" | "all" }) => runBrowserReset(opts)))
 
 cli
   .command("env", "appHost 门面自检(http/js/storage/ws 注入状态)")

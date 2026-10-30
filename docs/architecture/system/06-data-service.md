@@ -64,10 +64,13 @@
 ### 2.2 desktop 启动顺序
 
 1. Tauri `setup()` 启动；页面先渲染 skeleton。
-2. Rust 解析路径（`apps/src-tauri/src/service.rs:resolve_paths`）：
-   `dataDir=%LOCALAPPDATA%\app.amoeba.desktop\service`、
-   `dbFile=%APPDATA%\app.amoeba.desktop\rss{,.dev,.release-debug}.db`、
-   `profileDir=%LOCALAPPDATA%\app.amoeba.desktop\webview-profile`（复用旧桌面 profile，保登录态）。
+2. Rust 解析路径（`apps/src-tauri/src/service.rs:resolve_paths`），目录随 **identifier**
+   隔离（`app.amoeba.desktop` = 安装版 / `app.amoeba.dev` = 两种 dev 形态，见
+   `scripts/tauri.ts`）：
+   `dataDir=%LOCALAPPDATA%\<identifier>\service`、
+   `dbFile=%APPDATA%\<identifier>\rss{,.dev,.release-debug}.db`、
+   `profileDir=%LOCALAPPDATA%\<identifier>\webview-profile`（dev 首启会从旧共享目录
+   `app.amoeba.desktop` 一次性迁移 dev 库，见 `migrate_legacy_shared_db`）。
 3. 读 `dataDir\endpoint.json`；`/v1/hello` 存活且 protocol=1 → **adopt**，不 spawn。
 4. 否则 spawn `amoeba-runtime.exe <service.js|service/main.ts> --service --data-dir ... --db ... --profile-dir ... --token-file ... --parent-pid <desktop pid>`。
 5. 读 stdout 首行 `READY <port>`，上限 30s；启动先做每日 `VACUUM INTO` 备份再开库。
@@ -89,7 +92,7 @@
 
 ### 2.4 CLI：只做 attach
 
-- CLI 只做 attach：`rss attach`、`--via-service` 探针（`probe.*`）与 `rss login` 从 `--endpoint`、`AMOEBA_SERVICE_ENDPOINT` 或 `%LOCALAPPDATA%\app.amoeba.desktop\service\endpoint.json` 读 endpoint（`apps/cli/src/commands/attach.ts:26-49`），取不到就报错提示先起桌面或手动 `rss --service`；没有自动 spawn、`--no-spawn` 或 `--ephemeral`。
+- CLI 只做 attach：`rss attach`、`--via-service` 探针（`probe.*`）与 `rss login` 从 `--endpoint`、`AMOEBA_SERVICE_ENDPOINT`、`--profile`（默认 dev = `%LOCALAPPDATA%\app.amoeba.dev\service\endpoint.json`；`desktop` = 安装版目录）读 endpoint（`apps/cli/src/commands/attach.ts`），取不到就报错提示先起桌面或手动 `rss --service`；没有自动 spawn、`--no-spawn` 或 `--ephemeral`。不跨身份回退 —— attach/login 是写操作，静默连错实例比报错危险。
 - attach 用 client token，不能 shutdown；只有 owner 能 shutdown；`rss --service` 前台运行服务。
 - 不带 `--via-service` 时 `fetch/item/play/dm` 仍是本地只读探针（自己的 `apps/cli/.data/rss.db`）；`refresh` / `hot` 仍用进程内 `createDataLayer()` 写同一份 CLI 库（`refresh.ts:23`、`hot.ts:29`），它不是桌面库，不构成第二写者。
 
@@ -242,7 +245,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 
 ### 6.1 路径与现状
 
-- desktop 库实际在 **Roaming**：`%APPDATA%\app.amoeba.desktop\rss.db` / `rss.dev.db` / `rss.release-debug.db`；**已是 WAL**（实测 db 4.26MB + wal 2.88MB）。
+- desktop 库实际在 **Roaming**、随 identifier 分目录：安装版 `%APPDATA%\app.amoeba.desktop\rss.db`，dev 形态 `%APPDATA%\app.amoeba.dev\rss.dev.db` / `rss.release-debug.db`（2026-10-30 起拆分，旧共享目录里的 dev 库由桌面首启自动迁走）；**已是 WAL**（实测 db 4.26MB + wal 2.88MB）。
 - CLI 库：`apps/cli/.data/rss.db`，只允许显式 `--import-db`；不自动合并。
 - 服务原地打开 desktop 库；打开前 `VACUUM INTO` 每日一次（`dataDir/backups`，保留 7 份；
   实测 2.75MB）。备份失败只记 stderr，不阻止启动。

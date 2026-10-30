@@ -14,9 +14,12 @@ import "./styles.css"
 // 数据服务模式（唯一生产路径）：桌面不再是 SQLite/抓取浏览器写者 → storage/browser
 // 都封死。桌面进程内 DataLayer 回退（旧 `VITE_DATA_SERVICE=0`）已删除：它是唯一人为的
 // 第二写者入口，且需要长期维护两套数据路径。要查数据请用 `rss attach` / 诊断页。
+// updater 同理只在生产构建注入：dev server 形态（bun run tauri / tauri:release）里
+// 「安装更新」= 用正式 NSIS 覆盖升级已安装的正式版 —— 调试时这是误伤，不是功能。
 injectTauriHost({
   storage: false,
   browser: false,
+  ...(import.meta.env.PROD ? {} : { updater: false }),
 })
 
 // dev 调试锚点:CDP 连进运行实例时用 `__store.getState()` 读权威状态

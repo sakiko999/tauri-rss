@@ -43,7 +43,7 @@ const SRC_TAURI = `${ROOT}/apps/src-tauri`
 /** 移动端 dev/build 走独立 tauri.conf.mobile.json。 */
 const MOBILE_CFG = (p: Platform) => (p === "mobile" ? ["--config", `${SRC_TAURI}/tauri.conf.mobile.json`] : [])
 /**
- * dev 额外叠 tauri.conf.dev.json(只开 CDP 调试端口 9222)。
+ * dev 额外叠 tauri.conf.dev.json(开 CDP 调试端口 9222 + 独立 identifier app.amoeba.dev)。
  * ⚠️ 端口**不加进 tauri.conf.json**:那里是 release 构建用的,带上等于给发布版开一个
  * 无鉴权的远程调试口 —— 本机任意进程 attach 后能读改 localStorage 与 SQLite 里的 cookie。
  */
@@ -52,12 +52,20 @@ const DEV_CFG = (p: Platform) => [
   ...(p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.dev.json`] : []),
 ]
 /**
- * `--release` 时**不叠** `tauri.conf.dev.json` —— 那个文件存在的**唯一目的**就是开
- * 9222 调试口，而 release 模式的意义是**复现真实发布形态**；带上它就自相矛盾，
- * 也违背 CLAUDE.md 记的「9222 只在 dev」这条不变量。
- * 移动端仍叠它自己的 config（`tauri.conf.mobile.json` 是**必需平台配置**，与调试无关）。
+ * `--release` 时不叠 `tauri.conf.dev.json`(不开 9222),但**仍要叠身份 overlay**
+ * (tauri.conf.dev-release.json,只覆盖 identifier = app.amoeba.dev):
+ * single-instance 互斥锁 / service endpoint / DB / 浏览器 profile 全部由 identifier 派生,
+ * 不换 identifier 的话 release 调试实例会与**已安装的正式版**互斥退出、互相 adopt 对方的
+ * 数据服务(详见 CLAUDE.md「实例身份」)。注意与 tauri.conf.release.json(build 资源)无关。
  */
-const DEV_CFG_FOR = (p: Platform, release: boolean) => (release ? MOBILE_CFG(p) : DEV_CFG(p))
+const DEV_RELEASE_CFG = (p: Platform) =>
+  p === "desktop" ? ["--config", `${SRC_TAURI}/tauri.conf.dev-release.json`] : MOBILE_CFG(p)
+/**
+ * release 调试**不开 9222**(那是 tauri.conf.dev.json 的唯一用途,而 release 模式的意义是
+ * 复现真实发布形态);身份隔离与调试口无关,由独立的 dev-release overlay 承担。
+ * 移动端仍叠它自己的 config(`tauri.conf.mobile.json` 是**必需平台配置**,与调试无关)。
+ */
+const DEV_CFG_FOR = (p: Platform, release: boolean) => (release ? DEV_RELEASE_CFG(p) : DEV_CFG(p))
 
 const HELP = `
 Amoeba 调试脚本
@@ -72,9 +80,13 @@ Amoeba 调试脚本
 窗口形态）。普通 tauri dev 跑 debug profile，那些分支永远不走。--release 保留
 热重载但按 release 编译，首次会全量编译数分钟。
 
-⚠️ --release **不叠 tauri.conf.dev.json**（即**不开 9222**）—— 那个文件唯一的作用
-就是开调试口，而 release 模式的意义是复现真实发布形态。要用 CDP 检查抓取浏览器，
-用 WebView2 自己的 9334（webview_browser_open 返回的端口）。
+⚠️ --release **不开 9222**（dev 形态专用调试口，release 模式复现真实发布形态）——
+要用 CDP 检查抓取浏览器，用 WebView2 自己的 9334（webview_browser_open 返回的端口）。
+
+⚠️ 两种 dev 形态（debug / --release）都用独立 identifier「app.amoeba.dev」：
+single-instance 锁、数据服务、DB、抓取浏览器 profile 全部与**已安装的正式版**
+（app.amoeba.desktop）隔离，可与正式版同时运行互不影响。要 attach dev 的服务用
+「rss attach --profile dev」（默认就是 dev）。
 
 平台默认 desktop；移动端需先配置好 Android/iOS 工具链。
 `

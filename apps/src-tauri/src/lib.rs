@@ -18,6 +18,19 @@ pub fn run() {
         .setup(|app| {
             #[cfg(windows)]
             media_referer::install(app);
+            // dev 形态(identifier ≠ 正式版)加标题后缀：与安装版并跑时在任务栏可区分。
+            // 标题不写进 overlay 配置 —— app.windows 数组是整体替换语义,写进去就得
+            // 整窗手抄成第三份;base 一改窗口字段就会静默漂移。
+            #[cfg(desktop)]
+            {
+                use tauri::Manager;
+                if app.config().identifier != "app.amoeba.desktop" {
+                    let suffix = if cfg!(debug_assertions) { "dev" } else { "dev (release)" };
+                    if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.set_title(&format!("Amoeba {suffix}"));
+                    }
+                }
+            }
             Ok(())
         })
         // WS 隧道连接管理(state):弹幕长连接按 connectionId 定位发/关。

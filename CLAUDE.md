@@ -128,15 +128,18 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 - **必须从 "x64 Native Tools Command Prompt for VS 2022" 启动终端**，否则 Rust 链接失败。
   Git Bash 的 `/usr/bin/link` 会抢 MSVC（`/usr/bin/link: extra operand`）；
   **不要在 `.cargo/config.toml` 里写死 linker**（硬编码 MSVC 版本，VS 更新必坏）。
-- `cargo build/test` 前若 amoeba.exe 在跑会锁二进制（`拒绝访问 os error 5`）：
-  `taskkill //F //IM amoeba.exe`。⚠️ 进程名 = Cargo **package name**；改名时一并检查
+- `cargo build/test` 前若 amoeba.exe 在跑会锁二进制（`拒绝访问 os error 5`）。
+  ⚠️ **别 `taskkill //F //IM amoeba.exe`**：按镜像名杀会把**已安装的正式版**（`%LOCALAPPDATA%\Amoeba\amoeba.exe`）一起杀掉——dev 与安装版现在可以并跑。用按路径过滤：
+  `powershell -c "Get-Process amoeba -EA 0 | ? { $_.Path -like 'X:\tauri-rss\apps\src-tauri\target\*' } | Stop-Process -Force"`
+  （`.vscode/tasks.json` 的 kill-tauri 已是此写法）。⚠️ 进程名 = Cargo **package name**；改名时一并检查
   `tauri.conf*`、`Cargo.toml`、`main.rs`/`tests/*_lib`、`.vscode/{tasks,launch}.json`、以及
-  `apps/cli/.../browser-reset.ts` 里硬编码的 identifier 副本；**并清 `target/debug` 下旧包名
+  `apps/cli/.../browser-reset.ts` / `attach.ts` 里硬编码的 identifier 副本；**并清 `target/debug` 下旧包名
   的产物**（`cargo clean` 只认当前包名哈希，旧 `.rmeta`/`build`/`.fingerprint` 会残留并让
   rust-analyzer 报 `cannot find module or crate *_lib`）。
 - ⭐ **`bun run tauri:release`（`tauri dev --release`）** 用来调「只在 release 才走」的分支
   （`!cfg!(debug_assertions)` 是编译期判据，如 Windows 子系统）。保留 Vite dev server 与 Rust 热重载，
-  但首次全量 release 编译（~4min），且**不叠 `tauri.conf.dev.json`**（不开 9222）。
+  但首次全量 release 编译（~4min），且**不叠 `tauri.conf.dev.json`**（不开 9222），只叠身份 overlay
+  `tauri.conf.dev-release.json`（identifier 同 dev，见下方「实例身份」）。
   ⚠️ release 默认无调试符号：要断点用 `CARGO_PROFILE_RELEASE_DEBUG=true`（**环境变量**，写进
   Cargo.toml 会让发布安装包也白塞符号），只在**首次构建时**生效（已构建过需删 release 产物重建）。
   ⚠️ 别 `taskkill /IM msedgewebview2.exe`：那是应用窗口进程，杀它 = 应用退出。
@@ -262,6 +265,15 @@ live 按平台二次聚合的 UI 侧。
   改 UA；`flv.huya.com` 不需要（无头也 200）。
 - [ ] 系统文档正文细化（03 时序图 / 02 契约正文；01 依赖矩阵与 02 字段表已随 R9 / membersOnly 更新）
 - [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
+- [!] **实例身份（2026-10-30 拆分）**：single-instance 锁 / 数据服务 endpoint/lock / DB / 抓取
+  profile / 主窗口 WebView2 UDF 全部由 **identifier** 派生。三种形态两个身份：
+  `bun run tauri`（dev）与 `bun run tauri:release`（release-debug）= `app.amoeba.dev`
+  （tauri.conf.dev.json / tauri.conf.dev-release.json overlay），安装版与 `tauri build --no-bundle`
+  直跑 = `app.amoeba.desktop`（tauri.conf.json，勿改——老用户数据目录与 updater 产物都锚在它上面）。
+  dev 实例与安装版**可并跑互不影响**（服务端口动态分配）；dev updater 已封（main.tsx 只在 PROD 注入，
+  否则 dev 里点「安装」会用正式 NSIS 覆盖升级正式版）；dev 库首启自动从旧共享目录迁移
+  （`service.rs:migrate_legacy_shared_db`，原子落位 + legacy 改 `.migrated` 防复活）。
+  裸 `bunx tauri dev`（不经 `bun run tauri`）不带 overlay = desktop 身份，与安装版互斥，别用。
 - [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
 - [!] 桌面只走 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；进程内 DataLayer 回退已删（非 Tauri 的浏览器 dev 仍走进程内）。
 - [!] `tauri-plugin-sql` 保留：mobile 的进程内 DataLayer 仍用它（mobile 冻结但保留）。

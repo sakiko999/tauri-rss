@@ -63,6 +63,147 @@ fn repo_root() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."))
 }
 
+/// identifier 拆分（2026-10）前三种运行形态共用的旧身份目录名。
+const LEGACY_IDENTIFIER: &str = "app.amoeba.desktop";
+
+/// tasklist 探活：旧身份数据服务还开着时不搬它的库（WAL 活写时拷贝会撕裂）。
+#[cfg(windows)]
+fn pid_alive(pid: u32) -> bool {
+    use std::os::windows::process::CommandExt;
+    let mut cmd = std::process::Command::new("tasklist");
+    cmd.args(["/FI", &format!("PID eq {pid}"), "/NH"]);
+    // release 是 GUI 子系统，不隐藏会闪控制台（见 webview_browser.rs 同款注释）。
+    cmd.creation_flags(0x0800_0000);
+    match cmd.output() {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).contains(&format!("{pid} ")),
+        Err(_) => false,
+    }
+}
+
+/// 非 Windows 不做活源防护（桌面抓取/服务以 Windows 为主，容错优先迁移成功）。
+#[cfg(not(windows))]
+fn pid_alive(_pid: u32) -> bool {
+    false
+}
+
+/// 旧身份服务锁里的 pid（锁格式见 server.ts 的 instance.lock）。
+fn lock_pid(path: &Path) -> Option<u32> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let value: Value = serde_json::from_str(&text).ok()?;
+    value.get("pid")?.as_u64()?.try_into().ok()
+}
+
+/// `foo.db` → `foo.db-wal` / `foo.db.migrating`（OsString 拼接，不经显示编码）。
+fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(suffix);
+    PathBuf::from(s)
+}
+
+/// 两个既有路径是否指向同一文件（Windows 大小写不敏感；任一不存在 = 不同）。
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => {
+            a == b || a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+        }
+        _ => false,
+    }
+}
+
+/// identifier 拆分的一次性迁移：把旧共享目录里的 dev 库搬到新身份目录。
+///
+/// - 原子性：先拷成 `<db>.migrating` 再 rename 落位 —— 半截目标库会让
+///   「目标不存在才迁」的条件永久失效，等于把 dev 库钉死在损坏状态。
+/// - 防复活：迁移成功后 legacy 改名 `.migrated` —— 用户删 dev 库重置时，
+///   不会下次启动又从旧目录把数据搬回来。
+/// - `-shm` 不搬（共享内存索引，SQLite 打开时自己重建）。
+fn migrate_legacy_shared_db(new_data: &Path, new_local: &Path, db_path: &Path, db_file: &str) {
+    // rss.db 只属于正式版身份，绝不触碰。
+    if db_file == "rss.db" || db_path.exists() {
+        return;
+    }
+    let Some(legacy_db) = new_data.parent().map(|p| p.join(LEGACY_IDENTIFIER).join(db_file)) else {
+        return;
+    };
+    if !legacy_db.is_file() {
+        return;
+    }
+    // 活源防护：旧目录的服务若正开着**待迁移的这个库**（WAL 活写拷贝会撕裂）→ 推迟。
+    // ⚠️ 不能只看 instance.lock —— 锁属于 desktop 身份的服务，安装版开着 rss.db 时
+    // 锁也活着，但它不碰 dev 库；判据是 endpoint.json 的 dbFile。endpoint 不可读
+    // （服务启动中/损坏）才退回锁 + pid 探活，保守推迟。
+    let legacy_service = new_local
+        .parent()
+        .map(|p| p.join(LEGACY_IDENTIFIER).join("service"));
+    if let Some(service_dir) = legacy_service {
+        let owner_db = read_endpoint(&service_dir.join("endpoint.json"))
+            .and_then(|v| v.get("dbFile").and_then(Value::as_str).map(str::to_string));
+        match owner_db {
+            Some(db) if same_file(Path::new(&db), &legacy_db) => {
+                eprintln!("[service] 旧身份服务正持有该库（{db}），dev 库迁移推迟到下次启动");
+                return;
+            }
+            Some(_) => { /* desktop 身份服务开着别的库（如安装版的 rss.db）：不碰 dev 库，继续 */ }
+            None => {
+                if let Some(pid) = lock_pid(&service_dir.join("instance.lock")) {
+                    if pid_alive(pid) {
+                        eprintln!("[service] 旧身份服务启动中(pid={pid})，dev 库迁移推迟到下次启动");
+                        return;
+                    }
+                }
+            }
+        }
+    }
+    let Some(parent) = db_path.parent() else { return };
+    if let Err(e) = std::fs::create_dir_all(parent) {
+        eprintln!("[service] 迁移：创建目录失败 {}: {e}", parent.display());
+        return;
+    }
+    let tmp = with_suffix(db_path, ".migrating");
+    let legacy_wal = with_suffix(&legacy_db, "-wal");
+    if let Err(e) = std::fs::copy(&legacy_db, &tmp) {
+        eprintln!("[service] 迁移：拷贝失败 {}: {e}", legacy_db.display());
+        let _ = std::fs::remove_file(&tmp);
+        return;
+    }
+    if legacy_wal.is_file() {
+        let tmp_wal = with_suffix(db_path, ".migrating-wal");
+        if let Err(e) = std::fs::copy(&legacy_wal, &tmp_wal) {
+            eprintln!("[service] 迁移：拷贝 WAL 失败 {}: {e}", legacy_wal.display());
+            let _ = std::fs::remove_file(&tmp);
+            let _ = std::fs::remove_file(&tmp_wal);
+            return;
+        }
+    }
+    // 落位顺序：WAL 先、主库后（主库 rename 即提交点；中途崩溃 → 目标缺失 → 整体重来，
+    // copy 会覆盖上次残留的 tmp；Windows 的 rename 不覆盖已存在目标，先清半途的 WAL）。
+    let wal_target = with_suffix(db_path, "-wal");
+    if wal_target.exists() {
+        let _ = std::fs::remove_file(&wal_target);
+    }
+    let tmp_wal = with_suffix(db_path, ".migrating-wal");
+    if tmp_wal.is_file() {
+        if let Err(e) = std::fs::rename(&tmp_wal, &wal_target) {
+            eprintln!("[service] 迁移：WAL 落位失败: {e}");
+            let _ = std::fs::remove_file(&tmp);
+            return;
+        }
+    }
+    if let Err(e) = std::fs::rename(&tmp, db_path) {
+        eprintln!("[service] 迁移：主库落位失败: {e}");
+        let _ = std::fs::remove_file(&tmp);
+        return;
+    }
+    eprintln!(
+        "[service] dev 库已从旧共享目录迁移：{} → {}",
+        legacy_db.display(),
+        db_path.display()
+    );
+    // best-effort：失败只意味着旧库残留（可手删），不影响已落位的新库。
+    let _ = std::fs::rename(&legacy_db, with_suffix(&legacy_db, ".migrated"));
+    let _ = std::fs::rename(&legacy_wal, with_suffix(&legacy_wal, "-migrated"));
+}
+
 fn target_dir() -> PathBuf {
     repo_root().join("target").join(if cfg!(debug_assertions) {
         "debug"
@@ -93,6 +234,8 @@ fn resolve_paths(app: &AppHandle, db_file: &str) -> Result<Paths, String> {
     let db_path = data.join(db_file);
     let token_file = data_dir.join("service.token");
     let endpoint_file = data_dir.join("endpoint.json");
+    // identifier 拆分的一次性迁移（dev 库从旧共享目录搬进来；目标已存在即 no-op）。
+    migrate_legacy_shared_db(&data, &local, &db_path, db_file);
 
     let (launcher, entry, sidecar) = if cfg!(debug_assertions) {
         let target = target_dir();
@@ -484,6 +627,79 @@ mod tests {
                 }
             }
         }
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn migrates_legacy_dev_db_once() {
+        let base = temp_base();
+        // 模拟真实布局：库目录在 Roaming、服务目录在 Local（两个不同根，见 resolve_paths）。
+        let roaming = base.join("Roaming");
+        let local = base.join("Local");
+        let new_data = roaming.join("app.amoeba.dev");
+        let new_local = local.join("app.amoeba.dev");
+        let legacy = roaming.join("app.amoeba.desktop");
+        let legacy_service = local.join("app.amoeba.desktop").join("service");
+        std::fs::create_dir_all(&new_data).expect("mkdir new_data");
+        std::fs::create_dir_all(&legacy).expect("mkdir legacy");
+        std::fs::write(legacy.join("rss.dev.db"), b"db-bytes").expect("write legacy db");
+        std::fs::write(legacy.join("rss.dev.db-wal"), b"wal-bytes").expect("write legacy wal");
+
+        let db_path = new_data.join("rss.dev.db");
+        migrate_legacy_shared_db(&new_data, &new_local, &db_path, "rss.dev.db");
+        assert_eq!(std::fs::read(&db_path).unwrap(), b"db-bytes");
+        assert_eq!(std::fs::read(with_suffix(&db_path, "-wal")).unwrap(), b"wal-bytes");
+        assert!(legacy.join("rss.dev.db.migrated").is_file(), "legacy 改名 .migrated");
+
+        // 目标已存在 → no-op；用户删库重置后也不得从 legacy 复活。
+        std::fs::remove_file(&db_path).expect("remove migrated db");
+        migrate_legacy_shared_db(&new_data, &new_local, &db_path, "rss.dev.db");
+        assert!(!db_path.exists(), "删库重置后不得从 legacy 复活");
+
+        // rss.db 属于正式版身份，绝不迁移。
+        let prod = new_data.join("rss.db");
+        std::fs::write(legacy.join("rss.db"), b"prod").expect("write prod db");
+        migrate_legacy_shared_db(&new_data, &new_local, &prod, "rss.db");
+        assert!(!prod.exists(), "rss.db 不得被迁移");
+
+        // 防护①：旧目录服务开着**别的库**（安装版 rss.db）→ dev 库照常迁移。
+        std::fs::create_dir_all(&legacy_service).expect("mkdir service");
+        // Windows 路径含反斜杠，手拼 JSON 会转义坏 —— 一律走 serde。
+        let endpoint_json = |db: &Path| {
+            serde_json::json!({
+                "schema": "amoeba-service/1",
+                "dbFile": db.to_string_lossy(),
+            })
+            .to_string()
+        };
+        let legacy_prod = legacy.join("rss.db");
+        std::fs::write(&legacy_service.join("endpoint.json"), endpoint_json(&legacy_prod))
+            .expect("write endpoint");
+        let legacy2 = legacy.join("rss.release-debug.db");
+        std::fs::write(&legacy2, b"rel").expect("write legacy release-debug");
+        let target2 = new_data.join("rss.release-debug.db");
+        migrate_legacy_shared_db(&new_data, &new_local, &target2, "rss.release-debug.db");
+        assert!(target2.is_file(), "安装版开着 rss.db 不阻塞 dev 库迁移");
+
+        // 防护②：旧服务正持有待迁移库（endpoint 的 dbFile 命中源）→ 推迟。
+        let legacy3 = legacy.join("rss.defer.db");
+        std::fs::write(&legacy3, b"x").expect("write defer source");
+        std::fs::write(&legacy_service.join("endpoint.json"), endpoint_json(&legacy3))
+            .expect("write endpoint");
+        let target3 = new_data.join("rss.defer.db");
+        migrate_legacy_shared_db(&new_data, &new_local, &target3, "rss.defer.db");
+        assert!(!target3.exists(), "旧服务持有时必须推迟迁移");
+
+        // 防护③：endpoint 不可读 + instance.lock 的 pid 活着（服务启动中）→ 保守推迟。
+        std::fs::remove_file(&legacy_service.join("endpoint.json")).expect("remove endpoint");
+        std::fs::write(
+            &legacy_service.join("instance.lock"),
+            format!("{{\"pid\":{}}}", std::process::id()),
+        )
+        .expect("write lock");
+        migrate_legacy_shared_db(&new_data, &new_local, &target3, "rss.defer.db");
+        assert!(!target3.exists(), "锁活着且 endpoint 不可读时必须推迟");
+
         std::fs::remove_dir_all(&base).ok();
     }
 }
