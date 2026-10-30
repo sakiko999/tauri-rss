@@ -31,20 +31,33 @@ function serializeCookies(cookies: Record<string, string>): string {
     .join("; ")
 }
 
-/** 读二维码 data URL(找不到返回 null)。img.qrcode-img 为主,canvas.qrcode 兜底。 */
-async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
-  return cdpEvaluate<string | null>(
+/**
+ * 读二维码 data URL 与**它是否已过期**。img.qrcode-img 为主,canvas.qrcode 兜底。
+ *
+ * ⚠️ 过期码必须单独识别:login lane 的 tab 跨扫码复用,上次登录留下的弹窗会停在
+ * 「二维码已过期 点击刷新」——直接把那张图推给 UI,用户扫了手机端立刻提示失效,
+ * 现象就是「重新扫码没有覆盖旧登录」(2026-10-30 实测)。
+ */
+async function readQr(browser: BrowserBackend): Promise<{ src: string | null; expired: boolean }> {
+  const raw = await cdpEvaluate<string | null>(
     browser,
     `(() => {
       const img = document.querySelector('img.qrcode-img');
-      if (img && img.src) return img.src;
-      const cv = document.querySelector('canvas.qrcode');
-      if (cv) {
-        try { return cv.toDataURL('image/png'); } catch { return null; }
+      let src = img && img.src ? img.src : '';
+      if (!src) {
+        const cv = document.querySelector('canvas.qrcode');
+        if (cv) { try { src = cv.toDataURL('image/png'); } catch { src = ''; } }
       }
-      return null;
+      const expired = /二维码已过期|点击刷新/.test(document.body ? document.body.innerText || '' : '');
+      return JSON.stringify({ src, expired });
     })()`,
   )
+  try {
+    const o = JSON.parse(raw ?? "")
+    return { src: typeof o.src === "string" && o.src ? o.src : null, expired: o.expired === true }
+  } catch {
+    return { src: null, expired: false }
+  }
 }
 
 /**
@@ -96,29 +109,63 @@ async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
   )
 }
 
-/** 轮询二维码 data URL 出现(点按钮后登录弹窗 JS 渲染)。 */
+/**
+ * 轮询二维码出现(点按钮后登录弹窗 JS 渲染),**只接受没过期的码**。
+ *
+ * 上限 `maxWaitMs`(默认 30s)而不是整个登录超时:二维码一直出不来 = 弹窗没打开,
+ * 等满 5 分钟只会让 UI 停在「正在准备二维码…」、用户以为点了没反应。
+ */
 async function waitForQr(
   browser: BrowserBackend,
   emitQr: (qrDataUrl: string | null) => void,
-  deadline: number,
-  opts?: { signal?: AbortSignal; stepMs?: number },
+  opts?: { signal?: AbortSignal; stepMs?: number; maxWaitMs?: number },
 ): Promise<string> {
   const stepMs = opts?.stepMs ?? 500
+  const giveUpAt = Date.now() + (opts?.maxWaitMs ?? 30_000)
   for (;;) {
     // UI 关掉二维码弹窗必须立刻停:登录持全局浏览器锁,这里多转一圈,排队的抓取就多等 500ms。
     if (opts?.signal?.aborted) throw new Error("扫码登录已取消")
-    const src = await readQrSrc(browser)
-    if (src) {
-      emitQr(src)
+    const q = await readQr(browser)
+    if (q.src && !q.expired) {
+      emitQr(q.src)
       log.xhs.qrReady()
-      return src
+      return q.src
     }
-    if (Date.now() > deadline) {
+    if (Date.now() > giveUpAt) {
       log.xhs.qrMissing()
-      throw new Error("二维码未出现(登录弹窗可能未打开)")
+      throw new Error("二维码未出现(登录弹窗可能未打开或二维码已失效,请重试)")
     }
     await new Promise((r) => setTimeout(r, stepMs))
   }
+}
+
+/**
+ * 拿一张**可用**的二维码推给 UI（首屏 + 轮询中途过期都走这里）。
+ *
+ * 过期码(上次登录残留的弹窗)先强制重载页面:弹窗随旧文档销毁,再点「登录」重开,
+ * 拿到的就是新码。重载是幂等代价,只在真的过期时付。
+ */
+async function ensureFreshQr(
+  browser: BrowserBackend,
+  emitQr: (qrDataUrl: string | null) => void,
+  opts?: { signal?: AbortSignal },
+): Promise<string> {
+  let q = await readQr(browser)
+  if (q.expired) {
+    await cdpNavigate(browser, XHS_BASE, true)
+    log.xhs.loginNavigate({ url: XHS_BASE })
+    await waitUntil(browser, `typeof window.__INITIAL_STATE__ !== 'undefined'`, 8_000, "xhs 首页 SSR 未挂载").catch(
+      () => {},
+    )
+    q = await readQr(browser)
+  }
+  if (q.src && !q.expired) {
+    emitQr(q.src)
+    log.xhs.qrReady()
+    return q.src
+  }
+  await clickLoginButton(browser)
+  return waitForQr(browser, emitQr, { signal: opts?.signal })
 }
 
 export async function xhsScanLogin(
@@ -147,8 +194,11 @@ async function runScanLogin(
   }
 
   // 1. 导航到小红书首页(直接 /login 可能 404;首页右上角有「登录」按钮)。
+  // ⚠️ **强制重载**:login lane 的 tab 跨扫码复用,不重载会留着上次的文档 ——
+  // `user.loggedIn` 可能是失效前渲染的 true,于是短路成「已登录（无需重复扫码）」并把
+  // 旧 cookie 写回去,用户看到的就是「重新扫码没有覆盖旧登录」(2026-10-30)。
   assertLive()
-  await cdpNavigate(browser, XHS_BASE)
+  await cdpNavigate(browser, XHS_BASE, true)
   log.xhs.loginNavigate({ url: XHS_BASE })
   // 等首页 SSR 挂载再判登录态(否则会把已登录误判成未登录,白出一次二维码)。
   await waitUntil(browser, `typeof window.__INITIAL_STATE__ !== 'undefined'`, 8_000, "xhs 首页 SSR 未挂载").catch(
@@ -166,25 +216,24 @@ async function runScanLogin(
   // 轮询基线:扫码成功的标志是 user_id **从无到有/变化**,残留的旧值不算。
   const baselineUserId = initial.userId
 
-  // 2. 二维码未出现则点「登录」按钮触发登录弹窗,再等二维码渲染。
-  const existing = await readQrSrc(browser)
-  if (existing) {
-    emitQr(existing)
-    log.xhs.qrReady()
-  } else {
-    await clickLoginButton(browser)
-    await waitForQr(browser, emitQr, deadline, { signal: opts?.signal })
-  }
+  // 2. 拿一张可用二维码(过期码先重载换新,没弹窗就点「登录」打开)。
+  await ensureFreshQr(browser, emitQr, { signal: opts?.signal })
 
   // 3. 用户扫码后 Edge 页面自身轮询确认登录。我们等**真正的登录态**翻转
   //    (user.loggedIn / 新 user_id),而不是游客 web_session(~1s/次;~4min 二维码有效期)。
   let final: Awaited<ReturnType<typeof loginState>> | undefined
-  for (;;) {
+  for (let i = 1; ; i++) {
     assertLive()
     const s = await loginState(browser, { baselineUserId })
     if (s.loggedIn) {
       final = s
       break
+    }
+    // 没人扫(~2min 有效)码会自己过期:中途换一张新码推给 UI,别让用户扫到废码。
+    // 每 15 轮(~15s)才查一次,不增加轮询开销。
+    if (i % 15 === 0) {
+      const q = await readQr(browser)
+      if (q.expired) await ensureFreshQr(browser, emitQr, { signal: opts?.signal }).catch(() => {})
     }
     if (Date.now() > deadline) {
       log.xhs.loginTimeout()

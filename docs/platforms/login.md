@@ -94,6 +94,14 @@ POST https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket
 3. 轮询 `user_id` cookie 相对基线变化 / 页面登录位翻转 = 成功，再取全量 cookie（含 HttpOnly `web_session`）。
 
 > `web_session` 不是登录判据（游客也签发）；原「qrcode/create + 轮询 status」API 流程需要 x-s 签名，从未采用。
+>
+> **两个「扫码没生效」坑（2026-10-30 修）**：① login lane 的 tab 跨扫码复用，
+> 入口导航**必须强制重载**，否则读到失效前渲染的 `user.loggedIn=true` 会短路成
+> 「已登录（无需重复扫码）」并把旧 cookie 写回去；② 弹窗里的码过期后页面只剩
+> 「二维码已过期 点击刷新」——过期码**不能推给 UI**（手机扫了直接失效），出码前与
+> 轮询中都要检查过期状态、重载换新码。新码 30s 内出不来就报错，不再静默等满 5 分钟。
+> 服务端 session 被顶下线时页面给的是「电脑设备登录超限，请重新登录」（平台侧，
+> 重新扫码会把旧设备踢掉），xhs 渠道的 SSR 未就绪错误会直接把这个状态翻译出来。
 
 ### 保活
 

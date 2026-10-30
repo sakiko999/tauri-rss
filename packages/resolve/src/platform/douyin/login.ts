@@ -130,6 +130,22 @@ async function douyinHttpScanLogin(
   const token = String(payload?.data?.token ?? "")
   const qrcode = String(payload?.data?.qrcode ?? "")
   if (!token || !qrcode) throw new Error("douyin 扫码: get_qrcode 未返回 token/qrcode")
+  // ⚠️ 软封锁：Rust 隧道的 TLS 指纹会拿到「假二维码（抖音 logo 占位图）+ 真 token
+  // 字段」的降级响应——不抛错、轮询永远等不到 status，用户扫到的是 logo（2026-10-30
+  // 实测）。用一次探活校验 token 真实性：真会话必回 data.status（1/2/3/5），假 token
+  // 没有。两次都无 status → 判软封锁，抛错交给 browser 回退路径出真码。
+  let live = false
+  for (let i = 0; i < 2 && !live; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 800))
+    const probe = await fetchIntoJar(jar, `${SSO}/check_qrconnect/?${qrParams(fp, token).toString()}`, `${MAIN}/`)
+    try {
+      const s = String(JSON.parse(probe.text)?.data?.status ?? "")
+      live = s === "1" || s === "2" || s === "3" || s === "5"
+    } catch {
+      /* 瞬态：下次再探 */
+    }
+  }
+  if (!live) throw new Error("douyin 扫码: 二维码被降级(软封锁,无有效 token)，改走浏览器出码")
   emitQr(qrcode.startsWith("data:") ? qrcode : `data:image/png;base64,${qrcode}`)
   log.douyin.qrReady()
 
@@ -197,21 +213,47 @@ async function clickLoginButton(browser: BrowserBackend): Promise<boolean> {
 }
 
 /**
- * 读登录弹窗里的二维码 data URL。douyin 弹窗内是 canvas 渲染,弹窗容器定位:
- * 含「扫码登录」文案且带 canvas/img 的**最小** div(canvas 转出来)。
+ * 读登录弹窗里的二维码 data URL。douyin 弹窗内是 canvas/img 渲染,弹窗容器定位:
+ * 含「扫码登录」文案且带 canvas/img 的**最小** div。
+ *
+ * ⚠️ 弹窗里同时有多个 data-URL img，其中有一个 40×41 的抖音 logo（1598 字符）——
+ * 直接取「第一个 data-URL img」会把它当二维码推给 UI（2026-10-30 实测：用户扫到
+ * 的是 logo 占位图）。服务侧 sidecar 以 `images:false` 启动，img 的 naturalWidth
+ * 恒为 0，也不能用加载尺寸判断。判据改为**解码 base64 的 PNG 头尺寸**（不依赖图片
+ * 加载）：QR 是 512×512，logo 是 40×41 —— 取尺寸 ≥200 的最大一张。
  */
 async function readQrSrc(browser: BrowserBackend): Promise<string | null> {
   return cdpEvaluate<string | null>(
     browser,
     `(() => {
+      // data:image/png;base64 → PNG IHDR 宽高（偏移 16/20，大端）。非 PNG 返回 0。
+      const pngSize = (src) => {
+        try {
+          const comma = src.indexOf(",");
+          if (comma < 0) return { w: 0, h: 0 };
+          const bin = atob(src.slice(comma + 1));
+          if (bin.slice(12, 16) !== "IHDR") return { w: 0, h: 0 };
+          const u32 = (o) => ((bin.charCodeAt(o) << 24) | (bin.charCodeAt(o + 1) << 16) | (bin.charCodeAt(o + 2) << 8) | bin.charCodeAt(o + 3)) >>> 0;
+          return { w: u32(16), h: u32(20) };
+        } catch { return { w: 0, h: 0 }; }
+      };
       const roots = [...document.querySelectorAll('div')].filter(
         (d) => (d.textContent || '').includes('扫码登录') && d.querySelector('canvas, img'),
       );
       const root = roots.sort((a, b) => a.innerHTML.length - b.innerHTML.length)[0] || document;
-      const img = root.querySelector('img[src^="data:image"]');
-      if (img) return img.src;
+      // 候选里取 PNG 尺寸最大的 data-URL img（真二维码 512×512，logo 40×41）。
+      let best = null, bestArea = 0;
+      for (const img of root.querySelectorAll('img[src^="data:image"]')) {
+        const src = img.currentSrc || img.src || "";
+        const { w, h } = pngSize(src);
+        if (w >= 200 && h >= 200 && w * h > bestArea) { best = src; bestArea = w * h; }
+      }
+      if (best) return best;
+      // 没有合格的 data-URL img 才退 canvas（canvas 在渲染停摆时 toDataURL 是空图）。
       const cv = root.querySelector('canvas');
-      if (cv) { try { return cv.toDataURL('image/png'); } catch { return null; } }
+      if (cv && cv.width >= 200 && cv.height >= 200) {
+        try { return cv.toDataURL('image/png'); } catch { return null; }
+      }
       return null;
     })()`,
   )

@@ -50,12 +50,54 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 /** 等 xhs 页面 SSR 挂载;登录重定向也算「有结果」,由登录闸门给出可操作错误。 */
 async function waitXhsSsr(browser: BrowserBackend, message: string): Promise<void> {
-  await waitUntil(
-    browser,
-    `typeof window.__INITIAL_STATE__ !== 'undefined' || location.pathname.startsWith('/login')`,
-    15_000,
-    message,
-  )
+  try {
+    await waitUntil(
+      browser,
+      `typeof window.__INITIAL_STATE__ !== 'undefined' || location.pathname.startsWith('/login')`,
+      15_000,
+      message,
+    )
+  } catch {
+    // 超时说明页面既没挂载 state、也没跳登录页 —— 单报「SSR 状态未挂载」用户与排查都
+    // 无从下手(2026-10-30 实测:真实页面是平台给的「电脑设备登录超限,请重新登录」)。
+    const d = await xhsPageDiagnosis(browser)
+    throw new Error(d.replacement ?? `${message}（${d.hint}）`)
+  }
+}
+
+/**
+ * 页面到底怎么了(SR 未挂载时的补充说明)。
+ * `replacement` = 已知可操作状态时直接替换错误文案;`hint` = 兜底附加信息。
+ */
+async function xhsPageDiagnosis(browser: BrowserBackend): Promise<{ replacement?: string; hint: string }> {
+  try {
+    const raw = await cdpEvaluate<string>(
+      browser,
+      `(() => {
+        const txt = document.body ? document.body.innerText || '' : '';
+        return JSON.stringify({
+          href: location.href,
+          kicked: txt.includes('电脑设备登录超限'),
+          verify: !!document.querySelector('.fe-verify-box'),
+          blank: !txt.trim(),
+        });
+      })()`,
+    )
+    const o = JSON.parse(raw ?? "{")
+    if (o.kicked) {
+      return {
+        replacement: "小红书提示「电脑设备登录超限」:本机登录已被顶下线,请到「账号与凭证」重新扫码",
+        hint: "设备登录超限",
+      }
+    }
+    if (o.verify) {
+      return { replacement: "小红书风控校验页出现,请稍后再试或重新扫码登录", hint: "风控校验" }
+    }
+    if (o.blank) return { hint: "页面空白(网络或浏览器异常)" }
+    return { hint: `页面: ${String(o.href ?? "").slice(0, 100)}` }
+  } catch {
+    return { hint: "页面状态读取失败" }
+  }
 }
 
 /** 当前页面是否被重定向到登录页(必须同时确认在 xhs origin,共享 page 可能停在别的域)。 */

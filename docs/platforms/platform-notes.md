@@ -99,6 +99,12 @@
   （douyin.com 点登录读弹窗 canvas 二维码，成功判据 = `sessionid` cookie）。两层
   都封装在 `douyinScanLogin`，channel 只做薄委托。⚠️ 社区实现靠 curl_cffi TLS
   指纹；宿主 reqwest 无伪装，纯 HTTP 层保留是为了协议变化时可能直连。
+  ⚠️ **软封锁会返「假码 + 真 token」**（2026-10-30 实测）：`get_qrcode` 不报错，
+  只是 `qrcode` 是一张抖音 logo 占位图，轮询永远等不到 status —— UI 上表现为
+  「二维码是错的」。纯 HTTP 层因此加了一道探活（`check_qrconnect` 必须回
+  1/2/3/5），假 token 直接抛错回退浏览器。浏览器路径同理：弹窗里同时有 40×41 的
+  logo 和 512×512 的真码，`images:false` 下 `naturalWidth` 恒 0，判据改为**解码
+  PNG 头尺寸**取 ≥200 的最大一张。
 - ~~抖音登录 cookie 没有任何抓取/播放路径消费~~ **已接通（2026-10-21）**：登录成功写
   `settings.douyinCookie`，经 credentials provider 进入 `douyinCookie()`（抓取/播放/
   弹幕共用），登录档位（原画）待真机验证。真正的关键词搜索
