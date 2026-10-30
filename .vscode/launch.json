@@ -10,6 +10,17 @@
       "postDebugTask": "kill-tauri"
     },
     {
+      // 与上面同一个 identifier（app.amoeba.dev，DB / 服务 / 单实例锁都一样），唯一区别是
+      // 抓取浏览器用**自己的** profile（`app.amoeba.dev\webview-profile`），不共用安装版
+      // 的登录态 —— 调首登 / 清凭证 / 换号这类「干净 profile」路径时选它。
+      "name": "Tauri Dev (desktop, own profile)",
+      "type": "lldb",
+      "request": "attach",
+      "program": "${workspaceFolder}/target/debug/amoeba.exe",
+      "preLaunchTask": "tauri-dev-own-profile",
+      "postDebugTask": "kill-tauri"
+    },
+    {
       // ⚠️ **release 编译**（target/release/，非 debug）—— 用来调试「只在 release 下才走」的
       // 分支，典型是 `browser.rs` 的隐藏 Edge 窗口（`hide = !cfg!(debug_assertions)` 是
       // **编译期**判据，debug profile 下那条分支永远不走）。

@@ -51,6 +51,41 @@
       }
     },
     {
+      // 与 tauri-dev-desktop 相同的 identifier（app.amoeba.dev），唯一区别是抓取浏览器用
+      // **自己的** profile：服务进程带 AMOEBA_OWN_PROFILE=1（`service.rs:resolve_paths`），
+      // 不共用安装版登录态。调首登 / 清凭证 / 换号这类「干净 profile」路径时用它。
+      "label": "tauri-dev-own-profile",
+      "type": "shell",
+      "command": "bun run scripts/tauri.ts tauri desktop --own-profile",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "dependsOn": ["kill-tauri"],
+      "dependsOrder": "sequence",
+      "problemMatcher": {
+        "owner": "rust",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": [
+          {
+            "regexp": "^error\\[E\\d+\\]: (.*)$",
+            "message": 1
+          },
+          {
+            "regexp": "^\\s*-->\\s*([^:]+):(\\d+):(\\d+)",
+            "file": 1,
+            "line": 2,
+            "column": 3
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Running DevCommand",
+          "endsPattern": "Running.*amoeba\\.exe"
+        }
+      }
+    },
+    {
       // 真 release 的前端：走 `vite build`（PROD）→ 生产包无种子、DB 用 rss.db。
       "label": "tauri-release-frontend",
       "type": "shell",
