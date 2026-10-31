@@ -10,13 +10,14 @@
  */
 
 import type { MediaStream } from "@amoeba/core"
-import * as dashjs from "dashjs"
-import flvjs from "flv.js"
-import Hls from "hls.js"
+// ⚠️ 三个引擎都是**类型导入 + effect 内动态 import**：播放器代码本身在首屏（视频会话
+// 常驻宿主），但这 1.5MB 引擎只在真正开始播放某类流时才加载（2026-11-01）。
+import type * as dashjs from "dashjs"
+import type flvjs from "flv.js"
+import type Hls from "hls.js"
 import { useEffect, useRef } from "react"
 
 import { DashHostLoader } from "../engines/dashHostLoader.ts"
-import { HlsHostLoader } from "../engines/hlsHostLoader.ts"
 import { log } from "../log/index.ts"
 import type { EngineStats } from "../stats.ts"
 import { attemptPlayWithMuteFallback } from "../utils/attemptPlay.ts"
@@ -73,6 +74,9 @@ export function useMediaStream({
     // 强行打开。冷挂载:新元素 muted 默认 false → 与旧行为一致(带声起播)。
     const prevMuted = video.muted
 
+    let disposed = false
+    let teardown: (() => void) | undefined
+
     const cleanup = () => {
       flvRef.current?.destroy()
       flvRef.current = null
@@ -84,234 +88,261 @@ export function useMediaStream({
       // refresh / load-error 重试),过早 revoke 会 GET blob 404。只在组件卸载兜底 effect revoke。
     }
 
-    // HLS 分支
-    if (isHlsStream(stream)) {
-      // 桌面 Chromium/WebView2 的 canPlayType 对 m3u8 也返回非空,但实际不支持原生
-      // HLS(只有 iOS Safari 支持)。所以 **hls.js 优先**,canPlayType 仅作 iOS 兜底。
-      if (!Hls.isSupported()) {
-        if (video.canPlayType("application/vnd.apple.mpegurl")) {
-          video.src = stream.url
-        } else {
-          report?.(new Error("当前环境不支持 HLS 播放"))
+    const start = async (): Promise<void> => {
+      // HLS 分支
+      if (isHlsStream(stream)) {
+        // 桌面 Chromium/WebView2 的 canPlayType 对 m3u8 也返回非空,但实际不支持原生
+        // HLS(只有 iOS Safari 支持)。所以 **hls.js 优先**,canPlayType 仅作 iOS 兜底。
+        // ⚠️ HlsHostLoader 与 hls.js 一起动态加载：loader 继承 hls.js 的类，静态导入
+        // 会把 574KB 的 hls.js 钉回首屏（Vite 会报 INEFFECTIVE_DYNAMIC_IMPORT）。
+        const [{ default: Hls }, { HlsHostLoader }] = await Promise.all([
+          import("hls.js"),
+          import("../engines/hlsHostLoader.ts"),
+        ])
+        if (disposed) return
+        if (!Hls.isSupported()) {
+          if (video.canPlayType("application/vnd.apple.mpegurl")) {
+            video.src = stream.url
+          } else {
+            report?.(new Error("当前环境不支持 HLS 播放"))
+          }
+          teardown = cleanup
+          return
         }
-        return cleanup
-      }
-      // 标准模式:bilibili 直播本身已是 LL-HLS(EXT-X-VERSION:7 + fMP4),
-      // 再开 hls.js 的 lowLatencyMode 双重低延迟可能不兼容。
-      const hls = new Hls()
-      hlsRef.current = hls
-      reportStats({ engine: "hls" })
-      // 档位策略:video/live 都锁最高档起播,不走 ABR 自动降档。
-      // 原因:宿主隧道(Rust reqwest + base64)的固定开销让 ABR 带宽估算严重失真
-      // ——1080p 4561kbps 的流测得仅 ~1Mbps,ABR 会骤降 144p 且永不回升。
-      // `currentLevel = max` 是手动档位模式,ABR 完全关闭,恒定最高清晰度。
-      // 档位选择后续在播放器开放,用户手动选(当前默认最高档)。
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        const max = hls.levels.length - 1
-        if (max < 0) return
-        hls.currentLevel = max
-      })
-      // 走 HlsHostLoader(appHost.http:Rust reqwest 隧道,不经过 WebView 的 CORS/Origin):
-      //   - `googlevideo.com`(YouTube):manifest/分片都无 `Access-Control-Allow-Origin`
-      //     → playlist 与分片**全部**走隧道;
-      // 判据别按「有没有 CORS」,按「WebView 里直接发会不会被拒」。
-      // Twitch 的 playlist 域(`playlist.ttvnw.net`)不走隧道:它只拒页面源
-      // Origin(`*.tauri.localhost`),Rust 在 WebView2 网络层按 XHR_ORIGIN_RULES 改写
-      // Origin(media_referer.rs),默认 XHR 直连即可;分片域(`*.cloudfront.hls.ttvnw.net`)
-      // 本就 `ACAO:*` 直连。
-      if (/googlevideo\.com/i.test(stream.url)) {
-        hls.config.loader = HlsHostLoader
-      } else if (stream.headers) {
-        hls.config.xhrSetup = (xhr) => {
-          for (const [k, v] of Object.entries(stream.headers!)) {
-            // 浏览器禁止 JS 设置 forbidden headers(referer/user-agent 等),
-            // 设置会被忽略并 console 报 Refused to set unsafe header。
-            // 跳过它们——浏览器自动带 referer/UA,无需手动设。
-            if (/^(referer|user-agent|origin|cookie|host)$/i.test(k)) continue
-            try {
-              xhr.setRequestHeader(k, v)
-            } catch {
-              // 个别环境仍拒绝,忽略即可。
+        // 标准模式:bilibili 直播本身已是 LL-HLS(EXT-X-VERSION:7 + fMP4),
+        // 再开 hls.js 的 lowLatencyMode 双重低延迟可能不兼容。
+        const hls = new Hls()
+        hlsRef.current = hls
+        reportStats({ engine: "hls" })
+        // 档位策略:video/live 都锁最高档起播,不走 ABR 自动降档。
+        // 原因:宿主隧道(Rust reqwest + base64)的固定开销让 ABR 带宽估算严重失真
+        // ——1080p 4561kbps 的流测得仅 ~1Mbps,ABR 会骤降 144p 且永不回升。
+        // `currentLevel = max` 是手动档位模式,ABR 完全关闭,恒定最高清晰度。
+        // 档位选择后续在播放器开放,用户手动选(当前默认最高档)。
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const max = hls.levels.length - 1
+          if (max < 0) return
+          hls.currentLevel = max
+        })
+        // 走 HlsHostLoader(appHost.http:Rust reqwest 隧道,不经过 WebView 的 CORS/Origin):
+        //   - `googlevideo.com`(YouTube):manifest/分片都无 `Access-Control-Allow-Origin`
+        //     → playlist 与分片**全部**走隧道;
+        // 判据别按「有没有 CORS」,按「WebView 里直接发会不会被拒」。
+        // Twitch 的 playlist 域(`playlist.ttvnw.net`)不走隧道:它只拒页面源
+        // Origin(`*.tauri.localhost`),Rust 在 WebView2 网络层按 XHR_ORIGIN_RULES 改写
+        // Origin(media_referer.rs),默认 XHR 直连即可;分片域(`*.cloudfront.hls.ttvnw.net`)
+        // 本就 `ACAO:*` 直连。
+        if (/googlevideo\.com/i.test(stream.url)) {
+          hls.config.loader = HlsHostLoader
+        } else if (stream.headers) {
+          hls.config.xhrSetup = (xhr) => {
+            for (const [k, v] of Object.entries(stream.headers!)) {
+              // 浏览器禁止 JS 设置 forbidden headers(referer/user-agent 等),
+              // 设置会被忽略并 console 报 Refused to set unsafe header。
+              // 跳过它们——浏览器自动带 referer/UA,无需手动设。
+              if (/^(referer|user-agent|origin|cookie|host)$/i.test(k)) continue
+              try {
+                xhr.setRequestHeader(k, v)
+              } catch {
+                // 个别环境仍拒绝,忽略即可。
+              }
             }
           }
         }
-      }
-      hls.on(Hls.Events.ERROR, (_evt, data) => {
-        log.engineError({ engine: "hls", err: data, fatal: !!data.fatal })
-        // ⚠️ 上报**Error**而不是 hls.js 的 ErrorData 对象:后者 `String(obj)` 是
-        // `[object Object]`,PlayableMedia 的错误块会把「哪个 URL、哪个 HTTP 码」
-        // 全丢掉(曾因此只看到「播放失败 [object Object]」)。
-        if (data.fatal) {
-          const code = (data as { response?: { code?: number } }).response?.code
-          const where = (data as { context?: { url?: string } }).context?.url
-          report?.(
-            new Error(
-              `hls ${data.type}: ${data.details}` +
-                (code ? ` (HTTP ${code})` : "") +
-                (where ? ` — ${where.slice(0, 160)}` : ""),
-            ),
-          )
-        }
-      })
-      // 流信息:LEVEL_LOADED 打印实际播放档位(高度/码率),排查清晰度来源。
-      // ⚠️ 直播 LL-HLS 持续重载 playlist,每次 LEVEL_LOADED 都打会刷屏;且 B站直播
-      // 的 level 元数据常缺 height/bitrate(0)。只在**档位变化**时打(锁最高档后恒定,
-      // 只首帧打一次),0 高度显示档位 index。
-      let lastLevelKey = ""
-      hls.on(Hls.Events.LEVEL_LOADED, (_e, d) => {
-        const lvl = hls.levels[d.level]
-        const key = `${d.level}:${lvl?.height ?? 0}:${lvl?.bitrate ?? 0}`
-        if (key === lastLevelKey) return
-        lastLevelKey = key
-        reportStats({
-          engine: "hls",
-          levelIndex: d.level,
-          levelCount: hls.levels.length,
-          height: lvl?.height,
-          bitrate: lvl?.bitrate,
-          codecs: (lvl?.attrs as { CODECS?: string } | undefined)?.CODECS,
-          // hls.js 的实时延迟(仅直播有意义;点播接近 0 时也照实显示)。
-          liveLatency: (hls as unknown as { latency?: number }).latency,
-        })
-        log.hlsLevelLoaded({
-          live: !!d.details?.live,
-          level: d.level,
-          height: lvl?.height,
-          bitrate: lvl?.bitrate,
-        })
-      })
-      // 起播:autoPlay=true 带声(PlayableMedia 点击时 unlockAudioPlayback 已解除
-      // autoplay policy),被拦降级静音重试。统一等 video 的 canplay(浏览器权威
-      // 「可播」信号,库级 MANIFEST_PARSED 只是 manifest 就绪、不保证能播)——
-      // canplay 到达时数据已在 buffer,play() 才稳定。`{once:true}` 天然幂等。
-      video.muted = autoPlay ? prevMuted : true
-      const attemptPlay = () => {
-        if (!video.isConnected) return
-        attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
-      }
-      video.addEventListener("canplay", attemptPlay, { once: true })
-      hls.loadSource(stream.url)
-      hls.attachMedia(video)
-      // 清理:hls.destroy() 移除 hls 事件;video 上的 canplay 需手动移除。
-      return () => {
-        video.removeEventListener("canplay", attemptPlay)
-        cleanup()
-      }
-    }
-
-    // FLV 分支(仅 http-flv;rtmp:// 播不了)。
-    if (isFlvStream(stream)) {
-      if (!flvjs.isSupported()) {
-        report?.(new Error("当前环境不支持 FLV 播放"))
-        return cleanup
-      }
-      const flv = flvjs.createPlayer(
-        { type: "flv", url: stream.url, isLive: true },
-        // flv.js 不直接支持自定义 header;referer 靠页面本身,UA 走默认。
-      )
-      flvRef.current = flv
-      reportStats({ engine: "flv" })
-      flv.on(flvjs.Events.ERROR, (_t, _d, e) => {
-        log.engineError({ engine: "flv", err: e })
-        report?.(e)
-      })
-      flv.attachMediaElement(video)
-      flv.load()
-      // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
-      // (浏览器权威「可播」信号,METADATA_ARRIVED 只是 FLV 头就绪、不保证能播)。
-      video.muted = autoPlay ? prevMuted : true
-      const attemptPlay = () => {
-        if (!video.isConnected) return
-        attemptPlayWithMuteFallback(video, () => flv.play(), { autoPlay, onFail: report })
-      }
-      video.addEventListener("canplay", attemptPlay, { once: true })
-      // 清理:flv.destroy() 移除 flv 事件;video 上的 canplay 需手动移除。
-      return () => {
-        video.removeEventListener("canplay", attemptPlay)
-        cleanup()
-      }
-    }
-
-    // DASH 分支(B站视频:音视频分离,MPD 由 crawler 拼好存 dashManifest)。
-    // MPD 生成 blob URL 喂 attachSource——dash.js 走 fetch 解析 XML,分片 BaseURL
-    // 是绝对直链,直接请求真实 CDN。dash.js 双 SourceBuffer 同步音视频(等价 B 站官方)。
-    if (isDashStream(stream) && stream.dashManifest) {
-      log.dashManifestReady({ len: stream.dashManifest.length, autoPlay })
-      // 新实例创建前 revoke 旧 blob:旧 dash.js 实例已随上一次 cleanup destroy,
-      // 不会再 refresh 旧 MPD,revoke 安全。避免 DASH 切档/重试逐次泄漏 blob URL。
-      if (dashUrlRef.current) URL.revokeObjectURL(dashUrlRef.current)
-      const blob = new Blob([stream.dashManifest], { type: "application/dash+xml" })
-      const mpdUrl = URL.createObjectURL(blob)
-      dashUrlRef.current = mpdUrl
-      const player = dashjs.MediaPlayer().create()
-      dashRef.current = player
-      reportStats({ engine: "dash" })
-      // 初始化完成后补档位/码率(单 Representation,锁最高档)。
-      player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
-        try {
-          // dashjs 的运行时 API 在类型包里没声明全(MediaPlayerClass 缺这两个方法)。
-          const p = player as unknown as {
-            getBitrateInfoListFor(type: "video"): Array<{ height?: number; bitrate?: number }>
-            getQualityFor(type: "video"): number
-            getTracksFor(type: "video" | "audio"): Array<{ codec?: string }>
-            getCurrentLiveLatency(): number
+        hls.on(Hls.Events.ERROR, (_evt, data) => {
+          log.engineError({ engine: "hls", err: data, fatal: !!data.fatal })
+          // ⚠️ 上报**Error**而不是 hls.js 的 ErrorData 对象:后者 `String(obj)` 是
+          // `[object Object]`,PlayableMedia 的错误块会把「哪个 URL、哪个 HTTP 码」
+          // 全丢掉(曾因此只看到「播放失败 [object Object]」)。
+          if (data.fatal) {
+            const code = (data as { response?: { code?: number } }).response?.code
+            const where = (data as { context?: { url?: string } }).context?.url
+            report?.(
+              new Error(
+                `hls ${data.type}: ${data.details}` +
+                  (code ? ` (HTTP ${code})` : "") +
+                  (where ? ` — ${where.slice(0, 160)}` : ""),
+              ),
+            )
           }
-          const infos = p.getBitrateInfoListFor("video")
-          const idx = p.getQualityFor("video")
-          const info = infos[idx]
-          const codecs = (["video", "audio"] as const)
-            .flatMap((t) => p.getTracksFor(t).map((x) => x?.codec))
-            .filter(Boolean)
-            .join(" / ")
+        })
+        // 流信息:LEVEL_LOADED 打印实际播放档位(高度/码率),排查清晰度来源。
+        // ⚠️ 直播 LL-HLS 持续重载 playlist,每次 LEVEL_LOADED 都打会刷屏;且 B站直播
+        // 的 level 元数据常缺 height/bitrate(0)。只在**档位变化**时打(锁最高档后恒定,
+        // 只首帧打一次),0 高度显示档位 index。
+        let lastLevelKey = ""
+        hls.on(Hls.Events.LEVEL_LOADED, (_e, d) => {
+          const lvl = hls.levels[d.level]
+          const key = `${d.level}:${lvl?.height ?? 0}:${lvl?.bitrate ?? 0}`
+          if (key === lastLevelKey) return
+          lastLevelKey = key
           reportStats({
-            engine: "dash",
-            levelIndex: idx,
-            levelCount: infos.length,
-            height: info?.height,
-            bitrate: info?.bitrate,
-            codecs: codecs || undefined,
-            liveLatency: p.getCurrentLiveLatency?.() || undefined,
+            engine: "hls",
+            levelIndex: d.level,
+            levelCount: hls.levels.length,
+            height: lvl?.height,
+            bitrate: lvl?.bitrate,
+            codecs: (lvl?.attrs as { CODECS?: string } | undefined)?.CODECS,
+            // hls.js 的实时延迟(仅直播有意义;点播接近 0 时也照实显示)。
+            liveLatency: (hls as unknown as { latency?: number }).latency,
           })
-        } catch {
-          // 无 video 轨/未初始化完:保留基础 engine 信息即可。
+          log.hlsLevelLoaded({
+            live: !!d.details?.live,
+            level: d.level,
+            height: lvl?.height,
+            bitrate: lvl?.bitrate,
+          })
+        })
+        // 起播:autoPlay=true 带声(PlayableMedia 点击时 unlockAudioPlayback 已解除
+        // autoplay policy),被拦降级静音重试。统一等 video 的 canplay(浏览器权威
+        // 「可播」信号,库级 MANIFEST_PARSED 只是 manifest 就绪、不保证能播)——
+        // canplay 到达时数据已在 buffer,play() 才稳定。`{once:true}` 天然幂等。
+        video.muted = autoPlay ? prevMuted : true
+        const attemptPlay = () => {
+          if (!video.isConnected) return
+          attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
         }
-      })
-      player.on(dashjs.MediaPlayer.events.ERROR, (e: unknown) => {
-        const msg = (e as { message?: string })?.message
-        log.engineError({ engine: "dash", err: msg ?? e })
-        report?.(msg ? new Error(`dash: ${msg}`) : new Error(`dash 播放错误: ${String(e)}`))
-      })
-      // 起播成功的权威信号在 useVideoElement 的 playing 事件,这里不重复打。
-      player.initialize()
-      // B 站分片(mcdn)/ YouTube 分片(googlevideo)无 CORS 头 → 替换 HTTPLoader
-      // 走 appHost.http 隧道(无 CORS)。blob MPD 由 DashHostLoader 内部 fetch 原样拉;
-      // 分片走 Rust/浏览器宿主,并透传 stream.headers(referer/UA)。
-      player.extend("HTTPLoader", () => DashHostLoader({ headers: stream.headers }), true)
-      // 锁最高档:MPD 已按档单 Representation,关 ABR 防止带宽估算降档(走隧道估算失真)。
-      player.updateSettings({
-        streaming: {
-          buffer: { fastSwitchEnabled: true },
-          abr: { autoSwitchBitrate: { video: false, audio: false } },
-        },
-      })
-      player.attachView(video)
-      player.attachSource(mpdUrl)
-      video.muted = autoPlay ? prevMuted : true
-      // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
-      // (浏览器权威「可播」信号;dash.js 的 CAN_PLAY 就是它的转发,直接等原生更可靠)。
-      const attemptPlay = () => {
-        if (!video.isConnected) return
-        attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
+        video.addEventListener("canplay", attemptPlay, { once: true })
+        hls.loadSource(stream.url)
+        hls.attachMedia(video)
+        // 清理:hls.destroy() 移除 hls 事件;video 上的 canplay 需手动移除。
+        teardown = () => {
+          video.removeEventListener("canplay", attemptPlay)
+          cleanup()
+        }
+        return
       }
-      video.addEventListener("canplay", attemptPlay, { once: true })
-      // 清理:player.reset() 移除 dash.js 事件;video 上的 canplay 需手动移除。
-      return () => {
-        video.removeEventListener("canplay", attemptPlay)
-        cleanup()
+
+      // FLV 分支(仅 http-flv;rtmp:// 播不了)。
+      if (isFlvStream(stream)) {
+        const { default: flvjs } = await import("flv.js")
+        if (disposed) return
+        if (!flvjs.isSupported()) {
+          report?.(new Error("当前环境不支持 FLV 播放"))
+          teardown = cleanup
+          return
+        }
+        const flv = flvjs.createPlayer(
+          { type: "flv", url: stream.url, isLive: true },
+          // flv.js 不直接支持自定义 header;referer 靠页面本身,UA 走默认。
+        )
+        flvRef.current = flv
+        reportStats({ engine: "flv" })
+        flv.on(flvjs.Events.ERROR, (_t, _d, e) => {
+          log.engineError({ engine: "flv", err: e })
+          report?.(e)
+        })
+        flv.attachMediaElement(video)
+        flv.load()
+        // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
+        // (浏览器权威「可播」信号,METADATA_ARRIVED 只是 FLV 头就绪、不保证能播)。
+        video.muted = autoPlay ? prevMuted : true
+        const attemptPlay = () => {
+          if (!video.isConnected) return
+          attemptPlayWithMuteFallback(video, () => flv.play(), { autoPlay, onFail: report })
+        }
+        video.addEventListener("canplay", attemptPlay, { once: true })
+        // 清理:flv.destroy() 移除 flv 事件;video 上的 canplay 需手动移除。
+        teardown = () => {
+          video.removeEventListener("canplay", attemptPlay)
+          cleanup()
+        }
+        return
       }
+
+      // DASH 分支(B站视频:音视频分离,MPD 由 crawler 拼好存 dashManifest)。
+      // MPD 生成 blob URL 喂 attachSource——dash.js 走 fetch 解析 XML,分片 BaseURL
+      // 是绝对直链,直接请求真实 CDN。dash.js 双 SourceBuffer 同步音视频(等价 B 站官方)。
+      if (isDashStream(stream) && stream.dashManifest) {
+        const dashjs = await import("dashjs")
+        if (disposed) return
+        log.dashManifestReady({ len: stream.dashManifest.length, autoPlay })
+        // 新实例创建前 revoke 旧 blob:旧 dash.js 实例已随上一次 cleanup destroy,
+        // 不会再 refresh 旧 MPD,revoke 安全。避免 DASH 切档/重试逐次泄漏 blob URL。
+        if (dashUrlRef.current) URL.revokeObjectURL(dashUrlRef.current)
+        const blob = new Blob([stream.dashManifest], { type: "application/dash+xml" })
+        const mpdUrl = URL.createObjectURL(blob)
+        dashUrlRef.current = mpdUrl
+        const player = dashjs.MediaPlayer().create()
+        dashRef.current = player
+        reportStats({ engine: "dash" })
+        // 初始化完成后补档位/码率(单 Representation,锁最高档)。
+        player.on(dashjs.MediaPlayer.events.STREAM_INITIALIZED, () => {
+          try {
+            // dashjs 的运行时 API 在类型包里没声明全(MediaPlayerClass 缺这两个方法)。
+            const p = player as unknown as {
+              getBitrateInfoListFor(type: "video"): Array<{ height?: number; bitrate?: number }>
+              getQualityFor(type: "video"): number
+              getTracksFor(type: "video" | "audio"): Array<{ codec?: string }>
+              getCurrentLiveLatency(): number
+            }
+            const infos = p.getBitrateInfoListFor("video")
+            const idx = p.getQualityFor("video")
+            const info = infos[idx]
+            const codecs = (["video", "audio"] as const)
+              .flatMap((t) => p.getTracksFor(t).map((x) => x?.codec))
+              .filter(Boolean)
+              .join(" / ")
+            reportStats({
+              engine: "dash",
+              levelIndex: idx,
+              levelCount: infos.length,
+              height: info?.height,
+              bitrate: info?.bitrate,
+              codecs: codecs || undefined,
+              liveLatency: p.getCurrentLiveLatency?.() || undefined,
+            })
+          } catch {
+            // 无 video 轨/未初始化完:保留基础 engine 信息即可。
+          }
+        })
+        player.on(dashjs.MediaPlayer.events.ERROR, (e: unknown) => {
+          const msg = (e as { message?: string })?.message
+          log.engineError({ engine: "dash", err: msg ?? e })
+          report?.(msg ? new Error(`dash: ${msg}`) : new Error(`dash 播放错误: ${String(e)}`))
+        })
+        // 起播成功的权威信号在 useVideoElement 的 playing 事件,这里不重复打。
+        player.initialize()
+        // B 站分片(mcdn)/ YouTube 分片(googlevideo)无 CORS 头 → 替换 HTTPLoader
+        // 走 appHost.http 隧道(无 CORS)。blob MPD 由 DashHostLoader 内部 fetch 原样拉;
+        // 分片走 Rust/浏览器宿主,并透传 stream.headers(referer/UA)。
+        player.extend("HTTPLoader", () => DashHostLoader({ headers: stream.headers }), true)
+        // 锁最高档:MPD 已按档单 Representation,关 ABR 防止带宽估算降档(走隧道估算失真)。
+        player.updateSettings({
+          streaming: {
+            buffer: { fastSwitchEnabled: true },
+            abr: { autoSwitchBitrate: { video: false, audio: false } },
+          },
+        })
+        player.attachView(video)
+        player.attachSource(mpdUrl)
+        video.muted = autoPlay ? prevMuted : true
+        // 起播:autoPlay=true 带声(已 unlock),被拦降级静音。统一等 video 的 canplay
+        // (浏览器权威「可播」信号;dash.js 的 CAN_PLAY 就是它的转发,直接等原生更可靠)。
+        const attemptPlay = () => {
+          if (!video.isConnected) return
+          attemptPlayWithMuteFallback(video, () => video.play(), { autoPlay, onFail: report })
+        }
+        video.addEventListener("canplay", attemptPlay, { once: true })
+        // 清理:player.reset() 移除 dash.js 事件;video 上的 canplay 需手动移除。
+        teardown = () => {
+          video.removeEventListener("canplay", attemptPlay)
+          cleanup()
+        }
+        return
+      }
+
+      teardown = cleanup
     }
 
-    return cleanup
+    void start().catch((e) => {
+      if (!disposed) onErrorRef.current?.(e)
+    })
+    return () => {
+      disposed = true
+      teardown?.()
+      teardown = undefined
+    }
   }, [stream, videoRef, retryKey])
 
   // 组件卸载时兜底销毁(独立 effect,不依赖 stream 状态)。
