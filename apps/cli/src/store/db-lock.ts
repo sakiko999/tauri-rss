@@ -11,7 +11,7 @@
  * 不双写；报错里给出锁文件路径，确认没有服务后可手动删除）。跨机/网络盘不在考虑范围。
  */
 
-import { readFileSync, rmSync, writeFileSync } from "node:fs"
+import { readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 
 export interface LockOwner {
   pid?: number
@@ -42,7 +42,11 @@ function readLockOwner(path: string): LockOwner | null {
   }
 }
 
-/** O_EXCL 建锁；被活进程持有 → 返回持有者；stale（进程已死 / 坏文件）→ 回收重建，返回 null。 */
+/**
+ * O_EXCL 建锁；被活进程持有 → 返回持有者；stale（进程已死 / 坏文件）→ 回收重建，返回 null。
+ * ⚠️ 「建文件」与「写内容」不是一步：并发启动时可能读到别人刚建、还没写完的空锁。
+ * 5 秒内的空/坏锁当作有人持有（返回 `{}`，持有者未知）—— 当 stale 删掉会变成双持有。
+ */
 export function acquireLock(path: string, owner: LockOwner): LockOwner | null {
   try {
     writeFileSync(path, JSON.stringify(owner), { flag: "wx" })
@@ -50,9 +54,20 @@ export function acquireLock(path: string, owner: LockOwner): LockOwner | null {
   } catch {
     const old = readLockOwner(path)
     if (old?.pid && pidAlive(old.pid)) return old
+    if (!old?.pid && createdWithin(path, FRESH_LOCK_MS)) return {}
     rmSync(path, { force: true })
     writeFileSync(path, JSON.stringify(owner), { flag: "wx" })
     return null
+  }
+}
+
+const FRESH_LOCK_MS = 5_000
+
+function createdWithin(path: string, ms: number): boolean {
+  try {
+    return Date.now() - statSync(path).mtimeMs < ms
+  } catch {
+    return false
   }
 }
 

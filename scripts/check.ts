@@ -90,6 +90,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/crawler/src/example/passive-buffer.check.ts",
     "packages/crawler/src/example/passive-capture.check.ts",
     "packages/crawler/src/example/xhs-strategy.check.ts",
+    "apps/cli/src/store/db-lock.check.ts",
   ],
   service: ["scripts/service-skeleton-check.ts", "scripts/service-data-check.ts", "scripts/remote-data-layer-check.ts"],
 }

@@ -30,10 +30,17 @@ const FORBID_TAGS = [
   "dialog",
 ]
 const FORBID_ATTR = ["action", "formaction", "method"]
-const ESCAPES_LAYOUT = /(?:^|[;\s])(?:position|z-index)\s*:/i
 
+/**
+ * 判「这条内联样式能不能逃出阅读区」交给浏览器自己的 CSS 解析器 —— 正则挡不住
+ * `p\osition:fixed`（转义）/ `position/**\/:fixed`（注释）这类写法，浏览器照样认。
+ * 游离元素只解析声明、不参与渲染，不会触发样式里的资源请求。
+ */
+const probe = document.createElement("div")
 DOMPurify.addHook("uponSanitizeAttribute", (_node, data) => {
-  if (data.attrName === "style" && ESCAPES_LAYOUT.test(data.attrValue)) data.keepAttr = false
+  if (data.attrName !== "style") return
+  probe.setAttribute("style", data.attrValue)
+  if (probe.style.position || probe.style.zIndex) data.keepAttr = false
 })
 
 /**

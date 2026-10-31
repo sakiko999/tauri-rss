@@ -333,7 +333,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
   // 单实例：O_EXCL 创建；stale 锁先探活再回收。
   const running = acquireLock(lockPath, owner)
   if (running) {
-    console.error(`ALREADY_RUNNING pid=${running.pid} bootId=${running.bootId ?? "?"}`)
+    console.error(`ALREADY_RUNNING pid=${running.pid ?? "?"} bootId=${running.bootId ?? "?"}`)
     return 3
   }
   // 单写者按**库文件**判：dataDir 锁挡不住「两个 dataDir 指向同一份库」（见 store/db-lock.ts）。
@@ -344,7 +344,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
   if (dbOwner) {
     rmSync(lockPath, { force: true })
     console.error(
-      `DB_IN_USE pid=${dbOwner.pid} dataDir=${dbOwner.dataDir ?? "?"}：该库已被另一个数据服务使用（单写者）。` +
+      `DB_IN_USE pid=${dbOwner.pid ?? "?"} dataDir=${dbOwner.dataDir ?? "?"}：该库已被另一个数据服务使用（单写者）。` +
         `先停掉它，或让两边用同一个 --data-dir（会直接接管已在跑的服务）。锁文件：${dbLock}`,
     )
     return 4
