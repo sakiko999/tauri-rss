@@ -206,6 +206,19 @@ if (inStore) {
   if (origBatch) assert.ok(batches > 0, "多键删除走了 batch(不是逐个删)")
 }
 
+// ── 6. 诊断缓存口径:content: 与 body: 都要计入统计与「清空内容缓存」──
+{
+  const storage = globalThis.appHost.storage
+  await storage.set("content:chk-cache", JSON.stringify({ fetchedAt: t, xml: "<rss/>" }))
+  await storage.set("body:chk-cache:item-1", JSON.stringify({ content: "x", contentFormat: "text", fetchedAt: t }))
+  const stats = await dl.diagnostics.cacheStats()
+  assert.ok(stats.keys >= 2, `缓存统计应同时计入 content:/body:，实际 keys=${stats.keys}`)
+  await dl.diagnostics.clearContentCache()
+  const left = await storage.keys("")
+  assert.ok(!left.some((k) => k.startsWith("content:chk-cache")), "清空缓存后 content: 已删")
+  assert.ok(!left.some((k) => k.startsWith("body:chk-cache:")), "清空缓存后 body: 已删")
+}
+
 // 清理,避免污染同机的 CLI 库(用的是各自 storage key,这里仍清一遍)。
 await dl.subscriptions.remove("chk-off")
 await dl.subscriptions.remove("chk-on")

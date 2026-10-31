@@ -67,6 +67,23 @@ export function backupDbIfNeeded(dbFile: string, dataDir: string): void {
   }
 }
 
+/**
+ * 清凭证/完全重置时删掉历史备份（2026-11-01）：备份是整库 `VACUUM INTO`，包含明文
+ * cookie。不删的话「已退出登录」只对当前库成立，旧备份里仍可恢复出凭证。
+ * 只删 `rss-*.db`，不动其它文件。
+ */
+export function purgeBackups(dataDir: string): number {
+  const dir = join(dataDir, "backups")
+  if (!existsSync(dir)) return 0
+  let n = 0
+  for (const name of readdirSync(dir)) {
+    if (!name.startsWith("rss-") || !name.endsWith(".db")) continue
+    rmSync(join(dir, name), { force: true })
+    n += 1
+  }
+  return n
+}
+
 export function setupServiceHost(opts: ServiceHostOptions): ServiceHost {
   shimLocalStorageForLog()
   // stdout 契约（只允许 `READY <port>`）：@amoeba/log 的所有级别（含 info/debug）

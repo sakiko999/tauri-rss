@@ -181,6 +181,9 @@ function normalizeCookie(v: unknown): string {
   return serializeCookieDict(parseCookieDict(typeof v === "string" ? v : ""))
 }
 
+/** 单条正文缓存上限（字符；约 4MB UTF-16）。超过不入缓存，每次现取。 */
+const MAX_BODY_CACHE_CHARS = 2_000_000
+
 export function createDataLayer(): DataLayer {
   // DDL 唯一权威仍在 core：把 schema 注入 SQL 型后端。host 因此不需要反向 import
   // core（旧的 `host → core` 是包级运行时环的一边，见 docs/architecture/system/05-risks.md R2）。
@@ -819,7 +822,14 @@ export function createDataLayer(): DataLayer {
     const resolved = detail ?? item
     // 正文确有增长才落缓存(否则会把「无补全能力原样返回」也写进去)。
     const before = item.kind === "article" ? (item.content ?? "") : ""
-    if (cacheable && resolved.kind === "article" && (resolved.content ?? "").length > before.length) {
+    // 单条上限：超大正文（服务器把整库塞进一页之类）不入缓存，避免单条撑爆库与备份。
+    // 已知上限：没有全局 LRU/条数上限，缓存随「点开过的文章数」增长；退订会清、诊断页可整清。
+    if (
+      cacheable &&
+      resolved.kind === "article" &&
+      (resolved.content ?? "").length > before.length &&
+      (resolved.content ?? "").length <= MAX_BODY_CACHE_CHARS
+    ) {
       await bodyCache
         .set(subscriptionId, itemId, {
           content: resolved.content ?? "",
@@ -1025,16 +1035,18 @@ export function createDataLayer(): DataLayer {
 
   const diagnostics: DataLayerDiagnostics = {
     async cacheStats() {
-      const keys = await storage.keys("content:")
+      // ⚠️ 必须同时算 `body:`（点开过的文章补全正文）。只算 content: 时诊断页显示
+      // 「缓存很小」，而用户长期阅读后库和备份持续变大（2026-11-01 评审）。
+      const [contentKeys, bodyKeys] = await Promise.all([storage.keys("content:"), storage.keys("body:")])
       let bytes = 0
-      for (const key of keys) {
+      for (const key of [...contentKeys, ...bodyKeys]) {
         const value = await storage.get(key)
         bytes += (value?.length ?? 0) * 2
       }
-      return { keys: keys.length, bytes }
+      return { keys: contentKeys.length + bodyKeys.length, bytes }
     },
     async clearContentCache() {
-      const keys = await storage.keys("content:")
+      const keys = [...(await storage.keys("content:")), ...(await storage.keys("body:"))]
       for (const key of keys) await storage.delete(key)
       return keys.length
     },

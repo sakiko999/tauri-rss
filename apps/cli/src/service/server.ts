@@ -66,7 +66,7 @@ import {
 import type { ServerWebSocket } from "bun"
 
 import { acquireLock, dbLockPath, pidAlive, releaseLock } from "../store/db-lock.ts"
-import { backupDbIfNeeded, type ServiceHost, setupServiceHost } from "./host.ts"
+import { backupDbIfNeeded, purgeBackups, type ServiceHost, setupServiceHost } from "./host.ts"
 
 export interface ServiceOptions {
   dataDir: string
@@ -883,6 +883,8 @@ export async function runService(opts: ServiceOptions): Promise<number> {
           ? (p.hosts as unknown[]).filter((h): h is string => typeof h === "string" && !!h)
           : []
         await layer.diagnostics.clearCookies(hosts)
+        // 备份是整库拷贝：不删的话旧 cookie 还能从 backups/ 恢复出来。
+        purgeBackups(opts.dataDir)
         return undefined
       }
       case "diagnostics.clearAll": {
@@ -898,8 +900,9 @@ export async function runService(opts: ServiceOptions): Promise<number> {
           { type: "reading.changed", records: Object.fromEntries(removedKeys.map((k) => [k, null])) },
           ...ids.map((subscriptionId) => ({ type: "items.cleared" as const, subscriptionId })),
         )
-        // 库都清了，进行中的弹幕订阅也没有意义。
+        // 库都清了，进行中的弹幕订阅也没有意义；历史备份同样含旧数据/凭证。
         closeAllDanmaku()
+        purgeBackups(opts.dataDir)
         return ids
       }
       case "diagnostics.resetBrowserProfile":

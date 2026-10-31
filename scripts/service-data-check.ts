@@ -388,6 +388,9 @@ async function main(): Promise<void> {
     const backupDir = join(dir, "backups")
     const backups = existsSync(backupDir) ? readdirSync(backupDir).filter((name) => name.endsWith(".db")) : []
     add("每日备份已生成", backups.length > 0, backups.join(","))
+    // 回滚演练用的副本：clearAll 会（有意）清掉 backups/，先把备份拷到备份目录外。
+    const rollbackCopy = join(dir, "rollback-copy.db")
+    if (backups[0]) copyFileSync(join(backupDir, backups[0]), rollbackCopy)
     if (m2) {
       const port2 = Number(m2[1])
       const rpc2 = async (method: string, params: unknown = {}) => {
@@ -430,6 +433,9 @@ async function main(): Promise<void> {
       )
       const wipedSettings = (await rpc2("settings.get")).result as { refreshIntervalMin?: number } | undefined
       add("clearAll 后设置回默认", wipedSettings?.refreshIntervalMin === 30, JSON.stringify(wipedSettings))
+      // 备份是整库拷贝（含明文 cookie/旧订阅）：完全重置必须连历史备份一起清。
+      const leftover = readdirSync(backupDir).filter((name) => name.endsWith(".db"))
+      add("clearAll 后历史备份已清", leftover.length === 0, leftover.join(","))
       // 制造「备份之后又发生了写入」的漂移，供回滚演练用。
       const drift = await fetch(`http://127.0.0.1:${port2}/v1/rpc`, {
         method: "POST",
@@ -454,7 +460,7 @@ async function main(): Promise<void> {
         /* 不存在 */
       }
     }
-    copyFileSync(join(backupDir, backups[0]!), dbFile)
+    copyFileSync(rollbackCopy, dbFile)
     child2 = spawnService(dir)
     const ready3 = await firstLine(child2.stdout)
     const m3 = ready3.match(/^READY (\d+)$/)
