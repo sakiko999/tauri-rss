@@ -8,6 +8,7 @@
 import type { ChannelInfo } from "@amoeba/core"
 import { useState } from "react"
 
+import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
@@ -41,8 +42,9 @@ export function BoardList({ boards }: { boards: ChannelInfo[] }) {
               </span>
             </div>
             <div className="chip-row">
-              <button
-                className={subscribed ? "btn btn-secondary btn-sm" : "btn btn-primary btn-sm"}
+              <Button
+                variant={subscribed ? "secondary" : "primary"}
+                size="sm"
                 disabled={subscribed || busy === b.key}
                 onClick={async () => {
                   setBusy(b.key)
@@ -65,7 +67,7 @@ export function BoardList({ boards }: { boards: ChannelInfo[] }) {
                     <Icon name="plus" size={13} /> 一键订阅
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         )

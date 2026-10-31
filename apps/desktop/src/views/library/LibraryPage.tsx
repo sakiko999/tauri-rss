@@ -8,6 +8,7 @@
  * ⚠️ v1 **不渲染导航位**：没有任何渠道产出 movie/series/anime（MediaKind 六值里没有），
  * 硬造一个入口就是假功能。真做时见 docs/ui/heliu-redesign-plan.md §7-D14。
  */
+import { Button } from "../../components/Button.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useViewNavigate } from "../../router.tsx"
@@ -23,11 +24,7 @@ export function LibraryPage() {
             icon="layers"
             title="片库还没开放"
             text="片库需要电影/剧集的元数据源，目前没有任何渠道产出这些信息。现在的内容都在订阅里：首页看今日更新与继续观看，发现页可以添加更多源。"
-            actions={
-              <button className="btn btn-primary" onClick={() => go(HOME_NODE)}>
-                回到首页
-              </button>
-            }
+            actions={<Button onClick={() => go(HOME_NODE)}>回到首页</Button>}
           />
         </div>
       </div>

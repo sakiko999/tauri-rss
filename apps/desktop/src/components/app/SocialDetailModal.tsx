@@ -306,7 +306,7 @@ export function SocialDetailModal() {
               {...overlayBlock("social-detail-info", `social:detail:info:${itemKey(item)}`)}
             >
               <div className="social-detail-head">
-                <span className="social-avatar social-avatar-letter avatar-round" style={{ width: 34, height: 34 }}>
+                <span className="social-avatar social-avatar-letter" style={{ width: 34, height: 34 }}>
                   {(item.author?.name?.[0] ?? "?").toUpperCase()}
                 </span>
                 <span className="stack" style={{ gap: 0 }}>
@@ -316,9 +316,9 @@ export function SocialDetailModal() {
               </div>
               {resolving ? (
                 <span className="stack" style={{ gap: "var(--sp-2)" }}>
-                  <span className="skeleton sk-line" style={{ width: "92%" }} />
-                  <span className="skeleton sk-line" style={{ width: "78%" }} />
-                  <span className="skeleton sk-line" style={{ width: "64%" }} />
+                  <span className="skeleton h-3" style={{ width: "92%" }} />
+                  <span className="skeleton h-3" style={{ width: "78%" }} />
+                  <span className="skeleton h-3" style={{ width: "64%" }} />
                 </span>
               ) : bodyHtml ? (
                 // ⚠️ HTML 正文走 social-detail-html 覆盖掉 white-space:pre-wrap ——

@@ -206,12 +206,7 @@ export function Rail() {
         {/* 刷新全部的唯一入口（顶栏 update-chip 已移除）。loading 时图标转起来，
             按钮本身不禁用 —— 重复点会走 refreshAll 内部的并发守卫。 */}
         <div className="rail-sync">
-          <button
-            className="nav-row rail-sync-btn"
-            onClick={() => void refreshAll(true)}
-            title="同步订阅"
-            aria-label="同步订阅"
-          >
+          <button className="nav-row" onClick={() => void refreshAll(true)} title="同步订阅" aria-label="同步订阅">
             <Icon name="refresh" className={loading ? "animate-spin" : undefined} />
             <span className="nav-label">同步订阅</span>
           </button>

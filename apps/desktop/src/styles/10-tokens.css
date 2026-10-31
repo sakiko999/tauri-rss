@@ -439,9 +439,9 @@
      ⚠️ 注释里**别写类名通配**(星号紧跟斜杠那种,如 `bg-*` 后面补个斜杠):
      那串字符本身就是注释结束符,会**提前终止注释块**,后面的文字变成裸 CSS
      → Tailwind 抛 `Missing opening (`。2026-10-15 因写这一类注释踩了两次。
-     app 内看不出来,是因为 desktop 用的是 styles.css 自己的 `.btn`/`.icon-btn`
-     (同为无层,自己就能赢);受害的是 packages/player、packages/ui 这类
-     只靠 utility 的代码。Tailwind 4 层序:theme < base < components < utilities。 */
+     受害的是所有只靠 utility 的按钮 —— desktop 的 CVA Button/IconButton（2026-10-28
+     起取代旧 `.btn`）与 packages/player、packages/ui。
+     Tailwind 4 层序:theme < base < components < utilities。 */
   h1,
   h2,
   h3,

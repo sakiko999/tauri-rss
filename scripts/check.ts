@@ -53,6 +53,8 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/player/src/utils/audio-only-mpd.check.ts",
     "apps/desktop/src/lib/opml.check.ts",
     "apps/desktop/src/lib/ime.check.ts",
+    "apps/desktop/src/lib/cn.check.ts",
+    "apps/desktop/src/lib/css-classes.check.ts",
     "apps/desktop/src/lib/rail-nav.check.ts",
     "apps/desktop/src/lib/boot-skeleton.check.ts",
     "apps/desktop/src/store/nodes.check.ts",

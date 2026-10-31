@@ -125,7 +125,7 @@ export function ArticlePane() {
             {meta.sub?.refreshIntervalSec ? (
               <span>每 {Math.round(meta.sub.refreshIntervalSec / 60)} 分钟刷新</span>
             ) : null}
-            {health === "error" ? <span className="err-text">抓取失败</span> : null}
+            {health === "error" ? <span className="text-destructive">抓取失败</span> : null}
           </div>
         </div>
         <div className="pane-tools">

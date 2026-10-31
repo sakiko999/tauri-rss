@@ -143,6 +143,8 @@ bun packages/xml/src/example/opml.check.ts              # OPML 编解码往返�
 bun apps/desktop/src/lib/opml.check.ts                  # OPML ↔ 订阅映射（导出过滤 / 导入去重）
 bun apps/desktop/src/lib/rail-nav.check.ts              # 侧栏树方向键映射（→ 折叠态只展开 / ← 回父行 / 未分组不折叠）
 bun apps/desktop/src/lib/ime.check.ts                   # IME 组合态守卫（nativeEvent 取值 + 229 兜底 + 原生/合成两路径）
+bun apps/desktop/src/lib/cn.check.ts                    # cn 合并：@theme 自定义令牌按组覆盖（漏登记 TW_THEME_EXTEND 即失败）+ Button 变体类不丢
+bun apps/desktop/src/lib/css-classes.check.ts           # TSX 用到的语义类必须有 CSS 定义（死类 / 改名漏改）
 bun packages/player/src/hooks/useStreamSelection.check.ts # 默认选流 = streams[0]（不被格式族抢走）
 bun packages/player/src/hooks/player-stats.check.ts      # 统计信息格式化（引擎/码率/档位/缓冲/丢帧）
 bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契约（两份手写字面量必须一致）

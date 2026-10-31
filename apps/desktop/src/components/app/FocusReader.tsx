@@ -125,10 +125,7 @@ export function FocusReader({
           ref={scrollRef}
           {...overlayBlock("focus-scroll", `focus:scroll:${itemKey(item)}`)}
         >
-          <article
-            className="article focus-article"
-            {...overlayBlock("focus-article", `focus:article:${itemKey(item)}`)}
-          >
+          <article className="article" {...overlayBlock("focus-article", `focus:article:${itemKey(item)}`)}>
             {children}
           </article>
         </div>
