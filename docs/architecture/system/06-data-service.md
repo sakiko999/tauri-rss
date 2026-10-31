@@ -26,7 +26,9 @@
 **服务不与 desktop 绑定**：desktop 只是当前最常见的「谁把服务拉起来」——CLI 也可以
 `rss --service --db <同一份库> --profile-dir <同一份 profile>` 手动起，登录态与订阅
 完全共享。生命周期管理（spawn / 退出带走）是 desktop 的实现细节，不是协议约束；
-`rss login` 只要求「有服务在跑」，不要求桌面开着。
+`rss login` 只要求「有服务在跑」，不要求桌面开着。⚠️ 同一份库同一时刻只能有一个服务
+（库锁，§2.3）：手动服务与桌面要同时开，`--data-dir` 也得指向桌面的服务目录（桌面会
+直接接管它），否则后起的一方以退出码 4 拒绝启动。
 
 ## 1. 目标与非目标
 
@@ -87,8 +89,9 @@
 
 ### 2.3 发现、单实例与 token
 
-- `instanceKey = sha256(canonical(dbFile) + "\0" + canonical(profileDir))` 只作日志标识（未按它分目录）；单实例由 `dataDir/instance.lock` 保证。
-- `instance.lock`：`open(..., "wx")` 原子创建，内容 `{pid, bootId, startedAt}`；启动遇锁先探活，存活且协议兼容 → 打印 `ALREADY_RUNNING pid=<pid> bootId=<bootId>` 并以退出码 3 退出（`server.ts:343-346`；调用方按退出码转 attach）。
+- `instanceKey = sha256(canonical(dbFile) + "\0" + canonical(profileDir))` 只作日志标识（未按它分目录）；单实例由两把锁保证（`apps/cli/src/store/db-lock.ts`）。
+- `instance.lock`（dataDir 下）：`open(..., "wx")` 原子创建，内容 `{pid, bootId, startedAt, dataDir}`；启动遇锁先探活，存活 → 打印 `ALREADY_RUNNING pid=<pid> bootId=<bootId>` 并以退出码 3 退出（调用方按退出码转 attach / adopt）。
+- **库锁 `<db>.service.lock`**（库文件旁，2026-11-01）：拿到 dataDir 锁后、打开库之前再拿一把；被活进程持有 → `DB_IN_USE pid=… dataDir=…` + 锁文件路径，退出码 **4**（没有可接管的 endpoint，desktop 显示「服务启动即退出」+ 这行 stderr）。为什么要它：`--data-dir` 与 `--db` 是独立参数，两个 dataDir 不同的服务指向同一份库时各自都能拿到 dataDir 锁 → 双写者。进程内打开库的 CLI（`sqliteStorage()`）**只检查不持有**：库被活着的服务持有时直接报错（堵住「CLI 直开桌面库」），并行探针各开各的 CLI 库不受影响。stale 锁（pid 已死 / 坏文件）回收；已知上限是 pid 复用误判 → fail-closed 拒绝启动，按报错里的路径手动删锁。
 - 两种 token：
   - **owner token**：spawn 者持有（desktop 的 `service.rs`；手动 `rss --service` 时即它自己，落在 `--token-file`），可调 `/v1/shutdown`；
   - **client token**：endpoint.json 里的只读/命令 token，CLI attach 用，不能 shutdown。

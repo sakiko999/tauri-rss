@@ -12,6 +12,8 @@ import { dirname, join } from "node:path"
 
 import { STORAGE_SCHEMA } from "@amoeba/core"
 
+import { assertDbNotServed } from "./db-lock.ts"
+
 /** 数据目录(apps/cli/.data/,gitignore)。本文件在 src/store/,上两级即包根。 */
 export const DATA_DIR = join(import.meta.dir, "../../.data")
 
@@ -62,6 +64,9 @@ function applySchema(db: Database, schema: StorageSchema): void {
 }
 
 export function sqliteStorage(dbFile = sqliteFilePath()): StorageBackend {
+  // 单写者：库被另一个活着的数据服务持有时拒绝打开（CLI 直开桌面库 = 第二写者）。
+  // 服务自己持有锁（pid 相同）不受影响；见 db-lock.ts。
+  assertDbNotServed(dbFile)
   // ⚠️ bun:sqlite 不会自建父目录 —— 新克隆/CI 上目录不存在时 `new Database`
   // 直接抛 "unable to open database file"(且堆栈里看不出该建目录)。先建。
   mkdirSync(dirname(dbFile), { recursive: true })

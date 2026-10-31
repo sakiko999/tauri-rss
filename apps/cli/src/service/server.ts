@@ -3,7 +3,8 @@
  *
  * 单写者：本进程独占 SQLite、crawler/resolve、浏览器、governor、jobs。
  *   stdout 只输出一行 `READY <port>`；日志一律 stderr。
- *   endpoint.json / instance.lock / service.token 都在 dataDir 下。
+ *   endpoint.json / instance.lock / service.token 都在 dataDir 下；库锁 `<db>.service.lock`
+ *   在库旁边（单写者按库文件判，见 store/db-lock.ts）。
  *   HTTP: /v1/hello /v1/health /v1/state /v1/rpc /v1/jobs/:id/cancel /v1/shutdown
  *   WS:   /v1/events（首帧 auth → hello → subscribe sinceRev）
  *
@@ -14,7 +15,7 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 
 import {
   type AppSettings,
@@ -64,6 +65,7 @@ import {
 } from "@amoeba/service-protocol"
 import type { ServerWebSocket } from "bun"
 
+import { acquireLock, dbLockPath, pidAlive } from "../store/db-lock.ts"
 import { backupDbIfNeeded, type ServiceHost, setupServiceHost } from "./host.ts"
 
 export interface ServiceOptions {
@@ -205,16 +207,6 @@ function usage(): string {
   ].join("\n")
 }
 
-function pidAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch {
-    return false
-  }
-}
-
 function tokenEquals(a: string, b: string): boolean {
   // ⚠️ token 来自 JSON,可能是 number/object;Buffer.from(1) 会抛 TypeError。
   if (typeof a !== "string" || typeof b !== "string") return false
@@ -336,23 +328,30 @@ export async function runService(opts: ServiceOptions): Promise<number> {
   const startedAt = Date.now()
   const lockPath = join(opts.dataDir, "instance.lock")
   const endpointPath = join(opts.dataDir, "endpoint.json")
+  const owner = { pid: process.pid, bootId, startedAt, dataDir: opts.dataDir }
 
   // 单实例：O_EXCL 创建；stale 锁先探活再回收。
-  try {
-    writeFileSync(lockPath, JSON.stringify({ pid: process.pid, bootId, startedAt }), { flag: "wx" })
-  } catch {
-    let old: { pid?: number; bootId?: string } = {}
-    try {
-      old = JSON.parse(readFileSync(lockPath, "utf8")) as typeof old
-    } catch {
-      /* 坏锁当 stale */
-    }
-    if (old.pid && pidAlive(old.pid)) {
-      console.error(`ALREADY_RUNNING pid=${old.pid} bootId=${old.bootId ?? "?"}`)
-      return 3
-    }
+  const running = acquireLock(lockPath, owner)
+  if (running) {
+    console.error(`ALREADY_RUNNING pid=${running.pid} bootId=${running.bootId ?? "?"}`)
+    return 3
+  }
+  // 单写者按**库文件**判：dataDir 锁挡不住「两个 dataDir 指向同一份库」（见 store/db-lock.ts）。
+  // 退出码 4 ≠ 3：后者是「同一 dataDir 已有服务」，客户端可以接管；前者没有可接管的 endpoint。
+  mkdirSync(dirname(opts.dbFile), { recursive: true })
+  const dbLock = dbLockPath(opts.dbFile)
+  const dbOwner = acquireLock(dbLock, owner)
+  if (dbOwner) {
     rmSync(lockPath, { force: true })
-    writeFileSync(lockPath, JSON.stringify({ pid: process.pid, bootId, startedAt }), { flag: "wx" })
+    console.error(
+      `DB_IN_USE pid=${dbOwner.pid} dataDir=${dbOwner.dataDir ?? "?"}：该库已被另一个数据服务使用（单写者）。` +
+        `先停掉它，或让两边用同一个 --data-dir（会直接接管已在跑的服务）。锁文件：${dbLock}`,
+    )
+    return 4
+  }
+  const releaseLocks = (): void => {
+    rmSync(lockPath, { force: true })
+    rmSync(dbLock, { force: true })
   }
 
   const ownerToken = ownerTokenFrom(opts)
@@ -988,7 +987,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
   } catch (e) {
     console.error(`[service] bootstrap failed: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`)
     await host?.close().catch(() => {})
-    rmSync(lockPath, { force: true })
+    releaseLocks()
     return 1
   }
 
@@ -1182,7 +1181,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     console.error("[service] Bun.serve 未返回端口")
     await host.close().catch(() => {})
     server.stop(true)
-    rmSync(lockPath, { force: true })
+    releaseLocks()
     return 1
   }
 
@@ -1264,7 +1263,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     server?.stop(true)
     await host?.close().catch(() => {})
     rmSync(endpointPath, { force: true })
-    rmSync(lockPath, { force: true })
+    releaseLocks()
     process.exit(code)
   }
 

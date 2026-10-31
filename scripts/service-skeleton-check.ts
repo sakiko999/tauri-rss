@@ -2,19 +2,22 @@
  * 阶段 0 服务骨架自检：
  *   bun scripts/service-skeleton-check.ts
  *
- * 验证：READY、token 认证、/v1/hello、/v1/state、WS 首帧认证、单实例锁、shutdown 清理。
- * 不写业务 DB；临时 dataDir 结束后删除。
+ * 验证：READY、token 认证、/v1/hello、/v1/state、WS 首帧认证、单实例锁、库文件锁
+ * （同库异 dataDir → 4；进程内直开 → 拒绝）、shutdown 清理。
+ * 临时 dataDir 结束后删除。
  */
 
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { sqliteStorage } from "../apps/cli/src/store/sqlite-storage.ts"
+
 const ROOT = process.cwd()
 const ENTRY = join(ROOT, "apps", "cli", "src", "main.ts")
 
-function spawnService(dir: string) {
-  return Bun.spawn([process.execPath, ENTRY, "--service", "--data-dir", dir], {
+function spawnService(dir: string, extra: string[] = []) {
+  return Bun.spawn([process.execPath, ENTRY, "--service", "--data-dir", dir, ...extra], {
     cwd: ROOT,
     stdin: "pipe",
     stdout: "pipe",
@@ -96,12 +99,36 @@ async function main(): Promise<void> {
     add("单实例锁 → 退出码 3", code === 3, `code=${code}`)
     add("ALREADY_RUNNING", stderr.includes("ALREADY_RUNNING"), stderr.trim().slice(-200))
 
+    // 第三个实例：dataDir 不同但指向同一份库 —— dataDir 锁各拿各的，必须由库锁拒绝（退出码 4）。
+    const dbFile = join(dir, "rss.db")
+    const otherDir = mkdtempSync(join(tmpdir(), "amoeba-service-skeleton-b-"))
+    try {
+      const third = spawnService(otherDir, ["--db", dbFile])
+      const code4 = await third.exited
+      const stderr4 = await new Response(third.stderr).text()
+      add("同库异 dataDir → 退出码 4", code4 === 4, `code=${code4}`)
+      add("DB_IN_USE", stderr4.includes("DB_IN_USE"), stderr4.trim().slice(-200))
+      add("被拒实例不留 dataDir 锁", !existsSync(join(otherDir, "instance.lock")))
+    } finally {
+      rmSync(otherDir, { recursive: true, force: true })
+    }
+
+    // 进程内直开服务持有的库（CLI 直开桌面库的形态）→ 拒绝，而不是成为第二写者。
+    let refused = ""
+    try {
+      sqliteStorage(dbFile)
+    } catch (e) {
+      refused = String(e)
+    }
+    add("进程内直开服务持有的库 → 拒绝", refused.includes("正被数据服务使用"), refused.slice(0, 120))
+
     const shutdown = await fetch(`http://127.0.0.1:${port}/v1/shutdown`, { method: "POST", headers: auth })
     add("shutdown 200", shutdown.status === 200, `status=${shutdown.status}`)
     const exit = await child.exited
     add("服务退出码 0", exit === 0, `code=${exit}`)
     add("endpoint 已删除", !existsSync(join(dir, "endpoint.json")))
     add("lock 已删除", !existsSync(join(dir, "instance.lock")))
+    add("库锁已删除", !existsSync(`${dbFile}.service.lock`))
   } finally {
     try {
       child.kill()
