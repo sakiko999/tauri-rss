@@ -6,10 +6,10 @@
  * 只把外观换成 .scrim/.modal/.menu 类。
  */
 
-import * as Dialog from "@radix-ui/react-dialog"
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
-import * as SelectPrimitive from "@radix-ui/react-select"
-import * as SwitchPrimitive from "@radix-ui/react-switch"
+import * as Dialog from "radix-ui/dialog"
+import * as DropdownMenu from "radix-ui/dropdown-menu"
+import * as SelectPrimitive from "radix-ui/select"
+import * as SwitchPrimitive from "radix-ui/switch"
 import type { ReactNode } from "react"
 
 import { overlayBlock } from "../lib/uiOverlay.ts"

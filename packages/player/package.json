@@ -12,10 +12,10 @@
     "@amoeba/core": "workspace:*",
     "@amoeba/log": "workspace:*",
     "@amoeba/resolve": "workspace:*",
-    "@radix-ui/react-dropdown-menu": "^2.1.6",
     "dashjs": "^5.2.0",
     "flv.js": "^1",
     "hls.js": "^1",
+    "radix-ui": "1.8.1",
     "react": "^19.2.8"
   },
   "devDependencies": {

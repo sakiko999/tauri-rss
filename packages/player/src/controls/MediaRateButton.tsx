@@ -5,7 +5,7 @@
  * 菜单用 radix DropdownMenu(键盘导航 / ESC / 焦点管理)。
  */
 
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import * as DropdownMenu from "radix-ui/dropdown-menu"
 import { useState } from "react"
 
 import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"

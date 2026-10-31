@@ -5,7 +5,7 @@
  * 菜单用 radix DropdownMenu。
  */
 
-import * as DropdownMenu from "@radix-ui/react-dropdown-menu"
+import * as DropdownMenu from "radix-ui/dropdown-menu"
 import { useState } from "react"
 
 const MENU_CONTENT_CLS = "z-50 min-w-24 rounded-md border border-white/15 bg-black/95 py-1 text-xs text-white shadow-xl"

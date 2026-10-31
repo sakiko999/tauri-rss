@@ -11,7 +11,7 @@
  */
 
 import type { Subscription, SubscriptionGroup } from "@amoeba/core"
-import * as Accordion from "@radix-ui/react-accordion"
+import * as Accordion from "radix-ui/accordion"
 import { useCallback, useMemo, useRef, useState } from "react"
 
 import { navAction, type RowCtx } from "../../lib/rail-nav.ts"

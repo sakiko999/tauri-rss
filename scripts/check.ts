@@ -76,6 +76,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/host/src/example/host-check.ts",
     "packages/host/src/example/governor.check.ts",
     "apps/cli/src/ui/qr-terminal.check.ts",
+    "scripts/radix-boundary.check.ts",
   ],
   state: [
     "packages/core/src/example/data-layer.check.ts",
