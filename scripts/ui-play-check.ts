@@ -77,16 +77,12 @@ for (const [label, idv] of Object.entries(targets) as [string, string][]) {
   // startTransition 接管,同一 tick 内读到的还是旧页(曾 4 条全读成同一条)。
   await send("Page.navigate", { url: `${BASE}/play/${encodeURIComponent(idv)}` })
   const deadline = Date.now() + WAIT + 12000
-  let ready = false
   while (Date.now() < deadline) {
     await sleep(800)
     const sid = await ev(
       `(() => { const m = document.querySelector('audio') || document.querySelector('video'); return (decodeURIComponent(location.pathname).includes(${JSON.stringify(idv)}) && m) ? 1 : 0 })()`,
     )
-    if (sid === 1) {
-      ready = true
-      break
-    }
+    if (sid === 1) break
   }
   await sleep(WAIT)
   const st = JSON.parse(

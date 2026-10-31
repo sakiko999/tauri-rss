@@ -62,10 +62,8 @@ async function main(): Promise<void> {
     const m = ready.match(/^READY (\d+)$/)
     add("READY", !!m, ready)
     if (!m) throw new Error("no READY")
-    const port = Number(m[1])
     await waitFor(async () => existsSync(join(dir, "endpoint.json")))
     const endpoint = JSON.parse(readFileSync(join(dir, "endpoint.json"), "utf8")) as EndpointInfo
-    const owner = readFileSync(join(dir, "service.token"), "utf8").trim()
 
     let subsEvents = 0
     let settingsEvents = 0

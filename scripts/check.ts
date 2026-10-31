@@ -110,6 +110,7 @@ const TYPECHECK_PROJECTS = [
   "apps/cli",
   "apps/desktop",
   "apps/mobile",
+  "scripts",
 ]
 
 /** 全仓 *.check.ts（跳过 node_modules/target/点目录），路径用 `/` 分隔。 */

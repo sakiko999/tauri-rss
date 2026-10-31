@@ -41,13 +41,14 @@ function readStdout(stream: ReadableStream<Uint8Array>) {
       if (done) break
       text += dec.decode(value, { stream: true })
       const i = text.indexOf("\n")
+      // ⚠️ 断言是给 TS 控制流看的：闭包里对 let 的赋值它不追踪，会把它窄化成 null。
       if (i >= 0 && resolveReady) {
-        resolveReady(text.slice(0, i).trim())
+        ;(resolveReady as (line: string) => void)(text.slice(0, i).trim())
         resolveReady = null
       }
     }
     if (resolveReady) {
-      resolveReady("")
+      ;(resolveReady as (line: string) => void)("")
       resolveReady = null
     }
   })()

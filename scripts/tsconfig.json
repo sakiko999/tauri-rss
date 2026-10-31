@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    // 探针脚本多为「无 import 的顶层 await 单文件」：强制按模块处理，
+    // 否则它们会被当成共享全局脚本（变量互相 redeclare、await 非法）。
+    "moduleDetection": "force"
+  },
+  "files": ["../global.d.ts"],
+  "include": ["."]
+}

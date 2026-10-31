@@ -13,6 +13,7 @@ const BASE = process.env.APP_URL ?? "http://localhost:1420"
 
 const list = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()) as Array<{
   type: string
+  url: string
   webSocketDebuggerUrl: string
 }>
 const page = list.find((t) => t.type === "page" && t.url.startsWith(BASE))

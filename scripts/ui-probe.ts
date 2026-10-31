@@ -19,6 +19,7 @@ const BASE = process.env.APP_URL ?? "http://localhost:1420"
 
 interface Target {
   type: string
+  url: string
   webSocketDebuggerUrl: string
 }
 

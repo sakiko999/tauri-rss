@@ -407,6 +407,18 @@ async function main(): Promise<void> {
       })
       const sub2 = (sub2Body.result as { id?: string } | undefined)?.id ?? ""
       add("clearAll 前有订阅", sub2Body.ok === true && !!sub2, JSON.stringify(sub2Body).slice(0, 160))
+      // client token（endpoint.json，给 rss attach）不得清库/重置设置/清凭证。
+      // ⚠️ token 每次启动都换，必须读**当前**实例的 endpoint，不能用第一次的 authClient。
+      const client2 = {
+        authorization: `Bearer ${(JSON.parse(readFileSync(join(dir, "endpoint.json"), "utf8")) as { clientToken: string }).clientToken}`,
+        "content-type": "application/json",
+      }
+      const forbidden = await fetch(`http://127.0.0.1:${port2}/v1/rpc`, {
+        method: "POST",
+        headers: client2,
+        body: JSON.stringify({ method: "diagnostics.clearAll", params: {} }),
+      })
+      add("client token clearAll → 403", forbidden.status === 403, `status=${forbidden.status}`)
       const wipe = await rpc2("diagnostics.clearAll")
       const ids = (wipe.result as string[] | undefined) ?? []
       add("clearAll 返回受影响订阅", wipe.ok === true && ids.includes(sub2), JSON.stringify(ids))
