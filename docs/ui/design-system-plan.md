@@ -5,8 +5,9 @@
 > 每步做完停一次：`bun run check` + 对应实机巡检，再进入下一步。
 
 **进度（2026-11-01）**：F1 完成（`radix-ui@1.8.1` 子路径 + 边界守卫 + 封装层，白名单清零）；
-F2 完成 AlertDialog / `confirmAction`（7 处 `window.confirm` 全部替换）。下一步：F2 其余原语
-（ContextMenu / Popover / Tooltip / Slider / ToggleGroup / Tabs）。
+F2 完成 AlertDialog / `confirmAction`（7 处 `window.confirm` 全部替换）。其余原语**在有第一个
+真实调用方时再加**，不预先造空壳：Slider/Tooltip/ContextMenu/Popover 随播放器 P0a 落地，
+ToggleGroup/Tabs 随分段控件收编（F5）落地。
 
 ## 结论（为什么不用现成组件库）
 
