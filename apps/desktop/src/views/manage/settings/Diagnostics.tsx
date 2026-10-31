@@ -7,11 +7,14 @@ import { Button } from "../../../components/Button.tsx"
 import { Icon } from "../../../components/Icon.tsx"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
 import { confirmAction } from "../../../lib/confirm.ts"
+import { buildDataExport, downloadJson } from "../../../lib/data-export.ts"
 import { useDesktop } from "../../../store/index.ts"
 
 export function Diagnostics() {
   const allItems = useDesktop((s) => s.allItems)
   const subscriptions = useDesktop((s) => s.subscriptions)
+  const groups = useDesktop((s) => s.groups)
+  const settings = useDesktop((s) => s.settings)
   const refreshErrors = useDesktop((s) => s.refreshErrors)
   const refreshErrorKinds = useDesktop((s) => s.refreshErrorKinds)
   const dl = useDesktop((s) => s.dl)
@@ -99,6 +102,19 @@ export function Diagnostics() {
     }
   }
 
+  /** 全量导出（含平台订阅/分组/阅读态；凭证已剔除）。 */
+  const exportAll = () => {
+    if (!settings) return
+    const text = buildDataExport({
+      subscriptions,
+      groups,
+      items: allItems,
+      settings,
+    })
+    downloadJson(text, `amoeba-data-${new Date().toISOString().slice(0, 10)}.json`)
+    toast("ok", "已导出全部数据", "凭证（cookie）不在导出内容里。")
+  }
+
   const errs = Object.entries(refreshErrors)
 
   return (
@@ -128,6 +144,9 @@ export function Diagnostics() {
           </Button>
           <Button variant="danger" onClick={() => void clearCache()}>
             <Icon name="trash" size={14} /> 清空内容缓存
+          </Button>
+          <Button variant="secondary" onClick={exportAll}>
+            <Icon name="download" size={14} /> 导出全部数据
           </Button>
         </div>
         <div className="inline-row" style={{ padding: "var(--sp-2) 0" }}>

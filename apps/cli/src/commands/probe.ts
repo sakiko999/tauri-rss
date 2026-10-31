@@ -34,7 +34,11 @@ export async function probeResolve(
   endpoint?: string,
 ): Promise<{ route: ResolveRoute; streams: Stream[]; tookMs: number }> {
   const r = await probeClient(endpoint).rpc("probe.resolve", { url })
-  return { route: r.route as ResolveRoute, streams: r.streams as Stream[], tookMs: r.tookMs }
+  return {
+    route: r.route as unknown as ResolveRoute,
+    streams: r.streams as unknown as Stream[],
+    tookMs: r.tookMs,
+  }
 }
 
 export async function probeDanmaku(
@@ -48,9 +52,9 @@ export async function probeDanmaku(
     ...(opts.n !== undefined ? { n: opts.n } : {}),
   })
   return {
-    route: r.route as ResolveRoute,
+    route: r.route as unknown as ResolveRoute,
     kind: r.kind,
-    items: r.items as DanmakuItem[],
+    items: r.items as unknown as DanmakuItem[],
     tookMs: r.tookMs,
   }
 }

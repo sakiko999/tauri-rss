@@ -242,17 +242,52 @@ export interface RpcMethodMap {
   }
   "probe.resolve": {
     params: { url: string }
-    result: { route: unknown; streams: unknown[]; tookMs: number }
+    result: { route: JsonValue; streams: JsonValue[]; tookMs: number }
   }
   "probe.danmaku": {
     params: { url: string; seconds?: number; n?: number }
-    result: { route: unknown; kind: "vod" | "live"; items: unknown[]; tookMs: number }
+    result: { route: JsonValue; kind: "vod" | "live"; items: JsonValue[]; tookMs: number }
   }
 }
 
 export type RpcMethod = keyof RpcMethodMap
 export type RpcParams<M extends RpcMethod> = RpcMethodMap[M]["params"]
 export type RpcResult<M extends RpcMethod> = RpcMethodMap[M]["result"]
+
+/**
+ * RPC 返回值必须可 JSON 序列化。
+ *
+ * ⚠️ 跨服务边界的返回值过 JSON：函数 / 流 / 类实例（含 Date、Map、Buffer）会静默丢字段
+ * （弹幕函数即案例）。下面这条**编译期断言**：任何方法的结果类型里出现不可序列化的东西，
+ * `_rpcResultsAreJson` 的赋值就会失败，并给出方法名。
+ */
+export type JsonValue = string | number | boolean | null | undefined | JsonValue[] | { [key: string]: JsonValue }
+
+/**
+ * 结构判据（不能直接 `T extends JsonValue`：interface 没有索引签名，会被整体判成否）。
+ * 只查「函数 / 流 / Date/Map/Set」这类跨 JSON 必丢的东西，**不进**深层递归（MediaItem
+ * 这类递归联合会让 TS 类型实例化爆掉）。顶层与数组元素、对象一级属性足以覆盖真实事故
+ * （弹幕 Stream 就是一个函数）。
+ */
+type NonJsonValue = ((...args: never[]) => unknown) | Date | Map<unknown, unknown> | Set<unknown>
+type NonSerializable<T> = T extends NonJsonValue
+  ? true
+  : T extends readonly (infer U)[]
+    ? U extends NonJsonValue
+      ? true
+      : false
+    : T extends object
+      ? true extends {
+          [K in keyof T]-?: T[K] extends NonJsonValue ? true : false
+        }[keyof T]
+        ? true
+        : false
+      : false
+
+type NotJson<M extends RpcMethod> = NonSerializable<RpcResult<M>> extends true ? M : never
+type BadJsonMethods = { [M in RpcMethod]: NotJson<M> }[RpcMethod]
+// 一旦有方法不可序列化，这里会变成方法名联合，赋值失败（比运行时静默丢字段早得多）。
+export const _rpcResultsAreJson: [BadJsonMethods] extends [never] ? true : BadJsonMethods = true
 
 /* ──────────────────────────── Snapshot ─────────────────────────── */
 

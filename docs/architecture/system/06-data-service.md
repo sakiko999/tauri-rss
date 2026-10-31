@@ -467,7 +467,10 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   `apps/cli/src/service/{server,host}.ts` + `packages/service-protocol`。
 - 快照 + rev 事件环形缓冲 + `RemoteDataLayer`（`packages/service-client`）+ 本地镜像；
   desktop Tauri 只走服务（进程内回退已删）。
-- desktop 库原地迁移；每日 `VACUUM INTO` 备份；`_migrations` checksum 门禁。
+- desktop 库原地迁移；每日 `VACUUM INTO` 备份（`dataDir/backups`，最多 7 份）；`_migrations` checksum 门禁。
+  备份是整库拷贝（含明文 cookie）：`clearCookies` / `clearAll` 会**删除全部备份**；
+  恢复入口 = `rss restore --list` / `rss restore --db <库>`（服务停止时执行，覆盖前自动另存当前库）。
+  桌面「设置 → 存储与诊断 → 导出全部数据」导出 JSON（订阅/分组/阅读态，**不含 cookie**）。
 - **验收实测**：
   - `scripts/service-data-check.ts` 48 项全过（快照/事件 rev/阅读合批/settings/refresh/
     preview/loadMore/probe/cacheStats/幂等/退订清理/token 权限/迁移表/每日备份/回滚演练/

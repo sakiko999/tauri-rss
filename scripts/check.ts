@@ -57,6 +57,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "apps/desktop/src/lib/css-classes.check.ts",
     "apps/desktop/src/lib/core-imports.check.ts",
     "apps/desktop/src/lib/confirm.check.ts",
+    "apps/desktop/src/lib/data-export.check.ts",
     "apps/desktop/src/lib/rail-nav.check.ts",
     "apps/desktop/src/lib/boot-skeleton.check.ts",
     "apps/desktop/src/store/nodes.check.ts",
@@ -78,6 +79,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/host/src/example/governor.check.ts",
     "apps/cli/src/ui/qr-terminal.check.ts",
     "scripts/radix-boundary.check.ts",
+    "scripts/rpc-coverage.check.ts",
   ],
   state: [
     "packages/core/src/example/data-layer.check.ts",

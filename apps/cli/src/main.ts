@@ -35,6 +35,7 @@ import { runItem } from "./commands/item.ts"
 import { runLogin } from "./commands/login.ts"
 import { runPlay } from "./commands/play.ts"
 import { runRefresh } from "./commands/refresh.ts"
+import { runRestore } from "./commands/restore.ts"
 import { runSug } from "./commands/sug.ts"
 import { closeBrowser, setupHost } from "./host/node-host.ts"
 import { loadSettings } from "./info.ts"
@@ -231,6 +232,19 @@ cli
           [arg1, arg2].filter((v): v is string => !!v),
           opts,
         ),
+    ),
+  )
+
+cli
+  .command("restore", "从每日备份恢复数据库（服务停止时执行；--list 先看有哪些）")
+  .option("--db <file>", "要覆盖的库文件（必填；dev=rss.dev.db / 安装版=rss.db）")
+  .option("--data-dir <dir>", "服务数据目录（默认按 --profile 推导）")
+  .option("--profile <name>", "dev|desktop（默认 dev）")
+  .option("--file <path>", "指定备份文件（默认最新一份）")
+  .option("--list", "只列出备份，不恢复")
+  .action(
+    guard((opts: { db?: string; dataDir?: string; file?: string; profile?: string; list?: boolean }) =>
+      runRestore(opts),
     ),
   )
 
