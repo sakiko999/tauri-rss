@@ -149,6 +149,15 @@ for (const file of tsFiles) {
     else readString(src, i, onString)
   }
   for (const m of src.matchAll(/\b(?:cn|clsx)\(/g)) scan(src, m.index + m[0].length, ")", onString)
+  // cva(...) 的 base/variants 都是类名字符串（Button/IconButton 的唯一样式源）。
+  // 单标识符（"primary"/"md" 这类变体名，以及 defaultVariants 的值）不是类名，跳过；
+  // 已知上限：cva 里单独一个不带连字符的工具类（"flex"）也在此被跳过。
+  for (const m of src.matchAll(/\bcva\(/g)) {
+    scan(src, m.index + m[0].length, ")", (s, start, end) => {
+      if (!/[\s-]/.test(s.trim())) return
+      onString(s, start, end)
+    })
+  }
 }
 
 // ── 3. 判定 ────────────────────────────────────────────────────────────────

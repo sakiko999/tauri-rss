@@ -13,10 +13,33 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
 import { Button, IconButton } from "../components/Button.tsx"
-import { cn } from "./cn.ts"
+import { cn, TW_THEME_EXTEND } from "./cn.ts"
 
 // ── 1. 每个自定义令牌：与同组默认类互相覆盖；与同前缀的异组类共存 ──────────────
-const tokens = readFileSync(new URL("../styles/10-tokens.css", import.meta.url), "utf8")
+/**
+ * ⚠️ 只解析 `@theme { … }` 块：`:root` 里的私有变量（`--ease-heliu` 等）不生成工具类，
+ * 混进来会逼着把一个**不存在**的工具类登记进 TW_THEME_EXTEND（登记后 cn 会吞掉真实类）。
+ */
+function themeBlocks(css: string): string {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, "")
+  const blocks: string[] = []
+  const re = /@theme\b[^{]*\{/g
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    let i = m.index + m[0].length
+    let depth = 1
+    const start = i
+    while (i < text.length && depth > 0) {
+      if (text[i] === "{") depth += 1
+      else if (text[i] === "}") depth -= 1
+      i += 1
+    }
+    blocks.push(text.slice(start, i - 1))
+    re.lastIndex = i
+  }
+  return blocks.join("\n")
+}
+
+const tokens = themeBlocks(readFileSync(new URL("../styles/10-tokens.css", import.meta.url), "utf8"))
 
 /** 命名空间 → 工具类前缀 + 同组默认类（应被覆盖）+ 同前缀异组类（应共存）。 */
 const GROUPS: Record<string, { prefix: string; same: string; other?: string }> = {
@@ -52,6 +75,16 @@ for (const key of found) {
   if (g.other) assert.equal(cn(util, g.other), `${util} ${g.other}`, `${util} 与 ${g.other} 不同组，应共存${hint}`)
 }
 
+// 反向：登记了 CSS 里不存在的令牌 —— 工具类不会生成，但 cn 会把它当真（吞掉同组类）。
+for (const [ns, names] of Object.entries(TW_THEME_EXTEND)) {
+  for (const name of names) {
+    assert.ok(
+      found.has(`${ns}:${name}`),
+      `TW_THEME_EXTEND.${ns} 登记了 "${name}"，但 10-tokens.css 的 @theme 里没有 --${ns}-${name} —— 删掉这条登记`,
+    )
+  }
+}
+
 // ── 2. 真实组件输出：字号/高度/文字色三者都在（原 bug 的直接回归）───────────────
 const classes = (el: unknown): string[] => (el as { props: { className: string } }).props.className.split(/\s+/)
 const TEXT_COLOR = {
@@ -80,5 +113,28 @@ assert.ok(
   iconSm.includes("size-control-sm") && !iconSm.includes("size-control"),
   `IconButton sm 尺寸类不对：${iconSm.join(" ")}`,
 )
+
+// 反向：组件输出里的自定义类必须能在 @theme 找到对应令牌。
+// （删掉 --text-ui-sm 时前面的断言仍绿：cn 认识这个类名、只是 Tailwind 不再生成 CSS。）
+const TOKEN_OF: Record<string, string> = {
+  "text-ui": "text:ui",
+  "text-ui-sm": "text:ui-sm",
+  "h-control": "spacing:control",
+  "h-control-sm": "spacing:control-sm",
+  "size-control": "spacing:control",
+  "size-control-sm": "spacing:control-sm",
+  "font-ui": "font-weight:ui",
+}
+const emitted = new Set<string>()
+for (const variant of Object.keys(TEXT_COLOR) as Array<keyof typeof TEXT_COLOR>) {
+  for (const size of ["md", "sm"] as const) for (const c of classes(Button({ variant, size }))) emitted.add(c)
+}
+for (const size of ["md", "sm"] as const) for (const c of classes(IconButton({ size }))) emitted.add(c)
+for (const cls of emitted) {
+  if (!/^(?:text-ui|h-control|size-control|font-ui)/.test(cls)) continue
+  const key = TOKEN_OF[cls]
+  assert.ok(key, `组件输出了未登记映射的自定义类 ${cls}（补 TOKEN_OF 与 cn.ts 的扩展）`)
+  assert.ok(found.has(key!), `组件输出 ${cls}，但 10-tokens.css 的 @theme 里没有 --${key!.replace(":", "-")}`)
+}
 
 console.log(`✔ cn 自检通过（${found.size} 个自定义令牌按组合并 + Button 4 变体 × 2 尺寸 + IconButton）`)

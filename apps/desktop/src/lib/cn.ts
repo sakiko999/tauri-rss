@@ -14,15 +14,16 @@ import { extendTailwindMerge } from "tailwind-merge"
  * ⚠️ 不登记的后果（2026-11-01 实测）：`text-ui` 被当成**颜色**类，与 `text-foreground`
  * 互相覆盖 —— md Button 丢 13px 字号（继承 body 15px），sm Button 丢文字色。
  * 在这几个命名空间（text/spacing/font-weight/shadow/ease/animate）加令牌要同步这里；
- * `cn.check.ts` 按 CSS 反查，漏登记直接失败。颜色（color: isAny）、圆角/字体族
- * （默认 T 恤尺码/任意名）不用登记。
+ * `cn.check.ts` 双向校验：@theme 里的令牌漏登记会失败，登记了 CSS 里没有的令牌也会失败。
+ * 只认 `@theme` 块 —— `:root` 里同名的私有变量（如 `--ease-heliu`）不生成工具类，别登记。
+ * 颜色（color: isAny）、圆角/字体族（默认 T 恤尺码/任意名）不用登记。
  */
 export const TW_THEME_EXTEND = {
   text: ["ui", "ui-sm"],
   spacing: ["control", "control-sm"],
   "font-weight": ["ui"],
   shadow: ["1", "2", "pop"],
-  ease: ["heliu", "decel", "accel"],
+  ease: ["decel", "accel"],
   animate: ["rise", "fade", "shimmer", "pulse-soft", "modal-in"],
 }
 
