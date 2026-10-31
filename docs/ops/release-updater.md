@@ -86,7 +86,8 @@ git push origin vX.Y.Z
 
 v0.7.0 发了一个启动即「应用数据初始化失败」的包：CI 既没构建服务三件，也没叠加
 `tauri.conf.release.json`（`bundle.resources` 只写在那里）。已修 release.yml（见
-`0ecb1a2`），但**还没有自动门禁**，靠人记得。补齐项（处理 CI 时一并做）：
+`0ecb1a2`），但**产物仍没有自动门禁**，靠人记得。2026-11-01 起 release.yml 在构建前跑
+`bun run check`（只挡源码层回归，挡不住打包漏件）。仍待补（处理 CI 时一并做）：
 
 1. 构建后断言安装包内容含 `service/service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe`
    （`7z l *-setup.exe` 三条 grep，缺一即 fail）。

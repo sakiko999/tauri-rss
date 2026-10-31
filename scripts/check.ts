@@ -86,7 +86,6 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/resolve/src/example/scheduler.check.ts",
     "packages/resolve/src/example/live-photo.check.ts",
     "packages/resolve/src/example/video-post.check.ts",
-    "packages/resolve/src/example/douyin-user.check.ts",
     "packages/crawler/src/example/passive-buffer.check.ts",
     "packages/crawler/src/example/passive-capture.check.ts",
     "packages/crawler/src/example/xhs-strategy.check.ts",
@@ -129,7 +128,13 @@ function discoverChecks(): string[] {
  * 这里按文件系统发现，未登记直接失败；同时要求「有 tsconfig 的项目都必须进 typecheck」。
  */
 {
-  const registered = new Set(Object.values(FILES).flat())
+  const all = Object.values(FILES).flat()
+  const registered = new Set(all)
+  const dup = all.filter((p, i) => all.indexOf(p) !== i)
+  if (dup.length) {
+    console.error(`✘ 有 .check.ts 被登记了不止一层（会重复跑、层归属也说不清）：${[...new Set(dup)].join(", ")}`)
+    process.exit(1)
+  }
   const unregistered = discoverChecks().filter((p) => !registered.has(p))
   if (unregistered.length) {
     console.error("✘ 有 .check.ts 未登记，任何层都不会跑它：")
@@ -225,13 +230,15 @@ function main(): number {
   const t0 = performance.now()
 
   for (const layer of layers) {
-    // style 层是两条整仓命令（不走 FILES 文件列表；--filter 不适用）。
+    // style 层是两条整仓命令（不走 FILES 文件列表）；--filter 按步骤名筛（如 `--filter fmt`）。
+    // ⚠️ 不能无条件跑：否则 --filter 拼错时 results 永远非空，下面的「零匹配」守卫失效（假绿）。
     if (layer === "style") {
-      console.log(`\n${layer}`)
       const steps = [
         { cmd: [process.execPath, "run", "lint"], name: "oxlint", rerun: "bun run lint" },
         { cmd: [process.execPath, "run", "fmt:check"], name: "fmt --check", rerun: "bun run fmt:check" },
-      ]
+      ].filter((s) => !filter || s.name.includes(filter))
+      if (!steps.length) continue
+      console.log(`\n${layer}`)
       for (const s of steps) {
         const r = run(s.cmd, s.name)
         results.push(r)
@@ -267,7 +274,7 @@ function main(): number {
     }
   }
 
-  // ⚠️ --filter 拼错时 items 为空 → 下面会打印「全部通过 · 0/0」并退 0（假绿）。
+  // --filter 拼错时 items 为空 → 若不拦，下面会打印「全部通过 · 0/0」并退 0（假绿）。
   if (filter && results.length === 0) {
     console.error(`\n✘ --filter "${filter}" 没有匹配任何检查项（检查拼写）`)
     return 1

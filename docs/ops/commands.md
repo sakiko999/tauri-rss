@@ -91,17 +91,17 @@ target/debug/amoeba-runtime.exe --no-download <entry>      # 离线：只用已�
 ## 自检脚本（仓库无测试基建，用最小断言）
 
 ```bash
-bun run check                          # ★ 统一入口：static + contract + state + typecheck（默认 4 层）
+bun run check                          # ★ 统一入口：static + contract + state + style + typecheck（默认 5 层）
 bun run check --list                   # 列出全部检查项与所属层
 bun run check --layer service          # 起真实数据服务（慢，协议/快照/取消）
-bun run check --layer all              # 五层全跑
-bun run check --filter core           # 按路径子串筛（调试单点时用）
+bun run check --layer all              # 六层全跑（默认 5 层 + service）
+bun run check --filter core           # 按路径子串 / style 步骤名筛（调试单点时用；零匹配 = 失败）
 ```
 
 分层与归属清单在 `scripts/check.ts` 的 `FILES` / `TYPECHECK_PROJECTS`；新增 `.check.ts` 要同时加进对应层。
 
-> **CI 暂缓（2026-10-26 决策）**：`.github/workflows/ci.yml` 未建（`release.yml` 已有，只做发布）；
-> 本地 `bun run check` 即唯一门禁。
+> **CI**：`.github/workflows/ci.yml` 未建（2026-10-26 决策：日常提交不跑 CI）；`release.yml` 在构建前跑
+> `bun run check`（2026-11-01 起）—— 本地不过的提交，打了 tag 也发不出去。
 单跑某个文件（失败信息原样输出）：
 
 ```bash
@@ -157,14 +157,13 @@ bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契
 ```bash
 bun run lint                           # oxlint（默认 correctness 规则；.oxlintrc.json 里配 ignorePatterns）
 bun run fmt                            # bun fmt 全仓格式化（bunfig.toml：120 列/无分号/双引号/尾逗号 all）
-bun run fmt:check                      # 只检查不写（无 CI 门禁，本地自查）
+bun run fmt:check                      # 只检查不写（已并入 check 的 style 层）
 ```
 
 - formatter = Bun 内置 `bun fmt`（Prettier 兼容引擎）。⚠️ package.json 里的 `fmt` script 必须带
   `--no-script`，否则 `bun fmt` 会路由回同名 script 造成递归。
 - linter = `oxlint`（Bun 内置 `bun lint` 在 1.4.x 尚未发布；升级后可直接替换本行命令）。
-- 2026-10-28 接入时**未跑全仓格式化**：`bun run fmt:check` 仍报约 489 个文件待格式化（基线），
-  格式化收口后再把 `fmt:check`（以及 `lint`）并入 `bun run check` 的统一入口。
+- `lint` 与 `fmt:check` 都在 `bun run check` 的 style 层（全仓格式化已收口），发布前 CI 也跑。
 - 文档（`**/*.md`）与 `tmp/` 不在格式化范围内（bunfig.toml 的 ignorePatterns）。
 
 ## UI 交互巡检（连到正在运行的 dev 实例；需 `bun run tauri`，9222 由 dev 配置开启）

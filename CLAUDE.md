@@ -182,8 +182,8 @@ bun run rss login <platform>                                # 扫码登录（经
 bun run rss fetch <key> --via-service           # 探针走数据服务（同 cookie/被动/配额）
 bun run rss attach status | list | refresh <id>  # CLI 作为桌面数据服务客户端
 bun run service:build                       # 打包独立服务入口 → dist/service/service.js
-bun run check                               # ★ 统一检查入口：static+contract+state+typecheck
-bun run check --layer service       # 起真实数据服务（慢）；`--layer all` 五层、`--list` 列清单
+bun run check                               # ★ 统一检查入口：static+contract+state+style+typecheck（发布前 CI 也跑）
+bun run check --layer service       # 起真实数据服务（慢）；`--layer all` 六层、`--list` 列清单
 bun run lint                                # oxlint 静态检查（默认 correctness 规则；当前 0 error / 16 warning）
 bun run fmt / fmt:check                     # bun fmt 全仓格式化 / 只检查不写（配置在 bunfig.toml）
 bun scripts/service-data-check.ts           # 服务数据链路 48 项自检（含 job 取消/并发写/回滚）

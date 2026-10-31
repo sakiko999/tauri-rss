@@ -8,7 +8,7 @@
 
 | 改了什么 | 跑什么 |
 | --- | --- |
-| **任何** 改动 | `bun run check`（static + contract + state + typecheck，12 个 tsconfig）+ 相关 `.check.ts` |
+| **任何** 改动 | `bun run check`（static + contract + state + style + typecheck，12 个 tsconfig）+ 相关 `.check.ts` |
 | crawler→core 字段 | `serialize-roundtrip.check.ts` + `serialize-contract.check.ts` |
 | player 选流/兜底/autoplay | `scripts/ui-play-check.ts`（真机播放矩阵）+ `packages/player/src/hooks/useStreamSelection.check.ts` |
 | player 统计信息（右键） | `bun packages/player/src/hooks/player-stats.check.ts`；真机：播放中右键 →「统计信息」，引擎/档位/分辨率/帧率/丢帧/缓冲健康/编解码器/音量/宿主隧道/网络活动应有值（网络活动 = 进程累计出站流量与请求数，媒体分片持续增长）；直播另有「直播延迟」；再次右键可隐藏 |
@@ -66,12 +66,12 @@
 ## 二、类型检查（12 个项目，必须全 0）
 
 ```bash
-bun run check                  # static + contract + state + typecheck 一次跑完（推荐）
+bun run check                  # static + contract + state + style + typecheck 一次跑完（推荐）
 bun run check --layer typecheck # 只看类型
 ```
 
 覆盖 `packages/{xml,log,platform,resolve,crawler,core,host,player,ui}` + `apps/{cli,desktop,mobile}`，
-每个项目单独 `tsc -p`（入口 `scripts/check.ts`）。列表在 `scripts/check.ts:89` 的 `TYPECHECK_PROJECTS`。
+每个项目单独 `tsc -p`（入口 `scripts/check.ts`）。列表在 `scripts/check.ts` 的 `TYPECHECK_PROJECTS`。
 
 ## 二点五、Numbered UI Overlay（dev-only）
 

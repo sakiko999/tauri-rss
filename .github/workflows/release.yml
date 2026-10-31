@@ -42,6 +42,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # 发布门禁：与本地同一入口（static/contract/state/style/typecheck，约 10s）。
+      # 不过就不发 —— 发出去的包会经自更新推给所有已安装用户，回退成本远高于这一步。
+      - name: Checks
+        run: bun run check
+
       # 产物必须先生成到 dist/desktop(tauri.conf 的 frontendDist,tauri build 不会再跑 Vite)。
       - name: Build frontend
         run: bun run build:desktop
