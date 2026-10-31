@@ -11,6 +11,8 @@
 - [ ] **发布产物自动门禁**〔11-01〕：构建后解包 `*-setup.exe`，断言含 `service/service.js`、
       `amoeba-runtime.exe`、`amoeba-browser.exe`；断言 release overlay 真的生效（漏 `--config`
       时 resources 静默为空）。→ `docs/ops/release-updater.md` §待补
+      （v0.15.0 已人工解包验证三件齐全；CI 自动门禁未做，理想形态 = tauri-action 先出 draft，
+      断言通过再 `gh release edit --draft=false`）
 - [ ] **干净 VM 复核**：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin。
       → `docs/architecture/system/06-data-service.md` §12
 - [ ] **崩溃自愈真机验证**〔11-01〕：Tauri 下杀服务进程，确认 Rust `service_endpoint` 重新
