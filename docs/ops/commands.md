@@ -69,6 +69,8 @@ bun run rss attach status --profile desktop  # 连安装版的服务（--endpoin
 bun run rss attach list [--json]        # 列出订阅（含条目数/总数/分组）
 bun run rss attach refresh <id|channel> # 经服务刷新（--all 全部；--no-force 走 TTL）
 bun run rss attach rpc <method> @params.json  # 通用 RPC（Windows 传 JSON 用 @file）
+bun run rss restore --list                     # 列出每日备份（dataDir/backups）
+bun run rss restore --db <库> [--file <备份>]   # 服务停止时从备份恢复（覆盖前自动另存当前库）
 bun scripts/service-phase0.ts           # 阶段 0 测量：bootstrap/双写者/markMany 5k
 bun scripts/service-skeleton-check.ts   # 握手/state/WS/单实例/shutdown（13 项）
 bun scripts/service-data-check.ts       # 数据链路 48 项：快照/事件/阅读/备份/迁移/退订/回滚/取消/并发
