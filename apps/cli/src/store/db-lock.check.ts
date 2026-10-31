@@ -7,11 +7,11 @@
  */
 
 import assert from "node:assert/strict"
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { acquireLock, assertDbNotServed, dbLockPath } from "./db-lock.ts"
+import { acquireLock, assertDbNotServed, dbLockPath, releaseLock } from "./db-lock.ts"
 
 const dir = mkdtempSync(join(tmpdir(), "amoeba-db-lock-"))
 const me = { pid: process.pid, bootId: "check", dataDir: dir }
@@ -39,12 +39,22 @@ try {
   writeFileSync(p3, JSON.stringify({ pid: DEAD_PID }))
   assert.equal(acquireLock(p3, me), null, "持有者已死的锁应被回收")
 
-  // 6. 进程内开库的检查：自己持有不拦，别人（活）持有要拦，死人持有不拦
+  // 6. 只释放自己持有的锁：bootId 不同就不能删别人的
+  const p4 = join(dir, "d.lock")
+  writeFileSync(p4, JSON.stringify({ ...me, bootId: "someone-else" }))
+  releaseLock(p4, me)
+  assert.ok(existsSync(p4), "bootId 不同就不能删别人的锁")
+  releaseLock(p4, { pid: process.pid, bootId: "someone-else" })
+  assert.ok(!existsSync(p4), "自己的锁应被释放")
+
+  // 7. 进程内开库：自己持有不拦；别人（活）持有 / 刚建的空锁要拦；死人持有不拦
   const db = join(dir, "x.db")
   writeFileSync(dbLockPath(db), JSON.stringify({ pid: process.pid }))
   assertDbNotServed(db)
   writeFileSync(dbLockPath(db), JSON.stringify({ pid: DEAD_PID }))
   assertDbNotServed(db)
+  writeFileSync(dbLockPath(db), "")
+  assert.throws(() => assertDbNotServed(db), /正被数据服务使用/, "刚建出的空锁也应视为被持有")
   const parent = process.ppid
   if (parent && parent !== process.pid) {
     writeFileSync(dbLockPath(db), JSON.stringify({ pid: parent, dataDir: "other" }))

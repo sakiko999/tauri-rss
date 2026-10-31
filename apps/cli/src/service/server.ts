@@ -65,7 +65,7 @@ import {
 } from "@amoeba/service-protocol"
 import type { ServerWebSocket } from "bun"
 
-import { acquireLock, dbLockPath, pidAlive } from "../store/db-lock.ts"
+import { acquireLock, dbLockPath, pidAlive, releaseLock } from "../store/db-lock.ts"
 import { backupDbIfNeeded, type ServiceHost, setupServiceHost } from "./host.ts"
 
 export interface ServiceOptions {
@@ -342,16 +342,17 @@ export async function runService(opts: ServiceOptions): Promise<number> {
   const dbLock = dbLockPath(opts.dbFile)
   const dbOwner = acquireLock(dbLock, owner)
   if (dbOwner) {
-    rmSync(lockPath, { force: true })
+    releaseLock(lockPath, owner)
     console.error(
       `DB_IN_USE pid=${dbOwner.pid ?? "?"} dataDir=${dbOwner.dataDir ?? "?"}：该库已被另一个数据服务使用（单写者）。` +
         `先停掉它，或让两边用同一个 --data-dir（会直接接管已在跑的服务）。锁文件：${dbLock}`,
     )
     return 4
   }
+  // 只删自己持有的锁：失败方无条件 rm 会删掉接管者的锁，把它变成「无锁运行」。
   const releaseLocks = (): void => {
-    rmSync(lockPath, { force: true })
-    rmSync(dbLock, { force: true })
+    releaseLock(lockPath, owner)
+    releaseLock(dbLock, owner)
   }
 
   const ownerToken = ownerTokenFrom(opts)

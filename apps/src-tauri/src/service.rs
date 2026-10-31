@@ -316,6 +316,33 @@ fn client_token(value: &Value) -> Option<&str> {
     value.get("clientToken")?.as_str()
 }
 
+/// 已有的 endpoint 是否就是**本实例要用的那份库与 profile**。
+///
+/// ⚠️ 只校验 protocol/health 不够：endpoint.json 在 dataDir 下，手动起的服务如果把
+/// `--data-dir` 对齐了桌面、却没对齐 `--db`/`--profile-dir`，桌面会静默接管另一份库
+/// （订阅「消失」、写入落错库、登录态也是另一套）。2026-11-01 的库锁只在服务侧，
+/// 挡不住桌面 adopt。
+fn endpoint_matches(paths: &Paths, endpoint: &Value) -> bool {
+    let same_path = |key: &str, want: &Path| {
+        endpoint
+            .get(key)
+            .and_then(Value::as_str)
+            .is_some_and(|got| same_file(Path::new(got), want))
+    };
+    same_path("dbFile", &paths.db_path) && same_path("profileDir", &paths.profile_dir)
+}
+
+fn mismatch_error(endpoint: &Value, paths: &Paths) -> String {
+    format!(
+        "已运行的数据服务用的是另一份库/浏览器 profile：\n  服务 db={} profile={}\n  本实例期望 db={} profile={}\n\
+         停掉它，或手动起服务时同时对齐 --data-dir / --db / --profile-dir（见 docs/architecture/system/06-data-service.md §2.3）。",
+        endpoint.get("dbFile").and_then(Value::as_str).unwrap_or("?"),
+        endpoint.get("profileDir").and_then(Value::as_str).unwrap_or("?"),
+        paths.db_path.display(),
+        paths.profile_dir.display(),
+    )
+}
+
 fn health_ok(value: &Value) -> bool {
     let Some(port) = endpoint_port(value) else {
         return false;
@@ -494,6 +521,9 @@ fn ensure_service(
 ) -> Result<(Value, Option<Child>, Option<String>), String> {
     if let Some(endpoint) = read_endpoint(&paths.endpoint_file) {
         if health_ok(&endpoint) {
+            if !endpoint_matches(paths, &endpoint) {
+                return Err(mismatch_error(&endpoint, paths));
+            }
             return Ok((endpoint, None, None));
         }
     }
@@ -521,6 +551,9 @@ fn ensure_service(
                         tail(&stderr_tail)
                     )
                 })?;
+            if !endpoint_matches(paths, &endpoint) {
+                return Err(mismatch_error(&endpoint, paths));
+            }
             Ok((endpoint, None, None))
         }
         Err(err) => Err(err),
@@ -605,6 +638,44 @@ mod tests {
             "amoeba-service-test-{}-{stamp}",
             std::process::id()
         ))
+    }
+
+    #[test]
+    fn adopt_rejects_endpoint_pointing_at_other_db() {
+        let base = temp_base();
+        std::fs::create_dir_all(&base).expect("mkdir");
+        let db = base.join("rss.dev.db");
+        let profile = base.join("profile");
+        let other_db = base.join("other.db");
+        std::fs::write(&db, b"x").expect("db");
+        std::fs::write(&other_db, b"x").expect("other db");
+        std::fs::create_dir_all(&profile).expect("profile");
+        let paths = Paths {
+            data_dir: base.join("service"),
+            db_path: db.clone(),
+            profile_dir: profile.clone(),
+            token_file: base.join("token"),
+            endpoint_file: base.join("endpoint.json"),
+            launcher: base.join("launcher"),
+            entry: base.join("entry"),
+            sidecar: None,
+        };
+        let ok = serde_json::json!({
+            "dbFile": db.to_string_lossy(),
+            "profileDir": profile.to_string_lossy()
+        });
+        let wrong_db = serde_json::json!({
+            "dbFile": other_db.to_string_lossy(),
+            "profileDir": profile.to_string_lossy()
+        });
+        let wrong_profile = serde_json::json!({
+            "dbFile": db.to_string_lossy(),
+            "profileDir": base.join("other-profile").to_string_lossy()
+        });
+        assert!(endpoint_matches(&paths, &ok), "同库同 profile 才可 adopt");
+        assert!(!endpoint_matches(&paths, &wrong_db), "另一份库不得 adopt");
+        assert!(!endpoint_matches(&paths, &wrong_profile), "另一份 profile 不得 adopt");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

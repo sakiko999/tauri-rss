@@ -11,7 +11,7 @@
  * 不双写；报错里给出锁文件路径，确认没有服务后可手动删除）。跨机/网络盘不在考虑范围。
  */
 
-import { readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs"
 
 export interface LockOwner {
   pid?: number
@@ -48,17 +48,33 @@ function readLockOwner(path: string): LockOwner | null {
  * 5 秒内的空/坏锁当作有人持有（返回 `{}`，持有者未知）—— 当 stale 删掉会变成双持有。
  */
 export function acquireLock(path: string, owner: LockOwner): LockOwner | null {
-  try {
-    writeFileSync(path, JSON.stringify(owner), { flag: "wx" })
-    return null
-  } catch {
-    const old = readLockOwner(path)
-    if (old?.pid && pidAlive(old.pid)) return old
-    if (!old?.pid && createdWithin(path, FRESH_LOCK_MS)) return {}
-    rmSync(path, { force: true })
-    writeFileSync(path, JSON.stringify(owner), { flag: "wx" })
-    return null
+  // 两轮：第一轮建锁；第二轮在**原子地把 stale 锁改名搬走**之后重建。
+  for (let round = 0; round < 2; round++) {
+    try {
+      writeFileSync(path, JSON.stringify(owner), { flag: "wx" })
+      return null
+    } catch {
+      const old = readLockOwner(path)
+      if (old?.pid && pidAlive(old.pid)) return old
+      if (!old?.pid && createdWithin(path, FRESH_LOCK_MS)) return {}
+      // ⚠️ 不能「删掉再建」：两个并发启动者会各自删掉对方刚建的锁，双双持有。
+      // rename 是原子的 —— 只有一个能把这份 stale 锁搬走，另一个会 ENOENT 后重试读到新锁。
+      const stale = `${path}.stale.${process.pid}.${Date.now()}`
+      try {
+        renameSync(path, stale)
+        rmSync(stale, { force: true }) // 搬走即归我处置，删掉不留垃圾
+      } catch {
+        /* 别人先回收了：下一轮按新锁判定 */
+      }
+    }
   }
+  return readLockOwner(path) ?? {}
+}
+
+/** 只释放**自己持有**的锁：绝不删别人的（失败方清锁会放大成双写者）。 */
+export function releaseLock(path: string, owner: Pick<LockOwner, "pid" | "bootId">): void {
+  const current = readLockOwner(path)
+  if (current && current.pid === owner.pid && current.bootId === owner.bootId) rmSync(path, { force: true })
 }
 
 const FRESH_LOCK_MS = 5_000
@@ -73,11 +89,15 @@ function createdWithin(path: string, ms: number): boolean {
 
 /** 库正被另一个活着的数据服务持有时抛错 —— 进程内再打开它就是第二写者。 */
 export function assertDbNotServed(dbFile: string): void {
-  const owner = readLockOwner(dbLockPath(dbFile))
-  if (owner?.pid && owner.pid !== process.pid && pidAlive(owner.pid)) {
-    throw new Error(
-      `库 ${dbFile} 正被数据服务使用（pid ${owner.pid}，dataDir ${owner.dataDir ?? "?"}）；` +
-        `进程内再打开就是第二写者。改用 --via-service / rss attach，或先停掉该服务。`,
-    )
-  }
+  const path = dbLockPath(dbFile)
+  const owner = readLockOwner(path)
+  const pid = owner?.pid
+  // 与 acquireLock 同一判据：活 pid，或「刚建出来还没写完」的空锁，都算被占用。
+  if (pid === process.pid) return
+  if (!(pid && pidAlive(pid)) && !(pid === undefined && createdWithin(path, FRESH_LOCK_MS))) return
+  throw new Error(
+    `库 ${dbFile} 正被数据服务使用` +
+      `（pid ${pid ?? "?"}，dataDir ${owner?.dataDir ?? "?"}）；` +
+      `进程内再打开就是第二写者。改用 --via-service / rss attach，或先停掉该服务。`,
+  )
 }

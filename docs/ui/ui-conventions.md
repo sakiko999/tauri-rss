@@ -137,7 +137,9 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
   但那是兜底：前端拦截才有失败 toast 与锚点滚动。
 - ⚠️ **第三方正文 HTML 只能经 `lib/sanitize.ts` 的 `sanitizeFeedHtml` 渲染**（唯一消毒配置）：
   它在 DOMPurify 默认之上去掉 `<style>`（对整个应用文档生效）、表单族、带
-  `position`/`z-index` 的内联样式。别在调用点直接 `DOMPurify.sanitize` 另起一份配置。
+  `position`/`z-index` 的内联样式、**class 与 id**（正文与应用共用同一文档，`.scrim`/
+  `.modal`/`#toast-root` 这类全局名字能直接接管界面）。别在调用点直接 `DOMPurify.sanitize`
+  另起一份配置。代价：正文自带的 `.lede`、代码高亮类与脚注跳转不生效。
 - ⚠️ **JS 驱动的动画挡不住 `prefers-reduced-motion`**：`styles/90-responsive.css` 里那条
   `@media (prefers-reduced-motion: reduce)` 只压
   CSS 的 animation/transition，对 `scrollIntoView({behavior:"smooth"})`、脚本编排的入场与

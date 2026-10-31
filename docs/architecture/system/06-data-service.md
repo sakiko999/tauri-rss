@@ -91,7 +91,8 @@
 
 - `instanceKey = sha256(canonical(dbFile) + "\0" + canonical(profileDir))` 只作日志标识（未按它分目录）；单实例由两把锁保证（`apps/cli/src/store/db-lock.ts`）。
 - `instance.lock`（dataDir 下）：`open(..., "wx")` 原子创建，内容 `{pid, bootId, startedAt, dataDir}`；启动遇锁先探活，存活 → 打印 `ALREADY_RUNNING pid=<pid> bootId=<bootId>` 并以退出码 3 退出（调用方按退出码转 attach / adopt）。
-- **库锁 `<db>.service.lock`**（库文件旁，2026-11-01）：拿到 dataDir 锁后、打开库之前再拿一把；被活进程持有 → `DB_IN_USE pid=… dataDir=…` + 锁文件路径，退出码 **4**（没有可接管的 endpoint，desktop 显示「服务启动即退出」+ 这行 stderr）。为什么要它：`--data-dir` 与 `--db` 是独立参数，两个 dataDir 不同的服务指向同一份库时各自都能拿到 dataDir 锁 → 双写者。进程内打开库的 CLI（`sqliteStorage()`）**只检查不持有**：库被活着的服务持有时直接报错（堵住「CLI 直开桌面库」），并行探针各开各的 CLI 库不受影响。stale 锁（pid 已死 / 坏文件）回收；已知上限是 pid 复用误判 → fail-closed 拒绝启动，按报错里的路径手动删锁。
+- **库锁 `<db>.service.lock`**（库文件旁，2026-11-01）：拿到 dataDir 锁后、打开库之前再拿一把；被活进程持有 → `DB_IN_USE pid=… dataDir=…` + 锁文件路径，退出码 **4**（没有可接管的 endpoint，desktop 显示「服务启动即退出」+ 这行 stderr）。为什么要它：`--data-dir` 与 `--db` 是独立参数，两个 dataDir 不同的服务指向同一份库时各自都能拿到 dataDir 锁 → 双写者。进程内打开库的 CLI（`sqliteStorage()`）**只检查不持有**：库被活着的服务持有时直接报错（堵住「CLI 直开桌面库」），并行探针各开各的 CLI 库不受影响。stale 锁（pid 已死 / 5 秒前的坏文件）用 **rename 原子搬走**后重建（并发启动不会互相删锁）；释放只删自己写的锁（比 pid+bootId）。已知上限是 pid 复用误判 → fail-closed 拒绝启动，按报错里的路径手动删锁。
+- **adopt 校验（2026-11-01，`service.rs` 的 `endpoint_matches`）**：桌面接管已运行服务前比对 `dbFile` + `profileDir`，不一致直接报错并列出两边路径——手动服务只对齐 `--data-dir` 就会让桌面静默用上另一份库/登录态。
 - 两种 token：
   - **owner token**：spawn 者持有（desktop 的 `service.rs`；手动 `rss --service` 时即它自己，落在 `--token-file`），可调 `/v1/shutdown`；
   - **client token**：endpoint.json 里的只读/命令 token，CLI attach 用，不能 shutdown。
