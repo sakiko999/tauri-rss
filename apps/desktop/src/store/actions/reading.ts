@@ -4,7 +4,8 @@
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 reading 判据。
  */
 
-import { type DanmakuStream, findItem, positionDecision, readingKey, type ResolvePlayback } from "@amoeba/core"
+import type { DanmakuStream, ResolvePlayback } from "@amoeba/core"
+import { findItem, positionDecision, readingKey } from "@amoeba/core/pure"
 
 import type { DesktopState, StoreCtx } from "../types.ts"
 

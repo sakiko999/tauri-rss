@@ -4,7 +4,7 @@
  * 从 store/index.ts 拆出;只依赖 StoreCtx + core 的 DataLayer。
  */
 
-import { contentTtlMs, ERROR_KIND_LABEL, type ErrorKind, errorKindOf } from "@amoeba/core"
+import { contentTtlMs, ERROR_KIND_LABEL, type ErrorKind, errorKindOf } from "@amoeba/core/pure"
 
 import { createDesktopDataLayer } from "../data-source.ts"
 import { applyRuntimeSettings, REFRESH_TIMEOUT_MS, withTimeout } from "../lib.ts"

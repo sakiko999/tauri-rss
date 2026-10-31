@@ -9,7 +9,8 @@
  * refresh 时按 channelKey 前缀自动注入。
  */
 
-import { type ChannelInfo, cookieFieldFor } from "@amoeba/core"
+import type { ChannelInfo } from "@amoeba/core"
+import { cookieFieldFor } from "@amoeba/core/pure"
 import { browserCookieHostsOf, LOGIN_PLATFORMS, platformDef } from "@amoeba/platform"
 import { useEffect, useMemo, useRef, useState } from "react"
 

@@ -222,10 +222,10 @@ graph LR
 | --- | --- |
 | 负责 | `createDataLayer` 装配与 `DataLayer` 门面；本地镜像水合 `hydrate()`、`diagnostics`（缓存统计/清理）、`store.clear`；XML→`MediaItem` 反序列化（注入 app 语义）；5 个 KV repo 与内存 `MediaStore`；刷新/翻页串行链、TTL、被动/停用/0 条守卫；内容与正文缓存；播放/直播/详情/热搜的懒解析编排；扫码登录与启动 cookie 快照；渠道投影 `ChannelInfo`；网络策略投影；SQLite DDL（`STORAGE_SCHEMA` 经 `storage.setSchema?` 注入） |
 | 不负责 | 平台签名/取数细节（resolve）；XML 编解码（xml）；播放器实现（player）；UI 状态与路由（apps）；不持有 crawler 的条目模型 |
-| 对外导出 | `createDataLayer`/`DataLayer`、`cookieFieldFor`/`cookieFieldForPlatform`、`ChannelInfo`、`RefreshResult`、订阅/设置/查询/播放类型、`NoChannelError`、`ERROR_KIND_LABEL`/`errorKindOf`/`ResolveError`/`ErrorKind`、`positionDecision`、`readingKey`/`itemRefKey`/`findItem`、`KV_TABLE`/`KV_DDL`/`MIGRATIONS`/`STORAGE_SCHEMA`/`SCHEMA_MIGRATIONS`、`createMediaStore`、`createSettingsRepository`、`createContentCacheRepo`；子路径 `./source/rsshub`、`./media-store`、`./reading`（`packages/core/src/index.ts`、`packages/core/package.json` 的 `exports`） |
-| 内部结构 | `data-layer.ts`（编排）；`processing/deserialize.ts`（唯一反序列化）；`store/media-store.ts`；`repo/*`；`source/{index,rsshub}.ts`；`types/*`；`db/schema.ts` |
-| 依赖 / 被依赖 | 运行时依赖 crawler（注册表/谓词/`httpText`）、resolve（播放/弹幕/凭证/`withBrowserOpSlot`）、xml（`parseFeed`/`serializeFeed`）、`@amoeba/platform`（`data-layer.ts:12` 的 `cookieFieldForChannelKey`/`platformOfChannelKey`）；devDep host 供自检。被 3 个 app 使用；**不再被 host 反向依赖**——core 在 `createDataLayer()` 首行把 schema 推给 `appHost.storage.setSchema?()` |
-| 常见改动入口 | 新 `DataLayer` 方法：接口 + 实现 + apps 调用点；新存储键：`repo/*` + DDL；新条目字段：`processing/deserialize.ts` 与 `xml/serialize.ts` 两侧；新平台 cookie：`cookieFieldFor` 与 `cookieFieldForPlatform` |
+| 对外导出 | `createDataLayer`/`DataLayer`、`cookieFieldFor`/`cookieFieldForPlatform`、`ChannelInfo`、`RefreshResult`、订阅/设置/查询/播放类型、`NoChannelError`、`ERROR_KIND_LABEL`/`errorKindOf`/`ResolveError`/`ErrorKind`、`positionDecision`、`readingKey`/`itemRefKey`/`findItem`、`KV_TABLE`/`KV_DDL`/`MIGRATIONS`/`STORAGE_SCHEMA`/`SCHEMA_MIGRATIONS`、`createMediaStore`、`createSettingsRepository`、`createContentCacheRepo`；子路径 `./pure`（纯函数/常量：`contentTtlMs`、`cookieFieldFor*`、错误分类、`positionDecision`、阅读键；**desktop 值导入只许走它**，根入口会求值 data-layer 把 crawler/resolve 拉进首屏包，`apps/desktop/src/lib/core-imports.check.ts` 守卫）、`./source/rsshub`、`./media-store`、`./reading`（`packages/core/src/index.ts`、`packages/core/package.json` 的 `exports`） |
+| 内部结构 | `data-layer.ts`（编排）；`settings-policy.ts`（TTL / cookie 字段映射，纯）；`pure.ts`（纯子路径入口）；`processing/deserialize.ts`（唯一反序列化）；`store/media-store.ts`；`repo/*`；`source/{index,rsshub}.ts`；`types/*`；`db/schema.ts` |
+| 依赖 / 被依赖 | 运行时依赖 crawler（注册表/谓词/`httpText`）、resolve（播放/弹幕/凭证/`withBrowserOpSlot`）、xml（`parseFeed`/`serializeFeed`）、`@amoeba/platform`（`settings-policy.ts` 的 `cookieFieldForChannelKey`/`cookieFieldOf`、`data-layer.ts` 的 `platformOfChannelKey`）；devDep host 供自检。被 3 个 app 使用；**不再被 host 反向依赖**——core 在 `createDataLayer()` 首行把 schema 推给 `appHost.storage.setSchema?()` |
+| 常见改动入口 | 新 `DataLayer` 方法：接口 + 实现 + apps 调用点；新存储键：`repo/*` + DDL；新条目字段：`processing/deserialize.ts` 与 `xml/serialize.ts` 两侧；新平台 cookie：`@amoeba/platform` 的 PLATFORMS 表（`cookieFieldFor*` 只是带类型的薄封装） |
 | 关键文件 | `packages/core/src/data-layer.ts`（`DataLayer` 接口、`createDataLayer`、`cookieFieldFor`/`cookieFieldForPlatform`、`sourceInfoFor`、`doRefresh`、按订阅串行链、`loadMore`、`scanLogin`、`addSubscription`）；`packages/core/src/processing/deserialize.ts`；`packages/core/src/db/schema.ts`（`STORAGE_SCHEMA`） |
 
 不变量：refresh 与 loadMore 共用 `sub:${id}` 串行链；写回前查退订墓碑；一次 `doRefresh` 只读一次 settings 快照；设置写入必须经 `applySettings` 以同步 governor 与 cookieSnapshot；`createDataLayer()` 首行必须调 `storage.setSchema?.(STORAGE_SCHEMA)`（含 `versioned` 迁移与 checksum），`KV_TABLE`/`KV_DDL`/`MIGRATIONS` 只是其组成部分。身份语义（`MediaItem.id` 只在订阅内唯一、`itemRefKey`/`readingKey` 复合键）见 CLAUDE.md 硬契约与 `02-contracts.md`。
@@ -295,7 +295,7 @@ graph LR
   - `components/*.tsx` = 纯 props 功能件；`components/app/*.tsx` = 读 `useDesktop`/`usePrefs` 的业务件（本次实测 `useDesktop` 只出现在 `views/`、`components/app/`、`store/`、`lib/`、入口）。
   - `lib/` = 工具与少量 store 适配（`useLatestOnly` 世代守卫、`itemKey` 复合键、OPML 映射、快捷键、更新状态机）；其中 `host.ts`/`shortcuts.ts`/`update.ts` 直接读 `useDesktop`。
 - **跨包面**：core（30+ 处，含动态 import）、ui 7、player 3、xml 2（OPML：`lib/opml.ts:10`、`store/actions/subs.ts:7`）、resolve 1（`SocialDetailModal.tsx:19` 取 `./media-referrer`）、platform 2（`AccountPage.tsx:13`、`lib/subscriptions.ts:8`）、host 1（`main.tsx:4`）、service-client/service-protocol 各 1（`store/data-source.ts:12-13`）、`@tauri-apps/api` 1（`store/data-source.ts:11`）。
-- **启动入口**（注意静态 import 会提升到模块体之前）：模块加载期先执行 `import "@amoeba/core/source/rsshub"`（`main.tsx:8`），它只经 crawler→resolve 求值，**不再连带 host**；随后模块体执行 `injectTauriHost({ storage:false, browser:false })`（`@amoeba/host/tauri`，`main.tsx:15-18`，内部 `initAppHost()` 建门面 + `setHostCaps`）；`init()`（`store/actions/data.ts:21-90`）由 App 挂载时调用（`App.tsx:66`），内部 `createDesktopDataLayer()` → 首轮 TTL 刷新 → `ready`。dev 暴露 `__store`（`main.tsx:25-26`）并加载 ui-overlay。
+- **启动入口**（注意静态 import 会提升到模块体之前）：模块体执行 `injectTauriHost({ storage:false, browser:false })`（`@amoeba/host/tauri`，内部 `initAppHost()` 建门面 + `setHostCaps`）；`init()`（`store/actions/data.ts`）由 App 挂载时调用，内部 `createDesktopDataLayer()` → 首轮 TTL 刷新 → `ready`。desktop **不再静态 import** `@amoeba/core/source/rsshub`（2026-11-01）：Tauri 下注册归数据服务入口，只有浏览器 dev 分支（`store/data-source.ts`）在动态 import 进程内 DataLayer 时一并注册。dev 暴露 `__store` 并加载 ui-overlay。
 - **关键文件**：`apps/desktop/src/store/{index,types,nodes,selectors,ctx,lib,prefs,data-source}.ts`；`store/actions/{data,view,subs,reading,ui}.ts`；`views/player/usePlayerNav.ts`（播放入口收口）；`components/app/Cards.tsx`（可播判定）。
 
 ### 3.2 mobile — 极简看内容
@@ -383,7 +383,7 @@ graph BT
 | `host` | 直接（注入） | 直接（注入，updater/browser 关） | 直接（自组装） | 同上 |
 | `resolve` | 直接（`./media-referrer`）+ 经 core | 间接（core 播放/凭证 + player 类型） | 直接（探针） | 同上 |
 | `crawler` | 间接（core 注册表） | 间接（core） | 直接（渠道探针） | 同上；mobile 经 core 打包全量 92 渠道 |
-| `core` | 直接 | 直接 | 直接 | 同上；子路径 `@amoeba/core/{source/rsshub,media-store,reading}` 需显式 import（`service-client` 取后两个） |
+| `core` | 直接 | 直接 | 直接 | 同上；子路径 `@amoeba/core/{pure,source/rsshub,media-store,reading}` 需显式 import（`service-client` 取后两个；desktop 值导入只走 `pure`） |
 | `player` | 直接 | 直接 | 不进入 | `PlayableMedia` |
 | `ui` | 直接 | 直接 | 不进入 | `MediaImage` / `fmtCount` |
 | `platform` | 直接（账号页/订阅投影） | — | 直接（`login` 平台表） | `PLATFORMS` 单一权威 |

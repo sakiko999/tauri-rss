@@ -6,7 +6,6 @@ import { RouterProvider } from "react-router/dom"
 import { router } from "./router"
 import { useDesktop } from "./store/index"
 import { showSkeleton } from "./store/selectors.ts"
-import "@amoeba/core/source/rsshub"
 import "./styles.css"
 
 // 注入桌面宿主能力到全局 appHost(core/crawler 从它读 http/js/storage/now)。

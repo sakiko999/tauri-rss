@@ -145,6 +145,7 @@ bun apps/desktop/src/lib/rail-nav.check.ts              # 侧栏树方向键映�
 bun apps/desktop/src/lib/ime.check.ts                   # IME 组合态守卫（nativeEvent 取值 + 229 兜底 + 原生/合成两路径）
 bun apps/desktop/src/lib/cn.check.ts                    # cn 合并：@theme 自定义令牌按组覆盖（漏登记 TW_THEME_EXTEND 即失败）+ Button 变体类不丢
 bun apps/desktop/src/lib/css-classes.check.ts           # TSX 用到的语义类必须有 CSS 定义（死类 / 改名漏改）
+bun apps/desktop/src/lib/core-imports.check.ts          # desktop 只许 import type core 根入口；值导入走 @amoeba/core/pure（首屏包体）
 bun packages/player/src/hooks/useStreamSelection.check.ts # 默认选流 = streams[0]（不被格式族抢走）
 bun packages/player/src/hooks/player-stats.check.ts      # 统计信息格式化（引擎/码率/档位/缓冲/丢帧）
 bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契约（两份手写字面量必须一致）
@@ -155,7 +156,7 @@ bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契
 ## Lint 与格式化
 
 ```bash
-bun run lint                           # oxlint（默认 correctness 规则；.oxlintrc.json 里配 ignorePatterns）
+bun run lint                           # oxlint（默认 correctness 规则；无配置文件，按 .gitignore 跳过 tmp/ 等）
 bun run fmt                            # bun fmt 全仓格式化（bunfig.toml：120 列/无分号/双引号/尾逗号 all）
 bun run fmt:check                      # 只检查不写（已并入 check 的 style 层）
 ```

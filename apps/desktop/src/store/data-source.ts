@@ -28,8 +28,11 @@ function dbFileName(): string {
 export async function createDesktopDataLayer(hooks: RemoteHooks = {}): Promise<DataLayer> {
   if (!isTauri()) {
     // 浏览器 dev（没有 Rust 侧服务）：动态 import 进程内 DataLayer，仅供纯前端调试；
-    // 远端模式不把它拉进首屏包。
-    const { createDataLayer } = await import("@amoeba/core")
+    // 远端模式不把它拉进首屏包。rsshub provider 靠模块副作用注册，只有进程内
+    // DataLayer 用得上（Tauri 下由数据服务入口自己注册）。
+    // ⚠️ desktop 其余位置只许 `import type` core 根入口、值导入走 `@amoeba/core/pure`，
+    // 否则这里的动态 import 失效、crawler/resolve 回到首屏包（core-imports.check.ts）。
+    const [{ createDataLayer }] = await Promise.all([import("@amoeba/core"), import("@amoeba/core/source/rsshub")])
     return createDataLayer()
   }
 

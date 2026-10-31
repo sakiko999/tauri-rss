@@ -6,8 +6,9 @@
  * 因此 baseUrl 必须存在(settings.rsshubBaseUrl 或订阅 info.baseUrl);无则抛清晰错误,
  * 而不是静默连不存在的本地端口。
  *
- * import 本模块即自注册(模块副作用,与 injectTauriHost 同模式)——desktop
- * `apps/desktop/src/main.tsx` 与 mobile `apps/mobile/src/store.ts` 各 import 一次。
+ * import 本模块即自注册(模块副作用,与 injectTauriHost 同模式)——注册点 = 跑进程内
+ * DataLayer 的入口:数据服务 `apps/cli/src/service/server.ts`、CLI `apps/cli/src/main.ts`、
+ * mobile `apps/mobile/src/store.ts`、desktop 浏览器 dev 分支(`store/data-source.ts`,动态 import)。
  *
  * **只保留 `rsshub:feed` 一条泛用渠道**(2026-10-18):任意 RSSHub 路由 + 订阅级
  * baseUrl,作为内置 crawler 未覆盖信息源的逃生口。原 `rsshub:bili:*` / `weibo:*` /

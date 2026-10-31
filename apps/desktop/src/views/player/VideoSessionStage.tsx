@@ -13,7 +13,8 @@
  * 「随路由卸载的页面」换成「常驻 Stage」。
  */
 
-import { ERROR_KIND_LABEL, errorKindOf, type MediaItem, type MediaStream, type PlaybackChapter } from "@amoeba/core"
+import type { MediaItem, MediaStream, PlaybackChapter } from "@amoeba/core"
+import { ERROR_KIND_LABEL, errorKindOf } from "@amoeba/core/pure"
 import { PlayableMedia } from "@amoeba/player"
 import { MediaImage } from "@amoeba/ui"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"

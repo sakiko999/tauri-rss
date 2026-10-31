@@ -45,7 +45,8 @@ packages/
                取数经 resolve 的平台 client。不绑定流/弹幕解析。输出标准 RSS + 最小 tpl:*。
                可选 channel 能力：Pageable / HotWordSource / ItemDetailSource / Loginable / passive
   core/        订阅维护者：基于 crawler 输出维护订阅/分组/刷新编排/持久化；自解析 XML 建
-               MediaItem（不依赖 crawler 类型）
+               MediaItem（不依赖 crawler 类型）。desktop 值导入只走 `@amoeba/core/pure`
+               （根入口会把 crawler/resolve 拉进首屏包，`core-imports.check.ts` 守卫）
   player/      ★ 媒体播放器（video/audio/live 共用）。PlayableMedia = 唯一入口（懒解析 + 选流 +
                分发）+ VideoShell/AudioShell + 独立控件。依赖 core 类型 + appHost 隧道 + hls/flv/dash.js
   platform/    ★ 平台名单一权威（R9）：channelKey 前缀 / URL 域名 / cookie 字段 / 展示名。

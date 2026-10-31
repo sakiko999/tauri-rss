@@ -10,7 +10,7 @@
  */
 
 import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
-import { cookieFieldForChannelKey, cookieFieldOf, platformOfChannelKey } from "@amoeba/platform"
+import { platformOfChannelKey } from "@amoeba/platform"
 import {
   errorKindOf,
   getDanmakuByUrl,
@@ -34,6 +34,7 @@ import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createSubscriptionRepository, type SubscriptionRepository } from "./repo/subscription-repo.ts"
+import { contentTtlMs, cookieFieldFor, cookieFieldForPlatform } from "./settings-policy.ts"
 import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { createMediaStore } from "./store/media-store.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
@@ -43,18 +44,6 @@ import type { MediaQuery } from "./types/query.ts"
 import { findRecord } from "./types/reading.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
 import { type AppSettings, DEFAULT_SETTINGS, type NetLevel } from "./types/settings.ts"
-import type { Subscription } from "./types/subscription.ts"
-
-/**
- * 内容缓存 TTL（ms）：订阅级 `refreshIntervalSec` 优先，否则全局 `refreshIntervalMin`。
- * 消费方：doRefresh 的 TTL 短路、desktop 选中订阅时的自动补刷判据。
- */
-export function contentTtlMs(
-  sub: Pick<Subscription, "refreshIntervalSec">,
-  s: Pick<AppSettings, "refreshIntervalMin">,
-): number {
-  return sub.refreshIntervalSec ? sub.refreshIntervalSec * 1000 : s.refreshIntervalMin * 60 * 1000
-}
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
@@ -181,15 +170,6 @@ type FetchableSource = {
 }
 
 /**
- * channelKey 前缀 → settings 里存的 cookie 字段。
- * **单一权威 = `@amoeba/platform` 的 PLATFORMS 表**（R9）：sourceInfoFor 注入 /
- * scanLogin 写回 / CLI 探针 / desktop 账号页全部经此，禁止再手抄前缀表。
- */
-export function cookieFieldFor(channelKey: string): keyof AppSettings | undefined {
-  return cookieFieldForChannelKey(channelKey) as keyof AppSettings | undefined
-}
-
-/**
  * settings cookie 字段的**桌面 HTTP 消费方** —— 只有它们值得为快照同步单独拉起
  * 抓取浏览器(~1GB,空闲 3 分钟回收)。xhsCookie 在桌面没有数据消费方(xhs 全走
  * 浏览器,settings 只剩账号页展示),只在浏览器已因其它字段被拉起时顺带同步。
@@ -199,11 +179,6 @@ const DESKTOP_COOKIE_CONSUMER_FIELDS: ReadonlySet<keyof AppSettings> = new Set([
 /** cookie 串 → 按 key 排序的规范形(比较用;快照落库的就是这个形)。 */
 function normalizeCookie(v: unknown): string {
   return serializeCookieDict(parseCookieDict(typeof v === "string" ? v : ""))
-}
-
-/** 平台名（governor 分类语义）→ settings cookie 字段（同一张 `@amoeba/platform` 表）。 */
-export function cookieFieldForPlatform(platform: string): keyof AppSettings | undefined {
-  return cookieFieldOf(platform) as keyof AppSettings | undefined
 }
 
 export function createDataLayer(): DataLayer {

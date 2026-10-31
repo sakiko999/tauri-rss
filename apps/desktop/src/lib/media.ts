@@ -6,8 +6,8 @@
  * 归一化收在这里,避免每个卡片各写一遍分支。
  */
 
-import { itemRefKey } from "@amoeba/core"
 import type { MediaItem } from "@amoeba/core"
+import { itemRefKey } from "@amoeba/core/pure"
 
 /**
  * 图片 URL 归一。
