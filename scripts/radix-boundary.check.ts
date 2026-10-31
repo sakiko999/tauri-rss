@@ -20,12 +20,7 @@ import { join, relative } from "node:path"
 const ROOT = join(import.meta.dir, "..")
 const UI_DIRS = ["apps/desktop/src/components/ui/", "packages/player/src/ui/"]
 /** 迁移完成前允许直接碰 Radix 的文件（见 docs/ui/design-system-plan.md 的 F1/F2）。 */
-const WHITELIST = new Set([
-  "apps/desktop/src/components/Modal.tsx",
-  "apps/desktop/src/components/app/RailGroupTree.tsx",
-  "packages/player/src/controls/MediaQualityButton.tsx",
-  "packages/player/src/controls/MediaRateButton.tsx",
-])
+const WHITELIST = new Set<string>()
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of readdirSync(dir, { withFileTypes: true })) {

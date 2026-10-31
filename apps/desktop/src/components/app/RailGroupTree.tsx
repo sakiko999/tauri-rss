@@ -11,7 +11,6 @@
  */
 
 import type { Subscription, SubscriptionGroup } from "@amoeba/core"
-import * as Accordion from "radix-ui/accordion"
 import { useCallback, useMemo, useRef, useState } from "react"
 
 import { navAction, type RowCtx } from "../../lib/rail-nav.ts"
@@ -22,6 +21,7 @@ import { EditSubscriptionDialog } from "../../views/manage/EditSubscriptionDialo
 import { IconButton } from "../Button.tsx"
 import { Icon } from "../Icon.tsx"
 import { Menu, MenuItem, MenuSeparator } from "../Modal.tsx"
+import { Accordion } from "../ui/Accordion.tsx"
 
 const HEALTH_ICON: Partial<Record<Health, string>> = { error: "alert", stale: "warning" }
 
