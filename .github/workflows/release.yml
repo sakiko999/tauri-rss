@@ -19,8 +19,9 @@ jobs:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
-          # 与本地 bun.lock 生成版本一致,避免解析差异。
-          bun-version: 1.4.3
+          # 与本地 bun.lock 生成版本一致,避免解析差异。1.4.3 在 windows-latest 上
+          # `bun fmt --check` 会崩溃（exit 3，v0.15.0 首跑实测），已升到 1.4.4。
+          bun-version: 1.4.4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

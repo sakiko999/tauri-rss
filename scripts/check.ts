@@ -258,6 +258,16 @@ function main(): number {
         }
         if (!r.ok) {
           console.log(excerpt(r.out))
+          // 整仓命令的输出可能被 excerpt 过滤掉关键行（如 bun 崩溃横幅 / 待格式化文件列表），
+          // 再打一段末尾原文，否则 CI 只能看到重复的 "exited with code N"。
+          const tailLines = r.out
+            .split(/\r?\n/)
+            .filter((l) => l.trim())
+            .slice(-25)
+          if (tailLines.length) {
+            console.log("    ---- 输出末尾 ----")
+            for (const line of tailLines) console.log(`    ${line}`)
+          }
           console.log(`    复跑: ${s.rerun}`)
         }
       }
