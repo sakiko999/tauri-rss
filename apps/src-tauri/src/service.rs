@@ -394,9 +394,33 @@ fn tail(tail: &Arc<Mutex<VecDeque<String>>>) -> String {
         .unwrap_or_default()
 }
 
-fn drain_stderr(stderr: std::process::ChildStderr, tail: Arc<Mutex<VecDeque<String>>>) {
+/** 服务日志文件上限（5MB，超出轮转为 .1）。release 下没有控制台，不落文件就全丢。 */
+const MAX_LOG_BYTES: u64 = 5 * 1024 * 1024;
+
+fn open_service_log(data_dir: &Path) -> Option<std::fs::File> {
+    let path = data_dir.join("service.log");
+    if std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0) > MAX_LOG_BYTES {
+        let _ = std::fs::rename(&path, data_dir.join("service.log.1"));
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .ok()
+}
+
+fn drain_stderr(
+    stderr: std::process::ChildStderr,
+    tail: Arc<Mutex<VecDeque<String>>>,
+    log: Option<std::fs::File>,
+) {
+    use std::io::Write;
+    let mut log = log;
     let reader = BufReader::new(stderr);
     for line in reader.lines().map_while(Result::ok) {
+        if let Some(file) = log.as_mut() {
+            let _ = writeln!(file, "{line}");
+        }
         if let Ok(mut guard) = tail.lock() {
             guard.push_back(line);
             while guard.len() > 40 {
@@ -470,9 +494,10 @@ fn spawn_service(paths: &Paths) -> Result<(Child, u16), String> {
     let stdout = child.stdout.take().ok_or("服务 stdout 未捕获")?;
     let stderr = child.stderr.take().ok_or("服务 stderr 未捕获")?;
     let tail_buf = Arc::new(Mutex::new(VecDeque::new()));
+    let log = open_service_log(&paths.data_dir);
     std::thread::spawn({
         let tail = Arc::clone(&tail_buf);
-        move || drain_stderr(stderr, tail)
+        move || drain_stderr(stderr, tail, log)
     });
 
     let (tx, rx) = mpsc::channel::<String>();

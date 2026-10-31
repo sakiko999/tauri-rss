@@ -296,8 +296,22 @@ function asString(value: unknown, name: string): string {
   return value
 }
 
-function sameRefs(a: readonly MediaItem[], b: readonly MediaItem[]): boolean {
-  return a.length === b.length && a.every((it, i) => it === b[i])
+/**
+ * 条目快照是否「内容没变」。⚠️ 不能比对象引用：每次 refresh 都重新解析 XML，条目全是
+ * 新对象 → 每次刷新都会把整订阅条目重新广播一遍（2026-11-01 评审）。这里比投影后的
+ * 结构化签名（正文先剥掉，文章正文本来就不入快照）。
+ */
+function itemSig(item: MediaItem): string {
+  return JSON.stringify(projectItem(item))
+}
+
+function sameItems(a: readonly MediaItem[], b: readonly MediaItem[]): boolean {
+  return a.length === b.length && a.every((it, i) => itemSig(it) === itemSig(b[i]!))
+}
+
+function samePrefix(a: readonly MediaItem[], b: readonly MediaItem[], n: number): boolean {
+  for (let i = 0; i < n; i++) if (itemSig(a[i]!) !== itemSig(b[i]!)) return false
+  return true
 }
 
 /** 轻量投影：文章正文按需 resolveDetail；social 的正文是列表卡片本身，必须保留。 */
@@ -310,6 +324,9 @@ function projectItem(item: MediaItem): MediaItem {
 function recordKey(subscriptionId: string, itemId: string): string {
   return readingKey(subscriptionId, itemId)
 }
+
+/** WS 单连接未发送缓冲上限（8MB）——超过即断开，客户端重连走全量快照。 */
+const WS_MAX_BUFFERED = 8 * 1024 * 1024
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -395,6 +412,17 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     const text = JSON.stringify(message)
     for (const ws of sockets) {
       if (!ws.data.authed) continue
+      // 背压：慢消费者（断点/卡住的渲染）不能无限堆积。超过阈值直接断开，
+      // 客户端重连时按协议走「全量 GET /v1/state」，比把服务内存吃满安全。
+      const buffered = (ws as unknown as { getBufferedAmount?: () => number }).getBufferedAmount?.() ?? 0
+      if (buffered > WS_MAX_BUFFERED) {
+        try {
+          ws.close(1013, "slow consumer")
+        } catch {
+          /* 已关闭 */
+        }
+        continue
+      }
       try {
         ws.send(text)
       } catch {
@@ -462,7 +490,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     const prev = lastItems.get(subscriptionId) ?? []
     const next = layer.store.query({ subscriptionId })
     lastItems.set(subscriptionId, next)
-    if (sameRefs(prev, next)) return null
+    if (sameItems(prev, next)) return null
     const total = layer.totalOf(subscriptionId)
     if (!next.length) return { type: "items.cleared", subscriptionId }
     if (!prev.length) {
@@ -473,7 +501,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         total: total ?? null,
       }
     }
-    if (next.length >= prev.length && prev.every((it, i) => it === next[i])) {
+    if (next.length >= prev.length && samePrefix(prev, next, prev.length)) {
       if (next.length === prev.length) return null
       return {
         type: "items.appended",

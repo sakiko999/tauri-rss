@@ -76,6 +76,20 @@ export class ServiceRpcError extends Error {
   }
 }
 
+/** 慢方法（抓取/播放解析）单独放宽超时；未列出的默认 30s。 */
+const TIMEOUT_MS: Partial<Record<RpcMethod, number>> = {
+  refresh: 180_000,
+  refreshAll: 600_000,
+  loadMore: 120_000,
+  resolveDetail: 120_000,
+  resolvePlay: 180_000,
+  resolveLivePlay: 120_000,
+  scanLogin: 180_000,
+  "probe.fetch": 120_000,
+  "probe.resolve": 180_000,
+  "probe.danmaku": 60_000,
+}
+
 export interface ParsedSnapshot {
   meta: SnapshotMeta
   subscriptions: Subscription[]
@@ -124,17 +138,29 @@ export class ServiceClient {
     params?: RpcParams<M>,
     opts: { opId?: string; jobId?: string; signal?: AbortSignal } = {},
   ): Promise<RpcResult<M>> {
-    const res = await fetch(`${this.base}/v1/rpc`, {
-      method: "POST",
-      headers: this.headers(),
-      body: JSON.stringify({
-        method,
-        params: params ?? {},
-        ...(opts.opId ? { opId: opts.opId } : {}),
-        ...(opts.jobId ? { jobId: opts.jobId } : {}),
-      }),
-      ...(opts.signal ? { signal: opts.signal } : {}),
-    })
+    // 默认超时：底层卡住（抓取/解析走网络）时不能让界面无限转圈。
+    // 抓取/解析类给足时间；其余 30s。调用方的 signal 仍可提前取消。
+    const timeout = AbortSignal.timeout(TIMEOUT_MS[method] ?? 30_000)
+    const signal = opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout
+    let res: Response
+    try {
+      res = await fetch(`${this.base}/v1/rpc`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({
+          method,
+          params: params ?? {},
+          ...(opts.opId ? { opId: opts.opId } : {}),
+          ...(opts.jobId ? { jobId: opts.jobId } : {}),
+        }),
+        signal,
+      })
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "TimeoutError") {
+        throw new ServiceRpcError("timeout", 504, `${method} 超时（${(TIMEOUT_MS[method] ?? 30_000) / 1000}s）`)
+      }
+      throw e
+    }
     let body: RpcResponse<RpcResult<M>>
     try {
       body = (await res.json()) as RpcResponse<RpcResult<M>>

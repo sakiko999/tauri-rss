@@ -468,6 +468,9 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - 快照 + rev 事件环形缓冲 + `RemoteDataLayer`（`packages/service-client`）+ 本地镜像；
   desktop Tauri 只走服务（进程内回退已删）。
 - desktop 库原地迁移；每日 `VACUUM INTO` 备份（`dataDir/backups`，最多 7 份）；`_migrations` checksum 门禁。
+- 服务 stderr 同时落 `dataDir/service.log`（5MB 轮转为 `.1`）——release 没有控制台，不落文件等于没有日志。
+- 事件广播有背压：单连接未发送缓冲超过 8MB 直接断开（客户端重连走全量快照）；条目 diff 比**结构化签名**而不是对象引用，内容未变的刷新不再重播整个订阅。
+- `RemoteDataLayer.rpc` 默认超时（普通 30s；refresh/resolve 120-600s），底层卡住不会让界面无限转圈。
   备份是整库拷贝（含明文 cookie）：`clearCookies` / `clearAll` 会**删除全部备份**；
   恢复入口 = `rss restore --list` / `rss restore --db <库>`（服务停止时执行，覆盖前自动另存当前库）。
   桌面「设置 → 存储与诊断 → 导出全部数据」导出 JSON（订阅/分组/阅读态，**不含 cookie**）。
