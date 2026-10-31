@@ -59,6 +59,14 @@ export interface RemoteHooks {
   onSettings?(settings: AppSettings): void
   onStatus?(status: RemoteStatus): void
   onJobProgress?(jobId: string, progress: JobProgress): void
+  /**
+   * 事件通道反复断开时询问宿主：服务进程是否已退出、能否重新拉起。
+   *
+   * 服务崩溃后端口/令牌都会变，旧 client 永远连不上 —— 返回新 endpoint 时客户端
+   * 整体换连接（不用整页重载）。返回 null / 同值 = 没换，继续按退避重连。
+   * Tauri 侧实现为再次 `service_endpoint`（Rust 会探活并按需 spawn）。
+   */
+  resolveEndpoint?(): Promise<EndpointInfo | null>
 }
 
 export type RemoteDataLayer = DataLayer & {
@@ -265,7 +273,8 @@ function splitKey(key: string): { subscriptionId: string; itemId: string } | nul
  * 初始化顺序：hello → 快照 → 镜像 → channels → WS（WS 失败不阻塞；重连会重取快照）。
  */
 export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: RemoteHooks = {}): Promise<RemoteDataLayer> {
-  const client = new ServiceClient(endpoint)
+  let endpointInfo = endpoint
+  let client = new ServiceClient(endpoint)
   await client.hello()
 
   const store = createMediaStore()
@@ -499,6 +508,31 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
     })
   }
 
+  /**
+   * 服务进程可能已退出（崩溃/被外部结束）：宿主（Tauri）能重新拉起并返回**新
+   * endpoint**（端口与 token 都会变）。旧 client 永远连不上 —— 换掉后重取快照并
+   * 重连，否则只能整页重载才能恢复（2026-11-01 修）。
+   */
+  async function recoverEndpoint(): Promise<boolean> {
+    if (!hooks.resolveEndpoint) return false
+    try {
+      const fresh = await hooks.resolveEndpoint()
+      if (!fresh) return false
+      if (fresh.port === endpointInfo.port && fresh.clientToken === endpointInfo.clientToken) return false
+      endpointInfo = fresh
+      client = new ServiceClient(fresh)
+      await client.hello()
+      const next = await client.snapshot()
+      applySnapshot(next)
+      resyncing = false
+      reconnectBackoff = 500
+      await openWs()
+      return true
+    } catch {
+      return false // 宿主也拉不起来 → 继续退避
+    }
+  }
+
   function scheduleReconnect(delay = reconnectBackoff): void {
     if (closed || reconnectTimer) return
     reconnectBackoff = Math.min(Math.max(delay, 0), 10_000)
@@ -512,6 +546,7 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
           resyncing = false
           await openWs()
         } catch (e) {
+          if (await recoverEndpoint()) return
           reconnectBackoff = Math.min(reconnectBackoff * 2 || 500, 10_000)
           setStatus({
             online: false,

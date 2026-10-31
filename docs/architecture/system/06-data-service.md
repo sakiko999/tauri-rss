@@ -111,7 +111,8 @@
 - 服务优雅退出：停新命令 → 取消 job / abort CDP → 等写入链 ≤5s → 关 `amoeba-browser`（cookie flush ≤5s）→ `db.close()` → 删 endpoint/lock。
 - 硬杀：SQLite WAL 恢复；`amoeba-browser` 由 `--parent-pid` 退出；profile 命名 mutex 防双开。
 - renderer reload / HMR 不退出服务，只重连。
-- 服务崩溃：desktop init 失败进错误页，点「重试」清 `initPromise` 重走 init（`apps/desktop/src/store/actions/data.ts` 的 `init`）；non-owner（CLI attach）直接报错。WS 事件通道断开由 `service-client` 以 500ms→10s 退避重连并全量 resync（`packages/service-client/src/index.ts:463-473`），不做进程级重拉。`bootId` 变化 → 全量 resync。
+- 服务崩溃：init 阶段失败进错误页，点「重试」清 `initPromise` 重走 init（`apps/desktop/src/store/actions/data.ts` 的 `init`）；non-owner（CLI attach）直接报错。
+- 运行期崩溃自愈（2026-11-01）：WS 断开由 `service-client` 以 500ms→10s 退避重连并全量 resync；快照仍失败时调宿主注入的 `resolveEndpoint`（Tauri 侧再走 `service_endpoint`，Rust 探活并按需重新 spawn），拿到**新端口/token** 就整体换 client 再连 —— 不再需要整页重载。换连后照常全量快照；`bootId` 变化同样全量 resync。
 
 ## 3. 传输与协议
 
@@ -516,6 +517,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
       boot 实测 306ms（spawn → READY，含 `hydrate()`；`service-snapshot-size.ts` 可复测）。
 - [x] markAllRead <50ms（服务端 5k 条 6–7ms）。
 - [x] 服务崩溃/重启后镜像收敛：kill 进程 → status 离线 + 写 fail-closed → 同库重启 →
-      新客户端快照恢复订阅/已读/星标（`remote-data-layer-check`）；回滚演练另验。
+      新客户端快照恢复订阅/已读/星标；同一客户端经 `resolveEndpoint` 换连自动恢复
+      （`remote-data-layer-check`）；回滚演练另验。
 - [x] profile 复用 desktop `webview-profile`，登录态不丢。
 - [x] 安装包包含服务与浏览器载具；静默安装→启动→关窗→卸载全流程无残留（本机实测；干净 VM 未跑）。

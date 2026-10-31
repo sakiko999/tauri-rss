@@ -37,5 +37,10 @@ export async function createDesktopDataLayer(hooks: RemoteHooks = {}): Promise<D
   }
 
   const endpoint = await invoke<EndpointInfo>("service_endpoint", { dbFile: dbFileName() })
-  return createRemoteDataLayer(endpoint, hooks)
+  return createRemoteDataLayer(endpoint, {
+    ...hooks,
+    // 服务进程崩溃后端口/token 都会变：让 Rust 探活并按需重新拉起，客户端换连接，
+    // 不用整页重载（见 RemoteHooks.resolveEndpoint）。
+    resolveEndpoint: () => invoke<EndpointInfo | null>("service_endpoint", { dbFile: dbFileName() }),
+  })
 }

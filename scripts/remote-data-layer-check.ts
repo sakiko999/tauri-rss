@@ -69,6 +69,8 @@ async function main(): Promise<void> {
     let settingsEvents = 0
     let statusEvents = 0
     let lastOnline: boolean | null = null
+    /** 模拟宿主（Rust service_endpoint）在服务崩溃后给出的新 endpoint。 */
+    let recoverTo: EndpointInfo | null = null
     dl = await createRemoteDataLayer(endpoint, {
       onSubscriptions: () => {
         subsEvents++
@@ -80,6 +82,7 @@ async function main(): Promise<void> {
         statusEvents++
         lastOnline = status.online
       },
+      resolveEndpoint: async () => recoverTo,
     })
     add("remote 层创建", dl.remote === true)
     add("初始订阅为空", (await dl.subscriptions.list()).length === 0)
@@ -171,17 +174,35 @@ async function main(): Promise<void> {
       writeRejected = true
     }
     add("离线写 fail-closed", writeRejected)
-    dl.close()
 
-    // ── 重启（同 data dir）：新 endpoint → 新客户端从快照收敛 ──
+    // ── 自愈：宿主重新拉起服务并返回新 endpoint → 同一客户端换连（免整页重载）──
     child2 = spawnService()
     const ready2 = await firstLine(child2.stdout)
     const m2 = ready2.match(/^READY (\d+)$/)
     add("重启 READY", !!m2, ready2)
+    let endpoint2: EndpointInfo | null = null
+    let owner2 = ""
     if (m2) {
       await waitFor(() => existsSync(join(dir, "endpoint.json")))
-      const endpoint2 = JSON.parse(readFileSync(join(dir, "endpoint.json"), "utf8")) as EndpointInfo
-      const owner2 = readFileSync(join(dir, "service.token"), "utf8").trim()
+      endpoint2 = JSON.parse(readFileSync(join(dir, "endpoint.json"), "utf8")) as EndpointInfo
+      owner2 = readFileSync(join(dir, "service.token"), "utf8").trim()
+      recoverTo = endpoint2
+      // 重连退避最长 10s；给足两轮。
+      try {
+        await waitFor(() => lastOnline === true, 25_000)
+      } catch {
+        /* 断言在下一行 */
+      }
+      add("宿主重建后自动重连", lastOnline === true)
+      add(
+        "换连后镜像可用",
+        dl.store.all().some((it) => it.id === "alpha"),
+      )
+    }
+    dl.close()
+
+    // ── 新客户端（同 data dir）：从快照收敛 ──
+    if (endpoint2) {
       const dl2 = await createRemoteDataLayer(endpoint2, {})
       add("重启后快照含订阅", (await dl2.subscriptions.list()).length === 1)
       const alpha = dl2.store.all().find((it) => it.id === "alpha")
@@ -191,12 +212,12 @@ async function main(): Promise<void> {
         JSON.stringify({ unread: alpha?.isUnread, starred: alpha?.isStarred }),
       )
       dl2.close()
-      const shutdown = await fetch(`http://127.0.0.1:${m2[1]}/v1/shutdown`, {
+      const shutdown = await fetch(`http://127.0.0.1:${endpoint2.port}/v1/shutdown`, {
         method: "POST",
         headers: { authorization: `Bearer ${owner2}` },
       })
       add("owner shutdown", shutdown.status === 200, `status=${shutdown.status}`)
-      add("服务退出", (await child2.exited) === 0)
+      add("服务退出", (await child2!.exited) === 0)
     }
   } finally {
     try {
