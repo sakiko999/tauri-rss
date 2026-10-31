@@ -4,6 +4,10 @@
 > 不新增用户可见功能；播放器复刻排在其后（`docs/playback/player-parity-plan.md`）。
 > 每步做完停一次：`bun run check` + 对应实机巡检，再进入下一步。
 
+**进度（2026-11-01）**：F1 完成（`radix-ui@1.8.1` 子路径 + 边界守卫 + 封装层，白名单清零）；
+F2 完成 AlertDialog / `confirmAction`（7 处 `window.confirm` 全部替换）。下一步：F2 其余原语
+（ContextMenu / Popover / Tooltip / Slider / ToggleGroup / Tabs）。
+
 ## 结论（为什么不用现成组件库）
 
 - 不接 Mantine / Radix Themes 这类**带样式**的组件库：它们的视觉语言与现有 `@theme`

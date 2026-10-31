@@ -6,6 +6,7 @@ import { useState } from "react"
 import { Button } from "../../../components/Button.tsx"
 import { Icon } from "../../../components/Icon.tsx"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
+import { confirmAction } from "../../../lib/confirm.ts"
 import { useDesktop } from "../../../store/index.ts"
 
 export function Diagnostics() {
@@ -28,14 +29,13 @@ export function Diagnostics() {
   }
 
   async function clearCache() {
-    if (
-      !window.confirm(
-        "清空内容缓存？\n\n" +
-          "会删除全部订阅的已抓取内容。已显示的条目保留在列表里," +
-          "但下次刷新会真正走网络重新抓取。\n不影响:订阅列表、阅读状态、凭证。",
-      )
-    )
-      return
+    const ok = await confirmAction({
+      title: "清空内容缓存？",
+      desc:
+        "会删除全部订阅的已抓取内容。已显示的条目保留在列表里，" +
+        "但下次刷新会真正走网络重新抓取。\n不影响：订阅列表、阅读状态、凭证。",
+    })
+    if (!ok) return
     if (!dl) return
     try {
       const count = await dl.diagnostics.clearContentCache()
@@ -50,15 +50,15 @@ export function Diagnostics() {
 
   /** 清掉抓取用的内置浏览器数据(扩展/登录态越积越乱)。走后端命令,不自己删目录。 */
   async function clearBrowserProfile() {
-    if (
-      !window.confirm(
-        "清理浏览器数据?\n\n" +
-          "会删除抓取用的浏览器数据(缓存、登录态)。\n" +
-          "影响:微博/小红书等需要重新登录;下次抓取会重建一份全新的。\n" +
-          "不影响:订阅、已缓存内容、B站凭证。",
-      )
-    )
-      return
+    const ok = await confirmAction({
+      title: "清理浏览器数据？",
+      desc:
+        "会删除抓取用的浏览器数据（缓存、登录态）。\n" +
+        "影响：微博/小红书等需要重新登录；下次抓取会重建一份全新的。\n" +
+        "不影响：订阅、已缓存内容、B站凭证。",
+      danger: true,
+    })
+    if (!ok) return
     if (!dl) return
     try {
       // 服务端 diagnostics 内部用 withBrowserGlobal 与抓取 lane 互斥。
@@ -78,15 +78,16 @@ export function Diagnostics() {
    * ⚠️ 不碰浏览器 profile(登录态);需要时用上面的「清理浏览器数据」单独处理。
    */
   async function resetAll() {
-    if (
-      !window.confirm(
-        "完全重置本地数据？\n\n" +
-          "会删除:订阅与分组、阅读/星标/播放进度、设置、内容缓存、界面偏好与播放队列。\n" +
-          "不会删除:抓取用的浏览器登录态(用上面的「清理浏览器数据」单独处理)。\n\n" +
-          "重置后应用会立即重新加载。此操作不可撤销。",
-      )
-    )
-      return
+    const ok = await confirmAction({
+      title: "完全重置本地数据？",
+      desc:
+        "会删除：订阅与分组、阅读/星标/播放进度、设置、内容缓存、界面偏好与播放队列。\n" +
+        "不会删除：抓取用的浏览器登录态（用上面的「清理浏览器数据」单独处理）。\n\n" +
+        "重置后应用会立即重新加载。此操作不可撤销。",
+      confirmLabel: "重置",
+      danger: true,
+    })
+    if (!ok) return
     if (!dl) return
     try {
       await dl.diagnostics.clearAll()

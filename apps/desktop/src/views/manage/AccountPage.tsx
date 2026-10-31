@@ -19,6 +19,7 @@ import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
 import { QrImage } from "../../components/QrImage.tsx"
 import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
+import { confirmAction } from "../../lib/confirm.ts"
 import { platformOf } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useDesktop } from "../../store/index.ts"
@@ -215,7 +216,12 @@ function CredentialCard({
             const hosts = COOKIE_HOSTS[platform] ?? []
             const extra = hosts.length ? "会同时退出抓取浏览器里该平台的登录态（无法撤销）。\n\n" : ""
             const after = meta.needsLogin ? "相关订阅会因未登录而无法刷新。" : "相关订阅会退回匿名档位。"
-            if (!window.confirm(`清除 ${meta.label} 凭证？\n\n${extra}${after}`)) return
+            const ok = await confirmAction({
+              title: `清除 ${meta.label} 凭证？`,
+              desc: `${extra}${after}`,
+              danger: true,
+            })
+            if (!ok) return
             setBusy(true)
             try {
               // 清浏览器登录态走 diagnostics（远端 = 服务端浏览器；本地 = appHost.browser），

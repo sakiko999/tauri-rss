@@ -13,6 +13,7 @@
 import type { Subscription, SubscriptionGroup } from "@amoeba/core"
 import { useCallback, useMemo, useRef, useState } from "react"
 
+import { confirmAction } from "../../lib/confirm.ts"
 import { navAction, type RowCtx } from "../../lib/rail-nav.ts"
 import { useDesktop } from "../../store/index.ts"
 import { KIND_META } from "../../store/nodes.ts"
@@ -368,10 +369,10 @@ function SubRow({
           <MenuItem
             danger
             icon="trash"
-            onSelect={() => {
-              if (window.confirm(`退订「${sub.title}」?内容缓存也会一并删除。`)) {
-                void removeSubscription(sub.id).then(() => toast("ok", `已退订 ${sub.title}`))
-              }
+            onSelect={async () => {
+              if (!(await confirmAction({ title: `退订「${sub.title}」？`, desc: "内容缓存也会一并删除。" }))) return
+              await removeSubscription(sub.id)
+              toast("ok", `已退订 ${sub.title}`)
             }}
           >
             退订

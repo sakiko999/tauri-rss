@@ -14,6 +14,7 @@
 import { useEffect } from "react"
 import { useNavigate, useParams } from "react-router"
 
+import { ConfirmHost } from "./components/app/ConfirmHost.tsx"
 import { Rail } from "./components/app/Rail.tsx"
 import { SocialDetailModal } from "./components/app/SocialDetailModal.tsx"
 import { TitleBar } from "./components/app/TitleBar.tsx"
@@ -191,6 +192,7 @@ export default function App() {
       <MiniPlayer />
       {/* 视频会话的常驻宿主 + 右下小窗（路由切走不打断播放；播放页只是它的插槽）。 */}
       <VideoSessionStage />
+      <ConfirmHost />
       <Toaster />
     </div>
   )

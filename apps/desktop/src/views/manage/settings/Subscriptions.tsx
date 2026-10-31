@@ -7,6 +7,7 @@ import { Button, IconButton } from "../../../components/Button.tsx"
 import { Icon } from "../../../components/Icon.tsx"
 import { Menu, MenuItem, MenuSeparator, Switch } from "../../../components/Modal.tsx"
 import { SideCard, StateBlock } from "../../../components/StateBlock.tsx"
+import { confirmAction } from "../../../lib/confirm.ts"
 import { isImeComposing } from "../../../lib/ime.ts"
 import { exportOpmlFile, pickOpmlFile } from "../../../lib/opml-file.ts"
 import { useViewNavigate } from "../../../router.tsx"
@@ -205,9 +206,14 @@ function SideCardGroups({
               </span>
               <IconButton
                 aria-label="删除分组"
-                onClick={() => {
-                  if (window.confirm(`删除分组「${g.title}」？组内订阅会移到「未分组」，不会被退订。`))
-                    void removeGroup(g.id)
+                onClick={async () => {
+                  const ok = await confirmAction({
+                    title: `删除分组「${g.title}」？`,
+                    desc: "组内订阅会移到「未分组」，不会被退订。",
+                    confirmLabel: "删除",
+                    danger: true,
+                  })
+                  if (ok) await removeGroup(g.id)
                 }}
               >
                 <Icon name="trash" />
@@ -323,9 +329,12 @@ function SubscriptionTable({
                       <MenuItem
                         danger
                         icon="trash"
-                        onSelect={() => {
-                          if (window.confirm(`退订「${s.title}」？内容缓存也会一并删除。`))
-                            void removeSubscription(s.id)
+                        onSelect={async () => {
+                          const ok = await confirmAction({
+                            title: `退订「${s.title}」？`,
+                            desc: "内容缓存也会一并删除。",
+                          })
+                          if (ok) await removeSubscription(s.id)
                         }}
                       >
                         退订
