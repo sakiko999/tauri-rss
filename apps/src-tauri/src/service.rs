@@ -72,7 +72,7 @@ fn pid_alive(pid: u32) -> bool {
     use std::os::windows::process::CommandExt;
     let mut cmd = std::process::Command::new("tasklist");
     cmd.args(["/FI", &format!("PID eq {pid}"), "/NH"]);
-    // release 是 GUI 子系统，不隐藏会闪控制台（见 webview_browser.rs 同款注释）。
+    // release 是 GUI 子系统，不隐藏会闪控制台。
     cmd.creation_flags(0x0800_0000);
     match cmd.output() {
         Ok(o) => String::from_utf8_lossy(&o.stdout).contains(&format!("{pid} ")),
@@ -816,15 +816,27 @@ pub async fn service_endpoint(
     }
 
     let paths = resolve_paths(&app, &db_file)?;
+    let token_file = paths.token_file.clone();
     let stderr_tail = {
         let inner = state.inner.lock().map_err(|_| "service state poisoned")?;
         Arc::clone(&inner.stderr_tail)
     };
 
-    let (endpoint, child, owner_token) =
+    let (mut endpoint, child, owner_token) =
         tauri::async_runtime::spawn_blocking(move || ensure_service(&paths, stderr_tail))
             .await
             .map_err(|e| format!("service task failed: {e}"))??;
+
+    // 渲染进程用 **owner token**：清库/重置设置/清凭证这几类 RPC 只给 owner
+    // （server.ts 的 OWNER_ONLY）。owner token 本来就在本机 service.token 里、由 Rust
+    // 持有，交给同进程的 webview 不扩大信任边界；`rss attach` 仍用 endpoint.json 的
+    // client token，因此拿不到这些破坏性操作。
+    if let Ok(token) = std::fs::read_to_string(&token_file) {
+        let token = token.trim();
+        if !token.is_empty() {
+            endpoint["clientToken"] = Value::String(token.to_string());
+        }
+    }
 
     let mut inner = state.inner.lock().map_err(|_| "service state poisoned")?;
     inner.endpoint = Some(endpoint.clone());

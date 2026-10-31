@@ -271,6 +271,14 @@ function errorResponse(req: Request, status: number, kind: string, message: stri
   return json(req, { ok: false, error: { kind, message } } satisfies RpcResponse, status)
 }
 
+/** 只允许 owner token 的 RPC：清库、清/重置凭证、重置设置。 */
+const OWNER_ONLY: ReadonlySet<RpcMethod> = new Set<RpcMethod>([
+  "diagnostics.clearAll",
+  "diagnostics.resetBrowserProfile",
+  "diagnostics.clearCookies",
+  "settings.reset",
+])
+
 class ServiceError extends Error {
   constructor(
     readonly kind: string,
@@ -602,6 +610,11 @@ export async function runService(opts: ServiceOptions): Promise<number> {
     rawParams: unknown,
     ctx: { role: "owner" | "client"; jobId: string },
   ): Promise<unknown> {
+    // 破坏性/凭证类操作只给 owner（desktop 经 service_endpoint 拿 owner token；
+    // CLI attach 用 endpoint.json 的 client token，只能读写内容，不能清库/重置设置）。
+    if (ctx.role !== "owner" && OWNER_ONLY.has(method)) {
+      throw new ServiceError("forbidden", 403, `仅 owner 可调用 ${method}`)
+    }
     const layer = dataLayer()
     const p = (rawParams ?? {}) as Record<string, unknown>
     const jobId = ctx.jobId
