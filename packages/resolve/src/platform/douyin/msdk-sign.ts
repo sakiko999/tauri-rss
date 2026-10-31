@@ -9,6 +9,29 @@
  * window/document/navigator 全局,极简环境会产出服务端拒的指纹。
  * 源:github.com/jwwsjlm/douyinlive jsScript/webmssdk.js (2024-06-21 修改)
  */
+/**
+ * 完整性校验：这段 486KB 混淆代码由服务进程 `new Function` 直接执行，没有沙箱
+ * （评审 2026-11-01）。它随源码进入 bundle，篡改 bundle 也能改这段字符串 —— 校验和
+ * 防的是「误改/替换后仍在跑」而不是有权限的本地攻击者。改动脚本（升级 webmssdk）必须
+ * 同步更新 EXPECTED，否则启动即失败（fail-closed）。
+ * 想彻底关掉抖音直播弹幕：环境变量 `AMOEBA_DOUYIN_DANMAKU=0`。
+ */
+const EXPECTED_FNV1A64 = 0xba993d4747630432n
+
+export function assertMsdkIntegrity(): void {
+  let h = 0xcbf29ce484222325n
+  for (let i = 0; i < kWebMsSDK.length; i++) {
+    h ^= BigInt(kWebMsSDK.charCodeAt(i))
+    h = (h * 0x100000001b3n) & 0xffffffffffffffffn
+  }
+  if (h !== EXPECTED_FNV1A64) {
+    throw new Error(
+      `抖音签名脚本校验失败（FNV-1a 0x${h.toString(16)}，期望 0x${EXPECTED_FNV1A64.toString(16)}）。` +
+        `脚本被修改过；确认来源后把 msdk-sign.ts 的 EXPECTED_FNV1A64 更新为上面的实际值。`,
+    )
+  }
+}
+
 // eslint-disable-next-line no-template-curly-in-string
 export const kWebMsSDK = String.raw`
 // extracted from douyin webmssdk.es5.js

@@ -24,7 +24,7 @@ import { log } from "../../log.ts"
 import { md5Hex } from "../../utils/md5.ts"
 import { DEFAULT_TTWID, enterRoomParams, signDouyinUrl, UA_ENTER } from "./abogus.ts"
 import { decodeDouyinPushFrame, douyinHeartbeatFrame } from "./danmaku-proto.ts"
-import { kWebMsSDK } from "./msdk-sign.ts"
+import { assertMsdkIntegrity, kWebMsSDK } from "./msdk-sign.ts"
 
 const LIVE = "https://live.douyin.com"
 /** WS 弹幕连接 UA(对齐 douyinLive 现代 Chrome;webmssdk 签名环境也用这套)。 */
@@ -127,6 +127,12 @@ function getMsStub(roomId: string, userId: string): string {
  * 含 `-`/`=` 重新生成(douyinLive 循环)。
  */
 function douyinSignature(roomId: string, userId: string): string {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+  if (env?.AMOEBA_DOUYIN_DANMAKU === "0") {
+    throw new Error("抖音直播弹幕已禁用（AMOEBA_DOUYIN_DANMAKU=0）")
+  }
+  // 486KB 混淆脚本要 `new Function` 执行：先用校验和确认它没被替换（见 msdk-sign.ts）。
+  assertMsdkIntegrity()
   const msStub = getMsStub(roomId, userId)
   const code = `${WEBMSSDK_ENV}\n${JS_REQUIRE_SHIM}\n${kWebMsSDK}`
   let sign = ""

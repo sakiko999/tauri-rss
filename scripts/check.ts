@@ -40,6 +40,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/resolve/src/example/xhs-time.check.ts",
     "packages/resolve/src/example/youtube-danmaku-poll.check.ts",
     "packages/resolve/src/example/login-events.check.ts",
+    "packages/resolve/src/example/douyin-msdk.check.ts",
     "packages/resolve/src/example/douyin-user.check.ts",
     "packages/crawler/src/example/extract.check.ts",
     "packages/crawler/src/example/bili-popular.check.ts",
