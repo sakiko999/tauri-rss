@@ -129,6 +129,23 @@ assert.deepEqual(
   "replace 未按 id 去重 —— 同一订阅会渲染重复条目",
 )
 
+// ⭐ 续播进度单独走 `progress` 事件 + 原地更新:
+// 播放时每 5 秒写一次位置,若走「换对象 + items 事件」会全量重算视图并重渲染播放器整树。
+const progressStore = createMediaStore(() => NOW)
+progressStore.replace("s", [item("p1", "s", { positionSec: 0 })])
+const seen: string[] = []
+const off = progressStore.subscribe((c) => seen.push(c))
+const ref = progressStore.all()[0]!
+progressStore.patch("s", "p1", { positionSec: 30 })
+assert.equal(ref.positionSec, 30, "进度应原地更新(旧引用也要读到新值)")
+assert.deepEqual(seen, ["progress"], "只改进度 → progress 事件")
+progressStore.patch("s", "p1", { positionSec: 30 })
+assert.deepEqual(seen, ["progress"], "值没变不该发事件")
+progressStore.patch("s", "p1", { positionSec: 31, isStarred: true })
+assert.deepEqual(seen, ["progress", "items"], "结构化字段变了 → items 事件")
+assert.equal(progressStore.all()[0]!.positionSec, 31)
+off()
+
 console.log(
-  "✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / append / replace 去重)",
+  "✔ media-store 查询自检通过(subscriptionIds / unread / starred / today / 排序 / patch / progress / append / replace 去重)",
 )

@@ -8,7 +8,17 @@
 import type { MediaItem } from "../types/media-item.ts"
 import type { MediaQuery } from "../types/query.ts"
 
-export type MediaStoreListener = () => void
+/**
+ * 变更类型。`progress` = 只有续播进度变了（positionSec/scrollRatio/lastReadAt）：
+ * 条目对象**原地**更新，数组身份不变 —— 订阅方可以跳过视图重算与重渲染
+ * （播放时每 5 秒一次，全量重排 2 万条会卡）。
+ */
+export type MediaStoreChange = "items" | "progress"
+
+export type MediaStoreListener = (change: MediaStoreChange) => void
+
+/** 只影响「读到哪了」、不影响视图成员与排序的字段。 */
+const PROGRESS_FIELDS: ReadonlySet<string> = new Set(["positionSec", "scrollRatio", "lastReadAt"])
 
 export interface MediaStore {
   /** 全部条目(快照副本)。 */
@@ -21,11 +31,14 @@ export interface MediaStore {
    *  返回**实际新增**条数(0 = 整页都是重复,上游翻页没推进)。 */
   append(subscriptionId: string, items: MediaItem[]): number
   /**
-   * patch 单条(如标已读、收藏)。
+   * patch 单条(如标已读、收藏、续播进度)。
    *
    * ⚠️ **必须带 subscriptionId**:`item.id` 只在订阅内唯一,同一个 id 会跨订阅出现
    * (实测 `bilibili:7734200` 同时在 `bili:live` 与 `bili:live:hot`)。只按 id 匹配会
    * 把**两个订阅的条目一起改**(在热门榜标已读,手填订阅那条也变已读)。
+   *
+   * 只改 `PROGRESS_FIELDS` 时原地更新并发 `progress` 事件（见 `MediaStoreChange`）；
+   * 否则走写时复制并发 `items` 事件。
    */
   patch(subscriptionId: string, id: string, patch: Partial<MediaItem>): void
   /** 订阅 store 变更;返回退订函数。 */
@@ -44,8 +57,8 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
   let items: MediaItem[] = []
   const listeners = new Set<MediaStoreListener>()
 
-  function emit(): void {
-    for (const l of listeners) l()
+  function emit(change: MediaStoreChange): void {
+    for (const l of listeners) l(change)
   }
 
   return {
@@ -75,7 +88,7 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
       const seen = new Set<string>()
       const unique = next.filter((it) => !seen.has(it.id) && (seen.add(it.id), true))
       items = [...items.filter((it) => it.subscriptionId !== subscriptionId), ...unique]
-      emit()
+      emit("items")
     },
 
     append(subscriptionId, next) {
@@ -86,18 +99,30 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
       const fresh = next.filter((it) => !existingIds.has(it.id) && (existingIds.add(it.id), true))
       if (!fresh.length) return 0
       items = [...items, ...fresh]
-      emit()
+      emit("items")
       return fresh.length
     },
 
     patch(subscriptionId, id, patch) {
-      let changed = false
-      items = items.map((it) => {
-        if (it.id !== id || it.subscriptionId !== subscriptionId) return it
-        changed = true
-        return { ...it, ...patch } as MediaItem
-      })
-      if (changed) emit()
+      const i = items.findIndex((it) => it.id === id && it.subscriptionId === subscriptionId)
+      if (i < 0) return
+      const cur = items[i]!
+      // 只算**真的变了**的字段:服务端 reading.changed 回显会带全套字段,但标已读/星标
+      // 往往没变 —— 不比较的话每次续播都会当成结构化变更,播放中每 5 秒全量重算一次。
+      const changed = Object.entries(patch).filter(([k, v]) => (cur as unknown as Record<string, unknown>)[k] !== v)
+      if (!changed.length) return
+      if (changed.every(([k]) => PROGRESS_FIELDS.has(k))) {
+        // 原地写:对象/数组身份不变,不触发 React 重渲染;消费方下次渲染时读到新值。
+        // ⚠️ 只有 `progress` 订阅者可以做「等下次渲染」的处理 —— 依赖实时进度的视图
+        // （播放页持续显示的上一条进度）不在这个假设里,当前没有这种视图。
+        Object.assign(cur, Object.fromEntries(changed))
+        emit("progress")
+        return
+      }
+      items = items.map((it) =>
+        it.id === id && it.subscriptionId === subscriptionId ? ({ ...it, ...patch } as MediaItem) : it,
+      )
+      emit("items")
     },
 
     subscribe(listener) {
@@ -110,7 +135,7 @@ export function createMediaStore(now: () => number = Date.now): MediaStore {
     clear(subscriptionId) {
       const before = items.length
       items = items.filter((it) => it.subscriptionId !== subscriptionId)
-      if (items.length !== before) emit()
+      if (items.length !== before) emit("items")
     },
   }
 }

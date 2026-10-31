@@ -176,8 +176,8 @@ flowchart LR
 - 序列化是 crawler→core 唯一通道：标准字段 + `tpl:kind`、`tpl:fetchedAt`、`tpl:streamJson`、各 kind 扩展（`packages/xml/src/serialize.ts:35-53`、`:57-155`）。
 - 缓存是「每订阅一份 XML」的 KV（`packages/core/src/repo/content-cache-repo.ts:30-53`）；反序列化在命中缓存时复用同一路径，不新增 MediaItem 序列化面。
 - 反序列化注入 app 语义：`subscriptionId` 来自上下文，`baseFields` 给 `isUnread:true / isStarred:false` 默认值，`tpl:fetchedAt` 缺失才用 `now`（`packages/core/src/processing/deserialize.ts:127-163`）。**例外**：`parseCategory` 覆盖为 `isUnread:false` —— 目录条目不是内容、点开也没有 markRead 路径，否则目录订阅会把未读数凭空抬高且消不掉（`:248-259`）。
-- `MediaStore`：`replace` 整订阅替换、`append` 按 id 去重并返回新增数、`patch` 必须带 `subscriptionId`（`packages/core/src/store/media-store.ts:70-92`）。
-- desktop 重读：`dl.store.subscribe(() => refreshView())` → `queryView` 的 5 段管线（`apps/desktop/src/store/actions/data.ts:44`、`apps/desktop/src/store/ctx.ts:14-31`、`selectors.ts:161-183`）。
+- `MediaStore`：`replace` 整订阅替换、`append` 按 id 去重并返回新增数、`patch` 必须带 `subscriptionId`（`packages/core/src/store/media-store.ts`）。只改续播进度（`positionSec/scrollRatio/lastReadAt`）时**原地更新**并发 `progress` 事件，不换对象/数组身份。
+- desktop 重读：`dl.store.subscribe(change)` 只在 `change === "items"` 时 `markItemsChanged()` + `refreshView()` → `queryView` 的 5 段管线；`progress` 直接返回（播完回列表时读到原地更新后的值）——否则播放中每 5 秒一次全量重算 + 播放器整树重渲染（`apps/desktop/src/store/actions/data.ts`、`store/ctx.ts`、`selectors.ts`）。
 
 **成功路径**：XML 写入 KV → 反序列化 6 类 kind → 阅读态回填 → store emit → 视图列表更新。
 

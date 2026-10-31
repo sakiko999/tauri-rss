@@ -22,7 +22,7 @@ export { contentTtlMs, cookieFieldFor, cookieFieldForPlatform } from "./settings
 export type { DataLayer, DataLayerDiagnostics, LoginResult } from "./data-layer.ts"
 /** 远端客户端的本地镜像复用同一份查询语义（newest-first / 智能订阅过滤）。 */
 export { createMediaStore } from "./store/media-store.ts"
-export type { MediaStore, MediaStoreListener } from "./store/media-store.ts"
+export type { MediaStore, MediaStoreChange, MediaStoreListener } from "./store/media-store.ts"
 export type { ChannelInfo } from "./types/channel-info.ts"
 export type { RefreshResult } from "./types/refresh-result.ts"
 

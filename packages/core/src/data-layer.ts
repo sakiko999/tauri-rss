@@ -7,28 +7,34 @@
  *
  * 编排:订阅存 `channelKey` + `info`,refresh 时查 crawler 注册表 →
  * `channel.getSource(info).fetch()` 得 RSS XML → `deserializeFeed` → store.replace。
+ *
+ * 本文件只留「公共接口 + 刷新编排 + 订阅 CRUD + cookie 快照同步」;无状态的邻接职责
+ * 拆到 `internal/`(2026-11-01):
+ *   net-policy(等级投影) · cookies(取值/合并) · reading-state(阅读态回填)
+ *   playback(播放/详情/热搜/可翻页探测) · pagination(翻页) · async(串行/取消)
+ * ⚠️ refresh 与 pagination 共享游标/墓碑/串行链,所以两者仍在本闭包内装配 ——
+ * 只把「翻一页」的编排交出去,避免为一个文件行数把 6 个可变状态穿参到各处。
  */
 
-import { isHotWordSource, isItemDetailSource, isLoginable, isPageable, registerAllChannels } from "@amoeba/crawler"
-import { platformOfChannelKey } from "@amoeba/platform"
+import { isLoginable, registerAllChannels } from "@amoeba/crawler"
 import {
   errorKindOf,
-  getDanmakuByUrl,
-  parseCookieDict,
   ResolveError,
-  resolveLivePlayByUrl as resolveLiveByUrl,
-  resolvePlayByUrl as resolveVideoByUrl,
-  serializeCookieDict,
   setPlatformCookieLookup,
   withBrowserGlobal,
   withBrowserOpSlot,
 } from "@amoeba/resolve"
-import { serializeFeed } from "@amoeba/xml"
 
 import { STORAGE_SCHEMA } from "./db/schema.ts"
 import { NoChannelError } from "./errors.ts"
+import { createSerialized, withSignal } from "./internal/async.ts"
+import { DESKTOP_COOKIE_CONSUMER_FIELDS, mergeSourceInfo, normalizeCookie } from "./internal/cookies.ts"
+import { foldChannelLevels, syncNetPolicy } from "./internal/net-policy.ts"
+import { createPagination } from "./internal/pagination.ts"
+import { createPlaybackApi } from "./internal/playback.ts"
+import { applyReadingState } from "./internal/reading-state.ts"
 import { coreLog, formatError } from "./log.ts"
-import { deserializeFeed, deserializeFeedWithTotal } from "./processing/deserialize.ts"
+import { deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
 import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
@@ -36,14 +42,13 @@ import { createSettingsRepository, type SettingsRepository } from "./repo/settin
 import { createSubscriptionRepository, type SubscriptionRepository } from "./repo/subscription-repo.ts"
 import { contentTtlMs, cookieFieldFor, cookieFieldForPlatform } from "./settings-policy.ts"
 import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
-import { createMediaStore } from "./store/media-store.ts"
+import { createMediaStore, type MediaStoreChange } from "./store/media-store.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
 import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import type { DanmakuStream, ResolvePlayback } from "./types/playback.ts"
 import type { MediaQuery } from "./types/query.ts"
-import { findRecord } from "./types/reading.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
-import { type AppSettings, DEFAULT_SETTINGS, type NetLevel } from "./types/settings.ts"
+import { type AppSettings, DEFAULT_SETTINGS } from "./types/settings.ts"
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
@@ -88,7 +93,8 @@ export interface DataLayer {
     query(query?: MediaQuery): MediaItem[]
     /** ⚠️ 必须带 subscriptionId —— 同一个 item.id 会跨订阅出现(见 media-store.patch)。 */
     patch(subscriptionId: string, id: string, patch: Partial<MediaItem>): void
-    subscribe(listener: () => void): () => void
+    /** `progress` = 只有续播进度变了（原地更新）；消费方据此跳过全量视图重算。 */
+    subscribe(listener: (change: MediaStoreChange) => void): () => void
     /** 丢弃某订阅全部条目（退订/完全重置；服务端用）。 */
     clear(subscriptionId: string): void
   }
@@ -169,21 +175,6 @@ type FetchableSource = {
   fetchPassive?(): Promise<string | null>
 }
 
-/**
- * settings cookie 字段的**桌面 HTTP 消费方** —— 只有它们值得为快照同步单独拉起
- * 抓取浏览器(~1GB,空闲 3 分钟回收)。xhsCookie 在桌面没有数据消费方(xhs 全走
- * 浏览器,settings 只剩账号页展示),只在浏览器已因其它字段被拉起时顺带同步。
- */
-const DESKTOP_COOKIE_CONSUMER_FIELDS: ReadonlySet<keyof AppSettings> = new Set(["weiboCookie"])
-
-/** cookie 串 → 按 key 排序的规范形(比较用;快照落库的就是这个形)。 */
-function normalizeCookie(v: unknown): string {
-  return serializeCookieDict(parseCookieDict(typeof v === "string" ? v : ""))
-}
-
-/** 单条正文缓存上限（字符；约 4MB UTF-16）。超过不入缓存，每次现取。 */
-const MAX_BODY_CACHE_CHARS = 2_000_000
-
 export function createDataLayer(): DataLayer {
   // DDL 唯一权威仍在 core：把 schema 注入 SQL 型后端。host 因此不需要反向 import
   // core（旧的 `host → core` 是包级运行时环的一边，见 docs/architecture/system/05-risks.md R2）。
@@ -255,7 +246,7 @@ export function createDataLayer(): DataLayer {
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId)
       pageCursors.delete(subscriptionId)
-      replaceIfLive(subscriptionId, await applyReadingState(items))
+      replaceIfLive(subscriptionId, await applyReadingState(items, reading))
       return { subscriptionId, itemCount: items.length, fetchedAt: cached.fetchedAt }
     } catch {
       return null // 缓存损坏 → 视为无可用数据
@@ -263,110 +254,18 @@ export function createDataLayer(): DataLayer {
   }
 
   /**
-   * 把网络策略同步给宿主 governor(best-effort)。
-   * host 未注入 `net`(浏览器/CLI/旧宿主)时静默跳过 —— doRefresh 内的等级闸门仍生效。
-   */
-  function syncNetPolicy(s: AppSettings): void {
-    // governor 按 URL host 只认**平台名**;旧版 channelKey 覆盖先折叠成平台键(正常
-    // 启动时已迁移,这里兜底任何尚未迁移的写入)。
-    const levels = foldChannelLevels(s.netLevels) ?? s.netLevels
-    try {
-      // levels 是**整表替换**语义(设置页的完整平台覆盖快照)。
-      globalThis.appHost?.net?.configure({ level: s.netLevel, levels })
-    } catch {
-      /* net 未注入 / 旧宿主:沿用宿主默认策略 */
-    }
-  }
-
-  /**
-   * 旧版 channelKey 覆盖 → 平台键(2026-10-21 设置页改为只按平台)。
-   * 返回 null = 无需迁移(没有 channelKey 键)。
-   * 规则与旧运行时投影一致:
-   *   - **L0 优先**(显式调试直通,覆盖平台档);
-   *   - 其余取**更严格**者(不因个别渠道收紧而误放);
-   *   - 被动渠道的存量键**丢弃**(它不产生应用构造的请求,等级无意义)。
-   */
-  function foldChannelLevels(src: Record<string, NetLevel>): Record<string, NetLevel> | null {
-    let changed = false
-    const levels: Record<string, NetLevel> = { ...src }
-    for (const [key, level] of Object.entries(src)) {
-      const platform = platformOfChannel(key)
-      if (!platform) continue
-      delete levels[key]
-      changed = true
-      if (getChannel(key)?.passive) continue
-      const prev = levels[platform]
-      if (prev === undefined) levels[platform] = level
-      else if (prev === 0 || level === 0) levels[platform] = 0
-      else levels[platform] = prev >= level ? prev : level
-    }
-    return changed ? levels : null
-  }
-
-  /** channelKey → 平台名(与 host governor 的 URL 平台分类同源,均来自 `@amoeba/platform`)。 */
-  function platformOfChannel(channelKey: string): string | undefined {
-    return platformOfChannelKey(channelKey)
-  }
-
-  /** 按 channelKey 前缀取 settings 快照里的 cookie(订阅显式 info.cookie 永远优先)。 */
-  function cookieFor(channelKey: string, s: AppSettings): string | undefined {
-    const field = cookieFieldFor(channelKey)
-    return field ? (s[field] as string | undefined) : undefined
-  }
-
-  /**
-   * 合并 core 层默认 cookie 到订阅 info。
-   *   crawler 源:按平台前缀注入 cookie(bili/weibo/xhs/douyin)供抓取/解析。
-   *   rsshub 外挂源:只注入 baseUrl(供 fetch 请求外部实例),**不注入平台 cookie**
-   *     ——外挂只做信息抓取,无需登录态;平台 cookie 也不应泄露给公网实例。
-   *
-   * ⚠️ 「键存在即尊重」(含空串 = 强制匿名):与 CLI `--kv cookie=` 的探针语义一致
-   * (同一语义在两条装配线上曾含义相反——CLI 空串强制匿名、core 空串回落默认)。
-   * 渠道没写 cookie 键时,client 侧还有 credentials provider 兜底(同一 settings 源),
-   * 所以「漏写键」不再等于「永远匿名」。
+   * 合并 core 层默认 cookie 到订阅 info(规则实现见 `internal/cookies.ts`)。
+   * `s` 让 doRefresh 复用同一次 settings 读取。
    */
   async function sourceInfoFor(
     sub: { channelKey: string; info: Record<string, string> },
-    /** 已读出的 settings 快照(doRefresh 复用同一次读);不传则现读。 */
     s?: AppSettings,
   ): Promise<Record<string, string>> {
     const cfg = s ?? (await settings.get())
-    if (sub.channelKey.startsWith("rsshub:")) {
-      if (sub.info["baseUrl"]) return sub.info
-      return { ...sub.info, baseUrl: cfg.rsshubBaseUrl }
-    }
-    const cookie = cookieFor(sub.channelKey, cfg)
-    if (sub.info["cookie"] !== undefined || !cookie) return sub.info
-    return { ...sub.info, cookie }
+    return mergeSourceInfo(sub, cfg, cfg.rsshubBaseUrl)
   }
 
   /**
-   * 把持久化的阅读态(已读/星标/续播位置)回填到刚重建的条目上。
-   *
-   * ⚠️ 必需的原因:deserialize 每次都按「新条目」处理(isUnread=true、isStarred=false,
-   * 无 positionSec),而 refresh 是整批 replace。不回填的话每次刷新/重启,已读、星标、
-   * 续播位置都会被抹掉 —— 星标/续播只 patch 内存 store 时尤其明显。
-   */
-  async function applyReadingState(items: MediaItem[]): Promise<MediaItem[]> {
-    if (!items.length) return items
-    const map = await reading.getAll().catch(() => null)
-    if (!map) return items
-    return items.map((it) => {
-      // ⚠️ 必须走复合键（带 subscriptionId）——同一条目 id 跨订阅共享已读/星标/续播
-      // 是真实存在的（见 types/reading.ts 的 readingKey）。
-      const rec = findRecord(map, it.subscriptionId, it.id)
-      if (!rec) return it
-      const next: Partial<MediaItem> = {}
-      if (rec.read && it.isUnread) next.isUnread = false
-      if (rec.starred && !it.isStarred) next.isStarred = true
-      if (rec.positionSec && !it.positionSec) next.positionSec = rec.positionSec
-      if (rec.scrollRatio && !it.scrollRatio) next.scrollRatio = rec.scrollRatio
-      // lastReadAt 无条件回填(无「已设则跳过」语义:它就是最近一次时间,应随 reading 更新)。
-      if (rec.lastReadAt) next.lastReadAt = rec.lastReadAt
-      return Object.keys(next).length ? ({ ...it, ...next } as MediaItem) : it
-    })
-  }
-
   /** 取消语义的返回值：与「抓取失败」区分——不触发旧缓存回退，也不写 store/缓存。 */
   function cancelledResult(subscriptionId: string): RefreshResult {
     return {
@@ -376,32 +275,6 @@ export function createDataLayer(): DataLayer {
       errorKind: "timeout",
       fetchedAt: now(),
     }
-  }
-
-  /**
-   * 抓取与取消竞速：signal 触发即抛（在途请求的响应被丢弃，不占后续流程）。
-   *
-   * ⚠️ 不做 socket 级 abort：`appHost.http` 契约里没有 signal，且 governor 的
-   * 去重可能把同一请求共享给别的订阅——这里只停「本次刷新的编排」，网络层
-   * 自行跑完（结果无人消费）。
-   */
-  function withSignal<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
-    if (!signal) return p
-    if (signal.aborted) return Promise.reject(new Error("刷新已取消"))
-    return new Promise<T>((resolve, reject) => {
-      const onAbort = () => reject(new Error("刷新已取消"))
-      signal.addEventListener("abort", onAbort, { once: true })
-      p.then(
-        (v) => {
-          signal.removeEventListener("abort", onAbort)
-          resolve(v)
-        },
-        (e) => {
-          signal.removeEventListener("abort", onAbort)
-          reject(e)
-        },
-      )
-    })
   }
 
   /**
@@ -447,7 +320,7 @@ export function createDataLayer(): DataLayer {
           // ⚠️ 停用路径把 store 重置回缓存首页,必须**一并清分页游标** —— 否则残留的
           // page-2 游标会让下次 loadMore 追加「第 3 页」,第 2 页内容被静默跳过。
           pageCursors.delete(subscriptionId)
-          replaceIfLive(subscriptionId, await applyReadingState(items))
+          replaceIfLive(subscriptionId, await applyReadingState(items, reading))
           itemCount = items.length
         } catch {
           /* 缓存坏了 → 保持现状,不报错(停用不是错误) */
@@ -497,7 +370,7 @@ export function createDataLayer(): DataLayer {
             })
             if (total !== undefined) pageTotals.set(subscriptionId, total)
             else pageTotals.delete(subscriptionId)
-            replaceIfLive(subscriptionId, await applyReadingState(items))
+            replaceIfLive(subscriptionId, await applyReadingState(items, reading))
             pageCursors.delete(subscriptionId)
             return { subscriptionId, itemCount: items.length, fetchedAt: cached.fetchedAt }
           }
@@ -553,7 +426,7 @@ export function createDataLayer(): DataLayer {
       if (signal?.aborted) return cancelledResult(subscriptionId)
       if (total !== undefined) pageTotals.set(subscriptionId, total)
       else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
-      replaceIfLive(subscriptionId, await applyReadingState(items))
+      replaceIfLive(subscriptionId, await applyReadingState(items, reading))
       pageCursors.delete(subscriptionId) // 新首页 → 分页游标重置(从头翻)
       // ⚠️ 退订竞态:抓取途中用户退订 → remove 已删 content:<id>,若在途 refresh 在此照写
       // 就留下**无消费者的孤儿缓存**(订阅已删,永不读取/清理)。与 replaceIfLive 同用墓碑拦。
@@ -582,7 +455,7 @@ export function createDataLayer(): DataLayer {
             kind,
             now: now(),
           })
-          replaceIfLive(subscriptionId, await applyReadingState(items))
+          replaceIfLive(subscriptionId, await applyReadingState(items, reading))
           // ⚠️ 回退的是**首页**缓存,分页游标必须一并清:否则下次 loadMore 会从残留的
           // 旧游标继续翻(首页已换成缓存、游标却指向更后面 → 中间若干页被静默跳过)。
           pageCursors.delete(subscriptionId)
@@ -611,20 +484,8 @@ export function createDataLayer(): DataLayer {
     }
   }
 
-  /** 按订阅串行化(不同订阅仍可并发;refreshAll 的并行不受影响)。 */
-  const chains = new Map<string, Promise<unknown>>()
-  function serialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const prev = chains.get(key) ?? Promise.resolve()
-    const next = prev.then(fn, fn)
-    chains.set(
-      key,
-      next.then(
-        () => undefined,
-        () => undefined,
-      ),
-    )
-    return next
-  }
+  /** 按订阅串行化(不同订阅仍可并发;refreshAll 的并行不受影响)。实现见 internal/async.ts。 */
+  const serialized = createSerialized()
 
   /**
    * 刷新一次订阅(同订阅重入排队)。
@@ -636,273 +497,6 @@ export function createDataLayer(): DataLayer {
    */
   function refresh(subscriptionId: string, opts?: { force?: boolean; signal?: AbortSignal }): Promise<RefreshResult> {
     return serialized(`sub:${subscriptionId}`, () => doRefresh(subscriptionId, opts))
-  }
-
-  /**
-   * 解析播放:统一走 crawler/resolver(按 item.url 路由到平台解析函数)。
-   * crawler 与 rsshub 源的条目一样处理("统一生效")。不改 MediaItem,不持久化注记。
-   */
-  /** 抓住 resolver 的错误(而非吞成 null),供上层原样透出。 */
-  async function catching<T>(p: Promise<T>): Promise<{ ok: T } | { err: Error }> {
-    try {
-      return { ok: await p }
-    } catch (e) {
-      return { err: e instanceof Error ? e : new Error(String(e)) }
-    }
-  }
-
-  async function resolvePlay(subscriptionId: string, itemId: string): Promise<ResolvePlayback> {
-    // ⚠️ 不要把 null 当成「URL 不可解析」—— resolver 的真实错误(无流/风控/限区)必须
-    // 原样透出,否则把「解析/网络失败」误导成「链接不对」,用户查错方向。
-    const r = await catching(resolvePlayByUrl(itemId, subscriptionId))
-    if ("err" in r) throw r.err
-    if (r.ok) return r.ok
-    throw new Error("该条目不指向可解析的视频链接")
-  }
-
-  async function resolveLivePlay(subscriptionId: string, roomId: string): Promise<ResolvePlayback> {
-    const r = await catching(resolveLivePlayByUrl(roomId, subscriptionId))
-    if ("err" in r) throw r.err
-    if (r.ok) return r.ok
-    throw new Error("该条目不指向可解析的直播链接")
-  }
-
-  /**
-   * 入参 → 可路由的 URL。resolver 的 `resolveRoute` **只认 URL**(平台域名 + 路径),
-   * 所以这里必须先把条目查出来取 `item.url`,不能把入参直接当 URL 用。
-   *
-   * 按 `item.id` 命中,取 `item.url`。
-   *
-   * 兜底:入参本身就是 URL(`://`)时直接用它(如条目已不在 store 里)。
-   */
-  function findItemUrl(itemId: string, subscriptionId: string): string | null {
-    // ⚠️ item.id 只在订阅内唯一(实测同 id 跨订阅撞),裸 id 查全表会拿到别的订阅的 url。
-    const hit = store.query({ subscriptionId }).find((it) => it.id === itemId)
-    const url = hit?.url ?? (itemId.includes("://") ? itemId : null)
-    return url || null
-  }
-
-  /**
-   * 视频播放:crawler/resolver 按 item.url 路由解析。info 用订阅的 sourceInfoFor
-   * (cookie 注入;rsshub 源注入 baseUrl)。
-   */
-  /**
-   * 预览条目（`preview:<channelKey>`）没有订阅记录：按渠道前缀补默认 info（cookie / baseUrl）。
-   * 二级订阅（播客单集 / 分区房间）的条目就来自 `previewChannel`。
-   */
-  async function previewInfoFor(subscriptionId: string): Promise<Record<string, string> | null> {
-    const prefix = "preview:"
-    if (!subscriptionId.startsWith(prefix)) return null
-    // 复用 sourceInfoFor 的同一套规则(别再写第二份:规则漂移会变成
-    // 「抓取能取到、播放解析拿不到凭证」,而错误文案还指向「链接不对」)。
-    return sourceInfoFor({ channelKey: subscriptionId.slice(prefix.length), info: {} })
-  }
-
-  async function resolvePlayByUrl(itemId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
-    const url = findItemUrl(itemId, subscriptionId)
-    if (!url) return null
-    // ⚠️ resolver 抛错(平台风控/无流/限区/需登录)**不在此吞成 null** —— 交给外层
-    // `resolvePlay` 的 catching 原样透出真实错误。null 只留给「无订阅/无 url」这两种
-    // 真正「不可解析」的情形(外层映射为「该条目不指向可解析的视频链接」)。曾把 resolver
-    // 错误也吞成 null → 风控失败被误报成「链接不对」,用户去重装/换源(查错方向)。
-    const sub = await repo.get(subscriptionId)
-    const info = sub ? await sourceInfoFor(sub) : await previewInfoFor(subscriptionId)
-    if (!info) return null
-    const { streams, chapters } = await resolveVideoByUrl(url, info)
-    let danmaku
-    try {
-      danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
-    } catch {
-      // 无弹幕能力(如纯图文/音频)不阻塞播放。
-    }
-    // danmaku 是函数,过 RPC(JSON) 会丢 —— 同时给可序列化的 ref 让客户端本地重建
-    // (匿名;凭证不过界,见 DanmakuRef 注释)。
-    const danmakuRef = danmaku ? { url, kind: "vod" as const } : undefined
-    return { streams, danmaku, danmakuRef, chapters }
-  }
-
-  /** 直播播放:同上,但 kind=live 路由。 */
-  async function resolveLivePlayByUrl(roomId: string, subscriptionId: string): Promise<ResolvePlayback | null> {
-    const url = findItemUrl(roomId, subscriptionId)
-    if (!url) return null
-    const sub = await repo.get(subscriptionId)
-    const info = sub ? await sourceInfoFor(sub) : await previewInfoFor(subscriptionId)
-    if (!info) return null
-    const { streams } = await resolveLiveByUrl(url, info)
-    let danmaku
-    try {
-      danmaku = getDanmakuByUrl(url, { cookie: info.cookie })
-    } catch {
-      // 无弹幕能力不阻塞播放。
-    }
-    const danmakuRef = danmaku ? { url, kind: "live" as const } : undefined
-    return { streams, danmaku, danmakuRef }
-  }
-
-  /**
-   * 弹幕订阅（服务端建连）：凭证只在服务进程内使用 —— 抖音直播弹幕要 ttwid，
-   * 桌面拿不到也不该拿到。info 规则与播放解析同源（订阅 / `preview:` 前缀）。
-   */
-  async function resolveDanmaku(subscriptionId: string, url: string, kind: "vod" | "live"): Promise<DanmakuStream> {
-    const sub = await repo.get(subscriptionId)
-    const info = sub ? await sourceInfoFor(sub) : await previewInfoFor(subscriptionId)
-    // 无路由 / 平台不支持 → getDanmakuByUrl 抛错，原样透出（调用方按「没有弹幕」处理）。
-    return getDanmakuByUrl(url, { kind, cookie: info?.cookie })
-  }
-
-  async function resolveHotWord(subscriptionId: string, word: string): Promise<MediaItem[]> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) throw new Error("subscription not found")
-    const channel = getChannel(sub.channelKey)
-    if (!channel) throw new NoChannelError(sub.channelKey)
-    // 能力在 source 上:实例化源 → 探测是否有 resolveHotWord。
-    const info = await sourceInfoFor(sub)
-    const source = channel.getSource(info)
-    if (!isHotWordSource(source)) {
-      throw new Error(`channel ${sub.channelKey} does not support hot word resolution`)
-    }
-    const items = await source.resolveHotWord(word)
-    // 复用全链路 XML 契约:crawler Item[] → XML → core MediaItem[]。
-    const xml = serializeFeed(items, { channelTitle: channel.name })
-    return deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
-  }
-
-  /** 单条详情:store 里找 item → source 探测 ItemDetailSource → 补全。
-   *  xhs 走 noteDetail(匿名,需列表项 xsec_token);通用 RSS 抓原文页提正文;
-   *  bili/weibo 列表已完整(无该能力)→ 原样返回。item 不在 store 则返回 null。 */
-  async function resolveDetail(subscriptionId: string, itemId: string): Promise<MediaItem | null> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) return null
-    // ⚠️ 必须带 subscriptionId 查:item.id 只在订阅内唯一,裸 id 会命中别的订阅的同 id
-    // 条目(实测 bilibili:<mid> 同时存在于多个订阅),把别人的内容补到这条上。
-    const item = store.query({ subscriptionId }).find((it) => it.id === itemId)
-    if (!item) return null
-    const channel = getChannel(sub.channelKey)
-    if (!channel) return item // channel 未知 → 返回原 item(至少给现有数据)
-    // 通用 RSS 文章正文是**静态**的,持久缓存可跨会话复用(重开不重抓)。⚠️ 只对
-    // **article** 开缓存:xhs social 的补全是多图/标签(不止 content),只缓存正文字符串
-    // 会在命中时丢掉图片详情,故 social 一律走实时抓取。
-    const cacheable = item.kind === "article"
-    if (cacheable) {
-      const hit = await bodyCache.get(subscriptionId, itemId).catch(() => null)
-      if (hit) return { ...item, content: hit.content, contentFormat: hit.contentFormat }
-    }
-    // 被动渠道的详情补全同样要遵守「浏览器被动」的承诺(2026-10-19):
-    // 把 `{ passive: true }` 交给渠道 —— 走「导航 + 读页面 SSR」,不碰平台 API,
-    // 不支持时返回 null → 原样返回列表 item。渠道**抛错**(登录失效/风控)时不再
-    // 静默回退:调用方的失败态要能显示原因(见下方 catch)。
-    const s = await settings.get()
-    const info = await sourceInfoFor(sub, s)
-    const source = channel.getSource(info)
-    if (!isItemDetailSource(source)) return item // 无详情能力(bili/weibo 列表已完整)→ 原样返回
-    // 传**完整 item**(不是仅 url/id):通用 RSS 的 resolveDetail 是增量补全(先 spread 原
-    // item 再填 content),只给三字段会序列化出残缺条目。xhs 只读 url/xsecToken,多传无损。
-    // ⚠️ 详情失败仍然回退原 item(不空窗),但**必须留下原因**:登录失效、风控冷却、
-    // 详情页非 2xx 都从这里经过;静默吞掉会让用户以为「这条笔记本来只有摘要」。
-    let detailItem: Awaited<ReturnType<typeof source.resolveDetail>> | null = null
-    try {
-      // passive 由渠道自己决定怎么降级(被动模式下不得构造 fetch/API);不支持的渠道返回 null。
-      detailItem = await source.resolveDetail(item as never, { passive: channel.passive === true })
-    } catch (e) {
-      coreLog.detailFailed({
-        subscriptionId,
-        itemId,
-        channel: sub.channelKey,
-        error: formatError(e),
-      })
-      // ⚠️ 不能吞掉:桌面 social 详情弹窗靠这个 reject 进入失败态。吞掉会让用户
-      // 把列表摘要误认为完整详情(尤其 xhs 登录失效/风控时)。article 调用方
-      // (ReaderMain / mobile)自己 catch 并保留摘要,不受影响。
-      throw e
-    }
-    if (!detailItem) return item // 渠道明确不支持(返回 null)→ 原样返回列表 item
-    // crawler Item(含完整图文)→ XML → core MediaItem(复用 XML 契约,不新增序列化面)。
-    const xml = serializeFeed([detailItem], { channelTitle: channel.name })
-    const [detail] = deserializeFeed(xml, { subscriptionId, kind: channel.kind, now: now() })
-    const resolved = detail ?? item
-    // 正文确有增长才落缓存(否则会把「无补全能力原样返回」也写进去)。
-    const before = item.kind === "article" ? (item.content ?? "") : ""
-    // 单条上限：超大正文（服务器把整库塞进一页之类）不入缓存，避免单条撑爆库与备份。
-    // 已知上限：没有全局 LRU/条数上限，缓存随「点开过的文章数」增长；退订会清、诊断页可整清。
-    if (
-      cacheable &&
-      resolved.kind === "article" &&
-      (resolved.content ?? "").length > before.length &&
-      (resolved.content ?? "").length <= MAX_BODY_CACHE_CHARS
-    ) {
-      await bodyCache
-        .set(subscriptionId, itemId, {
-          content: resolved.content ?? "",
-          contentFormat: resolved.contentFormat ?? "text",
-          fetchedAt: now(),
-        })
-        .catch(() => {})
-    }
-    return resolved
-  }
-
-  /** 订阅是否支持分页加载更多(hot 发现流;UI 据此显隐「加载更多」)。 */
-  async function canLoadMore(subscriptionId: string): Promise<boolean> {
-    const sub = await repo.get(subscriptionId)
-    if (!sub) return false
-    const channel = getChannel(sub.channelKey)
-    if (!channel) return false
-    const info = await sourceInfoFor(sub)
-    return isPageable(channel.getSource(info))
-  }
-
-  /** 加载更多:翻一页追加进 store。游标内部维护(refresh 后重置);本页为空 = 没有更多。
-   *  与 refresh 共用同一条链,避免 refresh 在 fetchMore 的 await 期间换掉首页与游标。 */
-  function loadMore(subscriptionId: string): Promise<{ addedCount: number; hasMore: boolean }> {
-    return serialized(`sub:${subscriptionId}`, async () => {
-      const sub = await repo.get(subscriptionId)
-      if (!sub) return { addedCount: 0, hasMore: false }
-      const channel = getChannel(sub.channelKey)
-      if (!channel) return { addedCount: 0, hasMore: false }
-      // 停用订阅 = 不抓取(与 refresh 同契约)。否则停用后仍能翻页打网络/反爬源。
-      if (!sub.enabled) return { addedCount: 0, hasMore: false }
-      const info = await sourceInfoFor(sub)
-      const source = channel.getSource(info)
-      if (!isPageable(source)) return { addedCount: 0, hasMore: false }
-      const cursor = pageCursors.get(subscriptionId)
-      let page: { xml: string; cursor?: string; hasMore?: boolean }
-      try {
-        // existing:游标是页面下标时,首次翻页的起点必须是 store 已有条数(见 Pageable 注释)。
-        page = await source.fetchMore(cursor, { existing: store.query({ subscriptionId }).length })
-      } catch (e) {
-        // 翻页失败此前直接冒泡：调用方只看到错误文本，服务日志里没有「哪个订阅/渠道」。
-        coreLog.loadMoreFailed({
-          subscriptionId,
-          channel: sub.channelKey,
-          error: formatError(e),
-        })
-        throw e
-      }
-      const { xml, cursor: nextCursor, hasMore: channelHasMore } = page
-      const { items, total } = deserializeFeedWithTotal(xml, { subscriptionId, kind: channel.kind, now: now() })
-      if (removedSubs.has(subscriptionId)) return { addedCount: 0, hasMore: false } // 已退订:丢弃
-      // ⚠️ 分页条目的 fetchedAt 对齐到该订阅已有内容(首屏)的抓取时间。
-      // 没有 `publishedAt` 的源(小红书发现页等)排序走 `publishedAt ?? fetchedAt` 兜底;
-      // 若保留「本次抓取时间」,新一批会因时间更新而**整体排到列表最前** —— 用户滚到底
-      // 点「加载更多」,视口里还是原来那批,新内容全插到顶部(实测 89 → 272 条,顶部换了一屏)。
-      // 同一订阅的分页内容视为同一批快照:排序键相同 → 稳定排序保持 append 顺序(新内容在末尾)。
-      const batchTime = store.query({ subscriptionId }).reduce((min, it) => Math.min(min, it.fetchedAt), Infinity)
-      const aligned = Number.isFinite(batchTime) ? items.map((it) => ({ ...it, fetchedAt: batchTime })) : items
-      if (total !== undefined) pageTotals.set(subscriptionId, total)
-      else pageTotals.delete(subscriptionId) // 渠道不再带 total → 清残留旧值
-      const addedCount = store.append(subscriptionId, await applyReadingState(aligned))
-      if (nextCursor) pageCursors.set(subscriptionId, nextCursor)
-      else pageCursors.delete(subscriptionId)
-      // ⚠️ 游标前进了但一条都没新增 = 上游把已返回过的内容又给了一遍（典型：xhs 页面
-      // 被整页重载后 state 回到首屏）。继续 hasMore 会让 UI 反复「加载更多」拿到同一页。
-      // 游标没动（或本轮是首次翻页，core 原本无游标，渠道返回的重试游标不算「前进」）
-      // 则是「平台还在加载」的 retry 语义，保留 hasMore。
-      // ⚠️ 渠道**明确**说「还有下一页」时不要按 0 新增判到底 —— 过滤过条目的渠道
-      // (bili:favlist 跳过失效视频)会有整页被滤空的正常情况。
-      const cursorMoved = cursor !== undefined && nextCursor !== undefined && nextCursor !== cursor
-      const exhausted = cursorMoved && addedCount === 0 && channelHasMore !== true
-      return { addedCount, hasMore: !!nextCursor && !exhausted }
-    })
   }
 
   /** 渠道列表投影(source 聚合层 RssChannel → core ChannelInfo,不透 source 装配)。 */
@@ -1138,6 +732,21 @@ export function createDataLayer(): DataLayer {
     return { items, total }
   }
 
+  // 播放/详情解析:只读依赖(订阅/store/正文缓存),独立模块(见 internal/playback.ts)。
+  const playback = createPlaybackApi({ now, repo, store, bodyCache, sourceInfoFor })
+  // 分页与 refresh 共用游标/墓碑/串行链,由本闭包持有并注入。
+  const pagination = createPagination({
+    now,
+    repo,
+    reading,
+    store,
+    sourceInfoFor,
+    pageCursors,
+    pageTotals,
+    removedSubs,
+    serialized,
+  })
+
   return {
     listChannels,
     channelKind,
@@ -1211,14 +820,8 @@ export function createDataLayer(): DataLayer {
     },
     refresh,
     hydrate,
-    resolvePlay,
-    resolveLivePlay,
-    resolveDanmaku,
-    resolveHotWord,
-    resolveDetail,
-    canLoadMore,
-    loadMore,
-    totalOf: (id) => pageTotals.get(id),
+    ...playback,
+    ...pagination,
     scanLogin,
     syncBrowserCookies,
     diagnostics,

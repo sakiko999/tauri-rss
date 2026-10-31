@@ -44,14 +44,32 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
     return next
   }
 
+  /**
+   * 解析结果缓存。整张表是一个 KV blob,`refreshAll` 时每个订阅都会
+   * `applyReadingState → getAll()`,N 个订阅 = N 次整块 JSON.parse(2 万条阅读态时
+   * 是刷新路径上最贵的纯 CPU 操作)。按**原始字符串**比较:只有 blob 真变了才重解析
+   * (外部清库/恢复会改字符串,自动失效,不需要额外的 invalidate)。
+   *
+   * ⚠️ 返回的 map 视为**只读**:写路径必须先拷贝再改(见 patchMany)。
+   */
+  let cachedRaw: string | null = null
+  let cachedMap: ReadingMap = {}
+  let cacheValid = false
+
   async function load(): Promise<ReadingMap> {
     const raw = await storage.get(STORAGE_KEY)
-    if (!raw) return {}
+    if (cacheValid && raw === cachedRaw) return cachedMap
+    cacheValid = true
+    cachedRaw = raw
+    if (!raw) {
+      cachedMap = {}
+      return cachedMap
+    }
     try {
       const parsed: unknown = JSON.parse(raw)
       // 非对象(数组/null/标量)当损坏处理,不走 as 断言把坏结构当 map 用。
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {}
-      return parsed as ReadingMap
+      cachedMap = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as ReadingMap) : {}
+      return cachedMap
     } catch {
       // ⚠️ 解析失败**不能静默返回 {}**:调用方随后就会 save(),把这份空表写回去 ——
       // 一次坏值(半截写/外部改坏)会让全部已读与星标永久消失。这里先把它挪到
@@ -62,12 +80,18 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
       } catch {
         /* 留存失败也只能继续,不能在加载路径上抛。 */
       }
-      return {}
+      cachedRaw = null
+      cachedMap = {}
+      return cachedMap
     }
   }
 
   async function save(map: ReadingMap): Promise<void> {
-    await storage.set(STORAGE_KEY, JSON.stringify(map))
+    const raw = JSON.stringify(map)
+    await storage.set(STORAGE_KEY, raw)
+    cachedRaw = raw
+    cachedMap = map
+    cacheValid = true
   }
 
   async function patch(subscriptionId: string, itemId: string, patch: Partial<ReadRecord>): Promise<void> {
@@ -76,7 +100,8 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
 
   /** 读一次 map,改完所有 **key**,再写一次(必须整体在 run() 的临界区内)。 */
   async function patchMany(keys: string[], patch: Partial<ReadRecord>): Promise<void> {
-    const map = await load()
+    // 拷贝后再改:load() 可能返回缓存对象,原地改会在 save 失败时把缓存改脏。
+    const map = { ...(await load()) }
     const t = now()
     for (const key of keys) {
       const prev = map[key]
@@ -115,7 +140,7 @@ export function createReadingRepository(storage: StorageBackend, now: () => numb
     },
     async deleteBySubscription(subscriptionId) {
       await run(async () => {
-        const map = await load()
+        const map = { ...(await load()) }
         const prefix = `${subscriptionId}\u0000`
         let changed = false
         for (const key of Object.keys(map)) {
