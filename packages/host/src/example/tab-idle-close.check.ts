@@ -96,10 +96,12 @@ assert.equal(targets.size, 1, "应创建了一个 lane target")
 // 2) 在途命令不回收:evaluate 挂起期间过了两个回收周期,target 必须还在。
 const hanging = tab.evaluate("hang()")
 await sleep(150)
-assert.ok(releaseHanging, "挂起命令应已到达假 transport")
+// TS 的控制流分析看不到回调里的赋值,会把 let 收窄成 null —— 断言前先显式还原联合类型。
+const release = releaseHanging as (() => void) | null
+assert.ok(release, "挂起命令应已到达假 transport")
 await sleep(150)
 assert.equal(closed.length, 0, "在途命令期间不得回收 tab(长滚动/长轮询不能被打断)")
-releaseHanging!()
+release()
 assert.equal(await hanging, 42, "挂起命令放行后正常返回")
 
 // 3) 命令结束且空闲到点:关 target;句柄仍在 backend.tabs 里(再用即重建)。
