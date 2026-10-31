@@ -177,7 +177,7 @@ graph LR
 | 对外导出 | 根入口（兼容聚合）导出 `initAppHost`、`setHostCaps`、三个 injector、各 Backend 单件与 governor 函数；子路径 `./runtime`、`./governor`、`./node`、`./tauri`、`./browser`（纯前端注入）、`./cdp`（载具无关的 CDP 核心）供应用按需加载 |
 | 内部结构 | `runtime.ts` 门面 + 闭包；`net/governor.ts` 唯一出站准入点；`tauri/*` 生产后端；`node/*` 自检后端 + CLI 浏览器 sidecar driver / `ws` CDP connector；`browser/*` = 与载具无关的 CDP 核心（`transport` / `channel` / `backend`）+ 纯前端注入；`log.ts` 三个域（`host:http`/`host:browser`/`host:net`）；三个环境各有一个 `index.ts` 聚合子路径 |
 | 依赖 / 被依赖 | 运行时依赖 log 与 `@amoeba/platform`（`net/governor.ts:20` 的 `platformOfHost`），外加 Tauri JS API 与 `ws`；**不依赖 core**（SQL 后端的 schema 由 core 注入）。被全部应用经子路径注入；被 core/crawler/player/ui 以 `appHost` 全局读取（不 import） |
-| 常见改动入口 | 新增宿主能力 → `global.d.ts` + `runtime.ts` 门面 + 三个 injector；改风控 → `net/governor.ts`；加图床 Referer → resolve `media-referrer.ts`（不要写在 ui/host 里） |
+| 常见改动入口 | 新增宿主能力 → `global.d.ts` + `runtime.ts` 门面 + 三个 injector；改风控 → `net/governor.ts`；加图床 Referer → resolve `media-referrer.ts`（不要写在 ui/host 里）；CDP 通用语义只放 `./cdp`，桌面/CLI 差异只能写进 `BrowserDriver` / `CdpConnector`，不回写 backend |
 | 关键文件 | `packages/host/src/runtime.ts`（`initAppHost` / `setHostCaps` / governedHttp 包装 / 协议白名单）；`packages/host/src/net/governor.ts`（`DEFAULT_NET_POLICY` / `configure` / `governedHttp`）；`packages/host/src/tauri/inject-tauri.ts`；`packages/host/src/tauri/sqlite-storage-backend.ts`（`setSchema` / `requireSchema` / 惰性 `ready()`）；`packages/host/src/browser/backend.ts`（`CdpBrowserBackend`，lane/超时/拦截）与 `packages/host/src/tauri/browser-backend.ts`（Tauri driver + ws 隧道 connector） |
 
 不变量：`http/js/storage` 未注入即抛；`ws/browser/updater` 未注入返回 `undefined` 由消费侧降级；`net` 恒可用（`runtime.ts:59-96`）。所有经 `appHost.http` 的请求必过 governor，但原生 `<img>`/`<video>` 与部分 HLS 不走门面，governor 管不到（`governor.ts:17-18`）。CDP 流量绕过 HTTP 流水线，必须显式过 `browserGate`（`scheduler.ts:107-110`）。**SQL 型 storage 后端必须先 `setSchema` 再读写**：`SqliteStorageBackend` 在 `setSchema` 前调用 `get/set` 会抛「schema 未注入」，且 `setSchema` 只允许在首次连接前调用；KV/localStorage/内存后端不必实现。
@@ -318,7 +318,8 @@ graph LR
 
 - **定位**：桌面/移动的应用 crate（根 `Cargo.toml` workspace 三个成员之一，另两个是 `browser-sidecar`/`runtime`；`name = "amoeba"`，lib `amoeba_lib`），不含业务逻辑，只做「哑管道 + 窗口生命周期」。
 - **命令面 10 个**：`http_get`、`service_endpoint`、`ws_connect/ws_send/ws_close`、`webview_browser_open/set_mode/close/reset/tidy`（`apps/src-tauri/src/lib.rs:27-38`）。`service.rs` 负责数据服务生命周期（spawn/adopt/shutdown + `service_endpoint`），主窗口 `Destroyed` 时 shutdown 并退出（`lib.rs:50-63`）；TS 侧对端在 host 的 `tauri/*`。
-- **能力边界**：HTTP 隧道（reqwest，私网/链路本地拦截、重定向逐跳复查、超时 clamp，`commands/mod.rs:66,99-119`）；WS 隧道（自定义握手头，供弹幕与 CDP 文本帧）；保留 `webview_browser_*` / `TauriBrowserBackend`（独立 profile、9334），但 desktop 不注入；生产抓取浏览器是服务 spawn 的 `amoeba-browser` sidecar；插件只用 opener + sql（桌面再加 single-instance/updater/process，`plugins/mod.rs:4-35`；single-instance 必须最先注册）。
+- **能力边界**：HTTP 隧道（reqwest，私网/链路本地拦截、重定向逐跳复查、超时 clamp，`commands/mod.rs:66,99-119`）；WS 隧道（自定义握手头，供弹幕与 CDP 文本帧）；保留 `webview_browser_*` / `TauriBrowserBackend`（独立 profile、固定 9334），但 desktop 不注入
+（9334 是无鉴权的本地调试端口，release 也开——别当安全边界；attach 走动态端口，未新增攻击面）；生产抓取浏览器是服务 spawn 的 `amoeba-browser` sidecar；插件只用 opener + sql（桌面再加 single-instance/updater/process，`plugins/mod.rs:4-35`；single-instance 必须最先注册）。
 - **配置四份**：桌面主配置 `tauri.conf.json`；dev 叠加层只开 9222（`tauri.conf.dev.json`）；构建叠加层把 `service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe` 三个 resources 塞进包（`tauri.conf.release.json`，`scripts/tauri.ts` 只在 `build` 时叠加）；移动独立 identifier/version/devUrl（`tauri.conf.mobile.json`）。capability 只授权 `main` 窗口（`capabilities/default.json`），updater 限桌面三平台（`capabilities/desktop-updater.json`）。
 - **与 TS 的契约**：命令名是字符串、参数 `camelCase`、二进制一律 base64；`http_get` 对 4xx/5xx 也返回成功，调用方自查 status。Rust 不感知风控，治理全在 host 的 governor。
 

@@ -76,6 +76,9 @@ platform 被 URL 兜底误判为 bilibili）。✅ 修复后各平台在线数�
 (800) 则**不抓**（不把好 HTML 降级纯文本）；`ReaderMain` 只对可见文本 <400 的 article 触发。
 UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总线，已从
 `resolveSocialDetail` 更名）。SPA / 反爬占位页提取失败 → 回退原摘要。
+⚠️ **补全不保证纯文本**：feed 自带全文时 `raw.ts` 原样返回 HTML（`contentFormat=html`）——
+消费侧必须按**返回体**的 `contentFormat` 渲染；桌面镜像已剥掉 article 的 content，
+阅读器必走补全，不能读镜像里缓存的 item 字段。
 **持久缓存**：抓到的正文落 KV（`core/repo/body-cache-repo.ts`，`body:<sub>:<item>`），退订
 一并清；**只对 article**（xhs social 补全含多图/标签，只缓存 content 会丢）。
 

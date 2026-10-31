@@ -176,6 +176,10 @@
   `feeds/videos.xml?playlist_id=` 匿名可用，**最多 15 条、无翻页**；条目结构与频道
   feed 同构（复用 `entryToVideo`）。`RD`/`WL`/`LL`/`LM` 前缀拒收（动态/私有/需登录）。
   完整列表（InnerTube `VL<playlistId>`，100/页 + continuation）未做。
+- **会员视频标记**（`tpl:membersOnly` → `Video.membersOnly`，2026-10-26）：YouTube 官方
+  `feeds/videos.xml` **无会员标记**，频道走 InnerTube（`youtube` 渠道）才能取到；
+  **InnerTube 失败回退 RSS 时标记缺失**；匿名首屏可能不含会员视频（取决于频道）。
+  回归见 `docs/ops/smoke-check.md` 会员/付费标记行。
 
 ## 小红书（签名细节见 `docs/platforms/xhs-signature.md`）
 
@@ -346,8 +350,10 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
   注册同一 settings 快照,client 在调用点未显式传 cookie 时自动回落。显式**空串 = 强制
   匿名**(CLI `--kv cookie=` 依赖；xhs 会因此直接报「需要登录」)。旧「bilibili-cookie.ts
   本地手动占位 + skip-worktree」机制已移除(2026-10-21)。
-  匿名行为：bili 视频列表稳定、直播 250 超清封顶；weibo 热搜列表可用但 user/词流需登录；
-  **xhs 全渠道需登录（匿名态已移除）**；douyin 直播可用、原画档位需登录
+  匿名行为：bili 视频列表稳定、直播 250 超清封顶；**weibo 匿名只给首页约 10 条**，翻页
+  （page / since_id / weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录（登录态
+  since_id 翻页正常，见分页审计）；**xhs 全渠道需登录（匿名态已移除）**；douyin 直播可用、
+  原画档位需登录
 - ⚠️ **抖音渠道前缀是 `live:douyin*`**：权威是 `@amoeba/platform` 的 `PLATFORMS` ——
   `douyin.prefixes` 同时登记 `live:douyin` 与 `douyin`，长前缀优先
   （`packages/platform/src/index.ts:113-126`）；core `cookieFieldFor` 只是查表包装。

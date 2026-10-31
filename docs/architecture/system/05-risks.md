@@ -116,7 +116,7 @@
 - **错误分类已进契约，但仍是「启发式 + 逐步迁移」**：`errorKindOf` 先认显式 `ResolveError.kind`，再按消息归类。`auth`/`risk`/`rate-limit`/`network`/`timeout`/`unsupported`/`parse`/`no-data` 已能区分，403 不再等同「需要登录」而归 `risk`。残余：旧平台 client（如 `weibo:user` 只透平台 msg，`packages/crawler/src/channels/weibo/user.ts`）仍抛普通 `Error`，消息不匹配时落 `unknown`；平台 client 逐步改用 `ResolveError(kind)` 后精确度才完全成立。
 - **release-only 分支无法互证**：`--release` 刻意不叠 `tauri.conf.dev.json`（`scripts/tauri.ts:54-61`），而桌面调试锚点 `__store` 仅 DEV 构建存在（`apps/desktop/src/main.tsx`）。Twitch 的 `Origin` 403、隐藏窗口等只在 release 走的分支，只能靠真机观察，不能复用 UI 巡检脚本。
 
-CORS/referrer 隧道是另一条降级链：HLS 只对 `googlevideo.com` 全隧道、`playlist.ttvnw.net` 换 pLoader，其余走 `xhrSetup` 且跳过 forbidden header（`packages/player/src/hooks/useMediaStream.ts:109-139`）；隧道 loader 固定 YouTube UA/Referer（`packages/player/src/engines/hlsHostLoader.ts:43-48`）；FLV 分支明确不带 header（`useMediaStream.ts:209-212`）。规则表 `mediaReferrerFor` 用 host 子串匹配（`packages/resolve/src/media-referrer.ts`），比同仓库 cookie 清理的标签边界匹配更松。
+CORS/referrer 隧道是另一条降级链：HLS 只对 `googlevideo.com` 全隧道；`playlist.ttvnw.net` 走 XHR 直连 + Rust 改写 Origin（2026-10-30 起，不再换 pLoader，见 `docs/playback/playback.md`）；其余走 `xhrSetup` 且跳过 forbidden header（`packages/player/src/hooks/useMediaStream.ts:109-139`）；隧道 loader 固定 YouTube UA/Referer（`packages/player/src/engines/hlsHostLoader.ts:43-48`）；FLV 分支明确不带 header（`useMediaStream.ts:209-212`）。规则表 `mediaReferrerFor` 用 host 子串匹配（`packages/resolve/src/media-referrer.ts`），比同仓库 cookie 清理的标签边界匹配更松。
 
 ## 4. 状态与并发风险
 

@@ -603,7 +603,7 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 >
 > **实施注记（2026-10-22，阶段 1+2 一次落地）**：`resolve/browser/scheduler.ts` 四原语
 > （withLane / withRenderLease / browserGateFor / withBrowserGlobal）；宿主 `browser.tab(key)`
-> 每 lane 独立 target（`PUT /json/new`）+ 独立 CDP 连接（事件/abort 天然按 lane 隔离），
+> 每 lane 独立 target（`Target.createTarget`，`/json/new` 已不用）+ 独立 CDP 连接（事件/abort 天然按 lane 隔离），
 > LRU 上限 8；组合入口 `withBrowserOp({lane, mode, platform})`（gate → op lane → 租约 →
 > activate）。lane 分配：`list:<channelKey>`（xhs:explore / xhs:user / weibo:user）、
 > `detail:xhs`、`login:<platform>`×3、`browser:global`（clearCookies/resetProfile）。

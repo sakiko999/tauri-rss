@@ -219,6 +219,10 @@ isPageable/isLoginable)。早期设计的「source 上挂 getDanmaku + 谓词探
 
 ## 六、player 弹幕接入方案
 
+> ⚠️ **2026-10-30 起本节架构图已过时**：桌面已服务化，`ResolvePlayback.danmaku` 是函数、
+> 过 RPC(JSON) 会被丢；现行链路 = `danmakuRef {url, kind}` 能力标记 + `DataLayer.resolveDanmaku`
+> 服务端订阅推送（`danmaku.open/items/close`），见文末「播放器侧约定」。别把函数塞回 RPC 返回值。
+
 ### 架构位置:三层职责
 
 ```

@@ -21,6 +21,17 @@ bun run rss fetch weibo:user --browser --kv uid=1195230310
 bun run rss browser-reset --target cli   # 清 CLI 自己的 profile（默认；desktop=安装版，dev=调试实例，all=全部）
 ```
 
+**实例身份（identifier 派生一切）**：single-instance 锁 / 服务 endpoint / DB / 抓取 profile /
+主窗口 WebView2 UDF 全由 identifier 派生。`tauri.conf.json`（`app.amoeba.desktop`）勿改——
+老用户数据目录与 updater 产物锚在它上面。dev 形态的安全护栏：
+
+- **dev updater 已封**：`main.tsx` 只在 PROD 注入，否则 dev 里点「安装」会用正式 NSIS 覆盖升级正式版；
+- **裸 `bunx tauri dev` 别用**：不经 `bun run tauri` 就不带 overlay（= desktop 身份），与安装版互斥；
+- dev 库首启自动从旧共享目录迁移（`service.rs:migrate_legacy_shared_db`，原子落位 + legacy 改 `.migrated` 防复活）；
+- 抓取浏览器 profile 是临时例外：非 desktop 身份共用安装版（`app.amoeba.desktop/webview-profile`），
+  否则 dev 没有登录态；`--own-profile` 才走 `app.amoeba.dev`。代价是全局只有一个抓取浏览器
+  （sidecar profile 命名 mutex 独占），两边同时跑时后启动的报「profile 已被另一个 sidecar 占用」。
+
 ## CLI 调试探针（收编全部 example；设计与边界见下文「CLI 设计与边界」）
 
 ```bash
@@ -88,6 +99,9 @@ bun run check --filter core           # 按路径子串筛（调试单点时用�
 ```
 
 分层与归属清单在 `scripts/check.ts` 的 `FILES` / `TYPECHECK_PROJECTS`；新增 `.check.ts` 要同时加进对应层。
+
+> **CI 暂缓（2026-10-26 决策）**：`.github/workflows/ci.yml` 未建（`release.yml` 已有，只做发布）；
+> 本地 `bun run check` 即唯一门禁。
 单跑某个文件（失败信息原样输出）：
 
 ```bash
@@ -141,7 +155,7 @@ bun apps/desktop/src/lib/boot-skeleton.check.ts         # 骨架/侧栏宽度契
 ```bash
 bun run lint                           # oxlint（默认 correctness 规则；.oxlintrc.json 里配 ignorePatterns）
 bun run fmt                            # bun fmt 全仓格式化（bunfig.toml：120 列/无分号/双引号/尾逗号 all）
-bun run fmt:check                      # 只检查不写（收口后用作 CI 门禁）
+bun run fmt:check                      # 只检查不写（无 CI 门禁，本地自查）
 ```
 
 - formatter = Bun 内置 `bun fmt`（Prettier 兼容引擎）。⚠️ package.json 里的 `fmt` script 必须带
@@ -161,6 +175,7 @@ bun scripts/ui-probe.ts click "<selector>"  # 可信鼠标点击（悬停→按�
 bun scripts/ui-console.ts                   # 遍历各视图，捕获 React 告警 / 未捕获异常
 bun scripts/ui-design-audit.ts              # 量化设计审计：对比度(WCAG) / 点击区 / 字号 / 间距节奏
 bun scripts/ui-shot.ts tmp/shots            # 给各模块截图存档（用于视觉复核）
+bun scripts/ui-shots-all.ts                 # 批量实拍各视图（添加订阅弹窗/空态/深浅主题）
 bun scripts/ui-play-check.ts               # ★ 播放矩阵巡检（video/live/audio/yt 真播，报起播）
 bun scripts/ui-resize.ts 1500 950           # 改窗口尺寸（验证响应式断点）
 ```

@@ -36,7 +36,7 @@ packages/
                应用走子路径 `./node|tauri|browser|cdp|runtime|governor`；根入口无 import 副作用。
                `browser/*` 是载具无关的 CDP 核心（BrowserDriver 收敛桌面/CLI 差异）。
                桌面媒体防盗链走 WebView2 请求头注入（src-tauri/media_referer.rs：
-               图片/视频改 Referer，XHR/fetch 改 Origin——规则表在 resolve
+               图片/视频改 Referer，XHR/fetch 改 Origin 或 UA——规则表在 resolve
                media-referrer.ts，parity check 守护）；图片/实况均恒直连，无 JS 回退
   resolve/     ★ 平台解析层：platform/（各平台 client + 播放解析 + 弹幕 codec）、
                resolver/（by-url 路由）、browser/（CDP 模拟）、utils/、danmaku/ 原语。
@@ -110,11 +110,16 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   `_migrations` checksum 变化 → 拒绝启动；已发布迁移只能追加新版本，不能改 SQL。
 - **数据服务单写者**：Tauri 桌面默认 `service_endpoint` → `@amoeba/service-client`，
   `injectTauriHost({storage:false,browser:false})` 把 desktop 的直连封死
-  （进程内 DataLayer 回退已删除）。任何第二写者
+  （进程内 DataLayer 回退已删除；非 Tauri 的浏览器 dev 仍走进程内）。任何第二写者
   （desktop 直连、dev seed、Diagnostics、CLI 直开 desktop 库）都会静默丢数据。
 - **服务协议**：`protocol` 整数不兼容才 +1；RPC/事件类型唯一权威 = `@amoeba/service-protocol`；
   一次提交 `rev+1` 可带多条事件（共享 rev）；断线/rev gap 先全量 `GET /v1/state`，
   不做事件补丁恢复。stdout 只留 `READY <port>`，日志全走 stderr。
+  **跨服务边界的返回值只能是可序列化描述符**——函数/流/类实例过 RPC(JSON) 静默丢
+  （弹幕即案例，见 `docs/playback/danmaku.md`）。
+- **`resolveDetail` 不保证纯文本**：feed 自带全文时原样返回 HTML（`contentFormat=html`）；
+  桌面镜像剥掉了 article 的 content，阅读器必走补全——消费侧必须按**返回体**的
+  `contentFormat` 渲染。见 `docs/architecture/data-and-storage.md`。
 - **平台 cookie 三级语义**（`resolve/platform/credentials.ts`）：调用点显式非空 > 显式
   **空串 = 强制匿名**（CLI `--kv cookie=` 依赖；xhs 会因此报「需要登录」）> provider
   （settings 登录态，core DataLayer / CLI 入口注册同一张表）。**渠道层不许再手抄
@@ -139,7 +144,7 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
 - ⭐ **`bun run tauri:release`（`tauri dev --release`）** 用来调「只在 release 才走」的分支
   （`!cfg!(debug_assertions)` 是编译期判据，如 Windows 子系统）。保留 Vite dev server 与 Rust 热重载，
   但首次全量 release 编译（~4min），且**不叠 `tauri.conf.dev.json`**（不开 9222），只叠身份 overlay
-  `tauri.conf.dev-release.json`（identifier 同 dev，见下方「实例身份」）。
+  `tauri.conf.dev-release.json`（identifier 同 dev，见下方实例身份条）。
   ⚠️ release 形态的服务跑**仓库根 `target/release/service/service.js`**（resource_dir，优先于 dist/），
   且只在完整 `tauri build` 时刷新 —— 脚本会先 `service:build` 并同步过去，别手动拷到
   `apps/src-tauri/target`（那不是服务读的目录；2026-10-30 视频帖在 release 下「消失」即旧包）。
@@ -154,6 +159,14 @@ store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入�
   —— 中文/UTF-8 会按代码页往返损坏成乱码。
 - **加了新依赖必须 `bun install` + 重启 dev server**（Vite 预打包只在启动时做）；workspace 包
   还须在**消费方 package.json** 声明 `workspace:*`。改完清 `node_modules/.vite`。
+- **实例身份（identifier 派生一切）**：single-instance 锁 / 服务 endpoint / DB / 抓取 profile /
+  主窗口 WebView2 UDF 全由 identifier 派生。`bun run tauri` 与 `tauri:release` = `app.amoeba.dev`；
+  安装版与 `tauri build --no-bundle` 直跑 = `app.amoeba.desktop`（`tauri.conf.json` 勿改——老用户
+  数据目录与 updater 产物锚在它上面）。dev 与安装版可并跑；**dev updater 已封**（main.tsx 只在
+  PROD 注入）；**裸 `bunx tauri dev` 别用**（不带 overlay = 与安装版互斥）；抓取浏览器 profile 是
+  临时例外（共用安装版，`--own-profile` 用独立干净版）。详见 `docs/ops/commands.md` 实例身份段。
+- **tsconfig 注意**：根 `tsconfig.app.json` 的 `types:["vite/client"]` 依赖根 package.json
+  显式声明 vite（2026-10-28 起）；再动 workspace 布局时 player/ui tsc 会先断。
 - **Git 身份未全局配置**，提交需内联：
   `git -c user.name="zhh" -c user.email="zhonghuaremistinker@gmail.com" commit -m "..."`。
 - `tmp/` 是 gitignore 的参考项目（RSSHub / MediaCrawler / NewPipe 等），**不要对它跑构建/测试**。
@@ -191,11 +204,12 @@ bun packages/core/src/example/data-layer.check.ts   # 自检：改动对应包�
 | 平台 | 一句话 |
 | --- | --- |
 | B站 | 匿名 API 稳（wbi 零登录可复刻）；扫码 cookie **不含 buvid3**，带 cookie 也要补匿名 buvid，否则 `-352`；space 系接口需登录 + `dm_*` 指纹（`signSpace`），否则 412/-352 |
-| 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做）。`douyin:user`（2026-10-30）= **被动捕获页面自己的 `/aweme/post`**（接口重放/自签都被拦），**只拿得到首屏 ~21 条**、翻页未打通 |
-| YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH |
+| 抖音 | `live:douyin` 的 `roomIds` 吃抖音号/主页链接/直播间 URL；登录 cookie 经 credentials provider 消费（2026-10-21 前是死键），登录解锁原画档位待真机验证；真搜索需登录（未做）。`douyin:user`（2026-10-30）= **被动捕获页面自己的 `/aweme/post`**（接口重放/自签都被拦）；**登录态滚动翻页已打通**（Pageable，窗口 30 条），匿名只有首屏 ~21 条 |
+| YouTube | 主力 client **VISIONOS**（`VISIONOS → ANDROID_VR → WEB`）；换 client 救不了机房 IP 风控；1080p 走 DASH；会员标记走 InnerTube（RSS 回退时缺失） |
+| 微博 | 匿名只给首页约 10 条，翻页（page/since_id/ajax）一律登录墙；视频直链在列表 `page_info`；实况图 `pics.type=livephoto` |
 | 小红书 | 全 SSR；**`web_session` 不是登录标志**；**2026-10-22 起全渠道要求登录（匿名态已移除）**，未登录直接报「需要登录」；`xhs:explore` 被动、`xhs:user` 滚动翻页；带 `web_session` 的会话 **SSR 只给空壳**（feed 由页面 XHR 填，读 state 前要等列表非空）；匿名滚动翻页不可靠（headless 300012 / WebView2 300011，风控累积）——这是移除匿名的依据；**视频笔记的流只在详情 SSR**（`note.video`，codec 按 h264 优先，见 `Social.video`） |
 | Twitch | 公开 GQL + usher HLS，纯匿名；master 无 CORS 必须服务端拉；流列表翻页要用 Android Client-ID |
-| 斗鱼/虎牙 | douyu `rate` 是档位 ID 不是清晰度；huya 低档只产 HLS |
+| 斗鱼/虎牙 | douyu `rate` 是档位 ID 不是清晰度；huya 低档只产 HLS；huya HLS 只认 HYSDK 播放器 UA（浏览器 UA → 403） |
 | Apple 播客 | 榜单条目 = 一个 feed（`stream` 空），主操作是「列出单集」不是播放 |
 
 ## 网络风控 / 浏览器
@@ -225,132 +239,35 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 
 ## 下一步
 
-**登录（2026-10-26 收口）**：`rss login <platform>` 已落地（终端二维码，只走服务 RPC
-`scanLogin`）；登录态回归已实测——已登录短路、`xhs:explore` / `xhs:user` 首屏 + 翻页、
-`rss detail` 全过。唯一未验的是**扫码出码本身**（现有 profile 已登录，走的是短路）：
-用未登录 profile 起临时服务（`rss --service --profile-dir <空目录>`）再验；2026-10-28 起
-service 侧浏览器默认 `images:false`（`--blink-settings=imagesEnabled=false`），二维码
-路径（img.src 属性 / canvas.toDataURL / 纯 HTTP）理论上不受影响，验证时一并覆盖。
+**登录**：`rss login <platform>` 已落地（终端二维码，只走服务 RPC `scanLogin`）；登录态回归
+已实测（已登录短路、`xhs:explore` / `xhs:user` 首屏 + 翻页、`rss detail`）。假码/过期码与
+`images:false` 下的真码判据（解码 PNG 头尺寸）均已修；唯一未验：**干净 profile 全流程回归**
+（`rss --service --profile-dir <空目录>`，覆盖出码 → 扫码 → 登录成功）。
 
 **未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
 
 - **自动保活**（仅 bili 可行）：已有 `refresh_token` 但无续期调度 —— 到期只能重扫。
 - **抖音登录态搜索调研**：先专用小号 + CDP 被动探针，再决定是否实现。
-- ~~移动端扫码登录~~：mobile 已冻结（2026-10-26），不再排期。
-
-**待实机验证**：清单在下方 TODO（没跑过不算完成），当前包括干净 VM 安装/卸载与断网首启、
-WebView2 生命周期剩余、release 内存、`xhs:explore` 被动命中、实况图/实况播放。
 
 **长期悬置**（收益不抵复杂度）：CSP（现 `csp: null`，抖音/斗鱼签名脚本靠 `eval`）；
 live 按平台二次聚合的 UI 侧。
 
+**待实机验证**：清单见下方 TODO（没跑过不算完成）。
+
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）
 
-- [ ] **CI 工作流暂缓（2026-10-26 定）**：`.github/workflows/ci.yml` 未建；统一入口 `bun run check`
 - [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
-- [x] 空闲回收 + 自动重建（2026-10-28）：sidecar 载具补 `idleCloseMs=3min`（此前生产侧不回收），
-  连续 3 轮「起 → 空闲 8s 进程归零 → 再起」实测通过，重建 ~0.3s（`idleCloseMs=5s` 回归）
-- [ ] WebView2 生命周期剩余：LRU 驱逐（`/json/close`）后 renderer 不残留；`/json/new` 已不用
-  （统一 `Target.createTarget` + 屏外坐标）
+- [ ] WebView2 生命周期剩余：LRU 驱逐（`/json/close`）后 renderer 不残留
 - [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
 - [ ] `xhs:explore` 手动刷新命中 `passiveBuffer`（未命中走页面 SSR 兜底）
 - [ ] 实况图验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图
 - [ ] 实况播放 release 验收：mp4 解码与暂停/续播（dev 已修 Referer 403 + ORB）
 - [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
 - [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
-- [ ] Referer 改造剩余：规则表抽共享 JSON（现 TS/Rust 双份 + parity check）；实况视频的响应头注入（ORB 兜底）按需再做
-- [x] twitch XHR Origin 改写 release 复验（2026-10-30）：**release 确实 403，根因是改写值带尾斜杠**
-  —— `https://www.twitch.tv/` 403、`https://www.twitch.tv` 200（Origin 语法本就没有路径段）。
-  dev 页面 Origin（localhost:1420）本就被 CDN 放行，所以改写值从没被 CDN 校验过。已去掉斜杠；
-  hls.js 分片域 `*.cloudfront.hls.ttvnw.net` 本就 `ACAO:*` 直连。
-- [x] huya HLS 403（2026-10-30）：manifest/分片都只认 **HYSDK 播放器 UA**（浏览器 UA → 403
-  `text/html`，Referer/Origin 不是判据）。新增 `XHR_UA_RULES`（`hls.huya.com`），Rust 在 XHR/FETCH
-  改 UA；`flv.huya.com` 不需要（无头也 200）。
-- [ ] 系统文档正文细化（03 时序图 / 02 契约正文；01 依赖矩阵与 02 字段表已随 R9 / membersOnly 更新）
-- [!] host 根入口不再有 import 副作用；应用必须显式 `inject*Host()`/`setHostCaps()`（内部幂等 initAppHost），新代码取后端走 `@amoeba/host/{node,tauri,browser}` 子路径。
-- [!] **实例身份（2026-10-30 拆分）**：single-instance 锁 / 数据服务 endpoint/lock / DB / 抓取
-  profile / 主窗口 WebView2 UDF 全部由 **identifier** 派生。三种形态两个身份：
-  `bun run tauri`（dev）与 `bun run tauri:release`（release-debug）= `app.amoeba.dev`
-  （tauri.conf.dev.json / tauri.conf.dev-release.json overlay），安装版与 `tauri build --no-bundle`
-  直跑 = `app.amoeba.desktop`（tauri.conf.json，勿改——老用户数据目录与 updater 产物都锚在它上面）。
-  dev 实例与安装版**可并跑互不影响**（服务端口动态分配）；dev updater 已封（main.tsx 只在 PROD 注入，
-  否则 dev 里点「安装」会用正式 NSIS 覆盖升级正式版）；dev 库首启自动从旧共享目录迁移
-  （`service.rs:migrate_legacy_shared_db`，原子落位 + legacy 改 `.migrated` 防复活）。
-  ⚠️ **唯一例外（临时，2026-10-30）**：抓取浏览器 profile 是**共用安装版**的
-  （`service.rs:resolve_paths`：非 desktop 身份 → `app.amoeba.desktop/webview-profile`），
-  否则 dev 里没有登录态。代价是抓取浏览器全局只有一个（sidecar profile 命名 mutex 独占），
-  两边同时跑时后启动的那个报「profile 已被另一个 sidecar 占用」；`rss browser-reset --target dev`
-  清的是同一个目录。要一份**独立**的干净 profile（调首登/清凭证/换号）用
-  `bun run tauri --own-profile`（= 服务进程带 `AMOEBA_OWN_PROFILE=1`，走
-  `app.amoeba.dev\webview-profile`）。
-  裸 `bunx tauri dev`（不经 `bun run tauri`）不带 overlay = desktop 身份，与安装版互斥，别用。
-- [!] **数据服务是唯一写者**：SQLite/crawler/browser 全归 `rss --service`；desktop/CLI 只能发语义命令（读镜像 + RPC），绝不直开 DB 或写 KV blob —— 第二写者是数据丢失的唯一根因。计划见 `docs/architecture/system/06-data-service.md`。
-- [!] 桌面只走 `service_endpoint` + `@amoeba/service-client`，`injectTauriHost({storage:false,browser:false})` 封死第二写者；进程内 DataLayer 回退已删（非 Tauri 的浏览器 dev 仍走进程内）。
-- [!] `tauri-plugin-sql` 保留：mobile 的进程内 DataLayer 仍用它（mobile 冻结但保留）。
-- [!] 视频会员标记 = `Video.membersOnly`（`tpl:membersOnly`）：B站取 `rights.pay/arc_pay/ugc_pay`；YouTube 频道走 InnerTube（官方 RSS 无标记），**匿名首屏可能不含会员视频**，回退 RSS 时标记缺失。
-- [!] CLI 浏览器必须显式 `--browser`；显式空串 `--kv cookie=` 在浏览器路径也强制匿名（xhs 直接报「需要登录」），不传 cookie 键时浏览器路径才用 profile 登录态。
-- [!] CDP 通用语义只放 `@amoeba/host/cdp`；桌面/CLI 的差异只能写进 `BrowserDriver` / `CdpConnector`，不要回写进 backend。
-- [!] WebView2 请求头注入（图片/视频 Referer + XHR Origin）仅 Windows；图片与实况视频**均恒直连、无 JS 回退**（blob 隧道 2026-10-28 全删，`nativeMediaReferer` 探测一并删除）；未注入环境 403 → 占位（图片 ImageOff / 实况退回静态图 + 重试）。
-- [!] 9334 本来就是无鉴权的本地调试端口（release 也开），attach 没有新增攻击面，但也别把它当成安全边界。
-- [!] CLI 暂不编译成 92MB 二进制；分发用 `amoeba-runtime` 启动器（Rust，release 3.7MB）拉起 JS。
-- [!] 运行时**全局 Bun 优先**；缺失自动下载固定版本到 `%LOCALAPPDATA%\app.amoeba.runtime` 并校验 SHA256；不随包 Bun，不回退 Node。
-- [!] updater 签名密钥已于 2026-10-26 轮换（旧公钥 `55477786…` → 新 `397EFB52…`），本机私钥 `~/.tauri/amoeba.key` 无密码、不入库；轮换前发布的安装包无法用新签名升级。
-- [ ] 合流改版：M0–M6 已落地、M7 部分收尾（分支 `feat/heliu-redesign`），
-  进度与剩余项见 `docs/ui/heliu-redesign-plan.md` §实施状态
-- [x] 实拍添加订阅弹窗（2026-10-27，`bun scripts/ui-shots-all.ts` + CDP）：渠道目录分类 tab、搜索、
-  行式列表与「添加/配置」密度均正常；首页/阅读空态/动态/影音/发现/片库页同时复核（深浅两套主题）
-- [ ] `scripts/ui-design-audit.ts` 把 oklch 背景解析成 `rgb(271,111,74)` 这类非法值（>255），
-  active chip / `.tag-ok` 恒报 ~1.1:1 误报；真实值已手工复算过 AA。修脚本前别把它的
-  `contrastIssues` 当阻塞项
-- [ ] docs 遗留清单已全量对码（2026-10-27，120 条：open 81 / stale 8 / fixed 10 / decision 21；
-  快照见 `docs/audit/doc-backlog-2026-10-27.md`）：
-  分批按 `docs/audit/refactor-candidates.md` 排期；下一批优先 A1（服务端 diagnostics 归位）、
-  A4（取消时 abortTabs）、A0b（runJob abort race），再做 B 段性能
-- [x] 渠道翻页/去重审计（2026-10-27，55 渠道 + core 语义，快照
-  `docs/audit/pagination-dedupe-audit-2026-10-27.md`）：19 条行动项已修 15
-  （三批 `c3eb177` / `765771f` / `0c0a802`）；余 A6 RSS 入站上限 / A9 搜索候选翻页 /
-  A10 youtube:playlist InnerTube 化单独立项，B7/B8/B9 low 留观
-- [ ] 修 huya 403 时发现根 tsconfig.app.json 的 `types:["vite/client"]` 靠 vite 根提升才成立（2026-10-28 起已改为根 package.json 显式声明 vite ^8.1.5）；若未来再动 workspace 布局，注意 player/ui tsc 会先断
-- [!] 媒体加载统一策略（2026-10-28 / 2026-10-30 补 XHR UA）：平台知识只在 resolve 规则表，
-  Rust WebView2 网络层按 context 改头（IMAGE/MEDIA 改 Referer、XHR/FETCH 改 Origin 或 UA、
-  MEDIA 去 Edge UA 品牌），消费侧恒直连无回退；图片/实况 blob 隧道与 `nativeMediaReferer` 探测已全删。
-  **值本身也是规则的一部分**：twitch 的 Origin 带尾斜杠就 403，huya HLS 不认浏览器 UA。
-- [!] **媒体 403 的表象是 `Format error`**（2026-10-29）：CDN 的 403 text/html 被 ORB 拦成 `net::ERR_BLOCKED_BY_ORB`，`<audio>/<video>` 只报 `MEDIA_ELEMENT_ERROR: Format error`，看着像解码失败。喜马拉雅 CDN（`xmcdn.com`）的 403 带 `x-error-info: ua_acl.access`：黑名单是**一条完整 UA 字面串**（当前 Windows WebView2 的真实 UA），**整串等值、大小写不敏感**——mac 平台串、少一段、双空格、`Edg/156`（无补丁位）全放行，所以没有「按 Edge 版本号拦」的规则可匹配。`UA_STRIP_EDG_HOSTS` 在 Rust 侧只删 ` Edg/<ver>` 段（不含版本号，串一变即不等于黑名单条目）。排查先看 CDP `Network.loadingFailed` 的 `ERR_BLOCKED_BY_ORB` + 原始状态码，别往解码器上找。
-- [!] **`ResolvePlayback.danmaku` 是函数，过数据服务 RPC(JSON) 会被丢**（2026-10-29 修，
-  2026-10-30 改为服务端订阅）：桌面自服务化起视频/直播弹幕**整体消失**（服务进程里是好的）。
-  `danmakuRef {url, kind}`（**不带 cookie**——凭证不过界）只是能力标记；桌面调
-  `DataLayer.resolveDanmaku(subscriptionId, url, kind)` → 服务端 `danmaku.open` 建连、
-  `danmaku.items` 推批次、`danmaku.close` 退订（客户端全断 60s 空闲回收）。`subId` 客户端生成且
-  先挂监听（VOD 首批是一次性全量）。**桌面不再 import `@amoeba/resolve`**，抖音直播弹幕（要 ttwid）
-  因此恢复。**通则：跨服务边界的返回值只能是可序列化描述符，塞函数/类实例会静默丢**。
-- [!] 微博匿名只给首页 10 条，翻页（page/since_id/weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录
-- [!] **视频帖走 `Social.video`（`tpl:video`）**：视频微博直链在列表数据里（`page_info`，
-  随抓取落库，快照会过期）；小红书视频笔记只在详情 SSR（`note.video`，codec 必须按
-  h264→h265→h266→av1 偏好选，**别按键序**——av1 排最前会产出 WebView2 解不了的流）。
-  详情弹窗原生 `<video controls>` 直连（Referer 由 Rust 注入）；**刻意不进播放页/队列**
-  （social 不可播是 kind 硬契约，要进得先放宽门控并加 by-url 路由）。回归
-  `video-post.check.ts` + roundtrip。
-- [ ] 登录微博后复验 `weibo:user` 首屏自动预加载第二页真正落地（本次改动只验到匿名态）
-- [!] 补全（`resolveDetail`）**不保证纯文本**：feed 自带全文时 `raw.ts` 原样返回 HTML（contentFormat=html）；桌面镜像剥掉 article 的 content，所以阅读器必走补全 —— 消费侧必须按返回体的 contentFormat 渲染
-- [ ] 重启桌面应用复验阅读器：阮一峰正文应渲染为排版好的 HTML（本次只验到 core 侧 resolveDetail 返回 contentFormat=html，没在真机 UI 上确认）
-- [x] **音频播放页（原型 podplay 落地，2026-10-29）**：音频条目（播客单集）与视频的 `?mode=listen`
-  共用 `AudioShell` 的**播放面卡片** —— 封面 190px + 「正在播放 · …」kicker + 标题/节目名/元信息
-  + **声纹频谱**（`controls/WaveformSeek.tsx`：确定性伪波形，点击/拖动 seek、`role=slider` 键盘可达、
-  rAF 读元素时间，章节起点画刻度）+ 当前/剩余时间 + −15/主键/+30 + 倍速/睡眠定时 + 宿主给的次要
-  动作（听⇄看、下一条、打开原文）。右栏 = 本集简介（长文内部滚动）+ 播放队列 + 来自同一订阅
-  （按当前条目往后数，查 `known` 以覆盖预览单集）。配色走主题 token（浅色下是浅底卡片，不是黑舞台）。
-  AudioShell 不自造媒体状态机：state/ops 复用 `useVideoElement`、键盘复用
-  `useContainerInteractions`（音频页 ←/→ = −15/+30）。听模式能否真剥音轨由播放器
-  `onAudioOnlyChange` 回报，剥不动（durl 混合轨）时页面按视频版式。
-  实测：真单集 206 直连 + 起播；波形点击 50% → 375.9/748；Space 暂停、→+30、←−15；
-  倍速 1.5× 落到元素；听→看 t 4.5→6.3、看→听 9.3→11.6 接着播（引擎未就绪时 200ms 连点也不崩）；
-  队列自动下一条保持 `mode=listen`。
-  **章节（2026-10-29 补）**：`biliClient.viewPoints`（`/x/player/v2` 的 `view_points`，非 wbi、匿名可读）
-  → `ResolvePlayback.chapters` → `PlayableMedia.onChapters` → 右栏「章节」+ 波形刻度，点击走
-  `onMediaControl.seek`。**没有章节的条目一律缺省**（播客 RSS / 喜马拉雅 / YouTube 都没有），不渲染那一栏。
-  **迷你条（同日补）**：播客单集改走**会话级**播放器（`views/player/audio-session.ts` 的模块级
-  `<audio>`，跨路由存活），播放页与迷你条是两个控制面（`AudioShell` 的 `ownElement=false`）；
-  离开播放页继续播、底部浮条可暂停/回页/关闭。听视频是 DASH，仍归 PlayableMedia，离开即停。
-  **刻意不做**：节目笔记（单集简介就是它）。
+- [ ] Referer 改造剩余：规则表抽共享 JSON；实况视频响应头注入（ORB 兜底）按需再做
+- [ ] 系统文档正文细化（03 时序图 / 02 契约正文）
+- [ ] `scripts/ui-design-audit.ts` oklch 解析 bug（>255 非法值 → active chip 恒报 ~1.1:1 误报）；
+  真实值已复算过 AA，修前别把 `contrastIssues` 当阻塞（注记见 `docs/ops/smoke-check.md`）
+- [ ] 登录后实机复验：`weibo:user` 预加载第二页；阮一峰正文按 HTML 渲染
 <!-- cc-todo:end -->

@@ -10,7 +10,7 @@
 
 - **注入**：desktop `injectTauriHost()`（main.tsx）· example/测试 `injectNodeHost()` ·
   纯前端调试 `injectBrowserHost()`（CORS 受限）
-- **desktop 默认（数据服务模式）**：`injectTauriHost({nativeMediaReferer:true, storage:false, browser:false})`
+- **desktop 默认（数据服务模式）**：`injectTauriHost({storage:false, browser:false})`
   —— `storage:false` 注入「读写即抛错」的拒绝后端，`browser:false` 不构造 CDP 后端；
   两者都是**能力探测可见的关闭**（不是「注入了但命令失败」），保证 desktop 不再是第二写者。
   desktop 固定 `storage:false` / `browser:false`；进程内 DataLayer 回退（旧 `VITE_DATA_SERVICE=0`）已删除。
@@ -31,6 +31,11 @@
 - **媒体 403 的表象是 `Format error`**：被 ORB 拦掉的 403 text/html 在 `<audio>/<video>`
   上只报 `MEDIA_ELEMENT_ERROR: Format error`，看起来像解码失败。排查先看 CDP
   `Network.loadingFailed` 的 `net::ERR_BLOCKED_BY_ORB` 与原始响应状态，再查规则表。
+  已知案例（2026-10-29）：喜马拉雅 CDN（`xmcdn.com`）的 403 带 `x-error-info: ua_acl.access`，
+  黑名单是**一条完整 UA 字面串**（当前 Windows WebView2 的真实 UA），**整串等值、大小写
+  不敏感**——mac 平台串、少一段、双空格、`Edg/156`（无补丁位）全放行，没有「按 Edge 版本号
+  拦」的规则可匹配；`UA_STRIP_EDG_HOSTS` 在 Rust 侧只删 ` Edg/<ver>` 段（串一变即不等于
+  黑名单条目）。排查先看 CDP 原始状态码，别往解码器上找。
 
 **storage 四态（2026-10-26）**：数据服务 `sqliteStorage`（bun:sqlite，唯一写者）·
 desktop 拒绝后端（`injectTauriHost({storage:false})`，读写即抛）· mobile `SqliteStorageBackend`

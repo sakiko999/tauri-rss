@@ -167,7 +167,7 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 > 2026-08。微博图床 403 触发：审计 `<img>` 图片加载的 Referer 处理，当时结论是维持
 > blob 隧道。**2026-10-25 更新**：桌面改为 WebView2 `WebResourceRequested` 原生注入。
 > **2026-10-28 更新**：图片的 blob 隧道**删除**（过度防御）——图片恒直连，未注入环境
-> 403 → ImageOff 占位；实况视频保留 blob 回退；XHR/fetch 的 Origin 改写（Twitch
+> 403 → ImageOff 占位；实况视频也恒直连（blob 回退已删）；XHR/fetch 的 Origin 改写（Twitch
 > playlist 域）同批加入。自定义协议仍不做。
 
 ### 背景：sinaimg 对空 Referer 也 403

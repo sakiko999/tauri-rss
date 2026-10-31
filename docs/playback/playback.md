@@ -103,6 +103,10 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   由 `audio-session.ts` 的模块级 `<audio>` 持有，播放页与迷你条是它的两个控制面；
   `AudioShell` 因此有 `ownElement=false`（只做控制面）。听视频是 DASH，仍归
   `PlayableMedia`，离开播放页即停（不在这条会话里）。
+- **不自造媒体状态机**：state/ops 复用 `useVideoElement`、键盘复用 `useContainerInteractions`
+  （音频页 ←/→ = −15/+30）；听模式能否真剥音轨由播放器 `onAudioOnlyChange` 回报，
+  剥不动（durl 混合轨）时页面按视频版式。
+- **刻意不做**：节目笔记（单集简介就是它）。
 
 ## 统计信息（仿 YouTube 右键）
 
