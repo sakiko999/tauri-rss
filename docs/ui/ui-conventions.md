@@ -132,8 +132,12 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
   ⚠️ **取值必须走 `nativeEvent`**：本仓 `@types/react` 只给原生事件声明了 `isComposing`，
   合成事件上直接 `e.isComposing` 编译不过（TS2339）。守卫只挡 keydown，不改输入法组合行为。
 - ⚠️ **正文里的外链必须拦截**：`.article-body` 的委托 click 命中 `<a>` 要走
-  `openExternalSafely`；不拦的话 WebView 会整页导航走（应用没配 Tauri `on_navigation`），
-  界面被外部网页顶掉、只能重启才回来
+  `openExternalSafely`。漏拦时 Rust 侧的 nav-guard（`apps/src-tauri/src/plugins/nav_guard.rs`，
+  2026-11-01）会取消主窗口导航并把 http(s) 交给系统浏览器，界面不会再被外站顶掉 ——
+  但那是兜底：前端拦截才有失败 toast 与锚点滚动。
+- ⚠️ **第三方正文 HTML 只能经 `lib/sanitize.ts` 的 `sanitizeFeedHtml` 渲染**（唯一消毒配置）：
+  它在 DOMPurify 默认之上去掉 `<style>`（对整个应用文档生效）、表单族、带
+  `position`/`z-index` 的内联样式。别在调用点直接 `DOMPurify.sanitize` 另起一份配置。
 - ⚠️ **JS 驱动的动画挡不住 `prefers-reduced-motion`**：`styles/90-responsive.css` 里那条
   `@media (prefers-reduced-motion: reduce)` 只压
   CSS 的 animation/transition，对 `scrollIntoView({behavior:"smooth"})`、脚本编排的入场与

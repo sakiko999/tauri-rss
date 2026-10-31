@@ -12,12 +12,12 @@
  */
 
 import { fmtCount, MediaImage } from "@amoeba/ui"
-import DOMPurify from "dompurify"
 import { useEffect, useMemo, useState } from "react"
 
 import { openExternalSafely } from "../../lib/host.ts"
 import { looksLikeHtml } from "../../lib/html.ts"
 import { fmtAgo, httpsify, itemKey, mediaUrl, socialRatio } from "../../lib/media.ts"
+import { sanitizeFeedHtml } from "../../lib/sanitize.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useDesktop } from "../../store/index.ts"
 import { Button } from "../Button.tsx"
@@ -97,12 +97,12 @@ export function SocialDetailModal() {
    * 消毒后按 HTML 渲染。⚠️ useMemo 必须在 early return **之前**(hook 顺序稳定)。
    */
   const rawContent = ((detail?.full ?? detail?.item) as { content?: string } | undefined)?.content ?? ""
-  // ⚠️ FORBID_TAGS:["img"] —— 正文 HTML 里的 <img>(weibo 的 panda 页脚/表情)走原生
+  // ⚠️ images:false —— 正文 HTML 里的 <img>(weibo 的 panda 页脚/表情)走原生
   // DOM,不过 MediaImage 的防盗链隧道 → sinaimg 403 破图,且无占位兜底。主图本就走
-  // images 列(MediaImage),正文里剔除 img 只损失 logo 噪声。per-call 配置不污染
-  // ReaderMain 的正文消毒(那里要保留 img)。
+  // images 列(MediaImage),正文里剔除 img 只损失 logo 噪声。其余规则与 ReaderMain
+  // 同一份(lib/sanitize.ts)。
   const bodyHtml = useMemo(
-    () => (looksLikeHtml(rawContent) ? DOMPurify.sanitize(rawContent, { FORBID_TAGS: ["img"] }) : ""),
+    () => (looksLikeHtml(rawContent) ? sanitizeFeedHtml(rawContent, { images: false }) : ""),
     [rawContent],
   )
 

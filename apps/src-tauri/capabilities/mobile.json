@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mobile-sql",
+  "description": "In-process SQLite storage (mobile only). Desktop goes through the data service and must not get sql:allow-execute",
+  "windows": ["main"],
+  "platforms": ["android", "iOS"],
+  "permissions": ["sql:default", "sql:allow-execute"]
+}

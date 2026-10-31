@@ -320,7 +320,7 @@ graph LR
 - **命令面 10 个**：`http_get`、`service_endpoint`、`ws_connect/ws_send/ws_close`、`webview_browser_open/set_mode/close/reset/tidy`（`apps/src-tauri/src/lib.rs:27-38`）。`service.rs` 负责数据服务生命周期（spawn/adopt/shutdown + `service_endpoint`），主窗口 `Destroyed` 时 shutdown 并退出（`lib.rs:50-63`）；TS 侧对端在 host 的 `tauri/*`。
 - **能力边界**：HTTP 隧道（reqwest，私网/链路本地拦截、重定向逐跳复查、超时 clamp，`commands/mod.rs:66,99-119`）；WS 隧道（自定义握手头，供弹幕与 CDP 文本帧）；保留 `webview_browser_*` / `TauriBrowserBackend`（独立 profile、固定 9334），但 desktop 不注入
 （9334 是无鉴权的本地调试端口，release 也开——别当安全边界；attach 走动态端口，未新增攻击面）；生产抓取浏览器是服务 spawn 的 `amoeba-browser` sidecar；插件只用 opener + sql（桌面再加 single-instance/updater/process，`plugins/mod.rs:4-35`；single-instance 必须最先注册）。
-- **配置四份**：桌面主配置 `tauri.conf.json`；dev 叠加层只开 9222（`tauri.conf.dev.json`）；构建叠加层把 `service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe` 三个 resources 塞进包（`tauri.conf.release.json`，`scripts/tauri.ts` 只在 `build` 时叠加）；移动独立 identifier/version/devUrl（`tauri.conf.mobile.json`）。capability 只授权 `main` 窗口（`capabilities/default.json`），updater 限桌面三平台（`capabilities/desktop-updater.json`）。
+- **配置四份**：桌面主配置 `tauri.conf.json`；dev 叠加层只开 9222（`tauri.conf.dev.json`）；构建叠加层把 `service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe` 三个 resources 塞进包（`tauri.conf.release.json`，`scripts/tauri.ts` 只在 `build` 时叠加）；移动独立 identifier/version/devUrl（`tauri.conf.mobile.json`）。capability 只授权 `main` 窗口（`capabilities/default.json`：core + opener），sql 只授移动端（`capabilities/mobile.json`，桌面走数据服务、webview 调不到 sql，2026-11-01），updater 限桌面三平台（`capabilities/desktop-updater.json`）。主窗口另有 nav-guard 插件（`plugins/nav_guard.rs`）：只放行应用自身页面，漏网外链交系统浏览器。
 - **与 TS 的契约**：命令名是字符串、参数 `camelCase`、二进制一律 base64；`http_get` 对 4xx/5xx 也返回成功，调用方自查 status。Rust 不感知风控，治理全在 host 的 governor。
 
 ### 3.5 browser-sidecar — CLI 浏览器载体
