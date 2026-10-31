@@ -8,6 +8,7 @@
 F2 完成 AlertDialog / `confirmAction`（7 处 `window.confirm` 全部替换）。其余原语**在有第一个
 真实调用方时再加**，不预先造空壳：Slider/Tooltip/ContextMenu/Popover 随播放器 P0a 落地，
 ToggleGroup/Tabs 随分段控件收编（F5）落地。
+**F3–F5 的排期与完成状态见 `docs/ops/backlog.md` §B。**
 
 ## 结论（为什么不用现成组件库）
 

@@ -504,6 +504,8 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 
 ## 12. 后续（阶段 3 范畴，非本计划未完成项）
 
+> 开放项已汇总到 `docs/ops/backlog.md`（§A 验证 / §E 收尾）；本节保留技术背景。
+
 - 环境相关、需在干净目标机上复核：WebView2 Origin 白名单、断网首启、`externalBin` 编译版对比。
 - 阶段 3 才做：items >10k 的服务端聚合/窗口化、reading 行表、body 拆表、outbox、常驻 daemon。
 - `refreshAll`：服务端 job 已实现，但 desktop 仍逐订阅调 `refresh` 以保留逐条 busy/超时 UI

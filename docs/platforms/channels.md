@@ -304,6 +304,8 @@ UI 流程（与播客榜单完全同构）：
 
 ## 二、未做的缺口
 
+> 开放项（§二、§三）已汇总到 `docs/ops/backlog.md` §D（新功能）与 §G（条件触发）。
+
 - ~~**bili 按分区列房**~~ ✅ 已落地（2026-10-22）：`bili:live:areas`（目录，匿名）+
   `bili:live:area`（列房，**需登录态**——wbi + buvid + `w_webid`（live 页 HTML 的
   `access_id`），匿名 `-352`，20 条/页 + `has_more`）。此前「匿名带 access_id 仍

@@ -235,40 +235,23 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 | UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` · `docs/ui/heliu-redesign-plan.md`（实施中，分支 `feat/heliu-redesign`） |
 | 播放与弹幕 | ★ `docs/playback/playback.md` · `docs/playback/danmaku.md` · `docs/playback/mpv.md`（未做） |
 | 风控 | ★ `docs/risk/crawler-risk-control.md` |
-| 运维 | ★ `docs/ops/commands.md` · ★ `docs/ops/smoke-check.md` · `docs/ops/release-updater.md` |
-| 审计 | `docs/audit/findings.md` · `docs/audit/refactor-candidates.md`（重构候选分档） |
+| 运维 | ★ `docs/ops/commands.md` · ★ `docs/ops/smoke-check.md` · `docs/ops/release-updater.md` · ★ `docs/ops/backlog.md`（待办唯一入口） |
+| 审计 | `docs/audit/findings.md` · `docs/audit/refactor-candidates.md`（重构候选分档） · `docs/audit/improvements-2026-11-01.md`（评审清单完成记录 + 刻意不做） |
 
 ## 下一步
 
-**登录**：`rss login <platform>` 已落地（终端二维码，只走服务 RPC `scanLogin`）；登录态回归
-已实测（已登录短路、`xhs:explore` / `xhs:user` 首屏 + 翻页、`rss detail`）。假码/过期码与
-`images:false` 下的真码判据（解码 PNG 头尺寸）均已修；唯一未验：**干净 profile 全流程回归**
-（`rss --service --profile-dir <空目录>`，覆盖出码 → 扫码 → 登录成功）。
+**待办总表 = `docs/ops/backlog.md`（唯一入口）**。完成一项：删总表一行，并在权威文档改状态；
+不要在本文件或其它文档里再挂一份清单。当前主线顺序：
 
-**未做的功能**（按可行性排序，细节见 `docs/platforms/channels.md`）：
+1. 设计系统 F3–F5（F1/F2 已完成，`docs/ui/design-system-plan.md`）
+2. 播放器 P0a / P0b（前置已完成，`docs/playback/player-parity-plan.md`）
+3. 平台渠道缺口按 backlog §D 立项，条件触发项等信号（§G）
 
-- **自动保活**（仅 bili 可行）：已有 `refresh_token` 但无续期调度 —— 到期只能重扫。
-- **抖音登录态搜索调研**：先专用小号 + CDP 被动探针，再决定是否实现。
-
-**长期悬置**（收益不抵复杂度）：CSP（现 `csp: null`，抖音/斗鱼签名脚本靠 `eval`）；
-live 按平台二次聚合的 UI 侧。
-
-**待实机验证**：清单见下方 TODO（没跑过不算完成）。
+发布/实机验证项见 backlog §A / §C。
 
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）
 
-- [ ] 干净 VM 复核：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin
-- [ ] WebView2 生命周期剩余：LRU 驱逐（`/json/close`）后 renderer 不残留
-- [ ] release 验收：GPU 进程 private 是否下降；关 lane 后 renderer 是否释放；空闲 3 分钟是否归零
-- [ ] `xhs:explore` 手动刷新命中 `passiveBuffer`（未命中走页面 SSR 兜底）
-- [ ] 实况图验收：微博 .mov 在 WebView2 能否播、失败是否退回静态图
-- [ ] 实况播放 release 验收：mp4 解码与暂停/续播（dev 已修 Referer 403 + ORB）
-- [ ] 实机回归：真实微博/xhs feed 图片网格（直连+回退）、滚动时缓存命中
-- [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局
-- [ ] Referer 改造剩余：规则表抽共享 JSON；实况视频响应头注入（ORB 兜底）按需再做
-- [ ] 系统文档正文细化（03 时序图 / 02 契约正文）
-- [ ] `scripts/ui-design-audit.ts` oklch 解析 bug（>255 非法值 → active chip 恒报 ~1.1:1 误报）；
-  真实值已复算过 AA，修前别把 `contrastIssues` 当阻塞（注记见 `docs/ops/smoke-check.md`）
-- [ ] 登录后实机复验：`weibo:user` 预加载第二页；阮一峰正文按 HTML 渲染
+> 待办已统一迁到 `docs/ops/backlog.md`（§A 发布验证 / §C 实机验证）。
+> 本节只留 cc-todo 自动写入的临时提醒，不再手工维护长清单。
 <!-- cc-todo:end -->

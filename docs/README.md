@@ -63,12 +63,14 @@
 | `ops/commands.md` | ★ 全部命令、自检脚本、UI/浏览器探针 + CLI 设计与边界 |
 | `ops/smoke-check.md` | ★ 端到端巡检清单（改了什么 → 跑什么） |
 | `ops/release-updater.md` | 发布产物（NSIS）、签名密钥、自动更新链路、发版步骤 |
+| `ops/backlog.md` | ★ 待办总表（唯一入口；完成即删行，条件触发项单列） |
 
 ## 审计
 
 | 文档 | 内容 |
 | --- | --- |
 | `audit/findings.md` | 审计结论（故意不改 / 误报证伪）+ 兼容补丁清单 + 破坏性变更 |
+| `audit/improvements-2026-11-01.md` | 2026-11-01 架构评审改进清单 P0–P3 的完成记录与刻意不做的取舍 |
 | `audit/refactor-candidates.md` | 重构候选分档（A 建议做 / B 改到再动 / C 明确不改 / D 已核实） |
 | `audit/doc-backlog-2026-10-27.md` | docs 遗留问题全量核对快照（120 条：open/stale/fixed/decision + 下一批建议） |
 | `audit/pagination-dedupe-audit-2026-10-27.md` | 渠道翻页/去重全量审计快照（55 渠道 + core 语义；行动项 19 + 合理取舍 26，逐条反驳验证） |

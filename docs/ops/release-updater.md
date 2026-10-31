@@ -84,6 +84,8 @@ git push origin vX.Y.Z
 
 ## 待补：发布门禁（2026-10-26 事故后记）
 
+> 开放项已登记 `docs/ops/backlog.md` §A；完成后两边同步。
+
 v0.7.0 发了一个启动即「应用数据初始化失败」的包：CI 既没构建服务三件，也没叠加
 `tauri.conf.release.json`（`bundle.resources` 只写在那里）。已修 release.yml（见
 `0ecb1a2`），但**产物仍没有自动门禁**，靠人记得。2026-11-01 起 release.yml 在构建前跑

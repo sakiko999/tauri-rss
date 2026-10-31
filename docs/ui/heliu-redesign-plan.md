@@ -265,6 +265,8 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 
 ## 附：本计划未覆盖但已知的后续项
 
+> 已汇总到 `docs/ops/backlog.md` §G（条件触发）。
+
 - 真同步时间戳（新 RPC/state 字段，非 XML）——D12 的升级路径。
 - `rail-nav.check.ts` 若未来允许删节点，须先把「节点清单快照」断言写进 check。
 - 原型 `DESIGN-HANDOFF.md` 的多视口矩阵（360-1920）不适用于桌面（minWidth=1024）；若未来做 web 版再启用。

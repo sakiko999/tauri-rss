@@ -180,6 +180,8 @@ boot（`READY`）后 1.5s 由服务进程跑 `DataLayer.syncBrowserCookies()`（
 
 ## 6. 待实测确认项
 
+> 开放项已汇总到 `docs/ops/backlog.md` §C（干净 profile 扫码）与 §G（bili 续期参数）。
+
 - [ ] bili `cookie/refresh` 续期接口的精确参数（refresh_token 是否够、是否需 csrf）。
 - [ ] 扫码出码本身尚未在「未登录 profile」下实测（现有 profile 已登录走的是短路）：用 `rss --service --profile-dir <空目录>` 验。
 
