@@ -132,9 +132,10 @@
 这层 CDP 关不掉、flags 也挡不住。Tauri 自己的 WebView2 没有这一层。
 
 **做法**：数据服务 spawn `amoeba-browser.exe`（`apps/browser-sidecar/src/main.rs`，无 Tauri
-依赖的屏外 WebView2 宿主 + CDP，由 `packages/host/src/node/browser-sidecar.ts` 驱动）。Tauri
-进程内的 `webview_browser_*`（`apps/src-tauri/src/webview_browser.rs`）保留同语义，但 desktop
-已 `browser:false` 不再注入。旧的 spawn-Edge 路径（`commands/browser.rs`）已删除。
+依赖的屏外 WebView2 宿主 + CDP，由 `packages/host/src/node/browser-sidecar.ts` 驱动）。
+**这是唯一路径**：Tauri 进程内的 `webview_browser_*` 分支（9334 端口 + `TauriBrowserBackend`）
+已于 2026-11-01 标 deprecated 并整体删除；`injectTauriHost` 不再注入 browser
+（参数保留只为兼容旧调用点）。旧的 spawn-Edge 路径（`commands/browser.rs`）更早已删除。
 
 **生命周期契约**（改这里前先读）：
 

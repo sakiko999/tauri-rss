@@ -7,8 +7,6 @@ pub mod media_referer;
 pub mod plugins;
 /// 数据服务进程生命周期（spawn/adopt/shutdown + service_endpoint）。
 pub mod service;
-/// 抓取浏览器 = Tauri 自己的 WebView2（隐藏窗口 + CDP 9334）。
-pub mod webview_browser;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -44,11 +42,6 @@ pub fn run() {
             commands::ws::ws_connect,
             commands::ws::ws_send,
             commands::ws::ws_close,
-            commands::webview_browser::webview_browser_open,
-            commands::webview_browser::webview_browser_set_mode,
-            commands::webview_browser::webview_browser_close,
-            commands::webview_browser::webview_browser_reset,
-            commands::webview_browser::webview_browser_tidy,
         ]);
 
     #[cfg(mobile)]

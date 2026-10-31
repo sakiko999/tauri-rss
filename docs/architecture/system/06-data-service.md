@@ -61,7 +61,7 @@
 `amoeba-runtime` 在服务存活期间保留（它是 Bun 的父进程），desktop 退出时随 Job / `--parent-pid`
 一起收掉；它**只写 stderr**，stdout 原样留给服务的 `READY <port>`。
 
-服务不再使用 Tauri 的抓取 WebView2（`webview_browser_*`）。主窗口的媒体 Referer 注入（`media_referer.rs`）保留。
+服务不再使用 Tauri 的抓取 WebView2（`webview_browser_*`，该分支已删除，抓取浏览器统一走 `amoeba-browser.exe`）。主窗口的媒体 Referer 注入（`media_referer.rs`）保留。
 
 ### 2.2 desktop 启动顺序
 
@@ -348,8 +348,8 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   seed 标记改 localStorage。
 - `apps/src-tauri`：`service.rs`（spawn/adopt/READY/endpoint/shutdown）、`single-instance`、
   `tauri.conf.release.json` resources、`service_endpoint`；主窗口 Destroyed → 服务 shutdown。
-- `webview_browser_*` / `TauriBrowserBackend` 保留给 mobile / 进程内调试（desktop 不注入）；
-  服务接管路径不再注入 browser，`abortTabs` 调用已从 desktop 移除。
+- `webview_browser_*` / `TauriBrowserBackend` 已删除（2026-11-01）：抓取浏览器只有
+  `amoeba-browser.exe` 一条路径；`injectTauriHost` 的 `browser` 参数保留为 deprecated 兼容壳。
 
 ## 8. 打包与运行时
 

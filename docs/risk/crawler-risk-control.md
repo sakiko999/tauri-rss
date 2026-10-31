@@ -45,8 +45,8 @@
   作为 `--user-data-dir` 传给 `amoeba-browser.exe`（`apps/browser-sidecar`；identifier =
   安装版 `app.amoeba.desktop` / dev 形态 `app.amoeba.dev`，两实例并跑时各有独立 profile），CDP 端口由 sidecar
   stdout 的 `READY <port>` 动态分配（`packages/host/src/node/browser-sidecar.ts:97-120`）。
-  Tauri 内嵌的 `webview_browser.rs`（固定 9334）只在宿主未封 `browser` 时生效，desktop 已
-  `browser:false`（`apps/desktop/src/main.tsx:17-21`），属冻结路径。
+  Tauri 内嵌的 `webview_browser.rs`（固定 9334）已于 2026-11-01 删除；抓取浏览器只有 sidecar
+  一条路径（`apps/desktop/src/main.tsx` 也不再注入 browser）。
 - Tauri 内嵌路径：窗口 `visible(false)` + 屏外；启动参数禁图（`--blink-settings=imagesEnabled=false`）。
   service 的 sidecar 默认**加载**图片（扫码二维码需要），见 §3.14。
 - `BrowserBackend` 默认连 `/json/list` 的第一个非 Edge UI page；lane 各自 `Target.createTarget`
@@ -285,7 +285,7 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 
 ### 3.3 需要补的能力
 
-1. ✅ 已实现：`webview_browser_open` / `webview_browser_set_mode`（hidden / interactive），实测依据与落点见 §3.9。
+1. ✅ 已实现（sidecar）：`amoeba-browser.exe` 的 stdin 模式 `hidden / interactive`；Tauri 内嵌的 `webview_browser_*` 已于 2026-11-01 删除。
 2. `BrowserBackend`：
    - ✅ `send(method, params, sessionId?)`（公开原始 CDP 命令；当前走 page 连接，sessionId 预留给 P2 的 browser 连接）
    - ✅ `onEvent(cb)`（分发无 id 事件帧，带 `sessionId`）
@@ -406,8 +406,8 @@ L3 = ×0.25 / 间隔 ×4。正常刷新/搜索/详情/解析不应感到排队�
 
 ### 3.9 窗口模式（2026-10-19 实测）
 
-> 2026-10-22 迁移到 WebView2 后：**宿主窗口**直接对 HWND `ShowWindow(SW_SHOWNA)`（`webview_browser_set_mode`，显示不激活；隐藏用 `SW_HIDE`——刻意不走 Tauri `win.show()/hide()`，前者抢焦点、后者因内部可见态未同步而跳过）；**lane 窗口**是 CDP 建的
-> 独立顶层窗口，仍用 `SW_HIDE` / `SW_SHOWNA` + `WS_EX_TOOLWINDOW` 整理（`webview_browser_tidy`），
+> 2026-10-22 迁移到 WebView2 后：**宿主窗口**直接对 HWND `ShowWindow(SW_SHOWNA)`（sidecar 的 stdin `mode`，显示不激活；隐藏用 `SW_HIDE`——刻意不走 Tauri `win.show()/hide()`，前者抢焦点、后者因内部可见态未同步而跳过；Tauri 内嵌分支已于 2026-11-01 删除）；**lane 窗口**是 CDP 建的
+> 独立顶层窗口，仍用 `SW_HIDE` / `SW_SHOWNA` + `WS_EX_TOOLWINDOW` 整理（sidecar CDP 收尾），
 > 关闭时按进程树收尾。**行为结论不变**：隐藏窗口下渲染管线停摆（rAF=0、IO 不回调、
 > scroll 不派发），滚动驱动页面必须 `interactive`（屏外显示 +
 > `--disable-features=CalculateNativeWinOcclusion`）。下表是 Edge 上的原始测量，保留作为依据。
@@ -478,8 +478,8 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 
 | 层 | 改动 |
 | --- | --- |
-| Rust `webview_browser.rs`（Tauri 内嵌路径；service 侧对等实现 = `apps/browser-sidecar`，stdin `mode hidden\|interactive`） | `set_mode` = 直调 `ShowWindow(SW_SHOWNA / SW_HIDE)`（不用 Tauri show/hide）；遮挡/节流 flag 仍**启动时常驻**；`open/close/reset/set_mode` 由 OP 锁串行，`close` 等到窗口销毁 + 端口释放 |
-| 宿主 | `TauriBrowserBackend.setMode` → invoke `webview_browser_set_mode`；`BrowserBackend.setMode?` 为可选能力 |
+| `apps/browser-sidecar`（唯一路径，stdin `mode hidden\|interactive`） | `set_mode` = 直调 `ShowWindow(SW_SHOWNA / SW_HIDE)`（不用 Tauri show/hide）；遮挡/节流 flag 仍**启动时常驻**；`open/close/reset/set_mode` 由 OP 锁串行，`close` 等到窗口销毁 + 端口释放 |
+| 宿主 | `BrowserBackend.setMode?` 为可选能力（sidecar driver 实现；Tauri 内嵌 driver 已删除） |
 | crawler | 统一用 `withBrowserOp(..., { mode: "interactive" })` 包装（`withRenderLease` 引用计数 + 全局串行）。滚动路径（`xhs:user` 翻页）用 interactive，SSR 读取用默认 hidden |
 | 语义 | `webview_browser_open` **只确保就绪、不改模式**（否则 `ensureConn` 会把刚切好的 interactive 打回 hidden） |
 

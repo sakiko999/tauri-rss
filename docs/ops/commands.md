@@ -288,7 +288,7 @@ example 长期验证。逐项对应：
 | `ws_connect`（tungstenite+header） | `ws` 包（`node-ws.ts`） | ✅ `rss dm` 四平台通 |
 | js 签名执行（new Function） | Node new Function（`node-js.ts`） | ✅ douyin abogus/webmssdk 通 |
 | localStorage | storage backend（bun:sqlite） | ✅ |
-| webview_browser_* | — | 已排除（与宿主窗口绑定） |
+| webview_browser_* | — | 已删除（2026-11-01；抓取浏览器只走 amoeba-browser sidecar） |
 
 两个真实差异面：
 

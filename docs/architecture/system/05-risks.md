@@ -25,7 +25,7 @@
 | R13 | release-only 分支无法被同一套巡检覆盖 | 中 | 高 | `scripts/tauri.ts:54-61`；`apps/desktop/src/main.tsx`（`__store` 仅 DEV） | release 下开受控 CDP 或加核对钩子 |
 | R14 | 进程级单例：provider 后注册覆盖、门面 last-writer-wins、`cookieSnapshot` 无版本 | 中 | 低 | `packages/resolve/src/platform/credentials.ts:25-30`；`packages/core/src/data-layer.ts:200-221,472,914,945`；`packages/host/src/runtime.ts:120-141` | per-instance 化或显式 dispose |
 | R15 | CLI 旁路 settings **已修（2026-10-26）** | — | — | `apps/cli/src/info.ts` 的 `loadSettings` 改走 core `createSettingsRepository`（归一化/损坏留证/串行化，顺带修掉每次新建连接）；登录态不再写 CLI 本地库 —— profile/cookie 只在数据服务（`rss login` 走服务 RPC） | CLI 探针仍读自己的库（调试载具），登录态消费请用 `--via-service` 或桌面 |
-| R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 | 中 | 中 | `packages/host/src/tauri/browser-backend.ts`（`IDLE_CLOSE_MS`）、`packages/host/src/browser/backend.ts`（`closeIfIdle`） | 登录/长轮询显式续期或豁免 |
+| R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 | 中 | 中 | `packages/host/src/node/browser-sidecar.ts`（空闲回收入口）、`packages/host/src/browser/backend.ts`（`closeIfIdle`） | 登录/长轮询显式续期或豁免 |
 | R17 | 播放器兜底链静默（FLV 无 headers）**（部分修复 2026-10-23）** | 中 | 中 | 未知格式裸 `<video>` 已挂 onError（`PlayableMedia.tsx:472-475`）；FLV 仍不带 headers（`useMediaStream.ts:209-212`） | FLV 走隧道或显式提示 |
 | R18 | 死字段与无生产者字段面 **已修（2026-10-23）** | — | — | `Live.quality`/`Live.notice` 无生产者，已从类型与 serialize 删除；`Base.sourceId`/`raw` 注明「crawler 内部字段，不过 XML」 | 新增字段前先 grep 生产者；不可达字段直接删 |
 | R19 | 文档/注释与代码相反，误导后续修改 **（部分修复 2026-10-23）** | 低 | 高 | 见 §7.3；kind 顺序、inject-tauri storage、query/index/settings/credentials 注释已修 | 新注释与代码同改；漂移按 §7.3 登记 |

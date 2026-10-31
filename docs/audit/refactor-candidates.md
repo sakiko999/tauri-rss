@@ -177,7 +177,7 @@ case 写类型谓词，收益为负。
 - **A0 `browser-sidecar` 没接 WebView2 进程退出事件**（`apps/browser-sidecar/src/main.rs:928` 只有
   500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
   `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
-  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。桌面载具已有同款兜底（`webview_browser.rs:414`）。
+  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。（历史注：当时桌面载具在 `webview_browser.rs` 有同款兜底，该分支已于 2026-11-01 删除。）
   ✅ 已修（2026-10-27）：主路 `ICoreWebView2Environment5::add_BrowserProcessExited` →
   `request_shutdown()`，sidecar 自行退出、由宿主 `ensureReady` 重启整载具；旧 Runtime（< 88）
   没有 Environment5 才降级 `add_ProcessFailed` + 只拦 `BROWSER_PROCESS_EXITED`（渲染进程失败
