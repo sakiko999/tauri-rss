@@ -91,10 +91,10 @@ target/debug/amoeba-runtime.exe --no-download <entry>      # 离线：只用已�
 ## 自检脚本（仓库无测试基建，用最小断言）
 
 ```bash
-bun run check                          # ★ 统一入口：static + contract + state + style + typecheck（默认 5 层）
-bun run check --list                   # 列出全部检查项与所属层
+bun run check                          # ★ 统一入口：默认层（不含 service）
+bun run check --list                   # 列出层、检查项与 typecheck 项目（数字以此为准）
 bun run check --layer service          # 起真实数据服务（慢，协议/快照/取消）
-bun run check --layer all              # 六层全跑（默认 5 层 + service）
+bun run check --layer all              # 全部层（默认层 + service）
 bun run check --filter core           # 按路径子串 / style 步骤名筛（调试单点时用；零匹配 = 失败）
 ```
 

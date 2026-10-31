@@ -5,7 +5,8 @@
  * ui 包的 MediaImage(自带防盗链隧道 + 骨架 + 失败占位),不再自己写 <img>。
  */
 
-import type { AudioItem, CategoryItem, MediaItem } from "@amoeba/core"
+import type { CategoryItem, MediaItem } from "@amoeba/core"
+import { isFeedItem, isPlayableKind } from "@amoeba/core/pure"
 import { fmtCount, MediaImage } from "@amoeba/ui"
 
 import { fmtAgo, fmtTime, httpsify, isLiveNow, itemKey, mediaUrl, onlineOf, socialRatio } from "../../lib/media.ts"
@@ -44,9 +45,8 @@ function badged(item: MediaItem, actions: CardActions) {
  * (article)/「打开详情」(social),封面也不该摆播放按钮(参考实现
  * `new_desktop/js/components.js` 的 cardMini 只给 video/audio 出 play 图标)。
  */
-export function isPlayableKind(kind: MediaItem["kind"]): boolean {
-  return kind === "video" || kind === "audio" || kind === "live"
-}
+// 判据在 core/pure（单一权威，2026-11-01）；这里 re-export 供既有调用点使用。
+export { isFeedItem, isPlayableItem, isPlayableKind } from "@amoeba/core/pure"
 
 /**
  * 这条 audio 是**一集音频**(有直链)还是**一个播客 feed**(待订阅)?
@@ -60,9 +60,6 @@ export function isPlayableKind(kind: MediaItem["kind"]): boolean {
  * (没 enclosure 的 item 在 `itemToAudio` 就被丢了),所以「audio 且无 stream」
  * 不会误伤真正的单集。video/live 不受影响(它们的 stream 由懒解析给,不该靠它判)。
  */
-export function isFeedItem(item: MediaItem): boolean {
-  return item.kind === "audio" && !(item as AudioItem).stream
-}
 
 /** 分区目录条目:本身不可播,点开是「该分区的内容预览」。 */
 export function isCategoryItem(item: MediaItem): item is CategoryItem {

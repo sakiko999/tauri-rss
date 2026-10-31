@@ -10,7 +10,26 @@
  * 本文件只许 re-export 零依赖模块、`@amoeba/platform`、`@amoeba/resolve/errors`。
  */
 
+import type { MediaItem, MediaKind } from "./types/media-item.ts"
+
 export { contentTtlMs, cookieFieldFor, cookieFieldForPlatform } from "./settings-policy.ts"
 export { ERROR_KIND_LABEL, ResolveError, errorKindOf, type ErrorKind } from "@amoeba/resolve/errors"
 export { positionDecision, type PositionDecision } from "./reading-position.ts"
 export { findItem, findRecord, itemRefKey, readingKey } from "./types/reading.ts"
+export type { MediaItem, MediaKind } from "./types/media-item.ts"
+
+/**
+ * 可播判定（单一权威）：kind 门控 video/audio/live，且 audio 无 stream = 播客 feed。
+ * 新增「播放」入口一律用它，别在各处重写 `kind === "video" || ...`。
+ */
+export function isPlayableKind(kind: MediaKind): boolean {
+  return kind === "video" || kind === "audio" || kind === "live"
+}
+
+export function isFeedItem(item: Pick<MediaItem, "kind"> & { stream?: unknown }): boolean {
+  return item.kind === "audio" && !item.stream
+}
+
+export function isPlayableItem(item: Pick<MediaItem, "kind"> & { stream?: unknown }): boolean {
+  return isPlayableKind(item.kind as MediaKind) && !isFeedItem(item)
+}

@@ -73,12 +73,25 @@ export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
    *
    * ⚠️ 两个都读:分组 CRUD 会改 `groups`,而「删除分组」还会顺带把成员的 groupId
    * 置空(改 `subscriptions`),所以不能只读其中一个。
+   *
+   * ⚠️ **自己修正 selectedNodeId**（2026-11-01）：退订/删分组后，选中节点可能已不存在。
+   * 之前靠「8 处调用都必须先改再调」的约定，漏一处就是空视图。这里统一收口：
+   * 选中项没了就回 `tab:all`，调用方只管改数据。
    */
   function syncSubscriptions(): Promise<void> {
     const dl = get().dl
     if (!dl) return Promise.resolve()
     return Promise.all([dl.subscriptions.list(), dl.subscriptions.listGroups()]).then(([subs, groups]) => {
+      // 判「选中项被删了」要对**前后**两份快照比：只看新集合会把 tab/home/分区预览
+      // 这类本来就不在订阅表里的节点误判成已删除。
+      const prev = get()
+      const node = prev.selectedNodeId
+      const wasSub = !!node && prev.subscriptions.some((s) => s.id === node)
+      const wasGroup = !!node && node.startsWith("group:") && prev.groups.some((g) => `group:${g.id}` === node)
       set({ subscriptions: subs, groups })
+      const gone =
+        (wasSub && !subs.some((s) => s.id === node)) || (wasGroup && !groups.some((g) => `group:${g.id}` === node))
+      if (gone) set({ selectedNodeId: "tab:all" })
       refreshView()
     })
   }
