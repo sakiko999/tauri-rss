@@ -61,3 +61,13 @@ export function settleConfirm(accepted: boolean): void {
   current = queue.shift() ?? null
   emit()
 }
+
+/**
+ * 只结束指定 id 的请求。Radix 的 `Dialog.Close` 会在按钮 onClick 之后再上报一次
+ * `onOpenChange(false)`（Action/Cancel 都是 Close 子类）—— 用 id 守卫后，第二次
+ * 调用落到「已经顶上来」的下一条上会被忽略，不会把排队中的请求误判成取消。
+ */
+export function settleConfirmFor(id: number, accepted: boolean): void {
+  if (current?.id !== id) return
+  settleConfirm(accepted)
+}

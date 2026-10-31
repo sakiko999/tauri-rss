@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict"
 
-import { confirmAction, getConfirmRequest, settleConfirm, subscribeConfirm } from "./confirm.ts"
+import { confirmAction, getConfirmRequest, settleConfirm, settleConfirmFor, subscribeConfirm } from "./confirm.ts"
 
 let notified = 0
 const unsubscribe = subscribeConfirm(() => {
@@ -22,12 +22,19 @@ assert.equal(getConfirmRequest()?.danger, true, "选项要原样带给宿主")
 const second = confirmAction({ title: "重置？", desc: "不可撤销" })
 assert.equal(getConfirmRequest()?.title, "删除？", "并发请求排队，不覆盖当前")
 
-settleConfirm(true)
+const firstId = getConfirmRequest()!.id
+settleConfirmFor(firstId, true)
 assert.equal(await first, true, "确认解析为 true")
 assert.equal(getConfirmRequest()?.title, "重置？", "队列里的下一个顶上")
 assert.equal(notified, 2, "换请求要通知宿主")
 
-settleConfirm(false)
+// Radix 的 Close 会在按钮 onClick 之后再用**旧 id** 上报一次 onOpenChange(false)。
+// 带 id 守卫后，这次重复调用不能把刚顶上来的第二条误解析成取消。
+settleConfirmFor(firstId, false)
+assert.equal(getConfirmRequest()?.title, "重置？", "旧 id 的重复 settle 不得影响排队中的下一条")
+
+const secondId = getConfirmRequest()!.id
+settleConfirmFor(secondId, false)
 assert.equal(await second, false, "取消解析为 false")
 assert.equal(getConfirmRequest(), null, "队列空了")
 

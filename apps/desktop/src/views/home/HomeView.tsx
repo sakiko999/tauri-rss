@@ -40,6 +40,8 @@ const sameHour = (a: number, b: number): boolean => Math.floor(a / 3_600_000) ==
 
 export function HomeView() {
   const allItems = useDesktop((s) => s.allItems)
+  // 进度只原地更新条目、不换 allItems 身份（见 store/types.ts 的 progressVersion）。
+  const progressVersion = useDesktop((s) => s.progressVersion)
   const subscriptions = useDesktop((s) => s.subscriptions)
   const offline = useDesktop((s) => s.offline)
   const setOffline = useDesktop((s) => s.setOffline)
@@ -72,7 +74,8 @@ export function HomeView() {
     return today.find((i) => i.isUnread && !!mediaUrl(i)) ?? today[0] ?? null
   }, [allItems, now])
   const live = useMemo(() => selectLive(allItems, 4), [allItems])
-  const resume = useMemo(() => resumeWithPct(allItems).slice(0, 8), [allItems])
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- progressVersion 是 allItems 内容的版本号
+  const resume = useMemo(() => resumeWithPct(allItems).slice(0, 8), [allItems, progressVersion])
   const feeds = useMemo(() => groupedBySub(allItems, subscriptions, 2).slice(0, 6), [allItems, subscriptions])
   const picks = useMemo(() => picksMix(allItems, 12), [allItems])
 

@@ -4,8 +4,8 @@
  * OPML 只能表达 URL 订阅；平台订阅（B站/微博/小红书…）、分组、已读/星标/播放进度/
  * 阅读进度都不在里面。这里从桌面镜像直接导出这些字段。
  *
- * ⚠️ **不含凭证**：settings 里所有 `*Cookie` 字段被剔除（导出文件会落到下载目录，
- * 明文 cookie 不应跟着走）。重装后重新扫码登录即可。
+ * ⚠️ **不含凭证**：settings 里所有 `*Cookie` 字段被剔除，订阅 `info` 里的 cookie 键
+ * 也剔除（导出文件会落到下载目录，明文 cookie 不应跟着走）。重装后重新扫码登录即可。
  */
 
 import type { AppSettings, MediaItem, Subscription, SubscriptionGroup } from "@amoeba/core"
@@ -40,6 +40,17 @@ function redactSettings(settings: AppSettings): Omit<AppSettings, `${string}Cook
   return out as Omit<AppSettings, `${string}Cookie`>
 }
 
+/**
+ * 订阅 info 是任意字符串表，core 明确支持 `info.cookie` 作为订阅级凭证
+ * （调用点显式值优先于 settings 快照）。导出时必须同 settings 一样剔除。
+ */
+function redactSubscriptions(subscriptions: Subscription[]): Subscription[] {
+  return subscriptions.map((sub) => ({
+    ...sub,
+    info: Object.fromEntries(Object.entries(sub.info).filter(([k]) => !/cookie/i.test(k))),
+  }))
+}
+
 export function buildDataExport(input: {
   subscriptions: Subscription[]
   groups: SubscriptionGroup[]
@@ -71,7 +82,7 @@ export function buildDataExport(input: {
     version: 1,
     exportedAt: new Date(input.now ?? Date.now()).toISOString(),
     credentialsOmitted: true,
-    subscriptions: input.subscriptions,
+    subscriptions: redactSubscriptions(input.subscriptions),
     groups: input.groups,
     reading,
     settings: redactSettings(input.settings),

@@ -40,6 +40,7 @@ export const useDesktop = create<DesktopState>()((set, get) => {
     subscriptions: [],
     groups: [],
     allItems: [],
+    progressVersion: 0,
     view: { list: [], total: 0, hasMore: false },
     settings: null,
 

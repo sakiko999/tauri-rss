@@ -632,12 +632,16 @@ export function createDataLayer(): DataLayer {
       // ⚠️ 必须同时算 `body:`（点开过的文章补全正文）。只算 content: 时诊断页显示
       // 「缓存很小」，而用户长期阅读后库和备份持续变大（2026-11-01 评审）。
       const [contentKeys, bodyKeys] = await Promise.all([storage.keys("content:"), storage.keys("body:")])
+      // `body:` 是「每条点开过的文章一个键」且无上限：逐条串行 get 会让诊断页在长期库上
+      // 卡数秒。小批并发（32）降低墙钟时间；内存无解（后端只有整值读取，没有 SUM(length)）。
+      const keys = [...contentKeys, ...bodyKeys]
       let bytes = 0
-      for (const key of [...contentKeys, ...bodyKeys]) {
-        const value = await storage.get(key)
-        bytes += (value?.length ?? 0) * 2
+      for (let i = 0; i < keys.length; i += 32) {
+        const batch = keys.slice(i, i + 32)
+        const values = await Promise.all(batch.map((key) => storage.get(key)))
+        for (const value of values) bytes += (value?.length ?? 0) * 2
       }
-      return { keys: contentKeys.length + bodyKeys.length, bytes }
+      return { keys: keys.length, bytes }
     },
     async clearContentCache() {
       const keys = [...(await storage.keys("content:")), ...(await storage.keys("body:"))]

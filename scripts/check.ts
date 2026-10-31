@@ -116,7 +116,7 @@ const TYPECHECK_PROJECTS = [
   "scripts",
 ]
 
-/** 全仓 *.check.ts（跳过 node_modules/target/点目录），路径用 `/` 分隔。 */
+/** 全仓（packages/apps/scripts）*.check.ts（跳过 node_modules/target/点目录），路径用 `/` 分隔。 */
 function discoverChecks(): string[] {
   const out: string[] = []
   const walk = (rel: string) => {
@@ -127,7 +127,9 @@ function discoverChecks(): string[] {
       else if (e.name.endsWith(".check.ts")) out.push(p)
     }
   }
-  for (const root of ["packages", "apps"]) walk(root)
+  // scripts/ 也要扫：本次新增的 radix-boundary / rpc-coverage 就在这儿，
+  // 只扫 packages/apps 时「忘登记」不会被发现（检查静默不跑 = 假绿）。
+  for (const root of ["packages", "apps", "scripts"]) walk(root)
   return out
 }
 

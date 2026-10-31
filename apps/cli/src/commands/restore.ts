@@ -12,6 +12,7 @@
  * 必须给 `--db`（报错里给出两个典型路径）。
  */
 
+import { Database } from "bun:sqlite"
 import { copyFileSync, existsSync, readdirSync, rmSync, statSync } from "node:fs"
 import { join, resolve } from "node:path"
 
@@ -60,8 +61,9 @@ export function runRestore(opts: {
   if (!opts.db) {
     throw new Error(
       "需要 --db <库文件>（恢复要覆盖哪个库由实例身份决定）：\n" +
-        `  dev     %LOCALAPPDATA%/app.amoeba.dev/rss.dev.db\n` +
+        `  dev     %APPDATA%/app.amoeba.dev/rss.dev.db\n` +
         `  安装版  %APPDATA%/app.amoeba.desktop/rss.db\n` +
+        `（库在 Roaming；备份/服务锁在 LocalAppData 的 service 目录）\n` +
         `当前备份目录：${dataDir}/backups`,
     )
   }
@@ -69,6 +71,19 @@ export function runRestore(opts: {
   // 服务在跑 = 库锁被活进程持有：直接拒绝（覆盖就是双写者/撕裂）。
   assertDbNotServed(db)
   if (existsSync(db)) {
+    // ⚠️ 库是 WAL 模式：强杀后最新提交还在 -wal 里。先把 WAL 折进主库再拷贝，
+    // 否则「误恢复可换回来」的副本缺最后一次 checkpoint 之后的写入，而下面的
+    // 删除 -wal 又让这部分数据无法找回。
+    try {
+      const conn = new Database(db)
+      try {
+        conn.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+      } finally {
+        conn.close()
+      }
+    } catch (e) {
+      console.warn(pc.yellow(`WAL checkpoint 失败（继续复制主库）：${e instanceof Error ? e.message : String(e)}`))
+    }
     const stamp = new Date().toISOString().replace(/[:.]/g, "-")
     const keep = `${db}.pre-restore-${stamp}`
     copyFileSync(db, keep)

@@ -911,8 +911,8 @@ export async function runService(opts: ServiceOptions): Promise<number> {
           ? (p.hosts as unknown[]).filter((h): h is string => typeof h === "string" && !!h)
           : []
         await layer.diagnostics.clearCookies(hosts)
-        // 备份是整库拷贝：不删的话旧 cookie 还能从 backups/ 恢复出来。
-        purgeBackups(opts.dataDir)
+        // 备份/pre-restore 副本是整库拷贝：不删的话旧 cookie 还能从这里恢复出来。
+        purgeBackups(opts.dataDir, opts.dbFile)
         return undefined
       }
       case "diagnostics.clearAll": {
@@ -930,7 +930,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
         )
         // 库都清了，进行中的弹幕订阅也没有意义；历史备份同样含旧数据/凭证。
         closeAllDanmaku()
-        purgeBackups(opts.dataDir)
+        purgeBackups(opts.dataDir, opts.dbFile)
         return ids
       }
       case "diagnostics.resetBrowserProfile":

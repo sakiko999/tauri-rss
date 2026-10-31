@@ -261,8 +261,8 @@ function ScanLoginModal({ channel, onClose }: { channel: ChannelInfo | null; onC
     setQr("")
     setError("")
     setAlready(false)
-    // ⚠️ 关闭弹窗必须 abort:登录持全局浏览器锁直到成功/超时(最长 5 分钟),不取消的话
-    // 关窗后所有 xhs/weibo 浏览器操作都被排队卡住,重开弹窗也出不了码。
+    // ⚠️ 关闭弹窗必须 abort:登录持 `login:<platform>` lane 直到成功/超时(平台截止 5 分钟),
+    // 不取消的话同平台登录重试会被旧 job 排队挡着,重开弹窗也出不了码（其它 lane 不受影响）。
     const ac = new AbortController()
     dl.scanLogin(
       channel.key,

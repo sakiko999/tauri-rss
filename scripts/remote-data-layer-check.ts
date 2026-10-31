@@ -69,6 +69,7 @@ async function main(): Promise<void> {
     let settingsEvents = 0
     let statusEvents = 0
     let lastOnline: boolean | null = null
+    let lastEvents: boolean | null = null
     /** 模拟宿主（Rust service_endpoint）在服务崩溃后给出的新 endpoint。 */
     let recoverTo: EndpointInfo | null = null
     dl = await createRemoteDataLayer(endpoint, {
@@ -81,6 +82,7 @@ async function main(): Promise<void> {
       onStatus: (status) => {
         statusEvents++
         lastOnline = status.online
+        lastEvents = status.events
       },
       resolveEndpoint: async () => recoverTo,
     })
@@ -188,12 +190,14 @@ async function main(): Promise<void> {
       owner2 = readFileSync(join(dir, "service.token"), "utf8").trim()
       recoverTo = endpoint2
       // 重连退避最长 10s；给足两轮。
+      // ⚠️ 必须等 **events**（WS 认证成功）而不仅是 online：换连后用旧 token 连 WS 会
+      // 4001，靠 applySnapshot 提前置 online 会假绿（2026-11-01 复核发现）。
       try {
-        await waitFor(() => lastOnline === true, 25_000)
+        await waitFor(() => lastOnline === true && lastEvents === true, 25_000)
       } catch {
         /* 断言在下一行 */
       }
-      add("宿主重建后自动重连", lastOnline === true)
+      add("宿主重建后自动重连（WS 认证成功）", lastOnline === true && lastEvents === true)
       add(
         "换连后镜像可用",
         dl.store.all().some((it) => it.id === "alpha"),

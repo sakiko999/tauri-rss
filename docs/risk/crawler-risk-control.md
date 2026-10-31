@@ -481,13 +481,14 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 | `apps/browser-sidecar`（唯一路径，stdin `mode hidden\|interactive`） | `set_mode` = 直调 `ShowWindow(SW_SHOWNA / SW_HIDE)`（不用 Tauri show/hide）；遮挡/节流 flag 仍**启动时常驻**；`open/close/reset/set_mode` 由 OP 锁串行，`close` 等到窗口销毁 + 端口释放 |
 | 宿主 | `BrowserBackend.setMode?` 为可选能力（sidecar driver 实现；Tauri 内嵌 driver 已删除） |
 | crawler | 统一用 `withBrowserOp(..., { mode: "interactive" })` 包装（`withRenderLease` 引用计数 + 全局串行）。滚动路径（`xhs:user` 翻页）用 interactive，SSR 读取用默认 hidden |
-| 语义 | `webview_browser_open` **只确保就绪、不改模式**（否则 `ensureConn` 会把刚切好的 interactive 打回 hidden） |
+| 语义 | `ensureConn` **只建连/确保就绪、不改模式**（否则会把刚切好的 interactive 打回 hidden） |
 
-- 禁图 `--blink-settings=imagesEnabled=false` 只对 Tauri 内嵌路径常驻：实测 interactive 下
-  rAF/IO/scroll 正常，仅图片不加载（service sidecar 默认加载图片，见 §3.14）。
+- 禁图：数据服务创建 sidecar 时传 `{ images: false }`（`apps/cli/src/service/host.ts`，sidecar 加
+  `--no-images`）。实测 interactive 下 rAF/IO/scroll 正常，仅图片不加载；登录二维码不依赖图片渲染
+  （见 host.ts：`images:false` 必传）。见 §3.14。
 
 > 历史教训（Edge 时代，已随 `browser.rs` 删除）：隐藏窗口判据要数 `IsWindowVisible` 的顶层窗口并等稳定态；
-> 现行实现见 `webview_browser.rs` 的 OP 锁与 `browser/backend.ts` 的 lane 调度。
+> 现行实现见 `packages/host/src/browser/backend.ts` 的 lane 调度与 `apps/browser-sidecar` 的窗口管理。
 
 ⚠️ `WS_EX_TOOLWINDOW` 是 Win32 壳层技巧，不是 Chromium 开关。Edge 升级或窗口重建后
 要复测任务栏与 Alt-Tab；如果失效，退路是「接受任务栏图标」或「只在采集瞬间显示」。
@@ -715,7 +716,7 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   仍隐藏（滚动同样是 0 条）；`PUT /json/new` 建**同窗口 tab** 可规避。禁图
   `--blink-settings=imagesEnabled=false` 是启动参数，对全部 tab 生效，不能按 lane 开关。
 - **连接级状态全部下沉**：`connId / pending / nextId / eventListeners / abortPending` 要按 tab；
-  `connect()` 现在取 `/json/list` 的**第一个 page**（`browser-backend.ts:112`），超时重连会
+  `connect()` 取 `/json/list` 的**第一个 page**（`packages/host/src/browser/backend.ts`），超时重连会
   悄悄换 tab —— lane→target 映射必须显式持有、可校验、可重建。
 - **登录**：`withScanLoginLock` 改为 login lane 锁；`scanLoginActive` 布尔改 Set/计数
   （两个登录重叠会互相清标记，`cdp.ts:101`）；桌面 45s 超时（`data.ts:161`）改为只 abort
@@ -778,19 +779,18 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
 
 ### 3.14 抓取浏览器实例配置与调试端口
 
-（2026-10-21 从 `CLAUDE.md` 迁入；2026-10-22 起实例 = 屏外 WebView2。**生产路径
-（`rss --service`）的启动参数权威是 `apps/browser-sidecar/src/main.rs:293-317`**，Tauri 内嵌变体见
-`webview_browser.rs` 的 `browser_args()`（同一组 flag）；Edge 专属参数已随 `commands/browser.rs` 删除）
+（2026-10-21 从 `CLAUDE.md` 迁入；2026-10-22 起实例 = 屏外 WebView2。**唯一载体的启动参数权威是
+`apps/browser-sidecar/src/main.rs`**；Tauri 内嵌变体已于 2026-11-01 删除，Edge 专属参数随
+`commands/browser.rs` 删除）
 
 - ⚠️ **CDP 调试端口 9222 只在 dev**：`tauri.conf.json` 不带它（release 构建会带 = 发布版开
   无鉴权远程调试口，本机任意进程 attach 后可读改 cookie）；dev 用 `scripts/tauri.ts` 叠的
   `tauri.conf.dev.json`（`bun run tauri` 自动带上）。
-- **禁图只对 Tauri 内嵌路径常驻**：`webview_browser.rs` 的 `browser_args()` 固定带
-  `--blink-settings=imagesEnabled=false` —— SSR/滚动抓取只读 DOM 文本，图片纯浪费内存/带宽。
-  实测该参数**不影响** `interactive` 模式的 rAF / IntersectionObserver / scroll 事件（只让
-  图片不加载），所以模式切换不需要重开浏览器。⚠️ service 的 sidecar **默认加载图片**
-  （`browser-sidecar.ts:33-34`：给扫码二维码留图），要禁图必须显式传 `{ images: false }`
-  （sidecar 才加 `--no-images`，`apps/browser-sidecar/src/main.rs:317`）。
+- **禁图由 sidecar 参数控制**：数据服务创建 sidecar 时传 `{ images: false }`
+  （`apps/cli/src/service/host.ts`），sidecar 加 `--no-images` —— SSR/滚动抓取只读 DOM 文本，
+  图片纯浪费内存/带宽。实测该参数**不影响** `interactive` 模式的 rAF / IntersectionObserver /
+  scroll 事件（只让图片不加载），所以模式切换不需要重开浏览器。⚠️ 不传 `images:false` 时
+  sidecar 默认加载图片（给扫码二维码留图），CLI/调试路径按需使用。
 - **抓取 WebView2 干净度**：独立 `data_directory`（`%LOCALAPPDATA%/app.amoeba.desktop/
   webview-profile`），启动参数带 `--disable-sync --disable-extensions --disable-default-apps`。
   WebView2 没有 Edge 的账户上层（不会注入 `.msn/.bing` cookie）。要清空 profile 用

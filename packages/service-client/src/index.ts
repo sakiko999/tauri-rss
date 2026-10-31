@@ -92,7 +92,12 @@ const TIMEOUT_MS: Partial<Record<RpcMethod, number>> = {
   resolveDetail: 120_000,
   resolvePlay: 180_000,
   resolveLivePlay: 120_000,
-  scanLogin: 180_000,
+  // 这两个内部都会走一次真实抓取（addSubscription 末尾 await refresh），不能按 30s 默认。
+  addSubscription: 180_000,
+  previewChannel: 120_000,
+  // 平台扫码截止默认 300s（xhs/weibo 的 login.ts）；客户端必须比它久，否则「扫码成功但
+  // UI 已报超时」。
+  scanLogin: 330_000,
   "probe.fetch": 120_000,
   "probe.resolve": 180_000,
   "probe.danmaku": 60_000,
@@ -165,6 +170,10 @@ export class ServiceClient {
       })
     } catch (e) {
       if (e instanceof DOMException && e.name === "TimeoutError") {
+        // 超时只打断本地请求：服务端 job 仍在跑（继续占浏览器 lane / 排队其它请求）。
+        // 有 jobId 就显式取消；没有 jobId 的方法（如 addSubscription）服务端无法中止，
+        // 只能等它跑完 —— 调用方不要把超时当「没发生」。
+        if (opts.jobId) void this.cancel(opts.jobId)
         throw new ServiceRpcError("timeout", 504, `${method} 超时（${(TIMEOUT_MS[method] ?? 30_000) / 1000}s）`)
       }
       throw e
@@ -295,6 +304,8 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
   const jobProgressListeners = new Map<string, (progress: JobProgress) => void>()
   /** 弹幕批次按客户端生成的 subId 分发（服务端广播到全部连接，各端自行过滤）。 */
   const danmakuListeners = new Map<string, (items: DanmakuItem[]) => void>()
+  /** 已打开的弹幕订阅参数：服务崩溃换连后要按同一 subId 重开（见 recoverEndpoint）。 */
+  const danmakuOpen = new Map<string, { subscriptionId: string; url: string; kind: "vod" | "live" }>()
   let status: RemoteStatus = { online: true, events: false }
 
   function setStatus(next: RemoteStatus): void {
@@ -459,7 +470,9 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
       }
       ws = socket
       socket.onopen = () => {
-        socket.send(JSON.stringify({ type: "auth", token: endpoint.clientToken }))
+        // ⚠️ 用**当前** endpointInfo 的 token：服务崩溃重连时端口/token 都可能换
+        // （见 recoverEndpoint）；用创建时的入参会永远 4001。
+        socket.send(JSON.stringify({ type: "auth", token: endpointInfo.clientToken }))
       }
       socket.onmessage = (e) => {
         let msg: WsServerMessage
@@ -527,6 +540,10 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
       resyncing = false
       reconnectBackoff = 500
       await openWs()
+      // 弹幕连接随旧进程消失：用同一 subId 在新服务上重开，播放端不用重新 resolve。
+      for (const [subId, params] of danmakuOpen) {
+        void client.rpc("danmaku.open", { subId, ...params }, { opId: uid("op") }).catch(() => {})
+      }
       return true
     } catch {
       return false // 宿主也拉不起来 → 继续退避
@@ -803,16 +820,19 @@ export async function createRemoteDataLayer(endpoint: EndpointInfo, hooks: Remot
       const stream: DanmakuStream = (onItems) => {
         const subId = uid("dm")
         danmakuListeners.set(subId, onItems)
+        danmakuOpen.set(subId, { subscriptionId, url, kind })
         const opening = client
           .rpc("danmaku.open", { subId, subscriptionId, url, kind }, { opId: uid("op") })
           .catch(() => {
             // 该条目不支持弹幕（或解析失败）：静默无弹幕，不阻塞播放。
             danmakuListeners.delete(subId)
+            danmakuOpen.delete(subId)
           })
         return () => {
           // ⚠️ 等 open 落地再关：否则 close 先到、open 后到，服务端会留下没人听的连接。
           void opening.finally(() => {
             danmakuListeners.delete(subId)
+            danmakuOpen.delete(subId)
             void client.rpc("danmaku.close", { subId }, { opId: uid("op") }).catch(() => {})
           })
         }

@@ -22,11 +22,16 @@ export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
   /** 合帧：同一微任务内的多次 refreshView 只算一次（markAllRead 的 N 次 patch、
    *  WS 事件突发都从这里收敛）。microtask 而非 rAF——WebView2 隐藏窗口 rAF 会停摆。 */
   let refreshScheduled = false
-  function refreshView(): void {
+  /** 本帧是否要求「保留 allItems 身份」（progress 路径）。同帧内取或（结构化事件优先）。 */
+  let keepItems = false
+  function refreshView(opts?: { keepItems?: boolean }): void {
+    keepItems = keepItems || opts?.keepItems === true
     if (refreshScheduled) return
     refreshScheduled = true
     queueMicrotask(() => {
       refreshScheduled = false
+      const keep = keepItems
+      keepItems = false
       const s = get()
       if (!s.dl) return
       // 「今天」节点依赖时间，用日桶当键；其余节点与 now 无关。
@@ -34,6 +39,7 @@ export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
       const dayBucket = node === "today" ? Math.floor(now() / 86_400_000) : 0
       const key = [
         itemsVersion,
+        s.progressVersion,
         s.subscriptions,
         node,
         s.filter[node],
@@ -56,7 +62,10 @@ export function createCtx(set: StoreSet, get: StoreGet): StoreCtx {
       const view = queryView(slice, s.selectedNodeId, now())
       viewKey = key
       viewValue = view
-      set({ allItems: slice.allItems, view })
+      // progress 路径不换 allItems 身份：条目对象已被 media-store 原地更新，播放树
+      // 无需重渲染（见 types.ts progressVersion）。
+      if (keep) set({ view })
+      else set({ allItems: slice.allItems, view })
     })
   }
 

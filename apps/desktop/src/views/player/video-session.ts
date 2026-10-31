@@ -47,6 +47,12 @@ interface VideoSessionState {
   playing: boolean
   /** 起播过至少一次 —— 浮层（小窗/听条）的显示判据：没播过的会话不飘占位。 */
   started: boolean
+  /**
+   * 当前**注册在播放页舞台**的条目键（`itemKey`）。null = 没有页面插槽。
+   * 浮层判据必须用它而不是 URL 的 itemId：条目被刷新移出镜像后 PlayerPage 会早退、
+   * 不渲染插槽，但 URL 仍指着它 —— 那时必须落回小窗，否则播放器被藏进隐藏 home。
+   */
+  stageKey: string | null
   /** 4Hz 进度，供听条进度条（画面模式没人订阅，无渲染成本）。 */
   position: number
   duration: number
@@ -71,6 +77,7 @@ export const useVideoSession = create<VideoSessionState>((set, get) => ({
   startAtSec: undefined,
   playing: false,
   started: false,
+  stageKey: null,
   position: 0,
   duration: 0,
   muted: false,
@@ -157,11 +164,13 @@ export function applyVideoPlacement() {
 export function registerSlot(el: HTMLElement, key: string) {
   cancelIdleClose()
   slot = { el, key }
+  useVideoSession.setState({ stageKey: key })
   applyVideoPlacement()
 }
 
 export function unregisterSlot() {
   slot = null
+  useVideoSession.setState({ stageKey: null })
   applyVideoPlacement()
   // 离页时从未起播的会话（关了自动播放停在「准备播放」）不该一直挂在 home：
   // 延迟收口 —— StrictMode 的模拟卸载会在同一帧内重新注册从而取消本次关闭。

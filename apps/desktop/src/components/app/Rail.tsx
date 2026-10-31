@@ -39,6 +39,7 @@ export function Rail() {
   const subscriptions = useDesktop((s) => s.subscriptions)
   const groups = useDesktop((s) => s.groups)
   const allItems = useDesktop((s) => s.allItems)
+  const progressVersion = useDesktop((s) => s.progressVersion)
   const refreshErrors = useDesktop((s) => s.refreshErrors)
   const busy = useDesktop((s) => s.busy)
   const loading = useDesktop((s) => s.loading)
@@ -80,7 +81,9 @@ export function Rail() {
       if ((i.publishedAt ?? 0) >= midnight) today++
     }
     return { today, unread, starred, resume }
-  }, [allItems])
+    // progressVersion：条目只原地更新（不换数组身份），「继续」计数要跟着重算。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allItems, progressVersion])
 
   // 「影音」的小圆点：此刻确有在播房间才亮（unknown 算在播、offline 不算，判据同 lib/media）。
   const liveNow = useMemo(() => allItems.some(isLiveNow), [allItems])

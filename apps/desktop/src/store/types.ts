@@ -55,6 +55,12 @@ export interface DesktopState {
   groups: SubscriptionGroup[]
   /** 全局全部条目(core store 的快照;视图查询从它派生)。 */
   allItems: MediaItem[]
+  /**
+   * 续播进度版本。`progress` 事件只**原地**改条目字段、不换 `allItems` 身份（播放时
+   * 每 5 秒一次，换身份会重渲染播放器整棵树）。依赖进度的派生视图（首页「继续观看」、
+   * rail 的继续计数、resume 节点列表）订阅这个计数来重算 —— 只加它，不加播放树。
+   */
+  progressVersion: number
   /** 当前视图的**未分页**结果(供详情/推荐等直接消费)。 */
   view: ViewResult
   settings: AppSettings | null
@@ -244,8 +250,12 @@ export type StoreGet = StoreApi<DesktopState>["getState"]
 export interface StoreCtx {
   set: StoreSet
   get: StoreGet
-  /** 重算当前视图 + 全局条目快照（输入未变时命中 memo，跳过 set）。 */
-  refreshView(): void
+  /**
+   * 重算当前视图 + 全局条目快照（输入未变时命中 memo，跳过 set）。
+   * `keepItems`：只更新 `view`、不替换 `allItems` 身份 —— 供 progress 事件使用
+   * （条目对象已原地更新，换数组身份会让播放器整树重渲染）。
+   */
+  refreshView(opts?: { keepItems?: boolean }): void
   /** store 内容变更（replace/append/patch/clear）时调用，让 refreshView 的 memo 失效。 */
   markItemsChanged(): void
   /** 订阅集变更后重读 + 重绘。 */

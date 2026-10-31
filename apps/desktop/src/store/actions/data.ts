@@ -62,13 +62,16 @@ export function createDataActions(ctx: StoreCtx): DataActions {
           // 把「图片隧道开关」同步到宿主门面(ui 的 MediaImage 直读,不经 React 树传参)。
           applyRuntimeSettings(settings)
           // 全量变更回调:条目/阅读态变化后重算视图（先失效 memo，再重算）。
-          // `progress`（只改了续播位置）时条目对象是**原地**更新的：不 set state，
-          // 消费方下次渲染自然读到新值。播放中每 5 秒一次全量 queryView + 播放器整树
-          // 重渲染都在这里省掉（2,500 条无明显感，20 万条就是卡顿源）。
-          // 已知上限：停留在「继续」视图且迷你播放器在播时，列表不实时重排 ——
-          // 切走再切回即可（切节点会重算视图）。
+          // `progress` 时条目对象是**原地**更新的：不换 allItems 身份（否则播放器整树
+          // 每 5 秒重渲染一次），只 bump progressVersion 让依赖进度的派生视图重算；
+          // 「继续」视图的成员与排序都由进度字段决定，必须连 view 一起重算。
+          // 已知上限：其它列表里的卡片进度条不在播放期间实时刷新（下次渲染/切节点时更新）。
           dl.store.subscribe((change) => {
-            if (change === "progress") return
+            if (change === "progress") {
+              set((s) => ({ progressVersion: s.progressVersion + 1 }))
+              if (get().selectedNodeId === "tab:resume") refreshView({ keepItems: true })
+              return
+            }
             markItemsChanged()
             refreshView()
           })

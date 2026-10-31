@@ -10,7 +10,7 @@
 
 import { Database } from "bun:sqlite"
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs"
-import { join } from "node:path"
+import { basename, dirname, join } from "node:path"
 
 import { createSidecarBrowser, locateSidecarBinary, nodeBackend, nodeJsBackend, nodeWsBackend } from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
@@ -70,16 +70,28 @@ export function backupDbIfNeeded(dbFile: string, dataDir: string): void {
 /**
  * 清凭证/完全重置时删掉历史备份（2026-11-01）：备份是整库 `VACUUM INTO`，包含明文
  * cookie。不删的话「已退出登录」只对当前库成立，旧备份里仍可恢复出凭证。
- * 只删 `rss-*.db`，不动其它文件。
+ * 同时清 `rss restore` 留在库旁边的 `<db>.pre-restore-*` 整库副本（同样是含凭证的全量库）。
  */
-export function purgeBackups(dataDir: string): number {
-  const dir = join(dataDir, "backups")
-  if (!existsSync(dir)) return 0
+export function purgeBackups(dataDir: string, dbFile?: string): number {
   let n = 0
-  for (const name of readdirSync(dir)) {
-    if (!name.startsWith("rss-") || !name.endsWith(".db")) continue
-    rmSync(join(dir, name), { force: true })
-    n += 1
+  const dir = join(dataDir, "backups")
+  if (existsSync(dir)) {
+    for (const name of readdirSync(dir)) {
+      if (!name.startsWith("rss-") || !name.endsWith(".db")) continue
+      rmSync(join(dir, name), { force: true })
+      n += 1
+    }
+  }
+  if (dbFile) {
+    const dbDir = dirname(dbFile)
+    const prefix = `${basename(dbFile)}.pre-restore-`
+    if (existsSync(dbDir)) {
+      for (const name of readdirSync(dbDir)) {
+        if (!name.startsWith(prefix)) continue
+        rmSync(join(dbDir, name), { force: true })
+        n += 1
+      }
+    }
   }
   return n
 }

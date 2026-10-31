@@ -19,7 +19,6 @@ import { PlayableMedia } from "@amoeba/player"
 import { MediaImage } from "@amoeba/ui"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { createPortal } from "react-dom"
-import { useParams } from "react-router"
 
 import { Icon } from "../../components/Icon.tsx"
 import { itemKey, mediaUrl } from "../../lib/media.ts"
@@ -269,8 +268,8 @@ function VideoListenBar() {
 export function VideoSessionStage() {
   const item = useVideoSession((s) => s.item)
   const started = useVideoSession((s) => s.started)
+  const stageKey = useVideoSession((s) => s.stageKey)
   const audioOnly = useVideoSession((s) => s.audioOnly)
-  const params = useParams()
   const homeRef = useCallback((el: HTMLElement | null) => setHomeContainer(el), [])
 
   // 会话状态变化（起播/听⇄看/关会话）后收敛一次 host 归属。
@@ -278,8 +277,11 @@ export function VideoSessionStage() {
     applyVideoPlacement()
   }, [item, started, audioOnly])
 
-  // 浮层可见：有会话、起播过、且不在本会话的播放页（对齐 MiniPlayer 判据）。
-  const visible = !!item && started && params.itemId !== item.id
+  // 浮层可见：有会话、起播过、且**本会话没有注册在播放页舞台**。
+  // ⚠️ 不能用 `params.itemId !== item.id`：条目被刷新移出镜像后 PlayerPage 早退、
+  // 插槽已卸载，但 URL 仍指着它 —— 那时必须显示小窗，否则 host 被留在隐藏 home，
+  // 媒体继续播却没有任何暂停/关闭入口。
+  const visible = !!item && started && stageKey !== itemKey(item)
   const listen = visible && !!item && audioOnly?.on === true && audioOnly.key === itemKey(item)
 
   return (

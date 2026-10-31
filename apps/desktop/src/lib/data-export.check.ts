@@ -11,7 +11,18 @@ import type { AppSettings, MediaItem, Subscription } from "@amoeba/core"
 
 import { buildDataExport, type DataExport } from "./data-export.ts"
 
-const subs = [{ id: "s1", channelKey: "bili:popular", title: "B站热门", enabled: true, info: {} }] as Subscription[]
+const subs = [
+  {
+    id: "s1",
+    channelKey: "bili:live",
+    title: "B站直播",
+    enabled: true,
+    // 订阅级凭证：core 明确支持 info.cookie（调用点显式值优先于 settings 快照）。
+    info: { roomIds: "1,2", cookie: "SESSDATA=sub-secret" },
+    createdAt: 0,
+    updatedAt: 0,
+  },
+] as Subscription[]
 const settings = {
   theme: "system",
   bilibiliCookie: "SESSDATA=secret",
@@ -28,10 +39,12 @@ const items = [
 const text = buildDataExport({ subscriptions: subs, groups: [], items, settings, now: 1_700_000_000_000 })
 const data = JSON.parse(text) as DataExport & { settings: Record<string, unknown> }
 
-assert.ok(!text.includes("secret"), "导出内容不得包含明文 cookie 值")
+assert.ok(!text.includes("secret"), "导出内容不得包含明文 cookie 值（settings 或订阅 info）")
 assert.ok(!Object.keys(data.settings).some((k) => k.endsWith("Cookie")), "settings 里的 *Cookie 字段必须剔除")
 assert.equal(data.settings.theme, "system", "非凭证设置应保留")
 assert.equal(data.credentialsOmitted, true, "要显式标记凭证已剔除")
+assert.equal(data.subscriptions[0]?.info?.cookie, undefined, "订阅 info.cookie 必须剔除")
+assert.equal(data.subscriptions[0]?.info?.roomIds, "1,2", "订阅 info 的非凭证字段应保留")
 
 const ids = data.reading.map((r) => r.itemId).sort()
 assert.deepEqual(ids, ["b", "c", "d"], "只导出有阅读态的条目（未读且无进度/星标的不导出）")
