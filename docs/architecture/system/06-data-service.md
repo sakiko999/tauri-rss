@@ -147,7 +147,10 @@
 - 不兼容 → 426 `protocol-mismatch`；desktop 强制重启服务，CLI 拒绝 attach。
 - 同 protocol 内只做加法。
 
-## 4. API 面（47 个 RPC 方法）
+## 4. API 面
+
+> 方法清单以 `@amoeba/service-protocol` 的 `RpcMethodMap` 为准（`bun run check --filter rpc`
+> 守「DataLayer 方法都有对应 RPC + 分发无遗漏」）；下面分组的数量是阅读辅助，不是契约。
 
 ### 4.1 分组
 
@@ -476,11 +479,11 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   恢复入口 = `rss restore --list` / `rss restore --db <库>`（服务停止时执行，覆盖前自动另存当前库）。
   桌面「设置 → 存储与诊断 → 导出全部数据」导出 JSON（订阅/分组/阅读态，**不含 cookie**）。
 - **验收实测**：
-  - `scripts/service-data-check.ts` 48 项全过（快照/事件 rev/阅读合批/settings/refresh/
+  - `scripts/service-data-check.ts` 全过（快照/事件 rev/阅读合批/settings/refresh/
     preview/loadMore/probe/cacheStats/幂等/退订清理/token 权限/迁移表/每日备份/回滚演练/
     job 取消/并发写）。
-  - `scripts/remote-data-layer-check.ts` 38 项全过（镜像读/写 RPC/事件/诊断/退订/取消/
-    崩溃 fail-closed/重启快照收敛）。
+  - `scripts/remote-data-layer-check.ts` 全过（镜像读/写 RPC/事件/诊断/退订/取消/
+    崩溃 fail-closed/换连自愈/重启快照收敛）。
   - `scripts/service-snapshot-size.ts`：快照 gzip 实测见 §9。
   - 真机 Tauri：`remote=true`、53 订阅/2525 条目/ready=true；UI 标已读 → 服务落库；
     CLI `attach rpc reading.markRead` → 桌面事件立即变已读；反向同样可见。

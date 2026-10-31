@@ -52,8 +52,8 @@ packages/
   platform/    ★ 平台名单一权威（R9）：channelKey 前缀 / URL 域名 / cookie 字段 / 展示名。
                零依赖叶子，host（governor）与 core（cookie 注入）共用。
   log/         零依赖叶子：域注册语义化日志（log="0" 全局关 / log:<域>="0" 按域关）
-  service-protocol/ ★ 服务 HTTP/WS 契约（47 个 RPC 方法 = 36 个 DataLayer 语义方法 +
-                   refreshAll/diagnostics/probe/danmaku + snapshot/event/job 类型）
+  service-protocol/ ★ 服务 HTTP/WS 契约（RpcMethodMap + snapshot/event/job 类型；
+                   方法与 DataLayer 方法的覆盖关系由 `rpc-coverage.check` 守，数量不写字面值）
   service-client/   ★ RemoteDataLayer：desktop/CLI 共用。读本地镜像、写 RPC、WS 事件；
                    运行时不 import core 根入口（避免拉进 crawler/resolve）
   ui/          ⚠️ 只剩原子件：desktop 仅引 MediaImage（原生直连，防盗链归 Rust 注入）与 fmtCount
@@ -70,8 +70,8 @@ packages/
 `src/components/app/*.tsx` = 业务件（读 `useDesktop`/`usePrefs` 或吃 domain 类型）。
 判据 = 有没有 `useDesktop`/`usePrefs`/`@amoeba/core` 类型 / domain 常量。文件名统一 PascalCase
 （仅 `main.tsx`/`router.tsx` 这类入口保留小写）。位置权威 = URL（`/v/:nodeId`、`/play/:itemId`）。
-store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入口，内含 `refreshView()`，
-**必须先修 `selectedNodeId` 再调**；8 处调用，**不要**用于 `toggleSubEnabled` —— 启停不改
+store 收敛点：`syncSubscriptions()`（变更后「重读+重绘」唯一入口，内含 `refreshView()`；
+选中项被删时自己回 `tab:all`，调用方只管改数据；**不要**用于 `toggleSubEnabled` —— 启停不改
 内容集）· `lib/useLatestOnly.ts`（请求世代守卫，只能丢弃不能取消）。
 
 ## 界面守则：布局负责解释，文案只补布局说不出的
@@ -187,8 +187,8 @@ bun run check                               # ★ 统一检查入口：static+co
 bun run check --layer service       # 起真实数据服务（慢）；`--layer all` 六层、`--list` 列清单
 bun run lint                                # oxlint 静态检查（默认 correctness 规则；警告数不作为门禁）
 bun run fmt / fmt:check                     # bun fmt 全仓格式化 / 只检查不写（配置在 bunfig.toml）
-bun scripts/service-data-check.ts           # 服务数据链路 48 项自检（含 job 取消/并发写/回滚）
-bun scripts/remote-data-layer-check.ts      # 远端镜像 38 项自检（含取消/崩溃 fail-closed/重启收敛）
+bun scripts/service-data-check.ts           # 服务数据链路自检（含 job 取消/并发写/回滚）
+bun scripts/remote-data-layer-check.ts      # 远端镜像自检（含取消/崩溃 fail-closed/换连收敛）
 bun scripts/service-snapshot-size.ts        # 快照体积实测（原始 vs gzip，默认桌面 dev 库副本）
 cargo build -p amoeba-browser        # CLI 浏览器 sidecar（--browser 才用；需 VS2022 环境）
 cargo build -p amoeba-runtime        # Bun 运行时启动器（全局优先/缺失下载）
