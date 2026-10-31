@@ -90,6 +90,7 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/core/src/example/cookie-sync.check.ts",
     "packages/core/src/example/passive-mode.check.ts",
     "packages/resolve/src/example/scheduler.check.ts",
+    "packages/host/src/example/tab-idle-close.check.ts",
     "packages/resolve/src/example/live-photo.check.ts",
     "packages/resolve/src/example/video-post.check.ts",
     "packages/crawler/src/example/passive-buffer.check.ts",

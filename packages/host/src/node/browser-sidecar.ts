@@ -34,6 +34,15 @@ const CLOSE_TIMEOUT_MS = 5_000
  */
 const IDLE_CLOSE_MS = 3 * 60_000
 
+/**
+ * 单个 lane tab 的空闲回收。整树 3 分钟回收只在**整个浏览器**闲下来才触发；别的
+ * lane 持续在用时，抖音/小红书这类重页面会一直常驻（实测 douyin 单 tab ~440MB、
+ * xhs 150–260MB，2026-11-01 任务管理器）。到点关 target、保留句柄，下次使用重建
+ * 并重新导航（渠道本就处理「页面被导航走」：href 对不上就重新收首屏）。
+ * 5 分钟：抓取/翻页间隔内的连续使用不受影响，隔一轮刷新（默认 TTL ≥30min）就回收。
+ */
+const TAB_IDLE_CLOSE_MS = 5 * 60_000
+
 const SIDECAR_NAME = "amoeba-browser.exe"
 
 export interface SidecarBrowserOptions {
@@ -48,6 +57,8 @@ export interface SidecarBrowserOptions {
   images?: boolean
   /** 空闲回收毫秒（0 = 不回收）。默认 3 分钟；调小值用于生命周期回归。 */
   idleCloseMs?: number
+  /** 单 lane tab 空闲回收毫秒（0 = 不回收）。默认 5 分钟；调小值用于生命周期回归。 */
+  tabIdleCloseMs?: number
 }
 
 /** 与 sidecar 默认值一致；CLI 显式传参时以调用方为准。 */
@@ -93,6 +104,8 @@ interface RunningSidecar {
 class SidecarDriver implements BrowserDriver {
   /** 空闲回收(backend.closeIfIdle 读这个字段)——生产路径的「闲时归零」就靠它。 */
   readonly idleCloseMs: number
+  /** 单 tab 空闲回收(backend 的 CdpBrowserTab 读)——见 TAB_IDLE_CLOSE_MS 注释。 */
+  readonly tabIdleCloseMs: number
   private running: RunningSidecar | null = null
   private starting: Promise<number> | null = null
   private readonly profileDir: string
@@ -100,6 +113,7 @@ class SidecarDriver implements BrowserDriver {
   constructor(private readonly opts: SidecarBrowserOptions) {
     this.profileDir = opts.profileDir ?? defaultSidecarProfileDir()
     this.idleCloseMs = opts.idleCloseMs ?? IDLE_CLOSE_MS
+    this.tabIdleCloseMs = opts.tabIdleCloseMs ?? TAB_IDLE_CLOSE_MS
   }
 
   async ensureReady(): Promise<number> {

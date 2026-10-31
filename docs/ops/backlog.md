@@ -18,8 +18,15 @@
 - [ ] **崩溃自愈真机验证**〔11-01〕：Tauri 下杀服务进程，确认 Rust `service_endpoint` 重新
       spawn + 渲染层换连（`remote-data-layer-check` 只覆盖了客户端换连逻辑，未覆盖真实
       `ensure_service` 重拉）。→ 06 §2.5 / `packages/service-client/src/index.ts`
-- [ ] **WebView2 生命周期**：LRU 驱逐（`/json/close`）后 renderer 不残留；release 下 GPU 进程
-      private 是否下降、关 lane 后 renderer 是否释放、空闲 3 分钟是否归零。
+- [ ] **WebView2 生命周期**：lane tab 空闲回收已加（sidecar 5min，2026-11-01，回归
+      `tab-idle-close.check`）；仍待真机验证：LRU 驱逐（`/json/close`）后 renderer 不残留、
+      回收后下次抓取自动重建导航；release 下 GPU 进程 private 是否下降、关 lane 后 renderer
+      是否释放、空闲 3 分钟是否归零。
+- [ ] **抓取浏览器内存 A/B**〔11-01〕（调研结论见 `docs/risk/crawler-risk-control.md` §3.14）：
+      逐项实测 `--enable-low-end-device-mode`、`--js-flags` 追加 `--optimize-for-size` /
+      `--memory-saver-mode`（必须合并进唯一一条 `--js-flags`）、`--max-web-media-player-count=30~50`、
+      Prerender2/Preloading holdback。测法 = private bytes + `Runtime.getHeapUsage` /
+      `Memory.getDOMCounters`，同时确认 XHR 捕获与 SSR 读取不回归。
 - [ ] **启动器兼容性**：Bun 自动下载在公司代理 / 杀软 / 无签名场景的表现（版本闸门已实现）。
       → 06 §12
 

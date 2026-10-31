@@ -40,7 +40,11 @@ export const BLOCKED_URL_PATTERNS = [
   "*.otf",
   "*.mp4",
   "*.m3u8",
+  "*.ts",
+  "*.m4s",
   "*.webm",
+  "*.flv",
+  "*.mov",
   "*.mp3",
   "*.m4a",
   "*doubleclick.net*",
@@ -79,6 +83,15 @@ export interface BrowserDriver {
   resetProfile?(): Promise<string>
   /** 空闲回收毫秒数；不设 = 不回收（CLI 一次性进程不需要）。 */
   idleCloseMs?: number
+  /**
+   * **单个 lane tab** 的空闲回收毫秒数；不设 = 不回收。
+   *
+   * 与 `idleCloseMs`（整个浏览器）互补：别的 lane 持续在用时浏览器整体不会空闲，
+   * 抖音/小红书这类重页面就会一直常驻（实测单 tab 150–440MB）。到点后关 target、
+   * 保留句柄 —— 下次 evaluate 走既有的「target 丢失自愈」重建（渠道本就要处理
+   * 「页面被导航走」：`href` 对不上就重新导航收首屏，douyin/xhs 均如此）。
+   */
+  tabIdleCloseMs?: number
   /** 在通用拦截表之外追加的 URL 模式。 */
   extraBlockedUrls?: string[]
 }
@@ -99,6 +112,9 @@ interface TabDeps {
   connector: CdpConnector
   activity: { begin(): void; end(): void }
   blockedUrls: string[]
+  /** lane tab 空闲回收（0 = 不回收）。 */
+  tabIdleCloseMs: number
+  onTabIdleClosed(key: string): void
 }
 
 /** Runtime.evaluate + 异常归一 —— 默认 page 与每个 lane tab 共用，错误文案只此一份。 */
@@ -139,12 +155,27 @@ class CdpBrowserTab implements BrowserTab {
   private ensuring: Promise<void> | null = null
   /** 最近一次拿到的端口：close() 用它关 target，绝不重新 open（关闭路径反而拉起浏览器）。 */
   private lastPort: number | null = null
+  /** 本 tab 在途 CDP 命令数（tab 空闲回收只在 0 时执行）。 */
+  private tabBusy = 0
+  private tabIdleTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     readonly key: string,
     private readonly deps: TabDeps,
   ) {
-    this.channel = new CdpChannel(`tab:${key}`, deps.connector, deps.activity)
+    // activity 双计：全局计数（整机空闲回收）+ 本 tab 计数（tab 空闲回收）。
+    const outer = deps.activity
+    this.channel = new CdpChannel(`tab:${key}`, deps.connector, {
+      begin: () => {
+        this.tabBusy++
+        outer.begin()
+      },
+      end: () => {
+        this.tabBusy = Math.max(0, this.tabBusy - 1)
+        this.touchTabIdle()
+        outer.end()
+      },
+    })
   }
 
   /**
@@ -228,11 +259,35 @@ class CdpBrowserTab implements BrowserTab {
     await this.deps.afterTargetChange()
   }
 
+  /** tab 空闲计时：每次有命令就重排；没有 target（从未打开/已回收）不挂计时。 */
+  private touchTabIdle(): void {
+    const ms = this.deps.tabIdleCloseMs
+    if (!ms) return
+    if (this.tabIdleTimer) clearTimeout(this.tabIdleTimer)
+    if (!this.targetId) return
+    this.tabIdleTimer = setTimeout(() => void this.closeTabIfIdle(), ms)
+  }
+
+  /** tab 空闲到点：还有在途命令就再等一轮（长滚动/长轮询不能被打断）。 */
+  private async closeTabIfIdle(): Promise<void> {
+    this.tabIdleTimer = null
+    if (this.tabBusy > 0 || !this.targetId) {
+      this.touchTabIdle()
+      return
+    }
+    this.deps.onTabIdleClosed(this.key)
+    await this.close().catch(() => {})
+  }
+
   abortPending(reason: string): void {
     this.channel.abortPending(reason)
   }
 
   async close(): Promise<void> {
+    if (this.tabIdleTimer) {
+      clearTimeout(this.tabIdleTimer)
+      this.tabIdleTimer = null
+    }
     await this.channel.closeWs()
     if (this.targetId) {
       const id = this.targetId
@@ -486,6 +541,9 @@ export class CdpBrowserBackend implements BrowserBackend {
       connector: this.connector,
       activity: { begin: () => this.begin(), end: () => this.end() },
       blockedUrls: this.blockedUrls,
+      tabIdleCloseMs: this.driver.tabIdleCloseMs ?? 0,
+      onTabIdleClosed: (k) =>
+        browserLog.tabIdleClose({ key: k, minutes: Number(((this.driver.tabIdleCloseMs ?? 0) / 60_000).toFixed(1)) }),
     })
     this.tabs.set(key, tab)
     return tab

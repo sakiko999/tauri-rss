@@ -826,6 +826,44 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   此前生产侧没设、抓取浏览器随服务常驻不回收。按「在途 CDP 命令数 = 0」判定，长登录/
   长轮询不会被打断；profile 留在磁盘上，下次用自动重启（实测重建 ~0.3s，`tabs` 清空后
   lane 句柄自愈重建）。回归：连续 3 轮「起 → 空闲 8s 进程归零 → 再起」（`idleCloseMs=5s`）。
+- **单 lane tab 空闲回收（2026-11-01）**：整树回收只在**整个浏览器**闲下来才触发；别的 lane
+  持续在用时，抖音/小红书这类重页面会一直常驻（任务管理器实测 douyin 单 tab ~440MB、
+  xhs 150–260MB）。sidecar 的 `TAB_IDLE_CLOSE_MS = 5min`（`tabIdleCloseMs` 可覆盖）到点关
+  **target**、保留 lane 句柄 —— 下次使用走既有「target 丢失自愈」重建，渠道按「页面被导航走」
+  重新导航收首屏（douyin/xhs 均已如此处理，`fetchMoreViaBrowser` 的 href 判据）。按「本 tab
+  在途 CDP 命令数 = 0」判定，长滚动/长轮询不打断。回归：
+  `bun packages/host/src/example/tab-idle-close.check.ts`（假 CDP，无网络）。
+- **内存优化调研结论（2026-11-01，联网调研 + 源码核对）**——围绕「抖音单 tab ~440MB」：
+  - **采用**：① 单 lane tab 空闲回收（上条）——WebView2 官方在
+    [WebView2Feedback #2121](https://github.com/MicrosoftEdge/WebView2Feedback/issues/2121)
+    也明确建议应用自己做 tab discarding，关 target 是唯一确定释放 renderer 私有内存的手段
+    （每 tab 独立 renderer，Chromium 不复用）。② 资源拦截表补 `*.ts/*.m4s/*.flv/*.mov`
+    （媒体段对抓取零价值；播放用的直链在桌面端自己拉，不经抓取浏览器）。
+  - **明确不做**（附依据）：
+    - `--process-per-site` / `--renderer-process-limit` / 关 site isolation：CDP 附着下
+      Chromium 禁止同站 renderer 共享（[#5135](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5135)），
+      且本仓 2026-10-22 实测合并后关 tab 不释放（320MB 常驻）。
+    - `Page.setWebLifecycleState("frozen")` 冻结空闲 lane：省 CPU 但**不省内存**——常开的
+      `--disable-renderer-backgrounding`（屏外 shown 的前提）让 renderer 恒「前台」，
+      MemoryPurgeManager 的冻结后 purge 不会执行；解冻还要 active+activate 两次往返。
+    - `TrySuspendAsync` / `MemoryUsageTargetLevel=Low`：宿主 API，但 lane 是 CDP
+      `Target.createTarget` 建的窗口、sidecar 只持有一个 controller，按 lane 拿不到对象
+      （要「一 lane 一 controller」的架构改动）；TrySuspend 还要求 `IsVisible=false`，
+      与屏外 shown 方案冲突，且「被 DevTools 检查」会阻止睡眠。
+    - 拦 `sw.js` / `ServiceWorker.unregister`：注册脚本拦不住（Puppeteer #15135）， unregister
+      跨会话持久且可能弄坏依赖 SW 的页面；SW 空闲 30s 本就自动退出，不是常驻大头。
+    - `--disable-gpu`（整个 GPU 进程，~270MB private）：改 canvas/WebGL 指纹，违反
+      「不动指纹」原则（§1）。
+    - 禁 JS（`scriptEnabled=false` / `--lite-mode`）：抖音没有 SSR state，被动渠道靠页面
+      自己发 `/aweme/post`，断 JS = 断数据源。
+    - `--autoplay-policy=user-gesture-required`：muted 视频绕过 gesture 锁（Chromium 文档），
+      抖音 feed 恰好默认静音 → 无效。
+  - **待 A/B 的低置信项**（都在 backlog §A，测法：private bytes + `Runtime.getHeapUsage` /
+    `Memory.getDOMCounters`，同时确认 XHR 捕获与 SSR 读取不回归）：`--enable-low-end-device-mode`
+    （GPU/解码缓存预算降档，WebView2 是否接受未知）；`--js-flags` 追加 `--optimize-for-size` /
+    `--memory-saver-mode`（semi-space 可能已被 max-old-space-size 隐式收缩，增量或为 0）；
+    `--max-web-media-player-count=30~50`（防长尾 player，不是降常态）；Prerender2/Preloading
+    holdback（只有站点真预渲染才有收益）。
 - **service 侧浏览器默认关图**（`--no-images` → `--blink-settings=imagesEnabled=false`，
   2026-10-28）：`imagesEnabled` 只禁 `<img>` 加载/渲染，不动 DOM 属性与 canvas 2D；
   抓取只要 SSR DOM/接口状态，登录二维码走 img.src 属性 / canvas.toDataURL / 纯 HTTP，

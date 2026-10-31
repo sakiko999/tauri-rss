@@ -73,6 +73,11 @@ export const browserLog = createLogDomain("host:browser", {
       level: "info",
       text: (ctx: { minutes: number }) => `浏览器空闲 ${ctx.minutes} 分钟,已关闭(下次使用自动重启)`,
     },
+    tabIdleClose: {
+      level: "info",
+      text: (ctx: { key: string; minutes: number }) =>
+        `lane tab 空闲 ${ctx.minutes} 分钟,已回收 target(${ctx.key};下次使用自动重建并重新导航)`,
+    },
     uiSweep: {
       level: "info",
       text: (ctx: { count: number }) => `已关闭 ${ctx.count} 个 Edge 自带界面 target(省 ~200MB private)`,
