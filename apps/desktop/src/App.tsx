@@ -42,6 +42,7 @@ import { CommandPalette } from "./views/palette/CommandPalette.tsx"
 import { useAudioSession } from "./views/player/audio-session.ts"
 import { MiniPlayer } from "./views/player/MiniPlayer.tsx"
 import { PlayerPage } from "./views/player/PlayerPage.tsx"
+import { VideoSessionStage } from "./views/player/VideoSessionStage.tsx"
 
 export default function App() {
   const params = useParams()
@@ -188,6 +189,8 @@ export default function App() {
       <SocialDetailModal />
       <OnboardingModal />
       <MiniPlayer />
+      {/* 视频会话的常驻宿主 + 右下小窗（路由切走不打断播放；播放页只是它的插槽）。 */}
+      <VideoSessionStage />
       <Toaster />
     </div>
   )

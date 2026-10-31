@@ -86,7 +86,7 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
 | 时间 | 当前 / `-剩余` |
 | 控件 | −15 / 66px 主键 / +30；倍速、睡眠定时；右侧是宿主给的次要动作（听⇄看、下一条、打开原文） |
 | 右栏（desktop 组装） | 章节（有数据才出现）+ 播放队列 + 来自同一订阅（按当前条目往后数，查 `known` 覆盖预览单集）；简介在**播放器下方** |
-| 迷你条 | 播客单集的会话级播放器（`views/player/audio-session.ts`）：离开播放页继续播，底部浮条可暂停/回页/关闭 |
+| 迷你条 | 播客单集的会话级播放器（`views/player/audio-session.ts`）：离开播放页继续播，底部浮条可暂停/回页/关闭。视频会话的浮层形态见下节 |
 
 - **波形不进 React state**：rAF 直接读 `mediaRef.currentTime`，暂停时靠 `timeupdate` 重画一帧
   —— 4Hz 的 state 会让条形一顿一顿地跳。`prefers-reduced-motion` 下只画静态帧。
@@ -99,14 +99,46 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
   `ResolveResult` / `ResolvePlayback.chapters` → `PlayableMedia.onChapters` →
   播放页右栏 + 波形刻度，点击走 `onMediaControl.seek`。**没有章节的条目一律缺省**
   （播客 RSS、喜马拉雅单集、YouTube 都不带），右栏那一栏不渲染。
-- **会话级播放器**：播客单集不走 `PlayableMedia`（页面一卸载媒体元素就没了），
-  由 `audio-session.ts` 的模块级 `<audio>` 持有，播放页与迷你条是它的两个控制面；
-  `AudioShell` 因此有 `ownElement=false`（只做控制面）。听视频是 DASH，仍归
-  `PlayableMedia`，离开播放页即停（不在这条会话里）。
+- **会话级播放器（两个，同构）**：播客单集走 `audio-session.ts`（模块级 `<audio>` 挂 body，
+  播放页与迷你条是它的两个控制面，`AudioShell` 因此有 `ownElement=false`）；视频/直播/听视频
+  走 `video-session.ts` + `VideoSessionStage`（见下节）。两会话互斥（任一路起播先暂停另一路）、
+  播完自动下一条统一在 `session-queue.ts`。
 - **不自造媒体状态机**：state/ops 复用 `useVideoElement`、键盘复用 `useContainerInteractions`
   （音频页 ←/→ = −15/+30）；听模式能否真剥音轨由播放器 `onAudioOnlyChange` 回报，
   剥不动（durl 混合轨）时页面按视频版式。
 - **刻意不做**：节目笔记（单集简介就是它）。
+
+## 视频会话与小窗（路由切走不打断，2026-10-31）
+
+视频/直播（含听视频）的整条播放栈（解析/引擎/弹幕/控件）常驻 App 层：`VideoSessionStage`
+经 `createPortal` 把 `PlayableMedia` 渲染进**模块级 host div**（React 树外，同 audio-session
+的元素常驻思路），host 的**父容器**由 `video-session.moveHost` 命令式 `appendChild` 移动——
+播放页插槽（`VideoStageSlot`）↔ 右下小窗（画面模式）↔ 隐藏 home（听模式，`<audio>` 不受
+display:none 影响、音频照播）。同文档移动 DOM 不中断 MSE 播放，引擎零感知（hls/dash/flv
+attach 的是元素本身；DanmakuLayer 随 host 移动，弹幕连接跨路由保持）。
+
+- **纪律**：host 永不由 React 直接渲染（否则父链 reconcile 会把节点搬走）；移动走 `moveHost`
+  单入口（幂等 + 移动前退出全屏）；插槽注册必须 `useLayoutEffect`（passive cleanup 晚于
+  DOM 移除，会把 host 带进死树）；home 容器永在 DOM（保 `useMediaStream` 的
+  `video.isConnected` 起播守卫）。
+- **浮层判据**：`item && started && params.itemId !== item.id`（对齐迷你条）；从未起播的会话
+  离页 3s 后自动 close（不飘占位小窗；StrictMode 的模拟卸载在同一帧重新注册，会取消它）。
+- **浮层形态**：画面模式 = host + 帧 chrome（播放/静音/✕ + 透明点击层单击回页，顺带挡掉
+  VideoShell 的 hover 控件——小窗不需要整条 PlayerControls）；听模式 = 复用 `.mp-*` 的右下
+  卡片。z-index 38（与迷你条同层、低于浮层令牌），`bottom: calc(var(--sp-4) + 68px)` 让位
+  迷你条（两浮层同显不叠）。live/错误态原样出现在 host 内（错误块可重试，不自动关闭）。
+- **播完自动下一条（两会话统一，`session-queue.ts`）**：在播放页 → 导航下一条（URL 权威）；
+  浮层态 → 会话内换条目**不导航**（用户在浏览别处，跳页 = 抢走视图；回页
+  `playTo(会话条目)` 天然对齐 URL）；只续**同族**（audio→audio / video·live→video·live）。
+  ⚠️ 先取 next 再出队（出队后 indexOf 恒 -1，next 永远取不到）。
+- **互斥对称**：任一路 `play` 先暂停另一路（video host 的捕获监听 / audio-session 的
+  playInterceptor 注入）——开新会话与浮层恢复播放两条路径都覆盖，两路声音永不叠加。
+- **ShortVideoView 互斥**：进短视频视图一次性 pause 视频会话（短视频自带声自动播；它本身
+  刻意「卸载即停」不入会话）。
+- **player 包边界**：`PlayableMedia` 不感知会话——唯一改动是 `onMediaControl` 载荷扩展
+  （`{seek}` → `{seek, togglePlay, pause, toggleMute}`，浮层控件需要）。
+- **刻意不做**：小窗拖动（第一版固定右下）；OS 级 Picture-in-Picture API；ShortVideoView
+  并入会话（见 `ShortVideoView.tsx` 头注释）。
 
 ## 统计信息（仿 YouTube 右键）
 

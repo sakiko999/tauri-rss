@@ -192,10 +192,17 @@ export function PlayableMedia({
    */
   onChapters?: (chapters: PlaybackChapter[]) => void
   /**
-   * 把「跳转」暴露给宿主（章节栏点击定位）。元素换了（切档/听⇄看）会重新给一次，
-   * 卸载给 null。
+   * 把「媒体控制」暴露给宿主（章节栏点击定位 / 迷你条·小窗的播放暂停与静音）。
+   * 元素换了（切档/听⇄看）会重新给一次，卸载给 null。
    */
-  onMediaControl?: (ctl: { seek: (sec: number) => void } | null) => void
+  onMediaControl?: (
+    ctl: {
+      seek: (sec: number) => void
+      togglePlay: () => void
+      pause: () => void
+      toggleMute: () => void
+    } | null,
+  ) => void
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -368,7 +375,8 @@ export function PlayableMedia({
     onChaptersRef.current?.(resolved?.chapters ?? [])
   }, [resolved])
 
-  // 把跳转暴露给宿主(章节栏点击定位)。换元素(切档/听⇄看)重新给一次,卸载给 null。
+  // 把媒体控制暴露给宿主(章节定位 / 会话浮层的播放暂停与静音)。换元素(切档/听⇄看)
+  // 重新给一次,卸载给 null。
   const onMediaControlRef = useRef(onMediaControl)
   onMediaControlRef.current = onMediaControl
   useEffect(() => {
@@ -384,6 +392,15 @@ export function PlayableMedia({
         } catch {
           // 未加载完时个别状态抛 InvalidStateError,忽略(与续播同款处理)。
         }
+      },
+      togglePlay: () => {
+        // 与 useVideoElement.togglePlay 同款:被 autoplay policy 拦下就留在暂停态。
+        if (el.paused) void el.play().catch(() => {})
+        else el.pause()
+      },
+      pause: () => el.pause(),
+      toggleMute: () => {
+        el.muted = !el.muted
       },
     })
     return () => onMediaControlRef.current?.(null)

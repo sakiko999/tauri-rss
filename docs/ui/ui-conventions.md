@@ -77,6 +77,11 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 - ⚠️ **浮层必须处理视口**：共享 `Menu`（Radix DropdownMenu）已配 `collisionPadding`，
   `.menu` 用 `--radix-dropdown-menu-content-available-height` 限高并内部滚动；不要在业务
   组件里自造 absolute 菜单/提示层，否则窗口底部会贴边或顶出视口。
+- **常驻播放浮层的层级**（2026-10-31）：`.mini-player`（播客迷你条）与 `.vmini`/`.vmini-listen`
+  （视频会话小窗/听条）同用**手写 z-index 38**（低于 `--z-drawer:40`/`--z-modal:50`，高于
+  正文——它们是内容伴生控件不是浮层令牌族）；右下角浮层 `bottom: calc(var(--sp-4) + 68px)`
+  让位迷你条的 68px 底条（两浮层同显不叠，常量偏移不做条件判断）。机制见
+  `docs/playback/playback.md` 视频会话与小窗节。
 - ⚠️ **`.menu` 必须是 Radix popper wrapper 的在流子元素**（2026-10-19）：Radix 的 floating
   元素是外层 `div[data-radix-popper-content-wrapper]`（`position:fixed; transform`），
   `.menu` 只是它的子节点。给 `.menu` 写 `position:fixed/absolute` 会脱离文档流 → wrapper

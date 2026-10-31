@@ -193,6 +193,97 @@
     max-width: none;
   }
 }
+
+/* ── 视频会话（VideoSessionStage）：常驻宿主 + 右下小窗/听条 ─────────────
+   与迷你条同一层（z-index 38，低于浮层高于正文）；bottom 固定抬高 68px 让位
+   迷你条（两浮层同显不叠；无迷你条时只是略高，不做条件偏移）。 */
+.video-session-home {
+  display: none; /* host 的隐藏归宿：永在 DOM，不可见（听模式音频照播） */
+}
+/* host（React 树外）在插槽/小窗里都占满容器宽 —— VideoShell 的 w-full 以它为基准。 */
+.video-session-host {
+  width: 100%;
+}
+/* 播放页舞台插槽：host 移入前后都占住 16:9 防首帧塌高（黑底 = 舞台惯例）。 */
+.video-stage-slot {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+/* 听模式版式的高度由整张播放面（AudioShell 卡片）决定，插槽不再撑 16:9。 */
+.stage[data-audio="on"] .video-stage-slot {
+  aspect-ratio: auto;
+  background: none;
+}
+.vmini {
+  position: fixed;
+  right: var(--sp-5);
+  bottom: calc(var(--sp-4) + 68px);
+  z-index: 38;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, calc(100vw - var(--rail) - var(--sp-8)));
+  overflow: hidden;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--r-lg);
+  background: #000; /* 舞台黑底；圆角由外框裁切（player 包方角契约不变） */
+  box-shadow: var(--shadow-pop, 0 12px 32px rgb(0 0 0 / 45%));
+}
+.vmini-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 3px 5px;
+  background: rgb(15 15 18 / 92%);
+}
+.vmini-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: rgb(255 255 255 / 80%);
+}
+.vmini-btn:hover {
+  background: rgb(255 255 255 / 12%);
+  color: #fff;
+}
+.vmini-host {
+  position: relative;
+}
+.vmini-slot {
+  position: relative;
+  width: 100%;
+}
+/* 透明点击层：单击回播放页；顺带挡掉 VideoShell 的 hover 控件（小窗只要帧chrome）。 */
+.vmini-tap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+/* 听模式条：与播客迷你条同款视觉（复用 .mp-* 子类），右下卡片而非全宽底条。 */
+.vmini-listen {
+  position: fixed;
+  right: var(--sp-5);
+  bottom: calc(var(--sp-4) + 68px);
+  z-index: 38;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-3);
+  width: min(340px, calc(100vw - var(--rail) - var(--sp-8)));
+  padding: 7px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--r-lg);
+  background: var(--color-background-elev);
+  box-shadow: var(--shadow-pop, 0 12px 32px rgb(0 0 0 / 45%));
+}
 /* 剧场模式:单列 + 收起右栏(队列/同订阅),宽度全给画面。
    用 **data 属性**(不是新类名):上面 90-responsive 的 1280 断点也给 .player-layout
    收单列,属性选择器特异性更高 → 两边同时命中是同一个结果,不会打架;窗口变宽时

@@ -25,6 +25,7 @@ import { scrollBehavior } from "../../lib/motion.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useViewNavigate } from "../../router.tsx"
 import { useDesktop } from "../../store/index.ts"
+import { useVideoSession } from "../player/video-session.ts"
 
 /** 单个 slide。active=false 时只渲染 poster 占位（不挂播放器）。 */
 function Slide({
@@ -115,6 +116,12 @@ export function ShortVideoView() {
   useEffect(() => {
     if (view.hasMore && items.length > 0 && activeIdx >= items.length - 3) growPage(nodeId ?? "")
   }, [activeIdx, items.length, view.hasMore, nodeId, growPage])
+
+  // 短视频流自带声自动播 —— 进视图先暂停视频会话（小窗若在播会双声；它刻意「卸载即停」
+  // 不入会话，这里只是一次性让路）。StrictMode 双挂幂等（pause 已暂停是 no-op）。
+  useEffect(() => {
+    useVideoSession.getState().ctl?.pause()
+  }, [])
 
   // IntersectionObserver 跟踪「哪一屏在视口中央」→ activeIdx。
   useEffect(() => {
