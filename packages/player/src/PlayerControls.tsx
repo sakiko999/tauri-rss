@@ -7,8 +7,9 @@
  *   - 进度条 4px 恒定、已播 **#00AEEC**(B 站蓝)、缓冲白 30%、轨道白 20%;
  *   - 点播右侧顺序:清晰度(文本) → 倍速(文本,恒为「倍速」)→ 音量 → 弹幕开关
  *     → 宽屏 → 全屏;左侧:播放 → `01:00 / 02:10`(补零);
- *   - 直播(B 站直播播放器同款分流):左侧 播放 → 音量 → 已播 `407:26:23`(补零
- *     hh:mm:ss),右侧 清晰度 → 弹幕开关 → 宽屏 → 全屏;无倍速/无时长。
+ *   - 直播(B 站直播播放器同款分流):左侧 播放 → 回直播(滞后时) → 音量 → 已播
+ *     `407:26:23`(补零 hh:mm:ss),右侧 清晰度 → 弹幕开关 → 宽屏 → 全屏;
+ *     无倍速/无时长/**无进度条**(缓冲段一直伸缩观感很怪,用户明确要求隐藏)。
  *   - 弹幕开关 = 「弹」框 + 开启时品牌粉对勾(对齐 B 站直播控件行);
  *     **没有弹幕输入/发送**(B 站的发送条在视频下方页面里,本项目不提供写操作)。
  *
@@ -72,11 +73,13 @@ export function PlayerControls({
   const live = mode === "live" || (mode === undefined && state.live)
   return (
     <div className="flex flex-col bg-linear-to-t from-black/80 via-black/40 to-transparent pt-2 pb-0.5 text-white">
-      {/* 进度行(直播:缓冲指示 + 「回直播」) */}
-      <div className="flex items-center gap-3 px-3">
-        <MediaLiveEdgeButton state={state} ops={ops} clock={clock} />
-        <MediaTimeRange state={state} ops={ops} clock={clock} />
-      </div>
+      {/* 进度行:仅点播。直播没有固定时长,缓冲条会一直伸缩(观感很怪),
+          按用户要求隐藏 —— 只保留「回直播」入口(滞后于直播边缘时出现)。 */}
+      {live ? null : (
+        <div className="flex items-center gap-3 px-3">
+          <MediaTimeRange state={state} ops={ops} clock={clock} />
+        </div>
+      )}
 
       {/* 控件行:35px / 12px 边距 / 无分隔线(B 站实测) */}
       <div className="flex h-[35px] items-center px-3 text-[14px]">
@@ -84,6 +87,7 @@ export function PlayerControls({
         {live ? (
           <>
             {/* 直播:B 站把音量放在左侧,时间 = 已播 hh:mm:ss */}
+            <MediaLiveEdgeButton state={state} ops={ops} clock={clock} />
             <MediaVolumeSlider state={state} ops={ops} />
             <MediaTimeDisplay state={state} clock={clock} mode="live" />
           </>
