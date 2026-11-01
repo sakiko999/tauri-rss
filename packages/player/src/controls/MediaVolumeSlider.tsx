@@ -45,58 +45,62 @@ export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: 
         className="flex h-[22px] w-10 items-center justify-center text-white/80 hover:text-white"
       />
       {open && (
-        <div className="absolute bottom-full left-1/2 mb-2 flex h-[100px] w-8 -translate-x-1/2 flex-col items-center rounded-[2px] bg-[#141414]/90">
-          {/* 音量数字(B 站 32×28 区域,12px #e5e9ef) */}
-          <span className="flex h-7 items-center text-xs text-[#e5e9ef] tabular-nums">{volumePct}</span>
-          {/* 垂直滑条区:32×60;轨道 2px,滑块 12px 蓝点 */}
-          <div
-            ref={trackRef}
-            role="slider"
-            tabIndex={0}
-            aria-label="音量"
-            aria-orientation="vertical"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={volumePct}
-            className="relative flex w-full cursor-pointer touch-none items-center justify-center outline-none"
-            style={{ height: TRACK_H }}
-            onPointerDown={(e) => {
-              e.preventDefault()
-              ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-              setFromY(e.clientY)
-            }}
-            onPointerMove={(e) => {
-              if (e.buttons) setFromY(e.clientY)
-            }}
-            onPointerUp={(e) => {
-              setFromY(e.clientY)
-              try {
-                ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
-              } catch {
-                // ignore
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "ArrowUp" || e.key === "ArrowRight") {
-                e.preventDefault()
-                nudge(0.05)
-              } else if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
-                e.preventDefault()
-                nudge(-0.05)
-              }
-            }}
-          >
-            {/* 轨道 2px 浅灰 + **已调节部分 2px 蓝色**(B 站 .bui-bar,从底部到滑块) */}
-            <div className="relative h-full w-0.5 overflow-hidden rounded-[1.5px] bg-[#e7e7e7]">
-              <div className="absolute inset-x-0 bottom-0 bg-[#00aeec]" style={{ height: `${volumePct}%` }} />
-            </div>
+        // ⚠️ 面板与按钮之间的 8px 间隙必须由**本悬停子树**覆盖(pb-2 而非 mb-2):
+        // 否则鼠标跨越空隙时 wrapper 已 mouseleave → 面板先卸载,永远移不上去。
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 pb-2">
+          <div className="flex h-[100px] w-8 flex-col items-center rounded-[2px] bg-[#141414]/90">
+            {/* 音量数字(B 站 32×28 区域,12px #e5e9ef) */}
+            <span className="flex h-7 items-center text-xs text-[#e5e9ef] tabular-nums">{volumePct}</span>
+            {/* 垂直滑条区:32×60;轨道 2px,滑块 12px 蓝点 */}
             <div
-              className="pointer-events-none absolute left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-[#00aeec]"
-              style={{ bottom: `calc(${volumePct}% - 6px)` }}
-            />
+              ref={trackRef}
+              role="slider"
+              tabIndex={0}
+              aria-label="音量"
+              aria-orientation="vertical"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={volumePct}
+              className="relative flex w-full cursor-pointer touch-none items-center justify-center outline-none"
+              style={{ height: TRACK_H }}
+              onPointerDown={(e) => {
+                e.preventDefault()
+                ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+                setFromY(e.clientY)
+              }}
+              onPointerMove={(e) => {
+                if (e.buttons) setFromY(e.clientY)
+              }}
+              onPointerUp={(e) => {
+                setFromY(e.clientY)
+                try {
+                  ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+                } catch {
+                  // ignore
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowUp" || e.key === "ArrowRight") {
+                  e.preventDefault()
+                  nudge(0.05)
+                } else if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
+                  e.preventDefault()
+                  nudge(-0.05)
+                }
+              }}
+            >
+              {/* 轨道 2px 浅灰 + **已调节部分 2px 蓝色**(B 站 .bui-bar,从底部到滑块) */}
+              <div className="relative h-full w-0.5 overflow-hidden rounded-[1.5px] bg-[#e7e7e7]">
+                <div className="absolute inset-x-0 bottom-0 bg-[#00aeec]" style={{ height: `${volumePct}%` }} />
+              </div>
+              <div
+                className="pointer-events-none absolute left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-[#00aeec]"
+                style={{ bottom: `calc(${volumePct}% - 6px)` }}
+              />
+            </div>
+            {/* 底部 12px 留白(B 站 100 = 28 + 60 + 12) */}
+            <div className="h-3" />
           </div>
-          {/* 底部 12px 留白(B 站 100 = 28 + 60 + 12) */}
-          <div className="h-3" />
         </div>
       )}
     </div>

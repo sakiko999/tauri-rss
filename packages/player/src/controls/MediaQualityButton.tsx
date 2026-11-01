@@ -34,7 +34,9 @@ export function MediaQualityButton({
       open={open}
       onOpenChange={setOpen}
       container={container ?? ctxContainer}
-      contentClassName="w-[169px]"
+      // 宽度随内容自适应(最小 96px);B 站的 169px 是为了右侧会员/登录徽标留位,
+      // 我们没有徽标,固定宽度会显得空且过大。
+      contentClassName="min-w-24 max-w-60"
       trigger={
         <button type="button" aria-label="清晰度" className={className}>
           {qualityOptions.find((q) => q.rate === activeQuality)?.quality ?? "清晰度"}

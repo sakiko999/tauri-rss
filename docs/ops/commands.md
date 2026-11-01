@@ -13,6 +13,8 @@ bun run tauri:release               # ⭐ Rust 以 release 编译但保留热重
                                     #   ⚠️ 抓取浏览器 profile 例外：默认**共用**安装版（app.amoeba.desktop/webview-profile）
 bun run tauri --own-profile         # 抓取浏览器改用 app.amoeba.dev 自己的 profile（首登/清凭证/换号调试）
 bun run scripts/tauri.ts help       # 全部用法
+                                    # ⚠️ 改 packages/*（如 @amoeba/player）后 HMR/整页刷新可能仍是旧模块：
+                                    #   验证前先停 dev 重启（必要时删 apps/desktop/node_modules/.vite）
 
 # CLI 抓取浏览器 sidecar（Windows / WebView2；VS2022 Native Tools 环境）
 cargo build -p amoeba-browser       # 产物 target/debug/amoeba-browser.exe
