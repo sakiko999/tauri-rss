@@ -1,86 +1,33 @@
 # docs 遗留问题全量核对（2026-10-27）
 
-> 方法：对 `docs/` 全部 32 篇文档里的「遗留 / 未做 / 缺口 / 待验证 / 未实现」标记逐条对码
-> （5 个区域并行读文档 + 查代码/git log），再由人工复核修正状态。
-> 本文是**核对快照**，不是新增需求；后续按 §下一批建议排期。
-> 2026-11-01 起排期入口统一到 `docs/ops/backlog.md`（§E/§H 引用本文；已完成项不再回填）。
+> **历史快照**：本文是 2026-10-27 的核对记录，后续排期以 `docs/ops/backlog.md` 为准
+> （§E/§H 引用本文；已收敛项不再单独排期）。文中路径/状态可能已漂移（如
+> `host/src/tauri/browser-backend.ts` 已于 2026-11-01 删除、关键词搜索渠道已删），
+> 未收敛的 open 项请按代码重新核对。
+>
+> 方法：对 `docs/` 全部 32 篇文档里的「遗留 / 未做 / 缺口 / 待验证」逐条对码
+> （5 个区域并行读文档 + 查代码/git log），再由人工复核。原始快照计数：open 81 /
+> stale 8 / fixed 10（本轮 9 + A0 追加 1）/ decision 21；A1 于 10-30 另修。
+> 一个「未做的平台能力」可能横跨 2–3 篇文档，按条目计数。
 
-## 为什么会有 120 条
+## 本轮已修（9，2026-10-27）
 
-不是 120 个 bug。按状态拆分：
-
-| 状态 | 数量 | 含义 |
-| --- | --- | --- |
-| open | 81 | 确实没做（其中大量是 low/trivial 的清理或产品 backlog） |
-| stale | 8 | 文档写法已过期（代码已变），只需改文档 |
-| fixed | 10 | 核对时仍未做，已修（9 条见 §本轮已修；A0 于 2026-10-27 追加修复） |
-| decision | 21 | 文档明确写了「故意不改/不做」并有理由，不算待办 |
-
-按严重度：high 1 · medium 22 · low 95；
-按工作量：trivial 32 · small 43 · medium 40 · large 5。
-
-来源分布：
-
-| 文档 | 条数 |
-| --- | --- |
-| `docs/audit/refactor-candidates.md` | 30 |
-| `docs/audit/findings.md` | 21 |
-| `docs/architecture/system/05-risks.md` | 21 |
-| `docs/platforms/channels.md` | 14 |
-| `docs/architecture/system/02-contracts.md` | 8 |
-| `docs/ui/ui-conventions.md` | 6 |
-| `docs/platforms/login.md` | 5 |
-| `docs/architecture/system/00-overview.md` | 4 |
-| `docs/architecture/system/03-flows.md` | 4 |
-| `docs/risk/crawler-risk-control.md` | 4 |
-| `docs/platforms/platform-notes.md` | 1 |
-| `docs/ops/commands.md` | 1 |
-| `docs/playback/mpv.md` | 1 |
-
-> 口径提醒：一个「未做的平台能力」会同时出现在 channels.md、platform-notes.md 的同一主题下；
-> 本文按**文档条目**计数，同一件事可能占 2–3 行。
-
-## 本轮已修（9）
-
-- **RSSHub provider 只在 desktop/mobile 进程注册；桌面已改远端 DataLayer，服务入口没 import → rsshub:* 在桌面/服务里实际不可用**（`docs/architecture/system/00-overview.md:54`）
-  - 证据：现状：docs 说「desktop/mobile 入口都 import」，但 desktop 的 DataLayer 现在跑在服务（apps/desktop/src/store/data-source.ts:27-37），注册副作用只发生在 desktop 进程（apps/desktop/src/main.tsx:8）等于空转；服务入口 apps/cli/src/service/main.ts:9 与 server.ts:18-33 都没有 import "@amoeba/core/source/rsshub"，全仓 grep 仅 desktop/mobile 两处 import。服务 listChannels（server.ts:591）因此不含 rsshub，refresh 会 NoChannelError。04-extension.md:410 的排查条目同样过期。
-  - 处理：服务/CLI 入口补 import；probe.fetch 走 source 聚合表；service-data-check 钉住（2026-10-27 已修）
-- **A3 扫码登录成功后读本地 settings 镜像再写回，可能把刚写入的 cookie 覆盖成旧值**（`docs/audit/refactor-candidates.md:193`）
-  - 证据：AccountPage.tsx:275-279 仍是 `await dl.settings.get()` 再 `setSetting(field, s[field])`；service-client:692-693 settings.get 只返回本地镜像变量。LoginResult 已带 cookie（core data-layer.ts:52-57），server.ts:812-823 是 runJob → commit(settingsEvent) → return，事件与 HTTP 响应分两条连接，镜像未更新时就会把旧 cookie 写回去（WS 断连时必然命中）
-  - 处理：改用 LoginResult.cookie 同步 UI（2026-10-27 已修）
-- **误报已失效：桌面经数据服务把单订阅 TTL 改回 0 时，旧的 refreshIntervalSec 不会被清除**（`docs/audit/findings.md:56-58`）
-  - 证据：EditSubscriptionDialog.tsx:47 仍传 undefined → store/actions/subs.ts:85 → service-client/index.ts:127,592-596 JSON.stringify 丢掉 undefined → apps/cli/src/service/server.ts:633-637 原样透传 → core/repo/subscription-repo.ts:107 的 {...prev,...patch} 保留旧值。文档的『实测键消失』只在浏览器 dev 的进程内 DataLayer 成立；非本分支改动，但当前生产链路已使结论反转。
-  - 处理：SubscriptionPatch：null = 清除；repo 删键；自检覆盖写/清（2026-10-27 已修）
-- **A-2「在播」判据两处各写一遍**（`docs/audit/refactor-candidates.md:174`）
-  - 证据：Cards.tsx:10 import isLiveNow，:159 与 :173 全改用 isLiveNow，:114 留了合并说明；判据本体 media.ts:41-42。修复提交 446d40b（commit message 明写「refactor A-2，去掉内联副本」）。文档写的 Cards.tsx:102 已漂移。PlayerPage.tsx:202/232 残留的 liveStatus 是「下播不自动播放」与标签文案语义，不能换成 isLiveNow（对非 live 条目会误判）
-  - 处理：无需改动；把文档这条删掉，别让后来者顺手把 PlayerPage 的两处也换掉
-- **A6 contentCache.delete 无调用、bodyCache.deleteAll 只剩自检用**（`docs/audit/refactor-candidates.md:200`）
-  - 证据：content-cache-repo.ts:29,55 仍导出 delete，全仓（TS/TSX）0 调用；body-cache-repo.ts:28,52 deleteAll 只在 core/src/example/body-cache.check.ts:47-68 用；退订清理走 keysOf 批量删（data-layer.ts:1152-1153）
-  - 处理：删除无调用方法；bodyCache.deleteAll 标注仅自检（2026-10-27 已修）
-- **kind 的中文名/图标仍有两份本地实现，且都缺 category**（`docs/audit/refactor-candidates.md:34`）
-  - 证据：apps/desktop/src/views/player/PlayerPage.tsx:353-355 `kindName` 只有 article/video/audio/live/social，无 category，仍在 :311 被使用；apps/desktop/src/views/palette/CommandPalette.tsx:83 四层三元同样无 category（回落 "rss"）。权威表 store/nodes.ts:32-41 中 category = { label:"分区", icon:"layers" }
-  - 处理：PlayerPage/CommandPalette 统一 KIND_META（2026-10-27 已修）
-- **selectors.ts 仍存在三个无调用者的导出（unreadCount/subUnread/lastFetchedOf）**（`docs/audit/refactor-candidates.md:51`）
-  - 证据：apps/desktop/src/store/selectors.ts:199 unreadCount、:211 subUnread、:231 lastFetchedOf；全仓 grep 只命中定义处与 apps/desktop/src/views/library/ArticlePane.tsx:57 的一句注释（“直接用 unreadCount() 会写出…”），无 import 调用。文档写的 185/197/217 已漂移到 199/211/231，但结论不变
-  - 处理：删除 unreadCount/subUnread/lastFetchedOf（2026-10-27 已修）
-- **scripts/check.ts 仍是白名单，TYPECHECK_PROJECTS 仍漏 service-client/service-protocol，--filter 打错仍退 0**（`docs/audit/refactor-candidates.md:224`）
-  - 证据：scripts/check.ts:24-92 FILES 白名单（新 .check.ts 不登记就不跑，无 glob 校验）；:94-107 TYPECHECK_PROJECTS 12 项，无 service-client/service-protocol（这两个包连 tsconfig.json 都没有，packages/*/tsconfig.json 只有 9 个）；:178-179 `items` 过滤后为空 → `continue`，:202-210 results 为空时打印“全部通过 · 0/0”并 `return 0`
-  - 处理：未登记 check / 未纳入 typecheck / --filter 空匹配 全部改为失败（2026-10-27 已修）
-- **ShortVideoView 的 savePosition 对直播仍无守卫**（`docs/audit/findings.md:84-86`）
-  - 证据：apps/desktop/src/views/library/ShortVideoView.tsx:51 直接 savePosition(item,sec,dur)；只有 packages/player/src/PlayableMedia.tsx:300-303 与 AudioShell.tsx:100-103 的 dur<=0 早退。直播若返回有限 duration 会写 positionSec 进「继续」。
-  - 处理：savePosition 入口统一拦 kind=live（2026-10-27 已修）
+- RSSHub provider 补注册到服务/CLI 入口，`service-data-check` 钉 `channels.list` 含 `rsshub:feed`。
+- A3 扫码登录改用 `LoginResult.cookie` 同步 UI（不再回读滞后镜像）。
+- 单订阅 TTL 用 `SubscriptionPatch`（`null` = 清除）修「改不回 0」。
+- A-2「在播」判据统一 `isLiveNow`（PlayerPage 的 liveStatus 保留：是下播不自动播放语义）。
+- A6 删 `contentCache.delete`；`bodyCache.deleteAll` 标注仅自检。
+- `KIND_META` 统一 PlayerPage/CommandPalette 的 kind 名称与图标。
+- `selectors.ts` 删除 `unreadCount`/`subUnread`/`lastFetchedOf`。
+- `scripts/check.ts` 改为文件系统发现；未登记/未纳入 typecheck/`--filter` 空匹配均失败。
+- `savePosition` 入口统一拦 `kind === "live"`（直播不写续播位置）。
 
 ## open · high（0）
 
-- ~~**[high/medium]** A0 browser-sidecar 未接 WebView2 浏览器进程退出事件~~
-  ✅ 已修（2026-10-27，追加）：`apps/browser-sidecar/src/main.rs` 主路注册
-  `ICoreWebView2Environment5::add_BrowserProcessExited` → `request_shutdown()` 让 sidecar 自行退出、
-  宿主 `ensureReady` 重启；旧 Runtime（< 88）无 Environment5 才降级 `add_ProcessFailed` + 只拦
-  `BROWSER_PROCESS_EXITED`（渲染进程失败不拦，WebView2 自建进程，避免打断在途抓取）。
-  真机验证：杀 sidecar 的 msedgewebview2 子进程 → sidecar 干净退出（exitCode 0）。
+（A0 browser-sidecar 进程退出事件已于 2026-10-27 修复，见 `docs/audit/refactor-candidates.md`。）
 
 
-## open · medium（19）
+## open · medium（19；A1 已于 2026-10-30 修）
 
 - **[medium/trivial]** douyin enterRoomParams 仍写空 msToken，signDouyinUrl 再追加随机 msToken，query 出现双 msToken
   - 来源：`docs/audit/findings.md:15-17`
@@ -114,10 +61,8 @@
   - 来源：`docs/audit/refactor-candidates.md:170`
   - 证据：favlist.ts:55、season.ts:95、series.ts:98 仍只是照传 `rights`，而这三个接口的列表项没有该字段（`docs/platforms/platform-notes.md:32-35` 实测结论仍成立，`is_upower_exclusive` 只在 view 详情里）；video-common.ts:21-24,61 只认 rights.ugc_pay 与 space 的 is_charging_arc。04bb6f8 只修了 user_video，此后无相关提交
   - 建议：二选一并写清：接受缺口（在 channel 注释与 platform-notes 标「已知，列表侧无字段」），或按条目懒查 view 补 membersOnly（成本高，且卡片角标回不到列表）
-- **[medium/medium]** A1 服务端 diagnostics 内联一份 core 实现，clearAll 语义与 core 不一致
-  - 来源：`docs/audit/refactor-candidates.md:186`
-  - 证据：server.ts:860-876 仍是内联实现：直接删 storage 全部键 + store.clear + lastItems.clear + settings.reset + commit；对比 core data-layer.ts:1036-1046 还会清 removedSubs/pageCursors/pageTotals。在途刷新未取消（jobs 未参与），clearAll 也不给被清订阅挂 removedSubs 墓碑，因此换入 :562 的 replaceIfLive 拦不住，在途 refresh 会把 contentCache 与 items 写回已清空的库（用户看到「已清除」后内容复活）。另：文档「不重置 netPolicy」已过期——server 调的 layer.settings.reset()（data-layer.ts:1178-1181）本身就 syncNetPolicy + 重置 cookieSnapshot。core layer.diagnostics 在生产路径确为死代码：只有 scripts/remote-data-layer-check.ts:136 经 RemoteDataLayer 走 RPC 触达，apps/mobile 无引用
-  - 建议：dispatch 一律委托 layer.diagnostics；为 clearAll 先取订阅列表 → 取消在途 job/挂墓碑 → 再清，并返回受影响 subscriptionId 供 server 清 lastItems 与发事件。文档里 netPolicy 那半句要修掉
+- **[medium/medium]** ~~A1 服务端 diagnostics 内联一份 core 实现~~ ✅ 已修（2026-10-30，见
+  `refactor-candidates.md`）：dispatch 全部委托 `layer.diagnostics.*`，clearAll 前 abort 在途 job。
 - **[medium/medium]** A2 服务端/客户端 projectItem 剥掉 article 的 content，桌面正文搜索在生产路径静默失效
   - 来源：`docs/audit/refactor-candidates.md:190`
   - 证据：server.ts:297-301 projectItem 剥 content，出口全走它（:443/:452/:459 items 事件、:555 快照）；service-client:209-212 再剥一次（:273/:526 应用）。selectors.ts:146-171 bodyText/matchesQuery 仍把 content 计入匹配，但镜像里恒空 → 实际只搜标题/作者/摘要。文章卡片读的是 summary（Cards.tsx:190-201），不读 content，所以文档「卡片摘要直接读 item.content」已过期；「文案说谎」也已修：ArticlePane.tsx:233-241 已改成「搜索覆盖标题、作者与摘要；正文不在本地镜像里」（bc58270），MediaMain.tsx:544 空态也不提正文
@@ -412,14 +357,11 @@
   - 建议：先做 M0 的 9 项 spike（尤其 SegmentBase MPD 与 osd-overlay），确认后再落 appHost.player 门面；不要先写 UI 开关
 
 
-## stale（文档过期，待改）（8）
+## stale（文档过期，待改）（6；两条 findings 举例已于 2026-11-01 修正）
 
 - **[medium/small]** 「原生分支点重试不重载媒体」已不成立：错误态会把 VideoShell 卸载，重试即重挂并重设 src
   - 来源：`docs/architecture/system/03-flows.md:268`
   - 证据：packages/player/src/PlayableMedia.tsx:389-409 playError 时整块返回 MediaState（VideoShell 卸载），:418-436 重试后重新挂载 VideoShell；src 写入在 packages/player/src/VideoShell.tsx:69-73 的挂载 effect，因此会重新加载。原结论只适用于「VideoShell 保持挂载」的假设。
-- **[low/trivial]** 「无生产者的 latent 丢字段」描述已过期：raw 已有渠道产出，Live.quality 字段已删除，article.media[] 已双向透传
-  - 来源：`docs/audit/findings.md:22-24`
-  - 证据：packages/crawler/src/channels/weibo/hot.ts:50、apple/search.ts:45、apple/chart.ts:59、douyin/trend.ts:38 都写 Item.raw（serialize.ts 不写、crawler 内也无读者）；packages/xml/src/types.ts:155-156 明示 quality 字段已删；packages/xml/src/serialize.ts:159-196 写全部 media:content，core/processing/deserialize.ts:535-539 全部读回。
 - **[low/trivial]** 「reading 调用端多以 void 发出、失败不可见」已部分过期：已读/星标/批量已读现在有 catch+回滚+toast
   - 来源：`docs/architecture/system/02-contracts.md:88`
   - 证据：现状：apps/desktop/src/store/actions/reading.ts:33-37,48-56,66-69 都有 .catch 回滚与错误 toast；只剩 setPosition/setScrollRatio（:91,109）是纯 void（可接受）。doc 描述与代码已不一致。
@@ -435,9 +377,6 @@
 - **[low/small]** 「涉及浏览器或播放的路径没有自动化回归」已部分过期：播放侧已有 hook 级 check，浏览器/CDP 仍只有实机清单
   - 来源：`docs/architecture/system/00-overview.md:208`
   - 证据：scripts/check.ts:49-50 把 packages/player/src/hooks/useStreamSelection.check.ts、player-stats.check.ts 纳入 static 层；浏览器/CDP 确实仍无自动化（scripts/ui-probe.ts:8,17 依赖 9222 dev 实例）。
-- **[low/medium]** serialize-contract.check 的盲区仍成立，但举例（quality/raw/media[]）已过期
-  - 来源：`docs/audit/findings.md:43-45`
-  - 证据：packages/core/src/example/serialize-contract.check.ts:46-56 只做「deserialize 读、serialize 不写」差集，确实查不到两侧都漏；但 quality 已删、media[] 已往返，raw 是 crawler 内部字段，原举例不再成立。
 
 
 ## decision（记录在案，不算待办）（21）
@@ -453,7 +392,7 @@
   - 证据：crawler/channels/douyin/live.ts:137-159 读 web_rid/room.title/owner 且无 is_recommend 过滤；player/hooks/useMediaStream.ts:104-108 重锁 max；resolve/platform/bili/live-play.ts:82-87 g_qn_desc；resolve/platform/youtube/client.ts:728-731 每次新建 poller；reading-repo.ts:59/subscription-repo.ts:61 单 :corrupt key；douyin/danmaku.ts:177 %20；bili/discover.ts:122-124 收紧正则；youtube/client.ts:400-405 maxBy 参数顺序。
 - **[low/trivial]** mobile 冻结相关的存档项无人在动
   - 来源：`docs/audit/findings.md:91-93`
-  - 证据：git log apps/mobile 最后一次 2026-10-23（e17a3a6，在 2026-10-26 冻结之前）；feat/heliu-redesign 与 master 的差异不含 apps/mobile 文件。
+  - 证据：git log apps/mobile 最后一次 2026-10-23（e17a3a6，在 2026-10-26 冻结之前）；heliu 改版已合入 master（846bbb5），不含 apps/mobile 文件。
 - **[low/trivial]** weibo/xhs 的「保活」实质是长效 cookie + 到期重登，无刷新接口
   - 来源：`docs/platforms/login.md:15-16,19`
   - 证据：SUB ~1 年、web_session Max-Age 1 年且无刷新接口；代码已有失效检测（packages/core/src/example/error-kind.check.ts:68 的 auth 分类，apps/desktop/src/store/actions/data.ts:254 刷新后提示需登录），但没有也不可能做自动续期
@@ -483,7 +422,7 @@
   - 证据：packages/core/src/data-layer.ts:887-889 原逻辑；channelHasMore===true 时已豁免（885-886）。
 - **[low/medium]** 「不能删的兼容层」与 settings 预留字段仍成立
   - 来源：`docs/audit/findings.md:124-131,152`
-  - 证据：apps/cli/src/info.ts:18,26-28 仍以 roomId 建直播订阅；apps/desktop/src/dev/seed.ts:43-52 info:{} + rss:hn；crawler/register.ts:146 注册 DouyinUserLiveChannel，DiscoverPage.tsx:105-108 用 live:*:user 判入口；deserialize.ts:173 contentFormat 兜底；core/types/settings.ts:29,43,71 的 viewMode/startMuted/defaultQuality 仍无消费者。
+  - 证据：apps/cli/src/info.ts 仍以 `roomIds` 建直播订阅；apps/desktop/src/dev/seed.ts:43-52 info:{} + rss:hn；`live:douyin:user` 已删（2026-10-28），DiscoverPage.tsx 改用 `USER_ROOM_PLATFORMS` 判入口；deserialize.ts:173 contentFormat 兜底；core/types/settings.ts:29,43,71 的 viewMode/startMuted/defaultQuality 仍无消费者。
 - **[low/medium]** 渠道能力用 `in` 谓词运行时探测，缺失时静默不可用（按钮消失/预览退化）
   - 来源：`docs/architecture/system/02-contracts.md:57`
   - 证据：packages/crawler/src/index.ts:140-142 等 isXxx 谓词即设计（00-overview.md:166「一切皆 RssChannel，渠道是纯描述」），文档写明代价并只要求人工核对。
@@ -508,21 +447,6 @@
 
 
 
-## 下一批建议（按收益/风险排序）
+## 下一批建议
 
-1. **A1 服务端 diagnostics 归位 core**：clearAll 要取消在途 job、挂 removedSubs 墓碑，
-   否则「清除后内容复活」。
-2. **A4 取消/超时走 abortTabs**：被放弃的刷新仍占浏览器 lane（op:<platform>）。
-3. **A0b runJob 用 abort race 结算**：cancel 后 job 条目立即消失（当前有界但会挂到操作结束）。
-4. **B1–B4 性能**：patchMany、readingRecords 按 key 取、hydrate 复用 reading map、
-   /v1/state 按 rev 缓存（含 gzip）。
-5. **A-1 / A5 数据完整性**：B站收藏夹/合集会员标记（建议接受缺口并写清）、YouTube 频道
-   author/duration。
-6. **R13–R17 风险登记**：release-only 巡检缺口、cookieSnapshot 无版本、抓取浏览器无 lease、
-   FLV 分支不带 headers、resolveDetail 零校验边界。
-7. **8 条 stale 文档**：逐条改掉（本轮已改 RSSHub 那条）。
-
-> （原第 1 项 A0 browser-sidecar 接 BrowserProcessExited 已于 2026-10-27 落地。）
-
-> 平台产品缺口（抖音搜索/登录、YouTube 播放列表与游戏分区、Twitch VOD/clip/chat、B站账号、
-> bili 自动保活）属于新功能，不列入「收尾」；立项时看 docs/platforms/channels.md。
+> 已并入 `docs/ops/backlog.md` §E（数据/架构收尾）、§D（平台渠道缺口）；本文不再单独排期。

@@ -55,9 +55,8 @@ pub fn run() {
             .build(tauri::generate_context!())
             .expect("error while running tauri application");
         app.run(|app_handle, event| match event {
-            // ⚠️ 抓取 webview 是**第二个窗口**：只关主窗口时 Tauri 的 windows 集合
-            // 仍非空，不会自动退出 —— 进程会变成不可见、常驻数百 MB 的僵尸。
-            // 主窗口销毁即显式退出应用。
+            // ⚠️ 主窗口销毁即 shutdown 数据服务并显式退出（抓取浏览器是 sidecar
+            // 子进程，随服务/父进程退出；不依赖 Tauri 的窗口集合语义）。
             tauri::RunEvent::WindowEvent {
                 label,
                 event: tauri::WindowEvent::Destroyed,

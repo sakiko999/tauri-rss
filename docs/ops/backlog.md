@@ -3,32 +3,33 @@
 > **唯一入口**。这里只列「还没做 / 待验证」的条目，每条指向权威文档；细节不在本表重复。
 > 完成后：删掉本表这一行，并在权威文档对应位置改状态。
 > 条件触发项（§G）不进日常排期，等信号再立项。
-> 最后整理：2026-11-01（合并架构评审收尾、`docs/audit/doc-backlog-2026-10-27.md`
-> 的「下一批建议」、各计划文档的遗留项）。
+> 最后整理：2026-11-01（v0.16.0 发布后）。完成项已在各权威文档改状态，不再保留在此表。
 
 ## A. 发布与验证（影响可交付）
 
 - [ ] **发布产物自动门禁**〔11-01〕：构建后解包 `*-setup.exe`，断言含 `service/service.js`、
       `amoeba-runtime.exe`、`amoeba-browser.exe`；断言 release overlay 真的生效（漏 `--config`
       时 resources 静默为空）。→ `docs/ops/release-updater.md` §待补
-      （v0.15.0 已人工解包验证三件齐全；CI 自动门禁未做，理想形态 = tauri-action 先出 draft，
-      断言通过再 `gh release edit --draft=false`）
+      （v0.16.0 已人工解包验证三件齐全、`latest.json`/签名 version 均为 0.16.0；CI 自动门禁
+      未做，理想形态 = tauri-action 先出 draft，断言通过再 `gh release edit --draft=false`）
 - [ ] **干净 VM 复核**：安装/卸载、断网首启（Bun 缓存命中）、生产 WebView2 Origin。
-      → `docs/architecture/system/06-data-service.md` §12
+      → `docs/architecture/system/06-data-service.md` §8.4
 - [ ] **崩溃自愈真机验证**〔11-01〕：Tauri 下杀服务进程，确认 Rust `service_endpoint` 重新
       spawn + 渲染层换连（`remote-data-layer-check` 只覆盖了客户端换连逻辑，未覆盖真实
       `ensure_service` 重拉）。→ 06 §2.5 / `packages/service-client/src/index.ts`
-- [ ] **WebView2 生命周期**：lane tab 空闲回收已加（sidecar 5min，2026-11-01，回归
-      `tab-idle-close.check`）；仍待真机验证：LRU 驱逐（`/json/close`）后 renderer 不残留、
-      回收后下次抓取自动重建导航；release 下 GPU 进程 private 是否下降、关 lane 后 renderer
-      是否释放、空闲 3 分钟是否归零。
+- [ ] **WebView2 生命周期**：lane tab 空闲回收（sidecar 5min）与一次性 lane `release`
+      （v0.16.0，`withBrowserOp.release`）已加；仍待真机验证：LRU 驱逐（`/json/close`）后
+      renderer 不残留、回收后下次抓取自动重建导航；release 下 GPU 进程 private 是否下降、
+      关 lane 后 renderer 是否释放、空闲 3 分钟是否归零。
+- [ ] **WebView2 长等待 lease**：非 CDP 长等待（登录轮询之间的空档）没有显式租约，目前靠
+      轮询命令隐式续期；见 `docs/architecture/system/05-risks.md` R16。
 - [ ] **抓取浏览器内存 A/B**〔11-01〕（调研结论见 `docs/risk/crawler-risk-control.md` §3.14）：
       逐项实测 `--enable-low-end-device-mode`、`--js-flags` 追加 `--optimize-for-size` /
       `--memory-saver-mode`（必须合并进唯一一条 `--js-flags`）、`--max-web-media-player-count=30~50`、
       Prerender2/Preloading holdback。测法 = private bytes + `Runtime.getHeapUsage` /
       `Memory.getDOMCounters`，同时确认 XHR 捕获与 SSR 读取不回归。
 - [ ] **启动器兼容性**：Bun 自动下载在公司代理 / 杀软 / 无签名场景的表现（版本闸门已实现）。
-      → 06 §12
+      → 06 §8.3
 
 ## B. 主线：设计系统 → 播放器
 
@@ -36,30 +37,26 @@
       Skeleton/Avatar/SectionHeader/CardShell。→ `docs/ui/design-system-plan.md`（F1/F2 已完成）
 - [ ] **F4 守卫与验收工具**：`ui-probe` 增加「全屏浮层可见」「模式切换」探针；可选 `/dev/ui` 陈列页。
 - [ ] **F5 文案与语义修正**：分段控件 tablist/aria-pressed；播放器 chrome `title` → Tooltip。
-- [x] **播放器 P0a 地基**（feat/player-parity，2026-11-01）：`VideoShell` 插槽
-      （topBar/overlay/controls）+ PlayOverlay/VideoContextMenu 抽出；`player/ui` 首批原语 +
-      `PlayerContainer`（`getPlayerContainer()`/context）；`PlayerPrefs`（音量/静音/倍速持久化）；
-      WebView2 能力 spike 实测入档（PiP/MediaSession/HEVC/AV1 均可用）。
-      剩余：设置面板/OSD 等 P1 原语随功能落地。
-- [x] **播放器 P0b-1 媒体状态外置**：`mediaClock` 外部 store，4Hz 时间不再进 React state；
-      控件按原始值切片订阅（VideoShell 不再整树重渲）。
 - [ ] **播放器 P0b 剩余**：`PlayableMedia` 会话拆分（解析/播放/控制器三 hook）、
-      完整播放模式状态机（normal/wide/web/full/mini 枚举；目前 theater + 全屏 + Esc 分层）。
-      框架评估结论：保持 React，见 player-parity-plan.md「框架评估」节。
-- [ ] 其余 Radix 原语**随首个真实调用方落地**（Slider/Tooltip/ContextMenu/Popover 随 P0a；
+      完整播放模式状态机（normal/wide/web/full/mini 枚举；theater 已入会话 store，
+      Esc 先关浮层——全屏退出是 UA 手势，拦不住）。框架评估结论：保持 React，见
+      `docs/playback/player-parity-plan.md`。
+- [ ] 其余 Radix 原语**随首个真实调用方落地**（Slider/Tooltip/ContextMenu/Popover 随 P0b/P1；
       ToggleGroup/Tabs 随 F5），不预造空壳。
+- [ ] **heliu 合流残留**：M2 titlebar 收进主列 + D16 几何（`--rail 244` / `--header-h 64`）；
+      M4/M7 实机验证见 §C。→ `docs/ui/heliu-redesign-plan.md`
 
 ## C. 待实机验证（功能已实现，等真机/真数据）
 
 - [ ] `xhs:explore` 手动刷新命中 `passiveBuffer`（未命中走页面 SSR 兜底）。
 - [ ] 实况图：微博 `.mov` 在 WebView2 能否播、失败是否退回静态图；release 下 mp4 解码与
       暂停/续播（dev 已修 Referer 403 + ORB）。
-- [ ] 真实微博 / xhs feed 图片网格（直连 + 回退）、滚动时缓存命中。
+- [ ] 真实微博 / xhs feed 图片网格（原生直连，无 JS 回退）、滚动时缓存命中。
 - [ ] 登录后实机复验：`weibo:user` 预加载第二页；阮一峰正文按 HTML 渲染。
 - [ ] 干净 profile 扫码全流程（`rss --service --profile-dir <空目录>`：出码 → 扫码 → 成功）。
       → `docs/platforms/login.md`
 - [ ] 界面文案：发现页与添加订阅弹窗跑一次 `bun run dev` 看布局。
-- [ ] Referer 改造剩余：规则表抽共享 JSON；实况视频响应头注入（ORB 兜底）按需再做。
+- [ ] Referer 改造剩余：规则表抽共享 JSON（实况视频头注入已由 `media_referer.rs` 的 MEDIA 上下文覆盖）。
 - [ ] `scripts/ui-design-audit.ts` oklch 解析 bug（>255 非法值导致 active chip 恒报 ~1.1:1
       误报；真实值已复算过 AA）。→ `docs/ops/smoke-check.md` 注记
 - [ ] 系统文档正文细化：03 时序图 / 02 契约正文。
@@ -71,9 +68,9 @@
 
 - [ ] **抖音直播关键词搜索**：用户搜索已按被动路线落地（`douyin:user:search`，2026-11-01）；
       直播流搜索（`live/search`）仍需专用小号 + CDP 被动探针。
-      → `docs/platforms/channels.md` §二
+      → `docs/platforms/platform-notes.md` 抖音段 · `docs/platforms/channels.md` §二（索引）
 - [ ] **Twitch**：VOD / clip 路由、聊天弹幕（需宿主 `WsLike.send` 支持 text 帧）、
-      登录（OAuth 需注册应用，不建议近期）。~~搜频道~~ 已做（`twitch:user:search`，2026-11-01）。
+      登录（OAuth 需注册应用，不建议近期）。
 - [ ] **用户主页入口收敛的遗留**（2026-11-01）：`bili:dynamic` 不再出现在「浏览渠道」目录，
       但统一搜索只落地投稿（`bili:user_video`），动态暂无可达入口 —— 要么在候选上增加
       「订阅投稿 / 动态」落地选择，要么恢复手动 uid 入口。
@@ -96,32 +93,29 @@
       → refactor-candidates A7（新位置 `packages/core/src/internal/playback.ts`）
 - [ ] 四个直播渠道的并发抓取循环共用 factory（保留「全失败才抛错」护栏）。
       → refactor-candidates A8
-- [ ] `PlayerPage.kindName` 与 `KIND_META` 重复（前者缺 `category`）。
-      → refactor-candidates A3
 - [ ] 缓存 XML 回填 helper 之外的两处内联（TTL 短路 / 失败回退），注意 total 语义不要顺手统一。
       → refactor-candidates B1
 - [ ] YouTube 四种 client 请求体表驱动（~120 行 → 配置表）。
       → refactor-candidates B2
 - [ ] 续播/进度/播完在 `PlayableMedia` 与 `AudioShell` 各写一遍（B3）；`loadMore` 两次
       `store.query` + append 再滤（B7）。
-- [ ] 服务端下一批：`loadMore/resolve*` 的取消要真正归还浏览器 lane（`abortTabs`）；cancel 后
-      job 条目立即消失（runJob 用 abort race 结算）；HTTP 断开不取消 job / caller-only 任务无
-      lease；`/v1/state` 按 rev 缓存；`reading.changed` 按 key 取（不扫整张 map）。
-      → `docs/audit/doc-backlog-2026-10-27.md` §下一批建议 / 06 §187
+- [ ] 服务端下一批：`loadMore/resolve*` 的取消要真正归还浏览器 lane（`abortTabs`；客户端
+      120–180s 超时已兜底）；cancel 后 job 条目立即消失（runJob 用 abort race 结算）；HTTP
+      断开不取消 job / caller-only 任务无 lease；`/v1/state` 按 rev 缓存；`reading.changed`
+      按 key 取（不扫整张 map）。
+      → `docs/architecture/system/06-data-service.md` §4.2（job 语义与取消）
 - [ ] 抓取浏览器：每平台传输策略 `auto / browser-only`（§2.7，未实现）；`passiveBuffer` 按 lane
       过滤（当前仅 xhs:explore 声明 passive，同 lane 串行）。
       → `docs/risk/crawler-risk-control.md`
-- [ ] 图片管线剩余优化：回退路径加「图 URL → 字节」持久缓存；尺寸预取与显示合并。
+- [ ] 图片管线剩余优化：尺寸预取与显示合并（图片恒原生直连，无 JS 回退路径）。
       → `docs/ui/ui-conventions.md`（含 `@layer` 层序、浮层退场/Accordion 过渡两个可选项）
 - [ ] 数据服务阶段 3（>10k 条的服务端聚合/窗口化、reading 行表、body 拆表、outbox、常驻
-      daemon）；`refreshAll` 改走服务端 job（收益低于逐条 busy/超时 UI，暂不切）。→ 06 §12
+      daemon）。→ 06 §12
 
 ## F. 安全与长期悬置（明确低优先，不主动推进）
 
 - [ ] **CSP**〔11-01〕：用户明确「基本保障即可」；抖音/斗鱼签名脚本依赖 `eval`，收紧需逐平台验证。
 - [ ] **CI action 固定 SHA**〔11-01〕：现用 `@v4`/`@v1` 标签，单人仓库暂不引入维护成本。
-- [ ] **`loadMore` / `resolve*` 服务端取消**〔11-01〕：客户端 120–180s 超时已兜底，真取消需接
-      job 取消通道（`refresh` 已可取消）。
 - [ ] **`progress` 的实时边界**〔11-01〕：首页「继续观看」、rail 继续计数、resume 节点列表
       随 `progressVersion` 实时更新；其它列表里的**卡片进度条**不在播放期间刷新（下次渲染/
       切节点时更新），播放树不因进度重渲染（这是性能取舍，不是缺陷）。
@@ -140,10 +134,9 @@
 - Twitch 聊天（宿主 ws 支持 text 帧后）— `platforms/channels.md`
 - 真同步时间戳（D12 升级路径）与 web 版多视口矩阵 — `ui/heliu-redesign-plan.md` 附录
 
-## H. 快照类文档（不逐条搬运，按需重新核对）
+## H. 历史快照（不逐条搬运，按需重新核对）
 
-- `docs/audit/doc-backlog-2026-10-27.md`：120 条核对快照（其中 A1 已在 2026-11-01 修掉；
-  其余 open 项按本文 §E 收敛/重新核对）。
-- `docs/audit/refactor-candidates.md`：A/B 剩余见 §E；C（明确不改）/D（已核实）是结论。
-- `docs/audit/findings.md`：故意不改 / 误报证伪 / 兼容补丁 —— 是决策记录，不是待办。
-- `docs/audit/improvements-2026-11-01.md`：本轮评审清单的完成记录与取舍（§F 来源）。
+审计快照只保留结论与证据；**部分未完成项已收敛到本文，未列项见各快照并按需重新核对**：
+`docs/audit/doc-backlog-2026-10-27.md` · `docs/audit/pagination-dedupe-audit-2026-10-27.md` ·
+`docs/audit/refactor-candidates.md` · `docs/audit/findings.md` ·
+`docs/audit/improvements-2026-11-01.md`

@@ -231,9 +231,9 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 | 分类 | 文档 |
 | --- | --- |
 | 架构与契约 | ★ `docs/architecture/system/README.md`（全仓系统架构：包职责/契约/流程/扩展/风险） · `docs/architecture/system/06-data-service.md`（数据服务单写者/协议） · `docs/architecture/host-abi.md` · `docs/architecture/data-and-storage.md` · `docs/architecture/crawler-topology.md` |
-| 平台 | ★ `docs/platforms/platform-notes.md` · `docs/platforms/channels.md`（渠道与缺口）· `docs/platforms/youtube.md` · `docs/platforms/twitch.md` · `docs/platforms/xhs-signature.md` · `docs/platforms/login.md` · `docs/platforms/domestic-feeds.md` |
-| UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` · `docs/ui/heliu-redesign-plan.md`（实施中，分支 `feat/heliu-redesign`） |
-| 播放与弹幕 | ★ `docs/playback/playback.md` · `docs/playback/danmaku.md` · `docs/playback/mpv.md`（未做） |
+| 平台 | ★ `docs/platforms/platform-notes.md` · `docs/platforms/channels.md`（渠道与开放缺口索引）· `docs/platforms/youtube.md` · `docs/platforms/twitch.md` · `docs/platforms/xhs-signature.md` · `docs/platforms/login.md` · `docs/platforms/domestic-feeds.md` |
+| UI | ★ `docs/ui/ui-conventions.md` · `docs/ui/design-system-plan.md` · `docs/ui/numbered-ui-overlay.md` · `docs/ui/rail-tree-accordion.md` · `docs/ui/heliu-redesign-plan.md`（已合入 master） |
+| 播放与弹幕 | ★ `docs/playback/playback.md` · `docs/playback/player-parity-plan.md` · `docs/playback/danmaku.md` · `docs/playback/mpv.md`（未做） |
 | 风控 | ★ `docs/risk/crawler-risk-control.md` |
 | 运维 | ★ `docs/ops/commands.md` · ★ `docs/ops/smoke-check.md` · `docs/ops/release-updater.md` · ★ `docs/ops/backlog.md`（待办唯一入口） |
 | 审计 | `docs/audit/findings.md` · `docs/audit/refactor-candidates.md`（重构候选分档） · `docs/audit/improvements-2026-11-01.md`（评审清单完成记录 + 刻意不做） |
@@ -241,13 +241,8 @@ RSSHub 外挂请求由 source 显式声明 `policy.platform="rsshub"`（自建�
 ## 下一步
 
 **待办总表 = `docs/ops/backlog.md`（唯一入口）**。完成一项：删总表一行，并在权威文档改状态；
-不要在本文件或其它文档里再挂一份清单。当前主线顺序：
-
-1. 设计系统 F3–F5（F1/F2 已完成，`docs/ui/design-system-plan.md`）
-2. 播放器 P0a / P0b（前置已完成，`docs/playback/player-parity-plan.md`）
-3. 平台渠道缺口按 backlog §D 立项，条件触发项等信号（§G）
-
-发布/实机验证项见 backlog §A / §C。
+不要在本文件或其它文档里再挂一份清单。当前主线（设计系统 F3–F5 / 播放器 P0b 剩余 /
+平台渠道缺口）的进度与顺序以 backlog §B / §D 为准，发布与实机验证见 §A / §C。
 
 <!-- cc-todo:start -->
 ## TODO / 重要信息（cc-todo 自动维护）

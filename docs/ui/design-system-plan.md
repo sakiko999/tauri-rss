@@ -4,10 +4,9 @@
 > 不新增用户可见功能；播放器复刻排在其后（`docs/playback/player-parity-plan.md`）。
 > 每步做完停一次：`bun run check` + 对应实机巡检，再进入下一步。
 
-**进度（2026-11-01）**：F1 完成（`radix-ui@1.8.1` 子路径 + 边界守卫 + 封装层，白名单清零）；
-F2 完成 AlertDialog / `confirmAction`（7 处 `window.confirm` 全部替换）。其余原语**在有第一个
-真实调用方时再加**，不预先造空壳：Slider/Tooltip/ContextMenu/Popover 随播放器 P0a 落地，
-ToggleGroup/Tabs 随分段控件收编（F5）落地。
+**进度（2026-11-01）**：F1（`radix-ui@1.8.1` 子路径 + 边界守卫 + 封装层，白名单清零）与
+F2（AlertDialog / `confirmAction`，7 处 `window.confirm` 全部替换）已完成。其余原语**在有第一个
+真实调用方时再加**，不预造空壳。
 **F3–F5 的排期与完成状态见 `docs/ops/backlog.md` §B。**
 
 ## 结论（为什么不用现成组件库）
@@ -31,15 +30,16 @@ ToggleGroup/Tabs 随分段控件收编（F5）落地。
 
 ## 任务
 
+F1/F2 已完成（`radix-ui@1.8.1` 子路径 + 边界守卫；AlertDialog / `confirmAction` 替换 7 处
+`window.confirm`），下表只列剩余项。
+
 | ID | 任务 | 范围 | 验收 |
 | --- | --- | --- | --- |
-| F1 | 依赖与边界 | desktop/player 声明 `radix-ui@1.8.1`；新建 `apps/desktop/src/components/ui/`、`packages/player/src/ui/`；`.oxlintrc.json` 的 `no-restricted-imports` + `check` 脚本（`scripts/radix-boundary.check.ts`，contract 层）；迁移现有 4 个文件（Modal.tsx 拆为 ui/Dialog·Menu·Select·Switch，RailGroupTree 的 Accordion，播放器两个菜单） | `bun run check` 全绿；`bun run lint` 0 error；添加订阅/编辑订阅/侧栏分组/播放器倍速清晰度逐一手测 |
-| F2 | 基础原语 | AlertDialog（+ `useConfirm()` 异步替换 7 处 `window.confirm`）、ContextMenu、Popover、Tooltip、Slider、ToggleGroup、Tabs（只用于真有面板处）；每个原语带语义类与 data-motion 退场 | 取消危险操作无副作用；全屏播放器菜单可见；键盘/焦点/Esc 正常 |
 | F3 | 重复模式收敛 | 先做高频三类：`ListRow`（12 套行）、`Badge`（约 9 套）、`Progress`（约 8 套）；随后 Skeleton/Avatar/SectionHeader/CardShell | 视觉无回归（截图基线）；CSS 行数下降；新增行样式只改一处 |
 | F4 | 守卫与验收工具 | 扩充 `css-classes.check`（Radix 边界、`@theme` 令牌已覆盖）；`scripts/ui-probe` 增加「全屏浮层可见」「模式切换」探针；可选 dev 陈列页（`/dev/ui`，仅 DEV 构建） | 探针能抓到全屏浮层逃逸；ci/本地同一入口 |
 | F5 | 文案与语义修正 | 分段控件 tablist/aria-pressed 混用；播放器 chrome 的 `title` → Tooltip（虚拟列表仍用 title）；确认弹窗迁移后的文案 | 读屏语义正确；无重复说明文案 |
 
-顺序：F1 → F2 → F3 → F4 → F5。F1/F2 是播放器 P0 的前置。
+顺序：F3 → F4 → F5；F1/F2（播放器 P0 的前置）已完成。
 
 ## Radix Themes 对照（为什么不用 `@radix-ui/themes`）
 

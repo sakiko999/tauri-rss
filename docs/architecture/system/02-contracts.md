@@ -1,6 +1,6 @@
 # 02 · 跨包数据结构与接口契约
 
-> 基于 2026-10-27 v0.7.0 快照。本文只回答「谁定义、谁生产、谁消费、失效会怎样」；包职责与依赖全貌见 `01-packages.md`，端到端时序见 `03-flows.md`，怎么扩展见 `04-extension.md`。
+> 基于 2026-11-01 v0.16.0 快照。本文只回答「谁定义、谁生产、谁消费、失效会怎样」；包职责与依赖全貌见 `01-packages.md`，端到端时序见 `03-flows.md`，怎么扩展见 `04-extension.md`。
 >
 > 行号仅供阅读锚点，与当前源码可能已偏移——**以符号名为准**；契约守卫的实跑状态单独标注。
 >
@@ -64,7 +64,7 @@ graph LR
 | `AppHost` 及其 Backend | `global.d.ts:27-348` | 各宿主 injector（§5.1） | 所有包直读 `globalThis.appHost` | **全局 ambient 类型 + 全局对象** | 未注入时访问抛错（http/js/storage）或降级（ws/browser） |
 | KV `StorageBackend` + `StorageSchema` + DDL | `global.d.ts`（`StorageBackend` / `StorageSchema`）；`core/src/db/schema.ts:66` | host 的 SQLite/localStorage/内存、CLI 的 bun:sqlite | core 五个 repo、governor 冷却账本；schema 由 core 注入 | 方法调用（键值字符串）+ `setSchema?`（可选，SQL 后端实现） | 键或 DDL 漂移 = 读不到数据 / 建表失败；SQL 后端未收 schema 即读写会抛 |
 | `HttpRequest`/`HttpResponse` | `global.d.ts:308-331` | 三个 HttpBackend | resolve `host.ts`、player loader、ui `MediaImage` | 方法调用 | `arraybuffer` 返回形状不一致 → 图片/分片静默损坏 |
-| `BrowserBackend`/`BrowserTab` | `global.d.ts:167-260` | `host/src/browser/backend.ts` 的 `CdpBrowserBackend` + 载具 `BrowserDriver`（桌面 = Tauri WebView2） | resolve `browser/cdp.ts`、crawler xhs/weibo | 全局对象 + CDP 隧道 | 能力探测误判平台（见 §5.1 注入态） |
+| `BrowserBackend`/`BrowserTab` | `global.d.ts:167-260` | `host/src/browser/backend.ts` 的 `CdpBrowserBackend` + 载具 `BrowserDriver`（服务/CLI 均 spawn `amoeba-browser.exe`） | resolve `browser/cdp.ts`、crawler xhs/weibo | 全局对象 + CDP 隧道 | 能力探测误判平台（见 §5.1 注入态） |
 | `NetBackend` / `NetPolicy` | `global.d.ts:73-102`；`host/src/net/governor.ts:42-96` | host governor（恒可用） | core `syncNetPolicy`、resolve `reportRisk`、player 统计 | 方法调用 | 配额/冷却不生效或落到错误平台桶 |
 | `ChannelInfo` 投影 | `core/src/types/channel-info.ts:10` | `data-layer.ts:894-904` | desktop 添加订阅/发现页/账号页 | TS import | 表单字段缺失；`loginable/passive` 误判 |
 | `LoginResult` / `LoginCookieSnapshot` | `LoginResult` 三份平行声明（§8）；`LoginCookieSnapshot` 在 crawler/resolve 各一份，core 直接 re-export crawler 版 | channel `scanLogin` / `readLoginCookie` | core `scanLogin`、`syncBrowserCookies` | TS import / 结构兼容 | `refreshToken` 在边界被丢弃 |
@@ -75,7 +75,7 @@ graph LR
 
 ### 1.1 `DataLayer` 方法面（apps 唯一数据 seam）
 
-`DataLayer`（`packages/core/src/data-layer.ts:59-139`）共 20 个**接口成员**，其中 `subscriptions` / `reading` / `settings` / `store` / `diagnostics` 是子门面。方法注释是语义权威；下表只补齐三件容易误判的事：**成功返回什么、失败是抛还是返回值、谁在调用**。端到端时序见 `03-flows.md`；跨进程的 RPC 方法表（45 个，粒度不同于接口成员）见 `06-data-service.md`。
+`DataLayer`（`packages/core/src/data-layer.ts:59-139`）共 20 个**接口成员**，其中 `subscriptions` / `reading` / `settings` / `store` / `diagnostics` 是子门面。方法注释是语义权威；下表只补齐三件容易误判的事：**成功返回什么、失败是抛还是返回值、谁在调用**。端到端时序见 `03-flows.md`；跨进程的 RPC 方法表（47 个，粒度不同于接口成员）见 `06-data-service.md`。
 
 | 方法 | 签名要点 | 成功 / 失败语义 | 主要调用端 |
 | --- | --- | --- | --- |

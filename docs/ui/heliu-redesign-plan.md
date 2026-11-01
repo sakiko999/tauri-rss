@@ -1,7 +1,7 @@
 # 桌面端「合流」改版计划（HELIU Redesign Plan）
 
-> 状态：**实施中**（2026-10-27 起）。分支 `feat/heliu-redesign`。
-> 进度：M0 的 `navIdOf`/节点断言与 `--header-h` 断言、M3 的五个首页 selectors 已落地。
+> 状态：**已合入 master**（2026-10-27 起实施，merge `846bbb5`）。`feat/heliu-redesign` 不是当前状态。
+> 本文保留设计裁决、差距矩阵与决策记录；实施残留项见 `docs/ops/backlog.md` §B（M2）与 §C（M4/M7）。
 > 来源原型：`X:\design\聚合多媒体看板原型`（合流 HELIU，纯静态 HTML/CSS/JS，单屏 demo + 假数据）。
 > 测绘方法：11 个并行读码 agent 对外壳 / store / 列表视图 / 播放器 / 管理页 / 数据层 / 样式做测绘，
 > 产出 IA / 数据 / 视觉三张差距矩阵 + 一轮契约红队；本文是该输出的收敛与裁决。
@@ -65,7 +65,7 @@
 | 全局搜索 | **extend** | ⌘K 面板 = 「命令」+「内容」两段合一（现 CommandPalette 只搜前 400 条 title/author）；**独立 state，禁复用 `s.query`**（`select()` 会清空，`actions/view.ts:38`） |
 | 通知铃铛 | **drop** | 无通知数据模型，硬造是假入口；槽位留给同步状态 chip |
 | 专注阅读 | **new** | Modal 承载，与三栏共用同一 readingKey 写入口（双滚动容器互写会互相覆盖进度） |
-| 灯箱 | **new** | 必须走 `MediaImage`（Referer/Blob 隧道）+ radix Modal；裸 `<img>` = 微博/小红书 403 破图 |
+| 灯箱 | **new** | 必须走 `MediaImage`（防盗链由宿主网络层注入 Referer）+ radix Modal；裸 `<img>` = 微博/小红书 403 破图 |
 
 ### 2.2 数据能力（关键裁决：v1 零协议改动）
 
@@ -179,21 +179,15 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 上限（v2）：加**可选** RPC/字段 + `hello.features` 能力探测 + 失败降级；**不升** `SERVICE_PROTOCOL` 整数、不加 required snapshot 行
 （旧客户端忽略未知行、新客户端缺行会抛「快照不完整」）。片库若立项走 §7-D14。
 
-## 4. 分阶段实施（M0–M7）
+## 4. 实施结果（M0–M7）
 
-> 每阶段独立可验收、可停在任意里程碑发布（中间态 = 旧 IA + 新 token，允许）。
-> 通用回归：`bun run check`（61 项）+ 改动对应包 `.check` + `bun scripts/ui-probe.ts goto tab:all` + 1440/1280/1080 三档实拍。
+M0–M7 已落地并合入 master（`846bbb5`），M2/M4/M7 有残留项。逐阶段清单不再保留：
+M2 的 titlebar 收进主列与 D16 几何（`--rail 244` / `--header-h 64`，当前仍是 `268/52`）见
+backlog §B；M4 选中态 `?sub=&item=`（`usePlayerNav` 的 `setTimeout(0)` 补丁仍在）、M7 的
+1440/1280/1080 三档实拍与 `smoke-check.md` 全走见 backlog §C。
 
-| 阶段 | 范围 | 验收 |
-| --- | --- | --- |
-| **M0 回归保护**（前置，半天） | `store/nodes.check.ts` 补 SMART/SHORT/PAGES 断言 + `navIdOf` 表驱动自检；`boot-skeleton.check.ts` 加 `--header-h` 断言；建立「字段矩阵」文档（字段→tpl key→类型→产生渠道→消费视图，v2 用） | `bun run check` 全绿；删任一 SMART 节点的演练被断言拦住 |
-| **M1 视觉基座**（1 天） | §2.3 全部 token 换值 + 新增变量 + @theme 注册；主题切换颜色过渡白名单进 `[data-motion]` 门控（写死 .25s 会绕过动效开关）；浅色逐项覆盖对表（漏写会继承深色值） | `scripts/ui-design-audit.ts` 0 处低于 AA；三档实拍；`bun run check --layer static` |
-| **M2 外壳重构**（2 天） | 双列模型：titlebar 收进主列、品牌区 + 主导航 section 进侧栏、内容类型段缩为 全部/音频/直播、页脚同步行；NavRow live 槽位；头像菜单（账号/设置/关于，扫码入口迁入且关闭仍 `AbortController.abort`，否则浏览器锁卡满 5 分钟）；⌘K 合一（两段共用 index 空间，IME 守卫保留）；删铃铛与 update-chip；`home` 节点 + `/` 路由 + `DEFAULT_VIEW="home"`；`navIdOf` 高亮（修播放页高亮缺陷） | 启动骨架不跳（boot-skeleton 同批改）；旧深链 `/v/...`、`?word/?open/?tab` 全部实测；Alt+Left 行为不变；`rail-nav.check` 绿 |
-| **M3 首页**（2 天） | 五个 selectors + 五个 `.check`；失效键**验证**（见 §3.3，memo 键已含 itemsVersion，无需改造）；HomeView 五区块 + `.media-rail` 通用轨 + `65-home.css`；空态全部走 StateBlock | 首页五区块在 无订阅/空库/离线 三态下不出现假信息；等长 patch 恰好重算一次；滚动死区实测（头部随滚） |
-| **M4 阅读换装**（1-2 天） | `ViewFilter.starredOnly` + 阅读列表 `?filter=unread\|starred` chips（loader 写入 filter 并复位 page）；选中态 `?sub=&item=` 两参数（**禁** `?item=<sub>:<id>` 单参数——itemRefKey 不反解，preview 伪订阅与含冒号 id 都会解析错）；删 `usePlayerNav` 的 `setTimeout(0)` 补丁（选中态由 URL 派生）；`FocusReader` 弹层（同一 readingKey 单写入口） | 刷新/分享 URL 还原同一条文章；双滚动互写自检（切换后 progress 不变）；IME 回车守卫保留 |
-| **M5 动态换装**（1-2 天） | SocialCard mosaic 1-4 + `estimateItemHeight` 分档；动态 chips（图文/多图/视频/文字，客户端 filter）；`Lightbox`（MediaImage contain + radix，键盘左右翻页）；详情弹层加灯箱入口；外链一律 `openExternalSafely`（裸 `<a>` = WebView 整页被顶掉） | 微博/小红书实图回归（直连+回退）；灯箱在 9334 CDP 实测翻页；`ui-probe` 无裸 href 断言 |
-| **M6 影音与播放**（2 天） | 影音 tabs（视频/直播/音频；`tab:video` 直达、`tab:live/audio` 落对应 tab）；直播 hero（`selectLive` top1）；`.video-tile` 卡；播放页宿主：右栏 336px、剧场模式 data-attr 单列（与 1280 断点用 data-attr 区分，不新增类名）；「播放器无圆角」契约不动（`VideoShell.tsx:114`） | `ui-play-check.ts` 起播矩阵绿；剧场模式与窄窗单列不互压；清晰度仍走 `MediaQualityButton`（<2 档不显示，不自造菜单） |
-| **M7 收尾**（1 天） | 发现页瘦身（搜索型入口统一到 AddSubscriptionDialog，页内只留榜单/平台矩阵）；热搜确认为订阅派生视图（无改动，验证 `?word=` 链路）；响应式断点统一到 §2.3 五档；文档更新（本文状态、`ui-conventions.md`、`docs/README.md`、CLAUDE.md 目录段） | `bun run check` 全绿；`smoke-check.md` 走一遍；旧 `/v/tab:all` 等 3 类旧链 redirect 断言 |
+添加订阅弹窗已改成渠道目录（分类 tab + 搜索 + 行式列表 + 分页 + 两步配置），算法在 `lib/channel-catalog.ts`；
+三处刻意偏离原型：无参渠道才禁用重复订阅、保留标题/分组/刷新间隔、参数表单仍是多字段。
 
 ## 5. v1 删减清单（原型有 → 本版不做）
 
@@ -243,23 +237,6 @@ v1 文案注明「搜索标题/作者/摘要」（镜像剥了 content，全文�
 | D14 | 片库长期 | 展示层=随包静态 JSON + localStorage 片单（零协议）；可播=新 channel 走 XML；跨设备收藏=library.* RPC（唯一满足单写者+跨设备）。**禁止 desktop 直写 KV/SQLite（第二写者）** | 触发条件：真实片源/元数据源确定时立项 |
 | D15 | 主题取值 | 采纳信号橙 + 媒体块浅色恒深；两套主题分别核算对比度；保留现有 system 三态入口 | 三态入口已存在（设置→外观 `Appearance.tsx:12`），M2 只迁入新几何、不新增 |
 | D16 | 顶栏/侧栏几何 | M2 先收 titlebar 进主列（结构改），`--rail 244/--header-h 64` 数值对齐放 M1 一次做完，boot-skeleton 同批 | 几何与结构分离，各自可回滚 |
-
----
-
-## 实施状态（2026-10-27，`feat/heliu-redesign`）
-
-| 阶段 | 状态 | 实现要点 / 与计划的偏差 |
-| --- | --- | --- |
-| M0 | ✅ | `store/nodes.check.ts`（节点清单 + `navIdOf`）+ `boot-skeleton.check.ts` 的 `--header-h` 断言 |
-| M1（令牌） | ✅ | 信号橙、石墨系表面、`--bg-elev`/`--text-body`/`--accent-text`/`--accent-on-stage`/`--shadow-pop`/`--r-card`/`--r-tile`/`--r-chip`/`--ease-heliu` 全部落地并接线（`article-body`、`.modal/.palette/.toast`、`.chip`、首页过渡）；⚠️ 深色 `--live` 压到 `oklch(0.58 0.21 25)`（LIVE 白字 4.63:1）。断点 1500/1320/1280/1180/1080 五档已在 `90-responsive.css`；900/860/720 是更窄档的遗留（`minWidth=1024` 下不可达，留给未来 web 版）。`boot-skeleton.css` 的 `--bs-*` 已同批抄新值并由 `boot-skeleton.check.ts` 钉死 |
-| M2（外壳） | ⚠️ 部分 | 品牌区 + 4 主导航 + 内容类型 3 项 + 智能订阅/模式/树/页脚（含同步与「最近变更」）完成，`navIdOf` 高亮（播放页取 `?from=`）；删除顶栏 update-chip。**titlebar 未收进主列**（D16 的几何改动留待实拍验收） |
-| M3（首页） | ✅ | 五区块 + 三态空态（离线/无订阅/无内容）；`todayCounts` 等在 store 侧；失效键**已核验**（memo 键含 `itemsVersion`，内容变更写出新 `allItems` 引用，见 §3.3）；跨天/整点自校 `now`（60s 检查，避免长开过夜后页头与「今日」停在昨天） |
-| M4（阅读） | ✅ 主体 | chips（全部/未读/收藏）+ `ViewFilter.starredOnly` + `?filter=` 落 URL（loader 写入并复位页码；loader 只在**节点变化**时 `select()`，否则切 chip 会清掉选中文章与搜索词）+ 专注阅读浮层（复用同一棵已消毒节点、单一 scrollRatio 写入口；正文异步补全后按新高度重定位）。**选中态 `?sub=&item=` 未做**（`usePlayerNav` 的 `setTimeout(0)` 补丁仍在） |
-| M5（动态） | ✅ | SocialCard 1-4 图 mosaic（块比例恒等于封面比例，不破瀑布流估算）+ Lightbox（radix + MediaImage）+ 四类筛选 chips |
-| M6（影音/播放） | ✅ | 影音 tabs（导航，`aria-current`）+ 直播 hero + `.video-tile` + 剧场模式（`data-theater`）。章节与实时评论按 D13 不做 |
-| M7（收尾） | ⏳ 部分 | 文档已同步（本文状态、`ui-conventions.md` 配色、`docs/README.md`、CLAUDE.md 目录段）；断点五档已在位，900/860/720 遗留保留；发现页维持「能力矩阵 + 分区/搜索 + 榜单」（搜索型入口已在添加订阅弹窗）。**未做**：1440/1280/1080 三档实拍、`smoke-check.md` 全走 |
-| 添加订阅弹窗（原型 2026-10-27 新增） | ✅ | 渠道目录取代 chip 墙：分类 tab（含计数）+ 搜索 + 行式列表（`配置` / `添加` / `已订阅 N`）+ 每页 24 行的「显示更多」+ 两步（目录 → 配置，可返回）。算法在 `lib/channel-catalog.ts`，`channel-catalog.check.ts` 钉分类计数 / 搜索 / 分页边界 / 单例判定。**三处刻意偏离原型**：无参渠道才禁用重复订阅（带参数的每加一个 UP 主都是一条）；保留标题 / 分组 / 刷新间隔；参数表单仍是多字段。原型的「我的订阅」「阅读页」两个 `+` 入口 → 桌面已有品牌行 `+`，不再加阅读页入口 |
-| 片库 | ⏸ | 按 P1 不做入口；`/library` 深链已建，落 StateBlock「片库还没开放」（不渲染导航位） |
 
 ---
 

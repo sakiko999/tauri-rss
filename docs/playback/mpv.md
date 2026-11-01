@@ -20,7 +20,7 @@
 
 ## 二、流格式 → mpv 参数映射(核心表)
 
-项目 Stream 类型(`xml/types.ts`)字段:url/format/headers/quality/rate/dashManifest。
+项目 Stream 类型(`packages/xml/src/types.ts`)字段:url/format/headers/quality/rate/dashManifest。
 crawler 保证 streams[0] 为最高档,mpv 取第一条即可。
 
 | format | 来源 | mpv 方案 |
@@ -43,7 +43,7 @@ crawler 保证 streams[0] 为最高档,mpv 取第一条即可。
 ### DASH 的临时文件方案(关键技术点)
 
 `dashManifest` 是**内存 MPD 字符串**(webview 里喂 blob 给 dash.js),mpv 无法消费。
-但本项目自拼 MPD(`resolve/utils/mpd.ts`)的关键性质使其可落盘:
+但本项目自拼 MPD(`packages/resolve/src/utils/mpd.ts`)的关键性质使其可落盘:
 
 - profile `isoff-on-demand`,分片为 `<BaseURL>` **绝对 CDN 直链** + SegmentBase Range
   —— 本地 .mpd 文件引用远程分片完全合法

@@ -145,8 +145,8 @@ streamUrl = url + "&" + sp + "=" + deobfuscate(s)
 不解 `n` → **限速 ~50KB/s 或 403**。从 URL 提取 `n=xxx`,再用 player JS 的 n 函数解密
 替换回 URL。`resolveFormatUrl`(client.ts)统一处理 url/签名/n 参数——每个流装配前过一遍。
 
-> 门槛认知:签名+n 参数都要「从 base.js 挖函数 + JS 引擎执行」。ANDROID_VR 多数视频
-> 无 signatureCipher、无独立 n 参数,所以是主力。n 解密(signature.ts)保留作 WEB fallback。
+> 门槛认知:签名+n 参数都要「从 base.js 挖函数 + JS 引擎执行」。VISIONOS / ANDROID_VR
+> 多数视频无 signatureCipher、无独立 n 参数,所以排主用/兜底。n 解密(signature.ts)保留作 WEB fallback。
 
 ## 四、本项目落地:DASH 优先(视频)+ HLS(直播)
 
@@ -315,13 +315,13 @@ identity** 拦住——只带 `thirdParty.embedUrl` 报
 
 ```
 packages/crawler/src/channels/youtube/
-  index.ts        # re-export(channel / live / live-search / live-shelf / live-categories / playlist / user / refs)
+  index.ts        # re-export(channel / live / live-shelf / live-categories / playlist / user / refs)
   channel.ts      # youtube channel(fetch 元数据;播放走 resolve 平台侧,无 resolvePlay 方法)
   live.ts         # youtube:live channel(元数据)
 packages/resolve/src/platform/youtube/
   client.ts       # InnerTubeClient: getVisitorData / 四 client player / resolveYoutubeStreams / getDanmaku
   itag.ts         # itag 映射表(H.264/AAC 子集)
-  signature.ts    # n 参数(节流)解密(`appHost.js.call` 执行);⚠️ s 参数(signatureCipher)不实现,带签名的流整条丢弃(client.ts resolveFormatUrl),靠 ANDROID_VR 免签名规避
+  signature.ts    # n 参数(节流)解密(`appHost.js.call` 执行);⚠️ s 参数(signatureCipher)不实现,带签名的流整条丢弃(client.ts resolveFormatUrl),靠主 client(VISIONOS)免签名规避
   danmaku.ts      # live chat 轮询(createLiveChatPoller)
 packages/resolve/src/utils/mpd.ts   # 共享 MPD 装配器(从 bili 抽出,bili/youtube 共用)
 ```

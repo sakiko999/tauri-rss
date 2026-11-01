@@ -1,11 +1,11 @@
 # 平台渠道与能力总表
 
-> 合并自 capability-gaps.md + channel-expansion-research.md（2026-10-21 整理）。记录「已实现的渠道扩展」与「未做的缺口 / 已证伪路线」。
+> 合并自 capability-gaps.md + channel-expansion-research.md（2026-10-21 整理）。记录「已实现的渠道扩展」与「条件触发 / 已证伪路线」；开放缺口见 `docs/ops/backlog.md` §D。
 
 > 背景：对照 `tmp/pure_live`（Flutter 直播聚合器，23 平台）逐平台比对。
-> 第一节记录**已实现的渠道扩展**（2026-10-20 匿名实测）；其余各节只留**未做的缺口**与
+> 第一节记录**已实现的渠道扩展**（2026-10-20 匿名实测）；其余各节只留**条件触发项**与
 > **实测证伪的结论**（防止后人重走已证明走不通的路）。
-> 状态更新至 2026-10-22（B站直播分区目录落地）。
+> 状态更新至 2026-11-01（搜索渠道删除 / 统一搜索）。
 >
 > ⚠️ **2026-11-01 清理**：「关键词搜索」渠道（`bili:search` / `live:*:search` /
 > `youtube:live-search`）已删除 —— 只适合一次性检索，作为订阅长期产出同一批房间没有
@@ -168,7 +168,7 @@ GET https://api.bilibili.com/x/polymer/web-space/seasons_archives_list
 - 输入可以是 `seasonId`，也可以是视频 URL：先走 `x/web-interface/view?bvid=` 读 `data.ugc_season.id`。
 - 可直接复用 `packages/crawler/src/channels/bili/video-common.ts` 的 `ugc()`。
 - ✅ `bili:season` 已实现：`page_num` 递增翻页（`Pageable`），`seasonId` 用**模块级**
-  `seasonIdCache`（`season.ts:49`；core 每次 refresh/loadMore 都新建 source，实例级 memo
+  `seasonIdCache`（`season.ts`；core 每次 refresh/loadMore 都新建 source，实例级 memo
   跨不过一次调用），视频链接只换一次；输入归一化在 `channels/bili/refs.ts`。
 
 #### 3.2 视频列表 / 系列（series）
@@ -306,65 +306,26 @@ UI 流程（与播客榜单完全同构）：
 - **不做** UI 侧 `listCategories` 能力：目录是订阅内容，走正常的存储/刷新/列表链路，
   刷新间隔、分组、退订都与其它订阅一致，不需要单独的缓存层。
 
-#### 4.6 落地顺序（已完成）
+#### 4.6 落地顺序
 
-1. ✅ `kind:"category"` + XML 契约 + 目录渠道 + 卡片点击分流。
-2. ✅ 右侧内容视图（`?open=`，复用正常网格）+ 「订阅该分区」（完整参数）。
-3. ✅ 抖音 `partitionType` 两参问题（目录与手输都带完整参数）。
-4. ✅ 五个平台目录渠道（Twitch / YouTube / 抖音 / 斗鱼 / 虎牙）。
-5. ✅ **B站直播分区**（2026-10-22）：`bili:live:areas` 目录 + `bili:live:area` 列房
-   （`second/getList` 需登录态 + `w_webid`，见 `docs/platforms/platform-notes.md`）。
+全部完成（2026-10-22）：`kind:"category"` + XML 契约 + 目录渠道 + 卡片点击分流 →
+右侧内容视图（`?open=`）→ 抖音 `partitionType` 双参 → 五个平台目录渠道 →
+B站直播分区（`bili:live:areas` / `bili:live:area`，列房需登录态 + `w_webid`）。
 
 ---
 
-## 二、未做的缺口
+## 二、开放缺口（索引）
 
-> 开放项（§二、§三）已汇总到 `docs/ops/backlog.md` §D（新功能）与 §G（条件触发）。
+> 完整待办见 `docs/ops/backlog.md` §D；这里只留一行摘要，避免渠道文档失去上下文。
+> 行为细节与实测限制见 `docs/platforms/platform-notes.md`、`twitch.md`、`youtube.md`。
 
-- ~~**bili 按分区列房**~~ ✅ 已落地（2026-10-22）：`bili:live:areas`（目录，匿名）+
-  `bili:live:area`（列房，**需登录态**——wbi + buvid + `w_webid`（live 页 HTML 的
-  `access_id`），匿名 `-352`，20 条/页 + `has_more`）。此前「匿名带 access_id 仍
-  -352」的结论系探针 cookie 拼接缺 `; ` 分隔导致 buvid3 失效所致，登录态实测可用。
-- ~~**抖音分区搜索的词表局限**~~ —— `live:douyin:search` **已删除（2026-11-01）**。
-  已知主播请用 `live:douyin` + 抖音号/主页链接（见 `docs/platforms/platform-notes.md`）；
-  抖音用户作品用 `douyin:user`（可直接填抖音号）。`live:douyin:user` / `live:douyin:anchor` 亦已删除。
-- **抖音用户作品翻页需要登录**（2026-10-31 修正）—— `douyin:user`：导航主页 + 捕获
-  页面自己发的 `/aweme/v1/web/aweme/post/`（零构造请求）。**已登录**时滚动触发下一页，
-  走 `Pageable`（窗口 30 条）；**匿名**只有首屏 21 条、点「加载更多」报「需要登录」。
-  此前「翻页没打通」的结论是匿名态测的（登录弹窗盖住作品区、滚轮全打在弹窗上）。
-  订阅输入支持**抖音号**（`@抖音号` / `抖音号：xxx` 均可）或主页链接 / sec_uid
-  （2026-11-01：旧版资料接口 `unique_id → sec_uid`，匿名无需签名）。
-  详见 `docs/platforms/platform-notes.md` 抖音段。
-- **虎牙搜索不可分页** —— 接口 `start` 参数实测无效（`start=0` 返 20 条、`start>=20` 一律
-  返同一批 40 条），故只取首页、不声明 `Pageable`。
-- **微博无纯 HTTP 扫码登录** —— `weiboScanLogin` 走 CDP 浏览器路径（passport 页自带
-  二维码）；`settings.weiboCookie` 为空时按匿名，冷 cookie 几分钟即失效（自述于
-  `weibo/user.ts:9-13`）。
-- **bili 账号服务**（参照 `bilibili_account_service.dart:191`）—— 未做：登录后拉昵称/uid
-  展示（`/x/member/web/account`）。
-- **Twitch 未做部分**（2026-10-20）—— 已落地：`twitch:live`（`roomIds` 多频道）、
-  `twitch:hot`（热门，观看数降序）、`twitch:category`（分区流列表，slug/目录链接，
-  游标翻页）+ by-url 直播 HLS 播放；~~关键词搜索~~ ✅ 2026-11-01 `twitch:user:search`
-  （原始 GQL `searchFor`，网页 Client-ID 匿名 200）；**VOD / clip / 聊天弹幕 / 登录仍不做**：
-  - VOD/clip 路由要排在频道名**单段路径之前**（`/videos/<id>`、`/<login>/clip/<slug>`），
-    二期再加；`normalizeTwitchLogin` 现在对多段路径一律返回 null（避免误当频道）。
-  - **分类榜已做成目录订阅 `twitch:categories`**（`games(first)` 只给分类元数据、本身没有
-    可播房间）→ 点分类订阅 `twitch:category`，不另造分类 feed。
-  - 聊天（IRC `wss://irc-ws.chat.twitch.tv:443` + `justinfan`）文本帧实测可用，但宿主
-    `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 要先给宿主 ws 加 text 帧。
-  - ~~关键词搜索（搜频道/流）依赖 persisted query（结构不稳）~~ **证伪（2026-11-01）**：
-    原始 `searchFor` 查询匿名可用（见上）；只做了**搜频道**，搜直播流（`searchFor.channels`
-    不带在播态）二期再评估。登录（OAuth「我的关注」）需注册应用，不建议近期做。
-  - **Helix 匿名 401**（`api.twitch.tv/helix/streams`），且不提供播放地址 → 不走 Helix；
-    元数据与播放 token 都走公开 web GraphQL。
-- **YouTube 播放列表的完整列表未做**（2026-10-20）—— 需要 >15 条时走 InnerTube
-  `VL<playlistId>`（100/页 + continuation，解析器绑 `lockupViewModel`，较脆弱）尚未实现。
-- **YouTube 直播分区只到栏目级**（2026-10-20）—— **不是 Twitch 式完整分区树**，无
-  continuation。游戏级分区（`/gaming` 页的 Top live games，每个频道约 51 条）未做。
-- **B站合集 / 视频列表 / 收藏夹的分页深度**（2026-10-20）—— 剩余：
-  私有收藏夹需登录；「稍后再看」不接；合集/系列条目没有作者名（archives 里只有
-  `mid`，不回查用户资料）。
-- **分区目录订阅的剩余项**：预览弹窗里的房间**只读**（预览条目无真实订阅，不能直接播）。
+- **B站**：合集/视频列表/收藏夹分页深度（私有收藏夹需登录）、「稍后再看」不接、合集条目无作者名、账号资料展示未做。
+- **YouTube**：播放列表完整列表（InnerTube `VL` continuation）、游戏级直播分区；poToken 等条件项见 §三。
+- **Twitch**：VOD / clip 路由、聊天弹幕（需宿主 `WsLike.send` text 帧）、登录（OAuth 需注册应用）。
+- **抖音**：直播关键词搜索（`live/search` 需专用小号 + CDP 被动探针）；用户搜索已落地，分区搜索渠道已删除。
+- **虎牙**：搜索不可分页（`start` 无效、`rows` 封顶，证据见 `platform-notes.md`）。
+- **微博 / 小红书**：微博无纯 HTTP 扫码路径（见 `login.md`）；小红书匿名态已移除，全渠道要求登录。
+- **通用**：分区预览条目只读、bili 登录自动保活、外部 mpv 播放器接入（见 `backlog.md` §D）。
 
 ## 三、条件触发的迁移（当前不做，等信号）
 

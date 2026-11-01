@@ -69,8 +69,9 @@ utility 会被压过，表现为「类写了但没生效」。给已有语义类
 ## 组件与浮层
 
 - ⚠️ **不用原生 `<select>`**：下拉面板由 WebView/系统渲染，深色主题下弹的是**亮色系统
-  菜单**且 CSS 管不到。统一用 `components/Modal.tsx` 的 `Select`（radix，自带浮层）。
-  同理 `Switch`/`Menu`/`Modal` 都在那个模块。原生 `<input>`/`<textarea>` 保留（可主题化）。
+  菜单**且 CSS 管不到。统一用 `components/ui/Select.tsx`（radix，自带浮层）；
+  `Switch`/`Menu`/`Modal` 同在 `components/ui/`。`components/Modal.tsx` 只是旧导入路径的
+  兼容层，新代码直接从 `components/ui/<原语>.tsx` 导入。原生 `<input>`/`<textarea>` 保留（可主题化）。
   ⚠️ **占位提示走 `placeholder`，不要塞进 `options`**（否则会渲染成可点击的 `role=option`，
   选它只是空操作）；无空值选项时 Root 的 `value` 必须是 `""` 才显示 placeholder —— 内部
   哨兵 `__none` 会被 Radix 当成已选值。选项可带 `disabled`。
@@ -255,23 +256,21 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 
 ### 决策
 
-- **桌面优先 WebView2 原生注入，blob 保留为回退与跨平台路径**。理由：原生注入不改
-  响应体，缓存/Range/渐进解码全部保留；Windows 之外没有等价的可写 header 拦截点
-  （Android WebView 只能造响应，不能改请求头），所以回退路径必须保留。
+- **桌面走 WebView2 原生注入，图片/实况恒直连**。理由：原生注入不改响应体，缓存/Range/
+  渐进解码全部保留。blob 隧道与 JS 回退已于 2026-10-28 删除；未注入环境（纯浏览器调试）
+  403 直接走 ImageOff 占位，不再有跨平台回退路径。
 - **不做自定义协议 `media://`**：Tauri 的 responder 仍要求完整 body，wry 会整块复制
   进内存流，不是真流式；且自定义协议基本绕开 Chromium 缓存，Android 的 Range 还有
   已知缺陷（形态差异与安全洞见上文两节）。**两条替代路线都不做**：`http_get` 自动补
   Referer 会把同一份规则分裂成 TS/Rust 两份；`media://` 的原生 img 加载收益已被桌面
   WebView2 原生注入覆盖。
 
-### 图片加载性能（2026-08 实测；2026-10-25 起只剩回退路径）
+### 图片加载性能
 
-桌面走 WebView2 原生注入后不再有隧道瓶颈（跨重启复用 Chromium HTTP 缓存）。旧瓶颈只剩
-非 Windows 回退路径：整图下载（无渐进）、`proxyCache` 只活一个会话、无磁盘缓存、尺寸预取
-多一次 Range 往返（`sizeCache` 只存尺寸，见 `resolve/src/utils/img-size.ts`）。
+桌面走 WebView2 原生注入，无隧道瓶颈，跨重启复用 Chromium HTTP 缓存；未注入环境不做兜底
+（403 → ImageOff）。尺寸预取多一次 Range 往返（`resolve/src/utils/img-size.ts`）。
 
-**剩余优化（未做）**：回退路径加「图 URL → 字节」持久缓存；尺寸预取与显示合并；自定义协议
-`media://` 仍不推荐（见「决策」）。
+**剩余优化（未做）**：尺寸预取与显示合并；自定义协议 `media://` 仍不推荐（见「决策」）。
 
 ## 发现页与添加订阅
 
@@ -332,9 +331,9 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
   `rss:podcast`（播客，解 enclosure → 可播条目）。其余 `rss:*` 是 36 条种子清单，列出来太噪。
   ⚠️ 曾把整个 `rss:` 前缀滤掉 → **手工加外部 feed / 订阅播客都没有入口**
 - **`loginable` 是「支持扫码登录」，不是「必须登录」**：抖音直播/分区搜索等匿名也可用。
-  渠道 chip 用紧凑 QR 标记（13px + accent-soft pill），并按**平台**聚合 —— 同平台任一渠道
-  支持登录就给该平台所有 chip 同一标记；不要用文字 tag「需登录/可扫码登录」（太小读不懂、
-  像警告）。选中渠道后另有登录说明，入口统一在「账号与凭证」（2026-10-19 修正）。
+  渠道目录行用紧凑 QR 标记，并按**平台**聚合 —— 同平台任一渠道支持登录就给该平台所有行
+  同一标记；不要用文字 tag「需登录/可扫码登录」（太小读不懂、像警告）。选中渠道后另有
+  登录说明，入口统一在「账号与凭证」（2026-10-19 修正）。
 
 ## 调试工具
 
@@ -342,7 +341,9 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
   会连到 DevTools 而不是应用页面（曾因此截了一堆 DevTools 的图当「应用截图」）。
 - ⭐ **抓取浏览器的 CDP**：桌面已封 `browser`（`injectTauriHost({browser:false})`），抓取浏览器
   由数据服务 spawn 的 `amoeba-browser` sidecar 承载，**端口不固定**（sidecar 输出 `READY <port>`，
-  见 `docs/architecture/crawler-topology.md`）；固定 9334 只属于 Tauri 内嵌路径（宿主未封 `browser` 时）。
+  见 `docs/architecture/crawler-topology.md`）。Tauri 内嵌抓取路径（`webview_browser_*` /
+  `tauri/browser-backend.ts`，固定 9334）已于 2026-11-01 删除，9334 不再是抓取端口；
+  桌面应用自身的 devtools 端口（dev 9222）是另一回事。
   拿到端口后 `GET http://127.0.0.1:<port>/json/list` → page target → WebSocket `Runtime.evaluate`。
   验证 browser 侧行为（页面 state / 滚动 / 翻页方向）不必往产品代码加日志：前后两次读
   `__INITIAL_STATE__` 对比即可（2026-10-20 用它定位了 explore 分页方向）。⚠️ 两个测量陷阱：
@@ -357,13 +358,16 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 
 ## UI 组件/样式/动画库选型（2026-10-27 评估，结论：不换库）
 
+> 2026-11-01 起行为层统一用 `radix-ui` 聚合包的**子路径**导入（`radix-ui/dialog`，见
+> `docs/ui/design-system-plan.md` F1）——那是打包形态收敛，不是换组件库，下列「不换库」结论不变。
+
 四条硬约束决定匹配度：样式能对接**手写 CSS + 现有 token**、能活在**虚拟列表**（Virtuoso/masonic）里、
 动效受 **`data-motion` 三档**控制、包体/启动敏感（桌面安装包 7.4MB）。按此筛过一轮主流候选，
 **没有任何组件库值得替换**；匹配度 high 的只有 CSS 原生能力。
 
 | 层 | 候选 | 结论 |
 | --- | --- | --- |
-| 行为 | `radix-ui` 聚合伞包 | 同一份代码的打包形态，**零收益**（多约 25 个未用 primitive、锁死版本号） |
+| 行为 | `radix-ui` 聚合伞包 | 2026-11-01 已采用（F1）：子路径 re-export + tree-shake，运行时与独立包一致；作「换库」候选仍是零收益 |
 | 行为 | Base UI 1.9.0 | 同类最契合（无样式/CSS 变量/`data-*`/MIT/React 19），但**同面 +28KB gzip、零功能增益** |
 | 行为 | Ark UI / React Aria / Headless UI | 迁移面或 API 距离更大；Headless UI 的 Select 只是原生 `<select>` 包装（系统菜单） |
 | 样式 | **CSS `@layer` 声明层序** | 唯一 high：把「`@import` 顺序 = 层叠顺序」改成显式层声明 |
@@ -374,8 +378,9 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 | 动画 | AutoAnimate / anime.js / tw-animate-css | 不认 `data-motion` 三档 / 体积 10–40KB / 绑定 Tailwind 固定时长 |
 | 部件 | sonner / cmdk / react-resizable-panels / TanStack Virtual | 自研更贴合（token 时序、IME 守卫、grid 折叠补间、Virtuoso 动态高度） |
 
-判据数字（实测）：903 个 className token 里 utility 仅 84（**9.3%**），自维护语义类 359 个；
-Radix 触点仅 **7 条 import / 4 个文件**；样式 11 文件 4087 行。换库只会动到外壳、拿不到功能收益。
+判据数字（2026-10-27 实测，F1 迁移前）：903 个 className token 里 utility 仅 84（**9.3%**），
+自维护语义类 359 个；Radix 触点仅 **7 条 import / 4 个文件**；样式 11 文件 4087 行。
+换库只会动到外壳、拿不到功能收益。
 
 可做但**未做**（按性价比排序）：
 
@@ -383,7 +388,5 @@ Radix 触点仅 **7 条 import / 4 个文件**；样式 11 文件 4087 行。换
    `@layer theme, base, components, utilities, app.tokens, …, app.responsive;`。
    ⚠️ `10-tokens.css` **只包选择器块**（`:root`/`[data-theme]`/`[data-density]`/`[data-motion]`），
    `@theme`/`@keyframes`/`@font-face` 与元素 reset 必须留顶层——包错是静默大面积变色。
-2. Radix 补丁升级：`dialog 1.3.0→1.3.1`、`dropdown-menu 2.2.0→2.2.1`；`packages/player`
-   的 `^2.1.6` 对齐到 `^2.1.25`（消版本漂移）。
-3. 浮层退场（Dialog/Menu/Toast）+ Accordion 高度过渡（0.5–1 人日，纯 CSS，
+2. 浮层退场（Dialog/Menu/Toast）+ Accordion 高度过渡（0.5–1 人日，纯 CSS，
    受 `data-motion` 三档控制）。

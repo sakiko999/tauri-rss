@@ -1,17 +1,17 @@
 # 00 · 系统总览与运行时拓扑
 
-> 基于 2026-10-27 的 master 快照（v0.7.0，`8da14b8`）。`path:line` 是阅读锚点，重构后会漂移，文件与符号名优先。
+> 基于 2026-11-01 的 master 快照（v0.16.0）。`path:line` 是阅读锚点，重构后会漂移，文件与符号名优先。
 > 文档与代码冲突时以代码为准；已知漂移集中登记在 `05-risks.md`，本文不重复。
 
 ## 1. 定位与非目标
 
-**一句话**：Amoeba 是一个本地优先的订阅/媒体阅读器 monorepo。一个 Rust crate（`apps/src-tauri`，Cargo package `amoeba`）用 10 个 Tauri command 暴露 HTTP / WebSocket / WebView2 / 数据服务生命周期（`apps/src-tauri/src/lib.rs:27-38`），SQLite、外链、自动更新、单实例另由 5 个 Tauri 插件注册（opener / sql / updater / process / single-instance，`apps/src-tauri/src/plugins/mod.rs`；updater/process/single-instance 仅桌面）；11 个私有 TypeScript 包组成「协议 → 平台 → 渠道 → 编排 → 服务客户端 → 播放/原子」链路（清单与依赖见 [01-packages.md](01-packages.md) §1）；desktop 默认是数据服务客户端，CLI 既是探针也是服务载具/客户端。
+**一句话**：Amoeba 是一个本地优先的订阅/媒体阅读器 monorepo。一个 Rust crate（`apps/src-tauri`，Cargo package `amoeba`）用 6 个 Tauri command（`http_get`、`service_endpoint`/`service_shutdown`、`ws_connect/send/close`）暴露 HTTP / WebSocket / 数据服务生命周期（`apps/src-tauri/src/lib.rs`），SQLite、外链、自动更新、单实例另由 5 个 Tauri 插件注册（opener / sql / updater / process / single-instance，`apps/src-tauri/src/plugins/mod.rs`；updater/process/single-instance 仅桌面）；11 个私有 TypeScript 包组成「协议 → 平台 → 渠道 → 编排 → 服务客户端 → 播放/原子」链路（清单与依赖见 [01-packages.md](01-packages.md) §1）；desktop 默认是数据服务客户端，CLI 既是探针也是服务载具/客户端。
 
 三个使用端的分工不是「同一产品三套皮」，而是三种不同的数据/状态责任：
 
 | 使用端 | 它是什么 | 实际能力边界 | 代码入口 |
 | --- | --- | --- | --- |
-| **desktop** | 订阅工作台：rail 侧栏 + reader/media/hot/page/player/shortvideo 六种外壳，抓取、播放、订阅 CRUD、频道发现、登录、诊断全量 | 默认经 `service_endpoint` + `@amoeba/service-client` 读写本地服务；`storage/browser` 注入为拒绝后端，**不再是数据写者**。桌面仍独占 updater 与媒体 Referer | `apps/desktop/src/main.tsx`、`store/data-source.ts`、`App.tsx` |
+| **desktop** | 订阅工作台：rail 侧栏 + home/reader/media/hot/page/player/shortvideo 七种外壳，播放、订阅 CRUD、频道发现、登录、诊断全量 | 默认经 `service_endpoint` + `@amoeba/service-client` 读写本地服务；`storage` 注入为拒绝后端、`browser` 不注入，**不再是数据写者**。桌面仍独占 updater 与媒体 Referer | `apps/desktop/src/main.tsx`、`store/data-source.ts`、`App.tsx` |
 | **mobile** | 极简「看内容」闭环：未读列表 → 播放/阅读，加 RSS 直链增删 | 只用到 `query/patch/subscribe/refresh/addSubscription/resolveDetail/resolvePlay/resolveLivePlay` 等少数 DataLayer 方法；无 router、无频道发现、无登录 UI | `apps/mobile/src/store.ts:44-57`、`App.tsx` |
 | **CLI** | 调试探针：Bun + cac 零构建，14 个命令覆盖注册表、单渠道抓取、by-url 播放/弹幕、DataLayer 冒烟、热搜/联想/详情、扫码登录、环境自检、服务客户端（attach）、浏览器 profile 清理；`--service` 走数据服务入口（清单见 `../../ops/commands.md`） | 自行组装 node 宿主与 bun:sqlite；`--browser` 时注入 `amoeba-browser` sidecar（独立 WebView2 + CDP），默认不注入 | `apps/cli/src/main.ts`、`apps/cli/src/service/main.ts`、`apps/browser-sidecar/src/main.rs` |
 
@@ -35,7 +35,7 @@
 | 形态 | 入口与构建 | 宿主注入 | storage | 网络路径 | 可用能力 | 关键限制 |
 | --- | --- | --- | --- | --- | --- | --- |
 | **Bun 数据服务** | `apps/cli/src/service/main.ts`（`rss --service`；发布时 `dist/service/service.js`，由 `amoeba-runtime` 拉起） | `setupServiceHost()`（`apps/cli/src/service/host.ts:73`）：`nodeBackend + nodeJsBackend + sqliteStorage + nodeWsBackend + amoeba-browser sidecar`，`setLogSink` 写 stderr | bun:sqlite → desktop 的 `rss*.db`（唯一写者） | node `fetch` → governedHttp；CDP 走 `net.browserGate` | http/js/storage/ws/browser + net；stdout 只 `READY <port>` | SQLite/crawler/浏览器全归它；desktop/CLI 只能发 RPC，不得直开库 |
-| **Tauri desktop** | `apps/desktop`，Vite `1420`，`tauri.conf.json:8,10` | `injectTauriHost({storage:false, browser:false})`（`apps/desktop/src/main.tsx:15-18` → `packages/host/src/tauri/inject-tauri.ts:31-38`） | 拒绝后端（`storage:false`，读写即抛）；SQLite 归数据服务，库名经 `service_endpoint` 的 `dbFile` 传入（`rss.db` / `rss.dev.db` / `rss.release-debug.db`） | 媒体/图片：`appHost.http` → governor → `invoke("http_get")` → Rust reqwest（`packages/host/src/tauri/tauri-http-backend.ts:37`）；订阅读写：`@amoeba/service-client` → 服务 HTTP/WS（`apps/desktop/src/store/data-source.ts:27-37`） | http/js/ws/updater/openExternal + 恒可用 net；`storage` 拒绝后端、`browser` 不注入 | 抓取 / SQLite / CDP 全在数据服务进程（单写者）；桌面独占 updater 与媒体 Referer；`csp: null` |
+| **Tauri desktop** | `apps/desktop`，Vite `1420`，`tauri.conf.json:8,10` | `injectTauriHost({storage:false, browser:false})`（`apps/desktop/src/main.tsx:15-18` → `packages/host/src/tauri/inject-tauri.ts:31-38`） | 拒绝后端（`storage:false`，读写即抛）；SQLite 归数据服务，库名经 `service_endpoint` 的 `dbFile` 传入（`rss.db` / `rss.dev.db` / `rss.release-debug.db`） | 媒体分片：`appHost.http` → governor → `invoke("http_get")` → Rust reqwest（`packages/host/src/tauri/tauri-http-backend.ts:37`）；图片：原生 `<img>` 直连，Referer 由 Rust 网络层注入（不走 `appHost.http`）；订阅读写：`@amoeba/service-client` → 服务 HTTP/WS（`apps/desktop/src/store/data-source.ts:27-37`） | http/js/ws/updater/openExternal + 恒可用 net；`storage` 拒绝后端、`browser` 不注入 | 抓取 / SQLite / CDP 全在数据服务进程（单写者）；桌面独占 updater 与媒体 Referer；`csp: null` |
 | **Tauri mobile** | `apps/mobile`，Vite `1422`，`tauri.conf.mobile.json:8,10` | `injectTauriHost({ updater: false, browser: false })`（`apps/mobile/src/main.tsx:16`） | `SqliteStorageBackend`（tauri-plugin-sql，进程内 DataLayer）；app data 目录按 identifier `app.amoeba.mobile` 隔离（`tauri.conf.mobile.json:5`） | 与桌面相同的 Rust `http_get` / `ws_*` 隧道 | http/js/storage/ws；**`browser` 显式不注入**（`inject-tauri.ts:31-38`） | 已冻结（2026-10-26）；无 updater；无登录/发现/工作台；无抓取浏览器，被动渠道在移动端回落主动抓取 |
 | **Bun CLI** | `apps/cli`，`bun run rss`（`package.json:35`） | 自组装 `setupHost()`：`nodeBackend + nodeJsBackend + sqliteStorage + nodeWsBackend`（`apps/cli/src/host/node-host.ts:46-67`） | bun:sqlite → `apps/cli/.data/rss.db`（`apps/cli/src/store/sqlite-storage.ts:14-18`） | node `fetch`，经 `setHostCaps` 包成 governedHttp | http/js/storage/ws；log 用 localStorage shim 默认静音（`node-host.ts:46-47`） | browser 需显式 `--browser`（sidecar）；未开启时 `xhs:explore` 等被动渠道读不到数据；`updater` 不注入；入口已 import `@amoeba/core/source/rsshub`（`main.ts:20`），`rsshub:*` 可用；settings 统一走 `createSettingsRepository`（`apps/cli/src/info.ts:11,59`） |
 | **纯浏览器 dev** | 仅 mobile 入口在无 `__TAURI_INTERNALS__` 时降级（`apps/mobile/src/main.tsx:16-17`） | `injectBrowserHost()`（`packages/host/src/browser/inject-browser.ts:35-41`） | `localStorage`，前缀 `browser-rss:`（`inject-browser.ts:39`） | 浏览器 `fetch`，受 CORS 限制 | http/js/storage；无 ws/browser/updater | 多数平台 API/RSS 无 CORS 头，抓取基本失败；仅能看壳层与本地库。desktop 的 `bun run dev`（无 Tauri）走 `createDesktopDataLayer()` 的进程内 `createDataLayer()` 分支（`apps/desktop/src/store/data-source.ts:27-33`），仅纯前端调试 |
@@ -44,7 +44,7 @@
 
 同一份编排、不同宿主是这套架构的核心收益，也带来两个必须知道的分叉：
 
-1. **能力探测按 `appHost` 字段真值**（`global.d.ts:27-56`），所以「没注入」与「注入了但底层不可用」在类型上无法区分。mobile 因此显式传 `browser:false`，让 core 的被动门按「无浏览器」走；桌面与移动端都走 `injectTauriHost`，且两端都显式传 `browser:false`（抓取浏览器在数据服务进程）。
+1. **能力探测按 `appHost` 字段真值**（`global.d.ts:27-56`），所以「没注入」与「注入了但底层不可用」在类型上无法区分。mobile 因此显式传 `browser:false`，让 core 的被动门按「无浏览器」走；桌面与移动端都走 `injectTauriHost`，且两端都显式传 `browser:false`（桌面的抓取浏览器在数据服务进程；移动端无抓取浏览器）。
 2. **CLI 不是 desktop 的缩小版**：它不经 `DataLayer` 的命令直接调 crawler/resolve，且有自己的 settings 读取与数据库（`apps/cli/src/main.ts:50-57`）。探针结果与应用行为的差异有相当一部分来自这里，而不是内核。
 
 形态差异会造成可观测的行为差异，排查时必须先定位端：

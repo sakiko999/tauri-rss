@@ -152,7 +152,8 @@
   二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
   ⚠️ **匿名搜抖音无解已用真实 Edge 复核**（路 1/2 仍 2483，搜索页被 verify-center 4031 拦）：
   登录硬门槛，**browser 模拟解不了**（xhs 是 TLS 指纹差异能解，抖音是账号门槛不能）。
-  虎牙搜索/搜主播不可分页。~~抖音搜索渠道~~（2026-10-18 实现，**2026-11-01 删除**）：
+  虎牙搜索/搜主播不可分页（`start` 实测无效，靠 `rows` 一次多取；房间 ~100 / 主播 50 封顶）。
+  ~~抖音搜索渠道~~（2026-10-18 实现，**2026-11-01 删除**）：
   `live:douyin:search` 本质是**分区搜索**（关键词 → 分区 → 列房），只认大类/游戏名，
   不搜主播/房间标题；`live:douyin:anchor` 更早已删除。
   已知主播用 `live:douyin` + 抖音号/主页链接（发现页抖音卡片的「用户直播间」入口
@@ -264,8 +265,8 @@
   `extractInitialState` 用**平衡大括号截纯 JSON** + 空容器归一
 - ⚠️ **不要手拼 user_posted fetch**（页面内 `_webmsxyw` 只返回部分头 → 300011 风控）。
   `xhs:user` 分页是**滚动驱动**（浏览器路径），已加窗口化 + 验证码检测
-- 签名方案当前**不在主分支**（`signApiHeaders` 直接抛错降级）；曾经的 `packages/xhshow/`
-  fork 与 `feat/xhs-rustpython` 分支**在本仓库已不存在**（纯算法处于上游失效期，故维持全 SSR）。
+- 签名方案当前**不在主分支**（`signApiHeaders` 直接抛错降级）；`packages/xhshow/` fork
+  已移出主分支、归 `feat/xhs-rustpython` 分支且不维护（纯算法处于上游失效期，故维持全 SSR）。
   若要重启签名移植，参照 `docs/platforms/xhs-signature.md` 的 Python xhshow 0.2.0
 
 ## 实况图（Live Photo）：小红书 / 微博（2026-10-22 实测）
@@ -351,7 +352,7 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
 - ⚠️ **榜单不含 `feedUrl`**（旧 iTunes RSS 只给 `im:id`）→ 必须再 Lookup 一次换 feedUrl。
   Lookup 返回顺序**不保证**与请求一致，按榜单原序重排；**没 feedUrl 的条目直接丢**（只能显示不能订阅）
 - ⚠️ **搜索渠道刻意不声明 `defaultInfo`**：发现页「可一键订阅」判据 `!!defaultInfo || 无必填项`，
-  **空对象是 truthy** → 写 `= {}` 会让需要 `q` 的渠道被误列进去（同 `bili:search`）
+  **空对象是 truthy** → 写 `= {}` 会让需要 `q` 的渠道被误列进去（同 `bili:anchor`）
 - 端点：旧 `itunes.apple.com/{cc}/rss/toppodcasts` / `search?media=podcast`（**直接给 feedUrl**）/
   `lookup?id=` 全可用；新 `rss.applemarketingtools.com` **504**。均匿名，但要带 UA
 
@@ -408,5 +409,6 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
 - **「清除凭证」会真正登出浏览器账号**（2026-10-19）：xhs/weibo/抖音抓取用的是
   抓取浏览器（数据服务侧 `amoeba-browser` WebView2）profile 的登录态，只清
   `settings.*Cookie` 等于没退。账号页先发 `dl.diagnostics.clearCookies(hosts)`
-  （服务 RPC，`AccountPage.tsx:226`），由服务侧按域精确删除（`backend.ts:549`，
-  `d === host || d.endsWith("." + host)`），成功后再清 settings；中途失败则 settings 保持不动。
+  （服务 RPC，`AccountPage.tsx:226`），由服务侧按域精确删除（`browser/backend.ts` 的
+  `clearCookies`，判据 `d === host || d.endsWith("." + host)`），成功后再清 settings；
+  中途失败则 settings 保持不动。

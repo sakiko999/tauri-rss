@@ -1,8 +1,8 @@
 # 05 · 架构约束、耦合与演进风险
 
-> 代码快照：2026-10-23 基线（`master` @ 58b0d77）；R5/R9/R10/R11/R15 已于 2026-10-26 复核更新；其余条目按 10-23 基线判定（行号已按 10-27 代码重核）。只覆盖会影响数据、契约、状态与工程可维护性的问题；UI 视觉/布局不在范围。
+> 代码快照：2026-10-23 基线（`master` @ 58b0d77）；R5/R9/R10/R11/R15 已于 2026-10-26 复核更新；R16 的浏览器生命周期于 2026-11-01 复核（抓取浏览器只剩 sidecar 一条路径）。只覆盖会影响数据、契约、状态与工程可维护性的问题；UI 视觉/布局不在范围。
 > 判定口径：**严重度** = 触发后对正确性与可恢复性的影响；**可能性** = 当前代码与默认使用方式下的触发概率。
-> 状态口径：**未标「已修 / 部分修复」的条目 = 未处理**（R13/R14/R16 属此列；R15/R18 已修，R17/R19 部分修复，不是漏标）。
+> 状态口径：**未标「已修 / 部分修复」的条目 = 未处理**（R13/R14 属此列；R16 部分缓解——空闲回收已落地、长等待显式 lease 仍缺；R15/R18 已修，R17/R19 部分修复，不是漏标）。
 > 本次实跑守卫：`serialize-roundtrip.check.ts`、`serialize-contract.check.ts`、`passive-mode.check.ts`（含预览 `no-data` 用例）与 `error-kind.check.ts` 均通过（exit 0）；本轮共跑 19 个自检（含 mobile `html.check.ts`）、core/host/resolve/desktop/mobile/cli 的 tsc 与两端 Vite build。
 > 行号是复核时的锚点，代码移动后以符号名为准；只写文件名的条目表示未逐行复核到该断言。同目录：README.md · 00-overview.md · 01-packages.md · 02-contracts.md · 03-flows.md · 04-extension.md。
 
@@ -14,7 +14,7 @@
 | R2 | 包级运行时环 / 隐式宿主加载 **已修（2026-10-23）** | — | — | host 不再 import core（schema 注入）；`resolve/media-referrer.ts` 取代 `resolve → host` 值导入；host `./cdp\|runtime\|governor\|node\|tauri\|browser` 子路径 + 根入口无 import 副作用；`setHostCaps` 自建门面 | 新跨包值导入先查 `01-packages.md` 矩阵；应用走 host 子路径 |
 | R3 | 视图层裸 id 寻址，跨订阅同 id 串条目 **已修（2026-10-23）** | — | — | `router.tsx:36,60,67` 写 `?sub=`；`store/types.ts:59-63` 的 `selectedArticleKey`；队列存复合键（`store/actions/ui.ts:45-51`）；正文缓存带订阅（`ReaderMain.tsx:79-120`） | 新增「按 id 记/改/查」入口先过 `itemRefKey`/`readingKey` |
 | R4 | 新建订阅的首抓失败被丢弃，成功提示 + 空视图 **已修（2026-10-23）** | — | — | `data-layer.ts:70-75,1062-1086` 返回 `{ id, refresh }`；desktop 失败弹 warn（`subs.ts:70-76`）；CLI 复用首刷结果（`refresh.ts:47-57`） | 调用方不要只取 `id` 忽略 `refresh.error` |
-| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 **已消解（2026-10-26）** | — | — | desktop 不再持有抓取浏览器（`injectTauriHost({storage:false,browser:false})`，desktop 侧的 `abortTabs` 调用已移除，host 仍保留该 API 给 CLI/浏览器路径）；超时改走 job 取消：`/v1/jobs/:id/cancel` → `AbortSignal` → core `refresh(…,{signal})`（`apps/desktop/src/store/actions/data.ts` 的 `withTimeout(..., onTimeout)`） | 新增长任务沿用 jobId + `cancel(jobId)`，不要在客户端只 abort 本地 fetch |
+| R5 | `refreshAll` 超时中止所有非登录 lane，并把超时归因给其它订阅 **已消解（2026-10-26）** | — | — | desktop 不再持有抓取浏览器（`injectTauriHost({storage:false,browser:false})`，desktop 侧的 `abortTabs` 调用已移除，host 仍保留该 API 但当前无生产调用）；超时改走 job 取消：`/v1/jobs/:id/cancel` → `AbortSignal` → core `refresh(…,{signal})`（`apps/desktop/src/store/actions/data.ts` 的 `withTimeout(..., onTimeout)`） | 新增长任务沿用 jobId + `cancel(jobId)`，不要在客户端只 abort 本地 fetch |
 | R6 | 失败只有字符串，登录/风控/403 不可区分 **已修（2026-10-23，启发式兜底）** | — | — | `RefreshResult.errorKind?`（`packages/core/src/types/refresh-result.ts`）；`packages/resolve/src/errors.ts`；desktop `refreshErrorKinds` / 诊断表 / 首刷 toast；player `errorKindOf` | 平台 client 逐步从普通 `Error` 换成 `ResolveError(kind)`，启发式兜底随之退场 |
 | R7 | mobile 能力模型不一致（注入 browser、可播缺 `isFeedItem`） **已修（2026-10-23）** | — | — | `inject-tauri.ts:31` 新增 `browser?: boolean`；mobile 显式 `browser:false`（`apps/mobile/src/main.tsx:16`）；`isPlayable` 排除无 stream 的 audio（`apps/mobile/src/store.ts:146-152`） | 新增可选宿主能力时同步两端的注入开关 |
 | R8 | `previewChannel` 绕过被动采集承诺 **已修（2026-10-23）** | — | — | `previewChannel` 与刷新共用被动门：`channel.passive && appHost.browser` 时只调 `fetchPassive`，无数据抛 `ResolveError("no-data")`（`packages/core/src/data-layer.ts`）；`passive-mode.check.ts` 新增预览用例 | 无 |
@@ -25,7 +25,7 @@
 | R13 | release-only 分支无法被同一套巡检覆盖 | 中 | 高 | `scripts/tauri.ts:54-61`；`apps/desktop/src/main.tsx`（`__store` 仅 DEV） | release 下开受控 CDP 或加核对钩子 |
 | R14 | 进程级单例：provider 后注册覆盖、门面 last-writer-wins、`cookieSnapshot` 无版本 | 中 | 低 | `packages/resolve/src/platform/credentials.ts:25-30`；`packages/core/src/data-layer.ts:200-221,472,914,945`；`packages/host/src/runtime.ts:120-141` | per-instance 化或显式 dispose |
 | R15 | CLI 旁路 settings **已修（2026-10-26）** | — | — | `apps/cli/src/info.ts` 的 `loadSettings` 改走 core `createSettingsRepository`（归一化/损坏留证/串行化，顺带修掉每次新建连接）；登录态不再写 CLI 本地库 —— profile/cookie 只在数据服务（`rss login` 走服务 RPC） | CLI 探针仍读自己的库（调试载具），登录态消费请用 `--via-service` 或桌面 |
-| R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 | 中 | 中 | `packages/host/src/node/browser-sidecar.ts`（空闲回收入口）、`packages/host/src/browser/backend.ts`（`closeIfIdle`） | 登录/长轮询显式续期或豁免 |
+| R16 | 抓取浏览器空闲回收与“长时人工等待”的边界未建模 **（部分缓解 2026-11-01）** | 中 | 中 | `packages/host/src/node/browser-sidecar.ts`（整树空闲 3min、单 tab 5min）、`packages/host/src/browser/backend.ts`（`closeIfIdle`）、`packages/resolve/src/browser/cdp.ts`（`releaseLaneTab`） | 登录/长轮询显式续期或豁免 |
 | R17 | 播放器兜底链静默（FLV 无 headers）**（部分修复 2026-10-23）** | 中 | 中 | 未知格式裸 `<video>` 已挂 onError（`PlayableMedia.tsx:472-475`）；FLV 仍不带 headers（`useMediaStream.ts:209-212`） | FLV 走隧道或显式提示 |
 | R18 | 死字段与无生产者字段面 **已修（2026-10-23）** | — | — | `Live.quality`/`Live.notice` 无生产者，已从类型与 serialize 删除；`Base.sourceId`/`raw` 注明「crawler 内部字段，不过 XML」 | 新增字段前先 grep 生产者；不可达字段直接删 |
 | R19 | 文档/注释与代码相反，误导后续修改 **（部分修复 2026-10-23）** | 低 | 高 | 见 §7.3；kind 顺序、inject-tauri storage、query/index/settings/credentials 注释已修 | 新注释与代码同改；漂移按 §7.3 登记 |
@@ -134,7 +134,7 @@ CORS/referrer 隧道是另一条降级链：HLS 只对 `googlevideo.com` 全隧�
 
 两处生命周期风险：
 
-- **WebView2 空闲回收**：零在途满 3 分钟关闭（`tauri/browser-backend.ts` 的 `IDLE_CLOSE_MS`），计时只在 CDP 操作 `begin()/end()` 时重置（`browser/backend.ts` 的 `touch()`）。**当前扫码登录不会踩到**——xhs 每 1s（`packages/resolve/src/platform/xhs/login.ts:181-193`）、weibo 每 0.5/1s（`packages/resolve/src/platform/weibo/login.ts:117-138`）持续产生 CDP 命令，等于隐式续期；真正的缺口是「任何不产生 CDP 命令的长等待没有显式 lease」，这个边界没有写进契约。
+- **WebView2 空闲回收**：整树零在途满 3 分钟关闭（`packages/host/src/node/browser-sidecar.ts` 的 `IDLE_CLOSE_MS`），单 lane tab 满 5 分钟关闭（`TAB_IDLE_CLOSE_MS`），另有一次性的 `releaseLaneTab` 在 lane 锁内释放 target（2026-11-01）。计时只在 CDP 操作 `begin()/end()` 时重置（`browser/backend.ts` 的 `touch()`）。**当前扫码登录不会踩到**——xhs 每 1s（`packages/resolve/src/platform/xhs/login.ts:181-193`）、weibo 每 0.5/1s（`packages/resolve/src/platform/weibo/login.ts:117-138`）持续产生 CDP 命令，等于隐式续期；真正的缺口仍是「任何不产生 CDP 命令的长等待没有显式 lease」，这个边界没有写进契约。
 - **cookie 快照无版本**：`doRefresh` 每次用 `settings.get()` 覆盖 `cookieSnapshot`（`data-layer.ts:472`），`applySettings` / `scanLogin` 写回也写同一个闭包变量（`:914`、`:945`）。二者交错时后写者胜，provider 可能回退到旧 cookie（风控与登录相关请求静默退回匿名）。同一模式还有进程级单钩子（`credentials.ts:25-30`）与门面 last-writer-wins（`runtime.ts:120-141`）。
 
 RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显式声明 `policy.platform="rsshub"`，自建实例（任意自定义域名）也归同一桶；governor 另保留 `rsshub.app` 的 host 兜底，设置页新增 RSSHub 行。平台名已收口到 `@amoeba/platform`（R9）：core 的 `platformOfChannel` 与 host 的 `platformOfHost` 都只是查表，新增平台只改 `PLATFORMS`；RSSHub 不再依赖 host 推导。详见 [../../risk/crawler-risk-control.md](../../risk/crawler-risk-control.md)。
@@ -154,7 +154,7 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 
 | 项 | 事实 | 风险 |
 | --- | --- | --- |
-| 构建入口 | 根脚本 `tauri:build` → `scripts/tauri.ts tauri desktop build`；`parseArgs` 新增 `build` 意图（`scripts/tauri.ts:132-143`），`main` 把 `tauri + build` 映射到 `build-release`（`:264`） | 已修（2026-10-23）：发布构建跑 Vite build + Tauri build；`build` 单独出现仍只构建前端。建议实跑一次确认产出安装包 |
+| 构建入口 | 根脚本 `tauri:build` → `scripts/tauri.ts tauri desktop build`；`parseArgs` 新增 `build` 意图（`scripts/tauri.ts:132-143`），`main` 把 `tauri + build` 映射到 `build-release`（`:264`） | 已修（2026-10-23）：发布构建跑 Vite build + Tauri build；`build` 单独出现仍只构建前端 |
 | TS paths | `tsconfig.app.json:11-31` 把全部 `@amoeba/*` 指到源码 | 未声明依赖/深层引用 tsc 全绿；`apps/cli/src/commands/align.ts:12` 就直引 `packages/core/src/processing/deserialize.ts` |
 | 根 tsc | 根 `tsconfig.json` 只有 references（`:2-6`），目标配置无 `composite` | `tsc -b` 不是有效入口；仓库实际按 per-project `tsc -p` 使用 |
 | 全局 ABI | `global.d.ts` 经开 `files`（`tsconfig.app.json:43`）传播 | 独立编译/发布的包必须自己再声明一次；CLI/scripts 是同类漏配的高发区 |
@@ -182,7 +182,6 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 
 | 债务 | 最小改法 | 验证方式 |
 | --- | --- | --- |
-| R18 死字段（剩余） | 新增字段前先 grep 生产者；不可达字段直接删，不做「预留」 | `tsc` + grep 无 producer 的字段清单 |
 | R19 文档漂移（剩余） | 新注释与代码同改；发现漂移按 §7.3 登记 | `tsc` 通过即可（无逻辑改动） |
 
 ### 7.3 文档漂移清单（以代码为准）
@@ -193,10 +192,10 @@ RSSHub 已独立归桶（2026-10-23）：core 的 rsshub source 在请求上显�
 
 | 顺序 | 动作 | 收益 | 成本 | 前置 |
 | --- | --- | --- | --- | --- |
-| 1 | WebView2 边界显式化：登录续期、长等待豁免（R16） | 降低扫码/刷新失败率 | 1 天 | 需真机；R5 的取消部分已由 job 取消解决（2026-10-26），仅 lane 化未做 |
+| 1 | WebView2 边界显式化：登录续期、长等待豁免（R16） | 降低扫码/刷新失败率 | 1 天 | 需真机；R5 的取消部分已由 job 取消解决（2026-10-26）；空闲回收与 lane 释放已于 2026-11-01 落地，剩余「长等待无显式 lease」 |
 | 2 | 文档漂移持续收尾（R19） | 类型/注释不再承诺不存在的东西 | 随时 | `tsc` + grep；新漂移登记到 §7.3 |
 
-已完成项以 §0 总表为准；剩余只有 WebView2 边界（R16）、文档漂移（R19）与平台 client 逐步换 `ResolveError`（R6 残余），真机项见 [../../ops/smoke-check.md](../../ops/smoke-check.md)。
+已完成项以 §0 总表为准；剩余只有 WebView2 边界（R16，已登记 `docs/ops/backlog.md` §A）、文档漂移（R19）与平台 client 逐步换 `ResolveError`（R6 残余），真机项见 [../../ops/smoke-check.md](../../ops/smoke-check.md)。
 
 ## 延伸阅读
 

@@ -1,8 +1,9 @@
 # 国内原生 feed 清单（2026-08 快照）
 
-> 2026-08 的一次性可用性梳理，只用来查「哪些国内站有原生 feed」；渠道可用性以
-> `docs/platforms/channels.md` 为准。当时判「不建议」的 weibo / 小红书已有正式渠道
-> （`weibo:hot` / `xhs:explore` / `xhs:user`），相关旧结论已失效。
+> **历史快照（2026-08）**：一次性可用性梳理，只用来查「哪些国内站有原生 feed」。
+> 渠道可用性与待办以 `docs/platforms/channels.md` / `docs/ops/backlog.md` 为准。
+> 当时判「不建议」的 weibo / 小红书已有正式渠道（`weibo:hot` / `xhs:explore` /
+> `xhs:user`），相关旧结论已失效。
 
 ## 一、原生 feed 清单（curl 实测 200 + 真 XML）
 
@@ -18,7 +19,7 @@
 | **cnBeta** | ✅ | `https://www.cnbeta.com.tw/backend.php` | RSS · 图文 |
 | **新浪科技** | ✅ | `https://rss.sina.com.cn/tech/rollnews.xml` | 头部带 `xml-stylesheet`，grep 会误判成 HTML，实为真 RSS |
 | **Solidot** | ✅ | `https://www.solidot.org/index.rss` | 已加入 |
-| **bilibili** | ❌ 无原生 | — | 走公开 API + wbi 签名，已复刻 20+ 渠道（`bili:*`） |
+| **bilibili** | ❌ 无原生 | — | 走公开 API + wbi 签名，已复刻全部 `bili:*` 渠道 |
 | **weibo 微博** | ❌ 无原生 | — | `weibo:hot` 匿名热搜 / `weibo:user` 需登录 |
 | **小红书** | ❌ 无原生 | — | `xhs:explore` / `xhs:user` 已实现，需登录 |
 | **xueqiu 雪球** | ❌ WAF | — | 风险高，未做 |

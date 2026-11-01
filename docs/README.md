@@ -1,6 +1,6 @@
 # 文档索引
 
-> 2026-10-27 按数据服务单写者复核：分类不变，过时结论已清理。
+> 2026-11-01（v0.16.0）：清理过时结论与重复待办；**待办唯一入口 = `ops/backlog.md`**。
 > `CLAUDE.md` 只保留高频硬契约与本文的精简版。
 
 ## 怎么读
@@ -26,7 +26,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | `platforms/platform-notes.md` | ★ 各平台实测行为与坑：bili / 斗鱼虎牙抖音 / YouTube / 小红书 / Twitch / 时间戳 / Apple 播客 / cookie 登录 |
-| `platforms/channels.md` | 渠道与能力总表：已实现的渠道扩展（YouTube 栏目、播放列表、B站合集/收藏夹、分区目录）、未做的缺口、已证伪的路线 |
+| `platforms/channels.md` | 渠道与能力总表：已实现的渠道扩展（YouTube 栏目、播放列表、B站合集/收藏夹、分区目录）、开放缺口索引、已证伪的路线 |
 | `platforms/youtube.md` | YouTube 直链提取（InnerTube / VISIONOS / poToken / DASH 自拼）；client 链与 poToken 结论的唯一权威 |
 | `platforms/twitch.md` | Twitch 渠道（公开 GQL + PlaybackAccessToken + usher HLS） |
 | `platforms/xhs-signature.md` | 小红书为何不自己实现 x-s 签名：461 根因、签名频率证据、不重启的决定与触发条件 |
@@ -38,7 +38,8 @@
 | 文档 | 内容 |
 | --- | --- |
 | `ui/ui-conventions.md` | ★ 样式组织、浮层、滚动与虚拟化、交互守卫、卡片分流、发现页、图片防盗链、调试工具 |
-| `ui/heliu-redesign-plan.md` | 桌面端「合流」改版计划：原型差距矩阵、目标 IA 与路由、M0–M7 分期、风险登记与决策记录（实施中，分支 `feat/heliu-redesign`） |
+| `ui/design-system-plan.md` | 设计系统落地计划：F1/F2 已完成，F3–F5 见 backlog |
+| `ui/heliu-redesign-plan.md` | 桌面端「合流」改版：原型差距矩阵、目标 IA 与路由、M0–M7 分期、风险登记与决策记录（已合入 master） |
 | `ui/numbered-ui-overlay.md` | Numbered UI Overlay（dev-only）：编号语义、400 上限、AI 清单 |
 | `ui/rail-tree-accordion.md` | 侧栏树为何用 Accordion + 三个静默失败坑 |
 
@@ -47,6 +48,7 @@
 | 文档 | 内容 |
 | --- | --- |
 | `playback/playback.md` | ★ 选流契约、HLS/DASH 锁档、loader 路由、自动播放、统计信息 |
+| `playback/player-parity-plan.md` | 播放器对齐计划：P0a/P0b-1 已完成，P0b 剩余见 backlog |
 | `playback/danmaku.md` | 弹幕机制（VOD 分段 / 直播四平台 codec）+ 播放器侧约定 |
 | `playback/mpv.md` | 外部 mpv 播放器接入（**未做**） |
 
@@ -70,9 +72,9 @@
 | 文档 | 内容 |
 | --- | --- |
 | `audit/findings.md` | 审计结论（故意不改 / 误报证伪）+ 兼容补丁清单 + 破坏性变更 |
-| `audit/improvements-2026-11-01.md` | 2026-11-01 架构评审改进清单 P0–P3 的完成记录与刻意不做的取舍 |
+| `audit/improvements-2026-11-01.md` | 2026-11-01 架构评审改进清单 P0–P3 的完成记录与取舍 |
 | `audit/refactor-candidates.md` | 重构候选分档（A 建议做 / B 改到再动 / C 明确不改 / D 已核实） |
-| `audit/doc-backlog-2026-10-27.md` | docs 遗留问题全量核对快照（120 条：open/stale/fixed/decision + 下一批建议） |
-| `audit/pagination-dedupe-audit-2026-10-27.md` | 渠道翻页/去重全量审计快照（55 渠道 + core 语义；行动项 19 + 合理取舍 26，逐条反驳验证） |
+| `audit/doc-backlog-2026-10-27.md` | 历史快照：docs 遗留问题核对（部分未完成项已收敛到 backlog，其余按需重新核对） |
+| `audit/pagination-dedupe-audit-2026-10-27.md` | 历史快照：渠道翻页/去重审计（部分未完成项已收敛到 backlog，其余按需重新核对） |
 
 > 2026-10-21 的文档重组与合并/删除记录见当次 git 提交；本索引只列现存文档。

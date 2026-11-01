@@ -1,9 +1,13 @@
 # 渠道翻页 / 去重全量审计（2026-10-27）
 
+> **历史快照**：本文是 2026-10-27 的审计记录，后续排期以 `docs/ops/backlog.md` 为准
+> （可排期项已收敛至 §D/§E，其余保留本快照供重新核对）；
+> 其中涉及的关键词搜索渠道（`bili:search` / `live:*:search` / `youtube:live-search`）与
+> `live:douyin:user` 已于 2026-10-28 / 2026-11-01 删除，相关条目只作历史证据。
+>
 > 方法：8 个域并行读**全部 55 个渠道** + core 侧翻页/去重语义（data-layer / media-store /
 > deserialize / factory），共 65 个 agent（8 扫描 + 57 条逐条反驳验证）、1472 次工具调用。
 > 验证 agent 默认怀疑，多数条目附带**真机接口实测**（分页参数、条数、页间重叠）。
-> 本文是审计快照；按 §D 排期修复，修一条勾一条。
 
 ## 为什么查这个
 
@@ -174,23 +178,11 @@ fresh 非空、游标推进、append 去重后 0 新增 → 判到底；另一�
   retry cursor 原样回传不前进，core 只保留 hasMore 不判到底。
 - `douyu`/`huya` 直播间 id（rid / profileRoom）稳定唯一。
 
-## D. 排期建议（按收益/风险）
+## D. 排期与状态
 
-1. ✅ **A1 `bili:dynamic` offset 翻页** + ✅ **A2 YouTube channel continuation**（`c3eb177`；
-   真机：dynamic 13→37 条、youtube 30→90 条）。
-2. ✅ **B1 xhs notesToItems 去重** + ✅ **B3 season `sort_reverse=true`**（实测唯一生效的排序
-   参数，`sort_by`/`ascending`/`order` 均无效）+ ✅ **B2 append 页内去重**（`c3eb177`；
-   season page1 首条 2024-08-21 降序）。
-3. ✅ **A5 huya search rows=100**（真机 99 条）+ ✅ **A8 anchor rows=50**（50 条）+
-   ✅ **A3 popular pageable**（more +20 全新增）+ ✅ **A4 douyin search 首分区 offset**
-   （more +20 全新增）（`765771f`）。
-4. ✅ 小件（`0c0a802`）：B4 douyin id→webRid、B5 空 guid 兜底、B6 douyu hasMore、
-   A11 factory total（单元验证 tpl:total=42 透传 + 末页到底）、A7 apple clamp 200（真机 198 条）。
-5. 单独立项（open）：A6 RSS 入站上限（涉及 core 缓存策略）、A9 搜索候选翻页（涉及
-   previewChannel/UI）、A10 youtube:playlist InnerTube 化；
-   B7 xhs:explore 提前到底（low 未复现；toItems 去重已在 `c3eb177` 顺带落地）、
-   B8 实时榜漂移（固有限制，渠道注释已覆盖）、B9 user_video hasMore 加固（可选）。
+19 个行动项当轮修 15 个（`c3eb177` / `765771f` / `0c0a802`，逐条实测口径见上文 §A/§B）。
+剩余 open：A6 RSS 入站上限、A9 搜索候选翻页、A10 youtube:playlist InnerTube 化，
+以及 B7/B8/B9 三条低优先；可排期项以 `docs/ops/backlog.md` 为准，其余保留本快照供重新核对。
 
-> 修复时的回归：§各条目的实测口径已写明；渠道改动跑
-> `bun run rss fetch <key>` + 对应 `.check.ts`，core 改动跑 `media-store.check.ts`。
-> 分页渠道（A1/A2/A3/A4）验「第二页有新增」，参照 smoke-check「YouTube/B站合集」行的惯例。
+> 回归口径仍在 §A/§B 各条；渠道改动跑 `bun run rss fetch <key>` + 对应 `.check.ts`，
+> core 改动跑 `media-store.check.ts`。

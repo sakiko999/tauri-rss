@@ -1,6 +1,6 @@
 # 01 · 包职责、边界与依赖
 
-> 本文件回答「为什么切成 11 个库 + 3 个 TypeScript 应用 + 3 个 Rust crate、谁可以依赖谁、改动该落在哪」。版本基准 2026-10-27 / v0.7.0；行号是阅读锚点且已整体漂移，一律以符号名与文件为准。
+> 本文件回答「为什么切成 11 个库 + 3 个 TypeScript 应用 + 3 个 Rust crate、谁可以依赖谁、改动该落在哪」。版本基准 2026-11-01 / v0.16.0；行号是阅读锚点且已整体漂移，一律以符号名与文件为准。
 > 跨包数据结构的逐字段说明见 `02-contracts.md`，端到端流程见 `03-flows.md`。
 >
 > 数据服务（`service-protocol`/`service-client`）的进程/协议/打包以 `06-data-service.md` 为准，
@@ -99,8 +99,8 @@ host → core、也不允许 core 生产依赖 host —— 这是唯一能同时
 | **resolve** | T | R | | | | | | | | `ramda`（4 个平台文件）；`./media-referrer` 子路径供 desktop 取防盗链/Origin 规则 |
 | **crawler** | R | R | | D | R | | | | | — |
 | **core** | R | R | R | D | R | R | | | | — |
-| **player** | | R | | G | T | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`@radix-ui/react-dropdown-menu` |
-| **ui** | | | | | | | U | U | | `react`；读 `globalThis.appHost.dataSaver`（2026-10-28 起无 amoeba 包依赖） |
+| **player** | | R | | G | R（`./errors`） | | T（含类型 re-export） | | | `react`、`hls.js`、`flv.js`、`dashjs`、`radix-ui`；引擎均为动态 import |
+| **ui** | | | | | | | | | | `react`；经全局读 `appHost.dataSaver`（2026-10-28 起零 amoeba 包依赖） |
 | **desktop** | R | | R | R | R | | R | R | R | react-router、zustand、react-virtuoso、masonic、Radix、dompurify、qrcode、lucide、`@tauri-apps/api`（`store/data-source.ts:11`） |
 | **mobile** | U | | | R | U | U | R | R | R | react、zustand；`@tauri-apps/api` 也声明未用 |
 | **cli** | R | R | R | R | R | R | R | | | `cac`、`picocolors`、`qrcode`、`jsqr` |
@@ -115,7 +115,7 @@ host → core、也不允许 core 生产依赖 host —— 这是唯一能同时
 | `host → core` 已消失，改为 core 向 storage 注入 schema | `SqliteStorageBackend.setSchema`（`packages/host/src/tauri/sqlite-storage-backend.ts`）；`createDataLayer` 首行（`packages/core/src/data-layer.ts`）；`StorageSchema` 在 `global.d.ts` | DDL 唯一权威仍在 core，但它以参数形式过界（`storage.setSchema?`），host 不 import core，编译期无反向边。非 SQL 后端可不实现 `setSchema` |
 | host 根入口是兼容聚合，应用走子路径 | `packages/host/package.json` 的 `exports`；CLI `@amoeba/host/node\|runtime`；desktop/mobile `@amoeba/host/tauri\|browser` | 子路径避免把三套后端拉进模块图；根入口仍可用，但不再有 import 副作用 |
 | crawler/core/player/ui 都读 `appHost`，但 package.json 都不声明 host | `crawler/src/channels/xhs/base.ts:20`、`core/src/data-layer.ts:185-192`、`player/src/engines/hlsHostLoader.ts`（`appHost.http`）、`ui/src/renderers/atoms/MediaImage.tsx:115-122` | 宿主能力对多数包是**隐式 ABI**；漏注入只能在运行时暴露，类型检查发现不了 |
-| `ui` 声明 core/player、`mobile` 声明 crawler/resolve/xml 与 `@tauri-apps/api`，均零 import | `packages/ui/package.json:10-15`；`apps/mobile/package.json:12-19` | 依赖图噪声：ui 早已不 re-export 播放器（`packages/ui/src/index.ts:9-10`）；mobile 的这些能力经 core 间接获得 |
+| `ui` 已零 amoeba 依赖；`mobile` 声明 crawler/resolve/xml 与 `@tauri-apps/api` 但零 import | `packages/ui/package.json`；`apps/mobile/package.json:12-19` | 依赖图噪声：ui 早已不 re-export 播放器（`packages/ui/src/index.ts:9-10`）；mobile 的这些能力经 core 间接获得 |
 
 `global.d.ts` 不参与上述矩阵，但它是所有包共享的 ambient 类型源：`tsconfig.app.json:43` 的 `files: ["global.d.ts"]` 对所有 `extends` 它的包生效；CLI 单独 `files` 引用（`apps/cli/tsconfig.json`）。
 
@@ -129,7 +129,7 @@ graph LR
   crawler -- "appHost.browser（能力探测）" --> HOST
   player -- "appHost.http（HLS/DASH 分片）/ net.governorStats" --> HOST
   ui -- "appHost.dataSaver" --> HOST
-  HOST -- "invoke http_get / ws_* / webview_browser_*" --> RUST["apps/src-tauri"]
+  HOST -- "invoke http_get / service_endpoint / ws_*" --> RUST["apps/src-tauri"]
 ```
 
 ## 2. 库包
@@ -192,7 +192,7 @@ graph LR
 | 不负责 | 订阅/参数/XML 渠道语义（crawler）；持久化与编排（core）；播放器渲染（player）；不 import crawler |
 | 对外导出 | `resolvePlayByUrl`/`resolveLivePlayByUrl`/`getDanmakuByUrl`/`resolveRoute`、`setPlatformCookieLookup`/`resolveCookie`、各平台 client 与 discover/login、`withBrowserOp`/`withBrowserGlobal`/`withScanLoginLock`、`createWsStream`、`httpGet/httpText/httpJson`、`log`（`packages/resolve/src/index.ts`，单出口 `export *` 使公共面很宽）；子路径 `@amoeba/resolve/errors`（错误分类）与 `@amoeba/resolve/media-referrer`（防盗链规则），供 player/ui/desktop 只取单文件、避免整包进入模块图 |
 | 内部结构 | `platform/<平台>/{client,play,login,discover,danmaku}`；`resolver/{router,play,danmaku}`；`browser/{cdp,scheduler}`；`danmaku/{stream,types}`；`host.ts`/`log.ts`/`media-referrer.ts`/`utils/*`；`example/*.check.ts` |
-| 依赖 / 被依赖 | 仅类型依赖 xml（`Stream`/`Item` 等，16 个文件全是 `import type`，编译后擦除）；运行时依赖 log、ramda（4 个平台文件）。**不依赖 host**（Referer 规则已下沉）。被 crawler 大量调用、core 用于播放/弹幕/凭证、player 仅类型、ui 取 `./media-referrer`、desktop 1 处（`SocialDetailModal.tsx:19`）、CLI 9 处 |
+| 依赖 / 被依赖 | 仅类型依赖 xml（`Stream`/`Item` 等，16 个文件全是 `import type`，编译后擦除）；运行时依赖 log、ramda（4 个平台文件）。**不依赖 host**（Referer 规则已下沉）。被 crawler 大量调用、core 用于播放/弹幕/凭证、player 运行时取 `./errors`（错误文案，其余类型）、ui 取 `./media-referrer`、desktop 1 处（`SocialDetailModal.tsx:19`）、CLI 9 处 |
 | 常见改动入口 | 新平台：`platform/<p>/` + `resolver/router.ts:29` 路由 + host governor 平台分类 + core `cookieFieldFor`；改播放解析：`resolver/play.ts:35,46`；改浏览器并发：`browser/scheduler.ts` |
 | 关键文件 | `packages/resolve/src/resolver/router.ts:17`（平台枚举）、`:29`（路由表）；`packages/resolve/src/resolver/play.ts:35`/`:46`；`packages/resolve/src/platform/credentials.ts:41`（三级语义）；`packages/resolve/src/browser/cdp.ts:61`（withBrowserOp）；`packages/resolve/src/browser/scheduler.ts:42,71,107,162`（四原语）；`packages/resolve/src/danmaku/stream.ts:62` |
 
@@ -240,15 +240,15 @@ graph LR
 | 不负责 | 平台解析与弹幕抓取（core/resolve）；`item.kind` 判定（宿主传入 `resolve`/`streams`）；持久化；不 import ui/desktop（错误态自带 `MediaState`，`PlayableMedia.tsx:44-54`） |
 | 对外导出 | `PlayableMedia`、`unlockAudioPlayback`、hooks（选流/引擎/元素状态）、`VideoShell`/`AudioShell`/`PlayerControls`/`DanmakuLayer`、10 个独立控件、`MediaStream`/`DanmakuStream` 类型（`packages/player/src/index.ts:9-41`） |
 | 内部结构 | `PlayableMedia.tsx` 编排；`hooks/{streamKind,useStreamSelection,useMediaStream,useVideoElement}`；`engines/{hlsHostLoader,dashHostLoader}`；`controls/*`；`danmaku/DanmakuLayer`；`stats.ts`；`log/*` |
-| 依赖 / 被依赖 | 仅类型依赖 core（`MediaStream`/`ResolvePlayback`）与 resolve（`DanmakuStream`），运行时依赖 log；经 `globalThis.appHost.http` 取分片（未声明 host）；统计面板只读媒体元素与引擎上报，不读宿主 governor。被 desktop（3 处）与 mobile（1 处）使用 |
+| 依赖 / 被依赖 | 类型依赖 core（`MediaStream`/`ResolvePlayback`）；运行时依赖 log、resolve 的 `./errors`（错误文案）与 `radix-ui`；经 `globalThis.appHost.http` 取分片（未声明 host）；统计面板只读媒体元素与引擎上报，不读宿主 governor。被 desktop（3 处）与 mobile（1 处）使用 |
 | 常见改动入口 | 新格式：`streamKind.ts` 加判据 + `useMediaStream.ts` 加引擎分支 + `PlayableMedia.tsx` 分发；换 loader：`engines/*`；新控件：`controls/index.ts` 导出 |
-| 关键文件 | `packages/player/src/PlayableMedia.tsx:113`（唯一入口）、`:96`（手势解锁）；`packages/player/src/hooks/streamKind.ts:11-50`（判据）、`:65`（`streams[0]`）；`packages/player/src/hooks/useStreamSelection.ts:38`；`packages/player/src/hooks/useMediaStream.ts:12-14`（三引擎静态 import）、`:26` |
+| 关键文件 | `packages/player/src/PlayableMedia.tsx:113`（唯一入口）、`:96`（手势解锁）；`packages/player/src/hooks/streamKind.ts:11-50`（判据）、`:65`（`streams[0]`）；`packages/player/src/hooks/useStreamSelection.ts:38`；`packages/player/src/hooks/useMediaStream.ts:12-14`（引擎类型 import + effect 内动态 `import()`）、`:26` |
 
 不变量：判据必须是纯函数且不 import 引擎，否则 node 自检无法加载（`streamKind.ts:4-7`）；选流 = `streams[0]`，player 不二次排序；切流保留用户静音态；续播只跳一次。
 
 ### 2.8 ui — 原子件
 
-**存在理由**：desktop 与 mobile 都需要同一套「防盗链图片」行为（直连/隧道 + 占位 + 缓存），而图床规则属于平台/媒体知识层（resolve）。ui 保留为最小共享面，避免两端各写一份带 Referer 的加载逻辑。
+**存在理由**：desktop 与 mobile 都需要同一套图片加载行为（原生直连 + 占位 + 缓存），而图床 Referer 规则属于平台/媒体知识层（resolve）并由宿主网络层注入。ui 保留为最小共享面，避免两端各写一份加载逻辑。
 
 | 维度 | 内容 |
 | --- | --- |
@@ -317,17 +317,16 @@ graph LR
 ### 3.4 src-tauri — Rust 能力面
 
 - **定位**：桌面/移动的应用 crate（根 `Cargo.toml` workspace 三个成员之一，另两个是 `browser-sidecar`/`runtime`；`name = "amoeba"`，lib `amoeba_lib`），不含业务逻辑，只做「哑管道 + 窗口生命周期」。
-- **命令面 5 个**：`http_get`、`service_endpoint`、`ws_connect/ws_send/ws_close`（`apps/src-tauri/src/lib.rs`）。`service.rs` 负责数据服务生命周期（spawn/adopt/shutdown + `service_endpoint`，adopt 前比对 dbFile/profileDir），主窗口 `Destroyed` 时 shutdown 并退出；TS 侧对端在 host 的 `tauri/*`。`webview_browser_*`（5 个）已于 2026-11-01 删除。
-- **能力边界**：HTTP 隧道（reqwest，私网/链路本地拦截、重定向逐跳复查、超时 clamp，`commands/mod.rs`）；WS 隧道（自定义握手头，供弹幕与 CDP 文本帧）；抓取浏览器不在 Tauri 进程内（`amoeba-browser.exe` 由服务 spawn）
-（9334 是无鉴权的本地调试端口，release 也开——别当安全边界；attach 走动态端口，未新增攻击面）；生产抓取浏览器是服务 spawn 的 `amoeba-browser` sidecar；插件只用 opener + sql（桌面再加 single-instance/updater/process，`plugins/mod.rs:4-35`；single-instance 必须最先注册）。
+- **命令面 6 个**：`http_get`、`service_endpoint`、`service_shutdown`、`ws_connect/ws_send/ws_close`（`apps/src-tauri/src/lib.rs`）。`service.rs` 负责数据服务生命周期（spawn/adopt/shutdown + `service_endpoint`，adopt 前比对 dbFile/profileDir），主窗口 `Destroyed` 时 shutdown 并退出；TS 侧对端在 host 的 `tauri/*`。`webview_browser_*`（5 个）已于 2026-11-01 删除，抓取浏览器只有服务 spawn 的 sidecar。
+- **能力边界**：HTTP 隧道（reqwest，私网/链路本地拦截、重定向逐跳复查、超时 clamp，`commands/mod.rs`）；WS 隧道（自定义握手头，供弹幕与 CDP 文本帧）；抓取浏览器不在 Tauri 进程内（`amoeba-browser.exe` 由服务 spawn）；插件只用 opener + sql（桌面再加 single-instance/updater/process，`plugins/mod.rs:4-35`；single-instance 必须最先注册）。
 - **配置四份**：桌面主配置 `tauri.conf.json`；dev 叠加层只开 9222（`tauri.conf.dev.json`）；构建叠加层把 `service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe` 三个 resources 塞进包（`tauri.conf.release.json`，`scripts/tauri.ts` 只在 `build` 时叠加）；移动独立 identifier/version/devUrl（`tauri.conf.mobile.json`）。capability 只授权 `main` 窗口（`capabilities/default.json`：core + opener），sql 只授移动端（`capabilities/mobile.json`，桌面走数据服务、webview 调不到 sql，2026-11-01），updater 限桌面三平台（`capabilities/desktop-updater.json`）。主窗口另有 nav-guard 插件（`plugins/nav_guard.rs`）：只放行应用自身页面，漏网外链交系统浏览器。
 - **与 TS 的契约**：命令名是字符串、参数 `camelCase`、二进制一律 base64；`http_get` 对 4xx/5xx 也返回成功，调用方自查 status。Rust 不感知风控，治理全在 host 的 governor。
 
-### 3.5 browser-sidecar — CLI 浏览器载体
+### 3.5 browser-sidecar — 抓取浏览器载具（服务/CLI）
 
-- **定位**：Rust crate `amoeba-browser`（`apps/browser-sidecar/Cargo.toml`），无 Tauri 依赖的 WebView2 宿主（屏外窗口 + CDP），CLI 的抓取浏览器就是它。
-- **接线**：CLI `--browser` 时由 `packages/host/src/node/browser-sidecar.ts` spawn；与桌面共用 `@amoeba/host/cdp` 的 lane/超时/拦截语义。
-- **契约**：stdout 只留一行 `READY <port>`，端口默认动态取空闲口（不写死 9334），日志全走 stderr（`main.rs:162-168`）。
+- **定位**：Rust crate `amoeba-browser`（`apps/browser-sidecar/Cargo.toml`），无 Tauri 依赖的 WebView2 宿主（屏外窗口 + CDP），是数据服务与 CLI `--browser` 共用的唯一抓取浏览器载具。
+- **接线**：服务按需 spawn（`packages/host/src/node/browser-sidecar.ts`），CLI `--browser` 时同一 driver spawn；两者共用 `@amoeba/host/cdp` 的 lane/超时/拦截语义。
+- **契约**：stdout 只留一行 `READY <port>`，端口默认动态取空闲口，日志全走 stderr（`main.rs:162-168`）。
 
 ## 4. 分层规则
 

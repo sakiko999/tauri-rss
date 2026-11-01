@@ -9,7 +9,7 @@
 - 其余直播弹幕全是 WebSocket 长连接(bilibili/douyu/huya/douyin),统一走 **`appHost.ws`**(Rust `ws_connect` 隧道可带自定义 header;CLI/example = node `ws` 包带 header;未注入兜底原生 WS)。douyin 握手校验 UA/Cookie/Origin 完整性(残缺 cookie 417、陈旧 ttwid 415 DEVICE_BLOCKED),原生 WS 带不了 header,**必须隧道**;bili live/douyu/huya 原生无 header 可连,顺带统一接入。
 - **渲染:自研 + Canvas 2D**。B站高级弹幕(mode 7)**暂不支持**,降级普通滚动(mode 1–6 全覆盖)。
 - **时间单位坑**:seg.so proto 的 `progress` 是**毫秒**,XML 弹幕是**秒**,播放器 `currentTime` 是秒;YouTube live chat 的 `timestampUsec` 是**微秒**。
-- ✅ **落地状态(2026-10-16 复核)**:B站视频弹幕 + YouTube live chat + 四平台 WS 直播弹幕(bili live/douyu/huya/douyin)+ player `DanmakuLayer`(Canvas)已**全通**。⚠️ **接口名已更**（早期的 `DanmakuPlayable.getDanmaku` / `isDanmakuPlayable` 探测**已废弃**）：现在统一走 `resolve` 的 `getDanmakuByUrl(url, {cookie}) → DanmakuStream`（`resolve/resolver/danmaku.ts`），core `resolvePlay/resolveLivePlay` 把结果附到 `ResolvePlayback.danmaku`（core `data-layer.ts` 的 `resolvePlay`/`resolveLivePlay`），player `DanmakuLayer` 内部订阅分流；desktop 播放页**零弹幕逻辑**（只把 resolve 交给 `PlayableMedia`，入口 `views/player/PlayerPage.tsx`）。实测开播房间全收弹幕（bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条）。全仓已无 `DanmakuPlayable` 接口或 channel 能力注释（只剩 core/player 的文档注释沿用旧名）。
+- ✅ **落地状态(2026-10-16 复核)**:B站视频弹幕 + YouTube live chat + 四平台 WS 直播弹幕(bili live/douyu/huya/douyin)+ player `DanmakuLayer`(Canvas)已**全通**。⚠️ **接口名已更**（早期的 `DanmakuPlayable.getDanmaku` / `isDanmakuPlayable` 探测**已废弃**）：现在统一走 `resolve` 的 `getDanmakuByUrl(url, {cookie}) → DanmakuStream`（`resolve/resolver/danmaku.ts`），core `resolvePlay/resolveLivePlay` 把结果附到 `ResolvePlayback.danmaku` 并给可序列化的 `danmakuRef`（`packages/core/src/internal/playback.ts`）。桌面走 RPC（函数会被丢）时，`apps/desktop/src/store/actions/reading.ts` 按 `danmakuRef` 向服务端订阅、重挂成 `danmaku` 流；player `DanmakuLayer` 内部订阅分流，desktop 播放页**零弹幕逻辑**（只把 resolve 交给 `PlayableMedia`，入口 `views/player/PlayerPage.tsx`）。实测开播房间全收弹幕（bili 43/8 条、douyu 7/6 条、huya 29/29 条、douyin 40/92 条）。全仓已无 `DanmakuPlayable` 接口或 channel 能力注释（只剩 core/player 的文档注释沿用旧名）。
 
 ## 一、B站视频弹幕(主链路,已实测)
 
@@ -211,7 +211,7 @@ type DanmakuStream = (onItems: (items: DanmakuItem[]) => void) => () => void
 
 ⚠️ **类型与路由都在 `packages/resolve`(不在 crawler)**:`DanmakuItem`/`DanmakuStream` 定义在
 `resolve/src/danmaku/types.ts`;弹幕由 resolve 的 `getDanmakuByUrl(url)`(resolver/danmaku.ts)
-按 url 路由,core **直接调用**(`data-layer.ts`),**没有** `DanmakuPlayable`/`isDanmakuPlayable`
+按 url 路由,core **直接调用**(`packages/core/src/internal/playback.ts`),**没有** `DanmakuPlayable`/`isDanmakuPlayable`
 能力探测接口(crawler 的 source 契约只有 `fetch()`,能力谓词只有 isHotWordSource/isItemDetailSource/
 isPageable/isLoginable)。早期设计的「source 上挂 getDanmaku + 谓词探测」已废弃。
 
@@ -219,11 +219,12 @@ isPageable/isLoginable)。早期设计的「source 上挂 getDanmaku + 谓词探
 
 ## 六、player 弹幕接入方案
 
-> ⚠️ **2026-10-30 起本节架构图已过时**：桌面已服务化，`ResolvePlayback.danmaku` 是函数、
-> 过 RPC(JSON) 会被丢；现行链路 = `danmakuRef {url, kind}` 能力标记 + `DataLayer.resolveDanmaku`
-> 服务端订阅推送（`danmaku.open/items/close`），见文末「播放器侧约定」。别把函数塞回 RPC 返回值。
+> ⚠️ **本节「架构位置」是 2026-10-30 前的直连形态**：桌面已服务化，`ResolvePlayback.danmaku`
+> 是函数、过 RPC(JSON) 会被丢；现行链路 = `danmakuRef {url, kind}` 能力标记 +
+> `DataLayer.resolveDanmaku` 服务端订阅推送（`danmaku.open/items/close`），见文末「播放器侧约定」。
+> 别把函数塞回 RPC 返回值；`DanmakuLayer` 自身行为仍然有效。
 
-### 架构位置:三层职责
+### 架构位置（历史形态：2026-10-30 前）
 
 ```
 resolve(getDanmakuByUrl)  →  core(附到 ResolvePlayback.danmaku)  →  player(DanmakuLayer 订阅分流)
@@ -231,7 +232,7 @@ resolve(getDanmakuByUrl)  →  core(附到 ResolvePlayback.danmaku)  →  player
 
 player 保持**平台无感**:只消费统一 `DanmakuStream`。弹幕解析收敛在 **resolve**(`getDanmakuByUrl`
 按 url 路由),core 随播放流解析一起把它附到 `ResolvePlayback.danmaku`;无弹幕平台 →
-`danmaku: undefined` → VideoShell 不渲染层(零开销);无独立 `openDanmaku` 门面。
+`danmaku: undefined` → VideoShell 不渲染层(零开销)。服务化后多一层服务订阅，见文首提示与文末约定。
 
 App 层(desktop 播放页)零弹幕逻辑,只传 resolve:
 ```ts
@@ -247,27 +248,22 @@ const resolve = isLive
 ### player 内部
 
 **`danmaku/DanmakuLayer.tsx`** — 渲染层(见 §七),**内部订阅 stream 并分流**(数据层 hook 已并入,无独立 useDanmaku):
-- 有 `timeMs` → 累积全量池,按 `currentTime×1000` 窗口发射(`(prevT, currentT]` 新增,小预取 `PRE_MS` 提前进右缘);seek 回跳 >5s 重置起点,已发射 `timeMs` 集合跳过不重发。
+- 有 `timeMs` → 累积全量池,按播放时钟(`clock.state.currentTime × 1000`)窗口发射(`(prevT, currentT]` 新增,小预取 `PRE_MS` 提前进右缘);任意大幅 seek 重置起点(回跳重新填充、前跳跳过该段),已发射 `timeMs` 集合跳过不重发;首批晚到会按最早 `timeMs` 回拨补发开头。
 - 无 `timeMs` → 实时追加(live 增量)。
 - 暂停冻结:`paused && !live`(点播暂停弹幕停;直播暂停聊天照收——聊天不受播放暂停影响)。
 - 渲染:rAF 自绘循环,React 只负责「新弹幕进队列」,画面更新全在 canvas。
 
-**`VideoShell.tsx`** — 加 `danmaku?: DanmakuStream`:
-```tsx
-// video 之后、spinner 之前:
-{danmaku && <DanmakuLayer stream={danmaku} currentTime={state.currentTime} live={state.live} paused={state.paused} />}
-```
-relative 容器(16:9 自撑)正是覆盖层载体;`useVideoElement.state` 已提供 `currentTime`(秒)/ `live` / `paused`——**零新增状态源**。**`PlayableMedia.tsx`** 把 `resolved?.danmaku` 透传给 VideoShell(仅视频分支;音频无画面不接)。
+**`VideoShell.tsx`** — 接收 `danmaku?: DanmakuStream` 与播放时钟 `clock`,渲染 `DanmakuLayer`（`clock` 来自 `hooks/mediaClock.ts` 外部 store，VOD 发射按订阅推进，不触发 React 4Hz 重渲）。relative 容器(16:9 自撑)正是覆盖层载体。**`PlayableMedia.tsx`** 把 `resolved?.danmaku` 透传给 VideoShell(仅视频分支;音频无画面不接)。
 
 ### 决策点
 
 | 点 | 建议 |
 |---|---|
-| 时间单位 | `timeMs` 统一毫秒(`currentTime` 秒 ×1000);B站 `progress` 本就是毫秒;YouTube live chat 实时追加、不落 `timeMs`(`timestampUsec` 不归一) |
+| 时间单位 | `timeMs` 统一毫秒(`clock.state.currentTime` 秒 ×1000);B站 `progress` 本就是毫秒;YouTube live chat 实时追加、不落 `timeMs`(`timestampUsec` 不归一) |
 | Live 对齐 | YouTube live chat 是「当前时刻」轮询,实时追加即可,**不与播放时间轴对齐**(DVR setLiveEdge 不回溯聊天) |
 | 颜色 | 各平台 resolve 侧归一为 `#RRGGBB`(`resolve/src/danmaku/color.ts` 的 argbToHex/rgbToHex;douyu 独立 6 色表) |
 | superChat | MVP 显示为带边框高亮弹幕(不单独建模型) |
-| 依赖 | player 引 `@amoeba/resolve`(类型引用,无运行时耦合)——已落地 |
+| 依赖 | player 引 `@amoeba/resolve`（弹幕类型 + `errors` 纯函数，不从根入口拉平台解析）——已落地 |
 
 ## 七、弹幕渲染选型
 
@@ -336,7 +332,7 @@ DanmakuLayer (canvas 2D)
 | youtube channel(VISIONOS 主力) | `packages/resolve/src/platform/youtube/` | 提供 liveId(直播弹幕 + live chat 共用) |
 | 登录 cookie | core `settings.bilibiliCookie`(credentials provider 注入) | 带登录态更稳(视频/直播弹幕) |
 | 懒解析范式 | `resolveBiliVideoPlay`(platform/bili/video-play.ts) | 弹幕懒解析照抄(YouTube live chat 轮询起始) |
-| 播放器时间 | `useVideoElement.state.currentTime` | 弹幕时间窗口(currentTime 秒 × 1000) |
+| 播放器时间 | `packages/player/src/hooks/mediaClock.ts` 的外部时钟 | 弹幕时间窗口(clock 的 currentTime 秒 × 1000) |
 | 弹幕层挂载点 | `VideoShell.tsx` relative 容器 | 加 DanmakuLayer |
 | **dart 统一消息模型** | `tmp/dart_simple_live/.../model/live_message.dart` | `DanmakuItem` 字段/颜色归一直接参考(LiveMessage + numberToColor) |
 

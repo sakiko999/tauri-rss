@@ -8,7 +8,7 @@
 > 写操作走 RPC/job；desktop 的 Tauri 直连路径已删除；仅非 Tauri 浏览器 dev 保留进程内
 > `createDataLayer()` 作纯前端调试（`apps/desktop/src/store/data-source.ts:27-32`），不保留
 > `VITE_DATA_SERVICE=0` 回退。desktop 侧 `abortTabs` 调用已移除，超时取消改走 `/v1/jobs/:id/cancel`
-> （`BrowserBackend.abortTabs` 仍在，CLI 的浏览器路径照用）。详见 `06-data-service.md`。
+> （`BrowserBackend.abortTabs` 仍定义，但当前无生产调用，仅自检/注释引用）。详见 `06-data-service.md`。
 
 阅读前先记住三条贯穿全部流程的分工（它们决定了下面每一步写谁、读谁）：
 

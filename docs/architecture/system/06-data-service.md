@@ -1,7 +1,7 @@
-# 数据服务（CLI 载具）架构与落地计划
+# 数据服务（CLI 载具）架构与落地记录
 
 > 状态：阶段 0/1/2 已完成（2026-10-26 实机；安装包/签名/安装卸载/服务生命周期/备份回滚均已验）。
-> 后续项见 §12（阶段 3 范畴与干净 VM 复核）。
+> 开放项与验证项统一见 `docs/ops/backlog.md`（§A 验证 / §E 收尾）；§12 只留阶段 3 的技术边界。
 > 范围：desktop + CLI。mobile 不参与，继续进程内 `createDataLayer()`。
 
 ## 0. 决策摘要
@@ -61,7 +61,7 @@
 `amoeba-runtime` 在服务存活期间保留（它是 Bun 的父进程），desktop 退出时随 Job / `--parent-pid`
 一起收掉；它**只写 stderr**，stdout 原样留给服务的 `READY <port>`。
 
-服务不再使用 Tauri 的抓取 WebView2（`webview_browser_*`，该分支已删除，抓取浏览器统一走 `amoeba-browser.exe`）。主窗口的媒体 Referer 注入（`media_referer.rs`）保留。
+抓取浏览器统一走 `amoeba-browser.exe`（Tauri 内嵌抓取 WebView2 分支已于 2026-11-01 删除）。主窗口的媒体 Referer 注入（`media_referer.rs`）保留。
 
 ### 2.2 desktop 启动顺序
 
@@ -183,7 +183,7 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - **取消已实现（job 级）**：`POST /v1/jobs/:id/cancel` → `AbortSignal` 一路传到 core `refresh(…, {signal})`；
   抓取在途时 `Promise.race` 立即返回「刷新已取消」，不写 store/缓存；`refreshAll` 取消后停止遍历剩余订阅。
   客户端侧 `signal`（desktop 45s 超时）转成 `cancel(jobId)`，不再只 abort 本地 fetch。
-  桌面不再持有抓取浏览器，desktop 侧的 `abortTabs` 调用已移除（host 仍保留该 API 供 CLI/浏览器路径；R5 的桌面部分已消解）。
+  桌面不再持有抓取浏览器，desktop 侧的 `abortTabs` 调用已移除（host 仍保留该 API，当前无生产调用；R5 的桌面部分已消解）。
 - HTTP 断开不取消 job（job 正常结束由 `jobs.delete` 回收，`server.ts:509`）；caller-only 任务没有 lease/断开回收（未实现），只能显式调 `cancel(jobId)`。
 - 超时仍在客户端：desktop 的 `REFRESH_TIMEOUT_MS = 45_000`（`apps/desktop/src/store/lib.ts:53`）经 `withTimeout` 转成 `cancel(jobId)`；服务端不另设 refresh 超时，靠客户端取消收敛。
 
@@ -352,8 +352,6 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
   seed 标记改 localStorage。
 - `apps/src-tauri`：`service.rs`（spawn/adopt/READY/endpoint/shutdown）、`single-instance`、
   `tauri.conf.release.json` resources、`service_endpoint`；主窗口 Destroyed → 服务 shutdown。
-- `webview_browser_*` / `TauriBrowserBackend` 已删除（2026-11-01）：抓取浏览器只有
-  `amoeba-browser.exe` 一条路径；`injectTauriHost` 的 `browser` 参数保留为 deprecated 兼容壳。
 
 ## 8. 打包与运行时
 
@@ -404,20 +402,21 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 - 启动器日志一律 stderr；stdout 保留给服务的 `READY <port>`。下载进度只在 stderr。
 - 自动下载目前仅 Windows x64；其他平台只走 1–3，失败给出手动安装提示。
 
-### 8.4 阶段 0 打包实测
+### 8.4 打包实测（发布形态）
 
-1. **已完成**：阶段 0/1 的启动器与 `service.js` 实跑记录见 §11「阶段 0」。
-2. **已完成**：`tauri.conf.release.json` resources；NSIS 安装包（7.14MiB）内确认含
-   `service\service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe`；DB/profile 仍写
-   `%APPDATA%`/`%LOCALAPPDATA%`；服务进程用 `CREATE_NO_WINDOW`。
+1. **已完成**：启动器与 `service.js` 的实跑记录见 §11。
+2. **已完成**：`tauri.conf.release.json` resources；NSIS 安装包（v0.16.0 实测 7.4MiB，
+   历史 v0.6.5 为 7.1MiB）内确认含 `service\service.js`、`amoeba-runtime.exe`、
+   `amoeba-browser.exe`；DB/profile 仍写 `%APPDATA%`/`%LOCALAPPDATA%`；服务进程用
+   `CREATE_NO_WINDOW`。
 3. **已完成（2026-10-26 本机实测）**：`TAURI_SIGNING_PRIVATE_KEY` 就位后 `tauri build` 产出
-   `Amoeba_0.6.5_x64-setup.exe`（7.12MiB）+ `.exe.sig`，签名步骤通过（公钥已更新到
-   `tauri.conf.json`，CI secret 同步）。
+   `Amoeba_<version>_x64-setup.exe`（当时 7.12MiB）+ `.exe.sig`，签名步骤通过（公钥已
+   更新到 `tauri.conf.json`，CI secret 同步）。
 4. **已完成（本机替代 clean VM）**：`/S /D=<临时目录>` 静默安装 → 五个文件落盘（exe / runtime /
    browser / `service\service.js` / uninstall）→ 启动实机跑通（服务由**安装目录里的**
    `amoeba-runtime.exe` 拉起）→ 关主窗口后 app/runtime/browser 全退、endpoint/lock 清理 →
    静默卸载后目录、卸载注册表项、开始菜单快捷方式均无残留。硬杀主进程（模拟崩溃）也无孤儿。
-   ⚠️ 仍待：干净 VM / 断网首启 / `externalBin` 编译版对比。
+   干净 VM / 断网首启 / `externalBin` 对比见 backlog §A。
 
 ## 9. 性能预算（实测）
 
@@ -441,88 +440,25 @@ CLI 的 `fetch/item/play/dm` 支持 `--via-service`（`probe.fetch/resolve/danma
 4. **governor 分裂**：抓取 governor 只在服务；桌面只保留媒体 governor，平台桶不重叠。
 5. **同步镜像不一致**：epoch/rev、合帧成一次提交、缺口 resync、写失败回滚、`patchMany` 批量。
 
-## 11. 阶段计划
+## 11. 阶段状态
 
-### 阶段 0：实测与骨架（3–5 天）
+阶段 0/1/2 已于 2026-10-26 完成（安装包/签名/安装卸载/服务生命周期/备份回滚均已验）；阶段 3 未立项，范围见 §12。
 
-- **已完成（2026-10-26）**：
-  - `scripts/service-phase0.ts` 全过——投影 0.48MB、解析 111ms、双写者丢更新已复现、
-    单写者对照不丢、markManyRead 5k = 6ms。
-  - 服务骨架 `apps/cli/src/service/server.ts`：`/v1/hello`、`/v1/health`、`/v1/state`
-    （空快照）、`/v1/events`（WS 首帧认证）、`/v1/shutdown`、`instance.lock`、token；
-    自检 `scripts/service-skeleton-check.ts` 13 项全过。
-  - endpoint/lock/token 固定在 `--data-dir` 下：desktop 是 `%LOCALAPPDATA%\app.amoeba.desktop\service`，
-    裸 `rss --service` 默认 `%LOCALAPPDATA%\app.amoeba.service\default`（`server.ts:114,330-331`）；
-    未按 instanceKey 分目录，`instanceKey` 只做日志标识。
-  - 运行时启动器 `apps/runtime`（`amoeba-runtime.exe`，release 3.7MB）：`AMOEBA_BUN` → PATH →
-    随包 → 缓存 → 下载（SHA256/原子解压）；spawn Bun 并透传 stdio/退出码。
-    已实测：全局命中、本地 zip 安装、真实 HTTPS 下载（44.6MB）、缓存命中、校验失败拒绝、
-    `--no-download` 失败提示；`scripts/service-runtime-check.ts` 6 项全过。
-  - 独立服务入口 `apps/cli/src/service/main.ts` → `bun run service:build` 出
-    `dist/service/service.js`（阶段 0 仅 10KB / 3 modules），启动器跑打包产物同样 6 项全过。
-- **已完成（2026-10-26）**：Tauri resources（`tauri.conf.release.json`）与 NSIS 安装包；
-  真实 Tauri dev 实例通过 WebView2 loopback 连服务（CORS/WS/Origin 校验全过）；
-  profile 直接复用 `%LOCALAPPDATA%\app.amoeba.desktop\webview-profile`，不重扫。
-- 产出：测量报告 + go/no-go（go）。
+- **阶段 0（实测与骨架）**：`service-phase0.ts` 全过（投影 0.48MB、解析 111ms、双写者丢更新已复现、单写者对照不丢、markManyRead 5k = 6ms）；服务骨架 13 项、运行时启动器 6 项（全局命中 / 本地 zip / HTTPS 下载 / 缓存 / 校验失败拒绝 / `--no-download`）全过。
+- **阶段 1（单写者服务）**：服务接管 DB/迁移/crawler/browser/login/governor/jobs；快照 + rev 事件环形缓冲 + `RemoteDataLayer` + 本地镜像；daily `VACUUM INTO` 备份（保留 7 份）与 `_migrations` checksum 门禁；`service-data-check.ts`、`remote-data-layer-check.ts` 全过；真机 53 订阅 / 2525 条目，UI 与 `rss attach` 双向即时可见。
+- **阶段 2（收口发布）**：desktop 远端模式 + Diagnostics/seed 走 RPC；single-instance、protocol=1 握手/426、`service_endpoint`；安装包（启动器 + JS + browser sidecar；NSIS 约 7.1–7.4MiB，随版本）+ updater 签名；本机静默安装/卸载与硬杀无孤儿。`tauri-plugin-sql` 仅为 mobile 进程内路径保留。
 
-### 阶段 1：单写者数据服务（已完成 2026-10-26）
+**运行期事实**（非待办）：服务 stderr 同时落 `dataDir/service.log`（5MB 轮转）；单连接未发送缓冲 >8MB 直接断开并由客户端全量 resync；`RemoteDataLayer.rpc` 默认超时普通 30s / refresh·resolve 120–600s。备份是整库拷贝（含明文 cookie）：`clearCookies` / `clearAll` 会删除全部备份；恢复用 `rss restore --list` / `rss restore --db <库>`（停服执行，覆盖前自动另存当前库）；桌面「导出全部数据」为 JSON（订阅/分组/阅读态，不含 cookie）。
 
-- 服务接管 DB/迁移/crawler/browser/login/governor/jobs；
-  `apps/cli/src/service/{server,host}.ts` + `packages/service-protocol`。
-- 快照 + rev 事件环形缓冲 + `RemoteDataLayer`（`packages/service-client`）+ 本地镜像；
-  desktop Tauri 只走服务（进程内回退已删）。
-- desktop 库原地迁移；每日 `VACUUM INTO` 备份（`dataDir/backups`，最多 7 份）；`_migrations` checksum 门禁。
-- 服务 stderr 同时落 `dataDir/service.log`（5MB 轮转为 `.1`）——release 没有控制台，不落文件等于没有日志。
-- 事件广播有背压：单连接未发送缓冲超过 8MB 直接断开（客户端重连走全量快照）；条目 diff 比**结构化签名**而不是对象引用，内容未变的刷新不再重播整个订阅。
-- `RemoteDataLayer.rpc` 默认超时（普通 30s；refresh/resolve 120-600s），底层卡住不会让界面无限转圈。
-  备份是整库拷贝（含明文 cookie）：`clearCookies` / `clearAll` 会**删除全部备份**；
-  恢复入口 = `rss restore --list` / `rss restore --db <库>`（服务停止时执行，覆盖前自动另存当前库）。
-  桌面「设置 → 存储与诊断 → 导出全部数据」导出 JSON（订阅/分组/阅读态，**不含 cookie**）。
-- **验收实测**：
-  - `scripts/service-data-check.ts` 全过（快照/事件 rev/阅读合批/settings/refresh/
-    preview/loadMore/probe/cacheStats/幂等/退订清理/token 权限/迁移表/每日备份/回滚演练/
-    job 取消/并发写）。
-  - `scripts/remote-data-layer-check.ts` 全过（镜像读/写 RPC/事件/诊断/退订/取消/
-    崩溃 fail-closed/换连自愈/重启快照收敛）。
-  - `scripts/service-snapshot-size.ts`：快照 gzip 实测见 §9。
-  - 真机 Tauri：`remote=true`、53 订阅/2525 条目/ready=true；UI 标已读 → 服务落库；
-    CLI `attach rpc reading.markRead` → 桌面事件立即变已读；反向同样可见。
-  - 正常关窗：服务退出、endpoint/lock 清理、无残留进程。
+## 12. 后续范围
 
-### 阶段 2：收口与发布（已完成 2026-10-26）
+> 开放项与验证项统一见 `docs/ops/backlog.md`（§A 验证 / §E 收尾），本节只留不可搬的技术边界。
 
-- ✅ desktop 远端模式 `injectTauriHost({storage:false,browser:false})`；Diagnostics/seed 不再直连。
-- ✅ single-instance（第二个实例只聚焦主窗口）、protocol=1 握手/426 门禁、`service_endpoint`。
-- ✅ 安装包（启动器 + JS + 浏览器 sidecar 进 resources；NSIS 7.12MiB）+ updater 签名（`.sig`）。
-- ✅ 本机静默安装/卸载（临时目录）验证无残留；实际安装版启动/关窗/硬杀均无孤儿进程。
-- ⚠️ `tauri-plugin-sql` 保留（mobile 的进程内 DataLayer 仍用），未从 desktop 发布路径移除。
-- 回滚演练已验：备份覆盖恢复 → settings 回到备份时点。
+- 阶段 3（未立项）：items >10k 的服务端聚合/窗口化、reading 行表、body 拆表、outbox、常驻 daemon。
 
-### 阶段 3（可选，按实测）
+`refreshAll` 服务端 job 已实现，但 desktop 仍逐订阅调 `refresh` 以保留逐条 busy/超时 UI
+（切换收益低于 UI 复杂度）——**已定不切**，不再作为待办。
 
-- reading 行表、body 拆表、服务端聚合/窗口化、outbox、常驻 daemon。
+## 13. 验收状态
 
-## 12. 后续（阶段 3 范畴，非本计划未完成项）
-
-> 开放项已汇总到 `docs/ops/backlog.md`（§A 验证 / §E 收尾）；本节保留技术背景。
-
-- 环境相关、需在干净目标机上复核：WebView2 Origin 白名单、断网首启、`externalBin` 编译版对比。
-- 阶段 3 才做：items >10k 的服务端聚合/窗口化、reading 行表、body 拆表、outbox、常驻 daemon。
-- `refreshAll`：服务端 job 已实现，但 desktop 仍逐订阅调 `refresh` 以保留逐条 busy/超时 UI
-  （切换收益低于 UI 复杂度，暂不切）。
-- 启动器自动下载在公司代理/杀软/无签名场景的表现待观测（Bun 版本闸门 1.3 ≤ v < 2 已实现，见 `apps/runtime/src/lib.rs:31-33`）。
-
-## 13. 验收清单
-
-- [x] 服务唯一写者，desktop 直写会抛错（`storage:false` → RejectingStorage；Diagnostics/seed 走 RPC）。
-- [x] 双客户端并发 reading/settings 不丢更新（`service-data-check` 并发段：两条 markRead +
-      一条 settings.set 同时发出，全部落库；真机双向可见另验）。
-- [x] CLI 与 desktop 看到同一订阅/已读/设置/缓存。
-- [x] 快照 ≤1MB（gzip 传输量，实测见 §9）、首屏不白屏；
-      boot 实测 306ms（spawn → READY，含 `hydrate()`；`service-snapshot-size.ts` 可复测）。
-- [x] markAllRead <50ms（服务端 5k 条 6–7ms）。
-- [x] 服务崩溃/重启后镜像收敛：kill 进程 → status 离线 + 写 fail-closed → 同库重启 →
-      新客户端快照恢复订阅/已读/星标；同一客户端经 `resolveEndpoint` 换连自动恢复
-      （`remote-data-layer-check`）；回滚演练另验。
-- [x] profile 复用 desktop `webview-profile`，登录态不丢。
-- [x] 安装包包含服务与浏览器载具；静默安装→启动→关窗→卸载全流程无残留（本机实测；干净 VM 未跑）。
+阶段 0-2 验收全部通过：服务唯一写者（desktop 直写抛错）；双客户端并发 reading/settings 不丢更新；CLI 与 desktop 同数据；快照 gzip 616KB（≤1MB）且 boot 306ms（spawn → READY，含 `hydrate()`）；markAllRead 5k 条 6–7ms；崩溃/重启后 fail-closed 与快照收敛（含 `resolveEndpoint` 换连自愈）；profile 复用 `webview-profile` 登录态不丢；安装包含服务与浏览器载具，本机静默安装→启动→关窗→卸载无残留。干净 VM / 断网首启不在本机验收范围，见 backlog §A。

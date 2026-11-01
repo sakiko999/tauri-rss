@@ -31,7 +31,7 @@
 | 组件拆分(移动/新建文件) | `tsc -p apps/desktop` + `ui-probe.ts goto page:settings` / `page:discover` 各走一遍;⚠️ tsc 查不出**循环 import 与渲染断链**,必须实机点 tab / 开弹窗 |
 | 设计令牌/对比度 | `scripts/ui-design-audit.ts` |
 | **@theme 令牌 / className** | `bun apps/desktop/src/lib/cn.check.ts`（新增 text/spacing/font-weight/shadow/ease/animate 令牌必须登记进 `lib/cn.ts` 的 `TW_THEME_EXTEND`，否则 `cn` 按前缀误判分组、静默吞类）+ `bun apps/desktop/src/lib/css-classes.check.ts`（TSX 里的语义类必须有 CSS 定义；删/改名 CSS 类后跑） |
-| **desktop 新增 core 导入 / 首屏包体** | `bun apps/desktop/src/lib/core-imports.check.ts`（根入口只许 `import type`，值导入走 `@amoeba/core/pure`）；量包体：`apps/desktop` 下 `bun x vite build --outDir <临时目录>`，主 chunk 里不应出现 `X-MS-STUB` / `wbi_img` / `aweme`（基线 2026-11-01：主 chunk 2.55MB，crawler/resolve 在懒加载的 `source-*.js`） |
+| **desktop 新增 core 导入 / 首屏包体** | `bun apps/desktop/src/lib/core-imports.check.ts`（根入口只许 `import type`，值导入走 `@amoeba/core/pure`）；量包体：`apps/desktop` 下 `bun x vite build --outDir <临时目录>`，主 chunk 里不应出现 `X-MS-STUB` / `wbi_img` / `aweme`（基线 2026-11-01：**入口主 chunk** 2.55MB，含 vendor；crawler/resolve 与三引擎在动态 import 的 `source-*.js`/引擎包，不计入该数） |
 | **正文消毒 / 导航守卫 / capability**（2026-11-01） | `cargo test -p amoeba --lib plugins::nav_guard`；真机（`bun run tauri`）：① `ui-probe eval "import('/src/lib/sanitize.ts').then(m => m.sanitizeFeedHtml('<style>…</style><form>…</form><p style=\"position:fixed\">x</p>'))"` → 无 style/form、p 无 style；② CDP `Page.navigate` 到 `data:text/html,x` → `errorText: net::ERR_ABORTED` 且页面仍在应用（⚠️ 别用 `location.href='file:…'` 验 —— Chromium 自己就会拦，证明不了守卫；别用 http 外链验 —— 会真的弹出系统浏览器）；③ `ui-probe eval "__TAURI_INTERNALS__.invoke('plugin:sql\|load',{db:'sqlite:x.db'}).catch(String)"` → `not allowed` |
 | **响应式断点** | 逐宽度量真实几何（`Emulation.setDeviceMetricsOverride` + 读 `getBoundingClientRect`）。⚠️ **别只看断点数字**：两个断点撞在同一个宽度会产生**反向跳变**（播放页单栏 1080 与侧栏折叠 1080 撞车，窗口越窄播放器越小、到 1040 反而暴涨 912）。基线（2026-10-15 实测，勿回退）：1440→764 / 1360→684 / 1290→614（双栏，右栏 320）；1279→947 / 1200→868 / 1100→768 / 1040→912（单栏，右栏在下方） |
 | **类名冲突（跨区块复用）** | ⚠️ `styles/` 拆成多文件后，**同名类会跨文件叠加**（历史上 `.rail-head` 就同时被侧栏和直播区复用，`column` + `wrap` 叠加把头部撑成 132px；直播区现已改名 `live-*`）。改样式前先 `grep` 类名在 `styles/` 下**出现了几次**；新组件用**模块前缀**，别借侧栏的命名空间 |
@@ -110,8 +110,7 @@ cargo build -p amoeba-browser && bun run rss fetch weibo:user --browser --kv uid
 bun run rss fetch xhs:user --kv user_id=<id> --kv cookie=<ck> --json   # 小红书用户笔记（HTTP SSR）
 bun run rss fetch douyin:trend --json        # 抖音热点榜（匿名，含热度/榜位）
 bun run rss sug 王者                          # 抖音搜索联想词（匿名）
-bun run rss fetch live:douyin --kv roomIds=@<抖音号> --json       # 抖音号/短 ID/直播间链接归一
-bun run rss fetch live:douyin:user --kv secUid=<主页链接> --json  # 主页链接 → 抖音号 → 房间（在播/离线）
+bun run rss fetch live:douyin --kv roomIds=<抖音号/主页链接/直播间URL> --json  # 三种入口归一（在播/离线）
 bun run rss play "https://live.douyin.com/<在线房间>"   # douyin 直播多档位
 bun run rss dm   "https://live.douyin.com/<在线房间>" -s 6  # douyin 弹幕（需在线房间）
 bun run rss item <url>                        # by-url 路由 + 全档位

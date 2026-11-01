@@ -84,18 +84,10 @@ git push origin vX.Y.Z
 
 ## 待补：发布门禁（2026-10-26 事故后记）
 
-> 开放项已登记 `docs/ops/backlog.md` §A；完成后两边同步。
-
-v0.7.0 发了一个启动即「应用数据初始化失败」的包：CI 既没构建服务三件，也没叠加
-`tauri.conf.release.json`（`bundle.resources` 只写在那里）。已修 release.yml（见
-`0ecb1a2`），但**产物仍没有自动门禁**，靠人记得。2026-11-01 起 release.yml 在构建前跑
-`bun run check`（只挡源码层回归，挡不住打包漏件）。仍待补（处理 CI 时一并做）：
-
-1. 构建后断言安装包内容含 `service/service.js`、`amoeba-runtime.exe`、`amoeba-browser.exe`
-   （`7z l *-setup.exe` 三条 grep，缺一即 fail）。
-2. 断言 `tauri build` 真的加载了 release 配置（漏 `--config` 时 resources 静默为空，
-   与 0.7.0 同症状）。
-3. 打 tag 前的本地验收清单加一条：「解包安装包确认三件」，不再只看体积。
+v0.7.0 发过一个启动即「应用数据初始化失败」的包：CI 既没构建服务三件，也没叠加
+`tauri.conf.release.json`（`bundle.resources` 只写在那里）。release.yml 已修（`0ecb1a2`），
+2026-11-01 起构建前跑 `bun run check`（只挡源码层回归，挡不住打包漏件）。**产物自动门禁仍未做**，
+待办见 `docs/ops/backlog.md` §A（解包断言三件 + 断言 release overlay 生效）。
 
 ## 本地验证（打 tag 前）
 
@@ -114,8 +106,8 @@ bun run tauri:build   # = vite build + service:build + cargo build --release run
 预期产物(根 `Cargo.toml` 是 workspace,所以 target 在**仓库根**):
 
 ```
-target/release/bundle/nsis/Amoeba_0.7.0_x64-setup.exe
-target/release/bundle/nsis/Amoeba_0.7.0_x64-setup.exe.sig
+target/release/bundle/nsis/Amoeba_<version>_x64-setup.exe
+target/release/bundle/nsis/Amoeba_<version>_x64-setup.exe.sig
 ```
 
 注意：

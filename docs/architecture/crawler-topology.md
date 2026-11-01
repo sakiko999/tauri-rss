@@ -109,10 +109,8 @@
 ### 建议
 
 1. **不做**移动端浏览频繁模拟。移动端定位 = HTTP/SSR + 登录 cookie。
-2. 剩余缺口与路径（复用现有体系）：
-   - 扫码登录只走服务 `scanLogin` RPC（`rss login` 与桌面账号页共用；二维码组件 `apps/desktop/src/components/QrImage.tsx`）——mobile 冻结，不再排期；
-   - weibo HTTP 降级冷 cookie 时效 → 失效检测 + 引导重登；
-   - 若未来必须真浏览器环境（weibo 用户页 API 等）→ 唯一复用桌面 CDP 代码的路径 = **远程服务端跑 Chromium**，移动端经 API/WS 调用（Puppeteer-on-iOS 的普遍替代），不在设备上跑。
+2. 移动端相关遗留（weibo HTTP 降级冷 cookie 时效、移动端扫码入口）随 2026-10-26 冻结取消；扫码登录只走服务 `scanLogin` RPC（`rss login` 与桌面账号页共用；二维码组件 `apps/desktop/src/components/QrImage.tsx`）。
+3. 若未来必须在移动端跑真浏览器环境（weibo 用户页 API 等）→ 唯一复用桌面 CDP 代码的路径 = **远程服务端跑 Chromium**，移动端经 API/WS 调用（Puppeteer-on-iOS 的普遍替代），不在设备上跑。
 
 ### 来源
 
@@ -158,7 +156,7 @@
 - ⚠️ **仅销毁宿主窗口不够**：lane 窗口会让 WebView2 浏览器进程继续存活，留下 profile 占用。
   sidecar 退出时先 Close controller → 销毁窗口 → 等浏览器进程退出（2s）→ 关 Job 兜底杀残留树。
 
-**实测**（Tauri webview，2026-10-22）：CDP `/json/list` + WS + `Runtime.evaluate` +
+**历史实测**（Tauri webview，2026-10-22；该内嵌路径已于 2026-11-01 删除）：CDP `/json/list` + WS + `Runtime.evaluate` +
 `Page.navigate` 全通；xhs 首屏 34 条 / 约 0.8s；private 472MB（Edge 992MB），含应用自身 UI
 WebView2 合计约 850MB（Edge 1.37GB）。
 

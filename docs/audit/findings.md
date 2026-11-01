@@ -7,7 +7,7 @@
 > ① 已确认、**故意不改**的项（附判定理由）；② 审计**误报经实测证伪**的结论（防止后人重踩）。
 > 格式：`[严重度] 文件 — 问题 / 为什么不改`。
 
-## 一、故意不改（已确认，有理由）
+## 一、故意不改 / 已消解（已确认，有理由）
 
 - **[med] `resolve/platform/douyin/stream.ts:138`** — 清晰度兜底按位置
   `flvList[flvList.length - level]` 配对 URL，应按 `sdk_key` 键关联。JSON map 顺序非清晰度
@@ -19,9 +19,9 @@
   旧 nav）。主要缺陷（reject 毒化）已修，TTL 待 wbi 频繁轮换时再补。
 - **[low] `crawler/channels/weibo/user.ts:68-75`** — 首次翻页重拉首页拿 mids（多 2 次往返）。正确性
   无损、注释已解释必要性；要省需跨调用缓存 lastMid（状态脆），暂缓。
-- **[低/潜在] 无生产者的 latent 丢字段** — `Item.raw`（不往返）、`Live.quality`（不往返）、
-  `article.media[]` 图片（只保首个为 thumbnail）。三者当前**无 channel 产出**，不触发；未来有
-  channel 依赖再补 serialize + deserialize 两侧。
+- **[已消解 2026-10-27] 无生产者的 latent 丢字段** — 原记 `Item.raw` / `Live.quality` /
+  `article.media[]` 不往返。复核：`raw` 已有渠道产出（crawler 内部字段，本就不进 XML）、
+  `Live.quality` 已删、`article.media[]` 已双向透传；本条不再适用。
 - **[low] `crawler/channels/xhs/explore.ts` prepend 判定** — 只识别「纯前插/纯追加」（比较滚动
   前后首条 id）。头部非纯前插的变动（首卡被替换、同轮前插+后插）会切到已返回过的旧条目，
   靠 `store.append` 按 id 去重兜底（最多丢一批，不会重复展示）。实测（2026-10-20，862→968 条）
@@ -41,8 +41,8 @@
     浏览器路径已免疫（登录不传 platform，跳过 `browserGate`）。改法涉及 governor 语义
     （登录请求免冷却），待专门一轮。
 - **[低] `serialize-contract.check.ts` 盲区** — 只检测「deserialize 读、serialize 不写」，
-  检测不到「**两侧都漏**」的字段（如上面的 quality/raw/media[]）。扩展需维护「应透传字段」期望
-  清单，成本不低；当前新增字段时显式加守卫用例，暂够。
+  检测不到「**两侧都漏**」的字段。扩展需维护「应透传字段」期望清单，成本不低；当前新增字段时
+  显式加守卫用例，暂够。（原举例 quality/raw/media[] 已过期，盲区本身仍成立。）
 
 ## 二、误报（实测证伪，防重踩）
 
@@ -79,11 +79,10 @@
   `CDP_CMD_TIMEOUT_MS`）；lane 化后由 `tab.abortPending`/`abortTabs` 在连接层取消
   （`packages/resolve/src/browser/scheduler.ts:24-27`）。别再按「永久锁死」设计。
 
-## 三、存疑（未确证，未改）
+## 三、存疑（未确证；一条已修）
 
-- `ShortVideoView` 的 `savePosition` 对 `isLive` 未加守卫 —— 若某直播流返回有限 duration，
-  会写 positionSec 把该直播塞进「继续」视图。`PlayableMedia` 有 `dur<=0` 早退，直播一般
-  duration=0/Infinity 不上报，未复现。
+- ~~`ShortVideoView` 的 `savePosition` 对 `isLive` 未加守卫~~ **已修（2026-10-27）**：
+  `savePosition` 入口统一拦 `kind === "live"`（`store/actions/reading.ts`），调用方不再各自守卫。
 - `douyin/stream.ts:111` — `stream_data` 键名级别变更时主路径返回空 → 降级链（慢 2 RTT +
   可能低画质）。无失败证据，待上游字段变更时再处理。
 - `data-layer` `removedSubs` 墓碑无界增长（量级极小）；`resolveKind` 的 enclosure→audio 覆盖
@@ -156,7 +155,8 @@
 
 - **RSSHub 具名渠道整体删除**：`rsshub:bili:*` / `weibo:*` / `youtube:*` 等旧订阅刷新会失败，只能迁移到对应内置渠道或 `rsshub:feed`。这是目前最大的一处「不兼容」。
 - **`live:douyin:anchor` 已删除**：旧订阅如果引用它，刷新会失败。
-- `live:douyin:user` 属于半兼容：旧订阅仍能刷新，但不再出现在新建列表，也不会成为 `live:douyin` 的合并目标。
+- `live:douyin:user` 已于 2026-10-28 删除：旧订阅刷新失败；主页链接改由 `live:douyin` 的
+  `roomIds` 直接解析（见上表）。
 
 ## 十、维护提醒
 

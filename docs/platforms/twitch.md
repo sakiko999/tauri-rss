@@ -11,21 +11,13 @@ Twitch 匿名链路可用：公开 web Client-ID 的 GraphQL → `PlaybackAccess
 `usher.ttvnw.net` HLS，全程不需要账号、不需要 `Client-Integrity`、不需要浏览器。
 官方 Helix 匿名不可用（401），也不提供播放地址，因此**不走 Helix**。
 
-一期（MVP）：
+一期已实现：`twitch:live`（`roomIds` 频道订阅，含离线态）、`twitch:hot`、
+`twitch:category` + `twitch:categories`（目录订阅）、`twitch:user:search`
+（2026-11-01，统一搜索取数源，落地 `twitch:live` 的 `roomIds`），以及 by-url
+直播 HLS 解析；热门/分区共用游标翻页（见 §3.1）。
 
-- 新增 `twitch:live` 渠道：`roomIds` = 频道登录名列表，产出 `Live` item（含离线态）。
-- 新增 `twitch:hot`：无参数热门直播列表（`streams(sort: VIEWER_COUNT)`）。
-- 新增 `twitch:category`：参数 `category`（slug 或目录页链接）分区直播列表
-  （`game(slug).streams`）。
-- 热门/分区共用 `fetchMore` 游标翻页（见 §3.1）。
-- resolver 支持 `https://www.twitch.tv/<login>` 的直播 HLS 解析。
-- 不做：登录、VOD、clip、聊天弹幕、`passive`（浏览器被动）、cookie 字段。
-  （分类榜已做成独立目录订阅 `twitch:categories`，产 `kind:"category"` 条目。）
-- 2026-11-01 追加 `twitch:user:search`：关键词 → `searchFor` → 频道候选，
-  落地 `twitch:live` 的 `roomIds`（统一搜索入口的取数源，不是常驻订阅）。
-
-二期再考虑 VOD/clip（路由要排在频道名之前）、IRC 聊天
-（需宿主 ws 支持 text 帧——当前 `WsLike.send(Uint8Array)` 只发 binary，实测 Twitch 不收）。
+不做：登录、VOD、clip、聊天弹幕、`passive`（浏览器被动）、cookie 字段；
+二期规划见 §5（聊天需宿主 ws 支持 text 帧，当前 `WsLike.send(Uint8Array)` 只发 binary）。
 
 ## 2. 实测结论（2026-10-20，匿名）
 
@@ -212,9 +204,9 @@ XML 且不带 cursor（core 据此判「没有更多」）。Twitch 限额 120 R
 
 新增 `packages/crawler/src/channels/twitch/`：`live.ts`（频道订阅 + 流列表共用映射
 `twitchStreamToLive`）、`streams.ts`（热门/分区共用的 source 装配与游标翻页）、`hot.ts`、
-`category.ts`、`categories.ts`（分类目录订阅，`kind:"category"`）、`index.ts`；
-`packages/crawler/src/register.ts` 登记四个渠道。不实现 `resolveDetail` /
-`fetchPassive` / `Loginable` / `passive`。
+`category.ts`、`categories.ts`（分类目录订阅，`kind:"category"`）、`user-search.ts`
+（搜频道）、`index.ts`；`packages/crawler/src/register.ts` 登记上述渠道。不实现
+`resolveDetail` / `fetchPassive` / `Loginable` / `passive`。
 
 ### 4.3 类型 / 平台标签 / 设置
 
@@ -224,8 +216,8 @@ XML 且不带 cursor（core 据此判「没有更多」）。Twitch 限额 120 R
   `platformOfChannelKey`/`platformOfHost` 由此派生）；`core/src/data-layer.ts` 的
   `platformOfChannel` 只是薄封装。
 - `apps/desktop/src/lib/subscriptions.ts`：`LIVE_SUB_CHANNEL.twitch = "twitch:live"`、
-  `CATEGORY_CHANNEL.twitch = "twitch:category"`（分类目录条目预览/订阅该分区）；
-  `SEARCH_CHANNEL` 一期不加。
+  `CATEGORY_CHANNEL.twitch = "twitch:category"`（分类目录条目预览/订阅该分区）、
+  `USER_SEARCH_CHANNEL.twitch = "twitch:user:search"`（统一搜索取数源）。
 - CLI：`info.ts` 的 `exampleInfo("twitch:live")`；`item.ts` 路由错误文案与 `danmakuNote`
   （一期「无（Twitch 聊天二期）」）。
 
@@ -244,13 +236,11 @@ XML 且不带 cursor（core 据此判「没有更多」）。Twitch 限额 120 R
 
 ## 5. 分期
 
-| 阶段 | 内容 |
-| --- | --- |
-| 二期 A | VOD / clip 播放（路由排在频道之前） |
-| 二期 B | ~~关键词搜索~~ ✅ 已做（`twitch:user:search`，2026-11-01）；搜直播流（带在播态）待定 |
-| 二期 C | IRC 聊天弹幕（先给宿主 ws 增加 text 帧） |
-| 三期 | OAuth「我的关注」（需注册应用，不建议近期） |
-| 暂不做 | `Client-Integrity` 浏览器兜底、去广告、订阅者专属流 |
+VOD / clip 播放（路由须排在频道名之前）、搜直播流（带在播态）、IRC 聊天弹幕
+（先给宿主 ws 增加 text 帧）、OAuth「我的关注」（需注册应用）均未做；排期与条件见
+`docs/ops/backlog.md` §D / §G。
+
+暂不做：`Client-Integrity` 浏览器兜底、去广告、订阅者专属流。
 
 ## 6. 风险 / 待确认
 

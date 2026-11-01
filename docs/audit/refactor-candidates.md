@@ -6,13 +6,13 @@
 >
 > 判据只有一条：**数据变换**（可收敛成一次遍历/一次查表）才值得改；
 > **副作用分发**（改 store、动 DOM、发请求）保持命令式。做完一条删一条。
-> A/B 仍开放的条目同步登记在 `docs/ops/backlog.md` §E（总表是排期入口）。
+> A/B 条目**部分**已登记在 `docs/ops/backlog.md` §E；未登记项以本文件为准，按需补入总表。
 
 ## 总览
 
 | 档 | 条目 | 净收益（估） |
 | --- | --- | --- |
-| A · 低风险、建议尽快 | 6 条（A2/A5 已完成，已删） | ~100 行 |
+| A · 低风险、建议尽快 | A1/A4/A7/A8 仍开放；A2/A3/A5/A6 已修（正文保留标记） | ~45 行 |
 | B · 中风险、改到再动 | 5 条 | ~160 行 |
 | C · 明确不改 | 3 条 | — |
 | D · 已核实（可删） | 1 条 | — |
@@ -21,25 +21,18 @@
 
 ## A · 低风险，建议做
 
-### A1. 串行队列在 4 个文件各写一份
+### A1. 串行队列在 3 个 repo 各写一份
 
-- 位置：`packages/core/src/repo/subscription-repo.ts:37` · `reading-repo.ts:36` ·
-  `settings-repo.ts:26` · `packages/core/src/data-layer.ts:618`（`serialized()`，共四处）
-- 现状：四处都是 `let serial = Promise.resolve(); const next = serial.then(fn, fn)`；
-  data-layer 还要额外维护 `Map<key, Promise>`。注释各写各的。body-cache 的串行队列已删，
+- 位置：`packages/core/src/repo/subscription-repo.ts:35` · `reading-repo.ts:37` ·
+  `settings-repo.ts:27`
+- 现状：三处仍是 `let serial = Promise.resolve(); const next = serial.then(fn, fn)`；
+  data-layer 已改用 `internal/async.ts` 的 `createSerialized()`。body-cache 的串行队列已删，
   改为 `keysOf` 前缀扫描（`body-cache-repo.ts:47-51`）。
-- 建议：新增 `packages/core/src/repo/serial.ts`，导出 `createSerialQueue()` 与
-  `createKeyedSerialQueue()`，四处替换本地实现。纯 Promise 编排，不需要任何库。
-- 风险：low ｜ 省 ~30 行 ｜ remeda_fit: bad（这是控制流，不是数据变换）
+- 建议：三处统一改用 `packages/core/src/internal/async.ts` 的 `createSerialized()`，
+  不再新增 repo 本地实现。
+- 风险：low ｜ 省 ~20 行 ｜ remeda_fit: bad（这是控制流，不是数据变换）
 
-### A3. kind 的中文名/图标造了两份
-
-- 位置：`apps/desktop/src/views/player/PlayerPage.tsx:335`（`kindName`）·
-  `apps/desktop/src/views/palette/CommandPalette.tsx:83`（icon 四层三元）
-- 现状：`store/nodes.ts:32` 的 `KIND_META` 已有全部 label+icon，两份副本**已经不一致**
-  （`kindName` 缺 `category`）。`Cards.tsx` 的 `kindLabel` 已删。
-- 建议：统一 `KIND_META[kind]?.label ?? kind` / `KIND_META[kind]?.icon ?? "rss"`，删两处本地实现。
-- 风险：low ｜ 省 ~14 行
+### A3. kind 的中文名/图标造了两份 — ✅ 已修（2026-10-27，统一走 `KIND_META`）
 
 ### A4. 可播判定 desktop 两处各写一遍（mobile 已冻结，不再动）
 
@@ -49,12 +42,7 @@
   desktop 两处统一引用；mobile 保留自己的。
 - 风险：low ｜ 省 ~6 行 ｜ 价值在**契约一致**（新增 kind 时不会漏一处）
 
-### A6. `selectors.ts` 有无调用者的导出
-
-- 仍确认 **0 引用**：`unreadCount:185` · `subUnread:197` · `lastFetchedOf:217`
-  （`itemsById` 已删；`heatOf` 已被 `sortItems` 内部使用，保留）。
-- 建议：删除确认无用的导出；若想留作调试 API，加 `@internal` 注释，避免被当公共接口继续引用。
-- 风险：low ｜ 省 ~35 行
+### A6. `selectors.ts` 有无调用者的导出 — ✅ 已修（2026-10-27，三个无调用导出已删）
 
 ### A7. 两条按 URL 解析的链路只差一行
 
@@ -172,29 +160,23 @@ case 写类型谓词，收益为负。
   `series.ts:98`）：这三个接口的列表项没有 `rights`，充电专属不可判（详见
   `docs/platforms/platform-notes.md` 的 B站段）。已修的是 `user_video`（`is_charging_arc`）；
   这两个渠道要么接受缺口，要么按条目懒查 `view`（不建议）。
-- ~~**A-2 「在播」判据两处各写一遍**~~ ✅ **已修（2026-10-27）**：`Cards.tsx` 已统一走
-  `lib/media.ts` 的 `isLiveNow`（unknown 算在播、offline 不算，与首页/侧栏同判据）。
+- ~~**A-2 「在播」判据两处各写一遍**~~ ✅ **已修（2026-10-27）**：`Cards.tsx` 统一走
+  `lib/media.ts` 的 `isLiveNow`（unknown 算在播、offline 不算）。
 
-- **A0 `browser-sidecar` 没接 WebView2 进程退出事件**（`apps/browser-sidecar/src/main.rs:928` 只有
-  500ms timer + tidy）：浏览器进程崩溃/OOM 后 sidecar 仍存活，CDP 端口消失但
-  `SidecarDriver.ensureReady`（`host/src/node/browser-sidecar.ts:88`）只看子进程 exit，继续返回坏端口
-  → 长跑的 `rss --service` 后续所有浏览器渠道都失败且不自愈。（历史注：当时桌面载具在 `webview_browser.rs` 有同款兜底，该分支已于 2026-11-01 删除。）
-  ✅ 已修（2026-10-27）：主路 `ICoreWebView2Environment5::add_BrowserProcessExited` →
-  `request_shutdown()`，sidecar 自行退出、由宿主 `ensureReady` 重启整载具；旧 Runtime（< 88）
-  没有 Environment5 才降级 `add_ProcessFailed` + 只拦 `BROWSER_PROCESS_EXITED`（渲染进程失败
-  WebView2 会自建，泛化会打断在途抓取）。真机验证：杀 sidecar 的 msedgewebview2 子进程 →
-  sidecar 干净退出（exitCode 0）。
+- ~~**A0 `browser-sidecar` 没接 WebView2 进程退出事件**~~ ✅ **已修（2026-10-27）**：
+  `add_BrowserProcessExited` → `request_shutdown()`，sidecar 自退、宿主 `ensureReady` 重启；
+  旧 Runtime（< 88）降级 `add_ProcessFailed` 且只拦 `BROWSER_PROCESS_EXITED`。真机：杀 sidecar 的
+  msedgewebview2 子进程 → sidecar 干净退出（exitCode 0）。（当时桌面载具的同款兜底已随
+  `webview_browser.rs` 于 2026-11-01 删除。）
 - **A0b `rss --service` 的 job 表可能残留**（`apps/cli/src/service/server.ts:488-514`）：`runJob` 的
   `jobs.delete` 只在 `finally`，被 cancel 但底层 await 未返回时条目与 AbortController 一直挂着。
   **2026-10-27 复核**：实际等待有界（core refresh 自带 abort race、CDP 命令 30s、HTTP 超时），
   不是永久泄漏；但 cancel 后到操作自然结束前条目仍在。低成本改法：`Promise.race(fn, abortSignal)`
   让 job 在取消时立即结算（`finally` 删除），语义与「取消 = 结束」一致。
 
-- ~~**A1 服务端 diagnostics 内联了一份 core 实现**~~ ✅ **已修（2026-10-30）**：dispatch 5 个
-  `diagnostics.*` 一律委托 `layer.diagnostics.*`（core 的 `clearAll` 清 `removedSubs`/`pageCursors`/
-  `pageTotals` 并重置 netPolicy），返回受影响的 subscriptionId 供 server 清 `lastItems` 投影并广播
-  `items.cleared`；server 另在 clearAll 前 abort 在途 job（`jobs.controller`）。回归
-  `scripts/service-data-check.ts`（clearAll 返回 ids / 快照为空 / 设置回默认）。
+- ~~**A1 服务端 diagnostics 内联 core 实现**~~ ✅ **已修（2026-10-30）**：5 个 `diagnostics.*`
+  委托 `layer.diagnostics.*`，clearAll 返回受影响 id 并在前 abort 在途 job；回归
+  `scripts/service-data-check.ts`。
 - **A2 `projectItem` 剥掉 article 的 `content`**（`server.ts:294` / `service-client:209`）：
   镜像里 `content` 恒空 → `matchesQuery` 的 bodyText 部分在生产路径不生效。
   **2026-10-27 已修一半**：搜索空态文案改为「标题、作者与摘要；正文不在本地镜像里」
@@ -202,14 +184,14 @@ case 写类型谓词，收益为负。
   **仍需产品决策**：投影保 content（体积↑，先跑 `service-snapshot-size.ts`），或搜索走服务端 /
   按需 `resolveDetail`。
 - ~~**A3 扫码登录成功后读本地 settings 镜像再写回**~~ ✅ **已修（2026-10-27）**：
-  `AccountPage` 直接用 `LoginResult.cookie` 同步 UI，不再重读可能滞后的镜像。
+  `AccountPage` 直接用 `LoginResult.cookie` 同步 UI。
 - **A4 刷新超时不再 `abortTabs`**：服务端 `withSignal` 只让 race reject，不中止底层请求，
   被放弃的抓取仍占浏览器 lane（`op:xhs`）直到 CDP 自身超时。desktop 侧 `abortTabs` 调用已移除。
 - **A5 `channelVideoToItem` 缺 author/publishedAt/duration**（`crawler/.../youtube/channel.ts:119`）：
-  「今天」节点恒空、时间排序退化、卡片把 summary 当作者名。设计上刻意不反推 publishedAt，
-  但 author（频道名）与 duration（lockup 里有）可以补。
+  「今天」节点恒空（刻意不反推 publishedAt；时间排序已有 fetchedAt 兜底，卡片也不会拿
+  summary 当作者）。author（频道名）与 duration（lockup 里有）仍值得补。
 - ~~**A6 `contentCache.delete` 无调用**~~ ✅ **已修（2026-10-27）**：删除该方法；
-  `bodyCache.deleteAll` 保留并在接口注释标注「仅自检」。
+  `bodyCache.deleteAll` 保留并标注「仅自检」。
 
 ### B · 性能
 
@@ -233,9 +215,8 @@ case 写类型谓词，收益为负。
 - **C4 `BROWSER_UI_URL` / `EDGE_UI_URL` 与 `targetParams()` 在两个 driver 各一份**：
   不是载具差异，应移到 `host/src/browser/backend.ts` 常量。
 - ~~**C5 `scripts/check.ts` 是白名单**~~ ✅ **已修（2026-10-27）**：按文件系统发现
-  `*.check.ts`，未登记直接失败；有 `tsconfig.json` 但不在 `TYPECHECK_PROJECTS` 的项目同样失败；
-  `--filter` 空匹配改为 exit 1。（`service-client`/`service-protocol` 没有自己的 tsconfig，
-  由消费方 desktop/cli 的 typecheck 覆盖，不是漏项。）
+  `*.check.ts`，未登记/未纳入 typecheck 直接失败，`--filter` 空匹配 exit 1
+  （`service-client`/`service-protocol` 无自有 tsconfig，由消费方 typecheck 覆盖）。
 - **C6 YouTube InnerTube 文本/缩略图解析 4 份**（`channel.ts` 的 `textOf`/`maxThumb`、
   `discover.ts` 的 `textOf`/`thumbOf`、`client.ts` 的 `ytText`/`ytThumb`）。
 - **C7 客户端只比 `hello.protocol`，不读 `minClientProtocol`**（`service-client/src/index.ts:104`）：
@@ -251,27 +232,10 @@ case 写类型谓词，收益为负。
 
 ## 2026-10-27：合流改版收尾复核（docs 全量核对）
 
-对 `docs/` 里全部「遗留/未做/待验证」条目做了一次逐条对码核对（120 条：open 89 / fixed 1 /
-stale 9 / decision 21）。本轮修掉的：
-
-- **[high] RSSHub provider 没在数据服务/CLI 注册**（00-overview 曾写「desktop/mobile 入口都 import」，
-  数据服务化后那句已够不到 DataLayer）：服务与 CLI 入口补 `import "@amoeba/core/source/rsshub"`，
-  `probe.fetch` 改走 `@amoeba/core/source` 的聚合注册表；`service-data-check` 钉住
-  `channels.list` 含 `rsshub:feed`。
-- **[med] 单订阅 TTL 清不回 0**：`undefined` 在 RPC JSON 里丢失 → 旧值保留。
-  新增 `SubscriptionPatch`（`null` = 清除），repo 侧删除键；dialog 改发 `null`；
-  `service-data-check` 钉「可写 / 可用 null 清除」。
-- **[trivial] 扫码登录后用滞后的 settings 镜像回写 cookie**（A3，见上）。
-- **[low] 直播会写续播位置**：`savePosition` 统一在入口拦 `kind === "live"`（原只在部分调用点讨论）。
-- **[low] 死代码/重复**：`contentCache.delete`、`LiveRailCard`、`selectors` 三个无调用导出已删；
-  kind 名称/图标两处本地副本改为 `KIND_META`。
-- **[low] 检查入口假绿**：`scripts/check.ts` 增加未登记检查文件/未纳入 typecheck 项目的守卫，
-  `--filter` 空匹配退出 1。
-- **AI 文案**：搜索空态不再承诺「搜正文」（A2）。
-
-> 其余 open 项按本文分档排期（A1 diagnostics 归位、A4 abortTabs、
-> B 段性能、C 段分层）——都不属于合流改版的收尾范围，单独开轮做。
-> （A0 browser-sidecar 退出事件已于 2026-10-27 落地，见上。）
+对 `docs/` 全部「遗留/未做/待验证」条目逐条对码（120 条：open 89 / fixed 1 / stale 9 /
+decision 21）。本轮修掉 7 项（RSSHub provider 注册、订阅 TTL 用 `null` 清除、扫码登录镜像、
+直播续播入口拦截、死代码与 `KIND_META` 统一、`check.ts` 假绿、搜索空态文案），逐条证据见
+`docs/audit/doc-backlog-2026-10-27.md`；其余 open 项已并入 `docs/ops/backlog.md` §E。
 
 ## 附：为什么没引入 remeda
 

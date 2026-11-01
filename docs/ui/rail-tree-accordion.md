@@ -2,6 +2,8 @@
 
 > 实现早已完成（`apps/desktop/src/components/app/RailGroupTree.tsx` + `lib/rail-nav.ts`）。
 > 本文件只留**决策理由与踩过的坑**——修的过程在 git log，不在此复述。
+> 2026-11-01 起 Radix 统一经 `radix-ui` 聚合包子路径导入（`components/ui/Accordion.tsx` →
+> `radix-ui/accordion`，见 `docs/ui/design-system-plan.md` F1）；下表体积是选型时的独立包数据。
 
 ## 一、为什么是 Accordion，不是树组件
 
