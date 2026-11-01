@@ -16,6 +16,7 @@ import type { ChannelInfo } from "@amoeba/core"
 import { useEffect, useMemo, useState } from "react"
 
 import { Icon } from "../../components/Icon.tsx"
+import { CATEGORY_CHANNEL } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useDesktop } from "../../store/index.ts"
 import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
@@ -34,9 +35,8 @@ export function DiscoverPage() {
   const dl = useDesktop((s) => s.dl)
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
   const [platform, setPlatform] = useState("bili")
-  // 子视图提升到此处:能力矩阵的按钮要能一并切视图。
-  // 2026-11-01 起只剩「搜主播」（分区/搜索渠道已删除）。
-  const [view, setView] = useState<Cap>("anchor")
+  // 子视图提升到此处:能力矩阵的「浏览分区/搜主播」按钮要能一并切视图。
+  const [view, setView] = useState<Cap>("category")
   /** 带「用户主页 → 直播间」解析渠道的平台（目前只有 douyin）→ 弹窗预选该渠道。 */
   const [userDialogKey, setUserDialogKey] = useState<string | null>(null)
 
@@ -46,7 +46,10 @@ export function DiscoverPage() {
     for (const p of PLATFORMS) {
       const find = (suffix: string) =>
         channels.find((c) => c.key === `${p.id}:${suffix}` || c.key === `live:${p.id}:${suffix}`)
-      m[p.id] = { anchor: find("anchor") }
+      // 分区渠道名不统一（`youtube:live-category` 不在 `<platform>:category` 约定里），
+      // 以显式表为准，再回退旧的命名约定。
+      const category = channels.find((c) => c.key === CATEGORY_CHANNEL[p.id]) ?? find("category")
+      m[p.id] = { category, anchor: find("anchor") }
     }
     return m
   }, [channels])
@@ -119,6 +122,17 @@ export function DiscoverPage() {
                       </span>
                     </div>
                     <div className="chip-row">
+                      {c.category ? (
+                        <button
+                          className="chip chip-sm"
+                          onClick={() => {
+                            setPlatform(p.id)
+                            setView("category")
+                          }}
+                        >
+                          浏览分区
+                        </button>
+                      ) : null}
                       {c.anchor ? (
                         <button
                           className="chip chip-sm"
@@ -147,6 +161,7 @@ export function DiscoverPage() {
             platforms={discoverable}
             caps={caps[platform]}
             view={view}
+            onView={setView}
             onPickPlatform={pickPlatform}
           />
 

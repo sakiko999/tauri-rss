@@ -24,6 +24,8 @@ export function exampleInfo(key: string): Record<string, string> {
       return { channelId: "UCYO_jab_esuFRV4b17AJtAw" } // 3Blue1Brown
     case "youtube:playlist":
       return { playlistId: "PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI" } // 探针实测 15 条
+    case "youtube:live-category":
+      return { category: "gaming" } // Live Now - Gaming
     case "youtube:live":
       return { videoId: "tRsQsTMvPNg" } // Claude FM 常驻直播(desktop 测试源)
     case "bili:season":
@@ -40,6 +42,8 @@ export function exampleInfo(key: string): Record<string, string> {
       return { roomIds: "1" } // 抖音房间
     case "twitch:live":
       return { roomIds: "shroud" } // Twitch 频道登录名
+    case "twitch:category":
+      return { category: "just-chatting" } // 分区 slug(或目录页链接)
     case "rss:podcast":
       return { url: "https://feeds.megaphone.fm/hubermanlab" } // Huberman Lab(desktop 测试源)
     default:

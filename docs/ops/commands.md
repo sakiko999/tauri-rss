@@ -43,7 +43,11 @@ bun run rss fetch apple:podcast-chart   # Apple 播客热门榜（匿名；--kv 
 bun run rss item <url>                  # by-url：路由 + streams 全档位 + 弹幕元信息
 bun run rss fetch twitch:live --kv roomIds=shroud,riotgames  # Twitch 直播频道（匿名；离线也返 item）
 bun run rss fetch twitch:hot            # Twitch 热门直播（观看数降序，游标翻页）
+bun run rss fetch twitch:category --kv category=just-chatting  # Twitch 分区（slug / 目录链接）
+bun run rss fetch twitch:categories     # 分区目录订阅（kind:category；点条目预览分区）
+bun run rss fetch live:douyin:categories  # 抖音分区目录（16 条，顶层+子分区）
 bun run rss fetch youtube:live-hot       # YouTube 直播热门（Live 页 Live Now）
+bun run rss fetch youtube:live-category --kv category=gaming  # YouTube 直播栏目（news/gaming/sports）
 bun run rss fetch youtube:playlist       # YouTube 播放列表（官方 RSS，≤15 条）
 bun run rss fetch bili:season            # B站合集（30/页，需 Referer）
 bun run rss fetch bili:series            # B站视频列表（20/页，pn/ps）

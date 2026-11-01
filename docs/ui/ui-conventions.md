@@ -275,16 +275,24 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
 
 ## 发现页与添加订阅
 
-- **发现页能力矩阵只显示已实现入口**：不再渲染「无渠道」灰行；没有搜主播能力的平台整卡
+- **发现页能力矩阵只显示已实现入口**：不再渲染「无渠道」灰行；没有分区/搜主播能力的平台整卡
   不出现（微博/小红书走「可订阅榜单」）；切平台时视图自动落到该平台支持的第一个能力
   （`DiscoverPage` 的 `pickPlatform` + `caps` 效应）。平台卡用 `flex-direction:column` +
   `.chip-row{margin-top:auto}`，能力行数不同也把操作按钮固定在卡片底部。
-  ⚠️ **2026-11-01 清理**：分区浏览（`*:category` / `*:categories`）与房间搜索
-  （`*:search`）渠道已删除；发现页只留「搜主播」（`*:anchor`）与抖音「用户直播间」入口。
-  `kind:"category"` 的目录订阅流程随之停用（类型与序列化仍在，暂无产出方）。
+  ⚠️ **分区目录本身是一个订阅**（`twitch:categories` 等，产 `kind:"category"` 条目），不是
+  发现页的一次性目录。它出现在「可订阅榜单」里，点分类卡片 → URL 变 `?open=` → 右侧**用
+  正常网格**列出该分区内容（条目自带的 `categoryChannel` + **完整 `categoryInfo`** 调
+  `previewChannel`，苹果播客式二级）→ 表头「订阅该分区」。
+  ⚠️ 预览条目的 `subscriptionId` 是 `preview:<channelKey>`、没有订阅记录 —— 播放解析在 core
+  里按这个前缀补默认 info（`previewInfoFor`），否则会误报「不指向可解析的直播链接」。
+  ⚠️「浏览分区」入口（已知分区 ID 直接取内容）用显式 `CATEGORY_CHANNEL` 表，不按
+  `<platform>:category` 命名约定 —— `youtube:live-category` 不在约定里；手输参数**逐字段
+  渲染 `sourceInfoTpl`**（抖音 `partition + partitionType` 双参不会漏）。
+  ⚠️ 2026-11-01 删除「搜索房间」视图与 `SEARCH_CHANNEL`：关键词搜索渠道只适合一次性检索。
 - **发现页搜主播与「添加订阅」同形态**：两者共用 `AddPanels.tsx` 的 `CandidateList`
-  （缩略图 + label/sub/meta + 选中态 + 已订阅标记）。搜主播结果转成候选，选中后可直接
-  `addSubscription`；「订阅该关键词」仍走 `AddSubscriptionDialog`。
+  （缩略图 + label/sub/meta + 选中态 + 已订阅标记）。发现页（分区/搜主播）的结果都
+  转成候选，选中后可直接 `addSubscription`（roomId/videoId 单值），不用再开弹窗；
+  「订阅该分区/关键词」仍走 `AddSubscriptionDialog`。
 - **搜索添加只搜用户**（`USER_SEARCH_CHANNEL` → `bili:user_video`/`youtube`，
   uid/channelId **单值参数无并入**，targets 恒空自动隐藏「添加到」区块）。⚠️ 落地参数名用
   **显式表 `USER_SUB_PARAM`**，不能取 `sourceInfoTpl[0]` —— `youtube` 渠道首参是 videoId

@@ -34,6 +34,7 @@ const SEED_GROUPS: SubscriptionGroup[] = [
   { id: "g-audio", title: "音频" },
   { id: "g-live", title: "直播" },
   { id: "g-social", title: "社交" },
+  { id: "g-category", title: "分区目录" },
   { id: "g-search", title: "搜索" },
 ]
 
@@ -251,6 +252,49 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-live",
     info: {},
   },
+  // ── 分区目录(内容 = kind:category 条目,点开 = 右侧预览该分区)──────────────
+  // 单分区直播(`*:category`)渠道仍在(目录点开的依赖),但不再铺种子示例。
+  {
+    id: "s-cat-twitch",
+    channelKey: "twitch:categories",
+    title: "Twitch 分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-youtube",
+    channelKey: "youtube:live-categories",
+    title: "YouTube 直播栏目",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-douyu",
+    channelKey: "live:douyu:categories",
+    title: "斗鱼分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-huya",
+    channelKey: "live:huya:categories",
+    title: "虎牙分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+  {
+    id: "s-cat-douyin",
+    channelKey: "live:douyin:categories",
+    title: "抖音分区列表",
+    enabled: true,
+    groupId: "g-category",
+    info: {},
+  },
+
   // ── 社交 ────────────────────────────────────────────────────────────────
   // 热搜榜三条(B站/微博/抖音):条目是**词条**不是文章,三个渠道 kind 都是 social。
   {

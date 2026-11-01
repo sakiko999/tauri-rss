@@ -5,6 +5,7 @@
 export * from "./channel.ts"
 export * from "./live.ts"
 export * from "./live-shelf.ts"
+export * from "./live-categories.ts"
 export * from "./playlist.ts"
 export * from "./refs.ts"
 export * from "./user.ts"
