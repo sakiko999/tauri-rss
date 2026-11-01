@@ -11,10 +11,14 @@
 import * as DropdownMenu from "radix-ui/dropdown-menu"
 import type { ReactNode } from "react"
 
-export const PLAYER_MENU_CONTENT_CLS =
-  "z-50 min-w-16 rounded-md border border-white/15 bg-black/95 py-1 text-xs text-white shadow-xl"
+/**
+ * 弹窗视觉 = B 站播放器实测(2026-11-01):容器 `rgba(20,20,20,.9)` / 2px 圆角 /
+ * 无边框无阴影;条目 36px 高、文字居中、hover 白 10%、选中 **#00AEEC**;
+ * 倍速条 14px/宽 70px,清晰度条 12px/宽 169px(宽度由调用方给)。
+ */
+export const PLAYER_MENU_CONTENT_CLS = "z-50 rounded-[2px] bg-[#141414]/90 py-0 text-white"
 export const PLAYER_MENU_ITEM_CLS =
-  "flex w-full select-none items-center justify-center px-3 py-1.5 text-left outline-none hover:bg-white/15 focus:bg-white/15"
+  "flex h-9 w-full cursor-pointer select-none items-center justify-center px-2 text-center whitespace-nowrap outline-none hover:bg-white/10 focus:bg-white/10"
 
 export function PlayerMenu({
   open,
@@ -23,6 +27,7 @@ export function PlayerMenu({
   container,
   side = "top",
   align = "end",
+  contentClassName,
   children,
 }: {
   open: boolean
@@ -32,13 +37,20 @@ export function PlayerMenu({
   container?: HTMLElement | null
   side?: "top" | "bottom"
   align?: "start" | "end"
+  /** 菜单宽度等(B 站:倍速 70px / 清晰度 169px)。 */
+  contentClassName?: string
   children: ReactNode
 }) {
   return (
     <DropdownMenu.Root open={open} onOpenChange={onOpenChange}>
       <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
       <DropdownMenu.Portal {...(container ? { container } : {})}>
-        <DropdownMenu.Content side={side} align={align} sideOffset={4} className={PLAYER_MENU_CONTENT_CLS}>
+        <DropdownMenu.Content
+          side={side}
+          align={align}
+          sideOffset={4}
+          className={[PLAYER_MENU_CONTENT_CLS, contentClassName].filter(Boolean).join(" ")}
+        >
           {children}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
@@ -49,16 +61,21 @@ export function PlayerMenu({
 export function PlayerMenuItem({
   onSelect,
   active = false,
+  size = "md",
   children,
 }: {
   onSelect?: () => void
   active?: boolean
+  /** 字号档:B 站倍速 14px / 清晰度 12px。 */
+  size?: "sm" | "md"
   children: ReactNode
 }) {
   return (
     <DropdownMenu.Item
       onSelect={onSelect}
-      className={`${PLAYER_MENU_ITEM_CLS} ${active ? "text-blue-400" : "text-white/90"}`}
+      className={`${PLAYER_MENU_ITEM_CLS} ${size === "sm" ? "text-xs" : "text-[14px]"} ${
+        active ? "text-[#00aeec]" : "text-white"
+      }`}
     >
       {children}
     </DropdownMenu.Item>

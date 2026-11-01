@@ -34,6 +34,7 @@ export function MediaQualityButton({
       open={open}
       onOpenChange={setOpen}
       container={container ?? ctxContainer}
+      contentClassName="w-[169px]"
       trigger={
         <button type="button" aria-label="清晰度" className={className}>
           {qualityOptions.find((q) => q.rate === activeQuality)?.quality ?? "清晰度"}
@@ -43,6 +44,7 @@ export function MediaQualityButton({
       {qualityOptions.map(({ rate, quality }) => (
         <PlayerMenuItem
           key={rate}
+          size="sm"
           active={rate === activeQuality}
           onSelect={() => {
             onQuality(rate)

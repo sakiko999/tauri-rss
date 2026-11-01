@@ -147,7 +147,7 @@ export function PlayerStatsOverlay({
   const resolution = live ? `${live.resolution}${stats?.height ? ` / ${stats.height}p` : ""}` : "—"
 
   return (
-    <div className="pointer-events-none absolute top-2 left-2 z-20 max-w-[min(26rem,90%)] rounded-md bg-black/80 p-2.5 font-mono text-[11px] text-white/90 shadow-lg">
+    <div className="pointer-events-none absolute top-2 left-2 z-20 max-w-[min(26rem,90%)] rounded-[2px] bg-[#141414]/90 p-2.5 font-mono text-[11px] text-white/90">
       <div className="mb-1 text-xs font-semibold text-white">统计信息</div>
       <Section title="会话">
         <Line label="引擎" value={stats ? engineLabel(stats.engine) : "—"} />

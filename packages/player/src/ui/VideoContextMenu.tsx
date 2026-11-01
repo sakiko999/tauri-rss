@@ -37,8 +37,9 @@ export function VideoContextMenu({
           onClose()
         }}
       />
+      {/* 视觉与播放器菜单同源(B 站实测):rgba(20,20,20,.9) / 2px 圆角 / 36px 条目。 */}
       <div
-        className="fixed z-50 min-w-36 rounded-md border border-white/15 bg-black/95 py-1 text-xs text-white shadow-xl"
+        className="fixed z-50 min-w-36 rounded-[2px] bg-[#141414]/90 py-0 text-[14px] text-white"
         style={{
           // 贴边时向内收,避免菜单出视口(YouTube 同款行为)。
           left: Math.min(x, window.innerWidth - 152),
@@ -47,7 +48,7 @@ export function VideoContextMenu({
       >
         <button
           type="button"
-          className="block w-full px-3 py-1.5 text-left hover:bg-white/15"
+          className="flex h-9 w-full items-center px-3 whitespace-nowrap hover:bg-white/10"
           onClick={(e) => {
             e.stopPropagation()
             onToggleStats()

@@ -13,6 +13,11 @@ import { usePlayerContainer } from "../ui/PlayerContainer.tsx"
 
 export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
+/** B 站文案:`2.0x` / `1.25x`(整数补一位小数,小写 x)。 */
+function rateLabel(rate: number): string {
+  return `${Number.isInteger(rate) ? rate.toFixed(1) : rate}x`
+}
+
 export function MediaRateButton({
   state,
   ops,
@@ -35,6 +40,7 @@ export function MediaRateButton({
       open={open}
       onOpenChange={setOpen}
       container={container ?? ctxContainer}
+      contentClassName="w-[70px]"
       trigger={
         // B 站倍速按钮文案恒为「倍速」(不显示当前速率值)。
         <button type="button" aria-label="播放倍速" className={className}>
@@ -42,15 +48,18 @@ export function MediaRateButton({
         </button>
       }
     >
-      {PLAYBACK_RATES.map((rate) => (
-        <PlayerMenuItem
-          key={rate}
-          active={Math.abs(state.playbackRate - rate) < 0.001}
-          onSelect={() => ops.changeRate(rate)}
-        >
-          {rate}×
-        </PlayerMenuItem>
-      ))}
+      {/* B 站顺序:由快到慢;标签带一位小数、小写 x。 */}
+      {[...PLAYBACK_RATES]
+        .sort((a, b) => b - a)
+        .map((rate) => (
+          <PlayerMenuItem
+            key={rate}
+            active={Math.abs(state.playbackRate - rate) < 0.001}
+            onSelect={() => ops.changeRate(rate)}
+          >
+            {rateLabel(rate)}
+          </PlayerMenuItem>
+        ))}
     </PlayerMenu>
   )
 }

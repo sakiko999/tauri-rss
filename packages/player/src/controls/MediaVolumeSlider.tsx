@@ -22,9 +22,10 @@ export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: 
         ops={ops}
         className="flex h-[22px] w-9 items-center justify-center text-white/80 hover:text-white"
       />
-      {/* 垂直滑条浮层:仅按钮 hover 显示(React 状态,不受祖先 group 影响) */}
+      {/* 垂直滑条浮层(B 站实测:32×100、rgba(20,20,20,.9)、2px 圆角;滑块蓝色)。
+          仅按钮 hover 显示(React 状态,不受祖先 group 影响)。 */}
       {open && (
-        <div className="absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 rounded-full bg-black/80 p-2.5">
+        <div className="absolute bottom-full left-1/2 mb-2 flex h-[100px] w-8 -translate-x-1/2 items-center justify-center rounded-[2px] bg-[#141414]/90">
           <input
             type="range"
             min={0}
@@ -33,7 +34,7 @@ export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: 
             onChange={(e) => ops.changeVolume(Number(e.target.value) / 100)}
             aria-label="音量"
             aria-orientation="vertical"
-            className="h-24 w-1 cursor-pointer accent-[#fb7299]"
+            className="h-[60px] w-8 cursor-pointer accent-[#00aeec]"
             style={{ writingMode: "vertical-lr", direction: "rtl" }}
           />
         </div>
