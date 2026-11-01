@@ -58,14 +58,16 @@ export function savePlayerPrefs(patch: Partial<PlayerPrefs>): void {
 
 /**
  * 把偏好应用到媒体元素(挂载时一次)。
- * 倍速只在**已确认点播**(有限时长)时应用;直播恒 1×。
+ *
+ * ⚠️ **不在这里应用倍速**:元素可能还留着上一条点播的 duration(直播流 HLS 的
+ * duration 也可能是有限的 playlist 窗口),单看 `el.duration` 无法区分点播/直播。
+ * 倍速由 `useVideoElement` 在**宿主显式声明非直播**且时长已确认后应用。
  */
 export function applyPlayerPrefs(el: HTMLMediaElement): void {
   const p = loadPlayerPrefs()
   try {
     el.volume = p.volume
     el.muted = p.muted
-    if (Number.isFinite(el.duration) && el.duration > 0) el.playbackRate = p.rate
   } catch {
     // 个别元素状态(未就绪)会抛 — 忽略。
   }

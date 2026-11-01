@@ -50,6 +50,17 @@ hls/flv/dashjs，加载即要 `window`，判据放那儿 node 侧自检跑不起
 - ⚠️ 切流/切档时 `video` 元素复用（`useRef`），**保留用户当前静音态**；无条件写
   `muted=!autoPlay` 会把切档/下一条的声音强行打开。
 
+## 播放偏好（音量 / 静音 / 倍速）
+
+`packages/player/src/prefs.ts` 存 localStorage（不进 core schema）；只记**用户操作**
+（`ops.changeVolume/toggleMute/changeRate`），autoplay 被拦后的静音降级不写入。
+
+⚠️ **倍速只应用到点播**，进直播时强制回 1×。不能用 `duration` 判点播还是直播：
+元素复用时会短暂保留上一条点播的 duration，直播 HLS 的 duration 也可能是有限的
+playlist 窗口（实测 B 站直播为 218s）。判据只能来自宿主显式 `live`（`PlayableMedia`
+按条目 kind 传入）。踩过的坑：偏好里的 2× 被应用到直播后，播放追不上直播边缘
+（分片按 1 秒一片到达），表现为每 2 秒卡一下。
+
 ## 播放器外壳
 
 - ⚠️ **player 包方角（产品决定，非待补样式）**：`VideoShell`/`PlayerControls`/`PlayableMedia`
@@ -143,13 +154,16 @@ attach 的是元素本身；DanmakuLayer 随 host 移动，弹幕连接跨路由
 ## 统计信息（仿 YouTube 右键）
 
 `VideoShell` 右键菜单 → `PlayerStatsOverlay`（`packages/player/src/PlayerStatsOverlay.tsx`）。
-字段：引擎 / 档位 / 清晰度 / 当前与源分辨率 / 帧率 / 丢帧 / 缓冲健康 / 直播延迟 / 编解码器 /
-音轨 / 音量 / 播放速率 / 宿主隧道 / 网络活动。
+只报**当前这一条流**：会话（引擎 / 档位 / 清晰度 / 流主机 / 会话时长）、画面（分辨率 / 帧率 /
+丢帧 / 码率 / 编解码器 / 播放位置 / 缓冲健康）、音频（音轨 / 音量 / 播放速率 / 直播延迟）。
+引擎拿不到的字段（如 FLV 没有码率 / 编解码器）**整行不渲染**，不摆一排「—」。
 
 - 引擎侧（档位、码率、`CODECS`、hls.js `latency`）由 `useMediaStream` 的 `onStats` 上报
   （HLS `LEVEL_LOADED`、DASH `STREAM_INITIALIZED`）；点播时 `hls.latency` 为 0 → 不显示
   直播延迟（2026-10-21 修）。
 - 元素侧每 500ms 读 `<video>`（`getVideoPlaybackQuality`，帧率用相邻采样的总帧差）。
-- 宿主侧取 `appHost.net.governorStats()` 的 `lastLatency` 与 `network` —— governor 在
-  `governedHttp` 入口统一计时/累计流量（含 L0 与媒体分片，覆盖 Rust 隧道/浏览器 fetch）。
+- 直播由宿主显式声明（`mode="live"`）：「播放位置」只显示已播时长 —— 直播 HLS 的
+  `duration` 可能是有限的 playlist 窗口，按时长判定会显示成 `00:23 / 03:38`。
+- ⚠️ **不读 `appHost.net.governorStats()`**：那是**进程级**统计（最后一次 HTTP 的主机/耗时、
+  累计流量），播抖音时也会显示上一条 B 站请求的 mcdn 主机，曾被误读成「直播走隧道」。
 - 纯格式化逻辑在 `packages/player/src/stats.ts`（node 自检 `player-stats.check.ts`）。

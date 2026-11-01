@@ -400,7 +400,7 @@ sequenceDiagram
 - 冷却：只由显式 `reportRisk` 与计量请求的 403/412/418/429 写入；冷却期内重复信号只刷新原因不延长；账本 best-effort 落 `governor:cooldowns`（`governor.ts:410-431`、`:503-550`、`:645-650`）。
 - CDP：`browserGate(platform)` 做冷却 + `max(600ms, minInterval×12)+抖动`；登录不调用（`governor.ts:450-472`、`packages/resolve/src/browser/cdp.ts:61-87`）。
 
-**成功路径**：请求在配额内依次获得平台/全局名额 → 执行 → 统计 `lastLatency/requests/bytes` 供播放器诊断（`governor.ts:475-499`、`packages/player/src/PlayerStatsOverlay.tsx`）。
+**成功路径**：请求在配额内依次获得平台/全局名额 → 执行 → 统计 `lastLatency/requests/bytes` 供诊断（`governor.ts:475-499`）。⚠️ 这是**进程级**累计值，播放器统计面板不读它（播 A 平台时会带上 B 平台上一次请求的主机/耗时，容易被误读）。
 
 **失败/降级**
 - 冷却未到期直接 reject，错误串含平台名、剩余时间、signal（`governor.ts:607-619`）——该串会一路成为 UI 的刷新错误文案。

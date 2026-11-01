@@ -47,8 +47,10 @@ VideoContextMenu/PlayerContainer），设置面板/OSD 等 P1 原语未建。
   定位不符，放一个不可用输入框只是假象；控件栏保留弹幕开关按钮。
 - **theater 收编会话 store**（`useVideoSession.theater`，跨路由/小窗保持）——P0b-3 的一部分。
 - **菜单容器化**（P0a-2 的一部分）：Radix 菜单 Portal 进播放器容器，全屏可见（已实机验证）。
-- **统计信息重做**（三段式：会话 / 画面 / 音频网络）：引擎档位、流主机、会话时长（从播放
+- **统计信息重做**（三段式：会话 / 画面 / 音频）：引擎档位、流主机、会话时长（从播放
   会话起算）、播放位置、码率/编解码器（dash.js 不上报时从 MPD 摘要兜底）、缓冲健康。
+  只报当前流；引擎拿不到的字段整行不渲染（曾读进程级 `governorStats`，播抖音时显示出
+  上一条 B 站请求的 mcdn 主机，被误读成「直播走隧道」）。直播位置只显示已播时长。
 - **`scripts/player-dryrun.ts`**：媒体流稳定性探针（只跑 HTTP 记录，不跑播放器；
   DASH init 段 / HLS 清单+分片 / FLV 直链，TTFB 多轮抖动，`--json` 落盘）。
 
@@ -61,6 +63,8 @@ VideoContextMenu/PlayerContainer），设置面板/OSD 等 P1 原语未建。
   （注意：`BufferedRange` 导出已移除，`currentTime/bufferedEnd` 改走 clock）。
 - **P0a-3 PlayerPrefs**：`prefs.ts`（localStorage，不进 core schema）——音量/静音/倍速
   跨条目、视频⇄播客保持；只记用户意图（ops 里保存），autoplay 静音降级不写入。
+  ⚠️ 倍速只应用到点播（宿主显式 `live` 判定，进直播强制 1×）——元素复用残留的 duration
+  与直播 HLS 的有限 duration 都会把直播误判成点播，2× 追不上直播边缘会持续卡顿。
 - **P0a-1 插槽 + 组件抽出**：`VideoShell` 增 `slots.{topBar,overlay,controls}`；
   大播放键抽出 `ui/PlayOverlay.tsx`、右键菜单抽出 `ui/VideoContextMenu.tsx`。
 - **P0a-2 浮层容器收口**：`ui/PlayerContainer.tsx`（Provider + `usePlayerContainer` +

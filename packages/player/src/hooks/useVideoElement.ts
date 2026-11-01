@@ -82,6 +82,12 @@ export function useVideoElement(
   videoRef: React.RefObject<HTMLMediaElement | null>,
   isStreaming: boolean,
   onMediaError?: (code: number | undefined, msg: string) => void,
+  /**
+   * 宿主显式声明的直播态(按条目 kind)。undefined = 未声明,回退媒体元数据。
+   * ⚠️ 必比 `duration` 可靠:直播 HLS 的 duration 可能是有限的 playlist 窗口,
+   * 而元素复用时会短暂保留上一条点播的 duration —— 两者都会把直播误判成点播。
+   */
+  live?: boolean,
 ): { state: VideoPlayState; ops: VideoOps; clock: MediaClock } {
   const [state, setState] = useState<VideoPlayState>(INITIAL)
   // 热字段外部 store(跨重渲稳定;不触发本组件渲染)。
@@ -98,10 +104,34 @@ export function useVideoElement(
     const video = videoRef.current
     if (!video) return
 
-    // 播放偏好(volume/muted/rate)应用一次 —— 换条目不重置。
+    // 播放偏好(volume/muted)应用一次 —— 换条目不重置。倍速见 applyRatePref。
     applyPlayerPrefs(video)
-    /** 点播倍速要等元数据(时长)到位才能确认不是直播;每个元素只应用一次偏好。 */
+    // 显式直播:倍速恒 1×。元素可能留着上一条点播的倍速(如偏好里的 2×),
+    // 不清掉会让直播在 2× 下追不上直播边缘,表现为反复卡顿。
+    if (live === true) {
+      try {
+        video.playbackRate = 1
+      } catch {
+        // ignore
+      }
+    }
+    /** 点播倍速:宿主未声明直播 + 时长已确认后应用一次。 */
     let ratePrefApplied = false
+    const applyRatePref = () => {
+      if (ratePrefApplied || live === true) return
+      if (!(Number.isFinite(video.duration) && video.duration > 0)) return
+      ratePrefApplied = true
+      const rate = loadPlayerPrefs().rate
+      if (rate !== 1) {
+        try {
+          video.playbackRate = rate
+        } catch {
+          // ignore
+        }
+      }
+    }
+    // 元素可能已带元数据(复用/二次挂载),先试一次;否则等 durationchange。
+    applyRatePref()
 
     /** 写热字段(时间/缓冲),不触发 React 渲染。 */
     const readClock = () => {
@@ -134,18 +164,8 @@ export function useVideoElement(
     const onDurationChange = () => {
       readCold()
       readClock()
-      // 首次确认有限时长(点播)→ 应用偏好倍速(直播恒 1×,不应用)。
-      if (!ratePrefApplied && Number.isFinite(video.duration) && video.duration > 0) {
-        ratePrefApplied = true
-        const rate = loadPlayerPrefs().rate
-        if (rate !== 1) {
-          try {
-            video.playbackRate = rate
-          } catch {
-            // ignore
-          }
-        }
-      }
+      // 首次确认有限时长(点播)→ 应用偏好倍速(显式直播不应用)。
+      applyRatePref()
     }
     const onVolumeChange = () => readCold()
     const onRateChange = () => readCold()
@@ -211,7 +231,7 @@ export function useVideoElement(
       video.removeEventListener("canplay", onCanPlay)
       video.removeEventListener("error", onError)
     }
-  }, [videoRef, isStreaming, clock])
+  }, [videoRef, isStreaming, clock, live])
 
   const togglePlay = useCallback(() => {
     const el = videoRef.current
@@ -266,12 +286,13 @@ export function useVideoElement(
       if (!el) return
       try {
         el.playbackRate = rate
-        if (Number.isFinite(el.duration) && el.duration > 0) savePlayerPrefs({ rate })
+        // 直播的 duration 可能是有限值,不能拿它当点播判据 —— 用显式 live。
+        if (live !== true && Number.isFinite(el.duration) && el.duration > 0) savePlayerPrefs({ rate })
       } catch {
         // 某些 webview 不支持自定义倍速,忽略。
       }
     },
-    [videoRef],
+    [videoRef, live],
   )
 
   const setLiveEdge = useCallback(() => {

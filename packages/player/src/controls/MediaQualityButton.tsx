@@ -34,9 +34,9 @@ export function MediaQualityButton({
       open={open}
       onOpenChange={setOpen}
       container={container ?? ctxContainer}
-      // 宽度随内容自适应(最小 96px);B 站的 169px 是为了右侧会员/登录徽标留位,
-      // 我们没有徽标,固定宽度会显得空且过大。
-      contentClassName="min-w-24 max-w-60"
+      // 宽度随内容自适应(最小 64px);B 站的 169px 是为了右侧会员/登录徽标留位,
+      // 我们没有徽标,固定宽度会显得空且过大。直播档位多是「蓝光/超清」两字,更窄。
+      contentClassName="min-w-16 max-w-60"
       trigger={
         <button type="button" aria-label="清晰度" className={className}>
           {qualityOptions.find((q) => q.rate === activeQuality)?.quality ?? "清晰度"}

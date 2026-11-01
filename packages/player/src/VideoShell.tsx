@@ -86,7 +86,9 @@ export function VideoShell({
   /** 右键菜单坐标(viewport);null = 关闭。 */
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [showStats, setShowStats] = useState(false)
-  const { state, ops, clock } = useVideoElement(videoRef, isStreaming, onMediaError)
+  // 宿主声明了模式就交给它(条目 kind 比媒体元数据可靠);未声明才回退 duration。
+  const explicitLive = mode === undefined ? undefined : mode === "live"
+  const { state, ops, clock } = useVideoElement(videoRef, isStreaming, onMediaError, explicitLive)
   const { showControls, showSpinner, poke, hide, hover, leave } = useAutoHideControls(state)
   const [fullscreenState, setFullscreenState] = useState<FullscreenApi>({
     isFullscreen: false,
@@ -205,6 +207,7 @@ export function VideoShell({
             videoRef={videoRef}
             stats={stats}
             sessionStartedAt={sessionStartedAt}
+            live={explicitLive}
             quality={qualityOptions.find((q) => q.rate === activeQuality)?.quality}
           />
         ) : null}

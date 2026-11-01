@@ -114,7 +114,7 @@ host → core、也不允许 core 生产依赖 host —— 这是唯一能同时
 | --- | --- | --- |
 | `host → core` 已消失，改为 core 向 storage 注入 schema | `SqliteStorageBackend.setSchema`（`packages/host/src/tauri/sqlite-storage-backend.ts`）；`createDataLayer` 首行（`packages/core/src/data-layer.ts`）；`StorageSchema` 在 `global.d.ts` | DDL 唯一权威仍在 core，但它以参数形式过界（`storage.setSchema?`），host 不 import core，编译期无反向边。非 SQL 后端可不实现 `setSchema` |
 | host 根入口是兼容聚合，应用走子路径 | `packages/host/package.json` 的 `exports`；CLI `@amoeba/host/node\|runtime`；desktop/mobile `@amoeba/host/tauri\|browser` | 子路径避免把三套后端拉进模块图；根入口仍可用，但不再有 import 副作用 |
-| crawler/core/player/ui 都读 `appHost`，但 package.json 都不声明 host | `crawler/src/channels/xhs/base.ts:20`、`core/src/data-layer.ts:185-192`、`player/src/PlayerStatsOverlay.tsx`（`appHost.net`）、`ui/src/renderers/atoms/MediaImage.tsx:115-122` | 宿主能力对多数包是**隐式 ABI**；漏注入只能在运行时暴露，类型检查发现不了 |
+| crawler/core/player/ui 都读 `appHost`，但 package.json 都不声明 host | `crawler/src/channels/xhs/base.ts:20`、`core/src/data-layer.ts:185-192`、`player/src/engines/hlsHostLoader.ts`（`appHost.http`）、`ui/src/renderers/atoms/MediaImage.tsx:115-122` | 宿主能力对多数包是**隐式 ABI**；漏注入只能在运行时暴露，类型检查发现不了 |
 | `ui` 声明 core/player、`mobile` 声明 crawler/resolve/xml 与 `@tauri-apps/api`，均零 import | `packages/ui/package.json:10-15`；`apps/mobile/package.json:12-19` | 依赖图噪声：ui 早已不 re-export 播放器（`packages/ui/src/index.ts:9-10`）；mobile 的这些能力经 core 间接获得 |
 
 `global.d.ts` 不参与上述矩阵，但它是所有包共享的 ambient 类型源：`tsconfig.app.json:43` 的 `files: ["global.d.ts"]` 对所有 `extends` 它的包生效；CLI 单独 `files` 引用（`apps/cli/tsconfig.json`）。
@@ -240,7 +240,7 @@ graph LR
 | 不负责 | 平台解析与弹幕抓取（core/resolve）；`item.kind` 判定（宿主传入 `resolve`/`streams`）；持久化；不 import ui/desktop（错误态自带 `MediaState`，`PlayableMedia.tsx:44-54`） |
 | 对外导出 | `PlayableMedia`、`unlockAudioPlayback`、hooks（选流/引擎/元素状态）、`VideoShell`/`AudioShell`/`PlayerControls`/`DanmakuLayer`、10 个独立控件、`MediaStream`/`DanmakuStream` 类型（`packages/player/src/index.ts:9-41`） |
 | 内部结构 | `PlayableMedia.tsx` 编排；`hooks/{streamKind,useStreamSelection,useMediaStream,useVideoElement}`；`engines/{hlsHostLoader,dashHostLoader}`；`controls/*`；`danmaku/DanmakuLayer`；`stats.ts`；`log/*` |
-| 依赖 / 被依赖 | 仅类型依赖 core（`MediaStream`/`ResolvePlayback`）与 resolve（`DanmakuStream`），运行时依赖 log；经 `globalThis.appHost.http` 取分片、`net.governorStats` 取统计（未声明 host）。被 desktop（3 处）与 mobile（1 处）使用 |
+| 依赖 / 被依赖 | 仅类型依赖 core（`MediaStream`/`ResolvePlayback`）与 resolve（`DanmakuStream`），运行时依赖 log；经 `globalThis.appHost.http` 取分片（未声明 host）；统计面板只读媒体元素与引擎上报，不读宿主 governor。被 desktop（3 处）与 mobile（1 处）使用 |
 | 常见改动入口 | 新格式：`streamKind.ts` 加判据 + `useMediaStream.ts` 加引擎分支 + `PlayableMedia.tsx` 分发；换 loader：`engines/*`；新控件：`controls/index.ts` 导出 |
 | 关键文件 | `packages/player/src/PlayableMedia.tsx:113`（唯一入口）、`:96`（手势解锁）；`packages/player/src/hooks/streamKind.ts:11-50`（判据）、`:65`（`streams[0]`）；`packages/player/src/hooks/useStreamSelection.ts:38`；`packages/player/src/hooks/useMediaStream.ts:12-14`（三引擎静态 import）、`:26` |
 
