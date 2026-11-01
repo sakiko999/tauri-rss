@@ -164,6 +164,9 @@ attach 的是元素本身；DanmakuLayer 随 host 移动，弹幕连接跨路由
 - 元素侧每 500ms 读 `<video>`（`getVideoPlaybackQuality`，帧率用相邻采样的总帧差）。
 - 直播由宿主显式声明（`mode="live"`）：「播放位置」只显示已播时长 —— 直播 HLS 的
   `duration` 可能是有限的 playlist 窗口，按时长判定会显示成 `00:23 / 03:38`。
+- **小窗形态隐藏面板**：宿主在小窗/浮层时传 `PlayableMedia.hideStats`（desktop 用
+  `stageKey !== itemKey` 判定）—— 小窗只有帧 chrome，面板会盖住画面且点击层挡住
+  所有播放器交互，无处关闭；回播放页后恢复原开合状态。
 - ⚠️ **不读 `appHost.net.governorStats()`**：那是**进程级**统计（最后一次 HTTP 的主机/耗时、
   累计流量），播抖音时也会显示上一条 B 站请求的 mcdn 主机，曾被误读成「直播走隧道」。
 - 纯格式化逻辑在 `packages/player/src/stats.ts`（node 自检 `player-stats.check.ts`）。

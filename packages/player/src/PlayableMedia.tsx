@@ -145,6 +145,7 @@ export function PlayableMedia({
   onMediaControl,
   live,
   theater,
+  hideStats,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -213,6 +214,11 @@ export function PlayableMedia({
   live?: boolean
   /** 宽屏(剧场)开关;不传则控件栏不渲染该按钮。 */
   theater?: { on: boolean; toggle: () => void }
+  /**
+   * 隐藏「统计信息」面板(宿主在**小窗/浮层**形态下传 true).
+   * 播放器本身不感知宿主形态;小窗只有帧 chrome,诊断面板会盖住画面且无处关闭.
+   */
+  hideStats?: boolean
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -637,6 +643,7 @@ export function PlayableMedia({
         onQuality={switchQuality}
         mode={live === undefined ? undefined : live ? "live" : "video"}
         theater={theater}
+        hideStats={hideStats}
         onMediaError={(code, msg) => {
           setPlayError(new Error(`原生媒体错误(code=${code ?? "?"}): ${msg}`))
           onError?.(new Error(msg))

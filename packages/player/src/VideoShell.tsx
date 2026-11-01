@@ -41,6 +41,7 @@ export function VideoShell({
   sessionStartedAt,
   mode,
   theater,
+  hideStats,
   slots,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -68,6 +69,8 @@ export function VideoShell({
   mode?: PlayerMode
   /** 宽屏(剧场)开关;宿主不提供时不渲染按钮。 */
   theater?: { on: boolean; toggle: () => void }
+  /** 隐藏统计信息面板(小窗形态:只有帧 chrome,面板会盖住画面且无处关闭)。 */
+  hideStats?: boolean
   /**
    * 插槽(P0a-1):宿主的扩展点,默认实现保持现有视觉。
    *   - topBar:画面顶部条(标题/章节/返回),叠在画面与控件之间;
@@ -201,8 +204,8 @@ export function VideoShell({
         {/* 宿主插槽:画面浮层(OSD/提示),不随控件显隐 */}
         {slots?.overlay ? <div className="pointer-events-none absolute inset-0 z-10">{slots.overlay}</div> : null}
 
-        {/* 统计信息(右键菜单打开) */}
-        {showStats ? (
+        {/* 统计信息(右键菜单打开;小窗形态隐藏) */}
+        {showStats && !hideStats ? (
           <PlayerStatsOverlay
             videoRef={videoRef}
             stats={stats}

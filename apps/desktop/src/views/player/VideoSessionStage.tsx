@@ -90,6 +90,9 @@ function SessionPlayableMedia() {
   const allItems = useDesktop((s) => s.allItems)
   const previewDetail = useDesktop((s) => s.previewDetail)
   const queue = useDesktop((s) => s.queue)
+  // 小窗判据（与 VideoSessionStage.visible 同源）：起播过且舞台没挂本条目。
+  const stageKey = useVideoSession((s) => s.stageKey)
+  const started = useVideoSession((s) => s.started)
   const playTo = usePlayNavigate()
 
   // 与 PlayerPage 同一份 known / nextInQueue 语义（预览条目也入表）。
@@ -122,6 +125,7 @@ function SessionPlayableMedia() {
 
   if (!item) return null
   const isLive = item.kind === "live"
+  const inMini = started && stageKey !== itemKey(item)
   const listening = mode === "listen" && !isLive && item.kind === "video"
   const danmakuOn = danmakuVisible && (settings?.danmakuEnabled ?? true)
 
@@ -164,6 +168,8 @@ function SessionPlayableMedia() {
       audioStage={audioStage}
       // 直播/点播模式:宿主按条目 kind 显式给(控件栏据此分流,不等媒体元数据)。
       live={isLive}
+      // 小窗只有帧 chrome：统计面板会盖住画面，且点击层挡住所有播放器交互，无处关闭。
+      hideStats={inMini}
       theater={{ on: theater, toggle: () => useVideoSession.getState().toggleTheater() }}
       onEnded={() => consumeEnded("video", item)}
       onError={(err) => {
