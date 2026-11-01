@@ -19,6 +19,23 @@ export function isDouyinProfileUrl(raw: string): boolean {
 }
 
 /**
+ * 用户订阅输入归类：主页链接 / 裸 `sec_uid` 直接归一，其余按**抖音号**
+ * （`unique_id`）处理（换 `sec_uid` 要调资料接口，见 `resolveDouyinSecUid`）。
+ *
+ * ⚠️ `sec_uid` 固定以 `MS4wLjAB` 开头；不能把任意字符串当 `sec_uid` 直接拼进主页
+ * URL —— 抖音号拼出来的 `/user/pvcyinse` 也是 200（SPA 空壳），会静默采不到任何作品。
+ */
+export function classifyDouyinUserInput(raw: string): { kind: "sec_uid" | "unique_id"; value: string } {
+  const s = raw
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/^抖音号\s*[:：]\s*/u, "")
+  if (!s) throw new Error("需要抖音号或用户主页链接")
+  if (isDouyinProfileUrl(s) || /^MS4wLjAB[\w-]+$/.test(s)) return { kind: "sec_uid", value: parseDouyinSecUid(s) }
+  return { kind: "unique_id", value: s }
+}
+
+/**
  * 从主页链接 / `@抖音号` / 裸 sec_uid 中取 `sec_uid`。
  * 只接受主页链接或裸 sec_uid；直播间链接会抛错（那是 `live:douyin` 的参数）。
  */

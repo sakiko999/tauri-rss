@@ -99,6 +99,12 @@
     同一份 cookie）返回 835KB HTML 骨架；补 `uifid` 头、用页面 `localStorage.xmst`
     的 msToken、本仓现算 `a_bogus` 全部无效（`a_bogus` 与 HttpOnly 的 msToken cookie
     绑定、疑似一次性）；纯 HTTP 自签（ABogus + ttwid）直接 **403** 并触发平台冷却。
+  - ✅ **订阅输入可直接填抖音号**（2026-11-01）：旧版移动端资料接口
+    `www.iesdouyin.com/web/api/v2/user/info/?unique_id=...` **匿名可用、无需签名**
+    （返回 `user_info.sec_uid`）；网页版 `profile/other` 只认 `sec_user_id`，传
+    `unique_id` 报「UserId不合法」。`@抖音号` / `抖音号：xxx` 自动去前缀；主页链接
+    与裸 sec_uid 照旧。查不到时报错并提示改用主页链接。⚠️ 抖音号拼
+    `www.douyin.com/user/<抖音号>` 也是 200（SPA 空壳），**不能**当 sec_uid 用。
   - 映射：`aweme_type === 68`/有 `images[]` 的是**图文**（它的 `play_addr` 是 BGM，
     不能当视频）；视频按 `video.bit_rate[]` 降序取最高档直链。
   - ✅ **翻页（`Pageable`，2026-10-31）**：**登录态下**页面会随滚动自己发下一页

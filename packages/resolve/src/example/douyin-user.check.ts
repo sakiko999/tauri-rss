@@ -8,6 +8,7 @@
  * MediaCrawler 的解析（`video.bit_rate[].play_addr.url_list` 已是 CDN 直链）。
  */
 
+import { classifyDouyinUserInput } from "../platform/douyin/ids.ts"
 import {
   awemeListToSocial,
   awemeToSocial,
@@ -104,6 +105,24 @@ ok(readAwemeList(JSON.stringify({ status_code: 0 })).length === 0, "无 aweme_li
 ok(readAwemeList(JSON.stringify({ aweme_list: [videoAweme] })).length === 1, "正常响应能取到列表")
 
 ok(douyinUserUrl("MS4wLjAB") === "https://www.douyin.com/user/MS4wLjAB", "主页 URL 拼接")
+
+// 订阅输入归类：sec_uid / 主页链接原样，其余按抖音号（unique_id）走资料接口。
+// ⚠️ 抖音号若被当成 sec_uid 直接拼主页 URL，页面仍 200（SPA 空壳），会静默采不到作品。
+ok(classifyDouyinUserInput("MS4wLjABAAAAx").kind === "sec_uid", "裸 sec_uid 应识别为 sec_uid")
+ok(
+  classifyDouyinUserInput("https://www.douyin.com/user/MS4wLjABAAAAy").value === "MS4wLjABAAAAy",
+  "主页链接应取出 sec_uid",
+)
+const unique = classifyDouyinUserInput("@pvcyinse")
+ok(unique.kind === "unique_id" && unique.value === "pvcyinse", "抖音号（@前缀）应识别为 unique_id")
+ok(classifyDouyinUserInput("抖音号：pvcyinse").value === "pvcyinse", "「抖音号：xxx」应去掉前缀")
+let emptyThrew = false
+try {
+  classifyDouyinUserInput("  ")
+} catch {
+  emptyThrew = true
+}
+ok(emptyThrew, "空输入应抛错")
 
 if (failed === 0) console.log("抖音用户作品映射：全部通过")
 process.exit(failed === 0 ? 0 : 1)

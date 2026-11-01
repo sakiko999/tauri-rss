@@ -22,6 +22,10 @@
  * 「让页面自己往下加载」—— ① 把**最大可滚动容器**滚到底（抖音主页不在 window 上滚，
  * 容器是 class 混淆的内层 div）；② 再在作品卡位置发**真实滚轮**
  * （`Input.dispatchMouseEvent` type=mouseWheel，坐标取卡片的 `getBoundingClientRect`）。
+ *
+ * 订阅输入：**抖音号**（含 `@抖音号` / `抖音号：xxx`）或主页链接 / sec_uid。
+ * 抖音号经旧版资料接口换成 sec_uid（匿名可用，`resolveDouyinSecUid`）—— 网页版
+ * 资料 API 只认 sec_user_id，sec_uid 本身又很难拿到，让用户直接填抖音号。
  */
 
 import {
@@ -30,9 +34,9 @@ import {
   cdpNavigate,
   douyinUserUrl,
   now,
-  parseDouyinSecUid,
   readAwemeList,
   readDouyinLoginCookie,
+  resolveDouyinSecUid,
   withBrowserOp,
 } from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
@@ -41,7 +45,6 @@ import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 import type { Pageable, RssChannel, RssSource, SourceInfo } from "../../index.ts"
 import { passiveBuffer } from "../../passive/buffer.ts"
 import { capturePage } from "../../passive/capture.ts"
-import { apiFetchItems } from "../factory.ts"
 
 /** 被动捕获的 lane（列表页专属 tab）。 */
 const LANE = "list:douyin:user"
@@ -126,26 +129,32 @@ export class DouyinUserChannel implements RssChannel {
   readonly sourceInfoTpl = [
     {
       key: "sec_uid",
-      label: "用户主页链接或 sec_uid",
+      label: "抖音号或用户主页链接",
       required: true,
-      placeholder: "https://www.douyin.com/user/MS4wLj…",
+      placeholder: "抖音号，或 https://www.douyin.com/user/MS4wLj…",
     },
   ]
 
   getSource(info: SourceInfo): RssSource & Partial<Pageable> {
-    const secUid = parseDouyinSecUid(String(info.sec_uid ?? ""))
+    // 输入可以是抖音号（unique_id）或主页链接 / sec_uid；抖音号在 fetch 时换成 sec_uid
+    // （资料接口，见 resolve `resolveDouyinSecUid`）—— 换之前不知道主页 URL 与标题。
+    const input = String(info.sec_uid ?? "")
     const browser = globalThis.appHost?.browser
     const source: RssSource & Partial<Pageable> = {
       // 无浏览器（mobile / CLI 未加 --browser）没有被动采集通道：抖音的 HTTP 直连
       // 需要自签 a_bogus + 真实 msToken，已实测 403（且会触发平台冷却），不提供该路径。
-      fetch: apiFetchItems(
-        () => (browser ? this.fetchFirstPage(browser, secUid) : Promise.reject(new Error(NEEDS_BROWSER))),
-        () => this.channelOptions(secUid),
-      ),
+      fetch: async () => {
+        if (!browser) throw new Error(NEEDS_BROWSER)
+        const secUid = await resolveDouyinSecUid(input)
+        const items = await this.fetchFirstPage(browser, secUid)
+        // channelOptions 要用解析后的 sec_uid（标题/主页链接），所以不走 apiFetchItems
+        // ——它在 fetchResult 之前就取了 options。
+        return serializeFeed(items, this.channelOptions(secUid))
+      },
     }
     if (browser) {
       source.fetchMore = (cursor?: string, ctx?: { existing: number }) =>
-        this.fetchMoreViaBrowser(browser, secUid, cursor, ctx?.existing)
+        this.fetchMoreViaBrowser(browser, input, cursor, ctx?.existing)
     }
     return source
   }
@@ -181,10 +190,12 @@ export class DouyinUserChannel implements RssChannel {
   /** 翻页：滚动触发页面自己加载下一页，累积后按窗口切片。 */
   private async fetchMoreViaBrowser(
     browser: BrowserBackend,
-    secUid: string,
+    input: string,
     cursor?: string,
     existing?: number,
   ): Promise<{ xml: string; cursor?: string; hasMore?: boolean }> {
+    // 抖音号 → sec_uid（进程内有缓存，编译后每页不重复请求）。
+    const secUid = await resolveDouyinSecUid(input)
     return withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "douyin" }, async (b) => {
       // 匿名态页面只发首屏那一次请求、作品区被登录弹窗盖住（滚轮无效，2026-10-31 实测），
       // 直接给可操作错误；判据与登录快照同源（`sessionid`，ttwid 匿名访客也有，不能用）。
