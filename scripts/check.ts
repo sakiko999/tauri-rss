@@ -47,7 +47,6 @@ const FILES: Record<Exclude<Layer, "typecheck" | "style">, string[]> = {
     "packages/crawler/src/example/bili-channels.check.ts",
     "packages/crawler/src/example/twitch-live.check.ts",
     "packages/crawler/src/example/youtube-channels.check.ts",
-    "packages/crawler/src/example/category-directory.check.ts",
     "packages/crawler/src/example/hot-channels.check.ts",
     "packages/player/src/hooks/useStreamSelection.check.ts",
     "packages/player/src/hooks/player-stats.check.ts",

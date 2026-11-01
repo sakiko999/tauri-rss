@@ -12,8 +12,6 @@ import {
   mergeValues,
   MULTI_PARAMS,
   multiParamOf,
-  SEARCH_CHANNEL,
-  searchChannelOf,
   splitValues,
   subsHolding,
   valueList,
@@ -66,7 +64,7 @@ const ch = (key: string, field: string): ChannelInfo =>
     sourceInfoTpl: [{ key: field, label: field }],
   }) as ChannelInfo
 assert(multiParamOf(ch("bili:live", "roomIds")) === true, "roomIds 渠道支持并入")
-assert(multiParamOf(ch("bili:search", "keyword")) === false, "keyword 渠道不支持并入")
+assert(multiParamOf(ch("bili:anchor", "keyword")) === false, "keyword 渠道不支持并入")
 
 // subsHolding:多值订阅里任一项命中即算已存在
 const subs = [sub({ roomIds: "6,21452505" }), { ...sub({ roomIds: "9" }), id: "s2" } as Subscription]
@@ -77,15 +75,6 @@ assert(subsHolding(subs, "bili:live", "roomIds", "999").length === 0, "未收录
 const merged = mergeValues(["6", "21452505"], ["21452505", "9", "9"])
 assert(JSON.stringify(merged.merged) === JSON.stringify(["6", "21452505", "9"]), "并入去重且保留原顺序")
 assert(JSON.stringify(merged.added) === JSON.stringify(["9"]), "added 只含本次新增")
-
-// 搜索渠道映射:每个登记平台都有对应 search channel;未登记平台返回 undefined(UI 降级手填)
-assert(searchChannelOf("douyu") === "live:douyu:search", "douyu → 斗鱼搜索渠道")
-assert(searchChannelOf("youtube") === "youtube:live-search", "youtube → 直播搜索渠道")
-assert(searchChannelOf("douyin") === "live:douyin:search", "douyin → 抖音分区搜索渠道")
-assert(
-  Object.values(SEARCH_CHANNEL).every((k) => typeof k === "string"),
-  "映射值为渠道 key 字符串",
-)
 
 // candidatesFromSearch:从接口条目派生候选(roomId 去重、无 roomId 丢弃)
 const live = (roomId: string, title: string): LiveItem =>

@@ -1,18 +1,13 @@
 /**
- * youtube:live-hot / youtube:live-category —— YouTube 直播页栏目订阅。
+ * youtube:live-hot —— YouTube 直播页 `Live Now` 栏目订阅。
  *
- * 两者共用一次 live 页解析(resolve `fetchYoutubeLiveShelves`,5 分钟缓存):
- *   - `youtube:live-hot`       取 `Live Now` 栏目(`slug === "hot"`);
- *   - `youtube:live-category`  参数 `category`(news / gaming / sports / 栏目名),
- *                              匹配 `Live Now - <栏目>`。
- *
- * 输出 `kind:"live"`,播放走既有 by-url 解析(`watch?v=<videoId>` → resolveYoutubeStreams)。
- * ⚠️ 只有栏目级分区(YouTube 当前给的编辑栏目),不是 Twitch 式完整分区树;无 continuation。
+ * 解析在 resolve `fetchYoutubeLiveShelves`(5 分钟缓存),输 `kind:"live"`,
+ * 播放走既有 by-url 解析(`watch?v=<videoId>` → resolveYoutubeStreams)。
  * ⚠️ 按观看数降序(契约:列表顺序由渠道负责,默认选流/展示不依赖上游顺序)。
  */
 
 import type { YoutubeLiveHit } from "@amoeba/resolve"
-import { fetchYoutubeLiveShelves, normalizeYoutubeLiveCategory, now } from "@amoeba/resolve"
+import { fetchYoutubeLiveShelves, now } from "@amoeba/resolve"
 import type { Item, Live } from "@amoeba/xml"
 
 import { makeApiChannel } from "../factory.ts"
@@ -58,31 +53,5 @@ export const YoutubeLiveHotChannel = makeApiChannel({
     if (!hot) throw new Error("youtube:live-hot 找不到 Live Now 栏目（直播页布局可能已变）")
     const t = now()
     return byViewers(hot.hits).map((hit) => youtubeLiveHitToLive("youtube:live-hot", hit, t))
-  },
-})
-
-/** `Live Now - <栏目>` 订阅。参数 `category`(必填)。 */
-export const YoutubeLiveCategoryChannel = makeApiChannel({
-  key: "youtube:live-category",
-  name: "YouTube 直播栏目",
-  kind: "live",
-  sourceInfoTpl: [{ key: "category", label: "栏目（news / gaming / sports）", required: true }],
-  channelTitle: (info) => `YouTube 直播 ${info.category ?? ""}`,
-  channelLink: "https://www.youtube.com/",
-  fetchPage: async (info): Promise<Item[]> => {
-    const raw = info.category ?? ""
-    const slug = normalizeYoutubeLiveCategory(raw)
-    if (!slug) throw new Error("youtube:live-category 需要栏目（news / gaming / sports，或完整栏目名）")
-    // `Live Now` 不是分区,归 youtube:live-hot(避免两个订阅同内容)。
-    if (slug === "hot") throw new Error("youtube:live-category 不接 Live Now，请改用 youtube:live-hot")
-
-    const shelves = await fetchYoutubeLiveShelves()
-    const shelf = shelves.find((s) => s.slug === slug)
-    if (!shelf) {
-      const available = shelves.filter((s) => s.slug !== "hot" && s.hits.length).map((s) => s.slug)
-      throw new Error(`youtube:live-category 没有栏目 ${slug}；可用：${available.join(" / ") || "（暂无）"}`)
-    }
-    const t = now()
-    return byViewers(shelf.hits).map((hit) => youtubeLiveHitToLive("youtube:live-category", hit, t))
   },
 })

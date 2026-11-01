@@ -6,11 +6,16 @@
 > 第一节记录**已实现的渠道扩展**（2026-10-20 匿名实测）；其余各节只留**未做的缺口**与
 > **实测证伪的结论**（防止后人重走已证明走不通的路）。
 > 状态更新至 2026-10-22（B站直播分区目录落地）。
+>
+> ⚠️ **2026-11-01 清理**：全部「关键词搜索」渠道（`bili:search` / `live:*:search` /
+> `youtube:live-search`）与「分区目录 / 分区直播」渠道（`*:categories` / `*:category` /
+> `bili:live:areas` / `bili:live:area`）已删除 —— 它们只适合一次性检索，作为订阅反复
+> 产出同一批房间没有价值。本文对应章节保留为历史实测记录。
 
 ## 一、已实现的渠道扩展
 
-> 状态：**§1~§4 已实现**（`youtube:live-hot` / `youtube:live-category` / `youtube:playlist` /
-> `bili:season` / `bili:series` / `bili:favlist` + 分区目录订阅 `kind:"category"`）。
+> 状态：**§1~§4 已实现**（`youtube:live-hot` / `youtube:playlist` /
+> `bili:season` / `bili:series` / `bili:favlist`；分区目录订阅已于 2026-11-01 删除）。
 > 所有端点均为 2026-10-20 匿名实测；数据会变，接入前应重跑探针。
 > 相关：`docs/platforms/twitch.md`、`docs/platforms/youtube.md`。
 
@@ -69,11 +74,9 @@ contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content
 #### 1.2 已实现渠道
 
 - `youtube:live-hot`：取 `Live Now` 栏（slug `hot`），过滤 LIVE，按 watching 数降序。
-- `youtube:live-category`：参数 `category=news|gaming|sports`（也接受 `Live Now - Gaming`
-  这类完整栏目名），匹配 `Live Now - <name>`。
-- 两者都输出 `kind:"live"`，复用 `live-shelf.ts` 的 `youtubeLiveHitToLive`
-  （`youtube:live-search` 也走它）：
-  `roomId=videoId`、`url=https://www.youtube.com/watch?v=<id>`、`platform:"youtube"`、`online=观看数`。
+- 输出 `kind:"live"`，`roomId=videoId`、`url=https://www.youtube.com/watch?v=<id>`、
+  `platform:"youtube"`、`online=观看数`。
+- ~~`youtube:live-category`（栏目直播）与 `youtube:live-search`~~：**2026-11-01 删除**。
 - 直播页解析在 `resolve/platform/youtube/discover.ts`；整页约 800KB，结果做 **5 分钟内存
   缓存（缓存 Promise，并发去重）**，热门 + 栏目两个订阅同一轮刷新只发一次请求。
 - 只看 `thumbnailOverlays[].thumbnailOverlayTimeStatusRenderer.text === "LIVE"`，
@@ -191,7 +194,11 @@ GET https://api.bilibili.com/x/v3/fav/resource/list
 
 ---
 
-### 4. 分区订阅改造成「苹果播客式」二级操作（✅ 已实现）
+### 4. 分区订阅改造成「苹果播客式」二级操作（✅ 已实现，⛔ 2026-11-01 渠道删除）
+
+> ⚠️ **本节所有渠道已删除**：分区目录（`*:categories`）与分区直播（`*:category`）只适合
+> 一次性检索，长期订阅反复产出同一批房间没有价值。以下保留为历史设计记录（`kind:"category"`
+> 类型与序列化仍在，暂无产出方）。
 
 #### 4.1 设计动机
 
@@ -310,10 +317,9 @@ UI 流程（与播客榜单完全同构）：
   `bili:live:area`（列房，**需登录态**——wbi + buvid + `w_webid`（live 页 HTML 的
   `access_id`），匿名 `-352`，20 条/页 + `has_more`）。此前「匿名带 access_id 仍
   -352」的结论系探针 cookie 拼接缺 `; ` 分隔导致 buvid3 失效所致，登录态实测可用。
-- **抖音分区搜索的词表局限** —— `live:douyin:search` 本质是分区搜索，只按分区名匹配；
-  主播名（`旭旭宝宝`）与三级词（`美食`）返回 0。已知主播请用 `live:douyin` +
-  抖音号/主页链接（见 `docs/platforms/platform-notes.md`）；`live:douyin:user` 仅保留给存量订阅。
-  `live:douyin:anchor` 已删除（本地过滤热门房间没有意义）。
+- ~~**抖音分区搜索的词表局限**~~ —— `live:douyin:search` **已删除（2026-11-01）**。
+  已知主播请用 `live:douyin` + 抖音号/主页链接（见 `docs/platforms/platform-notes.md`）；
+  抖音用户作品用 `douyin:user`（可直接填抖音号）。`live:douyin:user` / `live:douyin:anchor` 亦已删除。
 - **抖音用户作品翻页需要登录**（2026-10-31 修正）—— `douyin:user`：导航主页 + 捕获
   页面自己发的 `/aweme/v1/web/aweme/post/`（零构造请求）。**已登录**时滚动触发下一页，
   走 `Pageable`（窗口 30 条）；**匿名**只有首屏 21 条、点「加载更多」报「需要登录」。
@@ -329,12 +335,12 @@ UI 流程（与播客榜单完全同构）：
 - **bili 账号服务**（参照 `bilibili_account_service.dart:191`）—— 未做：登录后拉昵称/uid
   展示（`/x/member/web/account`）。
 - **Twitch 未做部分**（2026-10-20）—— 已落地：`twitch:live`（`roomIds` 多频道）、
-  `twitch:hot`（热门，观看数降序）、`twitch:category`（分区流列表，slug/目录链接，
-  游标翻页）+ by-url 直播 HLS 播放；**VOD / clip / 聊天弹幕 / 关键词搜索 / 登录均未做**：
+  `twitch:hot`（热门，观看数降序）+ by-url 直播 HLS 播放（`twitch:category` /
+  `twitch:categories` 已于 2026-11-01 删除）；**VOD / clip / 聊天弹幕 / 关键词搜索 / 登录均未做**：
   - VOD/clip 路由要排在频道名**单段路径之前**（`/videos/<id>`、`/<login>/clip/<slug>`），
     二期再加；`normalizeTwitchLogin` 现在对多段路径一律返回 null（避免误当频道）。
-  - **分类榜已做成目录订阅 `twitch:categories`**（`games(first)` 只给分类元数据、本身没有
-    可播房间）→ 点分类订阅 `twitch:category`，不另造分类 feed。
+  - ~~分类榜做成目录订阅 `twitch:categories`~~（**2026-11-01 已删除**）：分区只适合
+    一次性浏览，不再作为订阅产出。
   - 聊天（IRC `wss://irc-ws.chat.twitch.tv:443` + `justinfan`）文本帧实测可用，但宿主
     `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 要先给宿主 ws 加 text 帧。
   - 关键词搜索（搜频道/流）依赖 persisted query（结构不稳），二期再评估；登录

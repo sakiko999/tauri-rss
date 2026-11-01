@@ -85,11 +85,10 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 ## dev 种子与重置
 
 - **首启种子订阅**在 `apps/desktop/src/dev/seed.ts`（SEED_SUBSCRIPTIONS + SEED_GROUPS，仅
-  dev 构建动态 import）。**覆盖绝大多数 channel**（每个 channel 一条，2026-10-20；之后新增的
-  `bili:live:areas` / `bili:live:area` / `live:douyin:user` 尚未补种子）：需登录的
-  `bili:dynamic` / `weibo:user` 停用；关键词搜索类（`*:search` / `*:anchor` / 搜频道 /
-  搜UP主）进「搜索」组且**默认停用**（启用即测）；36 条内置 RSS 直链属同一实现，只留
-  `rss:hn` 代表。
+  dev 构建动态 import）。**覆盖现役 channel**（每个 channel 一条，2026-10-20 起；2026-11-01
+  删除了搜索/分区渠道后，种子同步移除对应条目）：需登录的 `bili:dynamic` / `weibo:user`
+  停用；搜主播/搜用户（`*:anchor` / 搜频道 / 搜UP主）进「搜索」组且**默认停用**（启用即测）；
+  36 条内置 RSS 直链属同一实现，只留 `rss:hn` 代表。
   首次写入后在 `localStorage` 落 `dev:seeded` 标记（不写 SQLite：「完全重置数据」会连标记
   一起清掉，dev 下重载即重新种；手动删空订阅则不再写入。要恢复测试种子：删该 localStorage
   key 或整个 dev DB）。⚠️ **只在空库 + 无标记 + `import.meta.env.DEV` 下写入** ——

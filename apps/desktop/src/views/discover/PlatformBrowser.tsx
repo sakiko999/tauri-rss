@@ -1,16 +1,15 @@
 /**
- * PlatformBrowser —— 发现页的「分区浏览 / 搜索 / 搜主播」面板。
+ * PlatformBrowser —— 发现页的「搜主播」面板。
  *
  * 从 DiscoverPage 拆出。走 core `previewChannel(channelKey, info)` 取一次**真实数据**
  * (不建订阅);结果用与「添加订阅」**同一套候选行**(CandidateList：label/sub/meta
  * 一行看全)，选中后可直接订阅一个房间，或把整个查询词设为订阅。
  *
- * ⚠️ 分区**目录**不在这里 —— 目录本身是订阅(`twitch:categories` 等，见各平台
- * channel 目录下的 categories.ts)；本面板只处理「已知分区 ID 直接取内容」。
- * 参数按 `sourceInfoTpl` **逐字段**渲染（抖音 `partition + partitionType` 双参不漏）。
+ * ⚠️ 2026-11-01 起只剩「搜主播」：分区浏览（`*:category`）与房间搜索
+ * （`*:search`）渠道已删除 —— 它们只适合一次性检索，作为订阅反复产出同一批房间没有价值。
  *
- * ⚠️ 三种视图的返回都是 live item(roomId 已由 tpl:roomId/URL 还原)，所以统一走
- * `candidatesFromSearch`；不再用 CardMini 网格(信息少、还要再点进弹窗才能订阅)。
+ * ⚠️ 返回是 live item(roomId 已由 tpl:roomId/URL 还原)，统一走
+ * `candidatesFromSearch`；不用 CardMini 网格(信息少、还要再点进弹窗才能订阅)。
  */
 
 import type { ChannelInfo, MediaItem } from "@amoeba/core"
@@ -32,30 +31,26 @@ import { useLatestOnly } from "../../lib/useLatestOnly.ts"
 import { useDesktop } from "../../store/index.ts"
 import { CandidateList } from "../manage/AddPanels.tsx"
 import { AddSubscriptionDialog } from "../manage/AddSubscriptionDialog.tsx"
-import { type Cap, VIEW_LABEL } from "./platforms.ts"
+import type { Cap } from "./platforms.ts"
 
 export function PlatformBrowser({
   platform,
   platforms,
   caps,
   view,
-  onView,
   onPickPlatform,
 }: {
   platform: string
-  /** 只传有分区/搜索能力的平台（能力矩阵同源过滤）。 */
+  /** 只传有搜主播能力的平台（能力矩阵同源过滤）。 */
   platforms: Array<{ id: string; label: string }>
   caps: Record<Cap, ChannelInfo | undefined>
   view: Cap
-  onView: (v: Cap) => void
   onPickPlatform: (id: string) => void
 }) {
   const dl = useDesktop((s) => s.dl)
   const subscriptions = useDesktop((s) => s.subscriptions)
   const addSubscription = useDesktop((s) => s.addSubscription)
   const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
-  /** 分区视图的手输参数（按 sourceInfoTpl 逐字段收集）。 */
-  const [categoryValues, setCategoryValues] = useState<Record<string, string>>({})
   const [q, setQ] = useState("")
   const [busy, setBusy] = useState(false)
   const [subscribing, setSubscribing] = useState(false)
@@ -68,7 +63,7 @@ export function PlatformBrowser({
   const [dialogOpen, setDialogOpen] = useState(false)
   /** 请求世代守卫(见 lib/useLatestOnly.ts):切平台/切视图/新搜索都作废在途请求。 */
   const latest = useLatestOnly()
-  const ch = view === "category" ? caps.category : view === "anchor" ? caps.anchor : caps.search
+  const ch = caps[view]
   /** 参数名/标签全部来自渠道的 sourceInfoTpl（不硬编码字段名）。 */
   const fields = ch?.sourceInfoTpl ?? []
 
@@ -81,18 +76,11 @@ export function PlatformBrowser({
     setError("")
     setBusy(false) // 在途请求的 finally 因世代不符不再清 busy → 这里补，否则按钮卡禁用
     setSelected("")
-    setCategoryValues({})
   }, [platform, view, latest])
 
-  /** 当前手输参数:搜索/主播视图是单关键词,分区视图是完整的参数表。 */
+  /** 当前手输参数:搜主播是单关键词。 */
   function inputInfo(): Record<string, string> {
-    if (view !== "category") return fields[0] ? { [fields[0].key]: q } : {}
-    const info: Record<string, string> = {}
-    for (const f of fields) {
-      const v = String(categoryValues[f.key] ?? "").trim()
-      if (v) info[f.key] = v
-    }
-    return info
+    return fields[0] ? { [fields[0].key]: q } : {}
   }
 
   async function run() {
@@ -101,12 +89,7 @@ export function PlatformBrowser({
     // partitionType 回落 1,而 101 是顶层分区应为 4)→ 上游返回空 → 界面只说
     // 「该分区当前没有内容」,用户根本不知道是自己少填了一项。
     // (「订阅该分区」走 AddSubscriptionDialog,那边本来就有 required 校验。)
-    const missing =
-      view === "category"
-        ? fields.filter((f) => f.required && !String(categoryValues[f.key] ?? "").trim())
-        : fields[0]?.required && !q.trim()
-          ? [fields[0]]
-          : []
+    const missing = fields[0]?.required && !q.trim() ? [fields[0]] : []
     if (missing.length) {
       setError(`请填写：${missing.map((f) => f.label).join("、")}`)
       setItems(null)
@@ -172,7 +155,7 @@ export function PlatformBrowser({
   return (
     <section className="section" {...overlayBlock("platform-browser", "discover:browser")}>
       <div className="section-head">
-        <h2 className="section-title">分区浏览与搜索</h2>
+        <h2 className="section-title">搜主播</h2>
         <span className="section-desc">预览，不写入订阅</span>
       </div>
 
@@ -193,48 +176,9 @@ export function PlatformBrowser({
         ))}
       </div>
 
-      <div className="segmented" style={{ marginBottom: "var(--sp-4)" }}>
-        {caps.category ? (
-          <button
-            aria-pressed={view === "category"}
-            onClick={() => {
-              onView("category")
-              setItems(null) // 换视图清旧结果,否则「分区」的数据留在「搜索」视图里、标注对不上
-              setSelected("")
-            }}
-          >
-            分区
-          </button>
-        ) : null}
-        {caps.search ? (
-          <button
-            aria-pressed={view === "search"}
-            onClick={() => {
-              onView("search")
-              setItems(null)
-              setSelected("")
-            }}
-          >
-            搜索
-          </button>
-        ) : null}
-        {caps.anchor ? (
-          <button
-            aria-pressed={view === "anchor"}
-            onClick={() => {
-              onView("anchor")
-              setItems(null)
-              setSelected("")
-            }}
-          >
-            搜主播
-          </button>
-        ) : null}
-      </div>
-
       {!ch ? (
         <Banner tone="warn" icon="warning">
-          {platform} 当前没有「{VIEW_LABEL[view]}」渠道。
+          {platform} 当前没有搜主播渠道。
         </Banner>
       ) : (
         <div className="inline-row" style={{ marginBottom: "var(--sp-4)", flexWrap: "wrap" }}>
@@ -242,14 +186,10 @@ export function PlatformBrowser({
             <input
               key={f.key}
               className={fields.length > 1 ? "input" : "input input-wide"}
-              value={view === "category" ? (categoryValues[f.key] ?? "") : q}
+              value={q}
               placeholder={f.placeholder ?? f.label ?? "参数"}
               aria-label={f.label ?? "参数"}
-              onChange={(e) => {
-                const v = e.target.value
-                if (view === "category") setCategoryValues((prev) => ({ ...prev, [f.key]: v }))
-                else setQ(v)
-              }}
+              onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !isImeComposing(e)) void run()
               }}
@@ -259,7 +199,7 @@ export function PlatformBrowser({
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="search" size={14} />} 取数据
           </Button>
           <Button variant="secondary" onClick={openSubscribe}>
-            <Icon name="plus" size={14} /> 订阅该{VIEW_LABEL[view]}
+            <Icon name="plus" size={14} /> 订阅该关键词
           </Button>
         </div>
       )}

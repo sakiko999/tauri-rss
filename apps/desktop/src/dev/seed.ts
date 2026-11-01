@@ -34,7 +34,6 @@ const SEED_GROUPS: SubscriptionGroup[] = [
   { id: "g-audio", title: "音频" },
   { id: "g-live", title: "直播" },
   { id: "g-social", title: "社交" },
-  { id: "g-category", title: "分区目录" },
   { id: "g-search", title: "搜索" },
 ]
 
@@ -252,90 +251,6 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-live",
     info: {},
   },
-  // 分区直播(单分区订阅)
-  {
-    id: "s-live-cat-youtube",
-    channelKey: "youtube:live-category",
-    title: "YouTube 直播 · Gaming",
-    enabled: true,
-    groupId: "g-live",
-    info: { category: "gaming" },
-  },
-  {
-    id: "s-live-cat-twitch",
-    channelKey: "twitch:category",
-    title: "Twitch 分区 · Just Chatting",
-    enabled: true,
-    groupId: "g-live",
-    info: { category: "just-chatting" },
-  },
-  {
-    id: "s-live-cat-douyu",
-    channelKey: "live:douyu:category",
-    title: "斗鱼分区 · 英雄联盟",
-    enabled: true,
-    groupId: "g-live",
-    info: { areaId: "1" },
-  },
-  {
-    id: "s-live-cat-huya",
-    channelKey: "live:huya:category",
-    title: "虎牙分区 · 英雄联盟",
-    enabled: true,
-    groupId: "g-live",
-    info: { gameId: "1" },
-  },
-  {
-    id: "s-live-cat-douyin",
-    channelKey: "live:douyin:category",
-    title: "抖音分区 · 聊天",
-    enabled: true,
-    groupId: "g-live",
-    info: { partition: "101", partitionType: "4" }, // 顶层分区:4 / 子分区:1
-  },
-
-  // ── 分区目录(内容 = kind:category 条目,点开 = 右侧预览该分区)──────────────
-  {
-    id: "s-cat-twitch",
-    channelKey: "twitch:categories",
-    title: "Twitch 分区列表",
-    enabled: true,
-    groupId: "g-category",
-    info: {},
-  },
-  {
-    id: "s-cat-youtube",
-    channelKey: "youtube:live-categories",
-    title: "YouTube 直播栏目",
-    enabled: true,
-    groupId: "g-category",
-    info: {},
-  },
-  {
-    id: "s-cat-douyu",
-    channelKey: "live:douyu:categories",
-    title: "斗鱼分区列表",
-    enabled: true,
-    groupId: "g-category",
-    info: {},
-  },
-  {
-    id: "s-cat-huya",
-    channelKey: "live:huya:categories",
-    title: "虎牙分区列表",
-    enabled: true,
-    groupId: "g-category",
-    info: {},
-  },
-  {
-    id: "s-cat-douyin",
-    channelKey: "live:douyin:categories",
-    title: "抖音分区列表",
-    enabled: true,
-    groupId: "g-category",
-    info: {},
-  },
-
   // ── 社交 ────────────────────────────────────────────────────────────────
   // 热搜榜三条(B站/微博/抖音):条目是**词条**不是文章,三个渠道 kind 都是 social。
   {
@@ -402,15 +317,7 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     info: { uid: "5756404150" },
   },
 
-  // ── 搜索(默认停用:关键词入口,启用即测)────────────────────────────────
-  {
-    id: "s-search-bili-keyword",
-    channelKey: "bili:search",
-    title: "B站搜索 · 英雄联盟",
-    enabled: false,
-    groupId: "g-search",
-    info: { keyword: "英雄联盟" },
-  },
+  // ── 搜索(默认停用:关键词入口,启用即测;房间搜索渠道已删,只留主播/用户)──
   {
     id: "s-search-bili-anchor",
     channelKey: "bili:anchor",
@@ -436,22 +343,6 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     info: { keyword: "MKBHD" },
   },
   {
-    id: "s-search-youtube-live",
-    channelKey: "youtube:live-search",
-    title: "YouTube 搜直播间 · lofi",
-    enabled: false,
-    groupId: "g-search",
-    info: { keyword: "lofi" },
-  },
-  {
-    id: "s-search-douyu",
-    channelKey: "live:douyu:search",
-    title: "斗鱼搜索 · 英雄联盟",
-    enabled: false,
-    groupId: "g-search",
-    info: { keyword: "英雄联盟" },
-  },
-  {
     id: "s-search-douyu-anchor",
     channelKey: "live:douyu:anchor",
     title: "斗鱼搜主播 · yyf",
@@ -460,28 +351,12 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     info: { keyword: "yyf" },
   },
   {
-    id: "s-search-huya",
-    channelKey: "live:huya:search",
-    title: "虎牙搜索 · 英雄联盟",
-    enabled: false,
-    groupId: "g-search",
-    info: { keyword: "英雄联盟" },
-  },
-  {
     id: "s-search-huya-anchor",
     channelKey: "live:huya:anchor",
     title: "虎牙搜主播 · 骚男",
     enabled: false,
     groupId: "g-search",
     info: { keyword: "骚男" },
-  },
-  {
-    id: "s-search-douyin",
-    channelKey: "live:douyin:search",
-    title: "抖音分区搜索 · 音乐",
-    enabled: false,
-    groupId: "g-search",
-    info: { keyword: "音乐" },
   },
   {
     id: "s-search-apple",

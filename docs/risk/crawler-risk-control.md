@@ -552,8 +552,8 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
    `Network.enable` + `getResponseBody`）；`browser/cdp.ts` 本身仍只做 evaluate / 页面内 fetch / 导航。
 3. **`weibo:user` 现有浏览器路径属于类别②**（页面内 `cdpJson` 自定义 fetch，
    `user.ts:85`）。LX 下必须改成「导航到 `m.weibo.cn/u/{uid}` + 读页面自身请求/SSR」。
-4. **`live:douyin:search` 没有自然页面**：`www.douyin.com/search?type=live` 被
-   verify-center 拦截且不发目标请求，LX 对该渠道无解，只能维持主动模式或在 LX 下禁用。
+4. ~~**`live:douyin:search` 没有自然页面**~~（该渠道已于 2026-11-01 删除）：历史结论 ——
+   `www.douyin.com/search?type=live` 被 verify-center 拦截且不发目标请求，LX 对该渠道无解。
 
 ⚠️ 上表「页面是否自然发同一请求」只有小红书是源码/实现证据，其余是端点归属推断，
 接入时必须在 P0 探针里用 `Network.requestWillBeSent` 逐平台确认。

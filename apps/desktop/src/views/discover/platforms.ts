@@ -1,5 +1,10 @@
-/** 发现页共用的平台/能力常量(DiscoverPage 与 PlatformBrowser 都要用)。 */
-export type Cap = "category" | "search" | "anchor"
+/**
+ * 发现页共用的平台/能力常量(DiscoverPage 与 PlatformBrowser 都要用)。
+ *
+ * 2026-11-01:「分区浏览」与「搜索房间」能力随对应渠道删除（`*:category` /
+ * `*:search` 只适合一次性检索，长期订阅没有价值），只留「搜主播」。
+ */
+export type Cap = "anchor"
 
 /** 展示用的平台清单(能力从渠道注册表推导,不在数据里写死)。 */
 export const PLATFORMS: Array<{ id: string; label: string; icon: string }> = [
@@ -13,8 +18,8 @@ export const PLATFORMS: Array<{ id: string; label: string; icon: string }> = [
   { id: "xhs", label: "小红书", icon: "image" },
 ]
 
-export const CAPS: Cap[] = ["category", "search", "anchor"]
-export const CAP_LABEL: Record<Cap, string> = { category: "分区浏览", search: "搜索房间", anchor: "搜主播" }
+export const CAPS: Cap[] = ["anchor"]
+export const CAP_LABEL: Record<Cap, string> = { anchor: "搜主播" }
 
-/** PlatformBrowser 三个子视图(与 Cap 同键)的中文名。 */
-export const VIEW_LABEL: Record<Cap, string> = { category: "分区", search: "搜索", anchor: "主播搜索" }
+/** PlatformBrowser 子视图(与 Cap 同键)的中文名。 */
+export const VIEW_LABEL: Record<Cap, string> = { anchor: "主播搜索" }

@@ -19,11 +19,12 @@
   实测 uid：半佛仙人 37663924（⚠️ 37883317 是「DILI念」勿用）
 - **直播档位按实际值标注**：B 站对访客降档——匿名请求 `qn=10000`（原画）实测只给
   `current_qn=250`（超清），且多档请求会收敛到同一值。故读 `current_qn` 标注并按实际值去重
-- ✅ **按分区列房**（2026-10-22，渠道 `bili:live:areas` 目录 + `bili:live:area` 列房）：
+- ~~**按分区列房**~~（2026-10-22 实现，**2026-11-01 渠道删除**：`bili:live:areas` /
+  `bili:live:area` 只适合一次性检索，不再作为订阅）。历史实测：
   `GET xlive/web-interface/v1/second/getList?platform=web&parent_area_id=&area_id=&sort_type=online&page=`
   **需登录态**——wbi 签名 + buvid3 之外还**必带 `w_webid`**（任意 live 页 HTML 里的
   `"access_id"`，短时效 token，`discover.ts` 模块级缓存 + -352 逐出重取）；
-  匿名实测一律 `-352`（渠道翻译成「需要登录」文案）。20 条/页 + `has_more` 翻页。
+  匿名实测一律 `-352`。20 条/页 + `has_more` 翻页。
   分区树 `Area/getList` 匿名可用（顶层条目 `areaId=0` 即整区列房）。
 - ⚠️ **会员/付费字段各接口不一致**（2026-10-26 实测，7 个 `bili:user_video` 订阅）：
   - `space/wbi/arc/search`（`bili:user_video`）：vlist **没有 `rights`**，充电专属只在
@@ -143,10 +144,9 @@
   二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
   ⚠️ **匿名搜抖音无解已用真实 Edge 复核**（路 1/2 仍 2483，搜索页被 verify-center 4031 拦）：
   登录硬门槛，**browser 模拟解不了**（xhs 是 TLS 指纹差异能解，抖音是账号门槛不能）。
-  虎牙搜索/搜主播不可分页。✅ **抖音搜索渠道**（2026-10-18 调整）：
+  虎牙搜索/搜主播不可分页。~~抖音搜索渠道~~（2026-10-18 实现，**2026-11-01 删除**）：
   `live:douyin:search` 本质是**分区搜索**（关键词 → 分区 → 列房），只认大类/游戏名，
-  不搜主播/房间标题；`live:douyin:anchor` 已删除（本地过滤热门房间没有意义）。
-  已登记进 `SEARCH_CHANNEL`（发现页/搜索面板的平台名显示「抖音分区」）；
+  不搜主播/房间标题；`live:douyin:anchor` 更早已删除。
   已知主播用 `live:douyin` + 抖音号/主页链接（发现页抖音卡片的「用户直播间」入口
   也预置 `live:douyin`）。缺口见 `docs/platforms/channels.md`
 
@@ -167,14 +167,14 @@
 - ✅ **搜频道**（2026-10-16，`searchYouTubeChannels` / 渠道 `youtube:user`）：InnerTube
   `search` + `params:"EgIQAg=="`（仅频道过滤）匿名可用（WEB client + visitorData），
   解 `channelRenderer`。与 `youtube` 渠道（channelId 订阅）配对
-- ✅ **搜直播间**（2026-10-18，`searchYouTubeLive` / 渠道 `youtube:live-search`）：同端点
-  + `params:"EgJAAQ=="`（直播过滤，实为 protobuf field 8=1），匿名返回 18~20 条且全带
-  LIVE badge，解 `videoRenderer`。搜索添加「直播间」→ 落地 `youtube:live`（参数 videoId）
-- ✅ **直播热门 / 栏目**（2026-10-20，`youtube:live-hot` / `youtube:live-category`）：
-  Live 页 `browseId=UC4R8DWoMoI7CAwX8_LjQHig` 匿名返回栏目；实测布局是
-  `richGridRenderer.contents[].richSectionRenderer.content.richShelfRenderer`（旧版
-  直接 `richShelfRenderer` 也兼容）。`Live Now` 12 条、News/Gaming/Sports 各 12，
-  **无 continuation**。client 固定 `hl=en`/`gl=US`（栏目名是解析依据），只认
+- ~~**搜直播间**~~（2026-10-18 实现，**2026-11-01 渠道删除**）：同端点 + `params:"EgJAAQ=="`
+  （直播过滤，实为 protobuf field 8=1），匿名返回 18~20 条且全带 LIVE badge，解
+  `videoRenderer`。`youtube:live-search` 不再注册。
+- ✅ **直播热门**（2026-10-20，`youtube:live-hot`；栏目渠道 `youtube:live-category`
+  已于 2026-11-01 删除）：Live 页 `browseId=UC4R8DWoMoI7CAwX8_LjQHig` 匿名返回栏目；
+  实测布局是 `richGridRenderer.contents[].richSectionRenderer.content.richShelfRenderer`
+  （旧版直接 `richShelfRenderer` 也兼容）。`Live Now` 12 条，**无 continuation**。
+  client 固定 `hl=en`/`gl=US`（栏目名是解析依据），只认
   `thumbnailOverlayTimeStatusRenderer.text === "LIVE"`（Recent/Upcoming 因此为空）；
   观看数只取 `"N watching"`（`views`/`waiting` 不算）。整页 ~800KB → 5 分钟 Promise
   缓存（并发去重），见 `resolve/platform/youtube/discover.ts`。
@@ -347,7 +347,8 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
 - ⚠️ **master 没有 `Access-Control-Allow-Origin`** → resolver 必须经 `appHost.http` 拉 master，
   把 **variant playlist URL** 交给播放器；master variant 顺序不是高→低，需按高度/带宽降序。
 - ⚠️ **流列表翻页必须用 Android app 公开 Client-ID**（网页 ID 带 `after` 会 `IntegrityCheckFailed`）；
-  `twitch:categories` 目录渠道已实现，VOD / clip / 聊天弹幕 / 关键词搜索 / 登录未做。
+  `twitch:category` / `twitch:categories` **已于 2026-11-01 删除**；
+  VOD / clip / 聊天弹幕 / 关键词搜索 / 登录未做。
 
 ## cookie / 登录
 

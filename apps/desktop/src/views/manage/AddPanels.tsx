@@ -18,7 +18,7 @@ import { Select } from "../../components/Modal.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
 import { CATALOG_PAGE, catalogView, isSingleton } from "../../lib/channel-catalog.ts"
 import { isImeComposing } from "../../lib/ime.ts"
-import { type Candidate, platformOf, SEARCH_CHANNEL, USER_SEARCH_CHANNEL, valueList } from "../../lib/subscriptions.ts"
+import { type Candidate, platformOf, USER_SEARCH_CHANNEL, valueList } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { KIND_META } from "../../store/nodes.ts"
 
@@ -39,11 +39,8 @@ export const PLATFORM_ICON: Record<string, string> = {
 
 /** 「搜索添加」面板的入参(全部来自外层表单控制器)。 */
 export interface SearchPanelProps {
-  searchPlatforms: string[]
-  /** 有「搜用户」渠道的平台(bili/youtube;空 = 无用户搜索,不渲染类型切换)。 */
+  /** 有「搜用户」渠道的平台(bili/youtube)。 */
   userSearchPlatforms: string[]
-  searchKind: "room" | "user"
-  onSearchKind: (k: "room" | "user") => void
   channels: ChannelInfo[]
   platform: string
   onPickPlatform: (p: string) => void
@@ -57,11 +54,6 @@ export interface SearchPanelProps {
   candidateValue: string
   onPickCandidate: (c: Candidate) => void
   subscribed: Set<string>
-  targets: { id: string; title: string }[]
-  targetId: string
-  onTargetId: (v: string) => void
-  subChKey: string
-  landParam: string | undefined
 }
 
 /** 候选列表的入参(SearchPanel 与发现页共用)。 */
@@ -123,34 +115,23 @@ export function CandidateList(f: CandidateListProps) {
   )
 }
 
-/** 搜索添加:选类型(房间/用户) → 选平台 → 输关键词调接口 → 点选一个候选。 */
+/**
+ * 搜索添加:选平台 → 输关键词调接口 → 点选一个候选。
+ *
+ * 2026-11-01 起只搜 UP 主 / 频道（`bili:user` / `youtube:user`）：房间关键词
+ * 搜索渠道随订阅渠道一起删除（搜房间只适合一次性检索）。
+ * 选中后落到该用户/频道的投稿订阅（uid/channelId 单值参数，无「并入已有」）。
+ */
 export function SearchPanel(f: SearchPanelProps) {
-  const kindPlatforms = f.searchKind === "user" ? f.userSearchPlatforms : f.searchPlatforms
   return (
     <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("search-panel", "add:search")}>
-      {/* 类型切换:两种都有才渲染(只有一种时无须选择)。「搜用户」落地到该用户/频道的
-          投稿订阅(uid/channelId 单值参数,无「并入已有」)。 */}
-      {f.userSearchPlatforms.length > 0 && f.searchPlatforms.length > 0 ? (
-        <div className="field">
-          <span className="field-label">搜什么</span>
-          <div className="segmented" role="tablist" aria-label="搜索类型">
-            <button role="tab" aria-pressed={f.searchKind === "room"} onClick={() => f.onSearchKind("room")}>
-              <Icon name="radio" size={14} /> 直播间
-            </button>
-            <button role="tab" aria-pressed={f.searchKind === "user"} onClick={() => f.onSearchKind("user")}>
-              <Icon name="play" size={14} /> UP主 / 频道
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       <div className="field">
         <span className="field-label" id="lbl-search-channel">
           搜索哪个平台
         </span>
         <div className="chip-row" role="group" aria-labelledby="lbl-search-channel">
-          {kindPlatforms.map((p) => {
-            const key = f.searchKind === "user" ? USER_SEARCH_CHANNEL[p] : SEARCH_CHANNEL[p]
+          {f.userSearchPlatforms.map((p) => {
+            const key = USER_SEARCH_CHANNEL[p]
             return (
               <button key={p} className="chip" aria-pressed={f.platform === p} onClick={() => f.onPickPlatform(p)}>
                 <Icon name={PLATFORM_ICON[p] ?? "layers"} size={14} />
@@ -189,40 +170,10 @@ export function SearchPanel(f: SearchPanelProps) {
 
       {f.searchItems !== null && f.cands.length === 0 && !f.searching ? (
         <p className="t-small t-dim">
-          {f.searchItems.length === 0 ? "接口没有返回结果，换个关键词试试。" : "返回的条目没有可用的房间号。"}
+          {f.searchItems.length === 0
+            ? "接口没有返回结果，换个关键词试试。"
+            : "返回的条目里没有可订阅的 UP 主 / 频道。"}
         </p>
-      ) : null}
-
-      {/* 「添加到」:新建一条,或并入该平台下已有的直播订阅(roomIds 追加) */}
-      {f.cands.length > 0 && f.targets.length > 0 && f.subChKey ? (
-        <div className="field">
-          <span className="field-label" id="lbl-target">
-            添加到
-          </span>
-          <div className="chip-row" role="radiogroup" aria-labelledby="lbl-target">
-            <button
-              className="chip"
-              role="radio"
-              aria-checked={f.targetId === "new"}
-              onClick={() => f.onTargetId("new")}
-            >
-              <Icon name="plus" size={13} /> 新建订阅
-            </button>
-            {f.targets.map((s) => (
-              <button
-                key={s.id}
-                className="chip"
-                role="radio"
-                aria-checked={f.targetId === s.id}
-                onClick={() => f.onTargetId(s.id)}
-              >
-                {s.title}
-                <span className="cand-chip">{valueList(s as never, f.landParam).length} 房</span>
-              </button>
-            ))}
-          </div>
-          <span className="field-help">并入后原有房间保留。</span>
-        </div>
       ) : null}
 
       <CandidateList

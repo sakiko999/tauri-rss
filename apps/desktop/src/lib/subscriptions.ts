@@ -90,36 +90,13 @@ export function platformOf(key: string): string {
 }
 
 /**
- * 平台 → 直播**搜索渠道**(搜房间关键词 → 房间候选)。
- * 键 = `platformOf(订阅渠道 key)`;值 = 该平台的 search channel key。
- * ⚠️ 只登记**匿名可用**的 search 渠道(实测):
- *   - douyin search 本质是**分区搜索**（关键词→分区→列房，不搜主播/房间标题）；
- *     登记后搜索面板的输入框会明确写「分区关键词」，结果仍是可订阅的直播间
- *   - huya search 不可分页但首页可用 → 登记
+ * 平台 → 直播**订阅渠道**(roomIds 列表型参数)。
+ *
+ * ⚠️ 2026-11-01 已删除「关键词搜索」与「分区列表/分区直播」两类渠道
+ * （`bili:search`、`live:*:search`、`*:category(s)`、`youtube:live-search` 等）：
+ * 它们只能作为一次性检索用，作为订阅长期产出同一批房间没有价值。
+ * 直播间仍可按房号/主页链接订阅（`roomIds`），主播搜索与「搜用户」保留。
  */
-export const SEARCH_CHANNEL: Record<string, string> = {
-  bili: "bili:search",
-  douyu: "live:douyu:search",
-  huya: "live:huya:search",
-  douyin: "live:douyin:search",
-  youtube: "youtube:live-search",
-}
-
-/**
- * 平台 → 分区**订阅渠道**（已知分区 ID 直接取内容）。
- * ⚠️ 这只是「手输分区 → 取内容」的入口；分区**目录**（分类列表本身）是独立订阅，
- * 见 `*:categories` 渠道（`twitch:categories` / `youtube:live-categories` / …）。
- * 分区渠道名不统一（`youtube:live-category`），故用显式表，不按命名约定猜。
- */
-export const CATEGORY_CHANNEL: Record<string, string> = {
-  douyu: "live:douyu:category",
-  huya: "live:huya:category",
-  douyin: "live:douyin:category",
-  twitch: "twitch:category",
-  youtube: "youtube:live-category",
-}
-
-/** 平台 → 直播**订阅渠道**(roomIds 列表型参数)。 */
 export const LIVE_SUB_CHANNEL: Record<string, string> = {
   bili: "bili:live",
   douyu: "live:douyu",
@@ -127,7 +104,6 @@ export const LIVE_SUB_CHANNEL: Record<string, string> = {
   douyin: "live:douyin",
   // 搜索命中的 videoId 直接作为 youtube:live 的订阅参数。
   youtube: "youtube:live",
-  // 一期只做订阅(搜索/分区二期;故 SEARCH_CHANNEL 不登记)。
   twitch: "twitch:live",
 }
 
@@ -150,11 +126,6 @@ export const USER_SUB_CHANNEL: Record<string, string> = {
 export const USER_SUB_PARAM: Record<string, string> = {
   bili: "uid",
   youtube: "channelId",
-}
-
-/** 某平台的搜索渠道 key(无则 undefined → UI 降级手填)。 */
-export function searchChannelOf(platform: string): string | undefined {
-  return SEARCH_CHANNEL[platform]
 }
 
 /**
@@ -212,6 +183,5 @@ export function candidatesFromUsers(items: MediaItem[]): Candidate[] {
 }
 
 /* ⚠️ 已删除 candidatesFor / candidateHay:它们从**本机订阅库**派生候选(「搜索」变成
- * 在已抓到的数据里筛),而平台的真实搜索接口(live:*:search / bili:search)一直可用却
- * 没被用上。改为 AddSubscriptionDialog 调 `dl.previewChannel(searchChannel, {keyword})`
- * 走接口取候选(见 SEARCH_CHANNEL / candidatesFromSearch)。 */
+ * 在已抓到的数据里筛)。候选接口统一走 `dl.previewChannel(channelKey, info)`:
+ * 搜用户用 `USER_SEARCH_CHANNEL` / `candidatesFromUsers`,搜主播用 `*:anchor`。 */

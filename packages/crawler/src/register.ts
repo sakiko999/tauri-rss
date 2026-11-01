@@ -9,14 +9,11 @@ import {
   BiliAnchorChannel,
   BiliDynamicChannel,
   BiliFavlistChannel,
-  BiliLiveAreaChannel,
-  BiliLiveAreasChannel,
   BiliLiveChannel,
   BiliLiveHotChannel,
   BiliPopularChannel,
   BiliPreciousChannel,
   BiliRankingChannel,
-  BiliSearchChannel,
   BiliSeasonChannel,
   BiliSeriesChannel,
   BiliSquareChannel,
@@ -25,46 +22,21 @@ import {
   BiliWeeklyChannel,
 } from "./channels/bili/index.ts"
 import {
-  DouyinCategoriesChannel,
-  DouyinCategoryChannel,
   DouyinLiveChannel,
   DouyinLiveHotChannel,
-  DouyinPartitionSearchChannel,
   DouyinTrendChannel,
   DouyinUserChannel,
 } from "./channels/douyin/index.ts"
-import {
-  DouyuAnchorChannel,
-  DouyuCategoriesChannel,
-  DouyuCategoryChannel,
-  DouyuLiveChannel,
-  DouyuLiveHotChannel,
-  DouyuSearchChannel,
-} from "./channels/douyu/index.ts"
-import {
-  HuyaAnchorChannel,
-  HuyaCategoriesChannel,
-  HuyaCategoryChannel,
-  HuyaLiveChannel,
-  HuyaLiveHotChannel,
-  HuyaSearchChannel,
-} from "./channels/huya/index.ts"
+import { DouyuAnchorChannel, DouyuLiveChannel, DouyuLiveHotChannel } from "./channels/douyu/index.ts"
+import { HuyaAnchorChannel, HuyaLiveChannel, HuyaLiveHotChannel } from "./channels/huya/index.ts"
 import { RawRssChannel, RSS_BUILTIN_FEEDS, RssPodcastChannel } from "./channels/rss/index.ts"
-import {
-  TwitchCategoriesChannel,
-  TwitchCategoryChannel,
-  TwitchHotChannel,
-  TwitchLiveChannel,
-} from "./channels/twitch/index.ts"
+import { TwitchHotChannel, TwitchLiveChannel } from "./channels/twitch/index.ts"
 import { WeiboHotChannel, WeiboUserChannel } from "./channels/weibo/index.ts"
 import { XhsExploreChannel, XhsUserChannel } from "./channels/xhs/index.ts"
 import {
   YoutubeChannel,
-  YoutubeLiveCategoriesChannel,
-  YoutubeLiveCategoryChannel,
   YoutubeLiveChannel,
   YoutubeLiveHotChannel,
-  YoutubeLiveSearchChannel,
   YoutubePlaylistChannel,
   YoutubeUserChannel,
 } from "./channels/youtube/index.ts"
@@ -98,13 +70,10 @@ export function registerBuiltinChannels(): void {
   registerChannel(BiliUserVideoChannel)
   registerChannel(new BiliLiveChannel())
   registerChannel(BiliLiveHotChannel)
-  registerChannel(BiliLiveAreasChannel)
-  registerChannel(BiliLiveAreaChannel)
   registerChannel(new BiliSeasonChannel())
   registerChannel(new BiliSeriesChannel())
   registerChannel(BiliFavlistChannel)
   registerChannel(new BiliDynamicChannel())
-  registerChannel(BiliSearchChannel)
   registerChannel(BiliAnchorChannel)
   registerChannel(new BiliUserChannel())
 
@@ -113,37 +82,23 @@ export function registerBuiltinChannels(): void {
   registerChannel(YoutubePlaylistChannel)
   registerChannel(YoutubeLiveChannel)
   registerChannel(YoutubeLiveHotChannel)
-  registerChannel(YoutubeLiveCategoryChannel)
-  registerChannel(YoutubeLiveCategoriesChannel)
-  registerChannel(YoutubeLiveSearchChannel)
   registerChannel(YoutubeUserChannel)
 
-  // ── Twitch 直播(匿名 GraphQL;频道订阅 + 热门/分区列表)──
+  // ── Twitch 直播(匿名 GraphQL;频道订阅 + 热门列表)──
   registerChannel(new TwitchLiveChannel())
   registerChannel(new TwitchHotChannel())
-  registerChannel(new TwitchCategoryChannel())
-  registerChannel(TwitchCategoriesChannel)
 
   // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──
   registerChannel(new HuyaLiveChannel())
   registerChannel(HuyaLiveHotChannel)
-  registerChannel(HuyaCategoryChannel)
-  registerChannel(new HuyaCategoriesChannel())
-  registerChannel(HuyaSearchChannel)
   registerChannel(HuyaAnchorChannel)
 
   // ── douyu / douyin 直播(需 host.js 执行 cryptojs/abogus blob;单房间 + 热门列表)──
   registerChannel(new DouyuLiveChannel())
   registerChannel(DouyuLiveHotChannel)
-  registerChannel(DouyuCategoryChannel)
-  registerChannel(DouyuCategoriesChannel)
-  registerChannel(DouyuSearchChannel)
   registerChannel(DouyuAnchorChannel)
   registerChannel(new DouyinLiveChannel())
   registerChannel(DouyinLiveHotChannel)
-  registerChannel(DouyinCategoryChannel)
-  registerChannel(DouyinCategoriesChannel)
-  registerChannel(DouyinPartitionSearchChannel)
   registerChannel(DouyinTrendChannel)
   // 用户主页作品：**被动采集**（导航 + 捕获页面自己的 /aweme/post），见 channels/douyin/user.ts。
   registerChannel(new DouyinUserChannel())

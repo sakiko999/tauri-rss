@@ -6,7 +6,4 @@
 export * from "./live.ts"
 export * from "./user.ts"
 export * from "./hot.ts"
-export * from "./category.ts"
-export * from "./categories.ts"
-export * from "./search.ts"
 export * from "./trend.ts"

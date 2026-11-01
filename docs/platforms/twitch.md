@@ -1,7 +1,8 @@
 # Twitch 渠道一期方案（2026-10-20）
 
-> 状态：一期已实现（`twitch:live` / `twitch:hot` / `twitch:category` / `twitch:categories`）；
-> VOD / clip / 聊天 / 搜索未做。调研依据见本文「实测结论」；二期/三期只做边界说明。
+> 状态：一期已实现（`twitch:live` / `twitch:hot`）；**`twitch:category` / `twitch:categories`
+> 已于 2026-11-01 随「关键词搜索 / 分区列表」清理删除**。VOD / clip / 聊天 / 搜索未做。
+> 调研依据见本文「实测结论」；二期/三期只做边界说明。
 > 相关：`docs/platforms/channels.md`、`docs/risk/crawler-risk-control.md`。
 
 ## 1. 结论与范围
