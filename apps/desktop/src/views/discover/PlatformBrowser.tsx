@@ -23,6 +23,7 @@ import { Banner, StateBlock } from "../../components/StateBlock.tsx"
 import { isImeComposing } from "../../lib/ime.ts"
 import {
   type Candidate,
+  candidateKey,
   candidatesFromSearch,
   LIVE_SUB_CHANNEL,
   subsOfChannel,
@@ -139,25 +140,30 @@ export function PlatformBrowser({
   }
 
   /** 结果 → 候选(与「添加订阅」同一套提取:只留带 roomId 的 live 条目)。 */
-  const cands = useMemo(() => candidatesFromSearch(items ?? []), [items])
+  const cands = useMemo(() => candidatesFromSearch(items ?? [], platform), [items, platform])
 
   /** 落地的订阅渠道 = 平台的 live 订阅渠道(roomIds/videoId 单值)。 */
   const subKey = LIVE_SUB_CHANNEL[platform]
   const subCh = channels.find((c) => c.key === subKey)
   const landParam = subCh?.sourceInfoTpl?.[0]?.key
   const subscribed = useMemo(
-    () => new Set(subsOfChannel(subscriptions, subKey).flatMap((s) => valueList(s, landParam))),
-    [subscriptions, subKey, landParam],
+    () =>
+      new Set(
+        subsOfChannel(subscriptions, subKey)
+          .flatMap((s) => valueList(s, landParam))
+          .map((v) => candidateKey({ value: v, platform })),
+      ),
+    [subscriptions, subKey, landParam, platform],
   )
-  const selectedCand = cands.find((c) => c.value === selected)
+  const selectedCand = cands.find((c) => candidateKey(c) === selected)
 
   function pickCandidate(c: Candidate) {
-    setSelected((prev) => (prev === c.value ? "" : c.value))
+    setSelected((prev) => (prev === candidateKey(c) ? "" : candidateKey(c)))
   }
 
   /** 一步订阅选中的房间(标题取候选标题,分组/刷新间隔走默认)。 */
   async function subscribeSelected() {
-    if (!selectedCand || !subKey || !landParam || subscribed.has(selectedCand.value)) return
+    if (!selectedCand || !subKey || !landParam || subscribed.has(candidateKey(selectedCand))) return
     setSubscribing(true)
     try {
       const id = await addSubscription(subKey, selectedCand.label, { [landParam]: selectedCand.value })
@@ -286,7 +292,7 @@ export function PlatformBrowser({
                 {subKey && landParam ? (
                   <Button
                     size="sm"
-                    disabled={subscribing || subscribed.has(selectedCand.value)}
+                    disabled={subscribing || subscribed.has(candidateKey(selectedCand))}
                     onClick={() => void subscribeSelected()}
                   >
                     {subscribing ? (

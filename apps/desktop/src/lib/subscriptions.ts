@@ -70,6 +70,15 @@ export interface Candidate {
   thumb?: string
   /** 元信息标签(在线人数 / 房号 / 分区…)。 */
   meta: string[]
+  /** 来源平台(跨平台合并搜索时用于图标 / 去重 / 选中态)。 */
+  platform?: string
+  /** 选中后落地到哪条订阅渠道的哪个参数(跨平台合并后不能只按平台猜)。 */
+  land?: { channelKey: string; param: string }
+}
+
+/** 候选的全局唯一键(不同平台可能有相同的 roomId / uid)。 */
+export function candidateKey(c: Pick<Candidate, "value" | "platform">): string {
+  return `${c.platform ?? ""}:${c.value}`
 }
 
 /** 数字缩写:1.2万 / 3.4亿。 */
@@ -123,9 +132,9 @@ export const LIVE_SUB_CHANNEL: Record<string, string> = {
 /**
  * 平台 → 用户**搜索/查号渠道**(输入 → 订阅目标候选)。每个用户主页渠道都绑一个,
  * 「搜索添加」统一从这里取候选(2026-11-01 起覆盖全部用户主页渠道):
- *   - bili / youtube:按昵称真搜索(匿名);
+ *   - bili / youtube / twitch:按昵称真搜索(匿名);
  *   - weibo:按昵称搜索(**需登录**);
- *   - douyin:抖音号查号(匿名);xhs:用户 ID/主页链接查号(**需登录**)。
+ *   - douyin / xhs:抖音号/用户 ID 查号,**也支持关键词**(被动采集搜索页,需登录)。
  */
 export const USER_SEARCH_CHANNEL: Record<string, string> = {
   bili: "bili:user",
@@ -133,15 +142,18 @@ export const USER_SEARCH_CHANNEL: Record<string, string> = {
   weibo: "weibo:user:search",
   douyin: "douyin:user:search",
   xhs: "xhs:user:search",
+  twitch: "twitch:user:search",
 }
 
-/** 平台 → 用户**订阅渠道**(订阅其投稿;参数是单值,非列表 → 无「并入」)。 */
+/** 平台 → 用户**订阅渠道**(订阅其投稿;参数是单值,非列表 → 无「并入」,
+ *  例外:twitch 落地 `twitch:live` 的 roomIds 列表)。 */
 export const USER_SUB_CHANNEL: Record<string, string> = {
   bili: "bili:user_video",
   youtube: "youtube",
   weibo: "weibo:user",
   douyin: "douyin:user",
   xhs: "xhs:user",
+  twitch: "twitch:live",
 }
 
 /**
@@ -154,6 +166,57 @@ export const USER_SUB_PARAM: Record<string, string> = {
   weibo: "uid",
   douyin: "sec_uid",
   xhs: "user_id",
+  twitch: "roomIds",
+}
+
+/**
+ * 手动填 ID 的入口已从「浏览渠道」目录移除的渠道:分区(靠发现页/目录点选)
+ * 与用户主页(靠统一搜索)。⚠️ 这只是**入口收敛**,渠道本身仍可被订阅或预览。
+ */
+export const NO_MANUAL_ENTRY = new Set<string>([
+  ...Object.values(CATEGORY_CHANNEL),
+  ...Object.values(USER_SUB_CHANNEL),
+  ...Object.values(USER_SEARCH_CHANNEL),
+  // B站分区渠道不在 CATEGORY_CHANNEL(发现页走目录订阅 + 目录条目预览)。
+  "bili:live:area",
+  // 用户主页动态:uid 只能从 UP 主搜索结果拿到。
+  "bili:dynamic",
+])
+
+/** 该渠道是否只从「搜索 / 发现页」进入(目录里不再列出)。主播搜索渠道同样按工具处理。 */
+export function isManualEntryOnly(channel: ChannelInfo): boolean {
+  return channel.key.endsWith(":anchor") || NO_MANUAL_ENTRY.has(channel.key)
+}
+
+/** 统一搜索的一个取数源(用户搜索 / 主播搜索)。 */
+export interface SearchSource {
+  platform: string
+  kind: "user" | "room"
+  channelKey: string
+  /** 该渠道 sourceInfoTpl 的第一个参数名(keyword / roomId / …)。 */
+  field: string
+}
+
+/**
+ * 「输入关键词 → 触发所有可用搜索」的取数源清单。
+ *   - 用户搜索:`USER_SEARCH_CHANNEL`(bili / youtube / weibo / douyin / xhs / twitch);
+ *   - 主播搜索:注册表里以 `:anchor` 结尾的渠道(bili / douyu / huya)。
+ * 只保留 `sourceInfoTpl` 首参存在且为关键词类的渠道(主播渠道首参就是 keyword)。
+ */
+export function searchSources(channels: ChannelInfo[]): SearchSource[] {
+  const out: SearchSource[] = []
+  for (const [platform, key] of Object.entries(USER_SEARCH_CHANNEL)) {
+    const ch = channels.find((c) => c.key === key)
+    const field = ch?.sourceInfoTpl?.[0]?.key
+    if (ch && field) out.push({ platform, kind: "user", channelKey: key, field })
+  }
+  for (const ch of channels) {
+    if (!ch.key.endsWith(":anchor")) continue
+    const field = ch.sourceInfoTpl?.[0]?.key
+    if (!field) continue
+    out.push({ platform: platformOf(ch.key), kind: "room", channelKey: ch.key, field })
+  }
+  return out
 }
 
 /**
@@ -161,9 +224,10 @@ export const USER_SUB_PARAM: Record<string, string> = {
  * 与 candidatesFor 不同:数据来自**平台搜索接口**(不依赖本机订阅库),故单条直播
  * 也能产出候选。roomId 取 LiveItem.roomId(deserialize 已从 url 推导)。
  */
-export function candidatesFromSearch(items: MediaItem[]): Candidate[] {
+export function candidatesFromSearch(items: MediaItem[], platform?: string): Candidate[] {
   const out: Candidate[] = []
   const seen = new Set<string>()
+  const landKey = platform ? LIVE_SUB_CHANNEL[platform] : undefined
   for (const i of items) {
     const live = i as LiveItem
     const roomId = String(live.roomId ?? "").trim()
@@ -178,6 +242,8 @@ export function candidatesFromSearch(items: MediaItem[]): Candidate[] {
       sub: `${i.author?.name ?? "未知"} · ${idLabel} ${roomId}`,
       thumb: mediaUrl(i),
       meta: [online].filter(Boolean),
+      ...(platform ? { platform } : {}),
+      ...(landKey ? { land: { channelKey: landKey, param: "roomIds" } } : {}),
     })
   }
   return out
@@ -191,7 +257,7 @@ export function candidatesFromSearch(items: MediaItem[]): Candidate[] {
  *   `xiaohongshu.com/user_profile/<user_id>`。
  * 次行信息(粉丝/订阅数)来自条目 summary(channel 侧已拼好)。
  */
-export function candidatesFromUsers(items: MediaItem[]): Candidate[] {
+export function candidatesFromUsers(items: MediaItem[], platform?: string): Candidate[] {
   const out: Candidate[] = []
   const seen = new Set<string>()
   const USER_URL = [
@@ -200,7 +266,11 @@ export function candidatesFromUsers(items: MediaItem[]): Candidate[] {
     /weibo\.com\/u\/(\d+)/,
     /douyin\.com\/user\/(MS4wLjAB[\w-]+)/,
     /xiaohongshu\.com\/user(?:_|\/)profile\/([0-9a-f]{16,32})/i,
+    // 排除 Twitch 一级路由此类站内页(它们单段且不是频道名)。
+    /twitch\.tv\/(?!directory|videos|search|settings|login|subscriptions|wallet|drops|jobs|downloads|turbo)([a-z0-9_]{3,25})\/?$/i,
   ]
+  const landKey = platform ? USER_SUB_CHANNEL[platform] : undefined
+  const landParam = platform ? USER_SUB_PARAM[platform] : undefined
   for (const i of items) {
     const url = String(i.url ?? "")
     const m = USER_URL.map((re) => re.exec(url)).find(Boolean)
@@ -214,6 +284,8 @@ export function candidatesFromUsers(items: MediaItem[]): Candidate[] {
       sub: i.summary ?? "",
       thumb: mediaUrl(i),
       meta: [],
+      ...(platform ? { platform } : {}),
+      ...(landKey && landParam ? { land: { channelKey: landKey, param: landParam } } : {}),
     })
   }
   return out

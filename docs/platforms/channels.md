@@ -11,6 +11,12 @@
 > `youtube:live-search`）已删除 —— 只适合一次性检索，作为订阅长期产出同一批房间没有
 > 价值。分区列表（`*:categories`）与分区直播（`*:category`）**保留**（分区目录点开
 > 依赖分区直播渠道）。
+>
+> ⚠️ **2026-11-01 统一搜索**：桌面「添加订阅 → 搜索」改为**一个关键词并发查所有取数源**
+> （用户搜索 `USER_SEARCH_CHANNEL` + 主播搜索 `*:anchor`）。分区 / 用户主页 / 搜索类渠道
+> 不再出现在「浏览渠道」目录（`isManualEntryOnly`），只能从统一搜索或发现页进入。
+> 同日新增 `twitch:user:search`；`douyin:user:search` / `xhs:user:search` 增加**被动关键词
+> 搜索**（页面自己发请求，应用侧不签名），微博保持 HTTP 接口（无签名，被动无收益）。
 
 ## 一、已实现的渠道扩展
 
@@ -334,15 +340,17 @@ UI 流程（与播客榜单完全同构）：
   展示（`/x/member/web/account`）。
 - **Twitch 未做部分**（2026-10-20）—— 已落地：`twitch:live`（`roomIds` 多频道）、
   `twitch:hot`（热门，观看数降序）、`twitch:category`（分区流列表，slug/目录链接，
-  游标翻页）+ by-url 直播 HLS 播放；**VOD / clip / 聊天弹幕 / 关键词搜索 / 登录均未做**：
+  游标翻页）+ by-url 直播 HLS 播放；~~关键词搜索~~ ✅ 2026-11-01 `twitch:user:search`
+  （原始 GQL `searchFor`，网页 Client-ID 匿名 200）；**VOD / clip / 聊天弹幕 / 登录仍不做**：
   - VOD/clip 路由要排在频道名**单段路径之前**（`/videos/<id>`、`/<login>/clip/<slug>`），
     二期再加；`normalizeTwitchLogin` 现在对多段路径一律返回 null（避免误当频道）。
   - **分类榜已做成目录订阅 `twitch:categories`**（`games(first)` 只给分类元数据、本身没有
     可播房间）→ 点分类订阅 `twitch:category`，不另造分类 feed。
   - 聊天（IRC `wss://irc-ws.chat.twitch.tv:443` + `justinfan`）文本帧实测可用，但宿主
     `WsLike.send(Uint8Array)` **只发 binary**，Twitch 不收 → 要先给宿主 ws 加 text 帧。
-  - 关键词搜索（搜频道/流）依赖 persisted query（结构不稳），二期再评估；登录
-    （OAuth「我的关注」）需注册应用，不建议近期做。
+  - ~~关键词搜索（搜频道/流）依赖 persisted query（结构不稳）~~ **证伪（2026-11-01）**：
+    原始 `searchFor` 查询匿名可用（见上）；只做了**搜频道**，搜直播流（`searchFor.channels`
+    不带在播态）二期再评估。登录（OAuth「我的关注」）需注册应用，不建议近期做。
   - **Helix 匿名 401**（`api.twitch.tv/helix/streams`），且不提供播放地址 → 不走 Helix；
     元数据与播放 token 都走公开 web GraphQL。
 - **YouTube 播放列表的完整列表未做**（2026-10-20）—— 需要 >15 条时走 InnerTube

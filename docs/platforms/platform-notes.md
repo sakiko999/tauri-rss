@@ -107,9 +107,12 @@
     `www.douyin.com/user/<抖音号>` 也是 200（SPA 空壳），**不能**当 sec_uid 用。
   - 映射：`aweme_type === 68`/有 `images[]` 的是**图文**（它的 `play_addr` 是 BGM，
     不能当视频）；视频按 `video.bit_rate[]` 降序取最高档直链。
-  - **查用户渠道 `douyin:user:search`**（2026-11-01）：输入抖音号 → 旧版资料接口换
-    `sec_uid` + 昵称/头像（匿名，同 `douyin:user` 订阅输入的解析）；「搜索添加」取候选用。
-    抖音号以外（按昵称真搜索）仍需登录，未做。
+  - **搜用户渠道 `douyin:user:search`**（2026-11-01 更新）：昵称 → **被动采集**搜索页
+    （`douyin.com/search/<kw>?type=user`，捕获页面自己发的 `/aweme/v1/web/{discover,general}/search/`
+    或 `/aweme/v1/web/search/user/`，`user_list[].user_info.sec_uid/nickname/avatar_thumb`）；
+    抖音号 / 主页链接 → 旧版资料接口查号（匿名，同 `douyin:user` 订阅输入的解析）。
+    关键词路径**需登录**（匿名搜索页被登录弹窗接管），且必须 `mode:"interactive"`。
+    接口重放/自签与 `douyin:user` 同一结论：会被拦，所以只走被动。
   - ✅ **翻页（`Pageable`，2026-10-31）**：**登录态下**页面会随滚动自己发下一页
     `/aweme/post`（实测 57 → 87 → 110 → 140 → 163）。手法 = 把**最大可滚动容器**
     滚到底（抖音主页不在 window 上滚，容器是 class 混淆的内层 div）+ 在**完整落在
@@ -136,11 +139,11 @@
   PNG 头尺寸**取 ≥200 的最大一张。
 - ~~抖音登录 cookie 没有任何抓取/播放路径消费~~ **已接通（2026-10-21）**：登录成功写
   `settings.douyinCookie`，经 credentials provider 进入 `douyinCookie()`（抓取/播放/
-  弹幕共用），登录档位（原画）待真机验证。真正的关键词搜索
-  `aweme/v1/web/live/search` / `general/search/stream` 匿名返回 2483，**需要登录但未做
-  调研与开发**；现有 `live:douyin:search` 只是匿名分区搜索。不要直接把主账号 cookie
-  接进自动化搜索（4031/限流/账号标记风险）；要做先在有登录态的 Edge 上用**专用小号**
-  做 1~2 次 CDP 被动探针，确认页面是否自然发 `live/search`、body 能否取到。
+  弹幕共用），登录档位（原画）待真机验证。**直播**关键词搜索
+  `aweme/v1/web/live/search` / `general/search/stream` 匿名返回 2483，仍未做；
+  **用户**关键词搜索已按被动路线落地（`douyin:user:search`，见上）。
+  不要直接把主账号 cookie 接进自动化搜索（4031/限流/账号标记风险）；被动采集只复用
+  登录态页面自身请求，不构造签名接口。
 - **发现层**（分区/搜索，`resolve/platform/*/discover.ts`）：douyin 三路搜索只
   `partition/search` 匿名可用且只认游戏名级——但**顶层分区名恰是大类词**（舞蹈/音乐/聊天/
   二次元…），故 resolve 侧做「上游命中 ∪ 本地分区树 title 匹配」，0 → 20 条。
@@ -197,10 +200,13 @@
   `settings.xhsCookie`。登录判据 = 页面 `__INITIAL_STATE__.user.loggedIn === true`
   / 侧栏「我」入口 / `user_id` cookie（后两者兜底）。权威接口是
   `/api/sns/web/v2/user/me` 的 `data.guest === false && data.user_id`。
-- **查用户渠道 `xhs:user:search`**（2026-11-01）：输入 user_id / 主页链接 → 同一份
-  profile SSR 读 `user.userPageData`（拿不到回退首条笔记作者）；浏览器与 HTTP SSR
-  两条路径同 `xhs:user`，**需登录**。xhs 搜索 API 需签名（签名库在 feat/xhs-rustpython
-  分支），按昵称搜索未做。
+- **搜用户渠道 `xhs:user:search`**（2026-11-01 更新）：昵称 → **被动采集**
+  `search_result?keyword=<kw>&type=51`，再点页面上的「用户」Tab（默认落在「全部」，
+  不点只发 onebox/recommend/filter），捕获页面自己的 `/api/sns/web/v1/search/usersearch`
+  响应：`data.users[]`（`id` / `name` / `image` / `red_id` / `fans`，注意主键叫 `id`、
+  fans 是「29.9万」展示串）。应用侧不发搜索请求、不做签名
+  （签名库在 feat/xhs-rustpython 分支）。user_id / 主页链接 → 同一份 profile SSR
+  `user.userPageData`（拿不到回退首条笔记作者）。两条路径都**需登录**。
 - 主分支**全 SSR，且 2026-10-22 起要求登录（匿名态已移除）**：所有 xhs 渠道先过
   `assertXhsLoggedIn`（登录页优先 → 页面 `loggedIn` → 侧栏「我」→ `user_id` cookie），
   未登录直接抛可操作错误，不再退回匿名 SSR / 匿名详情。**笔记详情必须带列表项的
@@ -353,7 +359,12 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
 - ⚠️ **master 没有 `Access-Control-Allow-Origin`** → resolver 必须经 `appHost.http` 拉 master，
   把 **variant playlist URL** 交给播放器；master variant 顺序不是高→低，需按高度/带宽降序。
 - ⚠️ **流列表翻页必须用 Android app 公开 Client-ID**（网页 ID 带 `after` 会 `IntegrityCheckFailed`）；
-  `twitch:categories` 目录渠道已实现，VOD / clip / 聊天弹幕 / 关键词搜索 / 登录未做。
+  `twitch:categories` 目录渠道已实现；VOD / clip / 聊天弹幕 / 登录未做。
+  ✅ **搜频道**（2026-11-01）：`twitch:user:search` 用原始 GQL
+  `searchFor(userQuery, platform:"web")`，网页 Client-ID 匿名 200 返回
+  `channels.items[].login/displayName/followers` —— **不需要 persisted token /
+  Client-Integrity**（此前「依赖 persisted query」的判断已证伪）；落地
+  `twitch:live` 的 `roomIds`。
 
 ## cookie / 登录
 
@@ -370,6 +381,9 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
   containerid=100103type%3D3%26q%3D<昵称>`，**必须登录**（匿名 `ok:-100` 风控码、0 条；
   有完整 cookie 时返回 id/昵称/粉丝数/认证理由）。渠道在无 cookie 时**直接报「需要登录」**
   而不发匿名请求（避免触发平台冷却）。
+  为什么微博不做被动：该接口**没有签名**、页面搜索本身也调它，被动只是多开一个浏览器
+  tab 复用同一条 HTTP 请求，换不来新能力；被动只在「接口需签名 / 重放被拦」的
+  xhs / douyin 上才必要。用户搜索结果落地仍走 `weibo:user`。
 - ⚠️ **抖音渠道前缀是 `live:douyin*`**：权威是 `@amoeba/platform` 的 `PLATFORMS` ——
   `douyin.prefixes` 同时登记 `live:douyin` 与 `douyin`，长前缀优先
   （`packages/platform/src/index.ts:113-126`）；core `cookieFieldFor` 只是查表包装。

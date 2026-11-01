@@ -9,9 +9,11 @@ import type { ChannelInfo, LiveItem, MediaItem, Subscription } from "@amoeba/cor
 import {
   candidatesFromSearch,
   candidatesFromUsers,
+  isManualEntryOnly,
   mergeValues,
   MULTI_PARAMS,
   multiParamOf,
+  searchSources,
   splitValues,
   subsHolding,
   USER_SEARCH_CHANNEL,
@@ -125,6 +127,39 @@ assert(ucands[1]!.value === "UCBJycsmduvYEL83R_U4JriQ", "youtube 候选值 = cha
 assert(ucands[2]!.value === "5212695504", "weibo 候选值 = uid")
 assert(ucands[3]!.value.startsWith("MS4wLjAB"), "douyin 候选值 = sec_uid")
 assert(ucands[4]!.value === "5c6d75a400000000100278fa", "xhs 候选值 = user_id")
+
+// 带平台时候选自带落地渠道/参数(统一搜索跨平台合并后不能按「当前平台」猜)
+const bc = candidatesFromUsers([user("https://space.bilibili.com/37663924", "半佛仙人")], "bili")
+assert(
+  bc[0]!.land?.channelKey === "bili:user_video" && bc[0]!.land?.param === "uid",
+  "bili 候选落地 bili:user_video/uid",
+)
+const tc = candidatesFromUsers([user("https://www.twitch.tv/shroud", "shroud")], "twitch")
+assert(tc.length === 1 && tc[0]!.value === "shroud", "twitch 候选值 = 频道 login")
+assert(tc[0]!.land?.channelKey === "twitch:live" && tc[0]!.land?.param === "roomIds", "twitch 落地 twitch:live/roomIds")
+
+// 主播搜索候选落地直播渠道(roomIds)
+const rc = candidatesFromSearch([live("288016", "A")], "douyu")
+assert(rc[0]!.land?.channelKey === "live:douyu" && rc[0]!.land?.param === "roomIds", "主播候选落地 live:douyu/roomIds")
+
+// 统一搜索的取数源 = 用户搜索 + 注册表里的 *:anchor;分区/用户主页渠道不再列进目录手填
+const infos = [
+  ch("bili:user", "keyword"),
+  ch("bili:anchor", "keyword"),
+  ch("live:douyu:anchor", "keyword"),
+  ch("twitch:user:search", "keyword"),
+  ch("bili:live:area", "parentAreaId"),
+  ch("bili:live", "roomIds"),
+]
+const srcs = searchSources(infos)
+assert(
+  JSON.stringify(srcs.map((s) => s.channelKey).sort()) ===
+    JSON.stringify(["bili:anchor", "bili:user", "live:douyu:anchor", "twitch:user:search"]),
+  "searchSources 覆盖用户搜索与主播搜索",
+)
+assert(isManualEntryOnly(ch("bili:live:area", "parentAreaId")), "分区渠道不再出现在目录手填")
+assert(isManualEntryOnly(ch("live:douyu:anchor", "keyword")), "主播搜索渠道属工具,不进目录")
+assert(!isManualEntryOnly(ch("bili:live", "roomIds")), "直播间渠道仍可手动添加")
 // 用户订阅是单值参数(uid/channelId/sec_uid/user_id),无「并入已有」语义 → 不进 MULTI_PARAMS
 assert(
   !MULTI_PARAMS.includes("uid") && !MULTI_PARAMS.includes("channelId") && !MULTI_PARAMS.includes("sec_uid"),

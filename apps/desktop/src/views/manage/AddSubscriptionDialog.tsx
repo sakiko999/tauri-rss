@@ -12,7 +12,7 @@
  * 按渠道配置);这里只留**表单状态与提交编排**。
  */
 
-import type { MediaItem } from "@amoeba/core"
+import { platformDef } from "@amoeba/platform"
 import { useEffect, useMemo, useState } from "react"
 
 import { Button } from "../../components/Button.tsx"
@@ -21,14 +21,16 @@ import { Modal, Select } from "../../components/Modal.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
 import {
   type Candidate,
+  candidateKey,
+  candidatesFromSearch,
   candidatesFromUsers,
+  isManualEntryOnly,
   mergeValues,
   multiParamOf,
+  searchSources,
   splitValues,
+  subsHolding,
   subsOfChannel,
-  USER_SEARCH_CHANNEL,
-  USER_SUB_CHANNEL,
-  USER_SUB_PARAM,
   valueList,
 } from "../../lib/subscriptions.ts"
 import { useLatestOnly } from "../../lib/useLatestOnly.ts"
@@ -66,12 +68,13 @@ export function AddSubscriptionDialog({
   /** 手工模式选中的渠道(搜索模式的订阅渠道由平台推导,不走这个)。 */
   const [channelKey, setChannelKey] = useState("")
   const [values, setValues] = useState<Record<string, string>>({})
-  /** 搜索模式:选中的平台 + 关键词 + 接口返回的候选条目。 */
-  const [platform, setPlatform] = useState("")
+  /** 统一搜索:关键词 + 合并后的候选 + 已搜过 / 无结果的平台。 */
   const [keyword, setKeyword] = useState("")
-  const [searchItems, setSearchItems] = useState<MediaItem[] | null>(null)
+  const [cands, setCands] = useState<Candidate[]>([])
+  const [searched, setSearched] = useState(false)
+  const [failedPlatforms, setFailedPlatforms] = useState<string[]>([])
   const [searching, setSearching] = useState(false)
-  /** 搜索模式:从候选里选中的值('' = 未选,提交按钮禁用)。 */
+  /** 搜索模式:选中的候选键(`candidateKey`;'' = 未选,提交按钮禁用)。 */
   const [candidateValue, setCandidateValue] = useState("")
   /** 手工模式：列表型参数(roomIds)可并入已有订阅。 */
   const [manualTargetId, setManualTargetId] = useState("new")
@@ -91,8 +94,11 @@ export function AddSubscriptionDialog({
   //   `rss:podcast` = 播客 RSS(解 enclosure → kind:audio,条目可播)。
   // 原先把整个 `rss:` 前缀都滤掉,导致**手工加外部 feed / 订阅一个播客都没有入口**。
   const RSS_GENERIC = new Set(["rss:url", "rss:podcast"])
+  // 分区 / 用户主页 / 搜索类渠道只从「统一搜索」或发现页进入：不再列出需要手填
+  // uid / 分区 ID / 关键词的入口（2026-11-01）。
   const builtins = channels.filter(
-    (c) => !c.key.startsWith("rsshub:") && (!c.key.startsWith("rss:") || RSS_GENERIC.has(c.key)),
+    (c) =>
+      !c.key.startsWith("rsshub:") && (!c.key.startsWith("rss:") || RSS_GENERIC.has(c.key)) && !isManualEntryOnly(c),
   )
   // 36 条内置 RSS 直链(Hacker News / V2EX 等)不铺成 chip(太噪),单独用下拉暴露。
   // 它们带 defaultInfo,选中即可直接订阅。
@@ -100,36 +106,29 @@ export function AddSubscriptionDialog({
   const rsshub = channels.filter((c) => c.key.startsWith("rsshub:"))
   const channel = channels.find((c) => c.key === channelKey)
 
-  /** 有「搜用户」渠道的平台(bili:user / youtube:user)。 */
-  const userSearchPlatforms = useMemo(
-    () => Object.keys(USER_SEARCH_CHANNEL).filter((p) => channels.some((c) => c.key === USER_SEARCH_CHANNEL[p])),
-    [channels],
+  /** 统一搜索的取数源(用户搜索 + 主播搜索)。 */
+  const sources = useMemo(() => searchSources(channels), [channels])
+  /** 搜索覆盖的平台名(按取数源顺序去重)。 */
+  const searchPlatformLabels = useMemo(
+    () => [...new Set(sources.map((s) => platformDef(s.platform)?.label ?? s.platform))],
+    [sources],
   )
-  /** 当前是否处于搜索添加(有平台可搜,且用户没切到手工)。 */
-  const searchMode = mode === "search" && (userSearchPlatforms.length > 0 || !!presetKey)
+  /** 当前是否处于搜索添加(有搜索源,且用户没切到手工)。 */
+  const searchMode = mode === "search" && (sources.length > 0 || !!presetKey)
 
-  /**
-   * 搜索模式只搜 UP 主 / 频道：`bili:user` / `youtube:user` 取候选，
-   * 落到对应的内容订阅渠道（uid / channelId 单值）。
-   * ⚠️ 房间关键词搜索渠道已于 2026-11-01 删除。
-   */
-  const searchChKey = USER_SEARCH_CHANNEL[platform]
-  const searchCh = channels.find((c) => c.key === searchChKey)
-  const subChKey = USER_SUB_CHANNEL[platform] ?? ""
-  const subCh = channels.find((c) => c.key === subChKey)
-
-  const cands = useMemo(() => (searchMode ? candidatesFromUsers(searchItems ?? []) : []), [searchMode, searchItems])
-  /** 落地订阅的渠道(搜索模式 = 用户内容渠道;手工模式 = 选中的渠道)。 */
-  const landChannel = searchMode ? subCh : channel
-  /** 落地渠道的参数名。⚠️ 用显式表(USER_SUB_PARAM)——`youtube` 渠道首参是
-   *  videoId(订阅单视频),频道订阅是第二参 channelId，不能取首参。 */
-  const landParam = searchMode ? USER_SUB_PARAM[platform] : landChannel?.sourceInfoTpl?.[0]?.key
-  /** 已订阅过的候选值(重复添加会得到两条相同订阅,先标出来)。 */
+  /** 选中的候选(候选自带 `land`:落地渠道 + 参数)。 */
+  const selectedCand = cands.find((c) => candidateKey(c) === candidateValue)
+  /** 落地订阅的渠道(搜索模式 = 候选自带的;手工模式 = 选中的渠道)。 */
+  const landChannel = searchMode ? channels.find((c) => c.key === selectedCand?.land?.channelKey) : channel
+  /** 已订阅过的候选键(重复添加会得到两条相同订阅,先标出来)。 */
   const subscribed = useMemo(() => {
-    const param = USER_SUB_PARAM[platform]
-    if (!param) return new Set<string>()
-    return new Set(subsOfChannel(subscriptions, subChKey).flatMap((s) => valueList(s, param)))
-  }, [subscriptions, subChKey, platform])
+    const s = new Set<string>()
+    for (const c of cands) {
+      if (!c.land) continue
+      if (subsHolding(subscriptions, c.land.channelKey, c.land.param, c.value).length) s.add(candidateKey(c))
+    }
+    return s
+  }, [cands, subscriptions])
 
   useEffect(() => {
     if (!open) return
@@ -141,10 +140,12 @@ export function AddSubscriptionDialog({
     setTtl("")
     setCandidateValue("")
     setManualTargetId("new")
-    // 带预置渠道(发现页「订阅该关键词」)→ 直接进手工模式,预填参数。
+    // 带预置渠道(发现页「订阅该分区」)→ 直接进手工模式,预填参数。
     setMode(presetKey ? "manual" : "search")
     setKeyword("")
-    setSearchItems(null)
+    setCands([])
+    setSearched(false)
+    setFailedPlatforms([])
     // 不预选渠道:打开就是渠道目录。原先默认落「RSS 直链」,等于用户还没看目录,
     // 下面那套参数表单就已经按一条他没选的渠道填好了。
     const key = presetKey ?? ""
@@ -152,12 +153,9 @@ export function AddSubscriptionDialog({
     setChannelKey(key)
     setValues({ ...(ch?.defaultInfo ?? {}), ...(presetKey ? presetInfo : {}) })
     // 标题留空,由 placeholder 显示渠道名;提交时仍回退到 channel.name。
-    // 预置入口(发现页「订阅该关键词」)才用渠道名做初始标题。
+    // 预置入口(发现页「订阅该分区」)才用渠道名做初始标题。
     setTitle(presetKey ? (ch?.name ?? "") : "")
-    // 搜索模式只搜 UP 主 / 频道，默认选第一个可搜平台。
-    const p = userSearchPlatforms[0] ?? ""
-    setPlatform(p)
-  }, [open, channels, userSearchPlatforms, presetKey, presetInfo])
+  }, [open, channels, presetKey, presetInfo])
 
   const fields = channel?.sourceInfoTpl ?? []
   /** 手工模式可并入的已有订阅：只有列表型参数(roomIds)才有「加进去」语义。 */
@@ -169,23 +167,59 @@ export function AddSubscriptionDialog({
   /** 当前是「并入已有订阅」：此时标题/分组/刷新间隔都不生效，不渲染以免误解。 */
   const merging = manualTargetId !== "new"
 
-  /** 搜索模式:调平台 search 渠道拿候选(不建订阅,走 previewChannel)。 */
+  /**
+   * 统一搜索:一个关键词并发查所有取数源(用户搜索 + 主播搜索),按平台顺序合并。
+   * 单个源失败不拖垮整次搜索 —— 失败平台单独列出(多是没登录/风控)。
+   */
   async function runSearch() {
-    if (!dl || !searchChKey || !keyword.trim()) return
+    const kw = keyword.trim()
+    if (!dl || !kw || !sources.length) return
     const gen = latest.start()
     setSearching(true)
     setError("")
     setCandidateValue("")
     setTitle("")
+    setCands([])
+    setFailedPlatforms([])
+    setSearched(true)
     try {
-      const field = searchCh?.sourceInfoTpl?.[0]?.key ?? "keyword"
-      const r = await dl.previewChannel(searchChKey, { [field]: keyword.trim() })
-      if (latest.stale(gen)) return // 已被切平台/新搜索取代,丢弃
-      setSearchItems(r.items)
+      const results = await Promise.allSettled(
+        sources.map(async (s) => {
+          const r = await dl.previewChannel(s.channelKey, { [s.field]: kw })
+          // 用户搜索产主页 URL(候选值从 URL 解析);主播搜索产 live 条目(roomId)。
+          const list =
+            s.kind === "user" ? candidatesFromUsers(r.items, s.platform) : candidatesFromSearch(r.items, s.platform)
+          // 每个源只取前 10:8 个源全量合并会有几百行,候选列表是「挑一个」不是浏览。
+          return list.slice(0, 10)
+        }),
+      )
+      if (latest.stale(gen)) return // 已被新搜索取代,丢弃
+      const order = new Map(sources.map((s, i) => [s.channelKey, i]))
+      const merged: Candidate[] = []
+      const seen = new Set<string>()
+      const failed: string[] = []
+      results.forEach((r, i) => {
+        const s = sources[i]!
+        if (r.status === "rejected") {
+          const label = platformDef(s.platform)?.label ?? s.platform
+          if (!failed.includes(label)) failed.push(label)
+          return
+        }
+        for (const c of r.value) {
+          const key = candidateKey(c)
+          if (seen.has(key)) continue
+          seen.add(key)
+          merged.push(c)
+        }
+      })
+      // 按取数源顺序(平台 → 用户/主播)排列,同平台结果连在一起。
+      merged.sort((a, b) => (order.get(a.land?.channelKey ?? "") ?? 99) - (order.get(b.land?.channelKey ?? "") ?? 99))
+      setCands(merged)
+      setFailedPlatforms(failed)
     } catch (e) {
       if (latest.stale(gen)) return
       setError(e instanceof Error ? e.message : String(e))
-      setSearchItems([])
+      setCands([])
     } finally {
       if (!latest.stale(gen)) setSearching(false)
     }
@@ -201,45 +235,32 @@ export function AddSubscriptionDialog({
     setManualTargetId("new")
   }
 
-  /** 切换搜索平台(清空上一平台的候选与选中)。 */
-  function pickPlatform(p: string) {
-    latest.invalidate() // 作废在途搜索,否则旧平台候选覆盖新面板
-    setPlatform(p)
-    setSearchItems(null)
-    setCandidateValue("")
-    setTitle("")
-  }
-
   /** 选中/取消选中一个候选(再点一次 = 取消)。 */
   function pickCandidate(c: Candidate) {
-    if (candidateValue === c.value) {
+    const key = candidateKey(c)
+    if (candidateValue === key) {
       setCandidateValue("")
       return
     }
-    setCandidateValue(c.value)
+    setCandidateValue(key)
     setTitle(c.label)
     // 重复只作提示(在 targetHint 里),不拦提交 —— 重复订阅是合法选择。
   }
 
   async function submit() {
     if (searchMode) {
-      /* ── 搜索模式:把选中的房间落到平台的 live 订阅渠道 ─────────────── */
-      if (!subChKey || !landParam) {
-        setError("该平台没有对应的直播订阅渠道。")
-        return
-      }
-      if (!candidateValue) {
+      /* ── 搜索模式:把选中的候选落到它自己的订阅渠道/参数 ────────────── */
+      if (!selectedCand?.land) {
         setError("请先搜索并选中一项。")
         return
       }
       setBusy(true)
       setError("")
       try {
-        // 搜索结果是单值(uid/channelId)，只能新建订阅（并入语义只适用于 roomIds）。
-        const info = { [landParam]: candidateValue }
-        // 标题默认用候选名(UP主名/频道名，比 uid 可读)。
-        const cand = cands.find((c) => c.value === candidateValue)
-        const id = await addSubscription(subChKey, title.trim() || cand?.label || candidateValue, info, {
+        const { channelKey: landKey, param } = selectedCand.land
+        // 直播类候选(主播搜索)落地的是 roomIds,单值即可;用户类落地 uid/channelId…
+        const info = { [param]: selectedCand.value }
+        const id = await addSubscription(landKey, title.trim() || selectedCand.label, info, {
           groupId: groupId || null,
           refreshIntervalSec: Number(ttl) > 0 ? Number(ttl) * 60 : undefined,
         })
@@ -299,13 +320,12 @@ export function AddSubscriptionDialog({
     }
   }
 
-  /** 选中候选后的提示。搜用户是单值订阅，只能新建。 */
+  /** 选中候选后的提示。用户/主播都是单值落地，只能新建。 */
   const targetHint = (() => {
-    if (!candidateValue || !landChannel) return ""
-    const label = cands.find((c) => c.value === candidateValue)?.label ?? candidateValue
+    if (!selectedCand?.land) return ""
     return subscribed.has(candidateValue)
-      ? `「${label}」在该渠道下已存在，新建会得到两条相同订阅。`
-      : `已选中「${label}」，将新建一条订阅。`
+      ? `「${selectedCand.label}」在该渠道下已存在，新建会得到两条相同订阅。`
+      : `已选中「${selectedCand.label}」，将新建一条订阅。`
   })()
 
   return (
@@ -319,7 +339,7 @@ export function AddSubscriptionDialog({
         <>
           <span className="t-micro t-dim flex-1">
             {searchMode
-              ? targetHint || "先搜索并选中一个 UP 主 / 频道，再添加到订阅。"
+              ? targetHint || "先搜索并选中一个用户或主播，再添加到订阅。"
               : !channelKey
                 ? "先从目录里选一个渠道。"
                 : channel?.defaultInfo
@@ -329,10 +349,7 @@ export function AddSubscriptionDialog({
           <Button variant="secondary" disabled={busy} onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button
-            disabled={busy || (searchMode ? !candidateValue || !subChKey : !channelKey)}
-            onClick={() => void submit()}
-          >
+          <Button disabled={busy || (searchMode ? !selectedCand?.land : !channelKey)} onClick={() => void submit()}>
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="plus" size={14} />} 添加订阅
           </Button>
         </>
@@ -351,20 +368,17 @@ export function AddSubscriptionDialog({
 
       {searchMode ? (
         <SearchPanel
-          userSearchPlatforms={userSearchPlatforms}
-          channels={channels}
-          platform={platform}
-          onPickPlatform={pickPlatform}
+          platforms={searchPlatformLabels}
           keyword={keyword}
           onKeyword={setKeyword}
-          searchCh={searchCh}
           onSearch={() => void runSearch()}
           searching={searching}
-          searchItems={searchItems}
+          searched={searched}
           cands={cands}
           candidateValue={candidateValue}
           onPickCandidate={pickCandidate}
           subscribed={subscribed}
+          failedPlatforms={failedPlatforms}
         />
       ) : (
         <ChannelPanel

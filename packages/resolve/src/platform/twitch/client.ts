@@ -213,6 +213,61 @@ export async function fetchTwitchTopCategories(first = 30): Promise<TwitchCatego
   return (data.games.edges ?? []).map((e) => e?.node).filter((n): n is TwitchCategoryNode => !!n && !!n.slug)
 }
 
+/** 频道搜索结果(匿名 `searchFor`;字段只取展示与落地需要的)。 */
+export interface TwitchChannelHit {
+  login: string
+  displayName: string
+  description: string
+  followers: number
+}
+
+interface RawChannelHit {
+  login?: string | null
+  displayName?: string | null
+  description?: string | null
+  followers?: { totalCount?: number | null } | null
+}
+
+/**
+ * 按关键词搜频道(匿名,网页 Client-ID)。
+ *
+ * 实测 2026-11-01:`searchFor` 原始查询**不需要** persisted token / integrity,
+ * 匿名 200 返回 channels.items。条目里的 login 即 `twitch:live` 的订阅参数。
+ */
+export async function searchTwitchChannels(userQuery: string): Promise<TwitchChannelHit[]> {
+  const q = userQuery.trim()
+  if (!q) return []
+  const data = await twitchGql<{
+    searchFor?: { channels?: { items?: Array<RawChannelHit | null> | null } | null } | null
+  }>(
+    {
+      query: `query Search($q: String!) {
+        searchFor(userQuery: $q, platform: "web", target: null) {
+          channels { items { login displayName description followers { totalCount } } }
+        }
+      }`,
+      variables: { q },
+    },
+    { throwOnErrors: true },
+  )
+  const channels = data.searchFor?.channels
+  if (!channels) throw new Error("twitch gql: 搜索缺少 channels")
+  return (channels.items ?? [])
+    .map((it): TwitchChannelHit | null => {
+      const login = String(it?.login ?? "")
+        .trim()
+        .toLowerCase()
+      if (!login) return null
+      return {
+        login,
+        displayName: String(it?.displayName ?? "").trim() || login,
+        description: String(it?.description ?? "").trim(),
+        followers: Number(it?.followers?.totalCount) || 0,
+      }
+    })
+    .filter((x): x is TwitchChannelHit => !!x)
+}
+
 /**
  * 分区直播(`game(slug)` 下的流列表)。`slug` 由调用方归一(见 utils/twitch.ts 的
  * `normalizeTwitchCategory`),这里只做 JSON 转义,防止拼进查询串。

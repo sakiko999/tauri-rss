@@ -9,6 +9,7 @@
  */
 
 import type { ChannelInfo } from "@amoeba/core"
+import { platformDef } from "@amoeba/platform"
 import { MediaImage } from "@amoeba/ui"
 import { useMemo, useState } from "react"
 
@@ -18,7 +19,7 @@ import { Select } from "../../components/Modal.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
 import { CATALOG_PAGE, catalogView, isSingleton } from "../../lib/channel-catalog.ts"
 import { isImeComposing } from "../../lib/ime.ts"
-import { type Candidate, platformOf, USER_SEARCH_CHANNEL, valueList } from "../../lib/subscriptions.ts"
+import { type Candidate, candidateKey, platformOf, valueList } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { KIND_META } from "../../store/nodes.ts"
 
@@ -39,30 +40,34 @@ export const PLATFORM_ICON: Record<string, string> = {
 
 /** 「搜索添加」面板的入参(全部来自外层表单控制器)。 */
 export interface SearchPanelProps {
-  /** 有「搜用户」渠道的平台(bili/youtube)。 */
-  userSearchPlatforms: string[]
-  channels: ChannelInfo[]
-  platform: string
-  onPickPlatform: (p: string) => void
+  /** 本次搜索覆盖的平台名(静态文案:让用户知道这一个输入会查哪些站)。 */
+  platforms: string[]
   keyword: string
   onKeyword: (v: string) => void
-  searchCh: ChannelInfo | undefined
   onSearch: () => void
   searching: boolean
-  searchItems: { length: number } | null
+  /** 是否已经搜过(区分「还没搜」与「搜了但 0 条」)。 */
+  searched: boolean
   cands: Candidate[]
   candidateValue: string
   onPickCandidate: (c: Candidate) => void
   subscribed: Set<string>
+  /** 没有返回结果的平台(需要登录 / 风控)—— 空结果时也要说清是哪几站。 */
+  failedPlatforms: string[]
 }
 
 /** 候选列表的入参(SearchPanel 与发现页共用)。 */
 export interface CandidateListProps {
   cands: Candidate[]
+  /** 选中态键 = `candidateKey(c)`(跨平台合并时 value 可能撞车)。 */
   candidateValue: string
   onPick: (c: Candidate) => void
+  /** 已订阅的候选键(`candidateKey`)。 */
   subscribed: Set<string>
-  platform: string
+  /** 缩略图兜底平台(候选自带 platform 时以它为准)。 */
+  platform?: string
+  /** 跨平台合并结果:在次行加平台名(单个平台的面板里平台是已知的,不重复说)。 */
+  showPlatform?: boolean
 }
 
 /**
@@ -75,76 +80,69 @@ export function CandidateList(f: CandidateListProps) {
   return (
     <div className="field" {...overlayBlock("candidate-list", "add:candidates")}>
       <div className="cand-list" role="listbox" aria-label="候选项">
-        {f.cands.map((c) => (
-          <button
-            key={c.value}
-            className="cand"
-            role="option"
-            aria-selected={f.candidateValue === c.value}
-            onClick={() => f.onPick(c)}
-          >
-            {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
-            {c.thumb ? (
-              <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
-            ) : (
-              <span className="cand-thumb cand-thumb-plain">
-                <Icon name={PLATFORM_ICON[f.platform] ?? "layers"} size={18} />
-              </span>
-            )}
-            <span className="cand-main">
-              <span className="cand-label od-truncate">{c.label}</span>
-              {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
-              {c.meta.length > 0 ? (
-                <span className="cand-meta">
-                  {c.meta.map((m) => (
-                    <span className="cand-chip" key={m}>
-                      {m}
-                    </span>
-                  ))}
+        {f.cands.map((c) => {
+          const key = candidateKey(c)
+          const plat = c.platform ?? f.platform ?? ""
+          return (
+            <button
+              key={key}
+              className="cand"
+              role="option"
+              aria-selected={f.candidateValue === key}
+              onClick={() => f.onPick(c)}
+            >
+              {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
+              {c.thumb ? (
+                <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
+              ) : (
+                <span className="cand-thumb cand-thumb-plain">
+                  <Icon name={PLATFORM_ICON[plat] ?? "layers"} size={18} />
                 </span>
-              ) : null}
-            </span>
-            {f.subscribed.has(c.value) ? <span className="tag tag-warn chip-tag">已订阅</span> : null}
-            <span className="cand-check">
-              <Icon name="check" size={15} />
-            </span>
-          </button>
-        ))}
+              )}
+              <span className="cand-main">
+                <span className="cand-label od-truncate">{c.label}</span>
+                {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
+                {c.meta.length > 0 || (f.showPlatform && plat) ? (
+                  <span className="cand-meta">
+                    {f.showPlatform && plat ? (
+                      <span className="cand-chip" key="__platform">
+                        {platformDef(plat)?.label ?? plat}
+                      </span>
+                    ) : null}
+                    {c.meta.map((m) => (
+                      <span className="cand-chip" key={m}>
+                        {m}
+                      </span>
+                    ))}
+                  </span>
+                ) : null}
+              </span>
+              {f.subscribed.has(key) ? <span className="tag tag-warn chip-tag">已订阅</span> : null}
+              <span className="cand-check">
+                <Icon name="check" size={15} />
+              </span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )
 }
 
 /**
- * 搜索添加:选平台 → 输关键词调接口 → 点选一个候选。
+ * 统一搜索:一个关键词同时搜所有可用平台(用户搜索 + 主播搜索),点选一个候选。
  *
- * 2026-11-01 起只搜 UP 主 / 频道（`bili:user` / `youtube:user`）：房间关键词
- * 搜索渠道随订阅渠道一起删除（搜房间只适合一次性检索）。
- * 选中后落到该用户/频道的投稿订阅（uid/channelId 单值参数，无「并入已有」）。
+ * 选中后落到候选自带的 `land`(平台 → 用户内容渠道 / 直播渠道),跨平台合并后
+ * 不再按「当前平台」猜落地参数。房间类候选走 roomIds,用户类走 uid/channelId/…
  */
 export function SearchPanel(f: SearchPanelProps) {
+  const hint =
+    f.platforms.length > 0 ? `同时搜索 ${f.platforms.join(" · ")} 的用户与主播。` : "当前没有可用的搜索渠道。"
   return (
     <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("search-panel", "add:search")}>
       <div className="field">
-        <span className="field-label" id="lbl-search-channel">
-          搜索哪个平台
-        </span>
-        <div className="chip-row" role="group" aria-labelledby="lbl-search-channel">
-          {f.userSearchPlatforms.map((p) => {
-            const key = USER_SEARCH_CHANNEL[p]
-            return (
-              <button key={p} className="chip" aria-pressed={f.platform === p} onClick={() => f.onPickPlatform(p)}>
-                <Icon name={PLATFORM_ICON[p] ?? "layers"} size={14} />
-                {f.channels.find((c) => c.key === key)?.name.replace(/搜索$/, "") ?? p}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div className="field">
         <label className="field-label" htmlFor="add-keyword">
-          {f.searchCh?.sourceInfoTpl?.[0]?.label ?? "搜索关键词"}
+          搜索关键词
         </label>
         <div className="input-group">
           <Icon name="search" size={16} />
@@ -153,7 +151,7 @@ export function SearchPanel(f: SearchPanelProps) {
             className="input"
             type="search"
             value={f.keyword}
-            placeholder={f.searchCh?.sourceInfoTpl?.[0]?.placeholder ?? "如:英雄联盟"}
+            placeholder="UP 主 / 主播昵称，或抖音号、用户 ID"
             onChange={(e) => f.onKeyword(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !isImeComposing(e)) f.onSearch()
@@ -163,16 +161,22 @@ export function SearchPanel(f: SearchPanelProps) {
         <div className="inline-row">
           <Button variant="secondary" size="sm" disabled={f.searching || !f.keyword.trim()} onClick={f.onSearch}>
             {f.searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />}{" "}
-            搜索
+            全部搜索
           </Button>
+          <span className="t-micro t-dim">{hint}</span>
         </div>
       </div>
 
-      {f.searchItems !== null && f.cands.length === 0 && !f.searching ? (
+      {f.searched && f.cands.length === 0 && !f.searching ? (
         <p className="t-small t-dim">
-          {f.searchItems.length === 0
-            ? "接口没有返回结果，换个关键词试试。"
-            : "返回的条目里没有可订阅的 UP 主 / 频道。"}
+          {f.failedPlatforms.length > 0
+            ? "没有搜到可订阅的用户或主播。"
+            : "没有搜到可订阅的用户或主播，换个关键词试试。"}
+        </p>
+      ) : null}
+      {f.failedPlatforms.length > 0 ? (
+        <p className="t-small t-dim">
+          {f.failedPlatforms.join("、")} 没有返回结果。需要登录或触发风控时，先到「账号与凭证」处理。
         </p>
       ) : null}
 
@@ -181,7 +185,7 @@ export function SearchPanel(f: SearchPanelProps) {
         candidateValue={f.candidateValue}
         onPick={f.onPickCandidate}
         subscribed={f.subscribed}
-        platform={f.platform}
+        showPlatform
       />
     </div>
   )

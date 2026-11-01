@@ -4,6 +4,7 @@
  * (支持游标翻页)。播放解析在 packages/resolve/platform/twitch。
  */
 export * from "./live.ts"
+export * from "./user-search.ts"
 export * from "./streams.ts"
 export * from "./hot.ts"
 export * from "./category.ts"

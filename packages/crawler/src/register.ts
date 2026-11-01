@@ -52,6 +52,7 @@ import {
   TwitchCategoryChannel,
   TwitchHotChannel,
   TwitchLiveChannel,
+  TwitchUserSearchChannel,
 } from "./channels/twitch/index.ts"
 import { WeiboHotChannel, WeiboUserChannel, WeiboUserSearchChannel } from "./channels/weibo/index.ts"
 import { XhsExploreChannel, XhsUserChannel, XhsUserSearchChannel } from "./channels/xhs/index.ts"
@@ -117,6 +118,8 @@ export function registerBuiltinChannels(): void {
   registerChannel(new TwitchHotChannel())
   registerChannel(new TwitchCategoryChannel())
   registerChannel(TwitchCategoriesChannel)
+  // 搜频道（「搜索添加」的取数源，落地 twitch:live 的 roomIds）。
+  registerChannel(TwitchUserSearchChannel)
 
   // ── huya 直播(纯 HTTP,零签名;单房间 + 热门列表)──
   registerChannel(new HuyaLiveChannel())
@@ -139,7 +142,7 @@ export function registerBuiltinChannels(): void {
   // 用户主页作品：**被动采集**（导航 + 捕获页面自己的 /aweme/post），见 channels/douyin/user.ts。
   registerChannel(new DouyinUserChannel())
   // 用户搜索/查号渠道（「搜索添加」的取数源，不设计为长期订阅）。
-  registerChannel(DouyinUserSearchChannel)
+  registerChannel(new DouyinUserSearchChannel())
   registerChannel(WeiboUserSearchChannel)
   registerChannel(new XhsUserSearchChannel())
 

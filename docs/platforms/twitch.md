@@ -1,7 +1,8 @@
 # Twitch 渠道一期方案（2026-10-20）
 
 > 状态：一期已实现（`twitch:live` / `twitch:hot` / `twitch:category` / `twitch:categories`）；
-> VOD / clip / 聊天 / 关键词搜索未做。调研依据见本文「实测结论」；二期/三期只做边界说明。
+> 2026-11-01 追加 `twitch:user:search`（原始 GQL `searchFor` 匿名搜频道）；
+> VOD / clip / 聊天仍未做。调研依据见本文「实测结论」；二期/三期只做边界说明。
 > 相关：`docs/platforms/channels.md`、`docs/risk/crawler-risk-control.md`。
 
 ## 1. 结论与范围
@@ -18,10 +19,12 @@ Twitch 匿名链路可用：公开 web Client-ID 的 GraphQL → `PlaybackAccess
   （`game(slug).streams`）。
 - 热门/分区共用 `fetchMore` 游标翻页（见 §3.1）。
 - resolver 支持 `https://www.twitch.tv/<login>` 的直播 HLS 解析。
-- 不做：登录、VOD、clip、聊天弹幕、关键词搜索、`passive`（浏览器被动）、cookie 字段。
+- 不做：登录、VOD、clip、聊天弹幕、`passive`（浏览器被动）、cookie 字段。
   （分类榜已做成独立目录订阅 `twitch:categories`，产 `kind:"category"` 条目。）
+- 2026-11-01 追加 `twitch:user:search`：关键词 → `searchFor` → 频道候选，
+  落地 `twitch:live` 的 `roomIds`（统一搜索入口的取数源，不是常驻订阅）。
 
-二期再考虑 VOD/clip（路由要排在频道名之前）、关键词搜索、IRC 聊天
+二期再考虑 VOD/clip（路由要排在频道名之前）、IRC 聊天
 （需宿主 ws 支持 text 帧——当前 `WsLike.send(Uint8Array)` 只发 binary，实测 Twitch 不收）。
 
 ## 2. 实测结论（2026-10-20，匿名）
@@ -244,7 +247,7 @@ XML 且不带 cursor（core 据此判「没有更多」）。Twitch 限额 120 R
 | 阶段 | 内容 |
 | --- | --- |
 | 二期 A | VOD / clip 播放（路由排在频道之前） |
-| 二期 B | 关键词搜索（`twitch:categories` 已完成，见 §3.1） |
+| 二期 B | ~~关键词搜索~~ ✅ 已做（`twitch:user:search`，2026-11-01）；搜直播流（带在播态）待定 |
 | 二期 C | IRC 聊天弹幕（先给宿主 ws 增加 text 帧） |
 | 三期 | OAuth「我的关注」（需注册应用，不建议近期） |
 | 暂不做 | `Client-Integrity` 浏览器兜底、去广告、订阅者专属流 |
