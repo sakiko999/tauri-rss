@@ -12,6 +12,7 @@
 import type { DanmakuItem, DanmakuStream } from "@amoeba/resolve"
 import { useEffect, useRef } from "react"
 
+import type { MediaClock } from "../hooks/mediaClock.ts"
 import { log } from "../log/index.ts"
 
 const FONT = '"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif'
@@ -75,14 +76,14 @@ function mkActive(item: DanmakuItem, ctx: CanvasRenderingContext2D, w: number, l
 
 export function DanmakuLayer({
   danmaku,
-  currentTime,
+  clock,
   live,
   paused,
 }: {
   /** 弹幕流(随 resolve 结果附带,已探测;无弹幕平台不传,不渲染层)。 */
   danmaku?: DanmakuStream
-  /** 播放时间,秒(VOD 窗口发射用)。 */
-  currentTime: number
+  /** 播放时钟(热字段外部 store):VOD 窗口发射按订阅推进,不触发 React 渲染。 */
+  clock: MediaClock
   /** 媒体是否直播(决定暂停冻结:点播暂停弹幕停,直播暂停聊天照收)。 */
   live: boolean
   paused: boolean
@@ -136,38 +137,43 @@ export function DanmakuLayer({
   // 进度条都会命中,表现为「一跳一大波弹幕糊屏」。回跳重置会让未来窗口重新填充(已发
   // 过的靠 spawnedRef 去重,不重发);前跳重置只跳过该段,不炸。
   useEffect(() => {
-    if (pausedRef.current) return
-    const t = currentTime * 1000
-    if (Math.abs(t - lastTRef.current) > SEEK_RESET_MS) {
+    const spawn = () => {
+      if (pausedRef.current) return
+      const t = clock.state.currentTime * 1000
+      if (Math.abs(t - lastTRef.current) > SEEK_RESET_MS) {
+        lastTRef.current = t
+        return
+      }
+      if (t <= lastTRef.current) return
+      // ⚠️ 冷启动补发:首批弹幕晚于 currentTime 到达(视频直链先起播、弹幕网络在途)时,
+      // 开头这批的 timeMs ≤ lastT 会被严格 `>start` 永久滤掉 → 开头一段弹幕缺失。
+      // 触发条件必须**同时**满足:
+      //   - 尚未发射任何条目(spawnedRef.size===0);
+      //   - **确实从头起播**(lastT ≤ 1s)——否则续播/前跳(SEEK_RESET 把 lastT 设为 30s、
+      //     size 仍为 0)会把 999ms~30s 的历史弹幕一次糊屏(即 SEEK_RESET 要防的「一跳一大波」)。
+      const fb = firstBatchRef.current
+      const coldStart = spawnedRef.current.size === 0 && lastTRef.current <= 1000 && fb !== null
+      const start = coldStart && fb !== null ? Math.min(lastTRef.current, fb - 1) : lastTRef.current
       lastTRef.current = t
-      return
-    }
-    if (t <= lastTRef.current) return
-    // ⚠️ 冷启动补发:首批弹幕晚于 currentTime 到达(视频直链先起播、弹幕网络在途)时,
-    // 开头这批的 timeMs ≤ lastT 会被严格 `>start` 永久滤掉 → 开头一段弹幕缺失。
-    // 触发条件必须**同时**满足:
-    //   - 尚未发射任何条目(spawnedRef.size===0);
-    //   - **确实从头起播**(lastT ≤ 1s)——否则续播/前跳(SEEK_RESET 把 lastT 设为 30s、
-    //     size 仍为 0)会把 999ms~30s 的历史弹幕一次糊屏(即 SEEK_RESET 要防的「一跳一大波」)。
-    const fb = firstBatchRef.current
-    const coldStart = spawnedRef.current.size === 0 && lastTRef.current <= 1000 && fb !== null
-    const start = coldStart && fb !== null ? Math.min(lastTRef.current, fb - 1) : lastTRef.current
-    lastTRef.current = t
-    const fresh: DanmakuItem[] = []
-    for (const d of vodPoolRef.current) {
-      if (d.timeMs === undefined) continue
-      // ⚠️ 去重键必须用 `timeMs + 文本`,不能只用 timeMs —— 同一毫秒的多条不同弹幕
-      // (热门视频极常见)会被当成重复,只发一条、其余永久丢弃。
-      const key = `${d.timeMs}|${d.text}`
-      if (d.timeMs > start && d.timeMs <= t + PRE_MS && !spawnedRef.current.has(key)) {
-        spawnedRef.current.add(key)
-        fresh.push(d)
+      const fresh: DanmakuItem[] = []
+      for (const d of vodPoolRef.current) {
+        if (d.timeMs === undefined) continue
+        // ⚠️ 去重键必须用 `timeMs + 文本`,不能只用 timeMs —— 同一毫秒的多条不同弹幕
+        // (热门视频极常见)会被当成重复,只发一条、其余永久丢弃。
+        const key = `${d.timeMs}|${d.text}`
+        if (d.timeMs > start && d.timeMs <= t + PRE_MS && !spawnedRef.current.has(key)) {
+          spawnedRef.current.add(key)
+          fresh.push(d)
+        }
+      }
+      if (fresh.length) {
+        pendingRef.current.push(...fresh)
       }
     }
-    if (fresh.length) {
-      pendingRef.current.push(...fresh)
-    }
-  }, [currentTime])
+    // 订阅外部时钟(4Hz),不经过 React 渲染;挂载即跑一次(暂停时订阅不触发)。
+    spawn()
+    return clock.subscribe(spawn)
+  }, [clock])
 
   // rAF 主循环:同步尺寸/lane → 发射 pending → 推进 active → 绘制。
   useEffect(() => {

@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from "react"
 
 import { WaveformSeek } from "./controls/WaveformSeek.tsx"
+import { useMediaTime } from "./hooks/mediaClock.ts"
 import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"
 import { useVideoElement } from "./hooks/useVideoElement.ts"
 import { ForwardIcon, PauseIcon, PlayIcon, RewindIcon } from "./icons.tsx"
@@ -86,11 +87,11 @@ export function AudioShell({
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null)
   // 媒体错误统一由 useVideoElement 上报（含日志）。
-  const { state, ops } = useVideoElement(mediaRef, false, (code, msg) =>
+  const { state, ops, clock } = useVideoElement(mediaRef, false, (code, msg) =>
     onError?.(new Error(msg || `audio error(code=${code ?? "?"})`)),
   )
   // 键盘与视频页同语义，步长换成原型的 −15 / +30。单击播放不接（控件面不是画面）。
-  useContainerInteractions(shellRef, state, ops, () => {}, { back: 15, forward: 30 })
+  useContainerInteractions(shellRef, state, ops, clock, () => {}, { back: 15, forward: 30 })
 
   const [menu, setMenu] = useState<null | "speed" | "sleep">(null)
   const [sleepMin, setSleepMin] = useState(0)
@@ -116,7 +117,11 @@ export function AudioShell({
     return () => clearInterval(t)
   }, [sleepMin, mediaRef])
 
-  const { currentTime: current, duration, paused, playbackRate: rate } = state
+  // 时间按**整秒**订阅 — 文本只需每秒刷新,不把 4Hz 时间带进渲染。
+  const current = useMediaTime(clock, (s) => Math.floor(s.currentTime), 0)
+  const { duration, paused, playbackRate: rate } = state
+  /** 相对当前时间的跳转 —— 读时钟实时值(整秒快照会丢亚秒精度)。 */
+  const seekBy = (delta: number) => ops.seek(clock.state.currentTime + delta)
 
   // token + 深色回退：见文件头注释。
   const card =
@@ -194,7 +199,7 @@ export function AudioShell({
       <div className="my-[18px] flex items-center justify-center gap-[26px]">
         <button
           type="button"
-          onClick={() => ops.seek(current - 15)}
+          onClick={() => seekBy(-15)}
           aria-label="后退 15 秒"
           className="grid h-12 w-12 place-items-center gap-0 rounded-full border border-[var(--color-border,#2a2b30)] bg-[var(--color-surface-2,#191b21)] text-[var(--color-muted-foreground,#c8c6c0)] transition-colors hover:border-[var(--color-border-strong,#3a3b42)] hover:text-[var(--color-foreground,#e8e6e1)]"
         >
@@ -215,7 +220,7 @@ export function AudioShell({
         </button>
         <button
           type="button"
-          onClick={() => ops.seek(current + 30)}
+          onClick={() => seekBy(30)}
           aria-label="前进 30 秒"
           className="grid h-12 w-12 place-items-center gap-0 rounded-full border border-[var(--color-border,#2a2b30)] bg-[var(--color-surface-2,#191b21)] text-[var(--color-muted-foreground,#c8c6c0)] transition-colors hover:border-[var(--color-border-strong,#3a3b42)] hover:text-[var(--color-foreground,#e8e6e1)]"
         >

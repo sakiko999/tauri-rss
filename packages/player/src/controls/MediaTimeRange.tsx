@@ -14,6 +14,8 @@
 
 import { useCallback, useRef, useState } from "react"
 
+import type { MediaClock } from "../hooks/mediaClock.ts"
+import { useMediaTime } from "../hooks/mediaClock.ts"
 import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 import { playableDuration } from "../utils/buffer.ts"
 import { formatTime } from "../utils/time.ts"
@@ -21,14 +23,18 @@ import { formatTime } from "../utils/time.ts"
 const STEP_SEC = 5
 const PAGE_RATIO = 0.1
 
-export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: VideoOps }) {
+export function MediaTimeRange({ state, ops, clock }: { state: VideoPlayState; ops: VideoOps; clock: MediaClock }) {
   const [hoverPct, setHoverPct] = useState<number | null>(null)
   const [dragging, setDragging] = useState(false)
   const trackRef = useRef<HTMLDivElement | null>(null)
 
-  const duration = playableDuration(state)
-  const pct = duration > 0 ? Math.min(100, (state.currentTime / duration) * 100) : 0
-  const bufferPct = duration > 0 ? Math.min(100, (state.bufferedEnd / duration) * 100) : 0
+  // 进度条是唯一随 4Hz 重渲的叶子(B 站同款实时滑动);其余控件按原始值切片订阅。
+  const currentTime = useMediaTime(clock, (s) => s.currentTime, 0)
+  const bufferedEnd = useMediaTime(clock, (s) => s.bufferedEnd, 0)
+
+  const duration = playableDuration({ live: state.live, bufferedEnd, duration: state.duration })
+  const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0
+  const bufferPct = duration > 0 ? Math.min(100, (bufferedEnd / duration) * 100) : 0
 
   /** clientX → 进度百分比 0..100。悬停线/tooltip 直接用;seek 换算时 /100。 */
   const pctFromEvent = useCallback((clientX: number) => {
@@ -42,10 +48,12 @@ export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: Vid
   const seekFromEvent = useCallback(
     (clientX: number) => {
       const p = pctFromEvent(clientX)
-      const t = (p / 100) * playableDuration(state)
+      const t =
+        (p / 100) *
+        playableDuration({ live: state.live, bufferedEnd: clock.state.bufferedEnd, duration: state.duration })
       ops.seek(t)
     },
-    [pctFromEvent, ops, state.live, state.bufferedEnd, state.duration],
+    [pctFromEvent, ops, state.live, state.duration, clock],
   )
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -79,10 +87,10 @@ export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: Vid
     let next: number | null = null
     switch (e.key) {
       case "ArrowLeft":
-        next = state.currentTime - STEP_SEC
+        next = currentTime - STEP_SEC
         break
       case "ArrowRight":
-        next = state.currentTime + STEP_SEC
+        next = currentTime + STEP_SEC
         break
       case "Home":
         next = 0
@@ -91,10 +99,10 @@ export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: Vid
         next = duration
         break
       case "PageDown":
-        next = state.currentTime - PAGE_RATIO * duration
+        next = currentTime - PAGE_RATIO * duration
         break
       case "PageUp":
-        next = state.currentTime + PAGE_RATIO * duration
+        next = currentTime + PAGE_RATIO * duration
         break
       default:
         return
@@ -113,8 +121,8 @@ export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: Vid
       aria-label="播放进度"
       aria-valuemin={0}
       aria-valuemax={Math.round(duration)}
-      aria-valuenow={Math.round(state.currentTime)}
-      aria-valuetext={formatTime(state.currentTime)}
+      aria-valuenow={Math.round(currentTime)}
+      aria-valuetext={formatTime(currentTime)}
       aria-disabled={state.live}
       className="group relative flex h-5 w-full cursor-pointer touch-none items-center outline-none"
       onPointerDown={handlePointerDown}

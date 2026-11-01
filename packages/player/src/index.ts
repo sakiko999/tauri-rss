@@ -17,7 +17,17 @@ export {
   isStreamingStream,
 } from "./hooks/useStreamSelection.ts"
 export { useVideoElement, bindFullscreen } from "./hooks/useVideoElement.ts"
-export type { VideoPlayState, VideoOps, FullscreenApi, BufferedRange } from "./hooks/useVideoElement.ts"
+export type { VideoPlayState, VideoOps, FullscreenApi } from "./hooks/useVideoElement.ts"
+export { createMediaClock, useMediaTime } from "./hooks/mediaClock.ts"
+export type { MediaClock, MediaClockState } from "./hooks/mediaClock.ts"
+export { loadPlayerPrefs, savePlayerPrefs, applyPlayerPrefs } from "./prefs.ts"
+export type { PlayerPrefs } from "./prefs.ts"
+export {
+  getPlayerContainer,
+  setPlayerContainer,
+  usePlayerContainer,
+  PlayerContainerProvider,
+} from "./ui/PlayerContainer.tsx"
 export { VideoShell } from "./VideoShell.tsx"
 export { DanmakuLayer } from "./danmaku/DanmakuLayer.tsx"
 export { AudioShell } from "./AudioShell.tsx"

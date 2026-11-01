@@ -8,6 +8,7 @@
 import { useState } from "react"
 
 import { PlayerMenu, PlayerMenuItem } from "../ui/Menu.tsx"
+import { usePlayerContainer } from "../ui/PlayerContainer.tsx"
 
 export function MediaQualityButton({
   qualityOptions,
@@ -25,12 +26,14 @@ export function MediaQualityButton({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  // 显式 container 优先;否则用播放器容器上下文(全屏内菜单可见,见 PlayerContainer.tsx)。
+  const ctxContainer = usePlayerContainer()
   if (qualityOptions.length < 2) return null
   return (
     <PlayerMenu
       open={open}
       onOpenChange={setOpen}
-      container={container}
+      container={container ?? ctxContainer}
       trigger={
         <button type="button" aria-label="清晰度" className={className}>
           {qualityOptions.find((q) => q.rate === activeQuality)?.quality ?? "清晰度"}

@@ -8,25 +8,32 @@
  * `mode` 由控件栏显式给(宿主知道条目 kind);不给时回退到运行时判定。
  */
 
+import type { MediaClock } from "../hooks/mediaClock.ts"
+import { useMediaTime } from "../hooks/mediaClock.ts"
 import type { VideoPlayState } from "../hooks/useVideoElement.ts"
 import { formatTime } from "../utils/time.ts"
 
 export function MediaTimeDisplay({
   state,
+  clock,
   mode,
   className = "shrink-0 px-1.5 text-xs text-white/80 tabular-nums",
 }: {
   state: VideoPlayState
+  clock: MediaClock
   mode?: "video" | "live"
   className?: string
 }) {
+  // 只订阅**格式化后的字符串**:时间文本按秒变化,组件每秒最多重渲一次
+  // (原始 currentTime 是 4Hz —— P0b-1)。
+  const current = useMediaTime(clock, (s) => formatTime(s.currentTime), "00:00")
   const live = mode === "live" || (mode === undefined && state.live)
   if (live) {
-    return <span className={className}>{formatTime(state.currentTime)}</span>
+    return <span className={className}>{current}</span>
   }
   return (
     <span className={className}>
-      {formatTime(state.currentTime)}
+      {current}
       <span className="text-white/50"> / {formatTime(state.duration)}</span>
     </span>
   )

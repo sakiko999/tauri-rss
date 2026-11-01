@@ -29,6 +29,7 @@ import {
   MediaVolumeSlider,
 } from "./controls/index.ts"
 import type { DanmakuControl } from "./controls/index.ts"
+import type { MediaClock } from "./hooks/mediaClock.ts"
 import type { FullscreenApi, VideoOps, VideoPlayState } from "./hooks/useVideoElement.ts"
 import { TheaterIconButton } from "./theater.tsx"
 
@@ -40,6 +41,7 @@ const ICON_BTN = "flex h-[22px] w-9 shrink-0 items-center justify-center text-wh
 export function PlayerControls({
   state,
   ops,
+  clock,
   fullscreen,
   qualityOptions,
   activeQuality,
@@ -51,6 +53,8 @@ export function PlayerControls({
 }: {
   state: VideoPlayState
   ops: VideoOps
+  /** 播放时钟(热字段外部 store):进度/时间控件各自按值订阅。 */
+  clock: MediaClock
   fullscreen: FullscreenApi
   /** 多档位列表(rate + quality);长度 < 2 时档位按钮不渲染。 */
   qualityOptions: { rate: number; quality: string }[]
@@ -70,8 +74,8 @@ export function PlayerControls({
     <div className="flex flex-col bg-linear-to-t from-black/80 via-black/40 to-transparent pt-2 pb-0.5 text-white">
       {/* 进度行(直播:缓冲指示 + 「回直播」) */}
       <div className="flex items-center gap-3 px-3">
-        <MediaLiveEdgeButton state={state} ops={ops} />
-        <MediaTimeRange state={state} ops={ops} />
+        <MediaLiveEdgeButton state={state} ops={ops} clock={clock} />
+        <MediaTimeRange state={state} ops={ops} clock={clock} />
       </div>
 
       {/* 控件行:35px / 12px 边距 / 无分隔线(B 站实测) */}
@@ -81,10 +85,10 @@ export function PlayerControls({
           <>
             {/* 直播:B 站把音量放在左侧,时间 = 已播 hh:mm:ss */}
             <MediaVolumeSlider state={state} ops={ops} />
-            <MediaTimeDisplay state={state} mode="live" />
+            <MediaTimeDisplay state={state} clock={clock} mode="live" />
           </>
         ) : (
-          <MediaTimeDisplay state={state} mode="video" />
+          <MediaTimeDisplay state={state} clock={clock} mode="video" />
         )}
 
         <div className="flex-1" />

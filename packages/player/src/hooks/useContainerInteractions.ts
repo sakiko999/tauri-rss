@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useRef } from "react"
 
+import type { MediaClock } from "./mediaClock.ts"
 import type { VideoOps, VideoPlayState } from "./useVideoElement.ts"
 
 /** 键盘应忽略的焦点目标(输入/按钮/slider 自带键盘交互)。 */
@@ -23,6 +24,7 @@ export function useContainerInteractions(
   containerRef: React.RefObject<HTMLDivElement | null>,
   state: VideoPlayState,
   ops: VideoOps,
+  clock: MediaClock,
   fullscreenToggle: () => void,
   /** ←/→ 的步长(秒)。音频页按原型用 −15 / +30,视频页保持 ±5。 */
   seekSteps: { back: number; forward: number } = { back: 5, forward: 5 },
@@ -47,14 +49,15 @@ export function useContainerInteractions(
       if (e.altKey || e.ctrlKey || e.metaKey) return
       const s = stateRef.current
       const o = opsRef.current
+      const now = clock.state.currentTime
       const k = e.key.toLowerCase()
       const handled =
         e.key === " " || k === "k"
           ? (o.togglePlay(), true)
           : e.key === "ArrowLeft"
-            ? (o.seek(s.currentTime - stepsRef.current.back), true)
+            ? (o.seek(now - stepsRef.current.back), true)
             : e.key === "ArrowRight"
-              ? (o.seek(s.currentTime + stepsRef.current.forward), true)
+              ? (o.seek(now + stepsRef.current.forward), true)
               : e.key === "ArrowUp"
                 ? (o.changeVolume(s.volume + 0.1), true)
                 : e.key === "ArrowDown"
@@ -66,7 +69,7 @@ export function useContainerInteractions(
                       : e.key === "Home"
                         ? (o.seek(0), true)
                         : e.key === "End"
-                          ? (o.seek(s.live ? s.bufferedEnd : s.duration), true)
+                          ? (o.seek(s.live ? clock.state.bufferedEnd : s.duration), true)
                           : /^[0-9]$/.test(e.key) && !s.live
                             ? (o.seek((s.duration / 10) * Number(e.key)), true)
                             : false
@@ -74,7 +77,7 @@ export function useContainerInteractions(
     }
     el.addEventListener("keydown", onKeyDown)
     return () => el.removeEventListener("keydown", onKeyDown)
-  }, [containerRef])
+  }, [containerRef, clock])
 
   // 点击容器(含视频画面)时聚焦,让键盘可用。不抢控件按钮焦点(按钮聚焦后空格=击键)。
   useEffect(() => {

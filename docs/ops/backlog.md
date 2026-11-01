@@ -36,14 +36,16 @@
       Skeleton/Avatar/SectionHeader/CardShell。→ `docs/ui/design-system-plan.md`（F1/F2 已完成）
 - [ ] **F4 守卫与验收工具**：`ui-probe` 增加「全屏浮层可见」「模式切换」探针；可选 `/dev/ui` 陈列页。
 - [ ] **F5 文案与语义修正**：分段控件 tablist/aria-pressed；播放器 chrome `title` → Tooltip。
-- [ ] **播放器 P0a 地基**：`VideoShell` 插槽、`player/ui` 原语 + `getPlayerContainer()`、
-      `PlayerPrefs`、WebView2 能力 spike（PiP / MediaSession / HEVC / 全屏 API）。
-      → `docs/playback/player-parity-plan.md`
-      （feat/player-parity 分支已先行：菜单容器化（P0a-2 局部）、B 站视觉对齐、
-      直播/点播模式分流、统计面板重做、`scripts/player-dryrun.ts` 流稳定性探针）
-- [ ] **播放器 P0b**：媒体状态外置（取消 4Hz 全树重渲）、会话拆分、播放模式状态机
-      （theater 已收编 session store）。
-      （框架评估结论：保持 React，见 player-parity-plan.md「框架评估」节）
+- [x] **播放器 P0a 地基**（feat/player-parity，2026-11-01）：`VideoShell` 插槽
+      （topBar/overlay/controls）+ PlayOverlay/VideoContextMenu 抽出；`player/ui` 首批原语 +
+      `PlayerContainer`（`getPlayerContainer()`/context）；`PlayerPrefs`（音量/静音/倍速持久化）；
+      WebView2 能力 spike 实测入档（PiP/MediaSession/HEVC/AV1 均可用）。
+      剩余：设置面板/OSD 等 P1 原语随功能落地。
+- [x] **播放器 P0b-1 媒体状态外置**：`mediaClock` 外部 store，4Hz 时间不再进 React state；
+      控件按原始值切片订阅（VideoShell 不再整树重渲）。
+- [ ] **播放器 P0b 剩余**：`PlayableMedia` 会话拆分（解析/播放/控制器三 hook）、
+      完整播放模式状态机（normal/wide/web/full/mini 枚举；目前 theater + 全屏 + Esc 分层）。
+      框架评估结论：保持 React，见 player-parity-plan.md「框架评估」节。
 - [ ] 其余 Radix 原语**随首个真实调用方落地**（Slider/Tooltip/ContextMenu/Popover 随 P0a；
       ToggleGroup/Tabs 随 F5），不预造空壳。
 

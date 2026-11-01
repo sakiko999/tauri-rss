@@ -1,37 +1,34 @@
 /**
  * useVideoElement —— 同步 <video> 播放状态 + 暴露统一操作。
  *
- * 覆盖原生 <video>(mp4/hls/flv/dash 的 DOM 层)。控件层(SeekBar/PlayerControls/
- * VideoShell)只读这里的 state + 调这里的操作,不直接碰 media 元素:
- *   - state: paused / currentTime / duration / buffered / volume / muted / playbackRate
- *            waiting(缓冲中) / ended / live(直播流无 duration)
- *   - ops: togglePlay / seek / changeVolume / toggleMute / changeRate / setLiveEdge
+ * 覆盖原生 <video>/<audio>(mp4/hls/flv/dash 的 DOM 层)。控件层只读这里的
+ * state/clock + 调这里的操作,不直接碰媒体元素:
+ *   - state(冷字段,React state):paused / duration / volume / muted / playbackRate /
+ *     waiting / ended / started / live;
+ *   - clock(热字段,外部 store,见 mediaClock.ts):currentTime / bufferedEnd ——
+ *     timeupdate ~4Hz,若写进 React state 会让整个播放器树每秒重渲 4 次(P0b-1)。
+ *     消费方用 `useMediaTime(clock, selector)` 按原始值切片订阅;
+ *   - ops:togglePlay / seek / changeVolume / toggleMute / changeRate / setLiveEdge。
  *
  * 关键设计:
- *   - 监听 timeupdate(4Hz)/durationchange/progress(缓冲)/volumechange/ratechange/
- *     waiting/playing/play/pause/ended 等媒体事件,setState 驱动 React 渲染。
+ *   - 事件分流:timeupdate/progress 只写 clock(不 setState);其余事件写冷 state。
  *   - buffered 用 timeRanges 末尾一段(对渐进式/HLS/DASH 都是「已缓冲最近点」)。
  *   - 直播判定:流媒体 `!isFinite(duration)` 或 duration === 0 视为 live;
  *     非流媒体(原生 mp4/audio)用 `duration !== Infinity` 区分(VOD),无限时长视为 live。
+ *   - **播放偏好**(音量/静音/倍速)全局持久化(PlayerPrefs):挂载时应用,媒体事件
+ *     变化时保存 —— 换条目不重置(P0a-3)。
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { log } from "../log/index.ts"
-import { playableDuration } from "../utils/buffer.ts"
-
-export interface BufferedRange {
-  start: number
-  end: number
-}
+import { applyPlayerPrefs, loadPlayerPrefs, savePlayerPrefs } from "../prefs.ts"
+import { createMediaClock, type MediaClock } from "./mediaClock.ts"
 
 export interface VideoPlayState {
   paused: boolean
   ended: boolean
-  currentTime: number
   duration: number
-  buffered: BufferedRange[]
-  bufferedEnd: number
   volume: number
   muted: boolean
   playbackRate: number
@@ -60,10 +57,7 @@ export interface FullscreenApi {
 const INITIAL: VideoPlayState = {
   paused: true,
   ended: false,
-  currentTime: 0,
   duration: 0,
-  buffered: [],
-  bufferedEnd: 0,
   volume: 1,
   muted: false,
   playbackRate: 1,
@@ -72,12 +66,28 @@ const INITIAL: VideoPlayState = {
   live: false,
 }
 
+/** 读已缓冲区间的最远点(无 buffered 信息 → 0)。 */
+function readBufferedEnd(el: HTMLMediaElement): number {
+  const tr = el.buffered
+  if (!tr || tr.length === 0) return 0
+  let end = 0
+  for (let i = 0; i < tr.length; i++) {
+    const e = tr.end(i)
+    if (e > end) end = e
+  }
+  return end
+}
+
 export function useVideoElement(
   videoRef: React.RefObject<HTMLMediaElement | null>,
   isStreaming: boolean,
   onMediaError?: (code: number | undefined, msg: string) => void,
-): { state: VideoPlayState; ops: VideoOps } {
+): { state: VideoPlayState; ops: VideoOps; clock: MediaClock } {
   const [state, setState] = useState<VideoPlayState>(INITIAL)
+  // 热字段外部 store(跨重渲稳定;不触发本组件渲染)。
+  const clockRef = useRef<MediaClock | null>(null)
+  if (!clockRef.current) clockRef.current = createMediaClock()
+  const clock = clockRef.current
 
   // onMediaError 用 ref 持最新(与 onErrorRef 同模式):父组件每次渲染传新函数,
   // 但监听 effect 不该因它重跑。
@@ -88,47 +98,57 @@ export function useVideoElement(
     const video = videoRef.current
     if (!video) return
 
-    const read = () => {
+    // 播放偏好(volume/muted/rate)应用一次 —— 换条目不重置。
+    applyPlayerPrefs(video)
+    /** 点播倍速要等元数据(时长)到位才能确认不是直播;每个元素只应用一次偏好。 */
+    let ratePrefApplied = false
+
+    /** 写热字段(时间/缓冲),不触发 React 渲染。 */
+    const readClock = () => {
+      const el = videoRef.current
+      if (!el) return
+      clock.update(el.currentTime, readBufferedEnd(el))
+    }
+
+    /** 写冷字段(低频事件;timeupdate 不调它)。 */
+    const readCold = () => {
       const el = videoRef.current
       if (!el) return
       // duration 在直播流(hls/flv/dash)下是 Infinity / NaN;原生 mp4 是有限秒数。
-      // ⚠️ `Number.isFinite` 已把 Infinity/NaN 归 0 —— 故 `dur === Infinity` 恒假(死分支),
-      // 非流媒体的「无限时长=直播」本义应为 `dur <= 0`。
       const dur = Number.isFinite(el.duration) ? el.duration : 0
-      const live = dur <= 0
-      const tr = el.buffered
-      const buffered: BufferedRange[] = []
-      let bufferedEnd = 0
-      if (tr && tr.length > 0) {
-        for (let i = 0; i < tr.length; i++) {
-          const start = tr.start(i)
-          const end = tr.end(i)
-          buffered.push({ start, end })
-          if (end > bufferedEnd) bufferedEnd = end
-        }
-      }
       setState((prev) => ({
         paused: el.paused,
         ended: el.ended,
-        currentTime: el.currentTime,
         duration: dur,
-        buffered,
-        bufferedEnd,
         volume: el.volume,
         muted: el.muted,
         playbackRate: el.playbackRate,
-        waiting: prev.waiting, // 由 waiting/playing 事件精确控制,timeupdate 不改动
-        started: prev.started, // 由 play/playing 事件置位,timeupdate 不改动
-        live,
+        waiting: prev.waiting, // 由 waiting/playing 事件精确控制
+        started: prev.started, // 由 play/playing 事件置位
+        live: dur <= 0,
       }))
     }
 
-    // 事件源:驱动 state 更新的高频/低频媒体事件。
-    const onTimeUpdate = () => read()
-    const onDurationChange = () => read()
-    const onProgress = () => read() // 缓冲推进:更新 buffered 段
-    const onVolumeChange = () => read()
-    const onRateChange = () => read()
+    const onTimeUpdate = () => readClock()
+    const onProgress = () => readClock()
+    const onDurationChange = () => {
+      readCold()
+      readClock()
+      // 首次确认有限时长(点播)→ 应用偏好倍速(直播恒 1×,不应用)。
+      if (!ratePrefApplied && Number.isFinite(video.duration) && video.duration > 0) {
+        ratePrefApplied = true
+        const rate = loadPlayerPrefs().rate
+        if (rate !== 1) {
+          try {
+            video.playbackRate = rate
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
+    const onVolumeChange = () => readCold()
+    const onRateChange = () => readCold()
     const onPlay = () => {
       log.play()
       setState((p) => ({ ...p, paused: false, ended: false, started: true }))
@@ -164,7 +184,6 @@ export function useVideoElement(
     video.addEventListener("canplay", onCanPlay)
     // 原生 video 加载失败(403/网络断/格式不支持)的最终信号——流媒体引擎错误
     // 走 useMediaStream 的 report;原生 mp4/audio 只能靠这里(媒体错误码)。
-    // 打日志 + 上报 onMediaError,让 PlayableMedia 能弹 playError UI/重试。
     const onError = () => {
       const el = videoRef.current
       const code = el?.error?.code
@@ -175,7 +194,8 @@ export function useVideoElement(
     video.addEventListener("error", onError)
 
     // 初始读取一次(已有元数据 / 直播自动起播)。
-    read()
+    readCold()
+    readClock()
 
     return () => {
       video.removeEventListener("timeupdate", onTimeUpdate)
@@ -191,7 +211,7 @@ export function useVideoElement(
       video.removeEventListener("canplay", onCanPlay)
       video.removeEventListener("error", onError)
     }
-  }, [videoRef, isStreaming])
+  }, [videoRef, isStreaming, clock])
 
   const togglePlay = useCallback(() => {
     const el = videoRef.current
@@ -208,8 +228,9 @@ export function useVideoElement(
     (time: number) => {
       const el = videoRef.current
       if (!el) return
+      const dur = Number.isFinite(el.duration) ? el.duration : 0
       // 直播:seek 到已缓冲区间内(短延迟 DVR);越界 clamp 到 bufferedEnd。
-      const max = playableDuration(state)
+      const max = dur > 0 ? dur : clock.state.bufferedEnd
       const target = Math.max(0, Math.min(time, max))
       try {
         el.currentTime = target
@@ -217,7 +238,7 @@ export function useVideoElement(
         // 个别状态(未加载完)抛 InvalidStateError,忽略。
       }
     },
-    [videoRef, state.live, state.bufferedEnd, state.duration],
+    [videoRef, clock],
   )
 
   const changeVolume = useCallback(
@@ -227,6 +248,7 @@ export function useVideoElement(
       const v = Math.max(0, Math.min(1, volume))
       el.volume = v
       if (v > 0 && el.muted) el.muted = false
+      savePlayerPrefs({ volume: v, muted: el.muted })
     },
     [videoRef],
   )
@@ -235,6 +257,7 @@ export function useVideoElement(
     const el = videoRef.current
     if (!el) return
     el.muted = !el.muted
+    savePlayerPrefs({ muted: el.muted })
   }, [videoRef])
 
   const changeRate = useCallback(
@@ -243,6 +266,7 @@ export function useVideoElement(
       if (!el) return
       try {
         el.playbackRate = rate
+        if (Number.isFinite(el.duration) && el.duration > 0) savePlayerPrefs({ rate })
       } catch {
         // 某些 webview 不支持自定义倍速,忽略。
       }
@@ -253,7 +277,7 @@ export function useVideoElement(
   const setLiveEdge = useCallback(() => {
     const el = videoRef.current
     if (!el) return
-    const end = playableDuration(state)
+    const end = clock.state.bufferedEnd
     if (end > 0) {
       try {
         el.currentTime = end
@@ -261,9 +285,9 @@ export function useVideoElement(
         // ignore
       }
     }
-  }, [videoRef, state.live, state.bufferedEnd, state.duration])
+  }, [videoRef, clock])
 
-  return { state, ops: { togglePlay, seek, changeVolume, toggleMute, changeRate, setLiveEdge } }
+  return { state, ops: { togglePlay, seek, changeVolume, toggleMute, changeRate, setLiveEdge }, clock }
 }
 
 /** 把文档全屏切换能力绑定到容器元素(fullscreenchange 同步 isFullscreen)。 */

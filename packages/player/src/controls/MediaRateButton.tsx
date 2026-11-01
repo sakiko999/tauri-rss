@@ -9,6 +9,7 @@ import { useState } from "react"
 
 import type { VideoOps, VideoPlayState } from "../hooks/useVideoElement.ts"
 import { PlayerMenu, PlayerMenuItem } from "../ui/Menu.tsx"
+import { usePlayerContainer } from "../ui/PlayerContainer.tsx"
 
 export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
@@ -25,13 +26,15 @@ export function MediaRateButton({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  // 显式 container 优先;否则用播放器容器上下文(全屏内菜单可见)。
+  const ctxContainer = usePlayerContainer()
   // 直播没有倍速
   if (state.live) return null
   return (
     <PlayerMenu
       open={open}
       onOpenChange={setOpen}
-      container={container}
+      container={container ?? ctxContainer}
       trigger={
         // B 站倍速按钮文案恒为「倍速」(不显示当前速率值)。
         <button type="button" aria-label="播放倍速" className={className}>

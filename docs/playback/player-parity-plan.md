@@ -16,10 +16,12 @@
 自动下一条、Canvas 弹幕（mode 1-5）、B 站章节、统计信息；直播/点播模式显式分流
 （`mode` prop，宿主按条目 kind 给，不等媒体元数据）。
 
-结构性阻碍（剩余）：`useVideoElement` 4Hz 全树重渲（P0b-1 解）；`PlayableMedia`
-8 个 early-return 分支；Audio/Video 两套不对称会话；`player/ui` 原语与 token 未建。
-（Radix Portal 挂 body 导致全屏菜单不可见 —— 已修：`PlayerMenu` 收 `container`，
-`VideoShell` 贯通播放器容器。）
+结构性阻碍（剩余）：`PlayableMedia` 8 个 early-return 分支（P0b-2 拆会话/解析/控制器）；
+Audio/Video 两套不对称会话；`player/ui` 原语与 token 仅首批（PlayOverlay/
+VideoContextMenu/PlayerContainer），设置面板/OSD 等 P1 原语未建。
+
+已解：4Hz 全树重渲（P0b-1，时间进外部 store）；全屏菜单不可见（Radix Portal 进
+播放器容器）；播放偏好不持久（P0a-3）；VideoShell 写死控件（P0a-1 插槽）。
 
 ## 已落地（feat/player-parity 分支，2026-11-01）
 
@@ -41,6 +43,37 @@
   会话起算）、播放位置、码率/编解码器（dash.js 不上报时从 MPD 摘要兜底）、缓冲健康。
 - **`scripts/player-dryrun.ts`**：媒体流稳定性探针（只跑 HTTP 记录，不跑播放器；
   DASH init 段 / HLS 清单+分片 / FLV 直链，TTFB 多轮抖动，`--json` 落盘）。
+
+### P0a/P0b 结构性落地（2026-11-01 同分支追加）
+
+- **P0b-1 媒体状态外置**：`hooks/mediaClock.ts`（外部 store）+ `useMediaTime(clock, selector)`。
+  `timeupdate/progress` 只写时钟、不 setState；消费方按**原始值**切片订阅
+  （时间文本按秒、进度条 4Hz、live-edge 按差值、弹幕层在订阅回调里推进）。
+  VideoShell/PlayerControls 不再随 4Hz 重渲。`VideoPlayState` 只剩冷字段
+  （注意：`BufferedRange` 导出已移除，`currentTime/bufferedEnd` 改走 clock）。
+- **P0a-3 PlayerPrefs**：`prefs.ts`（localStorage，不进 core schema）——音量/静音/倍速
+  跨条目、视频⇄播客保持；只记用户意图（ops 里保存），autoplay 静音降级不写入。
+- **P0a-1 插槽 + 组件抽出**：`VideoShell` 增 `slots.{topBar,overlay,controls}`；
+  大播放键抽出 `ui/PlayOverlay.tsx`、右键菜单抽出 `ui/VideoContextMenu.tsx`。
+- **P0a-2 浮层容器收口**：`ui/PlayerContainer.tsx`（Provider + `usePlayerContainer` +
+  非 React 路径的 `getPlayerContainer/setPlayerContainer`）；清晰度/倍速菜单未显式
+  传 `container` 时自动挂播放器容器。
+- **P0b-3（部分）**：Esc 分层——第一下只关浮层（统计/右键菜单，preventDefault
+  防退全屏），第二下才由浏览器退全屏；theater 已在会话 store。
+- **P0a-4 WebView2 能力 spike（实测 WebView2 Edg/156，dev 实例内 eval）**：
+
+  | 能力 | 结果 | 结论 |
+  | --- | --- | --- |
+  | 画中画 PiP | `pictureInPictureEnabled=true`，`requestPictureInPicture` 存在 | P3 可做 |
+  | MediaSession | `navigator.mediaSession` + `MediaMetadata` 可用 | 系统媒体键/锁屏信息可做 |
+  | 全屏 API | `document.fullscreenEnabled` + 元素 requestFullscreen | 现方案成立 |
+  | H.264 / AAC | canPlayType=probably，MSE 支持 | 主路径 |
+  | HEVC (hvc1/hev1) | probably，MSE 支持 | 依赖系统 HEVC 扩展；需真机播放矩阵确认 |
+  | AV1 | probably，MSE 支持 | 可用；机型解码能力不一 |
+  | VP9 | probably | 可用 |
+
+  ⚠️ `canPlayType` 的 "probably" 只代表容器/编解码字符串被识别，**不等于硬件解码**；
+  实际可播性以 `ui-play-check` 真播矩阵为准。
 
 ## 框架评估：保持 React（2026-11-01）
 
