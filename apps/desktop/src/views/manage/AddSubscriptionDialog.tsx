@@ -24,13 +24,17 @@ import {
   candidateKey,
   candidatesFromSearch,
   candidatesFromUsers,
+  type CandidateTarget,
   isManualEntryOnly,
+  mergeCandidates,
   mergeValues,
   multiParamOf,
   searchSources,
   splitValues,
   subsHolding,
   subsOfChannel,
+  TARGET_LABEL,
+  targetKey,
   valueList,
 } from "../../lib/subscriptions.ts"
 import { useLatestOnly } from "../../lib/useLatestOnly.ts"
@@ -76,6 +80,8 @@ export function AddSubscriptionDialog({
   const [searching, setSearching] = useState(false)
   /** 搜索模式:选中的候选键(`candidateKey`;'' = 未选,提交按钮禁用)。 */
   const [candidateValue, setCandidateValue] = useState("")
+  /** 选中候选后「添加为」哪个目标(直播间 / 用户主页);换候选时归零。 */
+  const [targetIndex, setTargetIndex] = useState(0)
   /** 手工模式：列表型参数(roomIds)可并入已有订阅。 */
   const [manualTargetId, setManualTargetId] = useState("new")
   const [title, setTitle] = useState("")
@@ -116,19 +122,30 @@ export function AddSubscriptionDialog({
   /** 当前是否处于搜索添加(有搜索源,且用户没切到手工)。 */
   const searchMode = mode === "search" && (sources.length > 0 || !!presetKey)
 
-  /** 选中的候选(候选自带 `land`:落地渠道 + 参数)。 */
+  /** 选中的候选(候选自带多个可落地目标)。 */
   const selectedCand = cands.find((c) => candidateKey(c) === candidateValue)
-  /** 落地订阅的渠道(搜索模式 = 候选自带的;手工模式 = 选中的渠道)。 */
-  const landChannel = searchMode ? channels.find((c) => c.key === selectedCand?.land?.channelKey) : channel
-  /** 已订阅过的候选键(重复添加会得到两条相同订阅,先标出来)。 */
-  const subscribed = useMemo(() => {
+  /** 当前选中的落地点(「添加为」);越界时回落首项。 */
+  const selectedTarget: CandidateTarget | undefined = selectedCand?.targets[targetIndex] ?? selectedCand?.targets[0]
+  /** 落地订阅的渠道(搜索模式 = 选中目标;手工模式 = 选中的渠道)。 */
+  const landChannel = searchMode ? channels.find((c) => c.key === selectedTarget?.channelKey) : channel
+  /** 每个落地点的「已订阅」状态(同一候选的直播间/主页可能只有一个已订)。 */
+  const subscribedTargets = useMemo(() => {
     const s = new Set<string>()
     for (const c of cands) {
-      if (!c.land) continue
-      if (subsHolding(subscriptions, c.land.channelKey, c.land.param, c.value).length) s.add(candidateKey(c))
+      for (const t of c.targets) {
+        if (subsHolding(subscriptions, t.channelKey, t.param, t.value).length) s.add(targetKey(t))
+      }
     }
     return s
   }, [cands, subscriptions])
+  /** 候选是否至少有一个目标已订阅(列表行的「已订阅」标记)。 */
+  const subscribed = useMemo(() => {
+    const s = new Set<string>()
+    for (const c of cands) {
+      if (c.targets.some((t) => subscribedTargets.has(targetKey(t)))) s.add(candidateKey(c))
+    }
+    return s
+  }, [cands, subscribedTargets])
 
   useEffect(() => {
     if (!open) return
@@ -139,6 +156,7 @@ export function AddSubscriptionDialog({
     setGroupId("")
     setTtl("")
     setCandidateValue("")
+    setTargetIndex(0)
     setManualTargetId("new")
     // 带预置渠道(发现页「订阅该分区」)→ 直接进手工模式,预填参数。
     setMode(presetKey ? "manual" : "search")
@@ -178,6 +196,7 @@ export function AddSubscriptionDialog({
     setSearching(true)
     setError("")
     setCandidateValue("")
+    setTargetIndex(0)
     setTitle("")
     setCands([])
     setFailedPlatforms([])
@@ -195,25 +214,24 @@ export function AddSubscriptionDialog({
       )
       if (latest.stale(gen)) return // 已被新搜索取代,丢弃
       const order = new Map(sources.map((s, i) => [s.channelKey, i]))
-      const merged: Candidate[] = []
-      const seen = new Set<string>()
+      const lists: Candidate[][] = []
       const failed: string[] = []
       results.forEach((r, i) => {
-        const s = sources[i]!
         if (r.status === "rejected") {
+          const s = sources[i]!
           const label = platformDef(s.platform)?.label ?? s.platform
           if (!failed.includes(label)) failed.push(label)
           return
         }
-        for (const c of r.value) {
-          const key = candidateKey(c)
-          if (seen.has(key)) continue
-          seen.add(key)
-          merged.push(c)
-        }
+        lists.push(r.value)
       })
+      // 同平台同一人只留一条:用户搜索与主播搜索的结果在这里合并,
+      // 候选同时带「直播间」「用户主页」两个落地点(见 mergeCandidates)。
+      const merged = mergeCandidates(lists.flat())
       // 按取数源顺序(平台 → 用户/主播)排列,同平台结果连在一起。
-      merged.sort((a, b) => (order.get(a.land?.channelKey ?? "") ?? 99) - (order.get(b.land?.channelKey ?? "") ?? 99))
+      merged.sort(
+        (a, b) => (order.get(a.targets[0]?.channelKey ?? "") ?? 99) - (order.get(b.targets[0]?.channelKey ?? "") ?? 99),
+      )
       setCands(merged)
       setFailedPlatforms(failed)
     } catch (e) {
@@ -232,6 +250,7 @@ export function AddSubscriptionDialog({
     setTitle("")
     setMissing([])
     setCandidateValue("")
+    setTargetIndex(0)
     setManualTargetId("new")
   }
 
@@ -243,23 +262,24 @@ export function AddSubscriptionDialog({
       return
     }
     setCandidateValue(key)
+    setTargetIndex(0)
     setTitle(c.label)
     // 重复只作提示(在 targetHint 里),不拦提交 —— 重复订阅是合法选择。
   }
 
   async function submit() {
     if (searchMode) {
-      /* ── 搜索模式:把选中的候选落到它自己的订阅渠道/参数 ────────────── */
-      if (!selectedCand?.land) {
+      /* ── 搜索模式:把选中的候选落到「添加为」选中的目标 ────────────── */
+      if (!selectedCand || !selectedTarget) {
         setError("请先搜索并选中一项。")
         return
       }
       setBusy(true)
       setError("")
       try {
-        const { channelKey: landKey, param } = selectedCand.land
-        // 直播类候选(主播搜索)落地的是 roomIds,单值即可;用户类落地 uid/channelId…
-        const info = { [param]: selectedCand.value }
+        const { channelKey: landKey, param, value } = selectedTarget
+        // 直播类目标落地 roomIds,用户类落地 uid/channelId…
+        const info = { [param]: value }
         const id = await addSubscription(landKey, title.trim() || selectedCand.label, info, {
           groupId: groupId || null,
           refreshIntervalSec: Number(ttl) > 0 ? Number(ttl) * 60 : undefined,
@@ -322,10 +342,11 @@ export function AddSubscriptionDialog({
 
   /** 选中候选后的提示。用户/主播都是单值落地，只能新建。 */
   const targetHint = (() => {
-    if (!selectedCand?.land) return ""
-    return subscribed.has(candidateValue)
-      ? `「${selectedCand.label}」在该渠道下已存在，新建会得到两条相同订阅。`
-      : `已选中「${selectedCand.label}」，将新建一条订阅。`
+    if (!selectedCand || !selectedTarget) return ""
+    const what = TARGET_LABEL[selectedTarget.kind]
+    return subscribedTargets.has(targetKey(selectedTarget))
+      ? `「${selectedCand.label}」的${what}已在订阅里，新建会得到两条相同订阅。`
+      : `已选中「${selectedCand.label}」，将添加${what}。`
   })()
 
   return (
@@ -349,7 +370,7 @@ export function AddSubscriptionDialog({
           <Button variant="secondary" disabled={busy} onClick={() => onOpenChange(false)}>
             取消
           </Button>
-          <Button disabled={busy || (searchMode ? !selectedCand?.land : !channelKey)} onClick={() => void submit()}>
+          <Button disabled={busy || (searchMode ? !selectedTarget : !channelKey)} onClick={() => void submit()}>
             {busy ? <Icon name="loader" size={14} className="animate-spin" /> : <Icon name="plus" size={14} />} 添加订阅
           </Button>
         </>
@@ -402,6 +423,29 @@ export function AddSubscriptionDialog({
 
       {landChannel && !merging ? (
         <div className="stack" style={{ gap: "var(--sp-5)" }}>
+          {/* 同一人既有直播间又有主页时,由用户选这一条结果要加哪种。 */}
+          {searchMode && selectedCand && selectedCand.targets.length > 1 ? (
+            <div className="field">
+              <span className="field-label" id="lbl-target-kind">
+                添加为
+              </span>
+              <div className="chip-row" role="radiogroup" aria-labelledby="lbl-target-kind">
+                {selectedCand.targets.map((t, i) => (
+                  <button
+                    key={targetKey(t)}
+                    className="chip"
+                    role="radio"
+                    aria-checked={selectedTarget === t}
+                    onClick={() => setTargetIndex(i)}
+                  >
+                    <Icon name={t.kind === "live" ? "radio" : "user"} size={14} />
+                    {TARGET_LABEL[t.kind]}
+                    {subscribedTargets.has(targetKey(t)) ? <span className="cand-chip">已订阅</span> : null}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="field">
             <label className="field-label" htmlFor="add-title">
               订阅标题

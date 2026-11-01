@@ -198,6 +198,8 @@ export class XhsUserSearchChannel implements RssChannel {
     // ⚠️ 必须 interactive:搜索结果是导航后由页面脚本自己的 XHR 填的,
     // hidden 的后台 tab 会被节流到不发请求(douyin:user 同款结论)。
     const hits = await withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "xhs" }, async (b) => {
+      // 缓冲是进程级的:只读本次捕获窗口内写入的响应,避免连续搜索时混入上一次关键词。
+      const since = now()
       await capturePage(b, {
         platform: "xhs",
         endpoint: ENDPOINT,
@@ -227,13 +229,13 @@ export class XhsUserSearchChannel implements RssChannel {
         idleMs: 2000,
         timeoutMs: 8_000,
       })
-      const captured = this.readSearchCaptured()
+      const captured = this.readSearchCaptured(since)
       if (captured.length) return captured
       // 有结果包但 0 用户 = 真的没搜到(不要拿 recommend 的推荐用户充数);
       // 一个结果包都没抓到 → 首屏结果只在 SSR state 里,从页面 state 兜底。
       const hasResultPack = passiveBuffer
         .list("xhs", ENDPOINT)
-        .some((e) => /\/search\/(usersearch|users?|notes)$/.test(urlPath(e.url)))
+        .some((e) => e.at >= since && /\/search\/(usersearch|users?|notes)$/.test(urlPath(e.url)))
       return hasResultPack ? [] : this.readSearchStateViaBrowser(b)
     })
     if (!hits.length) {
@@ -249,8 +251,8 @@ export class XhsUserSearchChannel implements RssChannel {
    *      结果可能在 SSR 或别的包里)→ **深度遍历** JSON,收集所有带
    *      `user_id + nickname|name` 的对象。字段名新老两套都收。
    */
-  private readSearchCaptured(): XhsUserHit[] {
-    const entries = passiveBuffer.list("xhs", ENDPOINT)
+  private readSearchCaptured(since: number): XhsUserHit[] {
+    const entries = passiveBuffer.list("xhs", ENDPOINT).filter((e) => e.at >= since)
     // 结果包(usersearch / notes)优先;onebox/recommend/filter 是搜索页的附属请求,
     // 里面也有用户对象但**不是关键词结果**,只在没有结果包时才兜底。
     const resultEntries = entries.filter((e) => /\/search\/(usersearch|users?|notes)$/.test(urlPath(e.url)))

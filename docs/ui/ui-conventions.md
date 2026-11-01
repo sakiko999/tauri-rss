@@ -297,8 +297,12 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
   所有取数源**（`searchSources()` = `USER_SEARCH_CHANNEL` 的用户搜索 + 注册表里的
   `*:anchor` 主播搜索），结果按平台顺序合并；单源失败只记「该平台没返回」，
   不拖垮整次搜索。
-  - 候选自带 `land`（`channelKey + param`）：跨平台合并后不能按「当前平台」猜落地参数。
-  - 选中态与已订阅标记用 `candidateKey(c)` = `platform:value`（不同平台 roomId/uid 会撞车）。
+  - 候选带 `targets`（每项 `kind/channelKey/param/value`）：跨平台合并后不能按「当前平台」
+    猜落地参数。同一个人同时有直播间和主页时，一条候选带两个目标，选中后由「添加为」
+    chips 二选一（B站 uid + roomId 按 `author.handle` 合并；抖音主页可直接作
+    `live:douyin` 的 roomIds）。
+  - 选中态与已订阅标记用 `candidateKey(c)` = `platform:身份`（优先用户主页 id，
+    不同平台 roomId/uid 会撞车）；目标级「已订阅」用 `targetKey(t)`。
   - 用户搜索绑定：`bili:user`→`bili:user_video`；`youtube:user`→`youtube`；
     `weibo:user:search`→`weibo:user`；`douyin:user:search`→`douyin:user`；
     `xhs:user:search`→`xhs:user`；`twitch:user:search`→`twitch:live`（roomIds）。

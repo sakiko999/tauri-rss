@@ -38,6 +38,9 @@
   （`ps` 固定 30），`data.page.count` 给真实总数。渠道原先写死 `pn=1` —— 实测 7 个订阅里
   6 个正好卡在 30 条上限（该用户 450 条投稿只看得到前 30 条）。现在
   `pageable: { first: 2, step: 1 }`，登录态连翻 3 页验证无重复、`hasMore` 按 `count` 判。
+- **搜主播结果带 uid**（2026-11-01）：`search/type?search_type=live_user` 的每项同时有
+  `roomid` 与 `uid`；Live item 把 uid 写进 `author.handle`（XML `tpl:authorHandle` 已能
+  往返），统一搜索据此把「直播间」与「用户主页」合并成一条候选。
 - ✅ **搜UP主**（2026-10-16，`searchBiliUsers` / 渠道 `bili:user`）：
   `search_type=bili_user` + **匿名 buvid3/4**（`biliClient.getJson(..., {buvid:true})`，
   裸请求 412）。与 `bili:user_video`（uid 投稿订阅）配对，走「添加订阅 → UP主 / 频道」

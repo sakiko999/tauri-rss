@@ -194,7 +194,12 @@ export async function searchBiliAnchors(keyword: string, page = 1): Promise<Item
         title: stripEm(item.uname),
         url: `${LIVE}/${roomId}`,
         thumbnail: coverUrl(item.uface),
-        author: item.uname ? { name: stripEm(item.uname) } : undefined,
+        // handle = UP 主 mid(实测 live_user 返回 uid):统一搜索要靠它把
+        // 「直播间」和「用户主页」合并成同一条候选（落 bili:user_video 的 uid）。
+        author: {
+          name: stripEm(item.uname),
+          ...(item.uid ? { handle: String(item.uid) } : {}),
+        },
         fetchedAt: t,
         platform: "bilibili",
         roomId,

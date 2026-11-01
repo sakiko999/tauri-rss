@@ -21,14 +21,7 @@ import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Banner, StateBlock } from "../../components/StateBlock.tsx"
 import { isImeComposing } from "../../lib/ime.ts"
-import {
-  type Candidate,
-  candidateKey,
-  candidatesFromSearch,
-  LIVE_SUB_CHANNEL,
-  subsOfChannel,
-  valueList,
-} from "../../lib/subscriptions.ts"
+import { type Candidate, candidateKey, candidatesFromSearch, subsHolding } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useLatestOnly } from "../../lib/useLatestOnly.ts"
 import { useDesktop } from "../../store/index.ts"
@@ -55,7 +48,6 @@ export function PlatformBrowser({
   const dl = useDesktop((s) => s.dl)
   const subscriptions = useDesktop((s) => s.subscriptions)
   const addSubscription = useDesktop((s) => s.addSubscription)
-  const channels = useMemo(() => dl?.listChannels() ?? [], [dl])
   /** 分区视图的手输参数（按 sourceInfoTpl 逐字段收集）。 */
   const [categoryValues, setCategoryValues] = useState<Record<string, string>>({})
   const [q, setQ] = useState("")
@@ -142,19 +134,15 @@ export function PlatformBrowser({
   /** 结果 → 候选(与「添加订阅」同一套提取:只留带 roomId 的 live 条目)。 */
   const cands = useMemo(() => candidatesFromSearch(items ?? [], platform), [items, platform])
 
-  /** 落地的订阅渠道 = 平台的 live 订阅渠道(roomIds/videoId 单值)。 */
-  const subKey = LIVE_SUB_CHANNEL[platform]
-  const subCh = channels.find((c) => c.key === subKey)
-  const landParam = subCh?.sourceInfoTpl?.[0]?.key
-  const subscribed = useMemo(
-    () =>
-      new Set(
-        subsOfChannel(subscriptions, subKey)
-          .flatMap((s) => valueList(s, landParam))
-          .map((v) => candidateKey({ value: v, platform })),
-      ),
-    [subscriptions, subKey, landParam, platform],
-  )
+  /** 面板里的候选都落平台的直播渠道(候选自带 target,不按参数名猜)。 */
+  const subscribed = useMemo(() => {
+    const s = new Set<string>()
+    for (const c of cands) {
+      const t = c.targets[0]
+      if (t && subsHolding(subscriptions, t.channelKey, t.param, t.value).length) s.add(candidateKey(c))
+    }
+    return s
+  }, [cands, subscriptions])
   const selectedCand = cands.find((c) => candidateKey(c) === selected)
 
   function pickCandidate(c: Candidate) {
@@ -163,10 +151,11 @@ export function PlatformBrowser({
 
   /** 一步订阅选中的房间(标题取候选标题,分组/刷新间隔走默认)。 */
   async function subscribeSelected() {
-    if (!selectedCand || !subKey || !landParam || subscribed.has(candidateKey(selectedCand))) return
+    const target = selectedCand?.targets[0]
+    if (!selectedCand || !target || subscribed.has(candidateKey(selectedCand))) return
     setSubscribing(true)
     try {
-      const id = await addSubscription(subKey, selectedCand.label, { [landParam]: selectedCand.value })
+      const id = await addSubscription(target.channelKey, selectedCand.label, { [target.param]: target.value })
       if (!id) throw new Error("数据层未初始化")
       setSelected("")
     } catch (e) {
@@ -289,7 +278,7 @@ export function PlatformBrowser({
             {selectedCand ? (
               <div className="pick-action">
                 <span className="t-small t-muted od-truncate">已选中「{selectedCand.label}」</span>
-                {subKey && landParam ? (
+                {selectedCand.targets[0] ? (
                   <Button
                     size="sm"
                     disabled={subscribing || subscribed.has(candidateKey(selectedCand))}
@@ -300,7 +289,7 @@ export function PlatformBrowser({
                     ) : (
                       <Icon name="plus" size={13} />
                     )}
-                    {subscribed.has(selectedCand.value) ? "已订阅" : "订阅这个房间"}
+                    {subscribed.has(candidateKey(selectedCand)) ? "已订阅" : "订阅这个房间"}
                   </Button>
                 ) : (
                   <span className="t-micro t-dim">该平台没有可直接落地为订阅的直播渠道</span>

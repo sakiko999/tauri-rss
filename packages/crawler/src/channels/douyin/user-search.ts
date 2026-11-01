@@ -102,6 +102,9 @@ export class DouyinUserSearchChannel implements RssChannel {
     const hits = await withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "douyin" }, async (b) => {
       if (!(await readDouyinLoginCookie(b))) throw new Error(NEEDS_LOGIN)
       const url = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=user`
+      // 缓冲是进程级的:只读本次捕获窗口内写入的响应,否则会把上一次关键词的结果
+      // 混进来(同一次运行里连续搜两次就能看到)。
+      const since = now()
       // 页面可能同时发多条搜索请求;捕获窗口收全,再统一解析。
       await capturePage(b, {
         platform: "douyin",
@@ -111,7 +114,7 @@ export class DouyinUserSearchChannel implements RssChannel {
         idleMs: 1200,
         timeoutMs: 20_000,
       })
-      return this.readCaptured()
+      return this.readCaptured(since)
     })
     if (!hits.length) throw new Error(NO_RESULTS)
     return hits.map((h) => this.toItem(h))
@@ -121,10 +124,11 @@ export class DouyinUserSearchChannel implements RssChannel {
    * 收集本次捕获的 `user_list[]`(兼容 discover/search 与 general/search 两种形状:
    * 前者顶层是 `user_list`,后者包在 `data[]` 的条目里)。按 sec_uid 去重。
    */
-  private readCaptured(): UserHit[] {
+  private readCaptured(since: number): UserHit[] {
     const out: UserHit[] = []
     const seen = new Set<string>()
     for (const e of passiveBuffer.list("douyin", ENDPOINT)) {
+      if (e.at < since) continue
       let json: any
       try {
         json = JSON.parse(e.body)

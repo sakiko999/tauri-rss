@@ -61,8 +61,20 @@ export function subsHolding(
   return subsOfChannel(subs, channelKey).filter((s) => valueList(s, param).includes(String(value)))
 }
 
+/**
+ * 一个候选可以落地成的订阅(同一个人可能既有直播间又有主页)。
+ * 例如 B站搜主播的结果同时带 roomId 与 uid → 一条候选两种加法。
+ */
+export interface CandidateTarget {
+  kind: "live" | "user"
+  channelKey: string
+  param: string
+  value: string
+}
+
 /** 候选项。 */
 export interface Candidate {
+  /** 主值(与 `targets[0].value` 一致,仅用于展示/兜底)。 */
   value: string
   label: string
   sub: string
@@ -72,13 +84,53 @@ export interface Candidate {
   meta: string[]
   /** 来源平台(跨平台合并搜索时用于图标 / 去重 / 选中态)。 */
   platform?: string
-  /** 选中后落地到哪条订阅渠道的哪个参数(跨平台合并后不能只按平台猜)。 */
-  land?: { channelKey: string; param: string }
+  /** 可落地的订阅目标;首项 = 默认选择。 */
+  targets: CandidateTarget[]
 }
 
-/** 候选的全局唯一键(不同平台可能有相同的 roomId / uid)。 */
-export function candidateKey(c: Pick<Candidate, "value" | "platform">): string {
-  return `${c.platform ?? ""}:${c.value}`
+/** 落地面向用户的名字(「添加为」)。 */
+export const TARGET_LABEL: Record<CandidateTarget["kind"], string> = {
+  live: "直播间",
+  user: "用户主页",
+}
+
+/** 订阅目标的唯一键(同一候选的多个目标、跨候选比较都用它)。 */
+export function targetKey(t: CandidateTarget): string {
+  return `${t.channelKey}|${t.param}|${t.value}`
+}
+
+/**
+ * 候选的全局唯一键 = 平台 + 身份。
+ * 身份优先用「用户主页」目标的 id(同一人的直播间与主页合并成一条),否则用首个目标。
+ */
+export function candidateKey(c: Pick<Candidate, "value" | "platform" | "targets">): string {
+  const identity = c.targets.find((t) => t.kind === "user") ?? c.targets[0]
+  return `${c.platform ?? ""}:${identity?.kind ?? ""}:${identity?.value ?? c.value}`
+}
+
+/**
+ * 合并来自不同搜索源的候选(同平台同一人只留一条),targets 取并集。
+ * 展示信息保留先到的那条 —— 调用方按「用户搜索在前、主播搜索在后」拼输入。
+ */
+export function mergeCandidates(cands: Candidate[]): Candidate[] {
+  const byKey = new Map<string, Candidate>()
+  const order: string[] = []
+  for (const c of cands) {
+    const key = candidateKey(c)
+    const prev = byKey.get(key)
+    if (!prev) {
+      byKey.set(key, { ...c, targets: [...c.targets] })
+      order.push(key)
+      continue
+    }
+    for (const t of c.targets) {
+      if (!prev.targets.some((x) => targetKey(x) === targetKey(t))) prev.targets.push(t)
+    }
+    if (!prev.thumb && c.thumb) prev.thumb = c.thumb
+    if (!prev.sub && c.sub) prev.sub = c.sub
+    for (const m of c.meta) if (!prev.meta.includes(m)) prev.meta.push(m)
+  }
+  return order.map((k) => byKey.get(k)!)
 }
 
 /** 数字缩写:1.2万 / 3.4亿。 */
@@ -219,20 +271,55 @@ export function searchSources(channels: ChannelInfo[]): SearchSource[] {
   return out
 }
 
+/** 直播落地点(平台 → 房间列表参数);平台没有直播渠道时无目标。 */
+function liveTarget(platform: string, roomValue: string): CandidateTarget | undefined {
+  const channelKey = LIVE_SUB_CHANNEL[platform]
+  return channelKey ? { kind: "live", channelKey, param: "roomIds", value: roomValue } : undefined
+}
+
+/**
+ * 用户落地点(平台 → 用户内容渠道)。twitch 落地的是直播频道(roomIds),
+ * 目标类型随之算 live —— 它没有「投稿」渠道。
+ */
+function userTarget(platform: string, value: string): CandidateTarget | undefined {
+  const channelKey = USER_SUB_CHANNEL[platform]
+  const param = USER_SUB_PARAM[platform]
+  if (!channelKey || !param) return undefined
+  return { kind: param === "roomIds" ? "live" : "user", channelKey, param, value }
+}
+
+/**
+ * 用户目标值 → 直播订阅值(有些直播渠道直接吃用户主页链接)。
+ * 目前只有抖音:`live:douyin` 的 roomIds 接受主页链接。
+ */
+const USER_LIVE_VALUE: Record<string, (value: string) => string> = {
+  douyin: (secUid) => `https://www.douyin.com/user/${secUid}`,
+}
+
 /**
  * 平台搜索渠道返回的条目 → 候选(可选来「订阅某个房间」)。
  * 与 candidatesFor 不同:数据来自**平台搜索接口**(不依赖本机订阅库),故单条直播
  * 也能产出候选。roomId 取 LiveItem.roomId(deserialize 已从 url 推导)。
+ * B站 live_user 结果带 `author.handle`(= mid) → 同一条候选也能加「用户主页」。
  */
 export function candidatesFromSearch(items: MediaItem[], platform?: string): Candidate[] {
   const out: Candidate[] = []
   const seen = new Set<string>()
-  const landKey = platform ? LIVE_SUB_CHANNEL[platform] : undefined
   for (const i of items) {
     const live = i as LiveItem
     const roomId = String(live.roomId ?? "").trim()
     if (!roomId || seen.has(roomId)) continue
     seen.add(roomId)
+    const targets: CandidateTarget[] = []
+    const liveT = platform ? liveTarget(platform, roomId) : undefined
+    if (liveT) targets.push(liveT)
+    // 主播搜索里的身份(B站 uid)→ 同一个人的主页订阅。
+    const handle = String(i.author?.handle ?? "").trim()
+    if (platform && handle && USER_SUB_PARAM[platform] === "uid") {
+      const userT = userTarget(platform, handle)
+      if (userT && !targets.some((t) => targetKey(t) === targetKey(userT))) targets.push(userT)
+    }
+    if (!targets.length) continue
     const online = live.online ? `${fmtNum(live.online)} 在看` : ""
     // YouTube 没有「房号」概念,直播的 roomId 就是 videoId。
     const idLabel = live.platform === "youtube" ? "视频" : "房号"
@@ -243,7 +330,7 @@ export function candidatesFromSearch(items: MediaItem[], platform?: string): Can
       thumb: mediaUrl(i),
       meta: [online].filter(Boolean),
       ...(platform ? { platform } : {}),
-      ...(landKey ? { land: { channelKey: landKey, param: "roomIds" } } : {}),
+      targets,
     })
   }
   return out
@@ -254,8 +341,9 @@ export function candidatesFromSearch(items: MediaItem[], platform?: string): Can
  * value 从 **url 解析**(raw 不穿 XML 边界,serialize 不写,所以只能从 url 取):
  *   `space.bilibili.com/<mid>` / `youtube.com/channel/<channelId>` /
  *   `weibo.com/u/<uid>` / `douyin.com/user/<sec_uid>` /
- *   `xiaohongshu.com/user_profile/<user_id>`。
+ *   `xiaohongshu.com/user_profile/<user_id>` / `twitch.tv/<login>`。
  * 次行信息(粉丝/订阅数)来自条目 summary(channel 侧已拼好)。
+ * 抖音额外给一个「直播间」目标(live:douyin 的 roomIds 接受主页链接)。
  */
 export function candidatesFromUsers(items: MediaItem[], platform?: string): Candidate[] {
   const out: Candidate[] = []
@@ -269,8 +357,6 @@ export function candidatesFromUsers(items: MediaItem[], platform?: string): Cand
     // 排除 Twitch 一级路由此类站内页(它们单段且不是频道名)。
     /twitch\.tv\/(?!directory|videos|search|settings|login|subscriptions|wallet|drops|jobs|downloads|turbo)([a-z0-9_]{3,25})\/?$/i,
   ]
-  const landKey = platform ? USER_SUB_CHANNEL[platform] : undefined
-  const landParam = platform ? USER_SUB_PARAM[platform] : undefined
   for (const i of items) {
     const url = String(i.url ?? "")
     const m = USER_URL.map((re) => re.exec(url)).find(Boolean)
@@ -278,6 +364,13 @@ export function candidatesFromUsers(items: MediaItem[], platform?: string): Cand
     const value = m[1]!
     if (seen.has(value)) continue
     seen.add(value)
+    const targets: CandidateTarget[] = []
+    const userT = platform ? userTarget(platform, value) : undefined
+    if (userT) targets.push(userT)
+    const toLive = platform ? USER_LIVE_VALUE[platform] : undefined
+    const liveT = platform && toLive ? liveTarget(platform, toLive(value)) : undefined
+    if (liveT && !targets.some((t) => targetKey(t) === targetKey(liveT))) targets.push(liveT)
+    if (!targets.length) continue
     out.push({
       value,
       label: i.title,
@@ -285,7 +378,7 @@ export function candidatesFromUsers(items: MediaItem[], platform?: string): Cand
       thumb: mediaUrl(i),
       meta: [],
       ...(platform ? { platform } : {}),
-      ...(landKey && landParam ? { land: { channelKey: landKey, param: landParam } } : {}),
+      targets,
     })
   }
   return out
