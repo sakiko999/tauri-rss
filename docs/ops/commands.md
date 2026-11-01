@@ -181,6 +181,9 @@ bun scripts/ui-design-audit.ts              # 量化设计审计：对比度(WCA
 bun scripts/ui-shot.ts tmp/shots            # 给各模块截图存档（用于视觉复核）
 bun scripts/ui-shots-all.ts                 # 批量实拍各视图（添加订阅弹窗/空态/深浅主题）
 bun scripts/ui-play-check.ts               # ★ 播放矩阵巡检（video/live/audio/yt 真播，报起播）
+bun scripts/player-dryrun.ts <url>         # ★ 媒体流稳定性探针（不跑播放器）：DASH init/HLS 清单+分片/
+                                           #   FLV 直链的状态码·TTFB·吞吐·多轮抖动；--via-service 同服务
+                                           #   cookie；--rounds/--segments/--json report.json
 bun scripts/ui-resize.ts 1500 950           # 改窗口尺寸（验证响应式断点）
 ```
 

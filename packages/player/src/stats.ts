@@ -21,6 +21,8 @@ export interface EngineStats {
   codecs?: string
   /** 直播延迟(秒);点播 / 引擎不提供时省略。 */
   liveLatency?: number
+  /** 当前流的 URL 主机(统计面板「流主机」;blob/本地 MPD 时省略)。 */
+  host?: string
 }
 
 export function engineLabel(engine: EngineKind): string {
@@ -34,6 +36,60 @@ export function engineLabel(engine: EngineKind): string {
     default:
       return "原生 <video>"
   }
+}
+
+/** 从流 URL 取主机名(blob:/data:/空 → undefined)。 */
+export function streamHost(url: string | undefined): string | undefined {
+  if (!url) return undefined
+  try {
+    const u = new URL(url)
+    return u.protocol === "http:" || u.protocol === "https:" ? u.host : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 从 MPD 文本提取**静态**流信息(统计面板的兜底):dash.js 不上报逐 rep 档位时,
+ * 流主机/码率/编解码器/高度取自 MPD 本身。
+ *
+ * 口径与 resolve/utils/mpd.ts 的装配形状一致:每 rep 一段 `<BaseURL>` + SegmentBase。
+ * 优先取最高带宽 video rep,没有 video 时退回首个 rep(听模式 = 纯音频 MPD)。
+ * 模板型 MPD(无逐 rep BaseURL,如某些 YouTube 清单)只返回 undefined。
+ */
+export function parseDashSummary(mpd: string | undefined): {
+  host?: string
+  codecs?: string
+  bandwidth?: number
+  height?: number
+} {
+  if (!mpd) return {}
+  const reps: { mimeType: string; codecs?: string; bandwidth?: number; height?: number; baseUrl?: string }[] = []
+  const repRe = /<Representation\b([^>]*)>([\s\S]*?)<\/Representation>/g
+  let m: RegExpExecArray | null
+  while ((m = repRe.exec(mpd))) {
+    const attrs = m[1]
+    const base = /<BaseURL>([\s\S]*?)<\/BaseURL>/.exec(m[2])?.[1]?.trim()
+    reps.push({
+      mimeType: attrOf(attrs, "mimeType") ?? "",
+      codecs: attrOf(attrs, "codecs"),
+      bandwidth: Number(attrOf(attrs, "bandwidth") ?? 0) || undefined,
+      height: Number(attrOf(attrs, "height") ?? 0) || undefined,
+      baseUrl: base ? base.replace(/&amp;/g, "&") : undefined,
+    })
+  }
+  if (!reps.length) return {}
+  const pick =
+    reps.filter((r) => r.mimeType.startsWith("video")).sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0] ??
+    reps[0]
+  return { host: streamHost(pick.baseUrl), codecs: pick.codecs, bandwidth: pick.bandwidth, height: pick.height }
+}
+
+/** MPD 属性批量匹配(`bandwidth` 含 `width`,必须锚定属性名起点)。 */
+function attrOf(attrs: string, name: string): string | undefined {
+  const m = new RegExp(`(?:^|[\\s"])${name}=("[^"]*"|[^,\\s]+)`).exec(attrs)
+  if (!m) return undefined
+  return m[1].startsWith('"') ? m[1].slice(1, -1) : m[1]
 }
 
 /** bps → 人类可读;0 / undefined 返回 "—"。 */

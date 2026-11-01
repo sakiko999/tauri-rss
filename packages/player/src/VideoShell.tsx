@@ -17,7 +17,7 @@ import { useAutoHideControls } from "./hooks/useAutoHideControls.ts"
 import { useContainerInteractions } from "./hooks/useContainerInteractions.ts"
 import { bindFullscreen, type FullscreenApi, useVideoElement } from "./hooks/useVideoElement.ts"
 import { PlayIcon, SpinnerIcon } from "./icons.tsx"
-import { PlayerControls } from "./PlayerControls.tsx"
+import { PlayerControls, type PlayerMode } from "./PlayerControls.tsx"
 import { PlayerStatsOverlay } from "./PlayerStatsOverlay.tsx"
 import type { EngineStats } from "./stats.ts"
 
@@ -34,6 +34,9 @@ export function VideoShell({
   danmaku,
   danmakuControl,
   stats,
+  sessionStartedAt,
+  mode,
+  theater,
 }: {
   videoRef: React.RefObject<HTMLVideoElement | null>
   /** 是否由 useMediaStream(hls/flv/dash)驱动(决定直播判定)。 */
@@ -50,12 +53,20 @@ export function VideoShell({
   onMediaError?: (code: number | undefined, msg: string) => void
   /** 弹幕流(随 resolve 结果附带;无弹幕平台 undefined 不渲染层)。 */
   danmaku?: DanmakuStream
-  /** 弹幕开关(仅当解析结果确实带弹幕时传入);按钮渲染在控件栏内。 */
+  /** 弹幕开关(仅当解析结果确实带弹幕时传入);弹幕行的开关。 */
   danmakuControl?: DanmakuControl
   /** 引擎/档位(统计信息面板);右键菜单里打开。 */
   stats?: EngineStats | null
+  /** 播放会话起点(performance.now() 毫秒;统计面板「会话时长」)。 */
+  sessionStartedAt?: number
+  /** 直播/点播模式(宿主按条目 kind 显式给;不给则回退到媒体元数据判定)。 */
+  mode?: PlayerMode
+  /** 宽屏(剧场)开关;宿主不提供时不渲染按钮。 */
+  theater?: { on: boolean; toggle: () => void }
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  /** 播放器容器元素:Radix 浮层(倍速/清晰度菜单)的挂载点。全屏/小窗时必须挂在本容器内。 */
+  const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null)
   /** 右键菜单坐标(viewport);null = 关闭。 */
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [showStats, setShowStats] = useState(false)
@@ -97,7 +108,10 @@ export function VideoShell({
 
   return (
     <div
-      ref={containerRef}
+      ref={(el) => {
+        containerRef.current = el
+        setPortalContainer(el)
+      }}
       tabIndex={0}
       onMouseMove={poke}
       onMouseLeave={hide}
@@ -176,6 +190,7 @@ export function VideoShell({
         <PlayerStatsOverlay
           videoRef={videoRef}
           stats={stats}
+          sessionStartedAt={sessionStartedAt}
           quality={qualityOptions.find((q) => q.rate === activeQuality)?.quality}
         />
       ) : null}
@@ -239,6 +254,9 @@ export function VideoShell({
             activeQuality={activeQuality}
             onQuality={onQuality}
             danmakuControl={danmakuControl}
+            mode={mode}
+            theater={theater}
+            container={portalContainer}
           />
         </div>
       </div>

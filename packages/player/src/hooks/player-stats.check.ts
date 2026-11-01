@@ -17,6 +17,7 @@ import {
   formatFps,
   formatLevel,
   formatVolume,
+  parseDashSummary,
 } from "../stats.ts"
 
 assert.equal(engineLabel("hls"), "hls.js")
@@ -63,4 +64,40 @@ assert.equal(formatFps(29.97), "29.97 fps")
 assert.equal(formatVolume(0.8, false), "80%")
 assert.equal(formatVolume(0.8, true), "80%（静音）")
 
-console.log("✔ 播放器统计信息自检通过(引擎标签 / 码率 / 档位 / 缓冲余量 / 丢帧 / 流量 / 帧率 / 音量)")
+// DASH 静态摘要:优先最高带宽 video rep;`bandwidth` 不能被 `width` 正则串档。
+const MPD = `<?xml version="1.0" encoding="UTF-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static">
+  <Period>
+    <AdaptationSet mimeType="video/mp4">
+      <Representation id="80" mimeType="video/mp4" codecs="avc1.640034" bandwidth="3857000" width="3840" height="2160">
+        <BaseURL>https://xy1x2.mcdn.bilibili.com/video/BV1xx.mp4?a=1&amp;b=2</BaseURL>
+      </Representation>
+      <Representation id="64" mimeType="video/mp4" codecs="avc1.640028" bandwidth="1928000" width="1920" height="1080">
+        <BaseURL>https://xy3x4.mcdn.bilibili.com/video/BV1xx.mp4</BaseURL>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet mimeType="audio/mp4">
+      <Representation id="30280" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="320000">
+        <BaseURL>https://xy5x6.mcdn.bilibili.com/audio/BV1xx.m4s</BaseURL>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>`
+assert.deepEqual(parseDashSummary(MPD), {
+  host: "xy1x2.mcdn.bilibili.com",
+  codecs: "avc1.640034",
+  bandwidth: 3857000,
+  height: 2160,
+})
+// 听模式(纯音频 MPD):没有 video rep → 退回首/唯一 rep。
+assert.deepEqual(
+  parseDashSummary(
+    `<MPD><Period><AdaptationSet mimeType="audio/mp4"><Representation id="30280" mimeType="audio/mp4" codecs="mp4a.40.2" bandwidth="320000"><BaseURL>https://a.example.com/x.m4s</BaseURL></Representation></AdaptationSet></Period></MPD>`,
+  ),
+  { host: "a.example.com", codecs: "mp4a.40.2", bandwidth: 320000, height: undefined },
+)
+// 模板型 / 空清单:不报错,返回空摘要。
+assert.deepEqual(parseDashSummary(undefined), {})
+assert.deepEqual(parseDashSummary("<MPD></MPD>"), {})
+
+console.log("✔ 播放器统计信息自检通过(引擎标签 / 码率 / 档位 / 缓冲余量 / 丢帧 / 流量 / 帧率 / 音量 / DASH 摘要)")

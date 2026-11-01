@@ -123,18 +123,21 @@ export function MediaTimeRange({ state, ops }: { state: VideoPlayState; ops: Vid
       onPointerLeave={handlePointerLeave}
       onKeyDown={handleKeyDown}
     >
-      {/* 轨道 */}
-      <div className="relative h-1 w-full overflow-hidden rounded-full bg-white/25 transition-[height] group-hover:h-1.5">
+      {/* 轨道:B 站实测 4px 恒定(不随悬停增粗);已播 = B 站蓝 #00AEEC,
+          缓冲 = 白 30%,轨道 = 白 20%,圆角 1.5px */}
+      <div className="relative h-1 w-full overflow-visible rounded-[1.5px] bg-white/20">
         {/* 已缓冲段 */}
-        {bufferPct > 0 && <div className="absolute inset-y-0 left-0 bg-white/35" style={{ width: `${bufferPct}%` }} />}
+        {bufferPct > 0 && (
+          <div className="absolute inset-y-0 left-0 rounded-[1.5px] bg-white/30" style={{ width: `${bufferPct}%` }} />
+        )}
         {/* 已播放段 */}
-        <div className="absolute inset-y-0 left-0 bg-white" style={{ width: `${pct}%` }} />
+        <div className="absolute inset-y-0 left-0 rounded-[1.5px] bg-[#00aeec]" style={{ width: `${pct}%` }} />
         {/* 悬停位置细线 */}
         {shownPct !== null && (
           <div className="absolute inset-y-0 bg-white/70" style={{ left: `${shownPct}%`, width: 2 }} />
         )}
       </div>
-      {/* 播放头 */}
+      {/* 播放头:悬停出现的小白点(B 站同款,无描边) */}
       <div
         className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white opacity-0 shadow transition-opacity group-hover:opacity-100"
         style={{ left: `${pct}%` }}

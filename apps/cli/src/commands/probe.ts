@@ -32,8 +32,9 @@ export async function probeFetch(
 export async function probeResolve(
   url: string,
   endpoint?: string,
+  profile?: string,
 ): Promise<{ route: ResolveRoute; streams: Stream[]; tookMs: number }> {
-  const r = await probeClient(endpoint).rpc("probe.resolve", { url })
+  const r = await new ServiceClient(resolveEndpoint(endpoint, profile)).rpc("probe.resolve", { url })
   return {
     route: r.route as unknown as ResolveRoute,
     streams: r.streams as unknown as Stream[],

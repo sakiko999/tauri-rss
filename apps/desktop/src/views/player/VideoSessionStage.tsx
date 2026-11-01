@@ -84,6 +84,7 @@ function SessionPlayableMedia() {
   const from = useVideoSession((s) => s.from)
   const startAtSec = useVideoSession((s) => s.startAtSec)
   const chapters = useVideoSession((s) => s.chapters)
+  const theater = useVideoSession((s) => s.theater)
   const settings = useDesktop((s) => s.settings)
   const danmakuVisible = useDesktop((s) => s.danmakuVisible)
   const allItems = useDesktop((s) => s.allItems)
@@ -161,6 +162,9 @@ function SessionPlayableMedia() {
       audioOnly={listening}
       onAudioOnlyChange={(on) => useVideoSession.setState({ audioOnly: { key: itemKey(item), on } })}
       audioStage={audioStage}
+      // 直播/点播模式:宿主按条目 kind 显式给(控件栏据此分流,不等媒体元数据)。
+      live={isLive}
+      theater={{ on: theater, toggle: () => useVideoSession.getState().toggleTheater() }}
       onEnded={() => consumeEnded("video", item)}
       onError={(err) => {
         const kind = errorKindOf(err)

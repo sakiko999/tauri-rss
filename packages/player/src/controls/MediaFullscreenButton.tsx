@@ -9,7 +9,7 @@ import { FullscreenExitIcon, FullscreenIcon } from "../icons.tsx"
 
 export function MediaFullscreenButton({
   fullscreen,
-  className = "rounded p-1 hover:bg-white/20",
+  className = "flex h-[22px] w-9 items-center justify-center text-white/80 hover:text-white",
 }: {
   fullscreen: FullscreenApi
   className?: string

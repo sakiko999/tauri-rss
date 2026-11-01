@@ -39,7 +39,11 @@
 - [ ] **播放器 P0a 地基**：`VideoShell` 插槽、`player/ui` 原语 + `getPlayerContainer()`、
       `PlayerPrefs`、WebView2 能力 spike（PiP / MediaSession / HEVC / 全屏 API）。
       → `docs/playback/player-parity-plan.md`
-- [ ] **播放器 P0b**：媒体状态外置（取消 4Hz 全树重渲）、会话拆分、播放模式状态机。
+      （feat/player-parity 分支已先行：菜单容器化（P0a-2 局部）、B 站视觉对齐、
+      直播/点播模式分流、统计面板重做、`scripts/player-dryrun.ts` 流稳定性探针）
+- [ ] **播放器 P0b**：媒体状态外置（取消 4Hz 全树重渲）、会话拆分、播放模式状态机
+      （theater 已收编 session store）。
+      （框架评估结论：保持 React，见 player-parity-plan.md「框架评估」节）
 - [ ] 其余 Radix 原语**随首个真实调用方落地**（Slider/Tooltip/ContextMenu/Popover 随 P0a；
       ToggleGroup/Tabs 随 F5），不预造空壳。
 

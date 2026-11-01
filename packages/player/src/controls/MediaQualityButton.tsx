@@ -14,7 +14,7 @@ export function MediaQualityButton({
   activeQuality,
   onQuality,
   container,
-  className = "rounded px-1.5 py-1 text-xs hover:bg-white/20",
+  className = "flex h-[22px] items-center px-1 text-[14px] text-white/80 hover:text-white data-[state=open]:text-white",
 }: {
   /** 多档位列表(rate + quality);长度 < 2 时不显示。 */
   qualityOptions: { rate: number; quality: string }[]
@@ -32,7 +32,7 @@ export function MediaQualityButton({
       onOpenChange={setOpen}
       container={container}
       trigger={
-        <button type="button" aria-label="清晰度" className={`data-[state=open]:bg-white/20 ${className}`}>
+        <button type="button" aria-label="清晰度" className={className}>
           {qualityOptions.find((q) => q.rate === activeQuality)?.quality ?? "清晰度"}
         </button>
       }

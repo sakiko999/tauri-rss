@@ -31,6 +31,7 @@ import {
 import { SpinnerIcon } from "./icons.tsx"
 import { log } from "./log/index.ts"
 import type { EngineStats } from "./stats.ts"
+import { parseDashSummary, streamHost } from "./stats.ts"
 import { attemptPlayWithMuteFallback } from "./utils/attemptPlay.ts"
 import { audioOnlyMpd } from "./utils/audioOnlyMpd.ts"
 import { VideoShell } from "./VideoShell.tsx"
@@ -142,6 +143,8 @@ export function PlayableMedia({
   audioStage,
   onChapters,
   onMediaControl,
+  live,
+  theater,
 }: {
   /** refresh 已带的可播流(可选)。 */
   streams?: MediaStream[]
@@ -203,6 +206,13 @@ export function PlayableMedia({
       toggleMute: () => void
     } | null,
   ) => void
+  /**
+   * 直播/点播模式(宿主按条目 kind 给):决定控件栏形态(直播无进度拖拽/时长/倍速)。
+   * 不给时回退到媒体元数据判定(流起播后 duration 无效 = live)。
+   */
+  live?: boolean
+  /** 宽屏(剧场)开关;不传则控件栏不渲染该按钮。 */
+  theater?: { on: boolean; toggle: () => void }
 }) {
   const [resolved, setResolved] = useState<ResolvePlayback | null>(null)
   const [error, setError] = useState<unknown>(null)
@@ -284,6 +294,10 @@ export function PlayableMedia({
 
   // 引擎/档位(统计信息面板)。HLS/FLV/DASH 由 useMediaStream 上报;原生 mp4 在这里定。
   const [engineStats, setEngineStats] = useState<EngineStats | null>(null)
+  /** DASH 静态摘要(dash.js 不带逐 rep 档位时,统计面板的码率/编解码/流主机兜底)。 */
+  const dashSummary = useMemo(() => parseDashSummary(playStream?.dashManifest), [playStream?.dashManifest])
+  /** 本条目的播放会话起点(统计面板「会话时长」;PlayableMedia 随条目 key 重挂)。 */
+  const sessionStartedAt = useRef(performance.now())
 
   // 流媒体驱动(hls/flv/dash)→ useMediaStream 接管 video;原生 src 由 VideoShell 写。
   const needsStreamPlayer = !!playStream && isStreamingStream(playStream)
@@ -306,7 +320,20 @@ export function PlayableMedia({
     autoPlay,
     // retryKey 变化强制 useMediaStream 重建播放实例(错误重试)。
     retryKey,
-    onStats: setEngineStats,
+    // 引擎统计合并静态摘要(统计面板):引擎上报优先,缺失的流主机/码率/编解码/
+    // 档位高度用 MPD 兜底(blob/本地 MPD 时 host 省略)。
+    onStats: (s) =>
+      setEngineStats(
+        s
+          ? {
+              ...s,
+              host: s.host ?? dashSummary.host ?? streamHost(playStream?.url),
+              bitrate: s.bitrate ?? dashSummary.bandwidth,
+              codecs: s.codecs ?? dashSummary.codecs,
+              height: s.height ?? dashSummary.height,
+            }
+          : s,
+      ),
     onError: (e) => {
       setPlayError(e)
       onError?.(e)
@@ -605,8 +632,11 @@ export function PlayableMedia({
         autoPlay={autoPlay}
         qualityOptions={qualityOptions}
         activeQuality={stream.rate}
-        stats={needsStreamPlayer ? engineStats : { engine: "native" }}
+        stats={needsStreamPlayer ? engineStats : { engine: "native", host: streamHost(stream.url) }}
+        sessionStartedAt={sessionStartedAt.current}
         onQuality={switchQuality}
+        mode={live === undefined ? undefined : live ? "live" : "video"}
+        theater={theater}
         onMediaError={(code, msg) => {
           setPlayError(new Error(`原生媒体错误(code=${code ?? "?"}): ${msg}`))
           onError?.(new Error(msg))

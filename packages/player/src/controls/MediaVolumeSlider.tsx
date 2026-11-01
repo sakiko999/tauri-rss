@@ -17,10 +17,14 @@ export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: 
   const volumePct = Math.round((state.muted ? 0 : state.volume) * 100)
   return (
     <div className="relative flex items-center" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <MediaMuteButton state={state} ops={ops} />
+      <MediaMuteButton
+        state={state}
+        ops={ops}
+        className="flex h-[22px] w-9 items-center justify-center text-white/80 hover:text-white"
+      />
       {/* 垂直滑条浮层:仅按钮 hover 显示(React 状态,不受祖先 group 影响) */}
       {open && (
-        <div className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 rounded bg-black/80 p-2">
+        <div className="absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 rounded-full bg-black/80 p-2.5">
           <input
             type="range"
             min={0}
@@ -29,7 +33,7 @@ export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: 
             onChange={(e) => ops.changeVolume(Number(e.target.value) / 100)}
             aria-label="音量"
             aria-orientation="vertical"
-            className="h-24 w-1 cursor-pointer accent-white"
+            className="h-24 w-1 cursor-pointer accent-[#fb7299]"
             style={{ writingMode: "vertical-lr", direction: "rtl" }}
           />
         </div>

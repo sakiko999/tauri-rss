@@ -12,7 +12,7 @@
 import { type MediaItem, type MediaKind, type MediaStream, type PlaybackChapter } from "@amoeba/core"
 import { AudioShell } from "@amoeba/player"
 import { MediaImage } from "@amoeba/ui"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router"
 
 import { Button, IconButton } from "../../components/Button.tsx"
@@ -45,8 +45,10 @@ export function PlayerPage() {
   // ⚠️ 播放页内跳向另一条内容必须走 /play/:itemId。用 go("play:"+id) 会生成
   // `/v/play%3Aid`,App 的 isPlay 判的是 params.itemId → 落到 MediaMain 网格。
   const playTo = usePlayNavigate()
-  /** 剧场模式:单列 + 收起右栏(队列/同订阅),把宽度全给画面。只存本页状态,不改设置。 */
-  const [theater, setTheater] = useState(false)
+  // 剧场模式归视频会话 store:控件栏的宽屏按钮(VideoShell)与本页布局共用一个状态,
+  // 小窗/跨路由期间保持。音频页没有画面,剧场模式无意义。
+  const theater = useVideoSession((s) => s.theater)
+  const toggleTheater = useVideoSession((s) => s.toggleTheater)
   // 视频/听视频的播放栈在 VideoSessionStage（App 层常驻）——页面只订阅它的回报：
   // 「实际纯音频」（带条目键,切条目自动失效）、章节、媒体控制句柄。
   const sessionAudioOnly = useVideoSession((s) => s.audioOnly)
@@ -301,9 +303,9 @@ export function PlayerPage() {
                     )
                   ) : null}
                   {/* 剧场模式放控制区(与队列/下一条同一行):它是「怎么放」而不是「放什么」。
-                    音频页没有画面,剧场模式无意义。 */}
+                    音频页没有画面,剧场模式无意义。播放器控件栏里的宽屏按钮是同一状态。 */}
                   {audioMode ? null : (
-                    <Button variant="quiet" aria-pressed={theater} onClick={() => setTheater((v) => !v)}>
+                    <Button variant="quiet" aria-pressed={theater} onClick={toggleTheater}>
                       <Icon name="monitor" size={14} /> 剧场模式
                     </Button>
                   )}

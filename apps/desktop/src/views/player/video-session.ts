@@ -64,6 +64,13 @@ interface VideoSessionState {
   /** 当前章节下标（onProgress 顺带算，只在跨章节时 setState）。 */
   chapterIdx: number
   ctl: VideoCtl | null
+  /**
+   * 宽屏(剧场)模式。归会话 store 而不是播放页局部 state:控件栏的宽屏按钮
+   * (PlayableMedia → VideoShell)与播放页布局(收起右栏)都要读写它,小窗/跨路由
+   * 期间也保持。
+   */
+  theater: boolean
+  toggleTheater(): void
   /** 打开一条视频会话；同条目幂等（只补 mode/from，不动 startAtSec）。 */
   open: (item: MediaItem, opts: { from?: string | null; mode?: "view" | "listen"; startAtSec?: number }) => void
   /** 停止并销毁会话（Stage 卸载 portal → PlayableMedia 卸载 → 引擎 destroy）。 */
@@ -85,6 +92,10 @@ export const useVideoSession = create<VideoSessionState>((set, get) => ({
   chapters: null,
   chapterIdx: -1,
   ctl: null,
+  theater: false,
+  toggleTheater() {
+    set({ theater: !get().theater })
+  },
 
   open(item, opts) {
     // 互斥：两路声音不许叠（音频会话保留，只是暂停，迷你条可随时续上）。

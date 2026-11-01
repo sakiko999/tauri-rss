@@ -10,7 +10,7 @@ import { PauseIcon, PlayIcon } from "../icons.tsx"
 export function MediaPlayButton({
   state,
   ops,
-  className = "rounded p-1 hover:bg-white/20",
+  className = "flex h-[22px] w-9 items-center justify-center text-white/80 hover:text-white",
 }: {
   state: VideoPlayState
   ops: VideoOps

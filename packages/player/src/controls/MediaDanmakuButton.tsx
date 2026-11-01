@@ -1,12 +1,11 @@
 /**
  * MediaDanmakuButton —— 弹幕开关(播放器控件栏)。
  *
- * 纯受控:enabled 来自宿主(播放页的临时开关),点击调 onToggle。
- * 只控制「是否把弹幕流交给渲染层」,不负责解析/建连 —— 那是 PlayableMedia 的
- * showDanmaku 语义。control 缺失时不渲染(无弹幕流 / 全局设置已关闭)。
+ * 视觉对齐 B 站直播播放器:「弹」字方框;开启时右下角叠**品牌粉对勾**,
+ * 关闭时整枚图标降为白 45%。纯受控:enabled 来自宿主,点击调 onToggle。
+ * 不做弹幕发送/输入(B 站把发送条放在视频下方页面里,本项目不提供写操作,
+ * 放一个不可用的输入框只是假象 —— 已删除)。
  */
-
-import { DanmakuIcon, DanmakuOffIcon } from "../icons.tsx"
 
 export interface DanmakuControl {
   enabled: boolean
@@ -15,7 +14,7 @@ export interface DanmakuControl {
 
 export function MediaDanmakuButton({
   control,
-  className = "rounded p-1 hover:bg-white/20",
+  className = "relative flex h-[22px] w-9 shrink-0 items-center justify-center text-white/80 hover:text-white",
 }: {
   control?: DanmakuControl
   className?: string
@@ -26,10 +25,31 @@ export function MediaDanmakuButton({
       type="button"
       aria-label={control.enabled ? "关闭弹幕" : "开启弹幕"}
       aria-pressed={control.enabled}
+      title={control.enabled ? "关闭弹幕" : "开启弹幕"}
       onClick={control.onToggle}
-      className={`${className} ${control.enabled ? "" : "text-white/50"}`}
+      className={className}
     >
-      {control.enabled ? <DanmakuIcon className="h-5 w-5" /> : <DanmakuOffIcon className="h-5 w-5" />}
+      <span
+        className={`rounded-[4px] border-[1.5px] border-current px-[3px] text-[11px] leading-[14px] font-medium ${
+          control.enabled ? "" : "text-white/45"
+        }`}
+      >
+        弹
+      </span>
+      {control.enabled && (
+        <svg
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+          className="absolute right-1 bottom-0.5 h-3 w-3 text-[#fb7299]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M1.5 6.5 4.5 9.5 10.5 2.5" />
+        </svg>
+      )}
     </button>
   )
 }

@@ -15,10 +15,13 @@ export const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2]
 export function MediaRateButton({
   state,
   ops,
-  className = "rounded px-1.5 py-1 text-xs hover:bg-white/20",
+  container,
+  className = "flex h-[22px] items-center px-1 text-[14px] text-white/80 hover:text-white data-[state=open]:text-white",
 }: {
   state: VideoPlayState
   ops: VideoOps
+  /** 全屏/小窗时浮层挂载点。 */
+  container?: HTMLElement | null
   className?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -28,9 +31,11 @@ export function MediaRateButton({
     <PlayerMenu
       open={open}
       onOpenChange={setOpen}
+      container={container}
       trigger={
-        <button type="button" aria-label="播放倍速" className={`data-[state=open]:bg-white/20 ${className}`}>
-          {state.playbackRate}×
+        // B 站倍速按钮文案恒为「倍速」(不显示当前速率值)。
+        <button type="button" aria-label="播放倍速" className={className}>
+          倍速
         </button>
       }
     >

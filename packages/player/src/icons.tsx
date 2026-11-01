@@ -77,47 +77,6 @@ export function FullscreenExitIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-/** 弹幕:对话气泡 + 两行文字(开着时)。 */
-export function DanmakuIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-      {...props}
-    >
-      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V7a3 3 0 0 1 3-3h7a8 8 0 0 1 8 8z" />
-      <path d="M8 10h8M8 14h5" />
-    </svg>
-  )
-}
-
-/** 弹幕关闭:同一气泡加斜线。 */
-export function DanmakuOffIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-      {...props}
-    >
-      <path d="M21 12a8 8 0 0 1-8 8H7l-4 3V7a3 3 0 0 1 3-3h7a8 8 0 0 1 8 8z" />
-      <path d="M8 10h8M8 14h5" />
-      <path d="M3 3l18 18" />
-    </svg>
-  )
-}
-
 /** 后退:圆环 + 逆时针箭头（秒数由调用方叠在下方）。 */
 export function RewindIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -164,6 +123,26 @@ export function SpinnerIcon(props: SVGProps<SVGSVGElement>) {
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false" {...props}>
       <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
       <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** 宽屏(剧场):圆角框内左右箭头 —— B 站「宽屏模式」按钮同形。 */
+export function TheaterIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      <rect x="2.5" y="5.5" width="19" height="13" rx="2.5" />
+      <path d="M10 9.5 7.5 12l2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" />
     </svg>
   )
 }
