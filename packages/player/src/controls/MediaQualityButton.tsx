@@ -45,6 +45,7 @@ export function MediaQualityButton({
         <PlayerMenuItem
           key={rate}
           size="sm"
+          align="start"
           active={rate === activeQuality}
           onSelect={() => {
             onQuality(rate)

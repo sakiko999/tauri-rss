@@ -30,7 +30,7 @@ export function MediaDanmakuButton({
       className={className}
     >
       <span
-        className={`rounded-[4px] border-[1.5px] border-current px-[3px] text-[11px] leading-[14px] font-medium ${
+        className={`rounded-[4px] border-[1.5px] border-current px-[3px] text-[12px] leading-[15px] font-medium ${
           control.enabled ? "" : "text-white/45"
         }`}
       >

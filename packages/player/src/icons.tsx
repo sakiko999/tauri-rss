@@ -5,10 +5,15 @@
 
 import type { SVGProps } from "react"
 
+/**
+ * 图标统一口径(对齐 B 站控件字形实测 17-18px,B 站 svg 渲染框 22px):
+ * 所有 glyph 在 24 viewBox 内占 ~18-19 单位,按 22px 渲染 ≈ 17px;
+ * 播放三角 ~14×18、暂停双条 ~18 高、喇叭 ~18 高,避免「三角明显比喇叭小」。
+ */
 export function PlayIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
-      <path d="M8 5.14v13.72L19 12 8 5.14z" />
+      <path d="M6 2.9v18.2L19.8 12 6 2.9z" />
     </svg>
   )
 }
@@ -16,8 +21,8 @@ export function PlayIcon(props: SVGProps<SVGSVGElement>) {
 export function PauseIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
-      <rect x="6" y="5" width="4" height="14" rx="1" />
-      <rect x="14" y="5" width="4" height="14" rx="1" />
+      <rect x="5.5" y="2.6" width="5" height="18.8" rx="1" />
+      <rect x="13.5" y="2.6" width="5" height="18.8" rx="1" />
     </svg>
   )
 }
@@ -25,9 +30,15 @@ export function PauseIcon(props: SVGProps<SVGSVGElement>) {
 export function VolumeIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
-      <path d="M3 9v6h4l5 5V4L7 9H3z" />
-      <path d="M16 8.5a5 5 0 0 1 0 7" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      <path d="M18.6 5.9a9 9 0 0 1 0 12.2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 8.5v7h4l5.5 5.5V3L7.5 8.5H3z" />
+      <path d="M16 8.2a5.5 5.5 0 0 1 0 7.6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path
+        d="M18.8 5.4a9.5 9.5 0 0 1 0 13.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
     </svg>
   )
 }
@@ -35,7 +46,7 @@ export function VolumeIcon(props: SVGProps<SVGSVGElement>) {
 export function VolumeMutedIcon(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false" {...props}>
-      <path d="M3 9v6h4l5 5V4L7 9H3z" />
+      <path d="M3 8.5v7h4l5.5 5.5V3L7.5 8.5H3z" />
       <path d="M16 9l6 6M22 9l-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
@@ -141,8 +152,8 @@ export function TheaterIcon(props: SVGProps<SVGSVGElement>) {
       focusable="false"
       {...props}
     >
-      <rect x="2.5" y="5.5" width="19" height="13" rx="2.5" />
-      <path d="M10 9.5 7.5 12l2.5 2.5M14 9.5l2.5 2.5-2.5 2.5" />
+      <rect x="2" y="4.5" width="20" height="15" rx="2.5" />
+      <path d="M10 8.5 7 12l3 3.5M14 8.5l3 3.5-3 3.5" />
     </svg>
   )
 }
