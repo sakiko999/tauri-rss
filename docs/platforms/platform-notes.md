@@ -107,6 +107,9 @@
     `www.douyin.com/user/<抖音号>` 也是 200（SPA 空壳），**不能**当 sec_uid 用。
   - 映射：`aweme_type === 68`/有 `images[]` 的是**图文**（它的 `play_addr` 是 BGM，
     不能当视频）；视频按 `video.bit_rate[]` 降序取最高档直链。
+  - **查用户渠道 `douyin:user:search`**（2026-11-01）：输入抖音号 → 旧版资料接口换
+    `sec_uid` + 昵称/头像（匿名，同 `douyin:user` 订阅输入的解析）；「搜索添加」取候选用。
+    抖音号以外（按昵称真搜索）仍需登录，未做。
   - ✅ **翻页（`Pageable`，2026-10-31）**：**登录态下**页面会随滚动自己发下一页
     `/aweme/post`（实测 57 → 87 → 110 → 140 → 163）。手法 = 把**最大可滚动容器**
     滚到底（抖音主页不在 window 上滚，容器是 class 混淆的内层 div）+ 在**完整落在
@@ -194,6 +197,10 @@
   `settings.xhsCookie`。登录判据 = 页面 `__INITIAL_STATE__.user.loggedIn === true`
   / 侧栏「我」入口 / `user_id` cookie（后两者兜底）。权威接口是
   `/api/sns/web/v2/user/me` 的 `data.guest === false && data.user_id`。
+- **查用户渠道 `xhs:user:search`**（2026-11-01）：输入 user_id / 主页链接 → 同一份
+  profile SSR 读 `user.userPageData`（拿不到回退首条笔记作者）；浏览器与 HTTP SSR
+  两条路径同 `xhs:user`，**需登录**。xhs 搜索 API 需签名（签名库在 feat/xhs-rustpython
+  分支），按昵称搜索未做。
 - 主分支**全 SSR，且 2026-10-22 起要求登录（匿名态已移除）**：所有 xhs 渠道先过
   `assertXhsLoggedIn`（登录页优先 → 页面 `loggedIn` → 侧栏「我」→ `user_id` cookie），
   未登录直接抛可操作错误，不再退回匿名 SSR / 匿名详情。**笔记详情必须带列表项的
@@ -359,6 +366,10 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
   （page / since_id / weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录（登录态
   since_id 翻页正常，见分页审计）；**xhs 全渠道需登录（匿名态已移除）**；douyin 直播可用、
   原画档位需登录
+- **搜微博用户 `weibo:user:search`**（2026-11-01 实测）：`m.weibo.cn/api/container/getIndex?
+  containerid=100103type%3D3%26q%3D<昵称>`，**必须登录**（匿名 `ok:-100` 风控码、0 条；
+  有完整 cookie 时返回 id/昵称/粉丝数/认证理由）。渠道在无 cookie 时**直接报「需要登录」**
+  而不发匿名请求（避免触发平台冷却）。
 - ⚠️ **抖音渠道前缀是 `live:douyin*`**：权威是 `@amoeba/platform` 的 `PLATFORMS` ——
   `douyin.prefixes` 同时登记 `live:douyin` 与 `douyin`，长前缀优先
   （`packages/platform/src/index.ts:113-126`）；core `cookieFieldFor` 只是查表包装。

@@ -30,6 +30,7 @@ import {
   DouyinLiveHotChannel,
   DouyinTrendChannel,
   DouyinUserChannel,
+  DouyinUserSearchChannel,
 } from "./channels/douyin/index.ts"
 import {
   DouyuAnchorChannel,
@@ -52,8 +53,8 @@ import {
   TwitchHotChannel,
   TwitchLiveChannel,
 } from "./channels/twitch/index.ts"
-import { WeiboHotChannel, WeiboUserChannel } from "./channels/weibo/index.ts"
-import { XhsExploreChannel, XhsUserChannel } from "./channels/xhs/index.ts"
+import { WeiboHotChannel, WeiboUserChannel, WeiboUserSearchChannel } from "./channels/weibo/index.ts"
+import { XhsExploreChannel, XhsUserChannel, XhsUserSearchChannel } from "./channels/xhs/index.ts"
 import {
   YoutubeChannel,
   YoutubeLiveCategoriesChannel,
@@ -137,6 +138,10 @@ export function registerBuiltinChannels(): void {
   registerChannel(DouyinTrendChannel)
   // 用户主页作品：**被动采集**（导航 + 捕获页面自己的 /aweme/post），见 channels/douyin/user.ts。
   registerChannel(new DouyinUserChannel())
+  // 用户搜索/查号渠道（「搜索添加」的取数源，不设计为长期订阅）。
+  registerChannel(DouyinUserSearchChannel)
+  registerChannel(WeiboUserSearchChannel)
+  registerChannel(new XhsUserSearchChannel())
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──
   registerChannel(new WeiboUserChannel())

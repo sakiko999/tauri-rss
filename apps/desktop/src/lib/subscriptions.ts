@@ -120,16 +120,28 @@ export const LIVE_SUB_CHANNEL: Record<string, string> = {
   twitch: "twitch:live",
 }
 
-/** 平台 → 用户**搜索渠道**(搜 UP主/频道名 → 订阅目标候选;同 SEARCH_CHANNEL 的用户版)。 */
+/**
+ * 平台 → 用户**搜索/查号渠道**(输入 → 订阅目标候选)。每个用户主页渠道都绑一个,
+ * 「搜索添加」统一从这里取候选(2026-11-01 起覆盖全部用户主页渠道):
+ *   - bili / youtube:按昵称真搜索(匿名);
+ *   - weibo:按昵称搜索(**需登录**);
+ *   - douyin:抖音号查号(匿名);xhs:用户 ID/主页链接查号(**需登录**)。
+ */
 export const USER_SEARCH_CHANNEL: Record<string, string> = {
   bili: "bili:user",
   youtube: "youtube:user",
+  weibo: "weibo:user:search",
+  douyin: "douyin:user:search",
+  xhs: "xhs:user:search",
 }
 
-/** 平台 → 用户**订阅渠道**(订阅其投稿;参数是单值 uid/channelId,非列表 → 无「并入」)。 */
+/** 平台 → 用户**订阅渠道**(订阅其投稿;参数是单值,非列表 → 无「并入」)。 */
 export const USER_SUB_CHANNEL: Record<string, string> = {
   bili: "bili:user_video",
   youtube: "youtube",
+  weibo: "weibo:user",
+  douyin: "douyin:user",
+  xhs: "xhs:user",
 }
 
 /**
@@ -139,6 +151,9 @@ export const USER_SUB_CHANNEL: Record<string, string> = {
 export const USER_SUB_PARAM: Record<string, string> = {
   bili: "uid",
   youtube: "channelId",
+  weibo: "uid",
+  douyin: "sec_uid",
+  xhs: "user_id",
 }
 
 /**
@@ -169,17 +184,26 @@ export function candidatesFromSearch(items: MediaItem[]): Candidate[] {
 }
 
 /**
- * 用户搜索渠道返回的条目 → 候选(搜 UP主/频道 → 订阅其投稿)。
+ * 用户搜索渠道返回的条目 → 候选(搜/查用户 → 订阅其投稿)。
  * value 从 **url 解析**(raw 不穿 XML 边界,serialize 不写,所以只能从 url 取):
- * `space.bilibili.com/<mid>` / `youtube.com/channel/<channelId>`。
+ *   `space.bilibili.com/<mid>` / `youtube.com/channel/<channelId>` /
+ *   `weibo.com/u/<uid>` / `douyin.com/user/<sec_uid>` /
+ *   `xiaohongshu.com/user_profile/<user_id>`。
  * 次行信息(粉丝/订阅数)来自条目 summary(channel 侧已拼好)。
  */
 export function candidatesFromUsers(items: MediaItem[]): Candidate[] {
   const out: Candidate[] = []
   const seen = new Set<string>()
+  const USER_URL = [
+    /space\.bilibili\.com\/(\d+)/,
+    /youtube\.com\/channel\/(UC[\w-]+)/,
+    /weibo\.com\/u\/(\d+)/,
+    /douyin\.com\/user\/(MS4wLjAB[\w-]+)/,
+    /xiaohongshu\.com\/user(?:_|\/)profile\/([0-9a-f]{16,32})/i,
+  ]
   for (const i of items) {
     const url = String(i.url ?? "")
-    const m = /space\.bilibili\.com\/(\d+)/.exec(url) ?? /youtube\.com\/channel\/(UC[\w-]+)/.exec(url)
+    const m = USER_URL.map((re) => re.exec(url)).find(Boolean)
     if (!m) continue
     const value = m[1]!
     if (seen.has(value)) continue

@@ -52,6 +52,9 @@ bun run rss fetch youtube:playlist       # YouTube 播放列表（官方 RSS，�
 bun run rss fetch bili:season            # B站合集（30/页，需 Referer）
 bun run rss fetch bili:series            # B站视频列表（20/页，pn/ps）
 bun run rss fetch bili:favlist           # B站公开收藏夹（20/页）
+bun run rss fetch douyin:user:search --kv keyword=pvcyinse  # 抖音查用户（抖音号 → sec_uid/昵称，匿名）
+bun run rss fetch weibo:user:search --kv keyword=半佛仙人    # 微博搜用户（需登录 cookie）
+bun run rss fetch xhs:user:search --kv keyword=<user_id>     # 小红书查用户（需登录；user_id 或主页链接）
 bun run rss item https://www.twitch.tv/<login>  # Twitch 直播 HLS 档位（variant playlist，非 master）
 bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
 bun run rss dm <url> -s 5               # 弹幕：VOD 样本 / 直播窗口统计

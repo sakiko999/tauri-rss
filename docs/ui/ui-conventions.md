@@ -293,12 +293,17 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
   （缩略图 + label/sub/meta + 选中态 + 已订阅标记）。发现页（分区/搜主播）的结果都
   转成候选，选中后可直接 `addSubscription`（roomId/videoId 单值），不用再开弹窗；
   「订阅该分区/关键词」仍走 `AddSubscriptionDialog`。
-- **搜索添加只搜用户**（`USER_SEARCH_CHANNEL` → `bili:user_video`/`youtube`，
-  uid/channelId **单值参数无并入**，targets 恒空自动隐藏「添加到」区块）。⚠️ 落地参数名用
-  **显式表 `USER_SUB_PARAM`**，不能取 `sourceInfoTpl[0]` —— `youtube` 渠道首参是 videoId
-  （订阅单视频），频道订阅是第二参 channelId。候选值从 **url 解析**
-  （`candidatesFromUsers`：`space.bilibili.com/<mid>` / `channel/<UC...>`）—— raw 不穿 XML
-  边界，粉丝/订阅数走 summary 字段。
+- **搜索添加只搜用户，且每个用户主页渠道都绑定一个搜索/查号渠道**（`USER_SEARCH_CHANNEL`）：
+  `bili:user`（昵称，匿名）→ `bili:user_video`；`youtube:user`（昵称，匿名）→ `youtube`；
+  `weibo:user:search`（昵称，**需登录**）→ `weibo:user`；`douyin:user:search`（抖音号）→
+  `douyin:user`；`xhs:user:search`（user_id/主页链接，**需登录**）→ `xhs:user`。
+  全部是 uid/channelId/sec_uid/user_id **单值参数无并入**，targets 恒空自动隐藏「添加到」区块。
+  ⚠️ 落地参数名用**显式表 `USER_SUB_PARAM`**，不能取 `sourceInfoTpl[0]` —— `youtube` 渠道首参
+  是 videoId（订阅单视频），频道订阅是第二参 channelId。候选值从 **url 解析**
+  （`candidatesFromUsers`：`space.bilibili.com/<mid>` / `channel/<UC...>` / `weibo.com/u/<uid>` /
+  `douyin.com/user/<sec_uid>` / `xiaohongshu.com/user/profile/<id>`）—— raw 不穿 XML
+  边界，粉丝/订阅数走 summary 字段。新增用户主页渠道时三张表都要登记（自检
+  `subscriptions.check.ts` 逐平台断言三者齐全）。
 - **手工添加直播房间也能并入已有订阅**（2026-10-19）：`AddSubscriptionDialog` 手工模式下，
   `roomIds` 列表型参数会列出同渠道已有订阅；提交时用 `splitValues` 合并去重，不新建。
   搜索模式的「添加到」同义。

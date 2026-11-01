@@ -3,4 +3,5 @@
  * (client.ts 是公共 HTTP + mblog 归一,user.ts/hot.ts 是 channel 实现。)
  */
 export * from "./user.ts"
+export * from "./user-search.ts"
 export * from "./hot.ts"

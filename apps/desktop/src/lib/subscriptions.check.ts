@@ -14,6 +14,9 @@ import {
   multiParamOf,
   splitValues,
   subsHolding,
+  USER_SEARCH_CHANNEL,
+  USER_SUB_CHANNEL,
+  USER_SUB_PARAM,
   valueList,
 } from "./subscriptions.ts"
 
@@ -111,12 +114,25 @@ const ucands = candidatesFromUsers([
   user("https://space.bilibili.com/37663924", "半佛仙人", "770万粉丝 · 575 个视频"),
   user("https://space.bilibili.com/37663924", "半佛仙人-dup"),
   user("https://www.youtube.com/channel/UCBJycsmduvYEL83R_U4JriQ", "MKBHD", "19.1M subscribers"),
+  user("https://weibo.com/u/5212695504", "半佛仙人正在装", "207.7万 关注者"),
+  user("https://www.douyin.com/user/MS4wLjABAAAAyO-Yizm7OY", "银色虞姬（1号播）", "抖音号 pvcyinse"),
+  user("https://www.xiaohongshu.com/user/profile/5c6d75a400000000100278fa", "玛卡巴卡"),
   user("https://www.bilibili.com/video/BV1xx411c7mD", "普通视频不是用户主页"),
 ])
-assert(ucands.length === 2, "url 提取 mid/channelId 去重,非主页 url 跳过")
+assert(ucands.length === 5, "url 提取各平台用户 id 去重,非主页 url 跳过")
 assert(ucands[0]!.value === "37663924" && ucands[0]!.sub.includes("粉丝"), "bili 候选值 = mid,summary 作次行")
 assert(ucands[1]!.value === "UCBJycsmduvYEL83R_U4JriQ", "youtube 候选值 = channelId")
-// 用户订阅是单值参数(uid/channelId),无「并入已有」语义 → 不进 MULTI_PARAMS
-assert(!MULTI_PARAMS.includes("uid") && !MULTI_PARAMS.includes("channelId"), "uid/channelId 不在列表型参数表")
+assert(ucands[2]!.value === "5212695504", "weibo 候选值 = uid")
+assert(ucands[3]!.value.startsWith("MS4wLjAB"), "douyin 候选值 = sec_uid")
+assert(ucands[4]!.value === "5c6d75a400000000100278fa", "xhs 候选值 = user_id")
+// 用户订阅是单值参数(uid/channelId/sec_uid/user_id),无「并入已有」语义 → 不进 MULTI_PARAMS
+assert(
+  !MULTI_PARAMS.includes("uid") && !MULTI_PARAMS.includes("channelId") && !MULTI_PARAMS.includes("sec_uid"),
+  "用户订阅参数不在列表型参数表",
+)
+// 每个用户主页渠道都绑定了搜索渠道与落地参数(缺一项,「搜索添加」面板就不显示该平台)
+for (const p of Object.keys(USER_SEARCH_CHANNEL)) {
+  assert(!!USER_SUB_CHANNEL[p] && !!USER_SUB_PARAM[p], `${p} 的搜索渠道已绑定落地订阅/参数`)
+}
 
 console.log("\nall checks passed")

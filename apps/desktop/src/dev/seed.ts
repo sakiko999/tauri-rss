@@ -386,6 +386,31 @@ const SEED_SUBSCRIPTIONS: Omit<Subscription, "createdAt" | "updatedAt">[] = [
     groupId: "g-search",
     info: { keyword: "MKBHD" },
   },
+  // 用户搜索/查号渠道(各用户主页渠道的「搜索添加」取数源,2026-11-01 全量绑定)
+  {
+    id: "s-search-weibo-user",
+    channelKey: "weibo:user:search",
+    title: "微博搜用户 · 半佛仙人",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "半佛仙人" },
+  },
+  {
+    id: "s-search-douyin-user",
+    channelKey: "douyin:user:search",
+    title: "抖音查用户 · pvcyinse",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "pvcyinse" },
+  },
+  {
+    id: "s-search-xhs-user",
+    channelKey: "xhs:user:search",
+    title: "小红书查用户 · 玛卡巴卡",
+    enabled: false,
+    groupId: "g-search",
+    info: { keyword: "5c6d75a400000000100278fa" },
+  },
   {
     id: "s-search-douyu-anchor",
     channelKey: "live:douyu:anchor",

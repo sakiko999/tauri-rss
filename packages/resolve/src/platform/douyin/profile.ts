@@ -108,38 +108,62 @@ export async function fetchDouyinUserLive(input: string): Promise<DouyinUserLive
   }
 }
 
-/** 抖音号 → sec_uid 的进程内缓存（订阅信息里存的仍是抖音号，刷新时会重复查）。 */
-const secUidCache = new Map<string, string>()
+/** 抖音号 → 用户摘要的进程内缓存（订阅信息里存的仍是抖音号，刷新时会重复查）。 */
+const userByUniqueIdCache = new Map<string, DouyinUserSummary>()
+
+/** 旧版资料接口给出的用户摘要（搜用户候选行用）。 */
+export interface DouyinUserSummary {
+  secUid: string
+  nickname: string
+  avatar?: string
+  /** 抖音号(回显,确认输的就是它)。 */
+  uniqueId?: string
+}
 
 /**
- * 抖音号（`unique_id`）→ `sec_uid`。
+ * 抖音号（`unique_id`）→ 用户摘要（含 `sec_uid`）。
  *
  * 网页版资料接口（`PROFILE_API`）只认 `sec_user_id`，传 `unique_id` 返回
  * 「UserId不合法」；旧版移动端接口按 `unique_id` 查询是**匿名可用**的，且不需要
- * 签名（2026-11-01 实测 200，返回 `user_info.sec_uid`）。失败时要求改用主页链接。
+ * 签名（2026-11-01 实测 200，返回 `user_info`：sec_uid/nickname/头像）。
+ * 查不到时抛可操作错误（要求改用主页链接）。
  */
-export async function fetchDouyinSecUidByUniqueId(uniqueId: string): Promise<string> {
-  const cached = secUidCache.get(uniqueId)
+export async function fetchDouyinUserByUniqueId(uniqueId: string): Promise<DouyinUserSummary> {
+  const cached = userByUniqueIdCache.get(uniqueId)
   if (cached) return cached
   // 旧接口不是 douyin.com 域名，policy 显式归入 douyin 桶（否则会自成一个域名桶，
   // 绕开 douyin 的并发/RPM/冷却）。
   const json = await httpJson<{
     status_code?: number
     status_msg?: string | null
-    user_info?: { sec_uid?: string }
+    user_info?: { sec_uid?: string; nickname?: string; unique_id?: string; avatar_thumb?: { url_list?: unknown[] } }
   }>(
     `${USER_INFO_API}?unique_id=${encodeURIComponent(uniqueId)}`,
     { "user-agent": DESKTOP_CHROME_UA, referer: "https://www.douyin.com/" },
     { policy: { platform: "douyin" } },
   )
-  const secUid = String(json?.user_info?.sec_uid ?? "").trim()
-  if (Number(json?.status_code ?? NaN) !== 0 || !secUid) {
+  const u = json?.user_info ?? {}
+  const secUid = String(u.sec_uid ?? "").trim()
+  const nickname = String(u.nickname ?? "").trim()
+  if (Number(json?.status_code ?? NaN) !== 0 || !secUid || !nickname) {
     throw new Error(
       `找不到抖音号「${uniqueId}」：${json?.status_msg ?? "资料接口无此用户"}（请检查抖音号，或改用用户主页链接）`,
     )
   }
-  secUidCache.set(uniqueId, secUid)
-  return secUid
+  const avatarList = Array.isArray(u.avatar_thumb?.url_list) ? (u.avatar_thumb!.url_list as unknown[]) : []
+  const summary: DouyinUserSummary = {
+    secUid,
+    nickname,
+    avatar: avatarList[0] ? String(avatarList[0]) : undefined,
+    uniqueId: String(u.unique_id ?? "").trim() || undefined,
+  }
+  userByUniqueIdCache.set(uniqueId, summary)
+  return summary
+}
+
+/** 抖音号 → `sec_uid`（只要 id 的调用方用这个）。 */
+export async function fetchDouyinSecUidByUniqueId(uniqueId: string): Promise<string> {
+  return (await fetchDouyinUserByUniqueId(uniqueId)).secUid
 }
 
 /**

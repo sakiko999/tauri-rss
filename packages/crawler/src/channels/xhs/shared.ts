@@ -303,6 +303,13 @@ export function flatXhsStateList(state: any, path: string[]): any[] {
   return Array.isArray(v) ? v.flat() : []
 }
 
+/** SSR HTML 里的 state → 同一路径的**对象/标量**(逐层解 `_rawValue`;查用户资料用)。 */
+export function xhsStateValue(state: any, path: string[]): any {
+  let v: any = state
+  for (const key of path) v = rawOf(v?.[key])
+  return v ?? undefined
+}
+
 /** 一个列表页(explore 推荐流 / user 笔记流)的抓取配方。 */
 export interface XhsListPage<T> {
   /** 列表页 URL(导航落点)。 */
