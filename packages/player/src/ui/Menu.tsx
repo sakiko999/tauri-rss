@@ -9,10 +9,12 @@
  */
 
 import * as DropdownMenu from "radix-ui/dropdown-menu"
-import type { ReactNode } from "react"
+import { type ReactNode, useEffect, useRef } from "react"
 
 /**
- * 弹窗视觉 = B 站播放器实测(2026-11-01,打开态 computed style):
+ * 弹窗视觉与交互 = B 站播放器实测(2026-11-01,打开态 computed style):
+ *   - **hover 触发**:进入按钮/菜单即展开,离开两者 150ms 后收起(B 站行为,
+ *     不是点击打开);点击触发键仍可切换(键盘/触摸可用);
  *   - 容器 `rgba(20,20,20,.9)` / 2px 圆角 / 无边框无阴影;
  *   - **以触发按钮为轴居中**(菜单中心 = 按钮中心),底边距按钮 9px;
  *   - 条目 36px 高、hover 白 10%、选中 **#00AEEC**;
@@ -45,14 +47,42 @@ export function PlayerMenu({
   contentClassName?: string
   children: ReactNode
 }) {
+  // hover 触发(B 站行为):进入按钮即开;离开按钮/菜单 150ms 后关(留出跨过
+  // 8px 间隙的时间)。点击仍走 Radix 的切档,键盘(Enter/方向键)不受影响。
+  const closeTimer = useRef<number | null>(null)
+  const cancelClose = () => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }
+  const openNow = () => {
+    cancelClose()
+    if (!open) onOpenChange(true)
+  }
+  const closeSoon = () => {
+    cancelClose()
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null
+      onOpenChange(false)
+    }, 150)
+  }
+  useEffect(() => cancelClose, [])
+
   return (
     <DropdownMenu.Root open={open} onOpenChange={onOpenChange}>
-      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
+      <DropdownMenu.Trigger asChild>
+        <span className="inline-flex" onMouseEnter={openNow} onMouseLeave={closeSoon}>
+          {trigger}
+        </span>
+      </DropdownMenu.Trigger>
       <DropdownMenu.Portal {...(container ? { container } : {})}>
         <DropdownMenu.Content
           side={side}
           align={align}
           sideOffset={8}
+          onMouseEnter={openNow}
+          onMouseLeave={closeSoon}
           className={[PLAYER_MENU_CONTENT_CLS, contentClassName].filter(Boolean).join(" ")}
         >
           {children}

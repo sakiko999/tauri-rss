@@ -37,7 +37,7 @@ import { TheaterIconButton } from "./theater.tsx"
 export type PlayerMode = "video" | "live"
 
 /** 图标按钮命中区 36×22(B 站实测)。 */
-const ICON_BTN = "flex h-[22px] w-9 shrink-0 items-center justify-center text-white/80 hover:text-white"
+const ICON_BTN = "flex h-[22px] w-10 shrink-0 items-center justify-center text-white/80 hover:text-white"
 
 export function PlayerControls({
   state,

@@ -22,7 +22,7 @@ export function MediaRateButton({
   state,
   ops,
   container,
-  className = "flex h-[22px] items-center px-1 text-[14px] text-white/80 hover:text-white data-[state=open]:text-white",
+  className = "flex h-[22px] items-center px-2.5 text-[14px] text-white/80 hover:text-white data-[state=open]:text-white",
 }: {
   state: VideoPlayState
   ops: VideoOps

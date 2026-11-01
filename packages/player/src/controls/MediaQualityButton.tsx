@@ -15,7 +15,7 @@ export function MediaQualityButton({
   activeQuality,
   onQuality,
   container,
-  className = "flex h-[22px] items-center px-1 text-[14px] text-white/80 hover:text-white data-[state=open]:text-white",
+  className = "flex h-[22px] items-center px-2.5 text-[14px] text-white/80 hover:text-white data-[state=open]:text-white",
 }: {
   /** 多档位列表(rate + quality);长度 < 2 时不显示。 */
   qualityOptions: { rate: number; quality: string }[]

@@ -16,7 +16,7 @@ export function TheaterIconButton({ theater }: { theater?: { on: boolean; toggle
       aria-pressed={theater.on}
       title={theater.on ? "退出宽屏" : "宽屏模式"}
       onClick={theater.toggle}
-      className={`flex h-[22px] w-9 items-center justify-center ${theater.on ? "text-[#00aeec]" : "text-white/80 hover:text-white"}`}
+      className={`flex h-[22px] w-10 items-center justify-center ${theater.on ? "text-[#00aeec]" : "text-white/80 hover:text-white"}`}
     >
       <TheaterIcon className="h-[22px] w-[22px]" />
     </button>

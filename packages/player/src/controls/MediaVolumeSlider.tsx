@@ -42,12 +42,12 @@ export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: 
       <MediaMuteButton
         state={state}
         ops={ops}
-        className="flex h-[22px] w-9 items-center justify-center text-white/80 hover:text-white"
+        className="flex h-[22px] w-10 items-center justify-center text-white/80 hover:text-white"
       />
       {open && (
         <div className="absolute bottom-full left-1/2 mb-2 flex h-[100px] w-8 -translate-x-1/2 flex-col items-center rounded-[2px] bg-[#141414]/90">
-          {/* 音量数字(B 站 32×28 区域) */}
-          <span className="flex h-7 items-center text-xs text-white/80 tabular-nums">{volumePct}</span>
+          {/* 音量数字(B 站 32×28 区域,12px #e5e9ef) */}
+          <span className="flex h-7 items-center text-xs text-[#e5e9ef] tabular-nums">{volumePct}</span>
           {/* 垂直滑条区:32×60;轨道 2px,滑块 12px 蓝点 */}
           <div
             ref={trackRef}
@@ -86,7 +86,10 @@ export function MediaVolumeSlider({ state, ops }: { state: VideoPlayState; ops: 
               }
             }}
           >
-            <div className="h-full w-0.5 rounded-[1.5px] bg-[#e7e7e7]" />
+            {/* 轨道 2px 浅灰 + **已调节部分 2px 蓝色**(B 站 .bui-bar,从底部到滑块) */}
+            <div className="relative h-full w-0.5 overflow-hidden rounded-[1.5px] bg-[#e7e7e7]">
+              <div className="absolute inset-x-0 bottom-0 bg-[#00aeec]" style={{ height: `${volumePct}%` }} />
+            </div>
             <div
               className="pointer-events-none absolute left-1/2 h-3 w-3 -translate-x-1/2 rounded-full bg-[#00aeec]"
               style={{ bottom: `calc(${volumePct}% - 6px)` }}

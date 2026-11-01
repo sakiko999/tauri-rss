@@ -14,7 +14,7 @@ export interface DanmakuControl {
 
 export function MediaDanmakuButton({
   control,
-  className = "relative flex h-[22px] w-9 shrink-0 items-center justify-center text-white/80 hover:text-white",
+  className = "relative flex h-[22px] w-10 shrink-0 items-center justify-center text-white/80 hover:text-white",
 }: {
   control?: DanmakuControl
   className?: string
