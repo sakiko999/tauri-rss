@@ -36,6 +36,12 @@ export interface BrowserOpOptions {
   mode?: BrowserWindowMode
   /** 平台准入(browserGate)。登录流程**不传**(冷却期仍需允许重新扫码)。 */
   platform?: string
+  /**
+   * 操作结束后关掉本 lane 的 target（释放 renderer，见 `releaseLaneTab`）。
+   * 关闭发生在**本 lane 锁内**：锁外关会与「已出队、刚拿到同一 tab」的下一次操作
+   * 竞争（把对方正在导航的 target 掐掉）。传函数 = 结束时求值（列表只有翻到底才关）。
+   */
+  release?: boolean | (() => boolean)
 }
 
 /**
@@ -66,16 +72,22 @@ export function withBrowserOp<T>(
       withLane(`op:${lane}`, async () => {
         // lane → tab(宿主缺 tab 能力 → 单页语义,回默认 backend)。
         const b: BrowserBackend = browser.tab?.(lane) ?? browser
-        if (opts.mode === "interactive") {
-          return withRenderLease(browser, async () => {
-            // 滚动驱动必须激活本 tab:hidden(非激活)下渲染管线停摆,scrollTo 只改
-            // scrollTop、不派发 scroll 事件(§3.9);activate 毫秒级、不触发重载。
-            // interactive 操作已被 withRenderLease 全局串行,不会两个 lane 互抢激活。
-            await (b as BrowserTab).activate?.()
-            return fn(b)
-          })
+        try {
+          if (opts.mode === "interactive") {
+            return await withRenderLease(browser, async () => {
+              // 滚动驱动必须激活本 tab:hidden(非激活)下渲染管线停摆,scrollTo 只改
+              // scrollTop、不派发 scroll 事件(§3.9);activate 毫秒级、不触发重载。
+              // interactive 操作已被 withRenderLease 全局串行,不会两个 lane 互抢激活。
+              await (b as BrowserTab).activate?.()
+              return fn(b)
+            })
+          }
+          return await fn(b)
+        } finally {
+          // ⚠️ 必须在 lane 锁内关:释放锁后再关会掐掉刚出队、已拿到同一 tab 的下一次操作。
+          const release = typeof opts.release === "function" ? opts.release() : opts.release
+          if (release) await releaseLaneTab(browser, lane)
         }
-        return fn(b)
       }),
     ),
   )

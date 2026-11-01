@@ -8,7 +8,7 @@
  * 「浏览渠道」是查渠道目录再填参数。
  */
 
-import type { ChannelInfo } from "@amoeba/core"
+import type { ChannelInfo, Subscription } from "@amoeba/core"
 import { platformDef } from "@amoeba/platform"
 import { MediaImage } from "@amoeba/ui"
 import { useMemo, useState } from "react"
@@ -43,6 +43,12 @@ export interface SearchPanelProps {
   subscribed: Set<string>
   /** 没有返回结果的平台(需要登录 / 风控)—— 空结果时也要说清是哪几站。 */
   failedPlatforms: string[]
+  /** 可并入的已有订阅(仅列表型参数 roomIds 才有)。 */
+  targets: Subscription[]
+  targetId: string
+  onTargetId: (v: string) => void
+  /** 当前落地目标的参数名(用于数房间数)。 */
+  landParam?: string
 }
 
 /** 候选列表的入参(SearchPanel 与发现页共用)。 */
@@ -198,6 +204,38 @@ export function SearchPanel(f: SearchPanelProps) {
         <p className="t-small t-dim">
           {f.failedPlatforms.join("、")} 没有返回结果。需要登录或触发风控时，先到「账号与凭证」处理。
         </p>
+      ) : null}
+
+      {/* 直播目标(roomIds)：可新建，也可把选中房间追加进已有订阅（与手工模式同语义）。 */}
+      {f.cands.length > 0 && f.targets.length > 0 ? (
+        <div className="field">
+          <span className="field-label" id="lbl-search-target">
+            添加到
+          </span>
+          <div className="chip-row" role="radiogroup" aria-labelledby="lbl-search-target">
+            <button
+              className="chip"
+              role="radio"
+              aria-checked={f.targetId === "new"}
+              onClick={() => f.onTargetId("new")}
+            >
+              <Icon name="plus" size={13} /> 新建订阅
+            </button>
+            {f.targets.map((s) => (
+              <button
+                key={s.id}
+                className="chip"
+                role="radio"
+                aria-checked={f.targetId === s.id}
+                onClick={() => f.onTargetId(s.id)}
+              >
+                {s.title}
+                <span className="cand-chip">{valueList(s, f.landParam).length} 房</span>
+              </button>
+            ))}
+          </div>
+          <span className="field-help">并入后原有房间保留。</span>
+        </div>
       ) : null}
 
       <CandidateList

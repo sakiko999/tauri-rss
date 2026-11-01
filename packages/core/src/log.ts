@@ -55,5 +55,10 @@ export const coreLog = createLogDomain("core", {
       text: (ctx: { subscriptionId: string; error: string }) =>
         `退订清理残留内容失败 ${ctx.subscriptionId}: ${ctx.error}`,
     },
+    retiredChannel: {
+      level: "warn",
+      text: (ctx: { subscriptionId: string; channel: string }) =>
+        `渠道已下线，自动停用旧订阅 ${ctx.channel}/${ctx.subscriptionId}（内容保留，可手工退订）`,
+    },
   },
 })

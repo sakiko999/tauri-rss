@@ -326,8 +326,13 @@ export interface XhsListPage<T> {
  * `lane`:列表 lane 名(如 `list:xhs:explore`)——lane 化后按 channelKey 分 tab,
  * 保住翻页累积 state(详情/登录在各自 lane,不再把列表页导航走)。
  */
-export async function fetchXhsList<T>(browser: BrowserBackend, page: XhsListPage<T>, lane: string): Promise<T> {
-  return withBrowserOp(browser, { lane, platform: "xhs" }, async (b) => {
+export async function fetchXhsList<T>(
+  browser: BrowserBackend,
+  page: XhsListPage<T>,
+  lane: string,
+  opts?: { release?: boolean },
+): Promise<T> {
+  return withBrowserOp(browser, { lane, platform: "xhs", release: opts?.release }, async (b) => {
     await cdpNavigate(b, page.url, true)
     await waitXhsSsr(b, "xhs SSR 状态未挂载")
     await assertXhsNotBlocked(b)

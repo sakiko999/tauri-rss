@@ -838,11 +838,12 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
     [WebView2Feedback #2121](https://github.com/MicrosoftEdge/WebView2Feedback/issues/2121)
     也明确建议应用自己做 tab discarding，关 target 是唯一确定释放 renderer 私有内存的手段
     （每 tab 独立 renderer，Chromium 不复用）。
-    ② **一次性 lane 用完即关**（`releaseLaneTab`，2026-11-01）：关键词搜索页
-    （`search:xhs` / `search:douyin`）与**已翻到底**的列表 lane（xhs/douyin 的
-    `fetchMore` 返回「真到底」时）在操作结束后立刻关 target，不等 5 分钟空闲回收。
-    判据 = 下一次操作本来就会重新导航，页面累计 state 不再是增量依据；翻页中途
-    （页面还在累积）**不要**关。
+    ② **一次性 lane 用完即关**（`withBrowserOp` 的 `release` 选项 + `releaseLaneTab`，
+    2026-11-01）：关键词搜索页（`search:xhs` / `search:douyin`、xhs 查号）与
+    **已翻到底**的列表 lane（xhs/douyin 的 `fetchMore` 返回「真到底」时）在操作结束后
+    立刻关 target，不等 5 分钟空闲回收。关闭在**本 lane 锁内**执行——锁外关会掐掉
+    刚出队、已拿到同一 tab 的下一次操作。判据 = 下一次操作本来就会重新导航，页面
+    累计 state 不再是增量依据；翻页中途（页面还在累积）**不要**关。
     ③ 资源拦截表补 `*.ts/*.m4s/*.flv/*.mov` 与 **带 query 的媒体尾缀**：抖音直链实测形如
     `.../x.mp4?...`，只写 `*.mp4` 会漏；小红书视频 CDN 无扩展名（`sns-video-*.xhscdn.com`），
     按主机名拦。字体同理补 `*/fonts/*`（抖音实测一次主页加载 324 个

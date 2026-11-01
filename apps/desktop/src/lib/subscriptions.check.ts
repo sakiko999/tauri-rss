@@ -192,6 +192,13 @@ assert(
   "抖音用户候选同时给直播间目标",
 )
 
+// YouTube 直播落地 youtube:live + videoId（不是 roomIds）
+const yt = candidatesFromSearch([live("dQw4w9WgXcQ", "YT Live")], "youtube")
+assert(
+  yt[0]!.targets[0]?.channelKey === "youtube:live" && yt[0]!.targets[0]?.param === "videoId",
+  "YouTube 直播候选落地 videoId（与 youtube:live 的参数一致）",
+)
+
 // 统一搜索的取数源 = 用户搜索 + 注册表里的 *:anchor;分区/用户主页渠道不再列进目录手填
 const infos = [
   ch("bili:user", "keyword"),
@@ -211,6 +218,7 @@ assert(isManualEntryOnly(ch("bili:live:area", "parentAreaId")), "分区渠道不
 assert(isManualEntryOnly(ch("live:douyu:anchor", "keyword")), "主播搜索渠道属工具,不进目录")
 assert(isManualEntryOnly(ch("bili:live", "roomIds")), "直播间渠道不再出现在目录手填")
 assert(!isManualEntryOnly(ch("youtube:live", "videoId")), "YouTube 直播(视频 ID)保留手填入口")
+assert(!isManualEntryOnly(ch("youtube", "videoId")), "YouTube 通用渠道保留手填入口（单视频/频道 ID）")
 // 用户订阅是单值参数(uid/channelId/sec_uid/user_id),无「并入已有」语义 → 不进 MULTI_PARAMS
 assert(
   !MULTI_PARAMS.includes("uid") && !MULTI_PARAMS.includes("channelId") && !MULTI_PARAMS.includes("sec_uid"),

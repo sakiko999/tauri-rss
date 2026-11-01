@@ -70,8 +70,9 @@ VideoContextMenu/PlayerContainer），设置面板/OSD 等 P1 原语未建。
 - **P0a-2 浮层容器收口**：`ui/PlayerContainer.tsx`（Provider + `usePlayerContainer` +
   非 React 路径的 `getPlayerContainer/setPlayerContainer`）；清晰度/倍速菜单未显式
   传 `container` 时自动挂播放器容器。
-- **P0b-3（部分）**：Esc 分层——第一下只关浮层（统计/右键菜单，preventDefault
-  防退全屏），第二下才由浏览器退全屏；theater 已在会话 store。
+- **P0b-3（部分）**：Esc 先关浮层（统计/右键菜单）；theater 已在会话 store。
+  ⚠️ **全屏退出是 Chromium 的 UA 级手势，`preventDefault()` 拦不住**——全屏下按 Esc
+  会同时关浮层并退出全屏（真正拦住需要 Keyboard Lock API，未接入）。
 - **P0a-4 WebView2 能力 spike（实测 WebView2 Edg/156，dev 实例内 eval）**：
 
   | 能力 | 结果 | 结论 |

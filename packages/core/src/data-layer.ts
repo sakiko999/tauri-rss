@@ -474,12 +474,20 @@ export function createDataLayer(): DataLayer {
   }
 
   /**
-   * 只读缓存水化：服务启动时把各订阅首页塞回 store（零网络）。
+   * 启动水化：把各订阅首页塞回 store（零网络）；顺带停用**已下线渠道**的旧订阅。
+   *
    * 停用订阅也照常水化——停用只表示不抓取，不代表不展示旧内容。
+   * ⚠️ 已下线渠道（如 v0.16.0 清理的关键词搜索）必须停用而不是每轮 refresh 报
+   * NoChannelError：否则订阅永远停在旧内容、状态永远是错误，用户只能手工删。
+   * 不删数据（缓存与阅读态保留），用户在侧栏能看到停用项并自行退订。
    */
   async function hydrate(): Promise<void> {
     const subs = await repo.list().catch(() => [])
     for (const sub of subs) {
+      if (sub.enabled && !getChannel(sub.channelKey)) {
+        await repo.update(sub.id, { enabled: false }).catch(() => undefined)
+        coreLog.retiredChannel({ subscriptionId: sub.id, channel: sub.channelKey })
+      }
       await restoreFromCache(sub.id, getChannel(sub.channelKey)?.kind).catch(() => null)
     }
   }

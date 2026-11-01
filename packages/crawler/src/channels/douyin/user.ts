@@ -36,7 +36,6 @@ import {
   now,
   readAwemeList,
   readDouyinLoginCookie,
-  releaseLaneTab,
   resolveDouyinSecUid,
   withBrowserOp,
 } from "@amoeba/resolve"
@@ -198,73 +197,74 @@ export class DouyinUserChannel implements RssChannel {
     // 抖音号 → sec_uid（进程内有缓存，编译后每页不重复请求）。
     const secUid = await resolveDouyinSecUid(input)
     let ended = false
-    return withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "douyin" }, async (b) => {
-      // 匿名态页面只发首屏那一次请求、作品区被登录弹窗盖住（滚轮无效，2026-10-31 实测），
-      // 直接给可操作错误；判据与登录快照同源（`sessionid`，ttwid 匿名访客也有，不能用）。
-      if (!(await readDouyinLoginCookie(b))) throw new Error(NEEDS_LOGIN)
+    return withBrowserOp(
+      browser,
+      { lane: LANE, mode: "interactive", platform: "douyin", release: () => ended },
+      async (b) => {
+        // 匿名态页面只发首屏那一次请求、作品区被登录弹窗盖住（滚轮无效，2026-10-31 实测），
+        // 直接给可操作错误；判据与登录快照同源（`sessionid`，ttwid 匿名访客也有，不能用）。
+        if (!(await readDouyinLoginCookie(b))) throw new Error(NEEDS_LOGIN)
 
-      const state = posts.get(secUid) ?? []
-      posts.set(secUid, state)
-      // 起点 = store 已有条数（不是当前内存条数）：服务重启后内存空了但 store 还在，
-      // 若从内存长度起算，会把 store 已有的条目再返回一遍（core 去重后 0 新增 + 游标
-      // 前进 ⇒ 被误判「到底」）。从 existing 起算则继续往下滚，滚过它才吐新内容。
-      const start = cursor !== undefined ? Number(cursor) || 0 : (existing ?? state.length)
+        const state = posts.get(secUid) ?? []
+        posts.set(secUid, state)
+        // 起点 = store 已有条数（不是当前内存条数）：服务重启后内存空了但 store 还在，
+        // 若从内存长度起算，会把 store 已有的条目再返回一遍（core 去重后 0 新增 + 游标
+        // 前进 ⇒ 被误判「到底」）。从 existing 起算则继续往下滚，滚过它才吐新内容。
+        const start = cursor !== undefined ? Number(cursor) || 0 : (existing ?? state.length)
 
-      // 服务刚启动 / 页面被导航走：先回到主页并收下首屏那批。
-      const href = await cdpEvaluate<string>(b, "location.href").catch(() => "")
-      if (!href.startsWith(douyinUserUrl(secUid))) {
-        await capturePage(b, {
-          platform: "douyin",
-          endpoint: ENDPOINT,
-          match: (u) => u.pathname === POST_PATH,
-          trigger: (x) => cdpNavigate(x, douyinUserUrl(secUid), true),
-        })
-        mergeUnique(state, awemeListToSocial(this.readCaptured(secUid), this.key, now()))
-      }
+        // 服务刚启动 / 页面被导航走：先回到主页并收下首屏那批。
+        const href = await cdpEvaluate<string>(b, "location.href").catch(() => "")
+        if (!href.startsWith(douyinUserUrl(secUid))) {
+          await capturePage(b, {
+            platform: "douyin",
+            endpoint: ENDPOINT,
+            match: (u) => u.pathname === POST_PATH,
+            trigger: (x) => cdpNavigate(x, douyinUserUrl(secUid), true),
+          })
+          mergeUnique(state, awemeListToSocial(this.readCaptured(secUid), this.key, now()))
+        }
 
-      let platformActive = false
-      // 4 轮：一轮通常只换来一页（~30 条）。内存丢了要补回 existing 那段，多给一轮。
-      for (let round = 0; round < 4 && state.length <= start; round++) {
-        const before = await cdpEvaluate<number>(
-          b,
-          `(() => { const el = ${SCROLLER_EXPR}; return el ? el.scrollHeight : 0; })()`,
-        ).catch(() => 0)
-        await capturePage(b, {
-          platform: "douyin",
-          endpoint: ENDPOINT,
-          match: (u) => u.pathname === POST_PATH,
-          trigger: scrollForMore,
-          idleMs: 1000,
-          timeoutMs: 12_000,
-        })
-        mergeUnique(state, awemeListToSocial(this.readCaptured(secUid), this.key, now()))
-        const after = await cdpEvaluate<number>(
-          b,
-          `(() => { const el = ${SCROLLER_EXPR}; return el ? el.scrollHeight : 0; })()`,
-        ).catch(() => 0)
-        if (after > before) platformActive = true
-        if (state.length > start) break
-        await sleep(600)
-      }
+        let platformActive = false
+        // 4 轮：一轮通常只换来一页（~30 条）。内存丢了要补回 existing 那段，多给一轮。
+        for (let round = 0; round < 4 && state.length <= start; round++) {
+          const before = await cdpEvaluate<number>(
+            b,
+            `(() => { const el = ${SCROLLER_EXPR}; return el ? el.scrollHeight : 0; })()`,
+          ).catch(() => 0)
+          await capturePage(b, {
+            platform: "douyin",
+            endpoint: ENDPOINT,
+            match: (u) => u.pathname === POST_PATH,
+            trigger: scrollForMore,
+            idleMs: 1000,
+            timeoutMs: 12_000,
+          })
+          mergeUnique(state, awemeListToSocial(this.readCaptured(secUid), this.key, now()))
+          const after = await cdpEvaluate<number>(
+            b,
+            `(() => { const el = ${SCROLLER_EXPR}; return el ? el.scrollHeight : 0; })()`,
+          ).catch(() => 0)
+          if (after > before) platformActive = true
+          if (state.length > start) break
+          await sleep(600)
+        }
 
-      const page = state.slice(start, start + WINDOW)
-      const xml = serializeFeed(page, this.channelOptions(secUid))
-      if (!page.length) {
-        // 平台还在加载(scrollHeight 增长但条目未到,或内存刚丢还在补回 existing 那段)
-        // → 原样返回 cursor + hasMore 让 core 保留「加载更多」
-        // (core 的「游标前进但 0 新增 ⇒ 到底」启发式会误杀这种情况)。
-        // 多次滚动 scrollHeight 无增长才视为真到底(省略 cursor = 没有更多)。
-        if (platformActive) return { xml, cursor: String(start), hasMore: true }
-        ended = true
-        return { xml }
-      }
-      return { xml, cursor: String(start + page.length) }
-      // 真到底：关 target 释放 440MB 级 renderer（作品列表页的卡片/视频壳）。
-      // 下次刷新/加载更多会按 href 判据重新导航收首屏。
-    }).then(async (r) => {
-      if (ended) await releaseLaneTab(browser, LANE)
-      return r
-    })
+        const page = state.slice(start, start + WINDOW)
+        const xml = serializeFeed(page, this.channelOptions(secUid))
+        if (!page.length) {
+          // 平台还在加载(scrollHeight 增长但条目未到,或内存刚丢还在补回 existing 那段)
+          // → 原样返回 cursor + hasMore 让 core 保留「加载更多」
+          // (core 的「游标前进但 0 新增 ⇒ 到底」启发式会误杀这种情况)。
+          // 多次滚动 scrollHeight 无增长才视为真到底(省略 cursor = 没有更多)。
+          if (platformActive) return { xml, cursor: String(start), hasMore: true }
+          ended = true
+          return { xml }
+        }
+        return { xml, cursor: String(start + page.length) }
+        // 真到底：release 在 lane 锁内关 target，释放 440MB 级 renderer
+        // （作品列表页的卡片/视频壳）。下次刷新/加载更多按 href 判据重新导航收首屏。
+      },
+    )
   }
 
   /**

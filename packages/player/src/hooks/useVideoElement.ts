@@ -155,7 +155,9 @@ export function useVideoElement(
         playbackRate: el.playbackRate,
         waiting: prev.waiting, // 由 waiting/playing 事件精确控制
         started: prev.started, // 由 play/playing 事件置位
-        live: dur <= 0,
+        // 宿主声明的直播态优先:直播 HLS 的 duration 可能是有限窗口（B站实测 ≈218s），
+        // 只按 duration 判会把直播误当点播。未声明才回退元数据。
+        live: live ?? dur <= 0,
       }))
     }
 

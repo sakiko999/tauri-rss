@@ -228,7 +228,10 @@ export const USER_SUB_PARAM: Record<string, string> = {
  */
 export const NO_MANUAL_ENTRY = new Set<string>([
   ...Object.values(CATEGORY_CHANNEL),
-  ...Object.values(USER_SUB_CHANNEL),
+  // YouTube 通用渠道不只手填用户主页，还支持单视频/频道 ID，保留目录入口。
+  ...Object.entries(USER_SUB_CHANNEL)
+    .filter(([platform]) => platform !== "youtube")
+    .map(([, key]) => key),
   ...Object.values(USER_SEARCH_CHANNEL),
   // 直播间:各平台搜主播 / 统一搜索已覆盖。YouTube 直播参数是 videoId(不是房间号),
   // 且没有搜索入口 → 保留手填,避免功能失去入口。
@@ -277,10 +280,18 @@ export function searchSources(channels: ChannelInfo[]): SearchSource[] {
   return out
 }
 
-/** 直播落地点(平台 → 房间列表参数);平台没有直播渠道时无目标。 */
+/**
+ * 直播落地点参数名。YouTube 的直播/视频共享 videoId 命名空间，渠道参数是
+ * `videoId`；其余直播渠道都是房间列表 `roomIds`。
+ */
+export const LIVE_SUB_PARAM: Record<string, string> = { youtube: "videoId" }
+
+/** 直播落地点(平台 → 房间/videoId);平台没有直播渠道时无目标。 */
 function liveTarget(platform: string, roomValue: string): CandidateTarget | undefined {
   const channelKey = LIVE_SUB_CHANNEL[platform]
-  return channelKey ? { kind: "live", channelKey, param: "roomIds", value: roomValue } : undefined
+  return channelKey
+    ? { kind: "live", channelKey, param: LIVE_SUB_PARAM[platform] ?? "roomIds", value: roomValue }
+    : undefined
 }
 
 /**

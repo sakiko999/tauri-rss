@@ -117,8 +117,10 @@ export function VideoShell({
     }
   }, [])
 
-  // Esc 分层:先关浮层(统计面板/右键菜单),再按第二次才退全屏(P0b-3 交互规则)。
-  // ⚠️ 必须 preventDefault 第一下 —— 否则 Chromium 的默认动作会直接退全屏。
+  // Esc:先关浮层(统计面板/右键菜单)。⚠️ 全屏退出是 Chromium 的 UA 级手势，
+  // `preventDefault()` 拦不住 —— 全屏下按 Esc 会同时关浮层并退出全屏（要真正拦住
+  // 需要 Keyboard Lock API）。这是已知限制，见 player-parity-plan P0b-3。
+  // 非全屏时这里仍是「Esc 关浮层」的唯一入口。
   useEffect(() => {
     const el = containerRef.current
     if (!el) return

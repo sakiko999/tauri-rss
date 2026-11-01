@@ -15,14 +15,7 @@
  * 下游订阅走 `douyin:user`(sec_uid 参数),本渠道只作「搜索添加」的取数源。
  */
 
-import {
-  cdpNavigate,
-  fetchDouyinUserByUniqueId,
-  now,
-  readDouyinLoginCookie,
-  releaseLaneTab,
-  withBrowserOp,
-} from "@amoeba/resolve"
+import { cdpNavigate, fetchDouyinUserByUniqueId, now, readDouyinLoginCookie, withBrowserOp } from "@amoeba/resolve"
 import type { Item, Video } from "@amoeba/xml"
 
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
@@ -98,33 +91,44 @@ export class DouyinUserSearchChannel implements RssChannel {
     if (sec) return { secUid: sec, nickname: sec.slice(-8) }
     if (/\s/.test(s)) return null // 带空格的一定是关键词
     // 抖音号 → 资料接口(匿名,进程内有缓存)。
-    const u = await fetchDouyinUserByUniqueId(s).catch(() => null)
-    return u ? { secUid: u.secUid, nickname: u.nickname, avatar: u.avatar, uniqueId: u.uniqueId } : null
+    // 只有「查无此人」才回退关键词搜索；网络/风控错误原样抛出 —— 吞成 null 会让
+    // 用户被误导去扫码登录（实际上登录也不会好），且与「这个号不存在」无法区分。
+    try {
+      const u = await fetchDouyinUserByUniqueId(s)
+      return { secUid: u.secUid, nickname: u.nickname, avatar: u.avatar, uniqueId: u.uniqueId }
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("找不到抖音号")) return null
+      throw e
+    }
   }
 
   /** 关键词 → 导航搜索页 → 捕获页面自己的搜索响应。 */
   private async searchByKeyword(keyword: string): Promise<Item[]> {
     const browser = globalThis.appHost?.browser
     if (!browser) throw new Error(NEEDS_BROWSER)
-    // 搜索页是一次性的（下一轮搜索本来就会重新导航）：用完立即关 target 释放
-    // renderer（抖音搜索页同样会累积大量卡片/视频壳），不等 5 分钟空闲回收。
-    const hits = await withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "douyin" }, async (b) => {
-      if (!(await readDouyinLoginCookie(b))) throw new Error(NEEDS_LOGIN)
-      const url = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=user`
-      // 缓冲是进程级的:只读本次捕获窗口内写入的响应,否则会把上一次关键词的结果
-      // 混进来(同一次运行里连续搜两次就能看到)。
-      const since = now()
-      // 页面可能同时发多条搜索请求;捕获窗口收全,再统一解析。
-      await capturePage(b, {
-        platform: "douyin",
-        endpoint: ENDPOINT,
-        match: isDouyinSearchApi,
-        trigger: (x) => cdpNavigate(x, url, true),
-        idleMs: 1200,
-        timeoutMs: 20_000,
-      })
-      return this.readCaptured(since)
-    }).finally(() => releaseLaneTab(browser, LANE))
+    // 搜索页是一次性的（下一轮搜索本来就会重新导航）：release 在 lane 锁内关 target，
+    // 释放 renderer（抖音搜索页同样会累积大量卡片/视频壳）。
+    const hits = await withBrowserOp(
+      browser,
+      { lane: LANE, mode: "interactive", platform: "douyin", release: true },
+      async (b) => {
+        if (!(await readDouyinLoginCookie(b))) throw new Error(NEEDS_LOGIN)
+        const url = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=user`
+        // 缓冲是进程级的:只读本次捕获窗口内写入的响应,否则会把上一次关键词的结果
+        // 混进来(同一次运行里连续搜两次就能看到)。
+        const since = now()
+        // 页面可能同时发多条搜索请求;捕获窗口收全,再统一解析。
+        await capturePage(b, {
+          platform: "douyin",
+          endpoint: ENDPOINT,
+          match: isDouyinSearchApi,
+          trigger: (x) => cdpNavigate(x, url, true),
+          idleMs: 1200,
+          timeoutMs: 20_000,
+        })
+        return this.readCaptured(since)
+      },
+    )
     if (!hits.length) throw new Error(NO_RESULTS)
     return hits.map((h) => this.toItem(h))
   }

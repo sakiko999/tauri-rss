@@ -70,7 +70,10 @@ export function PlayerMenu({
   useEffect(() => cancelClose, [])
 
   return (
-    <DropdownMenu.Root open={open} onOpenChange={onOpenChange}>
+    // modal={false}:hover 打开的菜单不能用 Radix 的模态语义（会给 body 加
+    // pointer-events:none，鼠标一移出触发块就收不到 mouseleave → 开/关抖动，
+    // 且打开期间播放器其它控件全点不动）。
+    <DropdownMenu.Root open={open} onOpenChange={onOpenChange} modal={false}>
       <DropdownMenu.Trigger asChild>
         <span className="inline-flex" onMouseEnter={openNow} onMouseLeave={closeSoon}>
           {trigger}

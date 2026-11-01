@@ -11,7 +11,7 @@
  *   - 无浏览器(mobile/CLI)→ **不支持**(登录态 HTTP SSR 是空壳,见 `XHS_EXPLORE_NEEDS_BROWSER`)。
  */
 
-import { noteCardToSocial, now, releaseLaneTab, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
+import { noteCardToSocial, now, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 
@@ -111,58 +111,60 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
     existing?: number,
   ): Promise<{ xml: string; cursor?: string }> {
     let ended = false
-    return withBrowserOp(browser, { lane: "list:xhs:explore", mode: "interactive", platform: "xhs" }, async (b) => {
-      // 已在 /explore(忽略 query)就**不重载**:页面累计的 feed 与滚动位置是增量
-      // 翻页的唯一依据,重载会让 state 回到首屏 → 每次都取到同一批。
-      await ensureXhsPageReady(b, "/explore", "小红书登录已失效或未登录，请到「账号与凭证」重新扫码")
+    return withBrowserOp(
+      browser,
+      { lane: "list:xhs:explore", mode: "interactive", platform: "xhs", release: () => ended },
+      async (b) => {
+        // 已在 /explore(忽略 query)就**不重载**:页面累计的 feed 与滚动位置是增量
+        // 翻页的唯一依据,重载会让 state 回到首屏 → 每次都取到同一批。
+        await ensureXhsPageReady(b, "/explore", "小红书登录已失效或未登录，请到「账号与凭证」重新扫码")
 
-      const initial = await readXhsStateList(b, ["feed", "feeds"])
-      // cursor = 已返回条数。⚠️ 不能假设新推荐一定追加在尾部:平台可能把新批次
-      // **prepend 到 head**(表现为「第一页数据一直往下重复」)。用滚动前后的首条 id
-      // 判断增长方向,再决定从头部还是尾部取增量。
-      //
-      // ⚠️ 也不能把 cursor clamp 到当前页面条数:页面被重载过时(点开笔记等),页面
-      // 回到首屏,clamp 会把切片压回**已返回过的前缀** —— 表现为「加载更多点了没反应」。
-      // 保持旧 cursor:滚动把页面养到超过它,这轮滚不到就返回空 + 原 cursor 让 core
-      // 重试(别标 ended)。首次翻页的起点 = store 已有条数(不是页面当前长度):
-      // 页面可能被上次滚动养到几百条,而 store 只有首屏几十条 —— 用页面长度会跳过
-      // 中间几百条。页面比 store 还短(被重载回首屏)时只能从页面长度起,靠后续滚动
-      // 把页面养过游标。
-      const returned = cursor !== undefined ? Number(cursor) || 0 : Math.min(existing ?? initial.length, initial.length)
-      const headBefore = feedKey(initial[0])
-      let after = initial
-      let platformActive = false
-      if (initial.length <= returned) {
-        const r = await scrollXhsUntilGrown(b, () => readXhsStateListCount(b, ["feed", "feeds"]), returned)
-        platformActive = r.platformActive
-        after = await readXhsStateList(b, ["feed", "feeds"])
-      }
+        const initial = await readXhsStateList(b, ["feed", "feeds"])
+        // cursor = 已返回条数。⚠️ 不能假设新推荐一定追加在尾部:平台可能把新批次
+        // **prepend 到 head**(表现为「第一页数据一直往下重复」)。用滚动前后的首条 id
+        // 判断增长方向,再决定从头部还是尾部取增量。
+        //
+        // ⚠️ 也不能把 cursor clamp 到当前页面条数:页面被重载过时(点开笔记等),页面
+        // 回到首屏,clamp 会把切片压回**已返回过的前缀** —— 表现为「加载更多点了没反应」。
+        // 保持旧 cursor:滚动把页面养到超过它,这轮滚不到就返回空 + 原 cursor 让 core
+        // 重试(别标 ended)。首次翻页的起点 = store 已有条数(不是页面当前长度):
+        // 页面可能被上次滚动养到几百条,而 store 只有首屏几十条 —— 用页面长度会跳过
+        // 中间几百条。页面比 store 还短(被重载回首屏)时只能从页面长度起,靠后续滚动
+        // 把页面养过游标。
+        const returned =
+          cursor !== undefined ? Number(cursor) || 0 : Math.min(existing ?? initial.length, initial.length)
+        const headBefore = feedKey(initial[0])
+        let after = initial
+        let platformActive = false
+        if (initial.length <= returned) {
+          const r = await scrollXhsUntilGrown(b, () => readXhsStateListCount(b, ["feed", "feeds"]), returned)
+          platformActive = r.platformActive
+          after = await readXhsStateList(b, ["feed", "feeds"])
+        }
 
-      const total = after.length
-      const prepended = !!headBefore && feedKey(after[0]) !== headBefore
-      // prepend:新旧边界在尾部(total - returned 条新内容在头部);
-      // append:边界在 returned 处。两种方向都一次返回整批新内容 —— 分窗口切片在
-      // prepend 下会把「已返回/未返回」混在头部,无法用一个索引表达。
-      // ⚠️ 已知上限:这只识别「纯前插/纯追加」。头部非纯前插的变动(首卡被替换、
-      // 同轮前插+后插)会切到已返回过的旧条目,靠 store 按 id 去重兜底(最多丢一批,
-      // 不会重复展示);实测(2026-10-20,862→968 条)平台推荐流是尾部追加。
-      const fresh = total <= returned ? [] : prepended ? after.slice(0, total - returned) : after.slice(returned)
-      const items = this.toItems(fresh)
-      const xml = serializeFeed(items, this.channelOptions())
-      if (!fresh.length) {
-        // 平台还在追加(scrollHeight 增长)但 state 未到位 → 原样返回 cursor 让 core 重试;
-        // 否则视为真到底(hasMore=false)。
-        if (platformActive) return { xml, cursor: cursor ?? String(returned) }
-        ended = true
-        return { xml }
-      }
-      return { xml, cursor: String(total) }
-      // 真到底：页面累计的几百条 feed/DOM 不再需要，操作结束后关 target 释放 renderer
-      // （下次刷新本来就整体重载）。只能在这条路径做——翻页途中关掉会丢页面 state。
-    }).then(async (r) => {
-      if (ended) await releaseLaneTab(browser, "list:xhs:explore")
-      return r
-    })
+        const total = after.length
+        const prepended = !!headBefore && feedKey(after[0]) !== headBefore
+        // prepend:新旧边界在尾部(total - returned 条新内容在头部);
+        // append:边界在 returned 处。两种方向都一次返回整批新内容 —— 分窗口切片在
+        // prepend 下会把「已返回/未返回」混在头部,无法用一个索引表达。
+        // ⚠️ 已知上限:这只识别「纯前插/纯追加」。头部非纯前插的变动(首卡被替换、
+        // 同轮前插+后插)会切到已返回过的旧条目,靠 store 按 id 去重兜底(最多丢一批,
+        // 不会重复展示);实测(2026-10-20,862→968 条)平台推荐流是尾部追加。
+        const fresh = total <= returned ? [] : prepended ? after.slice(0, total - returned) : after.slice(returned)
+        const items = this.toItems(fresh)
+        const xml = serializeFeed(items, this.channelOptions())
+        if (!fresh.length) {
+          // 平台还在追加(scrollHeight 增长)但 state 未到位 → 原样返回 cursor 让 core 重试;
+          // 否则视为真到底(hasMore=false)。
+          if (platformActive) return { xml, cursor: cursor ?? String(returned) }
+          ended = true
+          return { xml }
+        }
+        return { xml, cursor: String(total) }
+        // 真到底：页面累计的几百条 feed/DOM 不再需要，release 在 lane 锁内关 target
+        // 释放 renderer（下次刷新本来就整体重载）。翻页途中 ended=false，不关。
+      },
+    )
   }
 
   /**

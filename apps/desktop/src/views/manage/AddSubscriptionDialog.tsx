@@ -85,6 +85,8 @@ export function AddSubscriptionDialog({
   const [targetIndex, setTargetIndex] = useState(0)
   /** 手工模式：列表型参数(roomIds)可并入已有订阅。 */
   const [manualTargetId, setManualTargetId] = useState("new")
+  /** 搜索模式：直播目标(roomIds)同样可并入已有订阅（与手工模式同一语义）。 */
+  const [searchTargetId, setSearchTargetId] = useState("new")
   const [title, setTitle] = useState("")
   const [groupId, setGroupId] = useState("")
   const [ttl, setTtl] = useState("")
@@ -160,6 +162,10 @@ export function AddSubscriptionDialog({
     setCandidateValue("")
     setTargetIndex(0)
     setManualTargetId("new")
+    setSearchTargetId("new")
+    // 作废在途搜索后其 finally 不会再清 searching —— 这里显式复位，否则重开弹窗
+    // 按钮永久转圈（旧 runSearch 的世代已失效）。
+    setSearching(false)
     // 带预置渠道(发现页「订阅该分区」)→ 直接进手工模式,预填参数。
     setMode(presetKey ? "manual" : "search")
     setKeyword("")
@@ -186,7 +192,12 @@ export function AddSubscriptionDialog({
     [channel, channelKey, subscriptions],
   )
   /** 当前是「并入已有订阅」：此时标题/分组/刷新间隔都不生效，不渲染以免误解。 */
-  const merging = manualTargetId !== "new"
+  const merging = searchMode ? searchTargetId !== "new" : manualTargetId !== "new"
+  /** 搜索模式下当前落地目标可并入的已有订阅（只有 roomIds 列表型参数才有）。 */
+  const searchTargets = useMemo(
+    () => (selectedTarget && multiParamOf(landChannel) ? subsOfChannel(subscriptions, selectedTarget.channelKey) : []),
+    [selectedTarget, landChannel, subscriptions],
+  )
 
   /**
    * 统一搜索:一个关键词并发查取数源(用户搜索 + 主播搜索),**边到边填** ——
@@ -202,24 +213,31 @@ export function AddSubscriptionDialog({
     setError("")
     setCandidateValue("")
     setTargetIndex(0)
+    setSearchTargetId("new")
     setTitle("")
     setCands([])
     setFailedPlatforms([])
     setSearched(true)
     // 按取数源顺序(平台 → 用户/主播)排列,同平台结果连在一起。
-    const order = new Map(active.map((s, i) => [s.channelKey, i]))
+    // ⚠️ 排序键必须是**取数源**顺序，不是落地渠道(targets[0].channelKey)：
+    // 两者是不同的键空间（bili:user → bili:user_video），按落地渠道查会恒 99。
+    const candidateOrder = new Map<string, number>()
     const acc: Candidate[] = []
-    const failed: string[] = []
+    /** 取数源失败的平台（id）与至少成功过一次的平台。 */
+    const failed = new Set<string>()
+    const succeeded = new Set<string>()
+    const flushFailed = () => {
+      const labels = [...failed].filter((p) => !succeeded.has(p)).map((p) => platformDef(p)?.label ?? p)
+      setFailedPlatforms(labels)
+    }
     const flush = () => {
       const merged = mergeCandidates(acc)
-      merged.sort(
-        (a, b) => (order.get(a.targets[0]?.channelKey ?? "") ?? 99) - (order.get(b.targets[0]?.channelKey ?? "") ?? 99),
-      )
+      merged.sort((a, b) => (candidateOrder.get(candidateKey(a)) ?? 99) - (candidateOrder.get(candidateKey(b)) ?? 99))
       setCands(merged)
     }
     try {
       await Promise.all(
-        active.map(async (s) => {
+        active.map(async (s, i) => {
           try {
             const r = await dl.previewChannel(s.channelKey, { [s.field]: kw })
             if (latest.stale(gen)) return
@@ -228,14 +246,20 @@ export function AddSubscriptionDialog({
               s.kind === "user" ? candidatesFromUsers(r.items, s.platform) : candidatesFromSearch(r.items, s.platform)
             // 每个源只取前 10:多源全量合并会有几百行,候选列表是「挑一个」不是浏览。
             acc.push(...list.slice(0, 10))
+            succeeded.add(s.platform)
+            failed.delete(s.platform)
+            for (const c of list) {
+              const key = candidateKey(c)
+              const prev = candidateOrder.get(key)
+              if (prev === undefined || i < prev) candidateOrder.set(key, i)
+            }
             flush()
+            flushFailed()
           } catch {
             if (latest.stale(gen)) return
-            const label = platformDef(s.platform)?.label ?? s.platform
-            if (!failed.includes(label)) {
-              failed.push(label)
-              setFailedPlatforms([...failed])
-            }
+            // 同平台只要有一个取数源成功，就不把整站标成「没有返回结果」。
+            failed.add(s.platform)
+            flushFailed()
           }
         }),
       )
@@ -250,10 +274,12 @@ export function AddSubscriptionDialog({
   /** 换搜索范围:作废在途搜索并清空上一范围的结果(不自动发起新搜索)。 */
   function pickPlatform(id: string) {
     latest.invalidate()
+    setSearching(false) // 作废在途搜索后其 finally 不会再清（见 open effect）
     setPlatformFilter(id)
     setCands([])
     setCandidateValue("")
     setTargetIndex(0)
+    setSearchTargetId("new")
     setTitle("")
     setFailedPlatforms([])
     setSearched(false)
@@ -279,6 +305,7 @@ export function AddSubscriptionDialog({
     }
     setCandidateValue(key)
     setTargetIndex(0)
+    setSearchTargetId("new")
     setTitle(c.label)
     // 重复只作提示(在 targetHint 里),不拦提交 —— 重复订阅是合法选择。
   }
@@ -294,6 +321,21 @@ export function AddSubscriptionDialog({
       setError("")
       try {
         const { channelKey: landKey, param, value } = selectedTarget
+        // 列表型目标(roomIds)+ 选中已有订阅 → 追加进去，不新建（与手工模式同语义）。
+        if (multiParamOf(landChannel) && searchTargetId !== "new") {
+          const target = searchTargets.find((s) => s.id === searchTargetId)
+          if (!target) throw new Error("目标订阅已不存在,可能刚刚被删除,请改选「新建订阅」。")
+          const { merged, added } = mergeValues(valueList(target, param), [value])
+          if (!added.length) {
+            toast("info", "已经在该订阅里了", `「${target.title}」中已有这个房间。`)
+            onOpenChange(false)
+            return
+          }
+          await updateSubscription(target.id, { info: { ...target.info, [param]: merged.join(",") } })
+          toast("ok", `已并入「${target.title}」`, `现在共 ${merged.length} 个房间，内容已更新。`)
+          onOpenChange(false)
+          return
+        }
         // 直播类目标落地 roomIds,用户类落地 uid/channelId…
         const info = { [param]: value }
         const id = await addSubscription(landKey, title.trim() || selectedCand.label, info, {
@@ -394,10 +436,28 @@ export function AddSubscriptionDialog({
     >
       <div className="add-mode">
         <span className="segmented" role="tablist" aria-label="添加方式">
-          <button role="tab" aria-pressed={mode === "search"} onClick={() => setMode("search")}>
+          <button
+            role="tab"
+            aria-pressed={mode === "search"}
+            onClick={() => {
+              latest.invalidate() // 切模式作废在途搜索，避免回填到另一模式的面板
+              setSearching(false)
+              setMode("search")
+              setSearchTargetId("new")
+            }}
+          >
             <Icon name="search" size={14} /> 搜索添加
           </button>
-          <button role="tab" aria-pressed={mode === "manual"} onClick={() => setMode("manual")}>
+          <button
+            role="tab"
+            aria-pressed={mode === "manual"}
+            onClick={() => {
+              latest.invalidate()
+              setSearching(false)
+              setMode("manual")
+              setManualTargetId("new")
+            }}
+          >
             <Icon name="layers" size={14} /> 浏览渠道
           </button>
         </span>
@@ -418,6 +478,10 @@ export function AddSubscriptionDialog({
           onPickCandidate={pickCandidate}
           subscribed={subscribed}
           failedPlatforms={failedPlatforms}
+          targets={searchTargets}
+          targetId={searchTargetId}
+          onTargetId={setSearchTargetId}
+          landParam={selectedTarget?.param}
         />
       ) : (
         <ChannelPanel
@@ -454,7 +518,10 @@ export function AddSubscriptionDialog({
                     className="chip"
                     role="radio"
                     aria-checked={selectedTarget === t}
-                    onClick={() => setTargetIndex(i)}
+                    onClick={() => {
+                      setTargetIndex(i)
+                      setSearchTargetId("new")
+                    }}
                   >
                     <Icon name={t.kind === "live" ? "radio" : "user"} size={14} />
                     {TARGET_LABEL[t.kind]}

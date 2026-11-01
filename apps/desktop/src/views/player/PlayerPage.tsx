@@ -213,7 +213,7 @@ export function PlayerPage() {
       className="player-view"
       // data 属性(不是新类名)驱动剧场模式:与 1280 断点收单列的 @media 规则互不覆盖,
       // 两边同时命中也是同一结果(单列),不会出现「窄窗 + 剧场」两套规则打架。
-      data-theater={theater ? "on" : undefined}
+      data-theater={theater && !audioMode ? "on" : undefined}
       {...overlayBlock("player-view", "player:view")}
     >
       <header className="detail-head" {...overlayBlock("player-head", "player:head")}>

@@ -18,16 +18,7 @@
  * ⚠️ 本渠道**不声明** `passive`:翻页要 interactive 滚动,不是纯导航采集。
  */
 
-import {
-  extractInitialState,
-  log,
-  noteCardToSocial,
-  now,
-  releaseLaneTab,
-  withBrowserOp,
-  XHS_BASE,
-  xhsClient,
-} from "@amoeba/resolve"
+import { extractInitialState, log, noteCardToSocial, now, withBrowserOp, XHS_BASE, xhsClient } from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 
@@ -155,54 +146,56 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
     // renderLease 在最后一个租约释放时才切回 hidden（多 lane 不互掐滚动）。
     // ⚠️ 滚动前 activate 本 tab(withBrowserOp 内做):非激活 tab 的 rAF/IO 同样停摆。
     let ended = false
-    return withBrowserOp(browser, { lane: "list:xhs:user", mode: "interactive", platform: "xhs" }, async (b) => {
-      // 已在 profile 页(忽略 query)就不重载:滚动驱动的增量依赖页面累计的 notes,
-      // 重载会让 state 回到首屏,`slice(startIdx)` 又切到已返回过的条目。
-      // 未登录 / 登录失效在这里抛可操作错误(不再有匿名翻页)。
-      await ensureXhsPageReady(
-        b,
-        `/user/profile/${userId}`,
-        "小红书登录已失效或未登录：用户主页需要登录，请到「账号与凭证」重新扫码",
-      )
+    return withBrowserOp(
+      browser,
+      { lane: "list:xhs:user", mode: "interactive", platform: "xhs", release: () => ended },
+      async (b) => {
+        // 已在 profile 页(忽略 query)就不重载:滚动驱动的增量依赖页面累计的 notes,
+        // 重载会让 state 回到首屏,`slice(startIdx)` 又切到已返回过的条目。
+        // 未登录 / 登录失效在这里抛可操作错误(不再有匿名翻页)。
+        await ensureXhsPageReady(
+          b,
+          `/user/profile/${userId}`,
+          "小红书登录已失效或未登录：用户主页需要登录，请到「账号与凭证」重新扫码",
+        )
 
-      const initial = await readXhsStateList(b, ["user", "notes"])
-      // 已返回条数(索引定位)。首次翻页用 store 已有条数(同 explore:页面可能
-      // 被养到几百条,页面长度 ≠ store 已返回数,用它会跳过中间几百条)。
-      // ⚠️ 不能 clamp 到当前页面条数:页面被重载过时(点开笔记会把 detail lane
-      // 之外的本 tab 导航走),clamp 会把窗口压回**已返回过的前缀** —— 「加载更多
-      // 点了没反应」。保持旧 cursor:滚动把页面养到超过它;这轮滚不到就返回空 +
-      // 原 cursor 让 core 重试(别标 ended)。
-      const startIdx = cursor !== undefined ? Number(cursor) || 0 : Math.min(existing ?? initial.length, initial.length)
+        const initial = await readXhsStateList(b, ["user", "notes"])
+        // 已返回条数(索引定位)。首次翻页用 store 已有条数(同 explore:页面可能
+        // 被养到几百条,页面长度 ≠ store 已返回数,用它会跳过中间几百条)。
+        // ⚠️ 不能 clamp 到当前页面条数:页面被重载过时(点开笔记会把 detail lane
+        // 之外的本 tab 导航走),clamp 会把窗口压回**已返回过的前缀** —— 「加载更多
+        // 点了没反应」。保持旧 cursor:滚动把页面养到超过它;这轮滚不到就返回空 +
+        // 原 cursor 让 core 重试(别标 ended)。
+        const startIdx =
+          cursor !== undefined ? Number(cursor) || 0 : Math.min(existing ?? initial.length, initial.length)
 
-      // state 缓存不足才滚动(平台自己签名加载,我们只触发);缓存够则零滚动直接取窗口(快)。
-      let after = initial
-      // 平台是否「还在追加内容」(滚动后 scrollHeight 增长)——0 条时据此区分「真到底」vs
-      // 「加载慢/未触发」:前者 hasMore false(停),后者返回 cursor 让 core 重试(别标 ended)。
-      let platformActive = false
-      if (initial.length <= startIdx) {
-        const r = await scrollXhsUntilGrown(b, () => readXhsStateListCount(b, ["user", "notes"]), startIdx)
-        platformActive = r.platformActive
-        after = await readXhsStateList(b, ["user", "notes"])
-      }
+        // state 缓存不足才滚动(平台自己签名加载,我们只触发);缓存够则零滚动直接取窗口(快)。
+        let after = initial
+        // 平台是否「还在追加内容」(滚动后 scrollHeight 增长)——0 条时据此区分「真到底」vs
+        // 「加载慢/未触发」:前者 hasMore false(停),后者返回 cursor 让 core 重试(别标 ended)。
+        let platformActive = false
+        if (initial.length <= startIdx) {
+          const r = await scrollXhsUntilGrown(b, () => readXhsStateListCount(b, ["user", "notes"]), startIdx)
+          platformActive = r.platformActive
+          after = await readXhsStateList(b, ["user", "notes"])
+        }
 
-      // 窗口化:只取 [startIdx, startIdx+WINDOW)——平台一次滚到底加载 120 条,每次只返回 30。
-      const page = after.slice(startIdx, startIdx + XHS_FETCH_MORE_WINDOW)
-      const items = this.notesToItems(page)
-      const xml = serializeFeed(items, this.channelOptions({ user_id: userId }))
-      if (!page.length) {
-        // 0 条:平台还在追加(scrollHeight 增长)但 notes 未渲染到位 → 返回 cursor 让 core 重试
-        // (而非 hasMore false → desktop 标 ended → 用户被迫手动刷新)。cursor 不变,desktop
-        // onRender 无进展保护(items 不增长)不会自动重复触发,只由用户手动再点「加载更多」。
-        if (platformActive) return { xml, cursor: String(startIdx) }
-        ended = true
-        return { xml } // 真到底:多次滚动 scrollHeight 无增长 = 平台无更多
-      }
-      return { xml, cursor: String(startIdx + page.length) }
-      // 真到底：不再需要页面累计的 notes/滚动位置，操作结束后关 target 释放 renderer。
-    }).then(async (r) => {
-      if (ended) await releaseLaneTab(browser, "list:xhs:user")
-      return r
-    })
+        // 窗口化:只取 [startIdx, startIdx+WINDOW)——平台一次滚到底加载 120 条,每次只返回 30。
+        const page = after.slice(startIdx, startIdx + XHS_FETCH_MORE_WINDOW)
+        const items = this.notesToItems(page)
+        const xml = serializeFeed(items, this.channelOptions({ user_id: userId }))
+        if (!page.length) {
+          // 0 条:平台还在追加(scrollHeight 增长)但 notes 未渲染到位 → 返回 cursor 让 core 重试
+          // (而非 hasMore false → desktop 标 ended → 用户被迫手动刷新)。cursor 不变,desktop
+          // onRender 无进展保护(items 不增长)不会自动重复触发,只由用户手动再点「加载更多」。
+          if (platformActive) return { xml, cursor: String(startIdx) }
+          ended = true
+          return { xml } // 真到底:多次滚动 scrollHeight 无增长 = 平台无更多
+        }
+        return { xml, cursor: String(startIdx + page.length) }
+        // 真到底：不再需要页面累计的 notes/滚动位置，release 在 lane 锁内关 target。
+      },
+    )
   }
 
   private channelOptions(info: SourceInfo): SerializeOptions {

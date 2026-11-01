@@ -17,16 +17,7 @@
  * 下游订阅走 `xhs:user`(user_id 参数),本渠道只作「搜索添加」的取数源。
  */
 
-import {
-  cdpEvaluate,
-  cdpNavigate,
-  extractInitialState,
-  now,
-  releaseLaneTab,
-  withBrowserOp,
-  XHS_BASE,
-  xhsClient,
-} from "@amoeba/resolve"
+import { cdpEvaluate, cdpNavigate, extractInitialState, now, withBrowserOp, XHS_BASE, xhsClient } from "@amoeba/resolve"
 import type { Item, Video } from "@amoeba/xml"
 
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
@@ -193,7 +184,11 @@ export class XhsUserSearchChannel implements RssChannel {
             readPage: (b) => this.readSummaryViaBrowser(b),
             loginError: "小红书查用户需要登录：请到「账号与凭证」扫码后重试",
           },
-          "list:xhs:user",
+          // 查号是一次性的独立 lane:与订阅翻页的 `list:xhs:user` 共 lane 会把
+          // 对方累计的 notes 导航走（加载更多随后退回首屏却拿着旧游标 → 空页）。
+          // 用完即关（release 在 lane 锁内），下次查号自动重建。
+          "search:xhs:lookup",
+          { release: true },
         )
       : await this.fetchProfileViaHttp(userId, info.cookie as string | undefined)
     if (!raw) throw new Error(`没有读到该用户的资料（ID ${userId}）：可能用户不存在或页面结构已变`)
@@ -206,49 +201,53 @@ export class XhsUserSearchChannel implements RssChannel {
     if (!browser) throw new Error(NEEDS_BROWSER)
     // ⚠️ 必须 interactive:搜索结果是导航后由页面脚本自己的 XHR 填的,
     // hidden 的后台 tab 会被节流到不发请求(douyin:user 同款结论)。
-    // 搜索页是**一次性**的（下一轮搜索本来就会重新导航）：用完立即关 target 释放
-    // renderer（搜索结果页 DOM/图片列表可达 150–260MB），不等 5 分钟空闲回收。
-    const hits = await withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "xhs" }, async (b) => {
-      // 缓冲是进程级的:只读本次捕获窗口内写入的响应,避免连续搜索时混入上一次关键词。
-      const since = now()
-      await capturePage(b, {
-        platform: "xhs",
-        endpoint: ENDPOINT,
-        match: isXhsSearchApi,
-        trigger: (x) =>
-          cdpNavigate(
-            x,
-            `${XHS_BASE}/search_result?keyword=${encodeURIComponent(keyword)}&source=web_search_result_notes&type=51`,
-            true,
-          ),
-        // 首屏结果常常是 SSR/稍晚才到的 XHR:多等一会儿,别在第一屏 onebox/recommend
-        // 之后立刻收工(实测 1.2s 会漏掉结果请求)。
-        idleMs: 2500,
-        timeoutMs: 20_000,
-      })
-      // 未登录 / 风控时要报可操作错误,不能当成「无结果」。
-      await assertXhsNotBlocked(b)
-      await assertXhsLoggedIn(b, XHS_LOGIN_REQUIRED)
-      // 搜索页默认落在「全部」:结果来自笔记 SSR,用户列表要切到「用户」Tab 才有
-      // `search/usersearch` 响应。点 Tab 是页面自然行为(不构造搜索请求)。
-      await capturePage(b, {
-        platform: "xhs",
-        endpoint: ENDPOINT,
-        match: isXhsSearchApi,
-        trigger: (x) => cdpEvaluate(x, CLICK_USER_TAB).then(() => undefined),
-        // 没有「用户」Tab 时不会触发任何请求:等一个 idle 就返回,不空耗超时。
-        idleMs: 2000,
-        timeoutMs: 8_000,
-      })
-      const captured = this.readSearchCaptured(since)
-      if (captured.length) return captured
-      // 有结果包但 0 用户 = 真的没搜到(不要拿 recommend 的推荐用户充数);
-      // 一个结果包都没抓到 → 首屏结果只在 SSR state 里,从页面 state 兜底。
-      const hasResultPack = passiveBuffer
-        .list("xhs", ENDPOINT)
-        .some((e) => e.at >= since && /\/search\/(usersearch|users?|notes)$/.test(urlPath(e.url)))
-      return hasResultPack ? [] : this.readSearchStateViaBrowser(b)
-    }).finally(() => releaseLaneTab(browser, LANE))
+    // 搜索页是**一次性**的（下一轮搜索本来就会重新导航）：release 在 lane 锁内关
+    // target，释放 renderer（搜索结果页 DOM/图片列表可达 150–260MB）。
+    const hits = await withBrowserOp(
+      browser,
+      { lane: LANE, mode: "interactive", platform: "xhs", release: true },
+      async (b) => {
+        // 缓冲是进程级的:只读本次捕获窗口内写入的响应,避免连续搜索时混入上一次关键词。
+        const since = now()
+        await capturePage(b, {
+          platform: "xhs",
+          endpoint: ENDPOINT,
+          match: isXhsSearchApi,
+          trigger: (x) =>
+            cdpNavigate(
+              x,
+              `${XHS_BASE}/search_result?keyword=${encodeURIComponent(keyword)}&source=web_search_result_notes&type=51`,
+              true,
+            ),
+          // 首屏结果常常是 SSR/稍晚才到的 XHR:多等一会儿,别在第一屏 onebox/recommend
+          // 之后立刻收工(实测 1.2s 会漏掉结果请求)。
+          idleMs: 2500,
+          timeoutMs: 20_000,
+        })
+        // 未登录 / 风控时要报可操作错误,不能当成「无结果」。
+        await assertXhsNotBlocked(b)
+        await assertXhsLoggedIn(b, XHS_LOGIN_REQUIRED)
+        // 搜索页默认落在「全部」:结果来自笔记 SSR,用户列表要切到「用户」Tab 才有
+        // `search/usersearch` 响应。点 Tab 是页面自然行为(不构造搜索请求)。
+        await capturePage(b, {
+          platform: "xhs",
+          endpoint: ENDPOINT,
+          match: isXhsSearchApi,
+          trigger: (x) => cdpEvaluate(x, CLICK_USER_TAB).then(() => undefined),
+          // 没有「用户」Tab 时不会触发任何请求:等一个 idle 就返回,不空耗超时。
+          idleMs: 2000,
+          timeoutMs: 8_000,
+        })
+        const captured = this.readSearchCaptured(since)
+        if (captured.length) return captured
+        // 有结果包但 0 用户 = 真的没搜到(不要拿 recommend 的推荐用户充数);
+        // 一个结果包都没抓到 → 首屏结果只在 SSR state 里,从页面 state 兜底。
+        const hasResultPack = passiveBuffer
+          .list("xhs", ENDPOINT)
+          .some((e) => e.at >= since && /\/search\/(usersearch|users?|notes)$/.test(urlPath(e.url)))
+        return hasResultPack ? [] : this.readSearchStateViaBrowser(b)
+      },
+    )
     if (!hits.length) {
       throw new Error(`没有搜到与「${keyword}」相关的用户：换个关键词，或确认搜索页能正常打开（可能需要登录）`)
     }

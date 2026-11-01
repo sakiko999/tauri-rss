@@ -23,6 +23,8 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 function fakeBrowser(opts?: { modeDelayMs?: number }) {
   const modes: string[] = []
   const modeResolvedAt: number[] = []
+  /** 操作用例自行写入的时间线 + close 事件（断言 release 在锁内、按序发生）。 */
+  const events: string[] = []
   const tabs = new Map<
     string,
     {
@@ -61,7 +63,9 @@ function fakeBrowser(opts?: { modeDelayMs?: number }) {
         async activate() {
           t!.activations++
         },
-        async close() {},
+        async close() {
+          events.push(`close:${key}`)
+        },
         abortPending(reason: string) {
           t!.aborted.push(reason)
         },
@@ -74,7 +78,7 @@ function fakeBrowser(opts?: { modeDelayMs?: number }) {
       }
     },
   }
-  return { browser, modes, modeResolvedAt, tabs }
+  return { browser, modes, modeResolvedAt, events, tabs }
 }
 
 // 1. hidden 下两 lane 并发:总耗时 ≈ 单次(而非串行两倍),且不触发 setMode。
@@ -110,6 +114,29 @@ function fakeBrowser(opts?: { modeDelayMs?: number }) {
   const r = await withBrowserOp(browser, { lane: "list:a" }, (b) => b.evaluate<string>("q"))
   assert.ok(r.startsWith("[list:a]"), `fn 必须打到本 lane 的 tab(得 ${r})`)
   assert.ok(tabs.has("list:a"), "宿主 tab(key) 按 lane 建句柄")
+}
+
+// 2b. release 必须在 lane 锁内关闭:同 lane 的下一次操作要等 target 关完才开始
+//     (锁外关会掐掉刚出队、已拿到同一 tab 的下一轮导航)。
+{
+  const { browser, events } = fakeBrowser()
+  await Promise.all([
+    withBrowserOp(browser, { lane: "list:release" }, async () => {
+      events.push("op1")
+    }),
+    // 故意在第一条还没结束时入队:release:true 的关闭发生在锁内,第二条必须排在后面。
+    withBrowserOp(browser, { lane: "list:release", release: true }, async () => {
+      events.push("op2")
+    }),
+  ])
+  await withBrowserOp(browser, { lane: "list:release", release: true }, async () => {
+    events.push("op3")
+  })
+  assert.deepEqual(
+    events,
+    ["op1", "op2", "close:list:release", "op3", "close:list:release"],
+    "release 必须在 lane 锁内、且不改变同 lane 串行顺序",
+  )
 }
 
 // 3. interactive 渲染租约:首个 interactive、并行租约不反复切换、最后释放才 hidden;
