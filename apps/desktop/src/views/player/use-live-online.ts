@@ -10,10 +10,9 @@
  */
 
 import type { LiveItem, MediaItem } from "@amoeba/core"
-import { platformOfHost } from "@amoeba/platform"
 import { useEffect, useState } from "react"
 
-import { itemKey, onlineOf } from "../../lib/media.ts"
+import { itemKey, onlineOf, platformIdOf } from "../../lib/media.ts"
 import { LIVE_SUB_CHANNEL } from "../../lib/subscriptions.ts"
 import { useDesktop } from "../../store/index.ts"
 
@@ -22,23 +21,14 @@ const POLL_MS = 30_000
 /** 打开播放页时订阅刷新刚取过,先等一拍再重复请求。 */
 const FIRST_DELAY_MS = 8_000
 
-/** 条目 URL → 平台表 id("bili" / "douyu" / …);解析失败给空串。 */
-function platformOfItem(item: MediaItem): string {
-  try {
-    return platformOfHost(new URL(String(item.url)).host)
-  } catch {
-    return ""
-  }
-}
-
 export function useLiveOnline(item: MediaItem | null | undefined): number | undefined {
   const dl = useDesktop((s) => s.dl)
   const key = item ? itemKey(item) : ""
   const isLive = item?.kind === "live"
   const roomId = isLive ? String((item as LiveItem).roomId ?? "") : ""
   // LiveItem.platform 是 "bilibili" 这种展示名,订阅渠道表用的是平台表 id("bili");
-  // 用 URL 域名走 platformOfHost,避免再抄一张别名表。
-  const platform = isLive && item?.url ? platformOfItem(item) : ""
+  // 用 URL 域名走 platformIdOf,避免再抄一张别名表。
+  const platform = isLive && item ? (platformIdOf(item) ?? "") : ""
   const initial = item ? onlineOf(item) : undefined
   const [online, setOnline] = useState<number | undefined>(initial)
 

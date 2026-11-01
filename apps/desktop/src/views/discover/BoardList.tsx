@@ -10,7 +10,9 @@ import { useState } from "react"
 
 import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
+import { PlatformIcon } from "../../components/PlatformIcon.tsx"
 import { StateBlock } from "../../components/StateBlock.tsx"
+import { platformOf } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useDesktop } from "../../store/index.ts"
 
@@ -32,7 +34,7 @@ export function BoardList({ boards }: { boards: ChannelInfo[] }) {
           <div className="platform-card" key={b.key} {...overlayBlock("board-card", `board:${b.key}`)}>
             <div className="platform-head">
               <span className="platform-mark">
-                <Icon name={b.kind === "live" ? "radio" : "layers"} size={17} />
+                <PlatformIcon platform={platformOf(b.key)} size={20} />
               </span>
               <span className="platform-title">
                 <span className="platform-name" style={{ fontSize: "var(--fs-h3)" }}>

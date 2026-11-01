@@ -17,9 +17,10 @@ import { useNavigate } from "react-router"
 
 import { Button, IconButton } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
+import { PlatformIcon } from "../../components/PlatformIcon.tsx"
 import { SideCard, StateBlock } from "../../components/StateBlock.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
-import { fmtAgo, fmtTime, itemKey, mediaUrl, PLATFORM_LABEL, platformOf } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, itemKey, mediaUrl, PLATFORM_LABEL, platformIdOf, platformOf } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
 import { useDesktop } from "../../store/index.ts"
@@ -285,7 +286,12 @@ export function PlayerPage() {
                           : "视频"}
                     </span>
                   )}
-                  {platform ? <span>{PLATFORM_LABEL[platform] ?? platform}</span> : null}
+                  {platform ? (
+                    <span className="platform-tag">
+                      <PlatformIcon platform={platformIdOf(item)} size={14} />
+                      {PLATFORM_LABEL[platform] ?? platform}
+                    </span>
+                  ) : null}
                   {item.author?.name ? <span>{item.author.name}</span> : null}
                   {/* 0 也要显示:直播「无人观看」是有用的状态,不该被 truthy 判断吞掉。 */}
                   {online !== undefined ? <span className="num">{online} 人在看</span> : null}

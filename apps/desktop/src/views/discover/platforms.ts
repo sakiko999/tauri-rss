@@ -6,16 +6,16 @@
  */
 export type Cap = "category" | "anchor"
 
-/** 展示用的平台清单(能力从渠道注册表推导,不在数据里写死)。 */
-export const PLATFORMS: Array<{ id: string; label: string; icon: string }> = [
-  { id: "bili", label: "B站", icon: "radio" },
-  { id: "douyu", label: "斗鱼", icon: "radio" },
-  { id: "huya", label: "虎牙", icon: "radio" },
-  { id: "douyin", label: "抖音", icon: "radio" },
-  { id: "youtube", label: "YouTube", icon: "play" },
-  { id: "twitch", label: "Twitch", icon: "radio" },
-  { id: "weibo", label: "微博", icon: "message" },
-  { id: "xhs", label: "小红书", icon: "image" },
+/** 展示用的平台清单(能力从渠道注册表推导,不在数据里写死)。品牌图标按 id 取。 */
+export const PLATFORMS: Array<{ id: string; label: string }> = [
+  { id: "bili", label: "B站" },
+  { id: "douyu", label: "斗鱼" },
+  { id: "huya", label: "虎牙" },
+  { id: "douyin", label: "抖音" },
+  { id: "youtube", label: "YouTube" },
+  { id: "twitch", label: "Twitch" },
+  { id: "weibo", label: "微博" },
+  { id: "xhs", label: "小红书" },
 ]
 
 export const CAPS: Cap[] = ["category", "anchor"]

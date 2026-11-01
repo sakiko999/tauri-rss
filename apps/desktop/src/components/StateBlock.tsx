@@ -84,7 +84,8 @@ export function SideCard({
   blockKey,
 }: {
   title?: string
-  icon?: string
+  /** lucide 图标名,或直接给一个图标节点(平台品牌图标)。 */
+  icon?: string | ReactNode
   children: ReactNode
   pad?: boolean
   /** 标题含动态计数时传一个稳定键，避免 overlay 编号跟着计数跳。 */
@@ -95,7 +96,7 @@ export function SideCard({
     <section className="side-card" {...overlayBlock("side-card", key)}>
       {title ? (
         <header className="side-card-head">
-          {icon ? <Icon name={icon} size={15} /> : null}
+          {icon ? typeof icon === "string" ? <Icon name={icon} size={15} /> : icon : null}
           <span className="side-card-title">{title}</span>
         </header>
       ) : null}

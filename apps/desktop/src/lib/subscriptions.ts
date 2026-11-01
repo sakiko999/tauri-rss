@@ -329,10 +329,13 @@ export function candidatesFromSearch(items: MediaItem[], platform?: string): Can
     const online = live.online ? `${fmtNum(live.online)} 在看` : ""
     // YouTube 没有「房号」概念,直播的 roomId 就是 videoId。
     const idLabel = live.platform === "youtube" ? "视频" : "房号"
+    // 主播名与标题常常相同(个人直播间),别在次行重复一遍。
+    const author = String(i.author?.name ?? "").trim()
+    const sub = [author && author !== i.title ? author : "", `${idLabel} ${roomId}`].filter(Boolean).join(" · ")
     out.push({
       value: roomId,
       label: i.title,
-      sub: `${i.author?.name ?? "未知"} · ${idLabel} ${roomId}`,
+      sub,
       thumb: mediaUrl(i),
       meta: [online].filter(Boolean),
       ...(platform ? { platform } : {}),

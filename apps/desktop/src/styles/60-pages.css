@@ -273,7 +273,7 @@
 .cand:hover {
   background: var(--color-surface-2);
 }
-/* 缩略图取真实封面;无封面时用平台标识占位,两者同尺寸,行高不跳 */
+/* 缩略图取真实封面;无封面时用平台品牌图标占位,两者同尺寸,行高不跳 */
 .cand-thumb {
   flex: none;
   width: 40px;
@@ -286,6 +286,41 @@
   display: grid;
   place-items: center;
   color: var(--color-dim);
+}
+/* 有封面时把品牌图标叠在右下角:跨平台合并列表里平台要一眼可辨 */
+.cand-thumb-wrap {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+}
+.cand-thumb-wrap .cand-thumb {
+  display: block;
+}
+.cand-brand {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+  box-shadow: var(--shadow-1);
+}
+/* 品牌图标统一 object-fit(ico/png 尺寸不一,不拉伸) */
+.platform-icon {
+  flex: none;
+  object-fit: contain;
+  border-radius: 4px;
+}
+/* 品牌图标 + 平台名(播放页元信息等文字行里使用) */
+.platform-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .cand-main {
   display: grid;
@@ -313,12 +348,6 @@
   color: var(--color-muted-foreground);
   font-size: var(--fs-micro);
   line-height: 17px;
-}
-/* 统一搜索的候选行带平台图标:图标与文字同一行对齐(普通 chip 是纯文本)。 */
-.cand-chip-platform {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
 }
 .cand-check {
   display: grid;

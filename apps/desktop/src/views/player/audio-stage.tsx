@@ -10,8 +10,9 @@ import type { MediaItem, PlaybackChapter } from "@amoeba/core"
 
 import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
+import { PlatformIcon } from "../../components/PlatformIcon.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
-import { fmtAgo, fmtTime, itemKey, mediaUrl, PLATFORM_LABEL, platformOf } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, itemKey, mediaUrl, PLATFORM_LABEL, platformIdOf, platformOf } from "../../lib/media.ts"
 import type { PlayMode } from "../../router.tsx"
 
 export interface AudioStageArgs {
@@ -57,7 +58,10 @@ export function buildAudioStage({
         {platform ? (
           <>
             <span className="opacity-60">·</span>
-            <span>{PLATFORM_LABEL[platform] ?? platform}</span>
+            <span className="platform-tag">
+              <PlatformIcon platform={platformIdOf(item)} size={14} />
+              {PLATFORM_LABEL[platform] ?? platform}
+            </span>
           </>
         ) : null}
       </>

@@ -15,7 +15,7 @@
 import type { ChannelInfo } from "@amoeba/core"
 import { useEffect, useMemo, useState } from "react"
 
-import { Icon } from "../../components/Icon.tsx"
+import { PlatformIcon } from "../../components/PlatformIcon.tsx"
 import { CATEGORY_CHANNEL } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { useDesktop } from "../../store/index.ts"
@@ -115,7 +115,7 @@ export function DiscoverPage() {
                   >
                     <div className="platform-head">
                       <span className="platform-mark">
-                        <Icon name={p.icon} size={17} />
+                        <PlatformIcon platform={p.id} size={20} />
                       </span>
                       <span className="platform-title">
                         <span className="platform-name">{p.label}</span>

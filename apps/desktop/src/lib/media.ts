@@ -8,6 +8,7 @@
 
 import type { MediaItem } from "@amoeba/core"
 import { itemRefKey } from "@amoeba/core/pure"
+import { platformOfHost } from "@amoeba/platform"
 
 /**
  * 图片 URL 归一。
@@ -191,4 +192,16 @@ export function platformOf(item: MediaItem): string | undefined {
 /** 直播在线人数(仅 LiveItem)。 */
 export function onlineOf(item: MediaItem): number | undefined {
   return (item as { online?: number }).online
+}
+
+/**
+ * 条目 → 平台表 id(`bili` / `douyu` / …;用于品牌图标、订阅渠道表)。
+ * `LiveItem.platform` 是 `bilibili` 这类展示名,与平台表 id 不同,故走 URL 域名。
+ */
+export function platformIdOf(item: MediaItem): string | undefined {
+  try {
+    return item.url ? platformOfHost(new URL(String(item.url)).host) : undefined
+  } catch {
+    return undefined
+  }
 }

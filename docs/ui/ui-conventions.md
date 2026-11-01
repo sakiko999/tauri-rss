@@ -300,7 +300,11 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
   - **边到边填**：每个取数源 resolve 就 `flush()` 一次，不等最慢的浏览器采集（抖音/小红书
     要 15–25s）；先回来的平台先出现。`searching` 只控制按钮转圈与空态文案。
   - 「搜索范围」chips 可指定单个平台（默认「全部」）；换范围作废在途搜索并清空结果，
-    不自动重搜。候选行的 meta 里带**平台图标 + 名称**。
+    不自动重搜。
+  - **品牌图标**：`components/PlatformIcon.tsx` 用各站 favicon（打包在
+    `apps/desktop/public/brand/`，不依赖外网）。搜索候选把品牌图标叠在缩略图右下角
+    （22px 角标；无封面时用 24px 占位），平台名并入次行 —— **同一行只出现一次图标**。
+    发现页平台卡/榜单、账号页、播放页平台标记同样用品牌图标；RSS/RSSHub 回落 lucide。
   - 候选带 `targets`（每项 `kind/channelKey/param/value`）：跨平台合并后不能按「当前平台」
     猜落地参数。同一个人同时有直播间和主页时，一条候选带两个目标，选中后由「添加为」
     chips 二选一（B站 uid + roomId 按 `author.handle` 合并；抖音主页可直接作

@@ -16,27 +16,13 @@ import { useMemo, useState } from "react"
 import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Select } from "../../components/Modal.tsx"
+import { PlatformIcon } from "../../components/PlatformIcon.tsx"
 import { Banner } from "../../components/StateBlock.tsx"
 import { CATALOG_PAGE, catalogView, isSingleton } from "../../lib/channel-catalog.ts"
 import { isImeComposing } from "../../lib/ime.ts"
 import { type Candidate, candidateKey, platformOf, valueList } from "../../lib/subscriptions.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { KIND_META } from "../../store/nodes.ts"
-
-/** 渠道 → 平台图标名(与 Dialog 里那份是同一张表,提出来给两块面板共用)。 */
-export const PLATFORM_ICON: Record<string, string> = {
-  bili: "radio",
-  douyu: "radio",
-  huya: "radio",
-  douyin: "radio",
-  twitch: "radio",
-  youtube: "play",
-  weibo: "message",
-  xhs: "image",
-  apple: "music",
-  rss: "rss",
-  rsshub: "rss",
-}
 
 /** 「搜索添加」面板的入参(全部来自外层表单控制器)。 */
 export interface SearchPanelProps {
@@ -94,25 +80,33 @@ export function CandidateList(f: CandidateListProps) {
               aria-selected={f.candidateValue === key}
               onClick={() => f.onPick(c)}
             >
-              {/* 缩略图:有真实封面用它,没有则回落到平台标识(不编造图片),两者同尺寸行高不跳 */}
+              {/* 缩略图:有真实封面用它;没有封面时整块就是品牌标识(不编造图片)。
+                  有封面时品牌角标叠在右下角 —— 跨平台合并列表里平台要一眼可辨。 */}
               {c.thumb ? (
-                <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
+                <span className="cand-thumb-wrap">
+                  <MediaImage src={c.thumb} ratio={1} className="cand-thumb" />
+                  {plat ? (
+                    <span className="cand-brand">
+                      <PlatformIcon platform={plat} size={14} label={platformDef(plat)?.label ?? plat} />
+                    </span>
+                  ) : null}
+                </span>
               ) : (
                 <span className="cand-thumb cand-thumb-plain">
-                  <Icon name={PLATFORM_ICON[plat] ?? "layers"} size={18} />
+                  <PlatformIcon platform={plat} size={24} />
                 </span>
               )}
               <span className="cand-main">
                 <span className="cand-label od-truncate">{c.label}</span>
-                {c.sub ? <span className="cand-sub od-truncate">{c.sub}</span> : null}
-                {c.meta.length > 0 || (f.showPlatform && plat) ? (
+                {/* 平台名并进次行:品牌图标已在缩略图角上,不再单独占一行 chip。 */}
+                {c.sub || (f.showPlatform && plat) ? (
+                  <span className="cand-sub od-truncate">
+                    {f.showPlatform && plat ? `${platformDef(plat)?.label ?? plat}${c.sub ? " · " : ""}` : ""}
+                    {c.sub}
+                  </span>
+                ) : null}
+                {c.meta.length > 0 ? (
                   <span className="cand-meta">
-                    {f.showPlatform && plat ? (
-                      <span className="cand-chip cand-chip-platform" key="__platform">
-                        <Icon name={PLATFORM_ICON[plat] ?? "layers"} size={11} />
-                        {platformDef(plat)?.label ?? plat}
-                      </span>
-                    ) : null}
                     {c.meta.map((m) => (
                       <span className="cand-chip" key={m}>
                         {m}
@@ -158,7 +152,7 @@ export function SearchPanel(f: SearchPanelProps) {
             </button>
             {f.platforms.map((p) => (
               <button key={p.id} className="chip" aria-pressed={f.platform === p.id} onClick={() => f.onPlatform(p.id)}>
-                <Icon name={PLATFORM_ICON[p.id] ?? "layers"} size={14} />
+                <PlatformIcon platform={p.id} size={16} />
                 {p.label}
               </button>
             ))}
@@ -269,7 +263,7 @@ export function ChannelPanel(f: ChannelPanelProps) {
         <div className="channel-form">
           <div className="channel-summary">
             <span className="platform-mark platform-mark-sm">
-              <Icon name={PLATFORM_ICON[platformOf(f.channel.key)] ?? "layers"} size={16} />
+              <PlatformIcon platform={platformOf(f.channel.key)} size={18} />
             </span>
             <span className="platform-title">
               <span className="t-h3">{f.channel.name}</span>
@@ -432,9 +426,10 @@ export function ChannelPanel(f: ChannelPanelProps) {
                     }}
                   >
                     <span className="cat-ico">
-                      <Icon
-                        name={c.kind === "audio" ? "music" : (PLATFORM_ICON[platformOf(c.key)] ?? "layers")}
-                        size={16}
+                      <PlatformIcon
+                        platform={platformOf(c.key)}
+                        size={18}
+                        fallback={c.kind === "audio" ? "music" : undefined}
                       />
                     </span>
                     <span className="cat-name">

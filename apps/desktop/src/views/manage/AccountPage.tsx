@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { Modal } from "../../components/Modal.tsx"
+import { PlatformIcon } from "../../components/PlatformIcon.tsx"
 import { QrImage } from "../../components/QrImage.tsx"
 import { Banner, InfoRow, SideCard } from "../../components/StateBlock.tsx"
 import { confirmAction } from "../../lib/confirm.ts"
@@ -160,7 +161,7 @@ function CredentialCard({
   const configured = !!value
 
   return (
-    <SideCard title={meta.label} icon={platform === "bili" ? "radio" : "message"}>
+    <SideCard title={meta.label} icon={<PlatformIcon platform={platform} size={18} />}>
       <div style={{ padding: "var(--sp-3) 0" }}>
         <InfoRow k="状态">
           {configured ? (
