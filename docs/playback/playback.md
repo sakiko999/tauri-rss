@@ -151,6 +151,18 @@ attach 的是元素本身；DanmakuLayer 随 host 移动，弹幕连接跨路由
 - **刻意不做**：小窗拖动（第一版固定右下）；OS 级 Picture-in-Picture API；ShortVideoView
   并入会话（见 `ShortVideoView.tsx` 头注释）。
 
+## 直播实时人气
+
+条目里的 `online` 是订阅抓取那一刻的快照，看直播时很快过期。播放页用
+`apps/desktop/src/views/player/use-live-online.ts` 在页存活期间每 30s 调一次
+`previewChannel`（同一房间、`LIVE_SUB_CHANNEL` 对应渠道、首个 tpl 参数）刷新人数：
+
+- 打开页先等 8s（订阅刷新刚取过），之后 30s 一拍；`document.hidden` 时跳过请求。
+- 只更新界面读数，**不写订阅、不动内容缓存**。
+- 失败静默保留上次读数：人气不是主功能，网络/风控错误不打断播放。
+- 平台 id 由条目 URL 经 `platformOfHost` 得到（`LiveItem.platform` 是 `bilibili`
+  这类展示名，与平台表 id `bili` 不同）。
+
 ## 统计信息（仿 YouTube 右键）
 
 `VideoShell` 右键菜单 → `PlayerStatsOverlay`（`packages/player/src/PlayerStatsOverlay.tsx`）。

@@ -72,8 +72,9 @@ export function AddSubscriptionDialog({
   /** 手工模式选中的渠道(搜索模式的订阅渠道由平台推导,不走这个)。 */
   const [channelKey, setChannelKey] = useState("")
   const [values, setValues] = useState<Record<string, string>>({})
-  /** 统一搜索:关键词 + 合并后的候选 + 已搜过 / 无结果的平台。 */
+  /** 统一搜索:关键词 + 搜索范围("all" 或平台 id)+ 合并后的候选。 */
   const [keyword, setKeyword] = useState("")
+  const [platformFilter, setPlatformFilter] = useState("all")
   const [cands, setCands] = useState<Candidate[]>([])
   const [searched, setSearched] = useState(false)
   const [failedPlatforms, setFailedPlatforms] = useState<string[]>([])
@@ -114,11 +115,12 @@ export function AddSubscriptionDialog({
 
   /** 统一搜索的取数源(用户搜索 + 主播搜索)。 */
   const sources = useMemo(() => searchSources(channels), [channels])
-  /** 搜索覆盖的平台名(按取数源顺序去重)。 */
-  const searchPlatformLabels = useMemo(
-    () => [...new Set(sources.map((s) => platformDef(s.platform)?.label ?? s.platform))],
-    [sources],
-  )
+  /** 可指定搜索范围的平台(按取数源顺序去重)。 */
+  const searchPlatforms = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const s of sources) m.set(s.platform, platformDef(s.platform)?.label ?? s.platform)
+    return [...m].map(([id, label]) => ({ id, label }))
+  }, [sources])
   /** 当前是否处于搜索添加(有搜索源,且用户没切到手工)。 */
   const searchMode = mode === "search" && (sources.length > 0 || !!presetKey)
 
@@ -161,6 +163,7 @@ export function AddSubscriptionDialog({
     // 带预置渠道(发现页「订阅该分区」)→ 直接进手工模式,预填参数。
     setMode(presetKey ? "manual" : "search")
     setKeyword("")
+    setPlatformFilter("all")
     setCands([])
     setSearched(false)
     setFailedPlatforms([])
@@ -186,12 +189,14 @@ export function AddSubscriptionDialog({
   const merging = manualTargetId !== "new"
 
   /**
-   * 统一搜索:一个关键词并发查所有取数源(用户搜索 + 主播搜索),按平台顺序合并。
-   * 单个源失败不拖垮整次搜索 —— 失败平台单独列出(多是没登录/风控)。
+   * 统一搜索:一个关键词并发查取数源(用户搜索 + 主播搜索),**边到边填** ——
+   * 不等最慢的浏览器源,先返回的平台先出现在列表里。单个源失败不拖垮整次搜索
+   * (失败平台单独列出,多是没登录/风控)。
    */
   async function runSearch() {
     const kw = keyword.trim()
-    if (!dl || !kw || !sources.length) return
+    const active = sources.filter((s) => platformFilter === "all" || s.platform === platformFilter)
+    if (!dl || !kw || !active.length) return
     const gen = latest.start()
     setSearching(true)
     setError("")
@@ -201,46 +206,57 @@ export function AddSubscriptionDialog({
     setCands([])
     setFailedPlatforms([])
     setSearched(true)
-    try {
-      const results = await Promise.allSettled(
-        sources.map(async (s) => {
-          const r = await dl.previewChannel(s.channelKey, { [s.field]: kw })
-          // 用户搜索产主页 URL(候选值从 URL 解析);主播搜索产 live 条目(roomId)。
-          const list =
-            s.kind === "user" ? candidatesFromUsers(r.items, s.platform) : candidatesFromSearch(r.items, s.platform)
-          // 每个源只取前 10:8 个源全量合并会有几百行,候选列表是「挑一个」不是浏览。
-          return list.slice(0, 10)
-        }),
-      )
-      if (latest.stale(gen)) return // 已被新搜索取代,丢弃
-      const order = new Map(sources.map((s, i) => [s.channelKey, i]))
-      const lists: Candidate[][] = []
-      const failed: string[] = []
-      results.forEach((r, i) => {
-        if (r.status === "rejected") {
-          const s = sources[i]!
-          const label = platformDef(s.platform)?.label ?? s.platform
-          if (!failed.includes(label)) failed.push(label)
-          return
-        }
-        lists.push(r.value)
-      })
-      // 同平台同一人只留一条:用户搜索与主播搜索的结果在这里合并,
-      // 候选同时带「直播间」「用户主页」两个落地点(见 mergeCandidates)。
-      const merged = mergeCandidates(lists.flat())
-      // 按取数源顺序(平台 → 用户/主播)排列,同平台结果连在一起。
+    // 按取数源顺序(平台 → 用户/主播)排列,同平台结果连在一起。
+    const order = new Map(active.map((s, i) => [s.channelKey, i]))
+    const acc: Candidate[] = []
+    const failed: string[] = []
+    const flush = () => {
+      const merged = mergeCandidates(acc)
       merged.sort(
         (a, b) => (order.get(a.targets[0]?.channelKey ?? "") ?? 99) - (order.get(b.targets[0]?.channelKey ?? "") ?? 99),
       )
       setCands(merged)
-      setFailedPlatforms(failed)
+    }
+    try {
+      await Promise.all(
+        active.map(async (s) => {
+          try {
+            const r = await dl.previewChannel(s.channelKey, { [s.field]: kw })
+            if (latest.stale(gen)) return
+            // 用户搜索产主页 URL(候选值从 URL 解析);主播搜索产 live 条目(roomId)。
+            const list =
+              s.kind === "user" ? candidatesFromUsers(r.items, s.platform) : candidatesFromSearch(r.items, s.platform)
+            // 每个源只取前 10:多源全量合并会有几百行,候选列表是「挑一个」不是浏览。
+            acc.push(...list.slice(0, 10))
+            flush()
+          } catch {
+            if (latest.stale(gen)) return
+            const label = platformDef(s.platform)?.label ?? s.platform
+            if (!failed.includes(label)) {
+              failed.push(label)
+              setFailedPlatforms([...failed])
+            }
+          }
+        }),
+      )
     } catch (e) {
       if (latest.stale(gen)) return
       setError(e instanceof Error ? e.message : String(e))
-      setCands([])
     } finally {
       if (!latest.stale(gen)) setSearching(false)
     }
+  }
+
+  /** 换搜索范围:作废在途搜索并清空上一范围的结果(不自动发起新搜索)。 */
+  function pickPlatform(id: string) {
+    latest.invalidate()
+    setPlatformFilter(id)
+    setCands([])
+    setCandidateValue("")
+    setTargetIndex(0)
+    setTitle("")
+    setFailedPlatforms([])
+    setSearched(false)
   }
 
   function pick(key: string) {
@@ -389,7 +405,9 @@ export function AddSubscriptionDialog({
 
       {searchMode ? (
         <SearchPanel
-          platforms={searchPlatformLabels}
+          platforms={searchPlatforms}
+          platform={platformFilter}
+          onPlatform={pickPlatform}
           keyword={keyword}
           onKeyword={setKeyword}
           onSearch={() => void runSearch()}

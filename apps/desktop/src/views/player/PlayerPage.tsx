@@ -19,7 +19,7 @@ import { Button, IconButton } from "../../components/Button.tsx"
 import { Icon } from "../../components/Icon.tsx"
 import { SideCard, StateBlock } from "../../components/StateBlock.tsx"
 import { openExternalSafely } from "../../lib/host.ts"
-import { fmtAgo, fmtTime, itemKey, mediaUrl, onlineOf, PLATFORM_LABEL, platformOf } from "../../lib/media.ts"
+import { fmtAgo, fmtTime, itemKey, mediaUrl, PLATFORM_LABEL, platformOf } from "../../lib/media.ts"
 import { overlayBlock } from "../../lib/uiOverlay.ts"
 import { previewPath, usePlayNavigate, usePlayParams, viewPath } from "../../router.tsx"
 import { useDesktop } from "../../store/index.ts"
@@ -27,6 +27,7 @@ import { KIND_META } from "../../store/nodes.ts"
 import { audioSessionRef, setAudioOnStage } from "./audio-session.ts"
 import { buildAudioStage } from "./audio-stage.tsx"
 import { nextInQueueOf, openAudioSession } from "./session-queue.ts"
+import { useLiveOnline } from "./use-live-online.ts"
 import { useVideoSession } from "./video-session.ts"
 import { VideoStageSlot } from "./VideoSessionStage.tsx"
 
@@ -149,6 +150,9 @@ export function PlayerPage() {
     return () => setAudioOnStage(false)
   }, [item, podcastSource, from])
 
+  // 直播人气实时刷新(条目里的 online 是抓取那一刻的快照)。
+  const online = useLiveOnline(item)
+
   if (!item) {
     return (
       <div className="page" {...overlayBlock("player-missing", "player:missing")}>
@@ -169,7 +173,6 @@ export function PlayerPage() {
   }
 
   const isLive = item.kind === "live"
-  const online = onlineOf(item)
   const platform = platformOf(item)
   // 听视频(?mode=listen):只对点播视频有意义 —— live 无独立音轨、audio 本来就是听的。
   // 流是 DASH 才真能听(bili/youtube);durl 回退流剥不出音轨时播放器自动照常播视频。

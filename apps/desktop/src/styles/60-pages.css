@@ -314,6 +314,12 @@
   font-size: var(--fs-micro);
   line-height: 17px;
 }
+/* 统一搜索的候选行带平台图标:图标与文字同一行对齐(普通 chip 是纯文本)。 */
+.cand-chip-platform {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 .cand-check {
   display: grid;
   place-items: center;

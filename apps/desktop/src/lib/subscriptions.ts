@@ -222,13 +222,19 @@ export const USER_SUB_PARAM: Record<string, string> = {
 }
 
 /**
- * 手动填 ID 的入口已从「浏览渠道」目录移除的渠道:分区(靠发现页/目录点选)
- * 与用户主页(靠统一搜索)。⚠️ 这只是**入口收敛**,渠道本身仍可被订阅或预览。
+ * 手动填 ID 的入口已从「浏览渠道」目录移除的渠道:分区(靠发现页/目录点选)、
+ * 用户主页(靠统一搜索)与直播间(靠搜主播/统一搜索)。
+ * ⚠️ 这只是**入口收敛**,渠道本身仍可被订阅或预览。
  */
 export const NO_MANUAL_ENTRY = new Set<string>([
   ...Object.values(CATEGORY_CHANNEL),
   ...Object.values(USER_SUB_CHANNEL),
   ...Object.values(USER_SEARCH_CHANNEL),
+  // 直播间:各平台搜主播 / 统一搜索已覆盖。YouTube 直播参数是 videoId(不是房间号),
+  // 且没有搜索入口 → 保留手填,避免功能失去入口。
+  ...Object.entries(LIVE_SUB_CHANNEL)
+    .filter(([platform]) => platform !== "youtube")
+    .map(([, key]) => key),
   // B站分区渠道不在 CATEGORY_CHANNEL(发现页走目录订阅 + 目录条目预览)。
   "bili:live:area",
   // 用户主页动态:uid 只能从 UP 主搜索结果拿到。

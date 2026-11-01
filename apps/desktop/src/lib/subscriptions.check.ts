@@ -209,7 +209,8 @@ assert(
 )
 assert(isManualEntryOnly(ch("bili:live:area", "parentAreaId")), "分区渠道不再出现在目录手填")
 assert(isManualEntryOnly(ch("live:douyu:anchor", "keyword")), "主播搜索渠道属工具,不进目录")
-assert(!isManualEntryOnly(ch("bili:live", "roomIds")), "直播间渠道仍可手动添加")
+assert(isManualEntryOnly(ch("bili:live", "roomIds")), "直播间渠道不再出现在目录手填")
+assert(!isManualEntryOnly(ch("youtube:live", "videoId")), "YouTube 直播(视频 ID)保留手填入口")
 // 用户订阅是单值参数(uid/channelId/sec_uid/user_id),无「并入已有」语义 → 不进 MULTI_PARAMS
 assert(
   !MULTI_PARAMS.includes("uid") && !MULTI_PARAMS.includes("channelId") && !MULTI_PARAMS.includes("sec_uid"),

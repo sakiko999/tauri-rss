@@ -297,6 +297,10 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
   所有取数源**（`searchSources()` = `USER_SEARCH_CHANNEL` 的用户搜索 + 注册表里的
   `*:anchor` 主播搜索），结果按平台顺序合并；单源失败只记「该平台没返回」，
   不拖垮整次搜索。
+  - **边到边填**：每个取数源 resolve 就 `flush()` 一次，不等最慢的浏览器采集（抖音/小红书
+    要 15–25s）；先回来的平台先出现。`searching` 只控制按钮转圈与空态文案。
+  - 「搜索范围」chips 可指定单个平台（默认「全部」）；换范围作废在途搜索并清空结果，
+    不自动重搜。候选行的 meta 里带**平台图标 + 名称**。
   - 候选带 `targets`（每项 `kind/channelKey/param/value`）：跨平台合并后不能按「当前平台」
     猜落地参数。同一个人同时有直播间和主页时，一条候选带两个目标，选中后由「添加为」
     chips 二选一（B站 uid + roomId 按 `author.handle` 合并；抖音主页可直接作
@@ -313,10 +317,10 @@ Windows/Android 伪 scheme 有**已公开漏洞**：`is_local_url()` 只校验�
     `xiaohongshu.com/user/profile/<id>` / `twitch.tv/<login>`）—— raw 不穿 XML 边界，
     粉丝/订阅数走 summary 字段。新增用户主页渠道时三张表都要登记（自检
     `subscriptions.check.ts` 逐平台断言三者齐全）。
-- **分区 / 用户主页 / 搜索类渠道不再进「浏览渠道」目录**（`isManualEntryOnly`）：
-  它们要求手填分区 ID / uid / 关键词，没有可发现性；分区走发现页与分区目录点选，
-  用户与主播走统一搜索。渠道本身仍可被 `previewChannel` 预览和订阅，只是不再列出
-  手填入口。
+- **分区 / 用户主页 / 直播间 / 搜索类渠道不再进「浏览渠道」目录**（`isManualEntryOnly`）：
+  它们要求手填分区 ID / uid / 房间号 / 关键词，没有可发现性；分区走发现页与分区目录点选，
+  用户、主播与直播间走统一搜索。**YouTube 直播例外**（参数是 videoId、没有搜索入口，
+  去掉手填会让功能失去入口）。渠道本身仍可被 `previewChannel` 预览和订阅。
 - **手工添加直播房间也能并入已有订阅**（2026-10-19）：`AddSubscriptionDialog` 手工模式下，
   `roomIds` 列表型参数会列出同渠道已有订阅；提交时用 `splitValues` 合并去重，不新建。
   搜索模式的「添加到」同义。

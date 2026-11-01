@@ -18,7 +18,9 @@
 > 同日新增 `twitch:user:search`；`douyin:user:search` / `xhs:user:search` 增加**被动关键词
 > 搜索**（页面自己发请求，应用侧不签名），微博保持 HTTP 接口（无签名，被动无收益）。
 > 同一人的「直播间 / 用户主页」合并为一条候选（B站按 uid，抖音主页可直接作 roomIds），
-> 由用户在结果上二选一添加。
+> 由用户在结果上二选一添加。直播间渠道（bili:live / live:douyu / live:huya /
+> live:douyin / twitch:live）的手填入口同时移除，改由搜索进入；YouTube 直播
+> （videoId）因没有搜索入口而保留。
 
 ## 一、已实现的渠道扩展
 

@@ -40,8 +40,11 @@ export const PLATFORM_ICON: Record<string, string> = {
 
 /** 「搜索添加」面板的入参(全部来自外层表单控制器)。 */
 export interface SearchPanelProps {
-  /** 本次搜索覆盖的平台名(静态文案:让用户知道这一个输入会查哪些站)。 */
-  platforms: string[]
+  /** 可指定搜索范围的平台(`id` 用于匹配取数源,`label` 展示)。 */
+  platforms: Array<{ id: string; label: string }>
+  /** 当前范围:`"all"` 或平台 id。 */
+  platform: string
+  onPlatform: (id: string) => void
   keyword: string
   onKeyword: (v: string) => void
   onSearch: () => void
@@ -105,7 +108,8 @@ export function CandidateList(f: CandidateListProps) {
                 {c.meta.length > 0 || (f.showPlatform && plat) ? (
                   <span className="cand-meta">
                     {f.showPlatform && plat ? (
-                      <span className="cand-chip" key="__platform">
+                      <span className="cand-chip cand-chip-platform" key="__platform">
+                        <Icon name={PLATFORM_ICON[plat] ?? "layers"} size={11} />
                         {platformDef(plat)?.label ?? plat}
                       </span>
                     ) : null}
@@ -130,16 +134,38 @@ export function CandidateList(f: CandidateListProps) {
 }
 
 /**
- * 统一搜索:一个关键词同时搜所有可用平台(用户搜索 + 主播搜索),点选一个候选。
- *
- * 选中后落到候选自带的 `land`(平台 → 用户内容渠道 / 直播渠道),跨平台合并后
- * 不再按「当前平台」猜落地参数。房间类候选走 roomIds,用户类走 uid/channelId/…
+ * 统一搜索:一个关键词搜所有可用平台(用户搜索 + 主播搜索),也支持只看某个平台;
+ * 结果边到边填(不等最慢的浏览器采集)。点选一个候选再选择落地目标。
  */
 export function SearchPanel(f: SearchPanelProps) {
+  const current = f.platforms.find((p) => p.id === f.platform)
   const hint =
-    f.platforms.length > 0 ? `同时搜索 ${f.platforms.join(" · ")} 的用户与主播。` : "当前没有可用的搜索渠道。"
+    f.platforms.length === 0
+      ? "当前没有可用的搜索渠道。"
+      : current
+        ? `只搜 ${current.label} 的用户与主播。`
+        : `同时搜索 ${f.platforms.map((p) => p.label).join(" · ")} 的用户与主播。`
   return (
     <div className="stack" style={{ gap: "var(--sp-5)" }} {...overlayBlock("search-panel", "add:search")}>
+      {f.platforms.length > 0 ? (
+        <div className="field">
+          <span className="field-label" id="lbl-search-platform">
+            搜索范围
+          </span>
+          <div className="chip-row" role="group" aria-labelledby="lbl-search-platform">
+            <button className="chip" aria-pressed={f.platform === "all"} onClick={() => f.onPlatform("all")}>
+              <Icon name="layers" size={14} /> 全部
+            </button>
+            {f.platforms.map((p) => (
+              <button key={p.id} className="chip" aria-pressed={f.platform === p.id} onClick={() => f.onPlatform(p.id)}>
+                <Icon name={PLATFORM_ICON[p.id] ?? "layers"} size={14} />
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="field">
         <label className="field-label" htmlFor="add-keyword">
           搜索关键词
@@ -161,7 +187,7 @@ export function SearchPanel(f: SearchPanelProps) {
         <div className="inline-row">
           <Button variant="secondary" size="sm" disabled={f.searching || !f.keyword.trim()} onClick={f.onSearch}>
             {f.searching ? <Icon name="loader" size={13} className="animate-spin" /> : <Icon name="search" size={13} />}{" "}
-            全部搜索
+            {f.platform === "all" ? "全部搜索" : "搜索"}
           </Button>
           <span className="t-micro t-dim">{hint}</span>
         </div>
