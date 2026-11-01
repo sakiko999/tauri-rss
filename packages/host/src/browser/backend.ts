@@ -32,21 +32,32 @@ export interface CdpTargetInfo {
  * 资源拦截：字体/媒体/统计域名对抓取零价值(页面内容走 SSR HTML + 签名脚本 + cookie)。
  * **不拦 CSS** —— 布局一变，懒加载与可见性判定(IntersectionObserver)可能跟着变。
  * 图片在启动参数层关掉(WebView2 用 `--blink-settings=imagesEnabled=false`)。
+ *
+ * ⚠️ 媒体尾缀要带 `*` 匹配 query：抖音直链实测形如 `.../x.mp4?...`，只写 `*.mp4`
+ * 漏掉整段音视频（页面会真的下载/解码，MediaSource 缓冲是抓取 tab 里最大的一块）。
+ * 小红书视频 CDN 甚至没有扩展名（`sns-video-al.xhscdn.com/<key>`），只能按主机名拦。
  */
 export const BLOCKED_URL_PATTERNS = [
-  "*.woff",
-  "*.woff2",
-  "*.ttf",
-  "*.otf",
-  "*.mp4",
-  "*.m3u8",
+  "*.woff*",
+  "*.ttf*",
+  "*.otf*",
+  // 不少 CDN 的字体没有扩展名（抖音 `lf3-pendah.bytetos.com/obj/pendah/fonts/<hash>`），
+  // 只按后缀会漏几十次字体加载；抓取只读文本，不需要字形。
+  "*/fonts/*",
+  "*.mp4*",
+  "*.m3u8*",
+  "*.m4s*",
+  "*.webm*",
+  "*.flv*",
+  "*.mov*",
+  "*.mp3*",
+  "*.m4a*",
+  "*.aac*",
   "*.ts",
-  "*.m4s",
-  "*.webm",
-  "*.flv",
-  "*.mov",
-  "*.mp3",
-  "*.m4a",
+  "*.ts?*",
+  "*douyinvod.com*",
+  "*sns-video*",
+  "*video.weibocdn.com*",
   "*doubleclick.net*",
   "*google-analytics.com*",
   "*googletagmanager.com*",

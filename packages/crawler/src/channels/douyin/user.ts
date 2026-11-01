@@ -36,6 +36,7 @@ import {
   now,
   readAwemeList,
   readDouyinLoginCookie,
+  releaseLaneTab,
   resolveDouyinSecUid,
   withBrowserOp,
 } from "@amoeba/resolve"
@@ -196,6 +197,7 @@ export class DouyinUserChannel implements RssChannel {
   ): Promise<{ xml: string; cursor?: string; hasMore?: boolean }> {
     // 抖音号 → sec_uid（进程内有缓存，编译后每页不重复请求）。
     const secUid = await resolveDouyinSecUid(input)
+    let ended = false
     return withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "douyin" }, async (b) => {
       // 匿名态页面只发首屏那一次请求、作品区被登录弹窗盖住（滚轮无效，2026-10-31 实测），
       // 直接给可操作错误；判据与登录快照同源（`sessionid`，ttwid 匿名访客也有，不能用）。
@@ -252,9 +254,16 @@ export class DouyinUserChannel implements RssChannel {
         // → 原样返回 cursor + hasMore 让 core 保留「加载更多」
         // (core 的「游标前进但 0 新增 ⇒ 到底」启发式会误杀这种情况)。
         // 多次滚动 scrollHeight 无增长才视为真到底(省略 cursor = 没有更多)。
-        return platformActive ? { xml, cursor: String(start), hasMore: true } : { xml }
+        if (platformActive) return { xml, cursor: String(start), hasMore: true }
+        ended = true
+        return { xml }
       }
       return { xml, cursor: String(start + page.length) }
+      // 真到底：关 target 释放 440MB 级 renderer（作品列表页的卡片/视频壳）。
+      // 下次刷新/加载更多会按 href 判据重新导航收首屏。
+    }).then(async (r) => {
+      if (ended) await releaseLaneTab(browser, LANE)
+      return r
     })
   }
 

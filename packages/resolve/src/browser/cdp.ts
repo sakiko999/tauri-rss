@@ -82,6 +82,21 @@ export function withBrowserOp<T>(
 }
 
 /**
+ * 关掉一次性 lane 的 target，释放该 tab 的 renderer 内存。
+ *
+ * WebView2 每个 target 独立 renderer，关 target 是唯一确定释放私有内存的手段
+ * （风控 §3.14：抖音单 tab 实测 ~440MB、小红书 150–260MB）。**只能用于下一次操作
+ * 本来就会重新导航的 lane**（关键词搜索页、已经翻到底的列表页）；翻页中途关掉会
+ * 丢页面累计 state，下一轮要从首屏重新滚到游标。lane 句柄留在 backend.tabs 里，
+ * 再用时按既有「target 丢失自愈」重建。
+ */
+export async function releaseLaneTab(browser: BrowserBackend, lane: string): Promise<void> {
+  const tab = browser.tab?.(lane)
+  if (!tab) return
+  await tab.close().catch(() => {})
+}
+
+/**
  * ⚠️ **兼容壳**(lane 化前是唯一入口):等价 `withBrowserOp(browser, { lane: "default",
  * mode, platform })`,所有 lane 共享默认 tab。存量调用点逐个迁到 withBrowserOp;
  * 新代码一律用 withBrowserOp。

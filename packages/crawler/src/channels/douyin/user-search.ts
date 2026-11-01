@@ -15,7 +15,14 @@
  * 下游订阅走 `douyin:user`(sec_uid 参数),本渠道只作「搜索添加」的取数源。
  */
 
-import { cdpNavigate, fetchDouyinUserByUniqueId, now, readDouyinLoginCookie, withBrowserOp } from "@amoeba/resolve"
+import {
+  cdpNavigate,
+  fetchDouyinUserByUniqueId,
+  now,
+  readDouyinLoginCookie,
+  releaseLaneTab,
+  withBrowserOp,
+} from "@amoeba/resolve"
 import type { Item, Video } from "@amoeba/xml"
 
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
@@ -99,6 +106,8 @@ export class DouyinUserSearchChannel implements RssChannel {
   private async searchByKeyword(keyword: string): Promise<Item[]> {
     const browser = globalThis.appHost?.browser
     if (!browser) throw new Error(NEEDS_BROWSER)
+    // 搜索页是一次性的（下一轮搜索本来就会重新导航）：用完立即关 target 释放
+    // renderer（抖音搜索页同样会累积大量卡片/视频壳），不等 5 分钟空闲回收。
     const hits = await withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "douyin" }, async (b) => {
       if (!(await readDouyinLoginCookie(b))) throw new Error(NEEDS_LOGIN)
       const url = `https://www.douyin.com/search/${encodeURIComponent(keyword)}?type=user`
@@ -115,7 +124,7 @@ export class DouyinUserSearchChannel implements RssChannel {
         timeoutMs: 20_000,
       })
       return this.readCaptured(since)
-    })
+    }).finally(() => releaseLaneTab(browser, LANE))
     if (!hits.length) throw new Error(NO_RESULTS)
     return hits.map((h) => this.toItem(h))
   }

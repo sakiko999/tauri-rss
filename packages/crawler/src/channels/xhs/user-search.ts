@@ -17,7 +17,16 @@
  * 下游订阅走 `xhs:user`(user_id 参数),本渠道只作「搜索添加」的取数源。
  */
 
-import { cdpEvaluate, cdpNavigate, extractInitialState, now, withBrowserOp, XHS_BASE, xhsClient } from "@amoeba/resolve"
+import {
+  cdpEvaluate,
+  cdpNavigate,
+  extractInitialState,
+  now,
+  releaseLaneTab,
+  withBrowserOp,
+  XHS_BASE,
+  xhsClient,
+} from "@amoeba/resolve"
 import type { Item, Video } from "@amoeba/xml"
 
 import type { RssChannel, RssSource, SourceInfo } from "../../index.ts"
@@ -197,6 +206,8 @@ export class XhsUserSearchChannel implements RssChannel {
     if (!browser) throw new Error(NEEDS_BROWSER)
     // ⚠️ 必须 interactive:搜索结果是导航后由页面脚本自己的 XHR 填的,
     // hidden 的后台 tab 会被节流到不发请求(douyin:user 同款结论)。
+    // 搜索页是**一次性**的（下一轮搜索本来就会重新导航）：用完立即关 target 释放
+    // renderer（搜索结果页 DOM/图片列表可达 150–260MB），不等 5 分钟空闲回收。
     const hits = await withBrowserOp(browser, { lane: LANE, mode: "interactive", platform: "xhs" }, async (b) => {
       // 缓冲是进程级的:只读本次捕获窗口内写入的响应,避免连续搜索时混入上一次关键词。
       const since = now()
@@ -237,7 +248,7 @@ export class XhsUserSearchChannel implements RssChannel {
         .list("xhs", ENDPOINT)
         .some((e) => e.at >= since && /\/search\/(usersearch|users?|notes)$/.test(urlPath(e.url)))
       return hasResultPack ? [] : this.readSearchStateViaBrowser(b)
-    })
+    }).finally(() => releaseLaneTab(browser, LANE))
     if (!hits.length) {
       throw new Error(`没有搜到与「${keyword}」相关的用户：换个关键词，或确认搜索页能正常打开（可能需要登录）`)
     }

@@ -11,7 +11,7 @@
  *   - 无浏览器(mobile/CLI)→ **不支持**(登录态 HTTP SSR 是空壳,见 `XHS_EXPLORE_NEEDS_BROWSER`)。
  */
 
-import { noteCardToSocial, now, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
+import { noteCardToSocial, now, releaseLaneTab, withBrowserOp, XHS_BASE } from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 
@@ -110,6 +110,7 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
     cursor?: string,
     existing?: number,
   ): Promise<{ xml: string; cursor?: string }> {
+    let ended = false
     return withBrowserOp(browser, { lane: "list:xhs:explore", mode: "interactive", platform: "xhs" }, async (b) => {
       // 已在 /explore(忽略 query)就**不重载**:页面累计的 feed 与滚动位置是增量
       // 翻页的唯一依据,重载会让 state 回到首屏 → 每次都取到同一批。
@@ -152,9 +153,15 @@ export class XhsExploreChannel extends XhsChannelBase implements RssChannel {
         // 平台还在追加(scrollHeight 增长)但 state 未到位 → 原样返回 cursor 让 core 重试;
         // 否则视为真到底(hasMore=false)。
         if (platformActive) return { xml, cursor: cursor ?? String(returned) }
+        ended = true
         return { xml }
       }
       return { xml, cursor: String(total) }
+      // 真到底：页面累计的几百条 feed/DOM 不再需要，操作结束后关 target 释放 renderer
+      // （下次刷新本来就整体重载）。只能在这条路径做——翻页途中关掉会丢页面 state。
+    }).then(async (r) => {
+      if (ended) await releaseLaneTab(browser, "list:xhs:explore")
+      return r
     })
   }
 

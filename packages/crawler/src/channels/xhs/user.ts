@@ -18,7 +18,16 @@
  * ⚠️ 本渠道**不声明** `passive`:翻页要 interactive 滚动,不是纯导航采集。
  */
 
-import { extractInitialState, log, noteCardToSocial, now, withBrowserOp, XHS_BASE, xhsClient } from "@amoeba/resolve"
+import {
+  extractInitialState,
+  log,
+  noteCardToSocial,
+  now,
+  releaseLaneTab,
+  withBrowserOp,
+  XHS_BASE,
+  xhsClient,
+} from "@amoeba/resolve"
 import type { Item, Social } from "@amoeba/xml"
 import { serializeFeed, type SerializeOptions } from "@amoeba/xml"
 
@@ -145,6 +154,7 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
     // 与 lazy 加载也不触发（2026-10-19 实测，见 docs/crawler-risk-control.md §3.9）。
     // renderLease 在最后一个租约释放时才切回 hidden（多 lane 不互掐滚动）。
     // ⚠️ 滚动前 activate 本 tab(withBrowserOp 内做):非激活 tab 的 rAF/IO 同样停摆。
+    let ended = false
     return withBrowserOp(browser, { lane: "list:xhs:user", mode: "interactive", platform: "xhs" }, async (b) => {
       // 已在 profile 页(忽略 query)就不重载:滚动驱动的增量依赖页面累计的 notes,
       // 重载会让 state 回到首屏,`slice(startIdx)` 又切到已返回过的条目。
@@ -184,9 +194,14 @@ export class XhsUserChannel extends XhsChannelBase implements RssChannel {
         // (而非 hasMore false → desktop 标 ended → 用户被迫手动刷新)。cursor 不变,desktop
         // onRender 无进展保护(items 不增长)不会自动重复触发,只由用户手动再点「加载更多」。
         if (platformActive) return { xml, cursor: String(startIdx) }
+        ended = true
         return { xml } // 真到底:多次滚动 scrollHeight 无增长 = 平台无更多
       }
       return { xml, cursor: String(startIdx + page.length) }
+      // 真到底：不再需要页面累计的 notes/滚动位置，操作结束后关 target 释放 renderer。
+    }).then(async (r) => {
+      if (ended) await releaseLaneTab(browser, "list:xhs:user")
+      return r
     })
   }
 

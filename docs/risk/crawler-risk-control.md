@@ -837,9 +837,24 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
   - **采用**：① 单 lane tab 空闲回收（上条）——WebView2 官方在
     [WebView2Feedback #2121](https://github.com/MicrosoftEdge/WebView2Feedback/issues/2121)
     也明确建议应用自己做 tab discarding，关 target 是唯一确定释放 renderer 私有内存的手段
-    （每 tab 独立 renderer，Chromium 不复用）。② 资源拦截表补 `*.ts/*.m4s/*.flv/*.mov`
-    （媒体段对抓取零价值；播放用的直链在桌面端自己拉，不经抓取浏览器）。
+    （每 tab 独立 renderer，Chromium 不复用）。
+    ② **一次性 lane 用完即关**（`releaseLaneTab`，2026-11-01）：关键词搜索页
+    （`search:xhs` / `search:douyin`）与**已翻到底**的列表 lane（xhs/douyin 的
+    `fetchMore` 返回「真到底」时）在操作结束后立刻关 target，不等 5 分钟空闲回收。
+    判据 = 下一次操作本来就会重新导航，页面累计 state 不再是增量依据；翻页中途
+    （页面还在累积）**不要**关。
+    ③ 资源拦截表补 `*.ts/*.m4s/*.flv/*.mov` 与 **带 query 的媒体尾缀**：抖音直链实测形如
+    `.../x.mp4?...`，只写 `*.mp4` 会漏；小红书视频 CDN 无扩展名（`sns-video-*.xhscdn.com`），
+    按主机名拦。字体同理补 `*/fonts/*`（抖音实测一次主页加载 324 个
+    `lf3-pendah.bytetos.com/obj/pendah/fonts/<hash>` 无扩展名字体，后缀规则全漏；
+    抓取只读文本，不需要字形）。媒体/字体对抓取零价值，播放用的直链在桌面端自己拉，
+    不经抓取浏览器。
   - **明确不做**（附依据）：
+    - **页面内 DOM 回收 / 离屏虚拟化**（油猴脚本式的 `remove()` + 按缓存重建）：抓取页是
+      第三方 React 应用，删它渲染的卡片会让后续 reconciliation 抛 `removeChild`；无限滚动
+      的分页依据本身就是页面累计的 DOM/state。安全等价物只有「关 target 重建」——已落在
+      空闲回收 + 一次性 lane + 翻到底三条路径上。自家 feed 的虚拟化（Virtuoso/masonic）
+      与抓取浏览器无关。
     - `--process-per-site` / `--renderer-process-limit` / 关 site isolation：CDP 附着下
       Chromium 禁止同站 renderer 共享（[#5135](https://github.com/MicrosoftEdge/WebView2Feedback/issues/5135)），
       且本仓 2026-10-22 实测合并后关 tab 不释放（320MB 常驻）。
