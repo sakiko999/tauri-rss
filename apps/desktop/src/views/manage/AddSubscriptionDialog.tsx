@@ -39,7 +39,7 @@ import {
 } from "../../lib/subscriptions.ts"
 import { useLatestOnly } from "../../lib/useLatestOnly.ts"
 import { useDesktop } from "../../store/index.ts"
-import { ChannelPanel, SearchPanel } from "./AddPanels.tsx"
+import { ChannelPanel, type FailedSource, SearchPanel } from "./AddPanels.tsx"
 
 export function AddSubscriptionDialog({
   open,
@@ -77,7 +77,7 @@ export function AddSubscriptionDialog({
   const [platformFilter, setPlatformFilter] = useState("all")
   const [cands, setCands] = useState<Candidate[]>([])
   const [searched, setSearched] = useState(false)
-  const [failedPlatforms, setFailedPlatforms] = useState<string[]>([])
+  const [failedSources, setFailedSources] = useState<FailedSource[]>([])
   const [searching, setSearching] = useState(false)
   /** 搜索模式:选中的候选键(`candidateKey`;'' = 未选,提交按钮禁用)。 */
   const [candidateValue, setCandidateValue] = useState("")
@@ -172,7 +172,7 @@ export function AddSubscriptionDialog({
     setPlatformFilter("all")
     setCands([])
     setSearched(false)
-    setFailedPlatforms([])
+    setFailedSources([])
     // 不预选渠道:打开就是渠道目录。原先默认落「RSS 直链」,等于用户还没看目录,
     // 下面那套参数表单就已经按一条他没选的渠道填好了。
     const key = presetKey ?? ""
@@ -200,9 +200,22 @@ export function AddSubscriptionDialog({
   )
 
   /**
+   * 服务端错误 → 用户能据此行动的一句话。
+   * 「需要登录」与「请求频繁被暂时限制」的下一步动作完全不同；冷却中错误自带剩余时间，
+   * 原样保留。其余截断显示原文（真实失败模式好过一句笼统的「没有返回结果」）。
+   */
+  function humanizeSearchError(e: unknown): string {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes("需要登录")) return "需要登录，到「账号与凭证」扫码或填入 cookie"
+    if (msg.includes("冷却中")) return msg
+    if (/ok=-100|频繁/.test(msg)) return "请求过于频繁，被平台暂时限制，等几分钟再试"
+    return msg.slice(0, 60)
+  }
+
+  /**
    * 统一搜索:一个关键词并发查取数源(用户搜索 + 主播搜索),**边到边填** ——
    * 不等最慢的浏览器源,先返回的平台先出现在列表里。单个源失败不拖垮整次搜索
-   * (失败平台单独列出,多是没登录/风控)。
+   * (失败源单独列出,带真实原因)。
    */
   async function runSearch() {
     const kw = keyword.trim()
@@ -216,19 +229,18 @@ export function AddSubscriptionDialog({
     setSearchTargetId("new")
     setTitle("")
     setCands([])
-    setFailedPlatforms([])
+    setFailedSources([])
     setSearched(true)
     // 按取数源顺序(平台 → 用户/主播)排列,同平台结果连在一起。
     // ⚠️ 排序键必须是**取数源**顺序，不是落地渠道(targets[0].channelKey)：
     // 两者是不同的键空间（bili:user → bili:user_video），按落地渠道查会恒 99。
     const candidateOrder = new Map<string, number>()
     const acc: Candidate[] = []
-    /** 取数源失败的平台（id）与至少成功过一次的平台。 */
-    const failed = new Set<string>()
+    /** 取数源失败的平台（id → 展示名 + 原因）与至少成功过一次的平台。 */
+    const failed = new Map<string, FailedSource>()
     const succeeded = new Set<string>()
     const flushFailed = () => {
-      const labels = [...failed].filter((p) => !succeeded.has(p)).map((p) => platformDef(p)?.label ?? p)
-      setFailedPlatforms(labels)
+      setFailedSources([...failed.values()].filter((f) => !succeeded.has(f.id)))
     }
     const flush = () => {
       const merged = mergeCandidates(acc)
@@ -255,10 +267,14 @@ export function AddSubscriptionDialog({
             }
             flush()
             flushFailed()
-          } catch {
+          } catch (e) {
             if (latest.stale(gen)) return
-            // 同平台只要有一个取数源成功，就不把整站标成「没有返回结果」。
-            failed.add(s.platform)
+            // 同平台只要有一个取数源成功，就不把整站标成失败；失败源带真实原因。
+            failed.set(s.platform, {
+              id: s.platform,
+              label: platformDef(s.platform)?.label ?? s.platform,
+              reason: humanizeSearchError(e),
+            })
             flushFailed()
           }
         }),
@@ -281,7 +297,7 @@ export function AddSubscriptionDialog({
     setTargetIndex(0)
     setSearchTargetId("new")
     setTitle("")
-    setFailedPlatforms([])
+    setFailedSources([])
     setSearched(false)
   }
 
@@ -477,7 +493,7 @@ export function AddSubscriptionDialog({
           candidateValue={candidateValue}
           onPickCandidate={pickCandidate}
           subscribed={subscribed}
-          failedPlatforms={failedPlatforms}
+          failedSources={failedSources}
           targets={searchTargets}
           targetId={searchTargetId}
           onTargetId={setSearchTargetId}

@@ -3,9 +3,13 @@
  * 无存储内容时加载 DEFAULT_SETTINGS。
  */
 
+import { COOKIE_SETTING_FIELDS } from "../settings-policy.ts"
 import { type AppSettings, DEFAULT_SETTINGS, type NetLevel } from "../types/settings.ts"
 
-const STORAGE_KEY = "settings"
+/** settings 的持久化键。clearAll 删库时跳过它,经 reset() 原子重置(保留凭证)。 */
+export const SETTINGS_STORAGE_KEY = "settings"
+
+const STORAGE_KEY = SETTINGS_STORAGE_KEY
 
 export interface SettingsRepository {
   get(): Promise<AppSettings>
@@ -99,9 +103,17 @@ export function createSettingsRepository(storage: StorageBackend): SettingsRepos
     async reset() {
       // ⚠️ 走 run() 串行链:裸 storage.set 会与并发的 set()(扫码落 cookie / 保存凭证)
       // 交错 —— 后写者用旧快照覆盖 → reset 丢失或刚写入的 cookie 被默认值抹掉。
+      // 凭证字段保留(与 clearAll 同语义:登录态不属于「应用数据」,清凭证走
+      // 「账号与凭证」/「清理浏览器数据」),否则 reset 后需登录渠道死锁在
+      // 「有启用订阅才同步」的前置上。
       return run(async () => {
-        await storage.set(STORAGE_KEY, JSON.stringify(DEFAULT_SETTINGS))
-        return { ...DEFAULT_SETTINGS }
+        const cur = await load()
+        const keep = Object.fromEntries(
+          COOKIE_SETTING_FIELDS.filter((f) => cur[f]).map((f) => [f, cur[f]]),
+        ) as Partial<AppSettings>
+        const next = { ...DEFAULT_SETTINGS, ...keep }
+        await storage.set(STORAGE_KEY, JSON.stringify(next))
+        return { ...next }
       })
     },
   }

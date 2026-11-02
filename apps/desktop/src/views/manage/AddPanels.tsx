@@ -41,14 +41,22 @@ export interface SearchPanelProps {
   candidateValue: string
   onPickCandidate: (c: Candidate) => void
   subscribed: Set<string>
-  /** 没有返回结果的平台(需要登录 / 风控)—— 空结果时也要说清是哪几站。 */
-  failedPlatforms: string[]
+  /** 失败的取数源（含真实原因）——「需要登录」与「请求频繁被暂时限制」的下一步
+   *  动作完全不同，不能混成一句「没有返回结果」。 */
+  failedSources: FailedSource[]
   /** 可并入的已有订阅(仅列表型参数 roomIds 才有)。 */
   targets: Subscription[]
   targetId: string
   onTargetId: (v: string) => void
   /** 当前落地目标的参数名(用于数房间数)。 */
   landParam?: string
+}
+
+/** 搜索失败的取数源：平台 id/展示名 + 能据此行动的原因（真实失败模式，见 humanizeSearchError）。 */
+export interface FailedSource {
+  id: string
+  label: string
+  reason: string
 }
 
 /** 候选列表的入参(SearchPanel 与发现页共用)。 */
@@ -193,17 +201,11 @@ export function SearchPanel(f: SearchPanelProps) {
         </div>
       </div>
 
-      {f.searched && f.cands.length === 0 && !f.searching ? (
-        <p className="t-small t-dim">
-          {f.failedPlatforms.length > 0
-            ? "没有搜到可订阅的用户或主播。"
-            : "没有搜到可订阅的用户或主播，换个关键词试试。"}
-        </p>
+      {f.searched && f.cands.length === 0 && !f.searching && f.failedSources.length === 0 ? (
+        <p className="t-small t-dim">没有搜到可订阅的用户或主播，换个关键词试试。</p>
       ) : null}
-      {f.failedPlatforms.length > 0 ? (
-        <p className="t-small t-dim">
-          {f.failedPlatforms.join("、")} 没有返回结果。需要登录或触发风控时，先到「账号与凭证」处理。
-        </p>
+      {f.failedSources.length > 0 ? (
+        <p className="t-small t-dim">{f.failedSources.map((s) => `${s.label}：${s.reason}`).join("；")}。</p>
       ) : null}
 
       {/* 直播目标(roomIds)：可新建，也可把选中房间追加进已有订阅（与手工模式同语义）。 */}

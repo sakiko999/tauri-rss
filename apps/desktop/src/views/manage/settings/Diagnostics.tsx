@@ -79,15 +79,19 @@ export function Diagnostics() {
    *
    * ⚠️ dev 构建下要落 `dev:seeded` 标记 —— 否则重载后空库会再次触发测试种子写入,
    * 用户以为「重置没生效」。生产构建没有种子逻辑,标记为无害冗余(这里仍只在 DEV 写)。
-   * ⚠️ 不碰浏览器 profile(登录态);需要彻底清凭证用上面的「清理浏览器数据」
-   * 或「账号与凭证」页的清除。
+   * ⚠️ 不碰浏览器 profile(登录态)。彻底清凭证 = 「账号与凭证」页的清除(浏览器
+   * cookie 与 settings 快照两处都清);上面的「清理浏览器数据」只重置 profile,
+   * settings 里的 cookie 快照会残留。
+   * ⚠️ 浏览器 dev(非 Tauri)形态:下面的 localStorage.clear() 会把进程内 DataLayer
+   * 回写在 localStorage 的 settings(含保留的凭证)一起清掉 —— release 走服务端
+   * SQLite 不受影响;dev 浏览器形态重置后凭证不保留是已知上限。
    */
   async function resetAll() {
     const ok = await confirmAction({
       title: "完全重置本地数据？",
       desc:
         "会删除：订阅与分组、阅读/星标/播放进度、设置、内容缓存、界面偏好与播放队列。\n" +
-        "不会删除：各平台登录态（重置后无需重新登录；要彻底清除用上面的「清理浏览器数据”）。\n\n" +
+        "不会删除：各平台登录态，重置后无需重新登录（要清除凭证去「账号与凭证」页）。\n\n" +
         "重置后应用会立即重新加载。此操作不可撤销。",
       confirmLabel: "重置",
       danger: true,

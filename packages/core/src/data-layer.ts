@@ -38,9 +38,9 @@ import { deserializeFeedWithTotal } from "./processing/deserialize.ts"
 import { createBodyCacheRepo } from "./repo/body-cache-repo.ts"
 import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
-import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
+import { createSettingsRepository, SETTINGS_STORAGE_KEY, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createSubscriptionRepository, type SubscriptionRepository } from "./repo/subscription-repo.ts"
-import { contentTtlMs, COOKIE_SETTING_FIELDS, cookieFieldFor, cookieFieldForPlatform } from "./settings-policy.ts"
+import { contentTtlMs, cookieFieldFor, cookieFieldForPlatform } from "./settings-policy.ts"
 import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { createMediaStore, type MediaStoreChange } from "./store/media-store.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
@@ -659,19 +659,15 @@ export function createDataLayer(): DataLayer {
     async clearAll() {
       // 删库前取受影响订阅：服务端据此清 diff 投影并广播 items.cleared。
       const ids = new Set<string>((await repo.list().catch(() => [])).map((s) => s.id))
-      // 凭证快照与浏览器 profile 配对保留：clearAll 删的是应用数据，登录态不在其列
-      // (清凭证走「账号与凭证」/「清理浏览器数据」)。否则重置后订阅为空,
-      // syncBrowserCookies 的「有启用订阅才同步」永远跳过 → 需登录渠道的添加入口
-      // (如微博搜用户)全部报「需要登录」,用户只能重新扫码。
-      const keep = await settings.get().catch(() => null)
+      // settings 键不删:经 repo 的 reset() 在串行链内原子重置(其余字段回默认、
+      // 凭证字段保留 —— 与浏览器 profile 配对,登录态不属于「应用数据」;清凭证走
+      // 「账号与凭证」/「清理浏览器数据」)。否则重置后订阅为空,syncBrowserCookies
+      // 的「有启用订阅才同步」永远跳过 → 需登录渠道的添加入口(如微博搜用户)全部
+      // 报「需要登录」,用户只能重新扫码。原子重置也消除了「先删后回写」窗口内
+      // 并发扫码落 cookie 被陈旧快照覆盖的竞态。
       const keys = await storage.keys()
-      for (const key of keys) await storage.delete(key)
-      // 经 repo 写回(串行链,防与在途扫码落 cookie 交错);只回填非空凭证字段,
-      // 其余设置随库清空回默认。
-      const cookies = Object.fromEntries(
-        COOKIE_SETTING_FIELDS.filter((f) => keep?.[f]).map((f) => [f, keep![f]]),
-      ) as Partial<AppSettings>
-      const restored = await settings.set(cookies)
+      for (const key of keys) if (key !== SETTINGS_STORAGE_KEY) await storage.delete(key)
+      const restored = await settings.reset()
       for (const it of store.all()) ids.add(it.subscriptionId)
       for (const id of ids) store.clear(id)
       // 内存态一并回零：退订墓碑/分页游标/总数 —— 漏一个就会带着旧状态继续跑

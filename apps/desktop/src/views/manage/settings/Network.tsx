@@ -21,7 +21,7 @@ const LEVEL_TEXT: Record<string, string> = {
 }
 
 const LEVEL_OPTIONS = [
-  { value: "0", label: "L0 无限制（仅调试）" },
+  { value: "0", label: "L0 直通（仅调试）" },
   { value: "1", label: "L1 入门（最宽松）" },
   { value: "2", label: "L2 标准" },
   { value: "3", label: "L3 严格" },
@@ -70,7 +70,10 @@ export function Network() {
   return (
     <>
       <SideCard title="网络与风控" icon="shield">
-        <Row label="默认等级" help="所有未单独设置平台的默认档。L1 只兜极端情况；L2/L3 才是主动防御档。L0 仅供调试。">
+        <Row
+          label="默认等级"
+          help="所有未单独设置平台的默认档。L1 只兜极端情况；L2/L3 才是主动防御档。L0 关闭全部限流、去重与平台冷却——被平台限速后应用不会自动停手，风控会越撞越深，只应在排查问题时临时使用。"
+        >
           <Select
             value={String(globalLevel)}
             onChange={(v) => void setSetting("netLevel", toLevel(v))}
@@ -93,7 +96,7 @@ export function Network() {
       <SideCard title="平台覆盖" icon="settings">
         <Row
           label="按平台设置"
-          help="等级是平台级的：账号风控、冷却与并发/RPM 都按平台（URL host）生效，无法按订阅拆开。L0 = 该平台直通（调试用，也是绕过平台冷却的入口）。被动采集（如小红书发现页）是渠道属性，不在这里设置。"
+          help="等级是平台级的：账号风控、冷却与并发/RPM 都按平台（URL host）生效，无法按订阅拆开。L0 = 该平台直通（关闭限流与冷却，被限时不会自动停手，仅调试）。被动采集（如小红书发现页）是渠道属性，不在这里设置。"
         >
           <span className="tag">{PLATFORM_ROWS.length - 1} 个平台</span>
         </Row>
