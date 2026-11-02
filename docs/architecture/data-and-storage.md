@@ -98,7 +98,11 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
 - **存储与诊断 → 完全重置数据**（`apps/desktop/src/views/manage/settings/Diagnostics.tsx`）：
   经 `dl.diagnostics.clearAll()` 让服务删空 SQLite KV，再 `localStorage.clear()`（连
   `dev:seeded` 标记一起清掉，dev 下空库重载会重新种），然后整页重载；生产无种子逻辑。
-  **不碰**浏览器 profile/登录态 —— 那是同页「清理浏览器数据」的职责。
+  **凭证快照（settings 各平台 cookie 字段）保留**（core clearAll 删库前抓快照、删完回写，
+  清单 = `COOKIE_SETTING_FIELDS`）—— 与浏览器 profile 配对：登录态不属于「应用数据」，
+  彻底清凭证走同页「清理浏览器数据」或「账号与凭证」页。若不保留：重置后订阅为空 →
+  `syncBrowserCookies` 的「有启用订阅才同步」永远跳过 → 需登录渠道的添加入口
+  （如微博搜用户）死锁在「需要登录」，只能重新扫码。
 
 ## 订阅归组
 

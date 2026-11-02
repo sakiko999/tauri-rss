@@ -422,6 +422,11 @@ async function main(): Promise<void> {
         body: JSON.stringify({ method: "diagnostics.clearAll", params: {} }),
       })
       add("client token clearAll → 403", forbidden.status === 403, `status=${forbidden.status}`)
+      // 凭证快照与浏览器 profile 配对保留（登录态不属于「应用数据」，清凭证有独立入口）。
+      // 若被 clearAll 删掉：重置后订阅为空 → syncBrowserCookies「有启用订阅才同步」
+      // 永远跳过 → 微博搜用户等需登录渠道的添加入口死锁在「需要登录」。
+      const fakeCk = "SUB=keep-after-clear-all"
+      await rpc2("settings.set", { patch: { weiboCookie: fakeCk } })
       const wipe = await rpc2("diagnostics.clearAll")
       const ids = (wipe.result as string[] | undefined) ?? []
       add("clearAll 返回受影响订阅", wipe.ok === true && ids.includes(sub2), JSON.stringify(ids))
@@ -431,8 +436,10 @@ async function main(): Promise<void> {
         wiped.includes('"subscriptions":[]') && !wiped.includes('"type":"items"'),
         wiped.length.toString(),
       )
-      const wipedSettings = (await rpc2("settings.get")).result as { refreshIntervalMin?: number } | undefined
+      const wipedSettings = (await rpc2("settings.get")).result as
+        { refreshIntervalMin?: number; weiboCookie?: string } | undefined
       add("clearAll 后设置回默认", wipedSettings?.refreshIntervalMin === 30, JSON.stringify(wipedSettings))
+      add("clearAll 保留凭证快照", wipedSettings?.weiboCookie === fakeCk, JSON.stringify(wipedSettings?.weiboCookie))
       // 备份是整库拷贝（含明文 cookie/旧订阅）：完全重置必须连历史备份一起清。
       const leftover = readdirSync(backupDir).filter((name) => name.endsWith(".db"))
       add("clearAll 后历史备份已清", leftover.length === 0, leftover.join(","))

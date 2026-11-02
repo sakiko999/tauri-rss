@@ -106,6 +106,9 @@ export const PLATFORMS: readonly PlatformDef[] = [
 /** 有登录态的平台（账号页 / `rss login` 的可用列表）。 */
 export const LOGIN_PLATFORMS: readonly string[] = PLATFORMS.filter((p) => p.cookieField).map((p) => p.id)
 
+/** settings 里全部凭证 cookie 字段（同一张表派生；「重置应用数据但保留登录态」按此清单保留）。 */
+export const COOKIE_FIELDS: readonly string[] = PLATFORMS.filter((p) => p.cookieField).map((p) => p.cookieField!)
+
 export function platformDef(id: string): PlatformDef | undefined {
   return PLATFORMS.find((p) => p.id === id)
 }

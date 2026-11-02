@@ -40,7 +40,7 @@ import { createContentCacheRepo } from "./repo/content-cache-repo.ts"
 import { createReadingRepository, type ReadingRepository } from "./repo/reading-repo.ts"
 import { createSettingsRepository, type SettingsRepository } from "./repo/settings-repo.ts"
 import { createSubscriptionRepository, type SubscriptionRepository } from "./repo/subscription-repo.ts"
-import { contentTtlMs, cookieFieldFor, cookieFieldForPlatform } from "./settings-policy.ts"
+import { contentTtlMs, COOKIE_SETTING_FIELDS, cookieFieldFor, cookieFieldForPlatform } from "./settings-policy.ts"
 import { getChannel, listChannels as listAllChannels, type LoginCookieSnapshot } from "./source/index.ts"
 import { createMediaStore, type MediaStoreChange } from "./store/media-store.ts"
 import type { ChannelInfo } from "./types/channel-info.ts"
@@ -48,7 +48,7 @@ import type { MediaItem, MediaKind } from "./types/media-item.ts"
 import type { DanmakuStream, ResolvePlayback } from "./types/playback.ts"
 import type { MediaQuery } from "./types/query.ts"
 import type { RefreshResult } from "./types/refresh-result.ts"
-import { type AppSettings, DEFAULT_SETTINGS } from "./types/settings.ts"
+import type { AppSettings } from "./types/settings.ts"
 
 /**
  * 扫码登录结果(core 本地声明,不依赖 crawler 类型——只透传 channel.scanLogin,不解析字段)。
@@ -659,17 +659,29 @@ export function createDataLayer(): DataLayer {
     async clearAll() {
       // 删库前取受影响订阅：服务端据此清 diff 投影并广播 items.cleared。
       const ids = new Set<string>((await repo.list().catch(() => [])).map((s) => s.id))
+      // 凭证快照与浏览器 profile 配对保留：clearAll 删的是应用数据，登录态不在其列
+      // (清凭证走「账号与凭证」/「清理浏览器数据」)。否则重置后订阅为空,
+      // syncBrowserCookies 的「有启用订阅才同步」永远跳过 → 需登录渠道的添加入口
+      // (如微博搜用户)全部报「需要登录」,用户只能重新扫码。
+      const keep = await settings.get().catch(() => null)
       const keys = await storage.keys()
       for (const key of keys) await storage.delete(key)
+      // 经 repo 写回(串行链,防与在途扫码落 cookie 交错);只回填非空凭证字段,
+      // 其余设置随库清空回默认。
+      const cookies = Object.fromEntries(
+        COOKIE_SETTING_FIELDS.filter((f) => keep?.[f]).map((f) => [f, keep![f]]),
+      ) as Partial<AppSettings>
+      const restored = await settings.set(cookies)
       for (const it of store.all()) ids.add(it.subscriptionId)
       for (const id of ids) store.clear(id)
-      // 内存态一并回零：退订墓碑/分页游标/总数/凭证快照 —— 漏一个就会带着旧状态继续跑
+      // 内存态一并回零：退订墓碑/分页游标/总数 —— 漏一个就会带着旧状态继续跑
       // (典型:netLevels 仍按登录态限流、loadMore 从已删的游标续翻)。
+      // 凭证快照对齐保留后的 settings(而非 DEFAULT)。
       removedSubs.clear()
       pageCursors.clear()
       pageTotals.clear()
-      cookieSnapshot = { ...DEFAULT_SETTINGS }
-      syncNetPolicy(cookieSnapshot)
+      cookieSnapshot = restored
+      syncNetPolicy(restored)
       return [...ids]
     },
     async clearCookies(hosts) {

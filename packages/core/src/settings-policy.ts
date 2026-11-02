@@ -5,10 +5,16 @@
  * 拉进 crawler/resolve。对外经 `@amoeba/core/pure` 与根入口两处导出。
  */
 
-import { cookieFieldForChannelKey, cookieFieldOf } from "@amoeba/platform"
+import { COOKIE_FIELDS, cookieFieldForChannelKey, cookieFieldOf } from "@amoeba/platform"
 
 import type { AppSettings } from "./types/settings.ts"
 import type { Subscription } from "./types/subscription.ts"
+
+/**
+ * settings 里全部凭证 cookie 字段（同一张 platform 表派生）。
+ * 消费方：diagnostics.clearAll 按「重置应用数据但保留登录态」保留这份清单里的字段。
+ */
+export const COOKIE_SETTING_FIELDS: ReadonlyArray<keyof AppSettings> = COOKIE_FIELDS.map((f) => f as keyof AppSettings)
 
 /**
  * 内容缓存 TTL（ms）：订阅级 `refreshIntervalSec` 优先，否则全局 `refreshIntervalMin`。
