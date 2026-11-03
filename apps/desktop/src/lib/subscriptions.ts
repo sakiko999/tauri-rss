@@ -233,12 +233,9 @@ export const NO_MANUAL_ENTRY = new Set<string>([
     .filter(([platform]) => platform !== "youtube")
     .map(([, key]) => key),
   ...Object.values(USER_SEARCH_CHANNEL),
-  // 直播间:各平台搜主播 / 统一搜索已覆盖。YouTube 直播订阅的 videoId 字段同样
-  // 接受 channelId(搜用户 → 直播间目标),但**单场 videoId 直订**(活动页/分享链接
-  // 拿到的)仍只有手填入口 → 保留。
-  ...Object.entries(LIVE_SUB_CHANNEL)
-    .filter(([platform]) => platform !== "youtube")
-    .map(([, key]) => key),
+  // 直播间:各平台搜主播 / 统一搜索已覆盖。YouTube 直播同理 —— 频道直播锚点
+  // (channelId)走「搜用户 → 直播间」目标,单场 videoId 也不再保留手填(2026-11-03)。
+  ...Object.values(LIVE_SUB_CHANNEL),
   // B站分区渠道不在 CATEGORY_CHANNEL(发现页走目录订阅 + 目录条目预览)。
   "bili:live:area",
   // 用户主页动态:uid 只能从 UP 主搜索结果拿到。

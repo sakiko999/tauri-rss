@@ -21,8 +21,8 @@
 > 同一人的「直播间 / 用户主页」合并为一条候选（B站按 uid；抖音主页可直接作 roomIds；
 > YouTube 2026-11-03 起 `youtube:live` 的 videoId 字段接受 channelId，每轮刷新经
 > Live tab 定位在播那场），由用户在结果上二选一添加。直播间渠道（bili:live /
-> live:douyu / live:huya / live:douyin / twitch:live）的手填入口同时移除，改由搜索
-> 进入；YouTube 直播保留手填（单场 videoId 直订仍有价值，频道直播走搜索）。
+> live:douyu / live:huya / live:douyin / twitch:live / youtube:live）的手填入口
+> **全部**移除，改由搜索进入。
 
 ## 一、已实现的渠道扩展
 
