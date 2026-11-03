@@ -143,7 +143,8 @@ export function registerBuiltinChannels(): void {
   registerChannel(new DouyinUserChannel())
   // 用户搜索/查号渠道（「搜索添加」的取数源，不设计为长期订阅）。
   registerChannel(new DouyinUserSearchChannel())
-  registerChannel(WeiboUserSearchChannel)
+  // 微博搜用户：被动采集（导航搜索页 + 捕获页面自己的 getIndex），见 weibo/user-search.ts。
+  registerChannel(new WeiboUserSearchChannel())
   registerChannel(new XhsUserSearchChannel())
 
   // ── 微博(用户主页 + 实时热搜;完整登录 cookie 解锁 container/getIndex)──

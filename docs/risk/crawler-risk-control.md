@@ -525,7 +525,7 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 | --- | --- | --- | --- |
 | 小红书 | ✅ `explore` / `user` 导航即得 SSR（生产代码已走通）；`user_posted` 由页面滚动后自己发（仅代码注释记载，请求形态未入库） | SSR 链路已导出纯函数（`extractInitialState` / `noteCardToSocial` / `noteDetailToSocial`） | **最高**：路线 B 零改造 |
 | B 站 | 大概率是（API 同源、Referer 已指向对应页面），**未实测** | `ugc()` 是导出纯函数；5 个 UGC 渠道只差内联 raw→入参映射；直播/搜索/广场完全耦合 | **不做**：匿名 API 稳定，页面是否自然发目标接口未实测，收益不抵复杂度（2026-10-19 移除 `bili:popular` 被动采集） |
-| 微博 | 推断是（`m.weibo.cn` 的 getIndex、`weibo.com` 的 hot_band 都是站点自身接口），未实测 | `mblogToSocial()` 纯函数；长文展开会二次请求 | 高：正好替掉现有类别② |
+| 微博 | ✅ 搜索页已实测（2026-11-03）：导航 `m.weibo.cn/search?containerid=100103type=3&q=<kw>` 页面自发同一 `getIndex`，匿名（visitor 身份）`ok:1` + 用户卡；`weibo:user:search` 已改被动。用户主页容器接口未单独实测 | `mblogToSocial()` 纯函数；长文展开会二次请求；搜索解析 `weiboUserHitsFromIndex` | 高：正好替掉现有类别② |
 | 抖音 | **未确认**：enter / partition / profile 都是应用构造；直播页 HTML 内含流直链 | `douyinLiveItem()` / `douyinOnline()` 已导出；列表/搜索映射内联 | 中 |
 | 斗鱼 | 推断是（`japi`/`gapi` 同源），未实测 | 无 payload→Item；`douyuSign` 是本地 JS，不产生网络请求 | 中 |
 | 虎牙 | 推断是（`cache.php` 同源），未实测 | `parseProfile()` 是现成的纯解析范例 | 中 |
@@ -609,7 +609,8 @@ listener 还是 IntersectionObserver，仓库里只有注释、未证实，但�
 > 每 lane 独立 target（`Target.createTarget`，`/json/new` 已不用）+ 独立 CDP 连接（事件/abort 天然按 lane 隔离），
 > LRU 上限 8；组合入口 `withBrowserOp({lane, mode, platform})`（gate → op lane → 租约 →
 > activate）。lane 分配：`list:<channelKey>`（xhs:explore / xhs:user / weibo:user）、
-> `detail:xhs`、`login:<platform>`×3、`browser:global`（clearCookies/resetProfile）。
+> `detail:xhs`、`login:<platform>`×3、`search:<platform>`（xhs/douyin/weibo 关键词搜索）、
+> `browser:global`（clearCookies/resetProfile）。
 > `abortTabs({keepLogin:true})` 取代 `scanLoginActive` 布尔与 45s 超时的平台前缀猜测；
 > capturePage 收尾 `Network.disable`。回归：`scheduler.check.ts`（并发 lane / 租约计数 /
 > gate 串行不占 lane / 异常释放 / abort 豁免登录）。未做：passiveBuffer 按 lane 过滤
@@ -835,7 +836,7 @@ withBrowserOp({ lane, mode, platform }, fn(tab))   // gate → lane → renderLe
     （[WebView2Feedback #2121](https://github.com/MicrosoftEdge/WebView2Feedback/issues/2121)），
     关 target 是确定释放 renderer 私有内存的手段（每 tab 独立 renderer，Chromium 不复用）。
     ② **一次性 lane 用完即关**（`withBrowserOp.release` + `releaseLaneTab`，2026-11-01）：
-    关键词搜索页（`search:xhs` / `search:douyin`、xhs 查号）与**已翻到底**的列表 lane
+    关键词搜索页（`search:xhs` / `search:douyin` / `search:weibo`、xhs 查号）与**已翻到底**的列表 lane
     操作后立即关 target，不等 5 分钟空闲回收。关闭在**本 lane 锁内**执行（锁外关会掐掉
     刚出队、已拿到同一 tab 的下一次操作）；翻页中途（页面还在累积）**不要**关。
     ③ 资源拦截表补 `*.ts/*.m4s/*.flv/*.mov`、带 query 的媒体尾缀（抖音 `.../x.mp4?...`）、

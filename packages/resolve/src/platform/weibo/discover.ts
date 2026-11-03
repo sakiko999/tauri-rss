@@ -1,17 +1,15 @@
 /**
- * weibo 用户搜索 —— m.weibo.cn container `100103type=3&q=<关键词>`(type=3 即用户)。
+ * weibo 用户搜索 —— getIndex 响应解析(cards → 用户卡)。
  *
- * ⚠️ **必须登录**(2026-11-01 实测):匿名请求 `ok:-100`(请求频繁风控码,0 条);
- * 带完整登录 cookie(含 SUB)返回用户卡(id/screen_name/followers/认证理由)。
- * cookie 三级语义由 `resolveCookie` 处理;无 cookie 时直接抛「需要登录」,不发请求
- * —— 匿名打一次会触发 weibo 平台冷却,不值得。
+ * 渠道取数走被动采集(2026-11-03,crawler `weibo:user:search`):导航 m.weibo.cn
+ * 搜索页 + capturePage 捕获页面自己发的 `/api/container/getIndex?containerid=
+ * 100103type=3&q=<关键词>`(type=3 即用户)。原 HTTP 重放路径已删:应用构造的请求
+ * (settings 冷 cookie + 无浏览器指纹)实测被 `ok:-100` 风控;页面自发请求带
+ * visitor 身份 + X-XSRF-TOKEN + 真实指纹,**匿名即可**返回用户卡(2026-11-03
+ * 实测:20 条/total 34,含粉丝数与认证理由)。
  *
  * 供「搜用户」渠道(`weibo:user:search`)取候选,落地订阅走 `weibo:user`(uid)。
  */
-
-import { ResolveError } from "../../errors.ts"
-import { resolveCookie } from "../credentials.ts"
-import { WB_BASE, wbJson } from "./client.ts"
 
 export interface WeiboUserHit {
   uid: string
@@ -23,28 +21,16 @@ export interface WeiboUserHit {
   verified?: string
 }
 
-/** 按昵称搜微博用户(需登录 cookie)。 */
-export async function searchWeiboUsers(keyword: string, cookie?: string): Promise<WeiboUserHit[]> {
-  const kw = keyword.trim()
-  if (!kw) throw new Error("微博搜用户需要关键词")
-  const ck = resolveCookie(cookie, "weibo")
-  if (!ck) {
-    throw new ResolveError("auth", "微博搜用户需要登录：请到「账号与凭证」扫码登录（或填入 cookie）后重试")
-  }
-
-  const qs = new URLSearchParams({ containerid: `100103type=3&q=${kw}`, page_type: "searchall" })
-  const { status, body } = await wbJson(`${WB_BASE}/api/container/getIndex?${qs.toString()}`, ck, {
-    Referer: `${WB_BASE}/search?weibo=${encodeURIComponent(kw)}`,
-  })
-  if (status !== 200 || typeof body === "string" || body?.ok !== 1) {
-    const msg = typeof body === "string" ? body.slice(0, 60) : (body?.msg ?? `ok=${body?.ok}`)
-    throw new Error(`微博用户搜索失败: ${msg}`)
-  }
-
-  // cards → card_group[].user / card.user(两种形态都收)。
-  const cards = (body?.data?.cards ?? []) as any[]
+/**
+ * getIndex 响应 → 用户卡列表。`ok` 由调用方检查(被动捕获到 `ok:-100` 要如实
+ * 抛风控错误,不能当 0 条吞掉)。
+ */
+export function weiboUserHitsFromIndex(json: unknown): WeiboUserHit[] {
+  const cards = ((json as { data?: { cards?: unknown[] } })?.data?.cards ?? []) as any[]
   const out: WeiboUserHit[] = []
   const seen = new Set<string>()
+  // cards → card_group[].user / card.user(两种形态都收;card_type=4 的 tab 头卡无
+  // card_group,`item.user` 判据自然跳过)。按 uid 去重。
   for (const card of cards) {
     const group = Array.isArray(card?.card_group) ? card.card_group : [card]
     for (const item of group) {

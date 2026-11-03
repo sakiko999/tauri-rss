@@ -104,7 +104,7 @@ UI 侧经 `dl.resolveDetail`（`ItemDetailSource`，与 xhs 同一条能力总�
   的清除（浏览器 cookie 与 settings 快照两处都清）；「清理浏览器数据」只重置 profile，
   settings 里的 cookie 快照会残留。若 clearAll 不保留凭证：重置后订阅为空 →
   `syncBrowserCookies` 的「有启用订阅才同步」永远跳过 → 需登录渠道的添加入口
-  （如微博搜用户）死锁在「需要登录」，只能重新扫码。
+  （如小红书搜用户）死锁在「需要登录」，只能重新扫码。
 
 ## 订阅归组
 

@@ -158,6 +158,9 @@ boot（`READY`）后 1.5s 由服务进程跑 `DataLayer.syncBrowserCookies()`（
   实测匿名 Edge 会话没有 `id_token`，扫码登录的 profile 有。
 - **weibo 优先 `https://m.weibo.cn`**（`WB_BASE` 消费域），缺失才回落 `weibo.com`；
   不合并两域（扁平 Record 会丢同名 SUB/SUBP 的域信息）。
+  ⚠️ `SUB` 不等于已登录：m.weibo.cn 的访客流程（visitor passport）也会种 HttpOnly
+  `SUB`/`SUBP`（2026-11-03 实测），快照判据只说明「访问过」，不能当登录门禁
+  （`weibo:user:search` 被动路径因此不设登录检查）。
 - **douyin 标记 = `sessionid`**（`ttwid` 匿名也签发）；域取 `https://www.douyin.com`。
   抖音桌面侧没有浏览器数据路径（直播流解析/主页全是 HTTP + `douyinCookie()`），
   2026-10-30 才补上这一步 —— 在此之前浏览器里换号/重登都不会回流 settings。
