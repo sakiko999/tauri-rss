@@ -233,8 +233,9 @@ export const NO_MANUAL_ENTRY = new Set<string>([
     .filter(([platform]) => platform !== "youtube")
     .map(([, key]) => key),
   ...Object.values(USER_SEARCH_CHANNEL),
-  // 直播间:各平台搜主播 / 统一搜索已覆盖。YouTube 直播参数是 videoId(不是房间号),
-  // 且没有搜索入口 → 保留手填,避免功能失去入口。
+  // 直播间:各平台搜主播 / 统一搜索已覆盖。YouTube 直播订阅的 videoId 字段同样
+  // 接受 channelId(搜用户 → 直播间目标),但**单场 videoId 直订**(活动页/分享链接
+  // 拿到的)仍只有手填入口 → 保留。
   ...Object.entries(LIVE_SUB_CHANNEL)
     .filter(([platform]) => platform !== "youtube")
     .map(([, key]) => key),
@@ -307,10 +308,12 @@ function userTarget(platform: string, value: string): CandidateTarget | undefine
 
 /**
  * 用户目标值 → 直播订阅值(有些直播渠道直接吃用户主页链接)。
- * 目前只有抖音:`live:douyin` 的 roomIds 接受主页链接。
+ * 抖音:`live:douyin` 的 roomIds 接受主页链接;YouTube:`youtube:live` 的 videoId
+ * 字段同样接受 channelId(UC 开头),渠道每轮刷新经 Live tab 解析在播那场。
  */
 const USER_LIVE_VALUE: Record<string, (value: string) => string> = {
   douyin: (secUid) => `https://www.douyin.com/user/${secUid}`,
+  youtube: (channelId) => channelId,
 }
 
 /**
@@ -363,7 +366,8 @@ export function candidatesFromSearch(items: MediaItem[], platform?: string): Can
  *   `weibo.com/u/<uid>` / `douyin.com/user/<sec_uid>` /
  *   `xiaohongshu.com/user_profile/<user_id>` / `twitch.tv/<login>`。
  * 次行信息(粉丝/订阅数)来自条目 summary(channel 侧已拼好)。
- * 抖音额外给一个「直播间」目标(live:douyin 的 roomIds 接受主页链接)。
+ * 抖音/YouTube 额外给一个「直播间」目标(live:douyin 的 roomIds 接受主页链接;
+ * youtube:live 的 videoId 接受 channelId)。
  */
 export function candidatesFromUsers(items: MediaItem[], platform?: string): Candidate[] {
   const out: Candidate[] = []

@@ -16,11 +16,13 @@
 > （用户搜索 `USER_SEARCH_CHANNEL` + 主播搜索 `*:anchor`）。分区 / 用户主页 / 搜索类渠道
 > 不再出现在「浏览渠道」目录（`isManualEntryOnly`），只能从统一搜索或发现页进入。
 > 同日新增 `twitch:user:search`；`douyin:user:search` / `xhs:user:search` 增加**被动关键词
-> 搜索**（页面自己发请求，应用侧不签名），微博保持 HTTP 接口（无签名，被动无收益）。
-> 同一人的「直播间 / 用户主页」合并为一条候选（B站按 uid，抖音主页可直接作 roomIds），
-> 由用户在结果上二选一添加。直播间渠道（bili:live / live:douyu / live:huya /
-> live:douyin / twitch:live）的手填入口同时移除，改由搜索进入；YouTube 直播
-> （videoId）因没有搜索入口而保留。
+> 搜索**（页面自己发请求，应用侧不签名）；`weibo:user:search` 于 2026-11-03 同改被动
+> （HTTP 重放实测被 -100 风控，页面自发请求匿名可用）。
+> 同一人的「直播间 / 用户主页」合并为一条候选（B站按 uid；抖音主页可直接作 roomIds；
+> YouTube 2026-11-03 起 `youtube:live` 的 videoId 字段接受 channelId，每轮刷新经
+> Live tab 定位在播那场），由用户在结果上二选一添加。直播间渠道（bili:live /
+> live:douyu / live:huya / live:douyin / twitch:live）的手填入口同时移除，改由搜索
+> 进入；YouTube 直播保留手填（单场 videoId 直订仍有价值，频道直播走搜索）。
 
 ## 一、已实现的渠道扩展
 
@@ -324,7 +326,8 @@ B站直播分区（`bili:live:areas` / `bili:live:area`，列房需登录态 + `
 - **Twitch**：VOD / clip 路由、聊天弹幕（需宿主 `WsLike.send` text 帧）、登录（OAuth 需注册应用）。
 - **抖音**：直播关键词搜索（`live/search` 需专用小号 + CDP 被动探针）；用户搜索已落地，分区搜索渠道已删除。
 - **虎牙**：搜索不可分页（`start` 无效、`rows` 封顶，证据见 `platform-notes.md`）。
-- **微博 / 小红书**：微博无纯 HTTP 扫码路径（见 `login.md`）；小红书匿名态已移除，全渠道要求登录。
+- **微博 / 小红书**：微博无纯 HTTP 扫码路径（见 `login.md`）；微博用户搜索已改被动（2026-11-03，
+  需浏览器、匿名可用）；小红书匿名态已移除，全渠道要求登录。
 - **通用**：分区预览条目只读、bili 登录自动保活、外部 mpv 播放器接入（见 `backlog.md` §D）。
 
 ## 三、条件触发的迁移（当前不做，等信号）

@@ -47,13 +47,14 @@ bun run rss fetch twitch:category --kv category=just-chatting  # Twitch 分区�
 bun run rss fetch twitch:categories     # 分区目录订阅（kind:category；点条目预览分区）
 bun run rss fetch live:douyin:categories  # 抖音分区目录（16 条，顶层+子分区）
 bun run rss fetch youtube:live-hot       # YouTube 直播热门（Live 页 Live Now）
+bun run rss fetch youtube:live --kv videoId=UCLA_DiR1FfKNvjuUpBHmylQ  # YouTube 频道直播锚点（channelId=UC 开头，定位在播那场；也接受单场 videoId）
 bun run rss fetch youtube:live-category --kv category=gaming  # YouTube 直播栏目（news/gaming/sports）
 bun run rss fetch youtube:playlist       # YouTube 播放列表（官方 RSS，≤15 条）
 bun run rss fetch bili:season            # B站合集（30/页，需 Referer）
 bun run rss fetch bili:series            # B站视频列表（20/页，pn/ps）
 bun run rss fetch bili:favlist           # B站公开收藏夹（20/页）
 bun run rss fetch douyin:user:search --kv keyword=pvcyinse  # 抖音查用户（抖音号 → sec_uid/昵称，匿名）
-bun run rss fetch weibo:user:search --kv keyword=半佛仙人    # 微博搜用户（需登录 cookie）
+bun run rss fetch weibo:user:search --browser --kv keyword=半佛仙人  # 微博搜用户（被动采集，2026-11-03 起必须 --browser）
 bun run rss fetch xhs:user:search --kv keyword=<user_id>     # 小红书查用户（需登录；user_id 或主页链接）
 bun run rss item https://www.twitch.tv/<login>  # Twitch 直播 HLS 档位（variant playlist，非 master）
 bun run rss play <url> --open           # 解析直链，--open 丢系统播放器
@@ -240,7 +241,8 @@ square/user_video/dynamic/live）、`youtube`/`youtube:live`、`live:{douyu,huya
 
 - ✅ **浏览器渠道可选启用（2026-10-26）**：`--browser` / `AMOEBA_BROWSER=1` 时注入
   `appHost.browser`，由 `amoeba-browser.exe`（独立 WebView2 进程 + CDP，屏外窗口）
-  承载 `weibo:user`、`xhs:*`。**显式 opt-in**：crawler 一看到 `appHost.browser` 就走
+  承载 `weibo:user`、`xhs:*` 与被动搜索（`weibo:user:search` 2026-11-03 起只此一条路）。
+  **显式 opt-in**：crawler 一看到 `appHost.browser` 就走
   浏览器路径并忽略 `--kv cookie=`，默认注入会让现有 HTTP 探针静默失效。
   - 构建：`cargo build -p amoeba-browser`；找不到时 CLI 保持 `browser=undefined`（HTTP 降级）。
   - profile：`%LOCALAPPDATA%/app.amoeba.cli/browser-profile`，与桌面 `webview-profile` 严格分开。

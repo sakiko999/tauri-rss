@@ -179,6 +179,13 @@
 - ~~**搜直播间**~~（2026-10-18 实现，**2026-11-01 渠道删除**）：同端点 + `params:"EgJAAQ=="`
   （直播过滤，实为 protobuf field 8=1），匿名返回 18~20 条且全带 LIVE badge，解
   `videoRenderer`。`youtube:live-search` 不再注册。
+- ✅ **频道直播锚点**（2026-11-03，`youtube:live` 的 videoId 字段接受 channelId）：
+  browse Live tab（params `EgdzdHJlYW1z8gYECgJ6AA%3D%3D`，NewPipe 同款）定位**当前在播**
+  那场——tab 混排预告（Upcoming badge）/ 在播（`THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE`）/
+  回放（无 badge），只认 LIVE badge；在播 → url 指向该场（懒解析直接可播），未开播 →
+  offline item（url 指频道页），`id = ylc-<channelId>` 跨刷新稳定。统一搜索「搜用户 →
+  直播间」目标落这一形态（`USER_LIVE_VALUE`）。频道名取 browse header 的
+  `pageHeaderViewModel.title.dynamicTextViewModel`。
 - ✅ **直播热门 / 栏目**（2026-10-20，`youtube:live-hot` / `youtube:live-category`）：
   Live 页 `browseId=UC4R8DWoMoI7CAwX8_LjQHig` 匿名返回栏目；实测布局是
   `richGridRenderer.contents[].richSectionRenderer.content.richShelfRenderer`（旧版
@@ -381,13 +388,15 @@ XML 走 `tpl:video`；详情弹窗用原生 `<video controls>` 直连播放。
   （page / since_id / weibo.com ajax）一律登录墙，`weibo:user` 想多拿只能登录（登录态
   since_id 翻页正常，见分页审计）；**xhs 全渠道需登录（匿名态已移除）**；douyin 直播可用、
   原画档位需登录
-- **搜微博用户 `weibo:user:search`**（2026-11-01 实测）：`m.weibo.cn/api/container/getIndex?
-  containerid=100103type%3D3%26q%3D<昵称>`，**必须登录**（匿名 `ok:-100` 风控码、0 条；
-  有完整 cookie 时返回 id/昵称/粉丝数/认证理由）。渠道在无 cookie 时**直接报「需要登录」**
-  而不发匿名请求（避免触发平台冷却）。
-  为什么微博不做被动：该接口**没有签名**、页面搜索本身也调它，被动只是多开一个浏览器
-  tab 复用同一条 HTTP 请求，换不来新能力；被动只在「接口需签名 / 重放被拦」的
-  xhs / douyin 上才必要。用户搜索结果落地仍走 `weibo:user`。
+- **搜微博用户 `weibo:user:search`**（2026-11-03 改被动）：导航
+  `m.weibo.cn/search?containerid=100103type%3D3%26q%3D<昵称>`，捕获页面自己发的
+  `/api/container/getIndex`（与旧 HTTP 重放同一接口同参数）。**匿名即可用**（页面先走
+  visitor passport 拿访客身份，请求带 X-XSRF-TOKEN + 真实浏览器指纹）；实测首屏 20 条
+  用户卡 / total 34，翻页（page=2）才碰登录墙——搜索添加只用首屏，不翻页。
+  原 HTTP 重放路径已删：应用构造请求（settings 冷 cookie + iPhone UA）实测被
+  `ok:-100` 风控（2026-11-01），被动捕获到 `-100` 仍如实报「请求过于频繁」并写平台冷却。
+  需要浏览器（`--browser` / 桌面服务），无浏览器直接报错，不再有 HTTP 回落。
+  用户搜索结果落地仍走 `weibo:user`。
 - ⚠️ **抖音渠道前缀是 `live:douyin*`**：权威是 `@amoeba/platform` 的 `PLATFORMS` ——
   `douyin.prefixes` 同时登记 `live:douyin` 与 `douyin`，长前缀优先
   （`packages/platform/src/index.ts:113-126`）；core `cookieFieldFor` 只是查表包装。

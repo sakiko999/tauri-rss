@@ -1,5 +1,6 @@
 /**
- * YouTube 频道 Videos tab —— InnerTube browse 解析（含频道会员标记）。
+ * YouTube 频道 InnerTube browse 解析 —— Videos tab（含频道会员标记）与 Live tab
+ * （当前在播定位，`youtube:live` 的 channelId 锚点用）。
  *
  * 为什么不用官方 RSS：`feeds/videos.xml` 只有 title/link/published/media:group，
  * **没有会员（Members only）标记**，也没有观看数。InnerTube 的频道 Videos tab 才带
@@ -153,4 +154,75 @@ function continuationOf(root: unknown): string | undefined {
     if (typeof t === "string" && !token) token = t
   })
   return token
+}
+
+/* ── Live tab：频道「当前在播」定位 ──────────────────────────────────────── */
+
+/** 频道 Live tab 的 tab 选择器（NewPipe `YoutubeChannelTabExtractor` 同款）。 */
+const LIVE_TAB_PARAMS = "EgdzdHJlYW1z8gYECgJ6AA%3D%3D"
+
+export interface YoutubeChannelLive {
+  /** 当前在播那场的 videoId；未开播（只有预告/回放/无直播）为 undefined。 */
+  videoId?: string
+  /** 在播那场的缩略图（Live tab 响应自带）。 */
+  thumb?: string
+  /** 频道名（browse header；取不到 undefined）。 */
+  channelName?: string
+}
+
+/** 拉频道 Live tab 并定位「当前在播」的那一场（`youtube:live` 的 channelId 锚点用）。 */
+export async function fetchYoutubeChannelLive(channelId: string): Promise<YoutubeChannelLive> {
+  const raw = await youtubeBrowse(channelId, { params: LIVE_TAB_PARAMS })
+  return parseYoutubeChannelLive(raw)
+}
+
+/**
+ * Live tab 响应 → 在播场（纯函数，便于自检）。
+ * Live tab 混排预告（Upcoming badge）/ 在播（LIVE badge）/ 回放（无 badge）：
+ * 在播判据 = 缩略图 overlay badgeStyle 含 `_LIVE`（新版 lockup，2026-11-03 实测 NASA：
+ * 在播 `THUMBNAIL_OVERLAY_BADGE_STYLE_LIVE` + text "LIVE"，预告为 `..._DEFAULT` +
+ * "Upcoming"，回放无 badge）或旧版 `videoRenderer.badges[].metadataBadgeRenderer.iconType === "LIVE"`。
+ */
+export function parseYoutubeChannelLive(raw: unknown): YoutubeChannelLive {
+  const out: YoutubeChannelLive = { channelName: channelNameOf(raw) }
+  walk(raw, (n) => {
+    if (out.videoId) return
+    // 新版 lockup：contentImage.thumbnailViewModel.overlays[].thumbnailBottomOverlayViewModel.badges[]
+    const overlays = n?.contentImage?.thumbnailViewModel?.overlays
+    if (Array.isArray(overlays)) {
+      for (const o of overlays) {
+        for (const b of o?.thumbnailBottomOverlayViewModel?.badges ?? []) {
+          const tb = b?.thumbnailBadgeViewModel
+          if (!tb) continue
+          const isLive =
+            String(tb?.badgeStyle ?? "").includes("_LIVE") || String(tb?.text ?? "").toUpperCase() === "LIVE"
+          if (!isLive) continue
+          const id = String(n?.contentId ?? "")
+          if (id) {
+            out.videoId = id
+            out.thumb = maxThumb(n?.contentImage?.thumbnailViewModel?.image)
+          }
+        }
+      }
+    }
+    // 旧版 videoRenderer：在播徽标 iconType === "LIVE"。
+    const vr = n?.videoRenderer
+    if (!out.videoId && vr?.videoId && Array.isArray(vr?.badges)) {
+      if (vr.badges.some((b: any) => b?.metadataBadgeRenderer?.iconType === "LIVE")) {
+        out.videoId = String(vr.videoId)
+        out.thumb = maxThumb(vr?.thumbnail)
+      }
+    }
+  })
+  return out
+}
+
+/** browse header → 频道名（新版 pageHeaderViewModel / 旧版 c4TabbedHeaderRenderer）。 */
+function channelNameOf(raw: unknown): string | undefined {
+  const h = (raw as { header?: Record<string, any> })?.header
+  const name =
+    h?.pageHeaderRenderer?.content?.pageHeaderViewModel?.title?.dynamicTextViewModel?.text?.content ??
+    h?.c4TabbedHeaderRenderer?.title?.simpleText ??
+    h?.c4TabbedHeaderRenderer?.title
+  return typeof name === "string" && name ? name : undefined
 }
