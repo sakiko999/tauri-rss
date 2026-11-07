@@ -76,6 +76,8 @@ export interface ServiceOptions {
   tokenFile: string
   parentPid?: number
   browserSidecar?: string
+  /** Electron 宿主 CDP 代理端口；给了就不再探测/拉起 WebView2 sidecar。 */
+  browserCdp?: number
   browser: boolean
   cookieSync: boolean
 }
@@ -124,6 +126,7 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
   let tokenFile: string | undefined
   let parentPid: number | undefined
   let browserSidecar: string | undefined
+  let browserCdp: number | undefined
   let browser = process.env.AMOEBA_BROWSER !== "0"
   let cookieSync = true
 
@@ -152,6 +155,11 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
         break
       case "--browser-sidecar":
         browserSidecar = resolve(next())
+        break
+      case "--browser-cdp":
+        browserCdp = Number(next())
+        if (!Number.isInteger(browserCdp) || browserCdp <= 0 || browserCdp > 65535)
+          throw new Error("--browser-cdp 无效")
         break
       case "--port":
         port = Number(next())
@@ -184,6 +192,7 @@ export function parseServiceArgs(argv: string[]): ServiceOptions | null {
     tokenFile: tokenFile ?? join(dataDir, "service.token"),
     parentPid,
     browserSidecar,
+    ...(browserCdp !== undefined ? { browserCdp } : {}),
     browser,
     cookieSync,
   }
@@ -197,6 +206,7 @@ function usage(): string {
     "  --db <file>               SQLite 路径（默认 <data-dir>/rss.db）",
     "  --profile-dir <path>      浏览器 profile（默认 <data-dir>/browser-profile）",
     "  --browser-sidecar <path>  amoeba-browser.exe 路径（缺省自动探测）",
+    "  --browser-cdp <port>      Electron 宿主 CDP 代理端口（优先于 sidecar）",
     "  --no-browser              不注入抓取浏览器",
     "  --no-cookie-sync          启动后不做浏览器 cookie 快照同步",
     "  --port <n>                0 = OS 分配",
@@ -1023,6 +1033,7 @@ export async function runService(opts: ServiceOptions): Promise<number> {
       dbFile: opts.dbFile,
       profileDir: opts.profileDir,
       browserSidecar: opts.browserSidecar,
+      ...(opts.browserCdp !== undefined ? { browserCdp: opts.browserCdp } : {}),
       browser: opts.browser,
     })
     dl = createDataLayer()

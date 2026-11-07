@@ -12,7 +12,14 @@ import { Database } from "bun:sqlite"
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs"
 import { basename, dirname, join } from "node:path"
 
-import { createSidecarBrowser, locateSidecarBinary, nodeBackend, nodeJsBackend, nodeWsBackend } from "@amoeba/host/node"
+import {
+  createCdpPortBrowser,
+  createSidecarBrowser,
+  locateSidecarBinary,
+  nodeBackend,
+  nodeJsBackend,
+  nodeWsBackend,
+} from "@amoeba/host/node"
 import { setHostCaps } from "@amoeba/host/runtime"
 import { setLogSink } from "@amoeba/log"
 
@@ -23,6 +30,11 @@ export interface ServiceHostOptions {
   profileDir: string
   /** 显式 sidecar 路径（Tauri 从 resourceDir 传入）；缺省按仓库/同目录探测。 */
   browserSidecar?: string
+  /**
+   * Electron 宿主的 CDP 代理端口（127.0.0.1）。给了就不再探测/拉起 WebView2
+   * sidecar —— 浏览器进程归 Electron 主进程，profile 也在其 session 分区里。
+   */
+  browserCdp?: number
   /** false = 不注入浏览器（`--no-browser` / 测试）。 */
   browser?: boolean
 }
@@ -102,13 +114,24 @@ export function setupServiceHost(opts: ServiceHostOptions): ServiceHost {
   // 改走 stderr。此前只有 core 的宿主 Logger 做了这件事，其它包的 console.info 会漏到 stdout。
   setLogSink((level, text) => console.error(`[${level}] ${text}`))
   const storage = sqliteStorage(opts.dbFile)
-  const binary = opts.browser === false ? undefined : (opts.browserSidecar ?? locateSidecarBinary())
-  // ⚠️ images:false 必传:抓取只要 SSR DOM/接口状态,瀑布流图片是纯内存负担;
-  // 登录不受影响——四个平台的二维码都不依赖图片渲染(bili/douyin 主路径纯 HTTP,
-  // xhs/weibo/douyin 回退读 img.src 属性或 canvas.toDataURL,见 resolve 各 login.ts)。
-  const browser = binary ? createSidecarBrowser({ binary, profileDir: opts.profileDir, images: false }) : undefined
+  // Electron 载具优先：端口由宿主 CDP 代理给，浏览器（隐藏 BrowserWindow）与 profile
+  // 都归 Electron 主进程管理，本进程不拉起任何浏览器。其余形态保持 sidecar 探测。
+  const browser =
+    opts.browser === false
+      ? undefined
+      : opts.browserCdp !== undefined
+        ? createCdpPortBrowser({ port: opts.browserCdp })
+        : (() => {
+            const binary = opts.browserSidecar ?? locateSidecarBinary()
+            // ⚠️ images:false 必传:抓取只要 SSR DOM/接口状态,瀑布流图片是纯内存负担;
+            // 登录不受影响——四个平台的二维码都不依赖图片渲染(bili/douyin 主路径纯 HTTP,
+            // xhs/weibo/douyin 回退读 img.src 属性或 canvas.toDataURL,见 resolve 各 login.ts)。
+            return binary ? createSidecarBrowser({ binary, profileDir: opts.profileDir, images: false }) : undefined
+          })()
   if (!browser) {
-    console.error("[service] browser sidecar not found; browser channels will fail")
+    console.error("[service] no browser carrier (electron cdp / sidecar); browser channels will fail")
+  } else if (opts.browserCdp !== undefined) {
+    console.error(`[service] browser carrier: electron cdp proxy port=${opts.browserCdp}`)
   }
 
   setHostCaps({
